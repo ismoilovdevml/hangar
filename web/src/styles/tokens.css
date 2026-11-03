@@ -1,0 +1,122 @@
+/* Hangar "Dawn" design tokens. Every colour, radius and shadow in the UI comes from here. */
+:root {
+  color-scheme: light;
+
+  /* ground */
+  --wall-color: #DCE3EC;
+  --wall-image: url(/lake-dawn.jpg);
+
+  /* glass surfaces */
+  --glass-bg: rgba(255, 255, 255, 0.66);
+  --glass-bg-strong: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.80);
+  --glass-blur: blur(22px) saturate(140%);
+  --glass-fallback: rgba(255, 255, 255, 0.9);
+  --shadow-panel: 0 1px 2px rgba(40, 60, 90, .06), 0 16px 40px -14px rgba(40, 60, 90, .18);
+  --shadow-raised: 0 1px 2px rgba(40, 60, 90, .08), 0 4px 12px -4px rgba(40, 60, 90, .12);
+  --shadow-primary: 0 10px 20px -10px rgba(47, 106, 138, .7);
+  --shadow-modal: 0 1px 2px rgba(40, 60, 90, .06), 0 30px 60px -20px rgba(40, 60, 90, .28);
+  --hairline: rgba(30, 43, 58, 0.07);
+  --hairline-strong: rgba(30, 43, 58, 0.12);
+  --track: rgba(30, 43, 58, 0.08);
+  --surface-solid: #FFFFFF;
+  --surface-muted: #EEF2F6;
+  --scrim: rgba(23, 36, 51, 0.32);
+
+  /* text */
+  --ink-strong: #172433;
+  --ink: #1E2B3A;
+  --ink-2: #3E4C5C;
+  --ink-3: #5A6878;
+  --ink-inverse: #FFFFFF;
+
+  /* brand */
+  --lake: #2F6A8A;
+  --lake-ink: #1F5673;
+  --lake-ink-hover: #163F55;
+  --lake-soft: #DCEAF3;
+  --chart-1: #8DB4CC;
+  --chart-2: #D98E63;
+  --chart-3: #5C93B4;
+  --focus-ring: 0 0 0 3px rgba(47, 106, 138, 0.45);
+
+  /* per-format accents (bars in "storage by format") */
+  --fmt-docker: #5C93B4;
+  --fmt-maven: #8E7BB8;
+  --fmt-npm: #D98E63;
+  --fmt-pypi: #7FA86A;
+  --fmt-helm: #5C93B4;
+  --fmt-go: #6BAFB0;
+  --fmt-nuget: #8E7BB8;
+  --fmt-cargo: #C9805A;
+  --fmt-apt: #A08D6B;
+  --fmt-raw: #A3AFBC;
+
+  /* status: always paired with a text label */
+  --ok: #3C9A72;   --ok-bg: #DDF0E6;   --ok-ink: #1E6B4A;  --ok-bar: #4FA27E;
+  --warn: #D2A23A; --warn-bg: #F7E9CF; --warn-ink: #7A5410;
+  --bad: #B23B3B;  --bad-bg: #F6DCDC;  --bad-ink: #8E2A2A;
+  --peach-bg: #F7E1D3; --peach-ink: #8A4220;
+  --violet-bg: #E8E2F2; --violet-ink: #4E3A7A;
+  --sage-bg: #E3EEDC; --sage-ink: #3B5E2B;
+  --org-bg: #F3D9C6; --org-ink: #7A4426;
+
+  /* code */
+  --code-bg: #1F2B38;
+  --code-ink: #DCE6EF;
+  --code-comment: #8FA3B5;
+
+  /* type */
+  --font-sans: 'Manrope', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* radius & space */
+  --r-panel: 18px;
+  --r-card: 20px;
+  --r-control: 12px;
+  --r-small: 10px;
+  --r-pill: 999px;
+  --gap: 16px;
+  --page-pad: 16px;
+
+  /* motion */
+  --t-fast: 120ms;
+}
+
+/*
+ * "Dusk" — prepared dark variant (later milestone). Same structure, darker glass and
+ * lighter ink. Enabled with <html data-theme="dusk">; not wired to a toggle yet.
+ * The wallpaper variant (lake-dusk.jpg) does not exist yet, so the solid wall colour shows.
+ */
+:root[data-theme='dusk'] {
+  color-scheme: dark;
+  --wall-color: #1A2430;
+  --wall-image: none;
+  --glass-bg: rgba(30, 42, 56, 0.66);
+  --glass-bg-strong: rgba(36, 50, 66, 0.88);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-fallback: rgba(30, 42, 56, 0.94);
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, .3), 0 16px 40px -14px rgba(0, 0, 0, .5);
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 12px -4px rgba(0, 0, 0, .4);
+  --hairline: rgba(220, 230, 239, 0.08);
+  --hairline-strong: rgba(220, 230, 239, 0.14);
+  --track: rgba(220, 230, 239, 0.10);
+  --surface-solid: #2A3A4C;
+  --surface-muted: #2A3A4C;
+  --scrim: rgba(0, 0, 0, 0.5);
+  --ink-strong: #F1F5F9;
+  --ink: #E2E8EF;
+  --ink-2: #BCC7D3;
+  --ink-3: #98A6B5;
+  --lake: #4C8DB0;
+  --lake-ink: #9CC8E2;
+  --lake-ink-hover: #C2DEEF;
+  --lake-soft: #24425A;
+  --ok-bg: #1F3D31;   --ok-ink: #9ED9BC;
+  --warn-bg: #43361A; --warn-ink: #F0D08E;
+  --bad-bg: #4A2626;  --bad-ink: #F2B0B0;
+  --peach-bg: #4A3022; --peach-ink: #F2BE9C;
+  --violet-bg: #352D4A; --violet-ink: #CDBFEA;
+  --sage-bg: #2C3B25; --sage-ink: #BFDBAE;
+  --org-bg: #4A3022; --org-ink: #F2BE9C;
+}

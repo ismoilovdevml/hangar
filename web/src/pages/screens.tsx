@@ -1,0 +1,197 @@
+import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
+import { useState, type FormEvent } from 'react';
+import { IconPlus } from '../components/icons';
+import { ScreenSkeleton } from './ScreenSkeleton';
+
+export function RepositoriesPage() {
+  return (
+    <ScreenSkeleton
+      title="Repositories"
+      description="Where packages live. Hosted stores your own, proxy caches the internet, group joins them under one URL."
+      actions={
+        <Link to="/repositories/new" className="button button--primary">
+          <IconPlus size={16} /> New repository
+        </Link>
+      }
+      planned={[
+        'Counts of hosted, proxy and group repositories.',
+        'Tabs All / Hosted / Proxy / Group, a format filter and a name filter, all kept in the URL.',
+        'A table with name, type, format, URL, size and status, with a copy-URL button per row.',
+      ]}
+    />
+  );
+}
+
+export function RepoCreatePage() {
+  return (
+    <ScreenSkeleton
+      title="Create a repository"
+      description="Three short steps. You can change everything later except the name and format."
+      planned={[
+        'Step 1: pick a format (Docker, npm, Maven, PyPI, Go, Helm, NuGet, Cargo, APT, Raw).',
+        'Step 2: pick hosted, proxy or group.',
+        'Step 3: name, blob store, remote URL, re-upload and cleanup policy, scanning and anonymous-read toggles.',
+        'A summary with the final URL and the same configuration as YAML, CLI and Terraform.',
+      ]}
+    />
+  );
+}
+
+const browseRoute = getRouteApi('/app/browse');
+
+export function BrowsePage() {
+  const { repo, name, version } = browseRoute.useSearch();
+  const selected = repo && name ? `${repo} / ${name}${version ? `@${version}` : ''}` : null;
+  return (
+    <ScreenSkeleton
+      title="Packages"
+      description={selected ? `Selected: ${selected}` : 'Browse every repository, package and version.'}
+      planned={[
+        'A tree of repository → package → versions.',
+        'Package header with format, version, signature, platforms, publisher, and Download SBOM / Delete actions.',
+        'The pull or install command for the format, ready to copy.',
+        'Tabs: Overview, Versions, Layers or Files, Vulnerabilities, Dependents.',
+      ]}
+    />
+  );
+}
+
+const searchRoute = getRouteApi('/app/search');
+
+export function SearchPage() {
+  const { q } = searchRoute.useSearch();
+  const navigate = useNavigate();
+  const [draft, setDraft] = useState(q ?? '');
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    void navigate({ to: '/search', search: { q: draft.trim() || undefined } });
+  };
+  return (
+    <ScreenSkeleton
+      title="Find any package"
+      description="Search by name, digest, CVE, licence or repository."
+      planned={[
+        'Query language: free text, format:, repo:, sha256:, cve:, unused:>90d, license:, published:<date.',
+        'Facets for format, security state and repository, with counts.',
+        'Results with format, coordinates, repository, versions, downloads and security state, sortable.',
+      ]}
+    >
+      <form className="search-form glass" role="search" onSubmit={onSubmit}>
+        <label className="visually-hidden" htmlFor="search-q">
+          Search query
+        </label>
+        <input
+          id="search-q"
+          className="input"
+          type="search"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="e.g. payments-api format:docker"
+        />
+        <button type="submit" className="button button--primary">
+          Search
+        </button>
+      </form>
+    </ScreenSkeleton>
+  );
+}
+
+export function BlobStoresPage() {
+  return (
+    <ScreenSkeleton
+      title="Blob stores"
+      description="The disks and buckets behind your repositories. Identical layers are stored once."
+      planned={[
+        'Totals: used versus capacity, space saved by deduplication, growth per day with a time-to-full estimate, space reclaimable now.',
+        'One card per store with type, location, state, usage, soft quota, repositories, blob count, write latency and encryption.',
+        'Actions to edit settings and move repositories between stores online.',
+      ]}
+    />
+  );
+}
+
+export function CleanupPage() {
+  return (
+    <ScreenSkeleton
+      title="Cleanup policies"
+      description="Rules that quietly remove what nobody uses. Always preview before they run."
+      planned={[
+        'The list of policies and an editor written as readable sentences.',
+        'The repositories each policy applies to.',
+        'A mandatory dry-run preview with counts, bytes, sample rows and CSV export.',
+        'The schedule as cron and in plain words.',
+      ]}
+    />
+  );
+}
+
+export function VulnerabilitiesPage() {
+  return (
+    <ScreenSkeleton
+      title="Vulnerabilities"
+      description="Every package is scanned when it arrives and again when new advisories appear."
+      planned={[
+        'Critical, high, medium and low counts.',
+        'Findings with advisory, severity, package, fixed-in version, affected components and status.',
+        'Filters for fix available, in production and waived; waivers need a reason and an expiry.',
+        'Quarantine, signature and licence policies, and a 30-day trend.',
+      ]}
+    />
+  );
+}
+
+export function AccessPage() {
+  return (
+    <ScreenSkeleton
+      title="Access & audit"
+      description="Who can read, publish and administer — and a record of everything they did."
+      planned={[
+        'Tabs for members, roles, access tokens and service accounts.',
+        'Sign-in provider status (OIDC, LDAP, SAML, local).',
+        'The audit log stream with CSV and JSON export.',
+      ]}
+    />
+  );
+}
+
+export function TasksPage() {
+  return (
+    <ScreenSkeleton
+      title="Scheduled tasks"
+      description="Maintenance the registry does on its own, mostly at night."
+      planned={[
+        'A banner for the task running now, with progress and Stop.',
+        'Every task with its schedule, last result, next run and a Run now button.',
+      ]}
+    />
+  );
+}
+
+export function ClusterPage() {
+  return (
+    <ScreenSkeleton
+      title="Cluster & replication"
+      description="Nodes that share the load, and edge nodes that keep a nearby copy for other regions."
+      planned={[
+        'Overall health and quorum.',
+        'One card per node with role, zone, CPU, memory and cache disk, requests per second and uptime.',
+        'Replication targets with lag or failures, and the health of PostgreSQL, object storage, the event bus, search and the scanner.',
+      ]}
+    />
+  );
+}
+
+export function NotFoundPage() {
+  return (
+    <div className="screen">
+      <div className="page-header">
+        <div className="page-header__text">
+          <h1 className="page-header__title">Page not found</h1>
+          <p className="page-header__desc">
+            This address does not match any page. <Link to="/">Go to the overview</Link>.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
