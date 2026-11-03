@@ -9,8 +9,10 @@ require (
 	github.com/nats-io/nats.go v1.55.0
 	github.com/pressly/goose/v3 v3.29.0
 	github.com/prometheus/client_golang v1.25.0
+	github.com/sony/gobreaker/v2 v2.4.0
 	go.yaml.in/yaml/v3 v3.0.6
 	golang.org/x/net v0.62.0
+	golang.org/x/sync v0.24.0
 )
 
 require (
@@ -34,7 +36,6 @@ require (
 	github.com/sethvargo/go-retry v0.5.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
