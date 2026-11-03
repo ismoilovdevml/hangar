@@ -1,0 +1,91 @@
+# Hangar configuration example. Copy to hangar.yaml (or hangar.local.yaml, which
+# is git-ignored) and run: hangar serve --config hangar.yaml
+#
+# Every setting can be overridden by an environment variable named HANGAR_ plus
+# its path in upper case joined with underscores, e.g. database.url ->
+# HANGAR_DATABASE_URL, storage.s3.secret_access_key -> HANGAR_STORAGE_S3_SECRET_ACCESS_KEY.
+# Keep secrets in the environment, not in this file.
+
+server:
+  addr: ":8080"
+  # External URL clients use; appears in generated metadata (npm tarball URLs, ...).
+  base_url: "http://localhost:8080"
+  # Name shown in the UI header and /api/v1/system/status.
+  instance_name: hangar
+  read_header_timeout: 10s
+  idle_timeout: 120s
+  # Time allowed for in-flight requests (large uploads) to finish on shutdown.
+  shutdown_timeout: 30s
+  # Reverse proxies / load balancers (CIDRs or IPs) whose X-Forwarded-For,
+  # X-Forwarded-Proto and X-Forwarded-Host headers are trusted. Requests from
+  # other peers have these headers ignored. Generated links always use base_url.
+  trusted_proxies: []
+  #  - 10.0.0.0/8
+
+log:
+  level: info # debug, info, warn, error
+  format: json # json or text
+
+database:
+  # Set via HANGAR_DATABASE_URL in production.
+  url: "postgres://hangar@localhost:5432/hangar?sslmode=disable"
+  max_conns: 20
+  min_conns: 2
+  conn_lifetime: 1h
+  # Apply pending schema migrations on `hangar serve` (or run `hangar migrate up`).
+  migrate_on_start: true
+
+# Default blob store, registered on first start.
+storage:
+  kind: fs # fs or s3
+  fs:
+    path: ./data/blobs
+  s3:
+    endpoint: "" # e.g. http://minio:9000; empty = AWS
+    region: us-east-1
+    bucket: hangar
+    prefix: blobs/
+    access_key_id: ""
+    secret_access_key: "" # use HANGAR_STORAGE_S3_SECRET_ACCESS_KEY
+    use_path_style: true
+
+nats:
+  # Single node: run NATS JetStream inside the hangar process.
+  embedded: true
+  data_dir: ./data/nats
+  # Expose the embedded server (host:port); empty = in-process only.
+  listen: ""
+  # Cluster mode: set embedded=false and point at the NATS cluster.
+  url: ""
+
+# Outbound HTTP for proxy repositories (Maven Central, npmjs, Docker Hub, ...).
+# Each proxy repository inherits these settings and can override proxy, CA
+# bundle, TLS verification and timeouts for its own remote.
+http:
+  # Corporate outbound proxy: http://, https:// or socks5:// URL.
+  proxy: "" # e.g. http://proxy.corp.example:3128
+  proxy_username: ""
+  proxy_password: "" # use HANGAR_HTTP_PROXY_PASSWORD
+  # Hosts, domain suffixes and CIDRs reached directly.
+  no_proxy: []
+  #  - .corp.example
+  #  - 10.0.0.0/8
+  # When proxy is empty, honour HTTP_PROXY / HTTPS_PROXY / NO_PROXY.
+  use_environment: true
+  # PEM bundle trusted in addition to system roots (TLS-inspecting proxies, private CAs).
+  ca_file: ""
+  connect_timeout: 10s
+  # Max wait for response headers; body transfer is bounded per request.
+  read_timeout: 60s
+  idle_conn_timeout: 90s
+  max_idle_conns: 200
+  max_idle_conns_per_host: 32
+  user_agent: "" # default Hangar/<version>
+
+scanner:
+  # Trivy server in client/server mode; empty disables scanning.
+  trivy_url: ""
+
+metrics:
+  enabled: true
+  path: /metrics

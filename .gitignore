@@ -18,3 +18,7 @@ hangar.local.yaml
 /data/
 .DS_Store
 .playwright-mcp/
+
+# Embedded web build (copied from web/dist at release build time)
+/internal/webui/dist/*
+!/internal/webui/dist/.gitkeep
