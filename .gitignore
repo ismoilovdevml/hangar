@@ -1,0 +1,20 @@
+# Go
+/bin/
+/dist/
+*.test
+coverage.out
+
+# Web
+/web/node_modules/
+/web/dist/
+/web/playwright-report/
+/web/test-results/
+
+# Local
+.env
+.env.*
+!.env.example
+hangar.local.yaml
+/data/
+.DS_Store
+.playwright-mcp/
