@@ -1,0 +1,137 @@
+// Package server assembles the HTTP router and runs it with graceful shutdown.
+package server
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net"
+	"net/http"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/ismoilovdevml/hangar/internal/api"
+	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats"
+	"github.com/ismoilovdevml/hangar/internal/health"
+	"github.com/ismoilovdevml/hangar/internal/observability"
+	"github.com/ismoilovdevml/hangar/internal/webui"
+)
+
+// RouterOptions are the parts the router is built from.
+type RouterOptions struct {
+	Logger         *slog.Logger
+	Metrics        *observability.Metrics // nil disables /metrics
+	MetricsPath    string
+	Health         *health.Checker
+	TrustedProxies TrustedProxies
+	Formats        *formats.Registry
+	Deps           core.Deps
+	InstanceName   string
+	Started        time.Time
+}
+
+// NewRouter builds the full route tree:
+//
+//	/healthz /readyz /metrics      operations
+//	/api/v1/...                    REST API (api/openapi.yaml)
+//	/repository/{repo}/... /v2/... format protocols
+//	everything else                web UI (SPA)
+func NewRouter(o RouterOptions) http.Handler {
+	r := chi.NewRouter()
+	r.Use(RequestInfo(o.TrustedProxies))
+	r.Use(Observe(o.Logger, o.Metrics))
+	r.Use(Recover(o.Logger))
+
+	r.Get("/healthz", health.Liveness)
+	r.Head("/healthz", health.Liveness)
+	if o.Health != nil {
+		r.Get("/readyz", o.Health.Readiness)
+	}
+	if o.Metrics != nil {
+		path := o.MetricsPath
+		if path == "" {
+			path = "/metrics"
+		}
+		r.Method(http.MethodGet, path, promhttp.HandlerFor(o.Metrics.Registry, promhttp.HandlerOpts{Registry: o.Metrics.Registry}))
+	}
+
+	names := []string{}
+	if o.Formats != nil {
+		names = o.Formats.Names()
+	}
+	(&api.API{Deps: o.Deps, InstanceName: o.InstanceName, Health: o.Health, Formats: names, Started: o.Started}).Mount(r)
+
+	if o.Formats != nil {
+		formats.Mount(r, o.Formats, o.Deps)
+	}
+
+	ui := webui.Handler()
+	r.NotFound(ui.ServeHTTP)
+	return r
+}
+
+// Config for Run.
+type Config struct {
+	Addr              string
+	ReadHeaderTimeout time.Duration
+	IdleTimeout       time.Duration
+	ShutdownTimeout   time.Duration
+	// DrainDelay keeps serving (with /readyz failing) before shutdown starts,
+	// so load balancers notice. 0 in tests and single-node setups.
+	DrainDelay time.Duration
+}
+
+// Run listens on cfg.Addr and serves h until ctx is cancelled, then shuts
+// down gracefully: readiness fails, in-flight requests get ShutdownTimeout.
+// ready (may be nil) is called with the bound address once listening.
+func Run(ctx context.Context, cfg Config, h http.Handler, hc *health.Checker, log *slog.Logger, ready func(net.Addr)) error {
+	srv := &http.Server{
+		Addr:              cfg.Addr,
+		Handler:           h,
+		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
+		IdleTimeout:       cfg.IdleTimeout,
+		// No ReadTimeout/WriteTimeout: multi-GB uploads and downloads stream
+		// for as long as the client keeps them moving.
+		ErrorLog:    slog.NewLogLogger(log.Handler(), slog.LevelWarn),
+		BaseContext: func(net.Listener) context.Context { return context.WithoutCancel(ctx) },
+	}
+	var lc net.ListenConfig
+	ln, err := lc.Listen(ctx, "tcp", cfg.Addr)
+	if err != nil {
+		return fmt.Errorf("listen %s: %w", cfg.Addr, err)
+	}
+	log.Info("http server listening", "addr", ln.Addr().String())
+	if ready != nil {
+		ready(ln.Addr())
+	}
+	errc := make(chan error, 1)
+	go func() { errc <- srv.Serve(ln) }()
+
+	select {
+	case err := <-errc:
+		return fmt.Errorf("http server: %w", err)
+	case <-ctx.Done():
+	}
+	log.Info("shutting down", "drain_delay", cfg.DrainDelay.String(), "timeout", cfg.ShutdownTimeout.String())
+	if hc != nil {
+		hc.SetDraining()
+	}
+	if cfg.DrainDelay > 0 {
+		time.Sleep(cfg.DrainDelay)
+	}
+	sctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	defer cancel()
+	if err := srv.Shutdown(sctx); err != nil {
+		_ = srv.Close()
+		return fmt.Errorf("graceful shutdown: %w", err)
+	}
+	if err := <-errc; err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	log.Info("http server stopped")
+	return nil
+}

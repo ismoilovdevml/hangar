@@ -1,0 +1,2234 @@
+openapi: 3.1.0
+info:
+  title: Hangar API
+  version: 0.1.0
+  summary: REST API of the Hangar package registry (web UI and automation).
+  description: |
+    JSON REST API served under `/api/v1`. Package clients (docker, npm, mvn, ...)
+    do not use this API; they speak their own protocols under `/repository/<repo>/`
+    and `/v2/`.
+
+    Conventions:
+    - JSON field names are `snake_case`. Timestamps are RFC 3339 strings in UTC.
+      Durations are Go duration strings (`"24h0m0s"`, `"90s"`). Sizes are bytes.
+    - Lists are cursor-paginated: pass `limit` and the previous page's
+      `next_cursor` as `cursor`. `next_cursor` is null or absent on the last page.
+    - Every non-2xx response has the `Error` body.
+    - Actions on a resource are sub-resources with POST (`/tasks/{id}/run`).
+    - Authentication: session cookie (browser), or `Authorization: Bearer hgr_...`
+      (personal access / service-account token), or HTTP Basic with a token as
+      the password. Every mutating call is authorized and audited.
+  license:
+    name: See repository
+    url: https://github.com/ismoilovdevml/hangar
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+  - bearerToken: []
+  - basicAuth: []
+tags:
+  - name: auth
+  - name: system
+  - name: overview
+  - name: repositories
+  - name: blob-stores
+  - name: components
+  - name: search
+  - name: security
+  - name: cleanup
+  - name: tasks
+  - name: access
+  - name: audit
+  - name: cluster
+  - name: events
+
+paths:
+  # ---------------------------------------------------------------- auth
+  /auth/providers:
+    get:
+      tags: [auth]
+      operationId: getAuthProviders
+      summary: Sign-in methods offered on the login screen
+      security: []
+      responses:
+        "200":
+          description: Configured providers
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthProviders" }
+  /auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Local or LDAP username/password login; sets the session cookie
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Signed in. `Set-Cookie` carries the session.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "423":
+          description: Account locked after repeated failures; `retry_after` says when to retry.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: End the session
+      responses:
+        "204": { description: Signed out }
+  /auth/session:
+    get:
+      tags: [auth]
+      operationId: getSession
+      summary: Current user and organization
+      responses:
+        "200":
+          description: Active session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/client-endpoints:
+    get:
+      tags: [auth]
+      operationId: listClientEndpoints
+      summary: Endpoints the current user should configure in their clients, most-used format first
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Endpoints
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClientEndpointPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ---------------------------------------------------------------- system
+  /system/status:
+    get:
+      tags: [system]
+      operationId: getSystemStatus
+      summary: Overall health, shown in the header status dot and the sidebar card
+      security: []
+      responses:
+        "200":
+          description: Status (always 200; read `state`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemStatus" }
+  /system/version:
+    get:
+      tags: [system]
+      operationId: getVersion
+      security: []
+      responses:
+        "200":
+          description: Build information
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BuildInfo" }
+  /formats:
+    get:
+      tags: [system]
+      operationId: listFormats
+      summary: Formats this server speaks (step 1 of "New repository")
+      responses:
+        "200":
+          description: Formats
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/FormatInfo" }
+
+  # ---------------------------------------------------------------- overview
+  /metrics/overview:
+    get:
+      tags: [overview]
+      operationId: getOverviewMetrics
+      summary: Every number on the Overview screen for one range
+      parameters:
+        - name: range
+          in: query
+          schema: { $ref: "#/components/schemas/OverviewRange" }
+      responses:
+        "200":
+          description: Metrics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OverviewMetrics" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /upstreams/health:
+    get:
+      tags: [overview]
+      operationId: listUpstreamHealth
+      summary: Health of every proxy remote
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Upstreams
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UpstreamHealthPage" }
+
+  # ---------------------------------------------------------------- repositories
+  /repositories:
+    get:
+      tags: [repositories]
+      operationId: listRepositories
+      parameters:
+        - name: type
+          in: query
+          schema: { $ref: "#/components/schemas/RepositoryType" }
+        - name: format
+          in: query
+          schema: { $ref: "#/components/schemas/Format" }
+        - name: q
+          in: query
+          description: Substring of the repository name
+          schema: { type: string }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Repositories, with counts for the tabs and count cards
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RepositoryList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [repositories]
+      operationId: createRepository
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RepositoryInput" }
+          application/yaml:
+            schema: { $ref: "#/components/schemas/RepositoryInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Repository" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /repositories/{name}:
+    parameters:
+      - $ref: "#/components/parameters/RepositoryName"
+    get:
+      tags: [repositories]
+      operationId: getRepository
+      responses:
+        "200":
+          description: Repository
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Repository" }
+            application/yaml:
+              description: Config-as-code form, accepted back by `hangar apply -f`.
+              schema: { $ref: "#/components/schemas/RepositoryInput" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [repositories]
+      operationId: updateRepository
+      description: Replaces the settings. `name`, `format` and `type` are immutable.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RepositoryInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Repository" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [repositories]
+      operationId: deleteRepository
+      responses:
+        "204": { description: Deleted (content is soft-deleted and reclaimed by compaction) }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Still a member of a group
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  # ---------------------------------------------------------------- blob stores
+  /blob-stores:
+    get:
+      tags: [blob-stores]
+      operationId: listBlobStores
+      responses:
+        "200":
+          description: Stores and totals
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlobStoreList" }
+    post:
+      tags: [blob-stores]
+      operationId: createBlobStore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlobStoreInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlobStore" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /blob-stores/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [blob-stores]
+      operationId: getBlobStore
+      responses:
+        "200":
+          description: Store
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlobStore" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [blob-stores]
+      operationId: updateBlobStore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlobStoreInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlobStore" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [blob-stores]
+      operationId: deleteBlobStore
+      responses:
+        "204": { description: Deleted }
+        "409":
+          description: Repositories still use the store
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /blob-stores/{name}/move-repositories:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [blob-stores]
+      operationId: moveRepositories
+      summary: Start an online migration of repositories into this store
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [repositories]
+              properties:
+                repositories:
+                  type: array
+                  items: { type: string }
+      responses:
+        "202":
+          description: Migration task started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskRun" }
+
+  # ---------------------------------------------------------------- components
+  /components:
+    get:
+      tags: [components]
+      operationId: listComponents
+      summary: Components across repositories (Recently published, package lists)
+      parameters:
+        - name: repository
+          in: query
+          schema: { type: string }
+        - name: format
+          in: query
+          schema: { $ref: "#/components/schemas/Format" }
+        - name: name
+          in: query
+          description: Exact package name (all versions of one package)
+          schema: { type: string }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [-published_at, published_at, name, -downloads]
+            default: -published_at
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Components
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublishedComponentPage" }
+  /components/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [components]
+      operationId: getComponent
+      responses:
+        "200":
+          description: Package detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComponentDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [components]
+      operationId: deleteComponent
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /components/{id}/assets:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [components]
+      operationId: listComponentAssets
+      summary: Files (or OCI layers) of a component
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Assets
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetPage" }
+  /components/{id}/versions:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [components]
+      operationId: listComponentVersions
+      summary: Other versions of the same package in the same repository
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Versions, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublishedComponentPage" }
+  /components/{id}/findings:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [components, security]
+      operationId: listComponentFindings
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Findings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FindingPage" }
+  /components/{id}/dependents:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [components]
+      operationId: listComponentDependents
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Components that depend on this one
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublishedComponentPage" }
+  /components/{id}/sbom:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [components]
+      operationId: getComponentSbom
+      responses:
+        "200":
+          description: CycloneDX SBOM
+          content:
+            application/vnd.cyclonedx+json:
+              schema: { type: object }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- search
+  /search:
+    get:
+      tags: [search]
+      operationId: search
+      parameters:
+        - name: q
+          in: query
+          description: |
+            Free text plus qualifiers: `format:npm`, `repo:npm-hosted`, `sha256:ab12`,
+            `cve:CVE-2026-1234`, `unused:>90d`, `license:GPL-3.0`, `published:<2026-01-01`.
+          schema: { type: string }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [relevance, -downloads, -published_at]
+            default: relevance
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Results and facets
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  # ---------------------------------------------------------------- security
+  /findings:
+    get:
+      tags: [security]
+      operationId: listFindings
+      parameters:
+        - name: severity
+          in: query
+          schema: { $ref: "#/components/schemas/Severity" }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/FindingStatus" }
+        - name: fix_available
+          in: query
+          schema: { type: boolean }
+        - name: in_production_days
+          in: query
+          description: Only components pulled in the last N days
+          schema: { type: integer, minimum: 1 }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Findings with severity totals
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FindingList" }
+  /findings/{id}/waiver:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [security]
+      operationId: waiveFinding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WaiverInput" }
+      responses:
+        "200":
+          description: Waived
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Finding" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+    delete:
+      tags: [security]
+      operationId: revokeWaiver
+      responses:
+        "200":
+          description: Waiver removed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Finding" }
+
+  # ---------------------------------------------------------------- cleanup
+  /cleanup-policies:
+    get:
+      tags: [cleanup]
+      operationId: listCleanupPolicies
+      responses:
+        "200":
+          description: Policies
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CleanupPolicyPage" }
+    post:
+      tags: [cleanup]
+      operationId: createCleanupPolicy
+      description: Rejected unless the same criteria were previewed (`preview_token`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CleanupPolicyInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CleanupPolicy" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+  /cleanup-policies/preview:
+    post:
+      tags: [cleanup]
+      operationId: previewCleanupPolicy
+      summary: Dry run of (possibly unsaved) criteria
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CleanupPolicyInput" }
+      responses:
+        "200":
+          description: What would be deleted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CleanupPreview" }
+            text/csv:
+              schema: { type: string }
+  /cleanup-policies/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [cleanup]
+      operationId: getCleanupPolicy
+      responses:
+        "200":
+          description: Policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CleanupPolicy" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [cleanup]
+      operationId: updateCleanupPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CleanupPolicyInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CleanupPolicy" }
+    delete:
+      tags: [cleanup]
+      operationId: deleteCleanupPolicy
+      responses:
+        "204": { description: Deleted }
+
+  # ---------------------------------------------------------------- tasks
+  /tasks:
+    get:
+      tags: [tasks]
+      operationId: listTasks
+      responses:
+        "200":
+          description: Scheduled tasks and the runs in progress
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskList" }
+    post:
+      tags: [tasks]
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+  /tasks/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [tasks]
+      operationId: getTask
+      responses:
+        "200":
+          description: Task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [tasks]
+      operationId: updateTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+    delete:
+      tags: [tasks]
+      operationId: deleteTask
+      responses:
+        "204": { description: Deleted }
+  /tasks/{id}/run:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [tasks]
+      operationId: runTask
+      responses:
+        "202":
+          description: Run queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskRun" }
+        "409":
+          description: Already running
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /tasks/{id}/stop:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [tasks]
+      operationId: stopTask
+      responses:
+        "202":
+          description: Cancellation requested
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskRun" }
+  /tasks/{id}/runs:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [tasks]
+      operationId: listTaskRuns
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Runs, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskRunPage" }
+
+  # ---------------------------------------------------------------- access
+  /users:
+    get:
+      tags: [access]
+      operationId: listUsers
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: kind
+          in: query
+          schema: { type: string, enum: [user, service_account] }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Members (Members and Service accounts tabs)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemberPage" }
+    post:
+      tags: [access]
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemberInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Member" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /users/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [access]
+      operationId: getUser
+      responses:
+        "200":
+          description: Member
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Member" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [access]
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemberInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Member" }
+    delete:
+      tags: [access]
+      operationId: deleteUser
+      responses:
+        "204": { description: Deleted }
+  /roles:
+    get:
+      tags: [access]
+      operationId: listRoles
+      responses:
+        "200":
+          description: Roles
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Role" }
+    post:
+      tags: [access]
+      operationId: createRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Role" }
+  /roles/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      tags: [access]
+      operationId: updateRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Role" }
+        "409":
+          description: Built-in roles cannot be changed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      tags: [access]
+      operationId: deleteRole
+      responses:
+        "204": { description: Deleted }
+  /identity-providers:
+    get:
+      tags: [access]
+      operationId: listIdentityProviders
+      summary: Sign-in providers and their status
+      responses:
+        "200":
+          description: Providers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/IdentityProvider" }
+  /tokens:
+    get:
+      tags: [access]
+      operationId: listTokens
+      description: The caller's tokens; with `system:tokens:admin`, `owner` selects another principal.
+      parameters:
+        - name: owner
+          in: query
+          schema: { type: string }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Tokens (secrets are never returned)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPage" }
+    post:
+      tags: [access]
+      operationId: createToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TokenInput" }
+      responses:
+        "201":
+          description: Created; `secret` is shown only in this response
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenCreated" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+  /tokens/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    delete:
+      tags: [access]
+      operationId: revokeToken
+      responses:
+        "204": { description: Revoked }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- audit
+  /audit:
+    get:
+      tags: [audit]
+      operationId: listAuditEvents
+      parameters:
+        - name: actor
+          in: query
+          schema: { type: string }
+        - name: action
+          in: query
+          description: Exact action or prefix with `*` (`repository.*`)
+          schema: { type: string }
+        - name: target
+          in: query
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Events, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditEventPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /audit/export:
+    get:
+      tags: [audit]
+      operationId: exportAuditEvents
+      parameters:
+        - name: format
+          in: query
+          required: true
+          schema: { type: string, enum: [csv, json] }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Streamed export
+          content:
+            text/csv:
+              schema: { type: string }
+            application/x-ndjson:
+              schema: { type: string }
+
+  # ---------------------------------------------------------------- cluster
+  /nodes:
+    get:
+      tags: [cluster]
+      operationId: listNodes
+      responses:
+        "200":
+          description: Cluster members and dependency health
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClusterStatus" }
+  /replication/targets:
+    get:
+      tags: [cluster]
+      operationId: listReplicationTargets
+      responses:
+        "200":
+          description: Targets
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ReplicationTarget" }
+    post:
+      tags: [cluster]
+      operationId: createReplicationTarget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReplicationTargetInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReplicationTarget" }
+  /replication/targets/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [cluster]
+      operationId: deleteReplicationTarget
+      responses:
+        "204": { description: Deleted }
+
+  # ---------------------------------------------------------------- events
+  /events:
+    get:
+      tags: [events]
+      operationId: streamEvents
+      summary: Server-Sent Events stream
+      description: |
+        `text/event-stream`. Each message has `event: <type>` and `data: <JSON>`
+        where the JSON is the `data` member of the matching `LiveEvent` variant.
+        A comment line (`: ping`) is sent every 15 s. Events the caller may not
+        read (RBAC) are filtered out. Reconnect with `Last-Event-ID` to resume
+        within the server's short replay window.
+      parameters:
+        - name: types
+          in: query
+          description: Comma-separated event types to receive (default all)
+          schema: { type: string }
+        - name: Last-Event-ID
+          in: header
+          schema: { type: string }
+      responses:
+        "200":
+          description: Event stream
+          content:
+            text/event-stream:
+              schema: { $ref: "#/components/schemas/LiveEvent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: hangar_session
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: Personal access or service-account token (`hgr_...`)
+    basicAuth:
+      type: http
+      scheme: basic
+      description: Username plus a token as the password (CLI clients)
+
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from the previous page's `next_cursor`
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 1000, default: 50 }
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    RepositoryName:
+      name: name
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/RepositoryName" }
+
+  responses:
+    BadRequest:
+      description: Invalid input
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Not signed in, or credentials invalid
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Missing privilege
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: No such resource
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Name already taken or state conflict
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TooManyRequests:
+      description: Rate limited
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    # ------------------------------------------------------------ common
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Machine-readable code, e.g. `not_found`, `forbidden`, `invalid_argument`, `locked`
+        message: { type: string }
+        retry_after:
+          type: integer
+          description: Seconds until the action may be retried (lockout, rate limit)
+        details:
+          type: object
+          additionalProperties: true
+    NextCursor:
+      type: [string, "null"]
+      description: Cursor for the next page; null or absent on the last page
+    Format:
+      type: string
+      enum: [docker, npm, maven, pypi, go, helm, nuget, cargo, apt, raw]
+    FormatInfo:
+      type: object
+      required: [name]
+      properties:
+        name: { $ref: "#/components/schemas/Format" }
+    RepositoryType:
+      type: string
+      enum: [hosted, proxy, group]
+    RepositoryName:
+      type: string
+      pattern: "^[a-z0-9][a-z0-9-]{1,62}$"
+    Duration:
+      type: string
+      description: Go duration string
+      examples: ["24h0m0s", "90s"]
+    Bytes:
+      type: integer
+      format: int64
+      minimum: 0
+    Timestamp:
+      type: string
+      format: date-time
+    Severity:
+      type: string
+      enum: [critical, high, medium, low, unknown]
+    BuildInfo:
+      type: object
+      required: [version, go_version]
+      properties:
+        version: { type: string }
+        commit: { type: string }
+        date: { type: string }
+        go_version: { type: string }
+
+    # ------------------------------------------------------------ auth/system
+    AuthProviders:
+      type: object
+      required: [oidc, ldap, saml, local]
+      properties:
+        oidc:
+          description: OIDC provider for "Continue with ..."; null when not configured
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [display_name, start_url]
+              properties:
+                display_name: { type: string }
+                start_url: { type: string }
+        ldap:
+          type: object
+          required: [enabled]
+          properties:
+            enabled: { type: boolean }
+        saml:
+          type: object
+          required: [enabled, start_url]
+          properties:
+            enabled: { type: boolean }
+            start_url: { type: [string, "null"] }
+        local:
+          type: object
+          required: [enabled]
+          properties:
+            enabled: { type: boolean }
+    LoginRequest:
+      type: object
+      required: [username, password, remember, realm]
+      properties:
+        username: { type: string }
+        password: { type: string, format: password, writeOnly: true }
+        remember: { type: boolean }
+        realm: { type: string, enum: [local, ldap] }
+    User:
+      type: object
+      required: [id, username, display_name, email]
+      properties:
+        id: { type: string }
+        username: { type: string }
+        display_name: { type: string }
+        email: { type: string }
+    Organization:
+      type: object
+      required: [slug, name, environment, region]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        environment: { type: string }
+        region: { type: string }
+    Session:
+      type: object
+      required: [user, organization]
+      properties:
+        user: { $ref: "#/components/schemas/User" }
+        organization: { $ref: "#/components/schemas/Organization" }
+        privileges:
+          type: array
+          description: Effective privileges, so the UI can hide actions the user cannot take
+          items: { $ref: "#/components/schemas/Privilege" }
+    ClientEndpoint:
+      type: object
+      required: [format, endpoint, repository]
+      properties:
+        format: { $ref: "#/components/schemas/Format" }
+        endpoint:
+          type: string
+          description: Registry host for docker, base URL for everything else (built from server.base_url)
+        repository: { type: string }
+    ClientEndpointPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ClientEndpoint" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+    DependencyStatus:
+      type: object
+      required: [name, status, latency_ms]
+      properties:
+        name:
+          type: string
+          description: database, blobstore, eventbus, search, scanner
+        status: { type: string, enum: [ok, fail] }
+        latency_ms: { type: integer }
+        error: { type: string }
+    SystemStatus:
+      type: object
+      required: [state, message, version, instance_name, nodes_up, nodes_total]
+      properties:
+        state:
+          type: string
+          enum: [ok, degraded, down]
+          description: ok = all normal; degraded = something needs attention; down = outage
+        message:
+          type: string
+          description: Short sentence, e.g. "All systems normal"
+        version: { type: string }
+        instance_name: { type: string }
+        nodes_up: { type: integer }
+        nodes_total: { type: integer }
+        build: { $ref: "#/components/schemas/BuildInfo" }
+        uptime_seconds: { type: integer }
+        web_ui:
+          type: boolean
+          description: Whether the web UI is embedded in this binary
+        dependencies:
+          type: array
+          items: { $ref: "#/components/schemas/DependencyStatus" }
+
+    # ------------------------------------------------------------ overview
+    OverviewRange:
+      type: string
+      enum: [1h, today, 7d, 30d]
+      default: today
+    TrafficBucket:
+      type: object
+      required: [start, downloads, uploads]
+      properties:
+        start: { $ref: "#/components/schemas/Timestamp" }
+        downloads: { type: integer }
+        uploads: { type: integer }
+    OverviewMetrics:
+      type: object
+      required: [range, generated_at, summary, storage, requests, cache, issues, traffic, storage_by_format]
+      properties:
+        range: { $ref: "#/components/schemas/OverviewRange" }
+        generated_at: { $ref: "#/components/schemas/Timestamp" }
+        summary:
+          type: object
+          required: [published_since_yesterday, failed_pushes]
+          properties:
+            published_since_yesterday: { type: integer }
+            failed_pushes: { type: integer }
+        storage:
+          type: object
+          required: [used_bytes, capacity_bytes, added_bytes_24h]
+          properties:
+            used_bytes: { $ref: "#/components/schemas/Bytes" }
+            capacity_bytes: { $ref: "#/components/schemas/Bytes" }
+            added_bytes_24h: { $ref: "#/components/schemas/Bytes" }
+        requests:
+          type: object
+          required: [total, trend_pct, peak_total, p95_ms]
+          properties:
+            total: { type: integer }
+            trend_pct:
+              type: number
+              description: Change versus the previous range of the same length, in percent
+            peak_total:
+              type: integer
+              description: Busiest equivalent range in the last 30 days
+            p95_ms: { type: number }
+        cache:
+          type: object
+          required: [hit_ratio, bytes_saved]
+          properties:
+            hit_ratio: { type: number, minimum: 0, maximum: 1 }
+            bytes_saved: { $ref: "#/components/schemas/Bytes" }
+        issues:
+          type: object
+          required: [critical, packages_affected, quarantined, open_findings]
+          properties:
+            critical: { type: integer }
+            packages_affected: { type: integer }
+            quarantined: { type: integer }
+            open_findings: { type: integer }
+        traffic:
+          type: array
+          items: { $ref: "#/components/schemas/TrafficBucket" }
+        storage_by_format:
+          type: array
+          items:
+            type: object
+            required: [format, bytes]
+            properties:
+              format: { $ref: "#/components/schemas/Format" }
+              bytes: { $ref: "#/components/schemas/Bytes" }
+    UpstreamState:
+      type: string
+      enum: [healthy, slow, blocked, offline]
+    UpstreamHealth:
+      type: object
+      required: [name, url, state, latency_ms]
+      properties:
+        name:
+          type: string
+          description: Proxy repository name
+        url: { type: string }
+        state: { $ref: "#/components/schemas/UpstreamState" }
+        latency_ms:
+          type: [integer, "null"]
+          description: p50 over the last 5 minutes; null without recent traffic
+    UpstreamHealthPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/UpstreamHealth" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+
+    # ------------------------------------------------------------ repositories
+    WritePolicy:
+      type: string
+      enum: [allow, allow_once, deny]
+    UpstreamAuth:
+      type: object
+      required: [kind]
+      description: Credentials sent only to the remote's own host. Secrets are write-only.
+      properties:
+        kind: { type: string, enum: [basic, bearer, header] }
+        username: { type: string }
+        password: { type: string, writeOnly: true }
+        token: { type: string, writeOnly: true }
+        header_name:
+          type: string
+          description: For kind=header, e.g. `Private-Token`
+    UpstreamHTTP:
+      type: object
+      description: Outbound HTTP for one remote; omitted fields inherit the server-wide `http` config.
+      properties:
+        proxy:
+          type: string
+          description: "`inherit` (default), `none`, or an http://, https:// or socks5:// proxy URL (password write-only)"
+        ca_bundle:
+          type: string
+          description: PEM certificates trusted for this remote in addition to the system roots
+        insecure_skip_verify:
+          type: boolean
+          description: Disable TLS verification for this remote (audited)
+        connect_timeout: { $ref: "#/components/schemas/Duration" }
+        read_timeout: { $ref: "#/components/schemas/Duration" }
+    ConnectorConfig:
+      type: object
+      description: Dedicated entry point, mainly for Docker clients that need a host root
+      properties:
+        host:
+          type: string
+          description: Virtual host name (e.g. cr.example.com) routed to Hangar
+        http_port:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          description: Extra plain-HTTP listener serving only this repository; 0 = none
+    RepositoryConfig:
+      type: object
+      description: Exactly one of hosted, proxy, group is set, matching the repository type.
+      properties:
+        hosted:
+          type: object
+          properties:
+            write_policy: { $ref: "#/components/schemas/WritePolicy" }
+        proxy:
+          type: object
+          required: [remote_url]
+          properties:
+            remote_url: { type: string, format: uri }
+            metadata_ttl: { $ref: "#/components/schemas/Duration" }
+            content_ttl: { $ref: "#/components/schemas/Duration" }
+            negative_cache_ttl: { $ref: "#/components/schemas/Duration" }
+            auth: { $ref: "#/components/schemas/UpstreamAuth" }
+            http: { $ref: "#/components/schemas/UpstreamHTTP" }
+            circuit_failures: { type: integer, minimum: 0 }
+            circuit_open_for: { $ref: "#/components/schemas/Duration" }
+        group:
+          type: object
+          required: [members]
+          properties:
+            members:
+              type: array
+              description: Member repository names in resolution order
+              items: { $ref: "#/components/schemas/RepositoryName" }
+            write_member:
+              type: string
+              description: Hosted member receiving writes sent to the group (docker, npm)
+        anonymous_read: { type: boolean }
+        scan_on_arrival: { type: boolean }
+        quarantine_critical: { type: boolean }
+        cleanup_policies:
+          type: array
+          items: { type: string }
+        connector: { $ref: "#/components/schemas/ConnectorConfig" }
+        format:
+          type: object
+          additionalProperties: true
+          description: Format-specific settings (e.g. maven `version_policy`)
+    RepositoryInput:
+      type: object
+      required: [name, format, type, config]
+      properties:
+        name: { $ref: "#/components/schemas/RepositoryName" }
+        format: { $ref: "#/components/schemas/Format" }
+        type: { $ref: "#/components/schemas/RepositoryType" }
+        description: { type: string }
+        blob_store:
+          type: string
+          description: Required for hosted and proxy repositories
+        online: { type: boolean, default: true }
+        config: { $ref: "#/components/schemas/RepositoryConfig" }
+    RepositoryStatus:
+      type: string
+      enum: [online, slow_upstream, blocked, offline]
+    Repository:
+      allOf:
+        - $ref: "#/components/schemas/RepositoryInput"
+        - type: object
+          required: [id, url, status, size_bytes, component_count, created_at, updated_at]
+          properties:
+            id: { type: string }
+            url:
+              type: string
+              description: Client URL built from server.base_url
+            status: { $ref: "#/components/schemas/RepositoryStatus" }
+            size_bytes: { $ref: "#/components/schemas/Bytes" }
+            component_count: { type: integer }
+            created_at: { $ref: "#/components/schemas/Timestamp" }
+            updated_at: { $ref: "#/components/schemas/Timestamp" }
+    RepositoryList:
+      type: object
+      required: [items, counts]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Repository" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+        counts:
+          type: object
+          description: Totals ignoring the type filter (tab badges, count cards)
+          required: [all, hosted, proxy, group]
+          properties:
+            all: { type: integer }
+            hosted: { type: integer }
+            proxy: { type: integer }
+            group: { type: integer }
+
+    # ------------------------------------------------------------ blob stores
+    BlobStoreInput:
+      type: object
+      required: [name, kind]
+      properties:
+        name: { type: string }
+        kind: { type: string, enum: [fs, s3] }
+        soft_quota_bytes: { $ref: "#/components/schemas/Bytes" }
+        fs:
+          type: object
+          properties:
+            path: { type: string }
+        s3:
+          type: object
+          properties:
+            endpoint: { type: string }
+            region: { type: string }
+            bucket: { type: string }
+            prefix: { type: string }
+            access_key_id: { type: string }
+            secret_access_key: { type: string, writeOnly: true }
+            use_path_style: { type: boolean }
+    BlobStore:
+      allOf:
+        - $ref: "#/components/schemas/BlobStoreInput"
+        - type: object
+          required: [id, state, location, used_bytes, repository_count, blob_count]
+          properties:
+            id: { type: string }
+            state: { type: string, enum: [ok, degraded, unavailable, read_only] }
+            location:
+              type: string
+              description: Human-readable location (bucket/prefix or path)
+            used_bytes: { $ref: "#/components/schemas/Bytes" }
+            capacity_bytes:
+              type: [integer, "null"]
+              description: Null when the backend has no fixed capacity
+            repository_count: { type: integer }
+            blob_count: { type: integer }
+            write_latency_ms: { type: [number, "null"] }
+            encryption:
+              type: string
+              description: e.g. "SSE-S3", "SSE-KMS", "none"
+    BlobStoreList:
+      type: object
+      required: [items, totals]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/BlobStore" }
+        totals:
+          type: object
+          required: [used_bytes, dedup_saved_bytes, growth_bytes_per_day, reclaimable_bytes]
+          properties:
+            used_bytes: { $ref: "#/components/schemas/Bytes" }
+            capacity_bytes: { type: [integer, "null"] }
+            dedup_saved_bytes: { $ref: "#/components/schemas/Bytes" }
+            growth_bytes_per_day: { type: integer }
+            days_to_full: { type: [number, "null"] }
+            reclaimable_bytes:
+              allOf: [{ $ref: "#/components/schemas/Bytes" }]
+              description: Soft-deleted bytes a compaction would free now
+
+    # ------------------------------------------------------------ components
+    ScanState:
+      type: string
+      enum: [pending, clean, findings, quarantined]
+    ScanSummary:
+      type: object
+      required: [state, critical, high, medium, low]
+      properties:
+        state: { $ref: "#/components/schemas/ScanState" }
+        critical: { type: integer }
+        high: { type: integer }
+        medium: { type: integer }
+        low: { type: integer }
+    Publisher:
+      type: object
+      required: [kind, display_name]
+      properties:
+        kind: { type: string, enum: [user, ci, service_account] }
+        display_name: { type: string }
+    PublishedComponent:
+      type: object
+      required: [id, format, name, version, repository, publisher, published_at, scan]
+      properties:
+        id: { type: string }
+        format: { $ref: "#/components/schemas/Format" }
+        namespace:
+          type: string
+          description: Scope / groupId / image path prefix; empty when the format has none
+        name: { type: string }
+        version: { type: string }
+        repository: { type: string }
+        publisher: { $ref: "#/components/schemas/Publisher" }
+        published_at: { $ref: "#/components/schemas/Timestamp" }
+        scan: { $ref: "#/components/schemas/ScanSummary" }
+        download_count: { type: integer }
+        last_downloaded_at: { type: [string, "null"], format: date-time }
+    PublishedComponentPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PublishedComponent" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+    ComponentDetail:
+      allOf:
+        - $ref: "#/components/schemas/PublishedComponent"
+        - type: object
+          required: [size_bytes, checksums, install_command, signed, quarantined]
+          properties:
+            size_bytes: { $ref: "#/components/schemas/Bytes" }
+            digest:
+              type: string
+              description: Primary digest (OCI manifest digest or main file sha256)
+            checksums:
+              type: object
+              additionalProperties: { type: string }
+            install_command:
+              type: string
+              description: Pull/install command for the format, built from server.base_url
+            signed: { type: boolean }
+            platforms:
+              type: array
+              items: { type: string }
+              examples: [["linux/amd64", "linux/arm64"]]
+            quarantined: { type: boolean }
+            quarantine_reason: { type: string }
+            downloads_30d: { type: integer }
+            last_downloaded_by: { type: string }
+            base_image: { type: string }
+            source_url:
+              type: string
+              description: Source commit link when provenance is known
+            license: { type: string }
+            attributes:
+              type: object
+              additionalProperties: true
+    Asset:
+      type: object
+      required: [id, path, kind, blob_digest, content_type, size_bytes, created_at]
+      properties:
+        id: { type: string }
+        path: { type: string }
+        kind: { type: string, enum: [content, metadata] }
+        blob_digest: { type: string }
+        content_type: { type: string }
+        size_bytes: { $ref: "#/components/schemas/Bytes" }
+        checksums:
+          type: object
+          additionalProperties: { type: string }
+        download_url: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        last_downloaded_at: { type: [string, "null"], format: date-time }
+    AssetPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Asset" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+
+    # ------------------------------------------------------------ search
+    FacetValue:
+      type: object
+      required: [value, count]
+      properties:
+        value: { type: string }
+        count: { type: integer }
+    SearchHit:
+      type: object
+      required: [component_id, format, coordinates, repository, versions, downloads, security]
+      properties:
+        component_id:
+          type: string
+          description: Newest matching version
+        format: { $ref: "#/components/schemas/Format" }
+        coordinates:
+          type: string
+          description: Rendered in the format's idiom (`@acme/ui@5.3.1`, `com.acme:ledger-core:7.0.0`)
+        repository: { type: string }
+        versions: { type: integer }
+        downloads: { type: integer }
+        security: { $ref: "#/components/schemas/ScanState" }
+        published_at: { $ref: "#/components/schemas/Timestamp" }
+    SearchResult:
+      type: object
+      required: [items, total, facets]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SearchHit" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+        total: { type: integer }
+        facets:
+          type: object
+          required: [format, security, repository]
+          properties:
+            format:
+              type: array
+              items: { $ref: "#/components/schemas/FacetValue" }
+            security:
+              type: array
+              items: { $ref: "#/components/schemas/FacetValue" }
+            repository:
+              type: array
+              items: { $ref: "#/components/schemas/FacetValue" }
+
+    # ------------------------------------------------------------ security
+    FindingStatus:
+      type: string
+      enum: [open, assigned, waived, fixed]
+    Finding:
+      type: object
+      required: [id, advisory_id, title, severity, package, installed, status, affected_components]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [vulnerability, license] }
+        advisory_id: { type: string, examples: ["CVE-2026-1234", "GHSA-xxxx-xxxx-xxxx"] }
+        title: { type: string }
+        severity: { $ref: "#/components/schemas/Severity" }
+        cvss: { type: [number, "null"] }
+        package: { type: string }
+        installed: { type: string }
+        fixed_in: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/FindingStatus" }
+        quarantined: { type: boolean }
+        affected_components: { type: integer }
+        waiver_reason: { type: [string, "null"] }
+        waiver_until: { type: [string, "null"], format: date-time }
+        assignee: { type: [string, "null"] }
+        first_seen_at: { $ref: "#/components/schemas/Timestamp" }
+    FindingPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Finding" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+    FindingList:
+      allOf:
+        - $ref: "#/components/schemas/FindingPage"
+        - type: object
+          required: [totals]
+          properties:
+            totals:
+              type: object
+              required: [critical, high, medium, low]
+              properties:
+                critical: { type: integer }
+                high: { type: integer }
+                medium: { type: integer }
+                low: { type: integer }
+    WaiverInput:
+      type: object
+      required: [reason, until]
+      properties:
+        reason: { type: string, minLength: 3 }
+        until: { $ref: "#/components/schemas/Timestamp" }
+
+    # ------------------------------------------------------------ cleanup
+    CleanupCriteria:
+      type: object
+      description: All set conditions must hold (AND); keep rules always win.
+      properties:
+        older_than_days: { type: integer, minimum: 1 }
+        not_downloaded_days: { type: integer, minimum: 1 }
+        keep_newest: { type: integer, minimum: 0 }
+        keep_matching:
+          type: array
+          description: Version/tag globs never deleted (e.g. `release-*`, `latest`)
+          items: { type: string }
+        prerelease_only:
+          type: boolean
+          description: Only pre-release / snapshot versions
+    CleanupPolicyInput:
+      type: object
+      required: [name, criteria, repositories]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        format:
+          oneOf:
+            - $ref: "#/components/schemas/Format"
+            - type: "null"
+        criteria: { $ref: "#/components/schemas/CleanupCriteria" }
+        repositories:
+          type: array
+          items: { type: string }
+        schedule:
+          type: [string, "null"]
+          description: 5-field cron in UTC; null = manual only
+        enabled: { type: boolean, default: true }
+        preview_token:
+          type: string
+          description: From a preview of identical criteria; required to save
+    CleanupPolicy:
+      allOf:
+        - $ref: "#/components/schemas/CleanupPolicyInput"
+        - type: object
+          required: [id, schedule_text, created_at]
+          properties:
+            id: { type: string }
+            schedule_text:
+              type: string
+              description: Human form of the schedule, e.g. "Every day at 02:00 UTC"
+            next_run_at: { type: [string, "null"], format: date-time }
+            created_at: { $ref: "#/components/schemas/Timestamp" }
+    CleanupPolicyPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CleanupPolicy" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+    CleanupPreview:
+      type: object
+      required: [component_count, bytes, sample, preview_token]
+      properties:
+        component_count: { type: integer }
+        bytes: { $ref: "#/components/schemas/Bytes" }
+        sample:
+          type: array
+          items: { $ref: "#/components/schemas/PublishedComponent" }
+        preview_token: { type: string }
+
+    # ------------------------------------------------------------ tasks
+    TaskType:
+      type: string
+      enum: [cleanup, blob_compaction, docker_gc, rescan, reindex, directory_sync, db_backup, replication, proxy_metadata_refresh, blob_store_move]
+    TaskRunStatus:
+      type: string
+      enum: [queued, running, succeeded, failed, cancelled]
+    TaskInput:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { $ref: "#/components/schemas/TaskType" }
+        description: { type: string }
+        schedule: { type: [string, "null"], description: 5-field cron in UTC }
+        config:
+          type: object
+          additionalProperties: true
+        enabled: { type: boolean, default: true }
+    TaskRun:
+      type: object
+      required: [id, task_id, status, progress, created_at]
+      properties:
+        id: { type: string }
+        task_id: { type: string }
+        task_name: { type: string }
+        status: { $ref: "#/components/schemas/TaskRunStatus" }
+        progress: { type: number, minimum: 0, maximum: 1 }
+        message: { type: string }
+        triggered_by: { type: string }
+        node: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+    Task:
+      allOf:
+        - $ref: "#/components/schemas/TaskInput"
+        - type: object
+          required: [id, schedule_text]
+          properties:
+            id: { type: string }
+            schedule_text: { type: string }
+            last_run:
+              oneOf:
+                - $ref: "#/components/schemas/TaskRun"
+                - type: "null"
+            next_run_at: { type: [string, "null"], format: date-time }
+    TaskList:
+      type: object
+      required: [items, running]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Task" }
+        running:
+          type: array
+          description: Runs in progress ("Running now" banner)
+          items: { $ref: "#/components/schemas/TaskRun" }
+    TaskRunPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TaskRun" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+
+    # ------------------------------------------------------------ access
+    Privilege:
+      type: string
+      pattern: "^(repo|system):[^:]+:(read|write|delete|admin|\\*)$|^system:\\*$"
+      examples: ["repo:*:read", "repo:npm-*:write", "system:users:admin", "system:*"]
+    Member:
+      type: object
+      required: [id, username, kind, display_name, source, roles, token_count]
+      properties:
+        id: { type: string }
+        username: { type: string }
+        kind: { type: string, enum: [user, service_account] }
+        display_name: { type: string }
+        email: { type: [string, "null"] }
+        avatar_url: { type: [string, "null"] }
+        source: { type: string, enum: [local, oidc, ldap, saml] }
+        roles:
+          type: array
+          items: { type: string }
+        token_count: { type: integer }
+        disabled: { type: boolean }
+        locked_until: { type: [string, "null"], format: date-time }
+        last_active_at: { type: [string, "null"], format: date-time }
+    MemberInput:
+      type: object
+      required: [username, kind]
+      properties:
+        username: { type: string }
+        kind: { type: string, enum: [user, service_account] }
+        display_name: { type: string }
+        email: { type: string }
+        password:
+          type: string
+          writeOnly: true
+          description: Local users only
+        roles:
+          type: array
+          items: { type: string }
+        disabled: { type: boolean }
+    MemberPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Member" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+    GroupMapping:
+      type: object
+      required: [provider, group]
+      properties:
+        provider: { type: string }
+        group: { type: string }
+    RoleInput:
+      type: object
+      required: [name, privileges]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        privileges:
+          type: array
+          items: { $ref: "#/components/schemas/Privilege" }
+        group_mappings:
+          type: array
+          description: External (OIDC/LDAP/SAML) groups granted this role
+          items: { $ref: "#/components/schemas/GroupMapping" }
+    Role:
+      allOf:
+        - $ref: "#/components/schemas/RoleInput"
+        - type: object
+          required: [id, builtin, member_count]
+          properties:
+            id: { type: string }
+            builtin: { type: boolean }
+            member_count: { type: integer }
+    IdentityProvider:
+      type: object
+      required: [name, kind, enabled, state]
+      properties:
+        name: { type: string }
+        kind: { type: string, enum: [oidc, ldap, saml] }
+        enabled: { type: boolean }
+        state: { type: string, enum: [ok, error, disabled] }
+        last_sync_at: { type: [string, "null"], format: date-time }
+        error: { type: string }
+    TokenInput:
+      type: object
+      required: [name, scopes, expires_at]
+      properties:
+        name: { type: string }
+        owner:
+          type: string
+          description: Service account name; default the caller
+        scopes:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/Privilege" }
+        expires_at:
+          allOf: [{ $ref: "#/components/schemas/Timestamp" }]
+          description: Required; tokens never live forever
+    Token:
+      type: object
+      required: [id, name, owner, prefix, scopes, expires_at, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        owner: { type: string }
+        prefix:
+          type: string
+          description: First characters of the secret, for recognition (`hgr_1a2b`)
+        scopes:
+          type: array
+          items: { $ref: "#/components/schemas/Privilege" }
+        expires_at: { $ref: "#/components/schemas/Timestamp" }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        last_used_at: { type: [string, "null"], format: date-time }
+    TokenCreated:
+      allOf:
+        - $ref: "#/components/schemas/Token"
+        - type: object
+          required: [secret]
+          properties:
+            secret:
+              type: string
+              description: The token (`hgr_...`). Shown once; store it now.
+    TokenPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Token" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+
+    # ------------------------------------------------------------ audit
+    AuditEvent:
+      type: object
+      required: [id, at, actor, action, target, outcome]
+      properties:
+        id: { type: integer, format: int64 }
+        at: { $ref: "#/components/schemas/Timestamp" }
+        actor: { type: string }
+        action:
+          type: string
+          examples: ["repository.create", "component.delete", "auth.login.failed"]
+        target: { type: string, examples: ["repo:npm-hosted"] }
+        outcome: { type: string, enum: [success, denied, error] }
+        ip: { type: [string, "null"] }
+        details:
+          type: object
+          additionalProperties: true
+    AuditEventPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AuditEvent" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+
+    # ------------------------------------------------------------ cluster
+    Node:
+      type: object
+      required: [id, name, role, address, healthy, last_heartbeat]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        role: { type: string, enum: [leader, follower, edge] }
+        zone: { type: string }
+        address: { type: string }
+        version: { type: string }
+        healthy: { type: boolean }
+        cpu_pct: { type: number }
+        memory_pct: { type: number }
+        cache_disk_pct: { type: number }
+        requests_per_second: { type: number }
+        uptime_seconds: { type: integer }
+        last_heartbeat: { $ref: "#/components/schemas/Timestamp" }
+    ClusterStatus:
+      type: object
+      required: [state, quorum, nodes, dependencies]
+      properties:
+        state: { type: string, enum: [ok, degraded, down] }
+        quorum: { type: boolean }
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/Node" }
+        dependencies:
+          type: array
+          items: { $ref: "#/components/schemas/DependencyStatus" }
+    ReplicationTargetInput:
+      type: object
+      required: [name, url, repositories]
+      properties:
+        name: { type: string }
+        url: { type: string, format: uri }
+        kind: { type: string, enum: [edge, dr], default: edge }
+        repositories:
+          type: array
+          description: Repository name patterns
+          items: { type: string }
+        enabled: { type: boolean, default: true }
+    ReplicationTarget:
+      allOf:
+        - $ref: "#/components/schemas/ReplicationTargetInput"
+        - type: object
+          required: [id, state, objects_today]
+          properties:
+            id: { type: string }
+            state: { type: string, enum: [in_sync, lagging, failing, disabled] }
+            lag_seconds: { type: [integer, "null"] }
+            objects_today: { type: integer }
+            last_error: { type: [string, "null"] }
+            retry_at: { type: [string, "null"], format: date-time }
+
+    # ------------------------------------------------------------ events
+    LiveEvent:
+      description: One SSE message; `type` is the SSE `event:` field, `data` its JSON payload.
+      oneOf:
+        - type: object
+          required: [type, data]
+          properties:
+            type: { const: component.published }
+            data: { $ref: "#/components/schemas/PublishedComponent" }
+        - type: object
+          required: [type, data]
+          properties:
+            type: { const: component.quarantined }
+            data:
+              type: object
+              required: [id, name, version]
+              properties:
+                id: { type: string }
+                name: { type: string }
+                version: { type: string }
+                repository: { type: string }
+                reason: { type: string }
+        - type: object
+          required: [type, data]
+          properties:
+            type: { const: component.deleted }
+            data:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                repository: { type: string }
+        - type: object
+          required: [type, data]
+          properties:
+            type: { const: task.progress }
+            data:
+              type: object
+              required: [task_id, progress]
+              properties:
+                task_id: { type: string }
+                run_id: { type: string }
+                progress: { type: number, minimum: 0, maximum: 1 }
+                message: { type: string }
+        - type: object
+          required: [type, data]
+          properties:
+            type: { const: task.finished }
+            data: { $ref: "#/components/schemas/TaskRun" }
+        - type: object
+          required: [type, data]
+          properties:
+            type: { const: upstream.status }
+            data: { $ref: "#/components/schemas/UpstreamHealth" }
+      discriminator:
+        propertyName: type
