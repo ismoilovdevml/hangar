@@ -49,15 +49,47 @@ type Format interface {
 }
 
 type Upstream interface { // proxy repos
-    Fetch(ctx context.Context, path string, cond Conditional) (*UpstreamResponse, error)
+    Fetch(ctx context.Context, req UpstreamRequest) (*UpstreamResponse, error) // path, method, headers, conditional
 }
 ```
+
+The full set, with doc comments, is in `internal/core/interfaces.go`:
+`BlobStore`, `BlobStores`, `Format` (+ optional `RootMounter`), `Upstream`/`Upstreams`,
+`HTTPClientFactory`, `RepositoryService`, `ComponentService`, `Authenticator`,
+`TokenIssuer`, `AuthZ`, `EventBus`, `JobQueue`, `AuditLog`, and the `Deps` struct
+every format receives. In-memory fakes for all of them live in
+`internal/core/coretest`. Decisions behind them: `docs/adr/`.
+
+## Routing
+
+| Path | Served by |
+|---|---|
+| `/healthz`, `/readyz`, `/metrics` | operations (liveness; DB + blob store + NATS readiness; Prometheus) |
+| `/api/v1/...` | REST API (`api/openapi.yaml`) |
+| `/repository/{repo}/...` | format handlers; the dispatcher resolves the repository first |
+| `/v2/...` | OCI (docker format, root mount) |
+| anything else | web UI (SPA, embedded) |
+
+## Corporate networks and reverse proxies
+
+- **Outbound**: every proxy repository reaches its remote through one HTTP
+  client factory. Server-wide `http.proxy` (http/https/socks5, credentials from
+  env), `http.no_proxy`, `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` (default on),
+  `http.ca_file`, timeouts and pool limits; each remote may override `proxy`
+  (`inherit` | `none` | URL), `ca_bundle`, `insecure_skip_verify` and timeouts.
+  Upstream credentials (basic, bearer, named header) are sent only to the
+  remote's own host, never to redirect targets.
+- **Inbound**: `server.base_url` is the only source of generated absolute URLs
+  (npm tarballs, OCI token realm, Maven/PyPI links). `X-Forwarded-For/Proto/Host`
+  are honoured only from `server.trusted_proxies`. Docker repositories can get
+  a connector: a dedicated host name (`cr.example.com`) or port.
+- See `docs/adr/0008-outbound-http-and-reverse-proxies.md`.
 
 ## Data model (PostgreSQL, simplified)
 
 ```
 blob_stores(id, name, kind, config jsonb, soft_quota_bytes)
-blobs(digest pk, store_id, size, created_at, ref_count, soft_deleted_at)
+blobs(store_id, digest, size, created_at, ref_count, soft_deleted_at, pk(store_id, digest))
 repositories(id, name unique, format, type, blob_store_id, config jsonb, online)
 group_members(group_id, member_id, position)
 components(id, repo_id, namespace, name, version, created_at, published_by,
@@ -78,7 +110,7 @@ nodes(id, address, role, last_heartbeat, stats jsonb), replication_targets, repl
 
 - `GET/POST /api/v1/...` JSON REST for UI and automation, described in `api/openapi.yaml`.
   Resources: repositories, blob-stores, components, assets, search, findings, waivers,
-  cleanup-policies (+ `:preview`), tasks (+ `:run`, `:stop`), users, roles, tokens,
+  cleanup-policies (+ `/preview`), tasks (+ `/{id}/run`, `/{id}/stop`), users, roles, tokens,
   audit, nodes, replication, system/status, metrics/overview.
 - `GET /api/v1/events` — Server-Sent Events: publishes, quarantines, task progress.
 - Config as code: `hangar apply -f` / `hangar export` (YAML), Terraform provider later.
