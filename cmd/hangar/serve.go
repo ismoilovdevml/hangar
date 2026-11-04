@@ -83,13 +83,23 @@ func serveCmd(args []string, stderr io.Writer) error {
 	}
 	defer a.close()
 
-	err = server.Run(ctx, server.Config{
+	srvCfg := server.Config{
 		Addr:              cfg.Server.Addr,
 		ReadHeaderTimeout: cfg.Server.ReadHeaderTimeout,
 		IdleTimeout:       cfg.Server.IdleTimeout,
 		ShutdownTimeout:   cfg.Server.ShutdownTimeout,
 		MaxHeaderBytes:    cfg.Security.Limits.MaxHeaderBytes,
-	}, a.router, a.health, log, nil)
+	}
+	// Dedicated ports of docker repository connectors open and close as
+	// repositories change.
+	host, mainPort := server.ListenHostPort(cfg.Server.Addr)
+	connectors := server.NewConnectorListeners(ctx, host, server.ConnectorOnly(a.router), srvCfg, log, mainPort)
+	defer connectors.Close()
+	if a.watchConnectorPorts != nil {
+		go a.watchConnectorPorts(ctx, connectors.Set)
+	}
+
+	err = server.Run(ctx, srvCfg, a.router, a.health, log, nil)
 	if err != nil {
 		return err
 	}

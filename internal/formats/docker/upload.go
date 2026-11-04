@@ -1,11 +1,7 @@
 package docker
 
 import (
-	"bytes"
 	"context"
-	"crypto/hmac"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,71 +11,6 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 )
-
-// Upload sessions keep no server memory and no database rows. Every chunk is
-// stored as its own content-addressed blob, and the session state (the chunk
-// list) is itself a small blob. The upload URL carries the state's digest and
-// an HMAC over it (_state=<hex>.<mac>), so any node with the shared key and
-// blob store can continue a session, and a client cannot forge one that
-// references blobs it did not upload. Chunk and state blobs are referenced by
-// no asset and are reclaimed by blob garbage collection.
-
-type uploadChunk struct {
-	Digest core.Digest `json:"d"`
-	Size   int64       `json:"n"`
-}
-
-type uploadState struct {
-	UUID    string        `json:"u"`
-	Repo    string        `json:"r"` // repository addressed by the URL (may be a group)
-	Image   string        `json:"i"`
-	Chunks  []uploadChunk `json:"c,omitempty"`
-	Size    int64         `json:"s"`
-	Started int64         `json:"t"`
-}
-
-var errUploadUnknown = errors.New("blob upload unknown")
-
-func (h *handler) uploadMAC(stateDigest core.Digest) string {
-	return base64.RawURLEncoding.EncodeToString(h.sign.mac("upload", string(stateDigest)))
-}
-
-// saveState stores st and returns the token for the upload URL.
-func (h *handler) saveState(ctx context.Context, bs core.BlobStore, st *uploadState) (string, error) {
-	b, err := json.Marshal(st)
-	if err != nil {
-		return "", fmt.Errorf("encode upload state: %w", err)
-	}
-	d, _, err := bs.Put(ctx, bytes.NewReader(b))
-	if err != nil {
-		return "", fmt.Errorf("store upload state: %w", err)
-	}
-	return d.Hex() + "." + h.uploadMAC(d), nil
-}
-
-func (h *handler) loadState(ctx context.Context, bs core.BlobStore, tok string) (*uploadState, error) {
-	hexPart, mac, ok := strings.Cut(tok, ".")
-	if !ok {
-		return nil, errUploadUnknown
-	}
-	d, err := core.ParseDigest(core.AlgorithmSHA256 + ":" + hexPart)
-	if err != nil || !hmac.Equal([]byte(mac), []byte(h.uploadMAC(d))) {
-		return nil, errUploadUnknown
-	}
-	rc, err := bs.Get(ctx, d)
-	if err != nil {
-		if errors.Is(err, core.ErrNotFound) {
-			return nil, errUploadUnknown
-		}
-		return nil, err
-	}
-	defer func() { _ = rc.Close() }()
-	var st uploadState
-	if err := json.NewDecoder(io.LimitReader(rc, 1<<20)).Decode(&st); err != nil {
-		return nil, errUploadUnknown
-	}
-	return &st, nil
-}
 
 func uploadLocation(name, uuid, tok string) string {
 	return "/v2/" + name + "/blobs/uploads/" + uuid + "?_state=" + tok
@@ -155,7 +86,8 @@ func (h *handler) tryMount(w http.ResponseWriter, r *http.Request, rq *request, 
 	if !ok {
 		return false
 	}
-	fromRepoName, fromImage, ok := splitName(from)
+	n, _ := namingFrom(ctx)
+	fromRepoName, fromImage, ok := n.split(from)
 	if !ok {
 		return false
 	}
@@ -174,6 +106,9 @@ func (h *handler) tryMount(w http.ResponseWriter, r *http.Request, rq *request, 
 		a, err := h.deps.Components.GetAsset(ctx, src.ID, blobPath(fromImage, d))
 		if err != nil {
 			continue
+		}
+		if _, blocked, err := h.quarantined(ctx, src, fromImage, d); err != nil || blocked {
+			return false // quarantined content is not copied out; upload it instead
 		}
 		stored := a.BlobDigest
 		if _, err := bs.Stat(ctx, stored); err != nil {
@@ -215,7 +150,7 @@ func (h *handler) loadUpload(w http.ResponseWriter, r *http.Request, rq *request
 		h.internal(w, r, "blob store", err)
 		return nil, nil, nil, false
 	}
-	st, err := h.loadState(ctx, bs, r.URL.Query().Get("_state"))
+	st, err := h.loadState(ctx, bs, rq.ref, r.URL.Query().Get("_state"))
 	if err == nil && (st.UUID != rq.ref || st.Repo != rq.repo.Name || st.Image != rq.image ||
 		h.now().Unix()-st.Started > int64(h.uploadTTL.Seconds())) {
 		err = errUploadUnknown
@@ -370,6 +305,7 @@ func (h *handler) commitBlob(w http.ResponseWriter, r *http.Request, rq *request
 		h.fail(w, r, rq, err, codeBlobUnknown)
 		return
 	}
+	h.finishUpload(ctx, bs, st, stored)
 	blobCreated(w, rq.name, want)
 }
 
@@ -382,9 +318,11 @@ func (h *handler) uploadStatus(w http.ResponseWriter, r *http.Request, rq *reque
 }
 
 func (h *handler) cancelUpload(w http.ResponseWriter, r *http.Request, rq *request) {
-	if _, _, _, ok := h.loadUpload(w, r, rq); !ok {
+	st, _, bs, ok := h.loadUpload(w, r, rq)
+	if !ok {
 		return
 	}
+	h.finishUpload(r.Context(), bs, st, "")
 	w.Header().Set("Content-Length", "0")
 	w.WriteHeader(http.StatusNoContent)
 }

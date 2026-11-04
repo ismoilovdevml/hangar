@@ -70,6 +70,9 @@ const (
 	TypeDockerGC        = "docker_gc"
 	TypeAuthPurge       = "auth_purge"
 	TypeAuditPartitions = "audit_partitions"
+	// TypeDockerUploadCleanup ends abandoned docker upload sessions and releases
+	// their chunks to blob GC (internal/tasks/dockeruploads).
+	TypeDockerUploadCleanup = "docker_upload_cleanup"
 )
 
 // Triggers recorded in task_runs.triggered_by besides a principal name.

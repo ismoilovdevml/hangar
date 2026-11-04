@@ -42,7 +42,7 @@ var (
 const maxNameLength = 255
 
 // parseRoute parses the path after "/v2/".
-func parseRoute(rest string) route {
+func parseRoute(rest string, nm naming) route {
 	rest = strings.TrimPrefix(rest, "/")
 	switch rest {
 	case "":
@@ -53,34 +53,34 @@ func parseRoute(rest string) route {
 		return route{kind: routeCatalog}
 	}
 	if name, ok := strings.CutSuffix(rest, "/tags/list"); ok {
-		return withName(route{kind: routeTags}, name)
+		return withName(route{kind: routeTags}, name, nm)
 	}
 	trimmed := strings.TrimSuffix(rest, "/")
 	seg := strings.Split(trimmed, "/")
 	n := len(seg)
 	switch {
 	case n >= 3 && seg[n-2] == "blobs" && seg[n-1] == "uploads":
-		return withName(route{kind: routeUploadStart}, strings.Join(seg[:n-2], "/"))
+		return withName(route{kind: routeUploadStart}, strings.Join(seg[:n-2], "/"), nm)
 	case n >= 4 && seg[n-3] == "blobs" && seg[n-2] == "uploads":
-		return withName(route{kind: routeUpload, ref: seg[n-1]}, strings.Join(seg[:n-3], "/"))
+		return withName(route{kind: routeUpload, ref: seg[n-1]}, strings.Join(seg[:n-3], "/"), nm)
 	case trimmed != rest:
 		// Only the upload-start endpoint has a trailing slash.
 		return route{}
 	case n >= 3 && seg[n-2] == "manifests":
-		return withName(route{kind: routeManifest, ref: seg[n-1]}, strings.Join(seg[:n-2], "/"))
+		return withName(route{kind: routeManifest, ref: seg[n-1]}, strings.Join(seg[:n-2], "/"), nm)
 	case n >= 3 && seg[n-2] == "blobs":
-		return withName(route{kind: routeBlob, ref: seg[n-1]}, strings.Join(seg[:n-2], "/"))
+		return withName(route{kind: routeBlob, ref: seg[n-1]}, strings.Join(seg[:n-2], "/"), nm)
 	case n >= 3 && seg[n-2] == "referrers":
-		return withName(route{kind: routeReferrers, ref: seg[n-1]}, strings.Join(seg[:n-2], "/"))
+		return withName(route{kind: routeReferrers, ref: seg[n-1]}, strings.Join(seg[:n-2], "/"), nm)
 	}
 	return route{}
 }
 
 // withName fills name, repo and image. An invalid name yields routeInvalid
 // with name set so the handler can answer NAME_INVALID.
-func withName(rt route, name string) route {
+func withName(rt route, name string, n naming) route {
 	rt.name = name
-	repo, image, ok := splitName(name)
+	repo, image, ok := n.split(name)
 	if !ok {
 		rt.kind = routeInvalid
 		return rt

@@ -297,6 +297,10 @@ func (h *harness) do(c cred, method, path string, body any, hdr ...string) (resp
 		req.Header.Set("Content-Type", ct)
 	}
 	for i := 0; i+1 < len(hdr); i += 2 {
+		if hdr[i] == "Host" {
+			req.Host = hdr[i+1]
+			continue
+		}
 		req.Header.Set(hdr[i], hdr[i+1])
 	}
 	switch {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -37,6 +38,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/tasks"
 	"github.com/ismoilovdevml/hangar/internal/tasks/blobgc"
 	"github.com/ismoilovdevml/hangar/internal/tasks/dockergc"
+	"github.com/ismoilovdevml/hangar/internal/tasks/dockeruploads"
 	"github.com/ismoilovdevml/hangar/internal/tasks/scheduler"
 	"github.com/ismoilovdevml/hangar/internal/version"
 )
@@ -61,6 +63,9 @@ type app struct {
 	health  *health.Checker
 	auth    *auth.Service
 	closers []func()
+	// watchConnectorPorts reports the dedicated ports of docker repository
+	// connectors (nil if the docker format is not built in).
+	watchConnectorPorts func(context.Context, func(map[int]string))
 }
 
 func (a *app) onClose(f func()) { a.closers = append(a.closers, f) }
@@ -181,6 +186,13 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	reg, err := builtin.RegistryWith(builtin.Options{Docker: docker.Options{TokenKey: []byte(cfg.Docker.TokenKey)}})
 	if err != nil {
 		return nil, err
+	}
+	var dockerFormat *docker.Format
+	if f, ok := reg.Get(docker.Name); ok {
+		if df, ok := f.(*docker.Format); ok {
+			a.watchConnectorPorts = df.WatchConnectorPorts
+			dockerFormat = df
+		}
 	}
 
 	// The SSRF guard checks remote URLs when repositories are saved, every
@@ -364,7 +376,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	// Tasks: scheduled maintenance, cleanup policies and docker GC, executed
 	// as task runs on any node. Close hands running runs back to the queue
 	// before the queue stops.
-	taskSvc, cleanupSvc, err := buildTasks(ctx, cfg, pool, queue, deps, collector, authSvc, log)
+	taskSvc, cleanupSvc, err := buildTasks(ctx, cfg, pool, queue, deps, collector, authSvc, dockerFormat, log)
 	if err != nil {
 		return nil, err
 	}
@@ -401,10 +413,15 @@ var builtinTasks = []tasks.Builtin{
 		Description: "Create the audit log partitions for the coming months"},
 }
 
+// dockerUploadCleanupTask ends abandoned docker upload sessions and hands
+// their chunks to blob GC, which frees them after its grace period.
+var dockerUploadCleanupTask = tasks.Builtin{Name: "docker-upload-cleanup", Type: tasks.TypeDockerUploadCleanup, Schedule: "40 * * * *",
+	Description: "End abandoned Docker upload sessions and release their chunks to blob compaction"}
+
 // buildTasks wires the task service with every executor and the cleanup
 // policy service, and makes sure the built-in tasks exist.
 func buildTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, queue core.JobQueue, deps core.Deps,
-	collector *blobgc.Collector, authSvc *auth.Service, log *slog.Logger,
+	collector *blobgc.Collector, authSvc *auth.Service, dockerFormat *docker.Format, log *slog.Logger,
 ) (*tasks.Service, *cleanup.Service, error) {
 	if g := cfg.Storage.GC.GracePeriod; g > 0 && g <= docker.DefaultUploadTTL {
 		log.Warn("storage.gc.grace_period should exceed the docker upload session lifetime, or blobs of uploads "+
@@ -430,7 +447,12 @@ func buildTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, queu
 		x.Progress(1, fmt.Sprintf("Audit partitions ensured (%v created)", created))
 		return err
 	}), tasks.TypeOptions{})
-	if err := taskSvc.EnsureBuiltins(ctx, builtinTasks); err != nil {
+	builtins := builtinTasks
+	if dockerFormat != nil {
+		taskSvc.Register(tasks.TypeDockerUploadCleanup, dockeruploads.Executor(dockerFormat, pool), tasks.TypeOptions{})
+		builtins = append(slices.Clone(builtinTasks), dockerUploadCleanupTask)
+	}
+	if err := taskSvc.EnsureBuiltins(ctx, builtins); err != nil {
 		return nil, nil, err
 	}
 	if err := taskSvc.Handle(); err != nil {
