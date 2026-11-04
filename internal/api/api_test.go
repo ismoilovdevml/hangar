@@ -480,6 +480,19 @@ func TestEventStream(t *testing.T) {
 	}
 }
 
+// upstream.status carries the repository name the UI matches rows by.
+func TestRenderUpstreamStatus(t *testing.T) {
+	ev := (&API{}).renderEvent(context.Background(), core.Event{Type: core.EventUpstreamStatus, Repository: "nuget-proxy",
+		Data: json.RawMessage(`{"state":"slow","previous":"healthy","url":"https://api.nuget.org/v3/index.json"}`)})
+	var got map[string]string
+	if err := json.Unmarshal(ev.Data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["name"] != "nuget-proxy" || got["state"] != "slow" || got["previous"] != "healthy" || got["url"] != "https://api.nuget.org/v3/index.json" {
+		t.Errorf("data = %v", got)
+	}
+}
+
 // signedIn authenticates every request as a user, for tests of what
 // happens after authentication.
 func signedIn(next http.Handler) http.Handler {

@@ -3318,6 +3318,16 @@ components:
           required: [type, data]
           properties:
             type: { const: upstream.status }
-            data: { $ref: "#/components/schemas/UpstreamHealth" }
+            data:
+              type: object
+              description: A proxy remote changed state; latency is not included (see /upstreams/health)
+              required: [name, url, state]
+              properties:
+                name:
+                  type: string
+                  description: Proxy repository name
+                url: { type: string }
+                state: { $ref: "#/components/schemas/UpstreamState" }
+                previous: { $ref: "#/components/schemas/UpstreamState" }
       discriminator:
         propertyName: type
