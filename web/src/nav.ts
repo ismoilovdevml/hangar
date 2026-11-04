@@ -2,6 +2,7 @@ import type { ComponentType, SVGProps } from 'react';
 import {
   IconCluster,
   IconClock,
+  IconKey,
   IconDatabase,
   IconOverview,
   IconPackage,
@@ -24,6 +25,7 @@ export type AppPath =
   | '/vulnerabilities'
   | '/access'
   | '/audit'
+  | '/account'
   | '/tasks'
   | '/cluster'
   | '/settings';
@@ -61,8 +63,9 @@ export const NAV: NavSection[] = [
     title: 'Security',
     items: [
       { to: '/vulnerabilities', label: 'Vulnerabilities', icon: IconShield, keywords: 'cve scanning findings quarantine' },
-      { to: '/access', label: 'Access & audit', icon: IconUsers, keywords: 'users roles tokens audit log' },
+      { to: '/access', label: 'Access & audit', icon: IconUsers, keywords: 'users members service accounts roles permissions tokens' },
       { to: '/audit', label: 'Audit log', icon: IconAudit, keywords: 'events history who did export compliance' },
+      { to: '/account', label: 'My account', icon: IconKey, keywords: 'profile password personal access tokens sessions devices' },
     ],
   },
   {

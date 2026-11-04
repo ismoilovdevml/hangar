@@ -153,3 +153,9 @@ export const IconArrowDown = (p: IconProps) => (
     <path d="M12 5v14M6 13l6 6 6-6" {...s} strokeLinecap="round" strokeLinejoin="round" />
   </Svg>
 );
+export const IconKey = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="8" cy="15" r="4" {...s} />
+    <path d="m10.8 12.2 8.2-8.2M16 7l2.5 2.5M14 9l2 2" {...s} strokeLinecap="round" />
+  </Svg>
+);

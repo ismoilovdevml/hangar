@@ -5,6 +5,7 @@
  */
 import { delay, http, HttpResponse } from 'msw';
 import type { ApiError, LoginRequest, OverviewRange, Repository, RepositoryInput, RepositoryType } from '../api/types';
+import { accessHandlers, resetAccessState } from './access';
 import * as data from './data';
 import { onMockLiveEvent, opsHandlers, resetOpsMockState } from './ops';
 
@@ -29,6 +30,7 @@ let state = initialState();
 export function resetMockState(): void {
   state = initialState();
   resetOpsMockState();
+  resetAccessState();
 }
 
 /** Test helpers: inspect or change the mock server's state. */
@@ -232,6 +234,8 @@ export const handlers = [
 
   http.get(api('/blob-stores'), ({ request }) => guard(request) ?? HttpResponse.json(data.blobStoreList())),
   ...opsHandlers(guard),
+
+  ...accessHandlers(guard),
 
   http.get(api('/events'), ({ request }) =>
     guard(request) ??

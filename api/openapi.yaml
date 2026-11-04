@@ -119,6 +119,86 @@ paths:
               schema: { $ref: "#/components/schemas/ClientEndpointPage" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /me/profile:
+    put:
+      tags: [access]
+      operationId: updateMyProfile
+      summary: Change your own display name and email (local accounts)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProfileInput" }
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Member" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /me/password:
+    put:
+      tags: [access]
+      operationId: changeMyPassword
+      summary: Change your own password
+      description: |
+        Needs the current password; wrong guesses count towards the account
+        lockout. Not available to token-authenticated requests. Every other
+        session of yours ends and short-lived session tokens are revoked;
+        personal access tokens keep working.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordChange" }
+      responses:
+        "204": { description: Changed }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "423":
+          description: Account locked after repeated wrong passwords
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /me/sessions:
+    get:
+      tags: [access]
+      operationId: listMySessions
+      summary: Your active browser sessions, most recently used first
+      responses:
+        "200":
+          description: Sessions; `current` marks the one making the request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionInfoList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    delete:
+      tags: [access]
+      operationId: revokeMyOtherSessions
+      summary: Sign out everywhere else (every session except the current one)
+      responses:
+        "200":
+          description: Sessions ended
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionsEnded" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/sessions/{sid}:
+    parameters:
+      - $ref: "#/components/parameters/SessionId"
+    delete:
+      tags: [access]
+      operationId: revokeMySession
+      summary: End one of your sessions (ending the current one signs you out)
+      responses:
+        "204": { description: Ended }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   # ---------------------------------------------------------------- system
   /system/status:
     get:
@@ -997,6 +1077,17 @@ paths:
         - name: kind
           in: query
           schema: { type: string, enum: [user, service_account] }
+        - name: role
+          in: query
+          description: Only users holding this role directly
+          schema: { type: string }
+        - name: status
+          in: query
+          description: "`active` = enabled and not locked"
+          schema: { type: string, enum: [active, disabled, locked] }
+        - name: source
+          in: query
+          schema: { type: string, enum: [local, oidc, ldap, saml] }
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
       responses:
@@ -1050,8 +1141,145 @@ paths:
     delete:
       tags: [access]
       operationId: deleteUser
+      description: Deletes the user with their tokens, sessions and role bindings. You cannot delete yourself or the last enabled administrator.
       responses:
         "204": { description: Deleted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /users/{id}/unlock:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [access]
+      operationId: unlockUser
+      summary: Clear a lockout after failed sign-ins
+      responses:
+        "200":
+          description: Unlocked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Member" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /users/{id}/disable:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [access]
+      operationId: disableUser
+      summary: Disable an account
+      description: Ends the account's sessions; its tokens stop working until it is enabled again. You cannot disable yourself or the last enabled administrator.
+      responses:
+        "200":
+          description: Disabled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Member" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /users/{id}/enable:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [access]
+      operationId: enableUser
+      summary: Enable a disabled account
+      responses:
+        "200":
+          description: Enabled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Member" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /users/{id}/password:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    put:
+      tags: [access]
+      operationId: resetUserPassword
+      summary: Set another local user's password
+      description: Clears any lockout and ends all of the user's sessions. Change your own password with `PUT /me/password`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordReset" }
+      responses:
+        "204": { description: Password set }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /users/{id}/permissions:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [access]
+      operationId: getUserPermissions
+      summary: Effective permissions of a user, and why
+      description: |
+        For every repository and system area the user can act on: the allowed
+        actions and each grant behind them (role and privilege, or the
+        repository's anonymous read). Needs `system:users:read`, or the user
+        themself.
+      responses:
+        "200":
+          description: Effective permissions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EffectivePermissions" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /users/{id}/sessions:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [access]
+      operationId: listUserSessions
+      summary: A user's active browser sessions
+      responses:
+        "200":
+          description: Sessions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionInfoList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [access]
+      operationId: revokeUserSessions
+      summary: End every session of a user
+      description: Also revokes the user's short-lived session tokens. When the user is the caller, the current session is kept.
+      responses:
+        "200":
+          description: Sessions ended
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionsEnded" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /users/{id}/sessions/{sid}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+      - $ref: "#/components/parameters/SessionId"
+    delete:
+      tags: [access]
+      operationId: revokeUserSession
+      summary: End one session of a user
+      responses:
+        "204": { description: Ended }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /roles:
     get:
       tags: [access]
@@ -1088,6 +1316,17 @@ paths:
         in: path
         required: true
         schema: { type: string }
+    get:
+      tags: [access]
+      operationId: getRole
+      responses:
+        "200":
+          description: Role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Role" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
     put:
       tags: [access]
       operationId: updateRole
@@ -1112,6 +1351,51 @@ paths:
       operationId: deleteRole
       responses:
         "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Built-in roles cannot be deleted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /roles/{name}/members:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [access]
+      operationId: addRoleMember
+      summary: Grant the role to a user (no-op if they have it)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleMemberInput" }
+      responses:
+        "204": { description: Granted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /roles/{name}/members/{id}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+      - $ref: "#/components/parameters/Id"
+    delete:
+      tags: [access]
+      operationId: removeRoleMember
+      summary: Take the role away from a user
+      description: The last enabled administrator keeps the Admin role.
+      responses:
+        "204": { description: Removed }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /identity-providers:
     get:
       tags: [access]
@@ -1133,10 +1417,27 @@ paths:
     get:
       tags: [access]
       operationId: listTokens
-      description: The caller's tokens; with `system:tokens:admin`, `owner` selects another principal.
+      description: |
+        The caller's live (not revoked) tokens, newest first, expired ones included.
+        With `system:tokens:read`, `owner` selects another principal and `all=true`
+        lists everyone's.
       parameters:
         - name: owner
           in: query
+          schema: { type: string }
+        - name: all
+          in: query
+          description: Every owner's tokens (needs `system:tokens:read`)
+          schema: { type: boolean }
+        - name: owner_kind
+          in: query
+          schema: { type: string, enum: [user, service_account] }
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, expired] }
+        - name: q
+          in: query
+          description: Substring of the token name
           schema: { type: string }
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
@@ -1146,9 +1447,17 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TokenPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       tags: [access]
       operationId: createToken
+      description: |
+        A personal access token for the caller, or (with `system:tokens:write`)
+        a token for the service account named in `owner`. A token never grants
+        more than its owner's roles: requests need both a role privilege and a
+        matching scope.
       requestBody:
         required: true
         content:
@@ -1161,12 +1470,15 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/TokenCreated" }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /tokens/{id}:
     parameters:
       - $ref: "#/components/parameters/Id"
     delete:
       tags: [access]
       operationId: revokeToken
+      description: Your own tokens, or anyone's with `system:tokens:delete`. Tokens minted from it stop working too.
       responses:
         "204": { description: Revoked }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1342,6 +1654,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    SessionId:
+      name: sid
+      in: path
+      required: true
+      schema: { type: string }
     RepositoryName:
       name: name
       in: path
@@ -1502,6 +1819,15 @@ components:
         username: { type: string }
         display_name: { type: string }
         email: { type: string }
+        kind: { type: string, enum: [user, service_account] }
+        source:
+          type: string
+          description: Where the identity lives; only `local` users have a password to change here
+          enum: [local, oidc, ldap, saml]
+        roles:
+          type: array
+          description: Roles bound directly to the user
+          items: { type: string }
     Organization:
       type: object
       required: [slug, name, environment, region]
@@ -1520,6 +1846,26 @@ components:
           type: array
           description: Effective privileges, so the UI can hide actions the user cannot take
           items: { $ref: "#/components/schemas/Privilege" }
+        auth_method:
+          type: string
+          description: How this request authenticated
+          enum: [session, token, basic]
+        token_policy: { $ref: "#/components/schemas/TokenPolicy" }
+        token_warnings:
+          type: array
+          description: |
+            Live tokens expiring within `token_policy.expiry_warning`, soonest first:
+            the caller's own and, with `system:tokens:read`, service accounts' tokens.
+          items: { $ref: "#/components/schemas/Token" }
+    TokenPolicy:
+      type: object
+      required: [max_lifetime, max_lifetime_days, expiry_warning]
+      properties:
+        max_lifetime: { $ref: "#/components/schemas/Duration" }
+        max_lifetime_days:
+          type: integer
+          description: "`max_lifetime` in whole days, for expiry pickers"
+        expiry_warning: { $ref: "#/components/schemas/Duration" }
     ClientEndpoint:
       type: object
       required: [format, endpoint, repository]
@@ -2474,10 +2820,19 @@ components:
         roles:
           type: array
           items: { type: string }
-        token_count: { type: integer }
+        token_count:
+          type: integer
+          description: Live (unrevoked, unexpired) personal or service-account tokens
         disabled: { type: boolean }
         locked_until: { type: [string, "null"], format: date-time }
         last_active_at: { type: [string, "null"], format: date-time }
+        description:
+          type: string
+          description: Free-text note, mostly for service accounts
+        password_set:
+          type: boolean
+          description: Whether the user has a local password
+        created_at: { $ref: "#/components/schemas/Timestamp" }
     MemberInput:
       type: object
       required: [username, kind]
@@ -2486,10 +2841,15 @@ components:
         kind: { type: string, enum: [user, service_account] }
         display_name: { type: string }
         email: { type: string }
+        description:
+          type: string
+          maxLength: 1000
         password:
           type: string
           writeOnly: true
-          description: Local users only
+          description: |
+            Local users only. To change your own password use `PUT /me/password`,
+            for others prefer `PUT /users/{id}/password`.
         roles:
           type: array
           items: { type: string }
@@ -2562,6 +2922,10 @@ components:
         id: { type: string }
         name: { type: string }
         owner: { type: string }
+        owner_kind: { type: string, enum: [user, service_account] }
+        last_used_ip:
+          type: [string, "null"]
+          description: Client address of the latest use
         prefix:
           type: string
           description: First characters of the secret, for recognition (`hgr_1a2b`)
@@ -2588,6 +2952,120 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Token" }
         next_cursor: { $ref: "#/components/schemas/NextCursor" }
+    ProfileInput:
+      type: object
+      properties:
+        display_name: { type: string, maxLength: 200 }
+        email: { type: string, description: Empty clears it }
+    PasswordChange:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password: { type: string, format: password, writeOnly: true }
+        new_password: { type: string, format: password, writeOnly: true }
+    PasswordReset:
+      type: object
+      required: [password]
+      properties:
+        password: { type: string, format: password, writeOnly: true }
+    SessionInfo:
+      type: object
+      required: [id, created_at, last_seen_at, expires_at, ip, user_agent, remember, current]
+      properties:
+        id: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        last_seen_at:
+          allOf: [{ $ref: "#/components/schemas/Timestamp" }]
+          description: Updated at most once a minute
+        expires_at: { $ref: "#/components/schemas/Timestamp" }
+        ip: { type: [string, "null"] }
+        user_agent: { type: string }
+        remember: { type: boolean }
+        current:
+          type: boolean
+          description: The session making this request
+    SessionInfoList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SessionInfo" }
+    SessionsEnded:
+      type: object
+      required: [ended]
+      properties:
+        ended: { type: integer }
+    RoleMemberInput:
+      type: object
+      required: [user_id]
+      properties:
+        user_id: { type: string }
+    Action:
+      type: string
+      enum: [read, write, delete, admin]
+    PermissionGrant:
+      type: object
+      required: [action, source]
+      properties:
+        action: { $ref: "#/components/schemas/Action" }
+        source:
+          type: string
+          enum: [role, anonymous]
+          description: "`role`: a privilege of one of the user's roles; `anonymous`: the repository allows anonymous read"
+        role: { type: string }
+        privilege: { $ref: "#/components/schemas/Privilege" }
+    ResourcePermissions:
+      type: object
+      required: [resource, name, actions, grants]
+      properties:
+        resource:
+          type: string
+          examples: ["repo:npm-hosted", "system:audit"]
+        name: { type: string }
+        format: { type: string, description: Repositories only }
+        type: { type: string, description: Repositories only }
+        anonymous_read: { type: boolean }
+        actions:
+          type: array
+          items: { $ref: "#/components/schemas/Action" }
+        grants:
+          type: array
+          items: { $ref: "#/components/schemas/PermissionGrant" }
+    RoleGrant:
+      type: object
+      required: [name, builtin, privileges]
+      properties:
+        name: { type: string }
+        builtin: { type: boolean }
+        privileges:
+          type: array
+          items: { $ref: "#/components/schemas/Privilege" }
+    EffectivePermissions:
+      type: object
+      required: [user_id, username, kind, disabled, locked, roles, repositories, system, notes]
+      properties:
+        user_id: { type: string }
+        username: { type: string }
+        kind: { type: string, enum: [user, service_account] }
+        disabled:
+          type: boolean
+          description: A disabled account can do nothing now; the lists show what applies once enabled
+        locked: { type: boolean }
+        roles:
+          type: array
+          items: { $ref: "#/components/schemas/RoleGrant" }
+        repositories:
+          type: array
+          description: Repositories with at least one allowed action, by name
+          items: { $ref: "#/components/schemas/ResourcePermissions" }
+        system:
+          type: array
+          items: { $ref: "#/components/schemas/ResourcePermissions" }
+        notes:
+          type: array
+          description: What the report cannot show (group-mapped roles, token scopes)
+          items: { type: string }
 
     # ------------------------------------------------------------ audit
     AuditEvent:

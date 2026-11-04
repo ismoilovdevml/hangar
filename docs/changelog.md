@@ -119,6 +119,33 @@
   `hangar_proxy_upstream_request_duration_seconds`,
   `hangar_proxy_upstream_retries_total`, `hangar_proxy_upstream_resumes_total`,
   `hangar_proxy_upstream_inflight_requests`.
+- **Access management** (see `docs/guides/access.md`):
+  - Members and service accounts: search and filter by role, status
+    (active, locked, disabled) and source; disable/enable, unlock, admin
+    password reset, sign out everywhere, delete — with guards for your own
+    account and the last administrator. Service accounts take a description.
+  - Self-service: `PUT /me/password` (current password required, other
+    sessions end), `PUT /me/profile`, `GET/DELETE /me/sessions`.
+  - Personal access tokens: last use is recorded with the client address;
+    administrators list everyone's tokens (`GET /tokens?all=true` with owner,
+    owner kind, status and name filters); scopes are validated; the session
+    payload carries the token policy and expiry warnings
+    (`auth.token_expiry_warning`, default 14 days).
+  - Roles: `GET /roles/{name}`, add/remove members
+    (`/roles/{name}/members`), privilege validation.
+  - Effective permissions report: `GET /users/{id}/permissions` lists, per
+    repository and system area, the allowed actions and the role, privilege
+    or anonymous read behind each.
+  - Every change and every refused attempt is audited (`user.disable`,
+    `user.enable`, `session.revoke`, `session.revoke_all`, `role.bind`,
+    `role.unbind`, …).
+  - Web UI: Access & audit (members, service accounts, access tokens, roles
+    with a privilege editor, access audit log) and My account (profile,
+    password, tokens, signed-in devices, own permissions), with a
+    create-token dialog that builds scopes, offers expiry presets and shows
+    the secret once.
+  - Migration `00040`: `tokens.last_used_ip`, `users.description`, token
+    indexes.
 
 ## M0 — Skeleton (2026-11-03)
 

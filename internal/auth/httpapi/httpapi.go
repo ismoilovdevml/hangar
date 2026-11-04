@@ -1,5 +1,5 @@
 // Package httpapi serves the authentication and access-management part of
-// the REST API (api/openapi.yaml): /auth/*, /tokens, /users and /roles,
+// the REST API (api/openapi.yaml): /auth/*, /me/*, /tokens, /users and /roles,
 // plus the middleware that authenticates every /api/v1 request from a
 // session cookie, a bearer token or HTTP Basic credentials, and enforces
 // CSRF protection for cookie sessions.
@@ -85,10 +85,28 @@ func Register(r chi.Router, svc *auth.Service, opts Options) {
 	r.Put("/users/{id}", h.updateUser)
 	r.Delete("/users/{id}", h.deleteUser)
 
+	r.Post("/users/{id}/unlock", h.unlockUser)
+	r.Post("/users/{id}/disable", h.disableUser)
+	r.Post("/users/{id}/enable", h.enableUser)
+	r.Put("/users/{id}/password", h.resetPassword)
+	r.Get("/users/{id}/permissions", h.userPermissions)
+	r.Get("/users/{id}/sessions", h.userSessions)
+	r.Delete("/users/{id}/sessions", h.revokeUserSessions)
+	r.Delete("/users/{id}/sessions/{sid}", h.revokeUserSession)
+
+	r.Put("/me/profile", h.updateProfile)
+	r.Put("/me/password", h.changePassword)
+	r.Get("/me/sessions", h.mySessions)
+	r.Delete("/me/sessions", h.revokeMySessions)
+	r.Delete("/me/sessions/{sid}", h.revokeMySession)
+
 	r.Get("/roles", h.listRoles)
 	r.Post("/roles", h.createRole)
+	r.Get("/roles/{name}", h.getRole)
 	r.Put("/roles/{name}", h.updateRole)
 	r.Delete("/roles/{name}", h.deleteRole)
+	r.Post("/roles/{name}/members", h.bindRole)
+	r.Delete("/roles/{name}/members/{id}", h.unbindRole)
 }
 
 // ---------------------------------------------------------------- middleware
@@ -309,6 +327,16 @@ func queryInt(r *http.Request, name string) (int, error) {
 		return 0, fmt.Errorf("%s must be an integer between 1 and %d: %w", name, core.MaxPageSize, core.ErrInvalid)
 	}
 	return n, nil
+}
+
+func queryBool(r *http.Request, name string) (bool, error) {
+	switch r.URL.Query().Get(name) {
+	case "", "false", "0":
+		return false, nil
+	case "true", "1":
+		return true, nil
+	}
+	return false, fmt.Errorf("%s must be true or false: %w", name, core.ErrInvalid)
 }
 
 func clientIP(r *http.Request) string {

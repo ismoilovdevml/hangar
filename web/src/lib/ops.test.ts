@@ -27,6 +27,13 @@ import {
 const run = (over: Partial<TaskRun> = {}): TaskRun => ({
   id: 'run_1',
   task_id: 't_1',
+  task_name: 'Rebuild index',
+  task_type: 'reindex',
+  message: '',
+  triggered_by: 'schedule',
+  node: 'hangar-1',
+  cancel_requested: false,
+  finished_at: null,
   status: 'running',
   progress: 0.2,
   created_at: '2026-11-04T10:00:00Z',
@@ -59,6 +66,11 @@ describe('cleanup draft', () => {
     enabled: true,
     schedule_text: 'Every day at 02:00 UTC',
     created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    effective_repositories: ['docker-prod', 'docker-staging'],
+    task_id: 'cleanup/docker-lean',
+    next_run_at: null,
+    last_run: null,
   };
 
   it('round-trips a saved policy', () => {
@@ -120,11 +132,12 @@ describe('cleanup draft', () => {
 });
 
 describe('task helpers', () => {
+  const base = { description: '', schedule: null, config: {}, builtin: true, next_run_at: null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' };
   const list: TaskList = {
     items: [
-      { id: 't_1', name: 'Rebuild index', type: 'reindex', schedule_text: 'Manual', enabled: true, last_run: null },
-      { id: 't_2', name: 'Compact', description: 'soft-deleted blobs', type: 'blob_compaction', schedule_text: 'x', enabled: true, last_run: run({ id: 'r2', task_id: 't_2', status: 'failed' }) },
-      { id: 't_3', name: 'Backup', type: 'db_backup', schedule_text: 'x', enabled: true, last_run: run({ id: 'r3', task_id: 't_3', status: 'succeeded' }) },
+      { ...base, id: 't_1', name: 'Rebuild index', type: 'reindex', schedule_text: 'Manual', enabled: true, last_run: null },
+      { ...base, id: 't_2', name: 'Compact', description: 'soft-deleted blobs', type: 'blob_compaction', schedule_text: 'x', enabled: true, last_run: run({ id: 'r2', task_id: 't_2', status: 'failed' }) },
+      { ...base, id: 't_3', name: 'Backup', type: 'db_backup', schedule_text: 'x', enabled: true, last_run: run({ id: 'r3', task_id: 't_3', status: 'succeeded' }) },
     ],
     running: [run()],
   };
@@ -142,7 +155,7 @@ describe('task helpers', () => {
     expect(a.running[0]).toMatchObject({ progress: 0.64, message: 'indexing maven-all' });
     const b = applyTaskProgress(a, { task_id: 't_1', run_id: 'run_1', progress: 0.5 });
     expect(b.running[0]!.progress).toBe(0.64);
-    expect(applyTaskProgress(list, { task_id: 't_9', progress: 0.5 })).toBe(list);
+    expect(applyTaskProgress(list, { task_id: 't_9', run_id: 'run_9', progress: 0.5 })).toBe(list);
   });
 
   it('moves a finished run into last_run', () => {

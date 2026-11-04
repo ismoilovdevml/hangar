@@ -9,8 +9,7 @@ import {
   useRunCleanupPolicy,
   useSaveCleanupPolicy,
 } from '../../api/ops';
-import type { CleanupPolicy, CleanupPreview } from '../../api/opsTypes';
-import type { PublishedComponent } from '../../api/types';
+import type { CleanupCandidate, CleanupPolicy, CleanupPreview } from '../../api/opsTypes';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { DataTable, type Column } from '../../components/DataTable';
 import { IconDownload, IconPlay, IconX } from '../../components/opsIcons';
@@ -35,7 +34,7 @@ import { formatUtc } from '../../lib/tasks';
 import { RunHistory } from './RunHistory';
 import { ScheduleField } from './ScheduleField';
 
-type PreviewItem = PublishedComponent & { size_bytes?: number };
+type PreviewItem = CleanupCandidate;
 
 interface PolicyEditorProps {
   /** The saved policy; undefined for a new one. */
@@ -489,7 +488,7 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
             <DataTable
               caption="Versions this policy would delete"
               columns={columns}
-              rows={preview.data.sample as PreviewItem[]}
+              rows={preview.data.sample}
               rowKey={(c) => c.id}
               minWidth={720}
               empty="No version matches these conditions."
