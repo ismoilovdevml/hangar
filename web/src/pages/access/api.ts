@@ -89,6 +89,8 @@ export const useSetDisabled = () =>
     apiFetch<Member>(userPath(id, disabled ? '/disable' : '/enable'), { method: 'POST' }),
   );
 export const useUnlock = () => useMutate((id: string) => apiFetch<Member>(userPath(id, '/unlock'), { method: 'POST' }));
+export const useRequirePasswordChange = () =>
+  useMutate((id: string) => apiFetch<Member>(userPath(id, '/require-password-change'), { method: 'POST' }));
 export const useResetPassword = () =>
   useMutate(({ id, password }: { id: string; password: string }) =>
     apiFetch<void>(userPath(id, '/password'), { method: 'PUT', body: { password } }),

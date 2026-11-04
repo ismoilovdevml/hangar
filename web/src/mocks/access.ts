@@ -29,6 +29,7 @@ function seed() {
     last_active_at: null,
     description: '',
     password_set: m.kind !== 'service_account',
+    must_change_password: false,
     created_at: iso(-200 * DAY),
     ...m,
   });
@@ -40,7 +41,7 @@ function seed() {
     member({ id: 'u_05', username: 'argo-cd', kind: 'service_account', description: 'Argo CD image updater', roles: ['Reader'], last_active_at: iso(-17 * 60_000) }),
     member({ id: 'u_06', username: 's.aliyev', display_name: 'Sardor Aliyev', email: 'sardor@acme.example', source: 'ldap', roles: ['Reader'], last_active_at: iso(-DAY) }),
     member({ id: 'u_07', username: 'n.tursunova', display_name: 'Nodira Tursunova', email: 'nodira@acme.example', source: 'oidc', roles: ['Admin'], last_active_at: iso(-2 * DAY) }),
-    member({ id: 'u_08', username: 'break-glass-1', display_name: 'break-glass-1', roles: ['Admin'], last_active_at: iso(-94 * DAY) }),
+    member({ id: 'u_08', username: 'break-glass-1', display_name: 'break-glass-1', roles: ['Admin'], last_active_at: iso(-94 * DAY), must_change_password: true }),
     member({ id: 'u_09', username: 'b.yusupov', display_name: 'Bekzod Yusupov', email: 'bekzod@acme.example', roles: ['Reader'], locked_until: iso(10 * 60_000) }),
   ];
   const roles: Role[] = [
@@ -81,6 +82,11 @@ let st = seed();
 
 export function resetAccessState(): void {
   st = seed();
+}
+
+/** The signed-in user's password, for PUT /me/password (set by a mocked sign-in). */
+export function setMockPassword(password: string): void {
+  st.password = password;
 }
 
 /** Test helpers. */
@@ -127,7 +133,7 @@ function enabledAdmins(exceptId: string) {
 
 const PRIV_RE = /^(repo|system):[^:]+:(read|write|delete|admin|\*)$|^system:\*$/;
 
-export function accessHandlers(guard: Guard) {
+export function accessHandlers(guard: Guard, onPasswordChanged: () => Record<string, string> = () => ({})) {
   const findUser = (id: string) => st.users.find((u) => u.id === id);
   return [
     http.get(api('/users'), ({ request }) => {
@@ -240,6 +246,13 @@ export function accessHandlers(guard: Guard) {
         case 'unlock':
           u.locked_until = null;
           break;
+        case 'require-password-change':
+          if (u.id === ME) return invalid('change your own password on your account page instead');
+          if (u.kind !== 'user' || u.source !== 'local' || !u.password_set) return invalid(`user "${u.username}" has no local password`);
+          if (u.must_change_password) return HttpResponse.json(u);
+          u.must_change_password = true;
+          record('user.password.require_change', `user:${u.username}`);
+          return HttpResponse.json(u);
         default:
           return notFound('route');
       }
@@ -307,10 +320,11 @@ export function accessHandlers(guard: Guard) {
       const body = (await request.json()) as { current_password: string; new_password: string };
       if (body.current_password !== st.password) return invalid('the current password is incorrect');
       if (body.new_password.length < 12) return invalid('password must be at least 12 characters');
+      if (body.new_password === body.current_password) return invalid('the new password must differ from the current one');
       st.password = body.new_password;
       st.sessions[ME] = (st.sessions[ME] ?? []).filter((s) => s.current);
       record('user.password', 'user:d.ismoilov', { self: true });
-      return new HttpResponse(null, { status: 204 });
+      return new HttpResponse(null, { status: 204, headers: onPasswordChanged() });
     }),
     http.get(api('/me/sessions'), ({ request }) => guard(request) ?? HttpResponse.json({ items: st.sessions[ME] ?? [] })),
     http.delete(api('/me/sessions'), ({ request }) => {

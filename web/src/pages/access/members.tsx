@@ -18,6 +18,7 @@ import {
   usePermissions,
   useResetPassword,
   useRoles,
+  useRequirePasswordChange,
   useSetDisabled,
   useTokens,
   useUnlock,
@@ -130,7 +131,12 @@ export function MembersTab({ kind, filters, onFilters, onOpen }: MembersTabProps
       className: 'col-last nowrap',
       cell: (m) => {
         const st = USER_STATUS_META[userStatus(m, now)];
-        return <StatusDot tone={st.tone} label={st.label} />;
+        return (
+          <span className="pill-row">
+            <StatusDot tone={st.tone} label={st.label} />
+            {m.must_change_password && <MustChangeBadge />}
+          </span>
+        );
       },
     },
   ];
@@ -467,10 +473,11 @@ export function UserDrawer({ id, canWrite, canDelete, canManageTokens, onClose }
   const session = useSession();
   const member = useMember(id);
   const [tab, setTab] = useState<DrawerTab>('overview');
-  const [dialog, setDialog] = useState<'edit' | 'reset' | 'delete' | 'disable' | 'endAll' | 'token' | null>(null);
+  const [dialog, setDialog] = useState<'edit' | 'reset' | 'requireChange' | 'delete' | 'disable' | 'endAll' | 'token' | null>(null);
   const [notice, setNotice] = useState('');
   const setDisabled = useSetDisabled();
   const unlock = useUnlock();
+  const requireChange = useRequirePasswordChange();
   const del = useDeleteMember();
   const endAll = useEndUserSessions();
   const m = member.data;
@@ -494,6 +501,7 @@ export function UserDrawer({ id, canWrite, canDelete, canManageTokens, onClose }
             <Avatar name={m.display_name || m.username} size={44} />
             <StatusDot tone={USER_STATUS_META[status].tone} label={USER_STATUS_META[status].label} />
             {status === 'locked' && m.locked_until && <span className="meta">until {formatDate(m.locked_until)}</span>}
+            {m.must_change_password && <MustChangeBadge />}
           </div>
           {notice && <Notice message={notice} />}
           {canWrite && (
@@ -509,6 +517,11 @@ export function UserDrawer({ id, canWrite, canDelete, canManageTokens, onClose }
               {m.source === 'local' && !sa && !self && (
                 <button type="button" className="button button--secondary button--sm" onClick={() => setDialog('reset')}>
                   Reset password
+                </button>
+              )}
+              {m.source === 'local' && !sa && !self && m.password_set && !m.must_change_password && (
+                <button type="button" className="button button--secondary button--sm" onClick={() => setDialog('requireChange')}>
+                  Require password change
                 </button>
               )}
               {!sa && !self && (
@@ -564,6 +577,17 @@ export function UserDrawer({ id, canWrite, canDelete, canManageTokens, onClose }
       {m && dialog === 'edit' && <MemberDialog kind={m.kind} member={m} onClose={() => setDialog(null)} />}
       {m && dialog === 'reset' && <ResetPasswordDialog member={m} onClose={() => setDialog(null)} />}
       {m && dialog === 'token' && <CreateTokenDialog owner={m.username} onClose={() => setDialog(null)} />}
+      {m && dialog === 'requireChange' && (
+        <ConfirmDialog
+          title="Require a password change at next sign-in?"
+          confirmLabel="Require password change"
+          onConfirm={() => requireChange.mutateAsync(m.id).then(() => setNotice('They must set a new password at their next sign-in.'))}
+          onClose={() => setDialog(null)}
+        >
+          {m.display_name || m.username} must set a new password before they can do anything else, including in a browser tab that
+          is already open. Their access tokens keep working.
+        </ConfirmDialog>
+      )}
       {m && dialog === 'disable' && (
         <ConfirmDialog
           title={`Disable ${m.display_name || m.username}?`}
@@ -769,4 +793,9 @@ export function PermissionsReport({ id }: { id: string }) {
       ))}
     </div>
   );
+}
+
+/** The member has to set a new password before they can do anything else. */
+function MustChangeBadge() {
+  return <Pill tone="warn">Must change password</Pill>;
 }
