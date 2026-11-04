@@ -22,7 +22,6 @@ package pypi
 import (
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -37,11 +36,11 @@ import (
 // Name is the format identifier stored in repositories.format.
 const Name = "pypi"
 
-// Defaults applied when a proxy repository leaves the matching ProxyConfig field at zero.
-const (
-	DefaultMetadataTTL      = 30 * time.Minute
-	DefaultNegativeCacheTTL = 5 * time.Minute
-)
+// DefaultMetadataTTL applies when a proxy repository leaves
+// ProxyConfig.MetadataTTL at zero. Remote 404s are negative-cached by the
+// core Upstream (ProxyConfig.NegativeCacheTTL), so the admin cache purge
+// covers them.
+const DefaultMetadataTTL = 30 * time.Minute
 
 // DefaultFileHosts are the hosts, besides the remote's own, from which a
 // proxy repository downloads files linked from the remote's project pages.
@@ -49,10 +48,11 @@ var DefaultFileHosts = []string{"files.pythonhosted.org"}
 
 // Config is the format-specific repository configuration (RepoConfig.Format).
 type Config struct {
-	// FileHosts lists the host names (optionally host:port) a proxy repository
-	// may download distribution files from when the remote's project pages
-	// link to another host. The remote's own host is always allowed. Empty
-	// means DefaultFileHosts.
+	// FileHosts lists the host names (optionally host:port, or ".domain" for
+	// its subdomains) a proxy repository may download distribution files
+	// from when the remote's project pages link to another host. The
+	// remote's own host and the repository's proxy related_hosts are always
+	// allowed. Empty means DefaultFileHosts.
 	FileHosts []string `json:"file_hosts,omitempty"`
 }
 
@@ -121,9 +121,8 @@ type handler struct {
 
 	flight singleflight.Group
 
-	mu       sync.Mutex
-	checked  map[string]time.Time // proxy index revalidated (304) at, by repoID/project
-	negative map[string]time.Time // upstream 404 remembered until, by repoID/project
+	mu      sync.Mutex
+	checked map[string]time.Time // proxy index revalidated (304) at, by repoID/project
 }
 
 func newHandler(deps core.Deps) *handler {
@@ -132,10 +131,9 @@ func newHandler(deps core.Deps) *handler {
 		log = slog.Default()
 	}
 	return &handler{
-		deps:     deps,
-		log:      log.With("format", Name),
-		checked:  map[string]time.Time{},
-		negative: map[string]time.Time{},
+		deps:    deps,
+		log:     log.With("format", Name),
+		checked: map[string]time.Time{},
 	}
 }
 
@@ -158,19 +156,7 @@ func formatConfig(repo *core.Repository) Config {
 // fileHostAllowed reports whether host (from a remote's link) is the remote's
 // own host or one of the configured file hosts.
 func fileHostAllowed(cfg Config, remoteHost, host string) bool {
-	if strings.EqualFold(host, remoteHost) {
-		return true
-	}
-	bare := host
-	if hn, _, err := net.SplitHostPort(host); err == nil {
-		bare = hn
-	}
-	for _, h := range cfg.FileHosts {
-		if strings.EqualFold(h, host) || strings.EqualFold(h, bare) {
-			return true
-		}
-	}
-	return false
+	return strings.EqualFold(host, remoteHost) || core.MatchHost(cfg.FileHosts, host)
 }
 
 func (h *handler) redirectSlash(w http.ResponseWriter, r *http.Request) {
