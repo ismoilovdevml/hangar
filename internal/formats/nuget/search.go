@@ -21,6 +21,11 @@ const (
 	maxSkip     = 3000
 )
 
+// maxSearchPackages bounds the packages a text search of a hosted repository
+// considers. Matches are ordered by id, so a query matching more packages
+// than this loses the tail (and totalHits is capped accordingly).
+const maxSearchPackages = 10000
+
 type searchQuery struct {
 	q           string
 	skip, take  int
@@ -127,7 +132,7 @@ func (h *handler) searchRepo(ctx context.Context, repo *core.Repository, q searc
 }
 
 func (h *handler) searchHosted(ctx context.Context, repo *core.Repository, q searchQuery) ([]hit, error) {
-	comps, err := h.listComponents(ctx, core.ComponentQuery{RepositoryID: repo.ID})
+	comps, err := h.searchCandidates(ctx, repo, q)
 	if err != nil {
 		return nil, err
 	}
@@ -160,6 +165,30 @@ func (h *handler) searchHosted(ctx context.Context, repo *core.Repository, q sea
 		return hits[i].lid < hits[j].lid
 	})
 	return hits, nil
+}
+
+// searchCandidates returns the components a query can match. With a text
+// query and a component service that keeps a full-text index, only the
+// packages whose stored text contains every query token (as a word prefix)
+// are loaded; matchTerms then applies the exact NuGet field rules to them.
+// Without either, every component of the repository is a candidate.
+func (h *handler) searchCandidates(ctx context.Context, repo *core.Repository, q searchQuery) ([]*core.Component, error) {
+	searcher, ok := h.deps.Components.(core.ComponentSearcher)
+	if !ok || strings.TrimSpace(q.q) == "" {
+		return h.listComponents(ctx, core.ComponentQuery{RepositoryID: repo.ID})
+	}
+	empty := ""
+	comps, truncated, err := searcher.SearchComponents(ctx, core.ComponentTextQuery{
+		RepositoryID: repo.ID, Namespace: &empty, Text: q.q, MaxNames: maxSearchPackages,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if truncated {
+		h.log().WarnContext(ctx, "nuget search matched too many packages; results truncated",
+			"repository", repo.Name, "query", q.q, "limit", maxSearchPackages)
+	}
+	return comps, nil
 }
 
 // matchTerms reports whether every term matches the package. Terms may be
