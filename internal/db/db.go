@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -39,6 +40,8 @@ type PoolOptions struct {
 	MaxConns     int32
 	MinConns     int32
 	ConnLifetime time.Duration
+	// Tracer, if set, observes every statement (metrics and spans).
+	Tracer pgx.QueryTracer
 }
 
 // Open connects a pool and verifies the connection with a ping.
@@ -55,6 +58,9 @@ func Open(ctx context.Context, url string, opts PoolOptions) (*pgxpool.Pool, err
 	}
 	if opts.ConnLifetime > 0 {
 		cfg.MaxConnLifetime = opts.ConnLifetime
+	}
+	if opts.Tracer != nil {
+		cfg.ConnConfig.Tracer = opts.Tracer
 	}
 	if cfg.ConnConfig.RuntimeParams["application_name"] == "" {
 		cfg.ConnConfig.RuntimeParams["application_name"] = "hangar"

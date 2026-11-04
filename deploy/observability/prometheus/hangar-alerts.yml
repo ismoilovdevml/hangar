@@ -1,0 +1,176 @@
+# Prometheus alerting rules for Hangar. Load with rule_files in prometheus.yml
+# (see prometheus.example.yml). Every alert links to its runbook section in
+# docs/operations/runbooks.md. Thresholds are starting points: tune them to
+# the traffic of your installation.
+#
+# Validate: promtool check rules deploy/observability/prometheus/hangar-alerts.yml
+
+groups:
+  - name: hangar.availability
+    rules:
+      - alert: HangarDown
+        expr: up{job="hangar"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Hangar node {{ $labels.instance }} is not answering scrapes"
+          description: "Prometheus could not scrape {{ $labels.instance }} for 2 minutes. The process is down, hung, or unreachable from Prometheus."
+          runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangardown"
+
+      - alert: HangarNotReady
+        expr: hangar_ready == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Hangar node {{ $labels.instance }} fails readiness (/readyz)"
+          description: "Readiness has failed for 5 minutes, so load balancers route no traffic to this node. Check hangar_dependency_up for the failing dependency."
+          runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangarnotready"
+
+      - alert: HangarDependencyDown
+        expr: hangar_dependency_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.dependency }} is unreachable from {{ $labels.instance }}"
+          description: "The {{ $labels.dependency }} readiness check has failed for 2 minutes."
+          runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangardependencydown"
+
+      - alert: HangarHigh5xxRate
+        expr: |
+          (
+            sum by (instance) (rate(hangar_http_requests_total{code=~"5..",code!="501"}[5m]))
+            /
+            sum by (instance) (rate(hangar_http_requests_total[5m]))
+          ) > 0.05
+          and
+          sum by (instance) (rate(hangar_http_requests_total[5m])) > 0.1
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of requests on {{ $labels.instance }} fail with 5xx"
+          description: "More than 5% of requests have been answered with a server error for 10 minutes."
+          runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangarhigh5xxrate"
+
+  - name: hangar.dependencies
+    rules:
+      - alert: HangarUpstreamCircuitOpen
+        expr: max by (repository) (hangar_upstream_state{state="offline"}) == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Proxy remote of {{ $labels.repository }} is offline (circuit breaker open)"
+          description: "Requests for content not yet cached in {{ $labels.repository }} fail fast; cached content is still served."
+          runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangarupstreamcircuitopen"
+
+      - alert: HangarBlobStoreErrors
+        expr: sum by (instance, driver, op) (increase(hangar_blobstore_operations_total{result="error"}[10m])) > 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Blob store {{ $labels.op }} errors on {{ $labels.instance }} ({{ $labels.driver }})"
+          description: "{{ $value | humanize }} {{ $labels.op }} operations failed in 10 minutes. Uploads or downloads are failing."
+          runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangarblobstoreerrors"
+
+      - alert: HangarDatabasePoolSaturated
+        expr: |
+          sum by (instance) (hangar_db_pool_connections{state="acquired"})
+          / sum by (instance) (hangar_db_pool_max_connections) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database pool on {{ $labels.instance }} is {{ $value | humanizePercentage }} in use"
+          description: "Requests are waiting for database connections; latency rises and requests may time out."
+          runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangardatabasepoolsaturated"
+
+  - name: hangar.jobs
+    rules:
+      - alert: HangarJobFailures
+        expr: sum by (type) (increase(hangar_jobs_total{result="failed"}[1h])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Background job {{ $labels.type }} failed permanently"
+          description: "{{ $value | humanize }} {{ $labels.type }} jobs exhausted their retries in the last hour and were dropped."
+          runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangarjobfailures"
+
+      - alert: HangarJobBacklog
+        expr: max by (type) (hangar_job_queue_depth) > 100
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} {{ $labels.type }} jobs are queued"
+          description: "The job queue has not drained for 30 minutes: workers are failing, slow, or not running."
+          runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangarjobbacklog"
+
+  - name: hangar.capacity
+    rules:
+      - alert: HangarBlobStoreQuotaNearLimit
+        expr: max by (store) (hangar_blobstore_used_bytes) / max by (store) (hangar_blobstore_soft_quota_bytes) > 0.9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Blob store {{ $labels.store }} uses {{ $value | humanizePercentage }} of its soft quota"
+          description: "Run cleanup policies, raise the quota, or add capacity before uploads are refused."
+          runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangarblobstorequotanearlimit"
+
+      - alert: HangarBlobStoreDiskNearlyFull
+        expr: hangar_blobstore_fs_free_bytes / hangar_blobstore_fs_size_bytes < 0.10
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Filesystem of blob store {{ $labels.store }} on {{ $labels.instance }} has {{ $value | humanizePercentage }} free"
+          description: "Uploads fail once the filesystem is full."
+          runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangarblobstoredisknearlyfull"
+
+      - alert: HangarStorageUsageStale
+        expr: hangar_blobstore_usage_age_seconds > 3600
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Blob store usage on {{ $labels.instance }} has not been refreshed for {{ $value | humanizeDuration }}"
+          description: "The quota and disk alerts work on stale numbers. The usage query is failing; see the node's log."
+          runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangarstorageusagestale"
+
+  - name: hangar.security
+    rules:
+      - alert: HangarAuthBruteForce
+        expr: |
+          sum by (instance) (
+            increase(hangar_auth_failures_total{reason=~"bad_password|unknown_user|unknown_expired_or_revoked|locked"}[5m])
+          ) > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanize }} failed sign-ins in 5 minutes on {{ $labels.instance }}"
+          description: "Sustained authentication failures: a credential-guessing attempt or a client with stale credentials."
+          runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangarauthbruteforce"
+
+      - alert: HangarAccountLockouts
+        expr: sum(increase(hangar_auth_lockouts_total[15m])) > 3
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanize }} accounts locked in 15 minutes"
+          description: "Several accounts reached the failed-login limit in a short time."
+          runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangaraccountlockouts"
+
+      - alert: HangarAuditEventsDropped
+        expr: sum by (instance) (increase(hangar_audit_events_rejected_total[10m]) + increase(hangar_audit_events_lost_total[10m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Audit events were dropped on {{ $labels.instance }}"
+          description: "{{ $value | humanize }} audit events were rejected or could not be stored in 10 minutes; the audit trail is incomplete."
+          runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangarauditeventsdropped"
