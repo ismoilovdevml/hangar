@@ -145,7 +145,11 @@ type Run struct {
 	FinishedAt      *time.Time `json:"finished_at"`
 	// Result is the executor's summary of a finished run (JSON object).
 	Result json.RawMessage `json:"result,omitempty"`
-	Log    *string         `json:"log,omitempty"`
+	// ComponentsDeleted and BytesFreed summarize Result (or the running
+	// totals of an active run) for the task types that report them.
+	ComponentsDeleted *int64  `json:"components_deleted,omitempty"`
+	BytesFreed        *int64  `json:"bytes_freed,omitempty"`
+	Log               *string `json:"log,omitempty"`
 }
 
 // Active reports whether the run is queued or running.
@@ -369,18 +373,23 @@ func scanTask(row pgx.Row) (*Task, error) {
 }
 
 const runCols = `r.id::text, r.task_id::text, t.name, t.type, r.status, r.progress, r.message, r.triggered_by, r.node,
-	r.cancel_requested, r.created_at, r.started_at, r.finished_at, r.result`
+	r.cancel_requested, r.created_at, r.started_at, r.finished_at, r.result, r.state`
 
 func scanRun(row pgx.Row, extra ...any) (*Run, error) {
 	var r Run
-	var result []byte
+	var result, state []byte
 	var progress float32
 	dest := append([]any{&r.ID, &r.TaskID, &r.TaskName, &r.TaskType, &r.Status, &progress, &r.Message, &r.TriggeredBy,
-		&r.Node, &r.CancelRequested, &r.CreatedAt, &r.StartedAt, &r.FinishedAt, &result}, extra...)
+		&r.Node, &r.CancelRequested, &r.CreatedAt, &r.StartedAt, &r.FinishedAt, &result, &state}, extra...)
 	if err := row.Scan(dest...); err != nil {
 		return nil, err
 	}
 	r.Progress = float64(progress)
+	if len(result) > 0 {
+		summarize(&r, result)
+	} else if r.Active() {
+		summarize(&r, state)
+	}
 	if len(result) > 0 {
 		r.Result = json.RawMessage(result)
 	}
@@ -750,6 +759,22 @@ WHERE tasks.policy_id IS NULL`, b.Name, b.Type, b.Description, sched, cfg, NextR
 	}
 	return nil
 }
+
+// Func is an Executor for task types without configuration: the config must
+// be an empty object.
+type Func func(ctx context.Context, x *Exec) error
+
+// Validate implements Executor.
+func (Func) Validate(cfg json.RawMessage) error {
+	var m map[string]any
+	if err := json.Unmarshal(cfg, &m); err != nil || len(m) != 0 {
+		return fmt.Errorf("this task type takes no configuration: %w", core.ErrInvalid)
+	}
+	return nil
+}
+
+// Execute implements Executor.
+func (f Func) Execute(ctx context.Context, x *Exec) error { return f(ctx, x) }
 
 // ---- helpers ----
 

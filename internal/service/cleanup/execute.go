@@ -116,7 +116,7 @@ func (e executor) Execute(ctx context.Context, x *tasks.Exec) error {
 			default:
 				failures++
 				res.Failed++
-				x.Logf("Could not delete %s/%s: %v", repo.Name, c.Coordinates(), err)
+				x.Warnf("Could not delete %s/%s: %v", repo.Name, c.Coordinates(), err)
 				if failures >= maxConsecutiveFailures {
 					return fmt.Errorf("%d deletions in a row failed, stopping (last: %w)", failures, err)
 				}

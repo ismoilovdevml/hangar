@@ -175,17 +175,18 @@ func (x *Exec) Progress(fraction float64, message string) {
 	x.dirty = true
 }
 
-// Logf appends a line to the run log.
-func (x *Exec) Logf(format string, args ...any) {
-	line := fmt.Sprintf(format, args...)
+// Logf appends an info line to the run log.
+func (x *Exec) Logf(format string, args ...any) { x.logLine(LevelInfo, fmt.Sprintf(format, args...)) }
+
+// Warnf appends a warning line to the run log (a step failed, the run goes on).
+func (x *Exec) Warnf(format string, args ...any) { x.logLine(LevelWarn, fmt.Sprintf(format, args...)) }
+
+func (x *Exec) logLine(level, line string) {
 	x.mu.Lock()
-	x.logBuf.WriteString(time.Now().UTC().Format(time.RFC3339))
-	x.logBuf.WriteByte(' ')
-	x.logBuf.WriteString(strings.ReplaceAll(line, "\n", " "))
-	x.logBuf.WriteByte('\n')
+	x.logBuf.WriteString(formatLogLine(time.Now(), level, line))
 	x.dirty = true
 	x.mu.Unlock()
-	x.s.log.Debug("task log", "task", x.Task.Name, "run_id", x.Run.ID, "line", line)
+	x.s.log.Debug("task log", "task", x.Task.Name, "run_id", x.Run.ID, "level", level, "line", line)
 }
 
 // SetResult sets the summary stored with the finished run (a JSON object).
@@ -322,7 +323,7 @@ func (s *Service) execute(c *claimed) {
 	case errors.Is(cause, errShutdown):
 		s.release(x, log)
 	default:
-		x.Logf("Failed: %v", err)
+		x.logLine(LevelError, "Failed: "+err.Error())
 		s.finish(x, StatusFailed, err.Error(), log)
 	}
 }
@@ -409,7 +410,7 @@ func (s *Service) release(x *Exec, log *slog.Logger) {
 UPDATE task_runs SET status = 'queued', heartbeat_at = now(), progress = $3, message = $4,
 	log = right(log || $5 || $6, $7)
 WHERE id = $1 AND claims = $2 AND status = 'running'`, x.Run.ID, x.claims, progress, message, lines,
-		time.Now().UTC().Format(time.RFC3339)+" Interrupted: "+s.opts.Node+" is shutting down; the run will resume\n",
+		formatLogLine(time.Now(), LevelWarn, "Interrupted: "+s.opts.Node+" is shutting down; the run will resume"),
 		s.opts.LogLimitBytes)
 	if err != nil || tag.RowsAffected() == 0 {
 		log.Warn("task run: hand-back on shutdown failed; it is recovered when its heartbeat goes stale", "error", err)

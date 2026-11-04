@@ -161,7 +161,7 @@ WITH u AS (
 	RETURNING *
 )
 SELECT u.id::text, u.task_id::text, t.name, t.type, u.status, u.progress, u.message, u.triggered_by, u.node,
-	u.cancel_requested, u.created_at, u.started_at, u.finished_at, u.result
+	u.cancel_requested, u.created_at, u.started_at, u.finished_at, u.result, u.state
 FROM u JOIN tasks t ON t.id = u.task_id`, stale, s.opts.MaxRecoveries)
 	if err == nil {
 		var failed []*Run

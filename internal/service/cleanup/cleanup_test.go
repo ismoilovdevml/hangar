@@ -420,6 +420,9 @@ func TestPreviewEqualsRun(t *testing.T) {
 	if res.Deleted != prev.ComponentCount || res.Bytes != prev.Bytes || res.Held != 1 || res.Failed != 0 {
 		t.Fatalf("result = %+v", res)
 	}
+	if done.ComponentsDeleted == nil || *done.ComponentsDeleted != 451 || done.BytesFreed == nil || *done.BytesFreed != 4507 {
+		t.Fatalf("run summary = %v %v", done.ComponentsDeleted, done.BytesFreed)
+	}
 	// Exactly the previewed ids are gone; everything else is still there.
 	var deleted []string
 	for _, e := range f.events.Published(core.EventComponentDeleted) {

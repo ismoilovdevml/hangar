@@ -131,12 +131,14 @@ func New(repos core.RepositoryService, comps core.ComponentService, blobs core.B
 type Reporter interface {
 	Progress(fraction float64, message string)
 	Logf(format string, args ...any)
+	Warnf(format string, args ...any)
 }
 
 type nopReporter struct{}
 
 func (nopReporter) Progress(float64, string) {}
 func (nopReporter) Logf(string, ...any)      {}
+func (nopReporter) Warnf(string, ...any)     {}
 
 // Run collects the selected repositories. done lists repositories already
 // collected by an earlier attempt of the same run (skipped); onRepo is called
@@ -169,7 +171,7 @@ func (c *Collector) Run(ctx context.Context, cfg Config, rep Reporter, done []st
 				return res, ctx.Err()
 			}
 			errs = append(errs, fmt.Errorf("repository %s: %w", repo.Name, err))
-			rep.Logf("%s: %v", repo.Name, err)
+			rep.Warnf("%s: %v", repo.Name, err)
 			continue
 		}
 		rep.Logf("%s: %d manifests, %d referrers entries and %d blobs deleted (%d bytes), %d images skipped",
@@ -364,7 +366,7 @@ func (c *Collector) collectRepo(ctx context.Context, repo *core.Repository, cuto
 		if err := c.mark(ctx, store, im, cutoff); err != nil {
 			im.unsafe = true
 			rr.ImagesSkipped++
-			rep.Logf("%s/%s: skipped, %v", repo.Name, name, err)
+			rep.Warnf("%s/%s: skipped, %v", repo.Name, name, err)
 		}
 	}
 
@@ -378,7 +380,7 @@ func (c *Collector) collectRepo(ctx context.Context, repo *core.Repository, cuto
 			return err == nil
 		}
 		rr.Failed++
-		rep.Logf("could not delete %s/%s: %v", repo.Name, a.Path, err)
+		rep.Warnf("could not delete %s/%s: %v", repo.Name, a.Path, err)
 		return false
 	}
 	names := make([]string, 0, len(images))

@@ -42,8 +42,8 @@ const (
 )
 
 // Validate checks the criteria. A policy must limit what it deletes by age,
-// download recency or a keep-newest count: filters alone would delete every
-// version in scope.
+// download recency, pre-release status or a keep-newest count: other filters
+// alone would delete every version in scope.
 func (c *Criteria) Validate() error {
 	_, err := c.compile()
 	return err
@@ -76,8 +76,8 @@ func (c *Criteria) compile() (*rules, error) {
 	if c.MinSizeBytes != nil && *c.MinSizeBytes < 0 {
 		return nil, fmt.Errorf("criteria.min_size_bytes must not be negative: %w", core.ErrInvalid)
 	}
-	if c.OlderThanDays == nil && c.NotDownloadedDays == nil && (c.KeepNewest == nil || *c.KeepNewest < 1) {
-		return nil, fmt.Errorf("criteria need older_than_days, not_downloaded_days or keep_newest >= 1; "+
+	if c.OlderThanDays == nil && c.NotDownloadedDays == nil && !c.PrereleaseOnly && (c.KeepNewest == nil || *c.KeepNewest < 1) {
+		return nil, fmt.Errorf("criteria need older_than_days, not_downloaded_days, prerelease_only or keep_newest >= 1; "+
 			"otherwise every version in scope would be deleted: %w", core.ErrInvalid)
 	}
 	if len(c.KeepMatching) > maxPatterns {

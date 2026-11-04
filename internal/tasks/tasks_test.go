@@ -225,6 +225,14 @@ func TestRunLifecycle(t *testing.T) {
 	if !strings.Contains(*done.Log, "step 1") || !strings.Contains(*done.Log, "Started on node-a") {
 		t.Errorf("log = %q", *done.Log)
 	}
+	lines, err := svc.RunLog(ctx, "work", run.ID, 0, 0)
+	if err != nil || len(lines.Items) != 2 || lines.Truncated || lines.Items[1].Seq != 2 ||
+		lines.Items[1].Message != "step 1" || lines.Items[1].Level != tasks.LevelInfo || lines.Items[1].At.IsZero() {
+		t.Fatalf("run log = %+v, %v", lines, err)
+	}
+	if tail, _ := svc.RunLog(ctx, "work", run.ID, 1, 10); len(tail.Items) != 1 || tail.Items[0].Seq != 2 {
+		t.Fatalf("log after 1 = %+v", tail)
+	}
 
 	var progress, fin int
 	for _, ev := range e.events.Published() {
@@ -258,6 +266,10 @@ func TestRunLifecycle(t *testing.T) {
 	failed = e.waitRun(svc, "broken", failed.ID, finished)
 	if failed.Status != tasks.StatusFailed || failed.Message != "disk on fire" {
 		t.Fatalf("failed run = %+v", failed)
+	}
+	if fl, _ := svc.RunLog(ctx, "broken", failed.ID, 0, 0); len(fl.Items) == 0 ||
+		fl.Items[len(fl.Items)-1].Level != tasks.LevelError {
+		t.Fatalf("failure not logged as error: %+v", fl)
 	}
 	page, err := svc.Runs(ctx, "work", "", 1)
 	if err != nil || len(page.Items) != 1 || page.NextCursor != "" || page.Items[0].ID != run.ID {
