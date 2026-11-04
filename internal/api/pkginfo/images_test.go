@@ -68,11 +68,13 @@ func TestRepositoryRawURLs(t *testing.T) {
 		}
 	}
 	for in, want := range map[string]string{
-		"https://github.com/acme/ui/blob/main/docs/logo.png":            "https://raw.githubusercontent.com/acme/ui/main/docs/logo.png",
-		"https://github.com/acme/ui/raw/main/logo.png?raw=true":         "https://raw.githubusercontent.com/acme/ui/main/logo.png",
-		"https://gitlab.com/group/project/-/blob/main/img/a.png":        "https://gitlab.com/group/project/-/raw/main/img/a.png",
-		"https://github.com/acme/ui/actions/workflows/ci.yml/badge.svg": "https://github.com/acme/ui/actions/workflows/ci.yml/badge.svg",
-		"https://img.example.com/x.svg?label=a":                         "https://img.example.com/x.svg?label=a",
+		"https://github.com/acme/ui/blob/main/docs/logo.png":                                                         "https://raw.githubusercontent.com/acme/ui/main/docs/logo.png",
+		"https://github.com/acme/ui/raw/main/logo.png?raw=true":                                                      "https://raw.githubusercontent.com/acme/ui/main/logo.png",
+		"https://gitlab.com/group/project/-/blob/main/img/a.png":                                                     "https://gitlab.com/group/project/-/raw/main/img/a.png",
+		"https://github.com/acme/ui/actions/workflows/ci.yml/badge.svg":                                              "https://github.com/acme/ui/actions/workflows/ci.yml/badge.svg",
+		"https://camo.githubusercontent.com/603a9f/68747470733a2f2f696d672e6578616d706c652e636f6d2f6c6f676f2e706e67": "https://img.example.com/logo.png",
+		"https://camo.githubusercontent.com/603a9f/6a6176617363726970743a616c657274283129":                           "https://camo.githubusercontent.com/603a9f/6a6176617363726970743a616c657274283129",
+		"https://img.example.com/x.svg?label=a":                                                                      "https://img.example.com/x.svg?label=a",
 	} {
 		u, _ := url.Parse(in)
 		if got := rawFileURL(u); got != want {

@@ -2,6 +2,7 @@ package pkginfo
 
 import (
 	"context"
+	"encoding/hex"
 	"io"
 	"net/url"
 	"path"
@@ -312,11 +313,23 @@ func (x *extraction) listMembers(ctx context.Context) {
 // ---------------------------------------------------------------- repositories
 
 // rawFileURL rewrites links to a file page on github.com or gitlab.com to
-// the raw file; other URLs are returned as they are.
+// the raw file, and image proxy links copied from github.com pages
+// (camo.githubusercontent.com/<digest>/<hex URL>) to the image they wrap,
+// which the proxy refuses to serve to anyone but github.com. Other URLs
+// are returned as they are.
 func rawFileURL(u *url.URL) string {
 	host := strings.ToLower(u.Hostname())
 	segs := strings.Split(strings.TrimPrefix(u.EscapedPath(), "/"), "/")
 	switch host {
+	case "camo.githubusercontent.com":
+		if len(segs) == 2 {
+			if b, err := hex.DecodeString(segs[1]); err == nil {
+				if inner, err := url.Parse(string(b)); err == nil && (inner.Scheme == "https" || inner.Scheme == "http") && inner.Host != "" &&
+					inner.User == nil && !strings.EqualFold(inner.Hostname(), host) {
+					return inner.String()
+				}
+			}
+		}
 	case "github.com", "www.github.com":
 		// /owner/repo/blob/ref/path or /owner/repo/raw/ref/path
 		if len(segs) >= 5 && (segs[2] == "blob" || segs[2] == "raw") {
