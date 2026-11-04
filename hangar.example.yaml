@@ -89,3 +89,35 @@ scanner:
 metrics:
   enabled: true
   path: /metrics
+
+# Encryption of stored credentials and HTTP hardening. See docs/security.md.
+security:
+  # 32 random bytes, base64 or hex: `openssl rand -base64 32`. Encrypts proxy
+  # upstream credentials and S3 keys stored in the database. Set it through
+  # HANGAR_SECRET_KEY; every node needs the same value. Without it,
+  # repositories and blob stores that carry credentials are refused.
+  secret_key: ""
+  # Keys that still decrypt values after a rotation (comma-separated in
+  # HANGAR_SECURITY_PREVIOUS_SECRET_KEYS). Run `hangar admin rotate-secrets`,
+  # then remove them.
+  previous_secret_keys: []
+  # Strict-Transport-Security, sent on HTTPS requests only (TLS, or
+  # X-Forwarded-Proto: https from server.trusted_proxies). 0 disables.
+  hsts:
+    max_age: 8760h
+    include_subdomains: false
+  # Browser origins other than server.base_url allowed to call Hangar.
+  cors:
+    allowed_origins: []
+  # Per client IP; per_minute: 0 disables a limit.
+  rate_limit:
+    api: { per_minute: 1200, burst: 300 }
+    # Failed authentications (401) on the API and package endpoints. When a
+    # client runs out, its requests carrying credentials answer 429.
+    failed_auth: { per_minute: 30, burst: 30 }
+  limits:
+    max_header_bytes: 131072
+    api_body_bytes: 1048576
+    upload_body_bytes: 0 # 0 = unlimited; uploads are streamed
+    # A request body that sends nothing for this long is aborted.
+    body_idle_timeout: 2m

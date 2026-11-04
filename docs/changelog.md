@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+- **Secrets at rest**: proxy upstream passwords, tokens and header values,
+  passwords in proxy remote and outbound proxy URLs, and S3 keys of blob
+  stores are encrypted in the database (AES-256-GCM envelope encryption,
+  key from `HANGAR_SECRET_KEY`). Existing plaintext values are sealed on the
+  first start with a key; the database rejects plaintext secrets. Without a
+  key, configurations carrying credentials are refused (`501`).
+- **Key rotation**: `security.previous_secret_keys` and
+  `hangar admin rotate-secrets [--dry-run]`.
+- **API**: every route except `GET /system/status`, `GET /system/version`,
+  `GET /auth/providers` and `POST /auth/login` now requires sign-in
+  (anonymous callers previously could list repositories, components and
+  search results of anonymously readable repositories).
+- **Proxy repositories**: remote URLs pointing at loopback, private,
+  link-local or other internal addresses are refused when the repository
+  is saved (`400`), not only when fetching.
+- **HTTP hardening**: security headers and content security policies for
+  the UI, API and package endpoints; HSTS on HTTPS; CORS denied by default
+  (`security.cors.allowed_origins`); API body limit (1 MiB), streamed
+  uploads, body idle timeout and header size limit; per-IP rate limits for
+  the API and for failed authentications (`security.rate_limit`).
+- **Security tests**: `test/security` sweeps every API operation and package
+  endpoint for authorization, SSRF and secret handling against a running
+  server.
+- **Docs**: `docs/security.md` (threat model, secret storage, operator
+  checklist) and `SECURITY.md` (vulnerability reporting).
+
 ## M0 — Skeleton (2026-11-03)
 
 Foundation every later milestone builds on. No package format is functional yet.
