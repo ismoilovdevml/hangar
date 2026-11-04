@@ -44,6 +44,8 @@ Options (flags left out keep the value of an existing install):
   --admin-user NAME        first administrator (default admin)
   --image REF              use this image instead of the release image
   --files-from DIR         take the compose files from DIR instead of downloading
+  --mirror URL             download release files from URL/<version>/ instead of
+                           GitHub (an internal mirror of the release assets)
   --uninstall              stop and remove the containers, keep all data
   --purge                  with --uninstall: also delete volumes and DIR
   -h, --help               show this help
@@ -64,7 +66,7 @@ die() {
 # ---- Arguments ---------------------------------------------------------------
 opt_domain="" opt_version="" opt_dir=/opt/hangar opt_bind="" opt_port="" opt_storage=""
 opt_s3_endpoint="" opt_tls="" opt_registry="" opt_acme="" opt_trusted="" opt_base_url=""
-opt_admin="" opt_image="" opt_files="" uninstall=0 purge=0
+opt_admin="" opt_image="" opt_files="" opt_mirror="" uninstall=0 purge=0
 
 need_value() { [[ $# -ge 2 && -n "$2" ]] || die "$1 needs a value"; }
 while [[ $# -gt 0 ]]; do
@@ -84,6 +86,7 @@ while [[ $# -gt 0 ]]; do
 	--admin-user) need_value "$@"; opt_admin=$2; shift 2 ;;
 	--image) need_value "$@"; opt_image=$2; shift 2 ;;
 	--files-from) need_value "$@"; opt_files=$2; shift 2 ;;
+	--mirror) need_value "$@"; opt_mirror=${2%/}; shift 2 ;;
 	--uninstall) uninstall=1; shift ;;
 	--purge) purge=1; shift ;;
 	-h | --help) usage; exit 0 ;;
@@ -267,6 +270,7 @@ fetch_files() {
 		return
 	fi
 	local base=https://github.com/$REPO/releases/download/$version
+	[[ -n "$opt_mirror" ]] && base=$opt_mirror/$version
 	if download "$base/SHA256SUMS" "$stage/SHA256SUMS" 2>/dev/null; then
 		for f in $COMPOSE_FILES registry.caddy; do
 			download "$base/$f" "$stage/$f" || die "cannot download $f from release $version"
@@ -274,6 +278,7 @@ fetch_files() {
 			[[ -n "$want" && "$want" == "$(sha256_of "$stage/$f")" ]] || die "checksum mismatch for $f in release $version"
 		done
 	else
+		[[ -z "$opt_mirror" ]] || die "cannot download $base/SHA256SUMS"
 		warn "release $version has no SHA256SUMS asset; using the files of tag $version"
 		local raw=https://raw.githubusercontent.com/$REPO/$version/deploy/compose
 		for f in $COMPOSE_FILES; do
