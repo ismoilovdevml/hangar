@@ -186,7 +186,7 @@ function VersionList({ hit, version }: { hit: SearchHit; version?: string }) {
             aria-current={v.version === active ? 'page' : undefined}
           >
             <span className="tree-version__name">{v.version}</span>
-            {i === 0 && <span className="tree-version__tag">newest</span>}
+            {i === 0 && <span className="tree-version__tag"> newest</span>}
           </Link>
         </li>
       ))}

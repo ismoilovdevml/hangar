@@ -29,7 +29,7 @@ export function BlobStoresPage() {
         title="Blob stores"
         description="The disks and buckets behind your repositories. Identical files are stored once."
         actions={
-          !add && (
+          (!add || !canCreate) && (
             <button
               type="button"
               className="button button--primary"
