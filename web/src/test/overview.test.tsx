@@ -49,8 +49,20 @@ describe('overview', () => {
     const pypi = within(upstreams).getByText('pypi-proxy').closest('li')!;
     expect(within(pypi).getByTitle('No remote requests in this range')).toHaveTextContent('—');
 
-    expect(await screen.findByText('docker login cr.acme.io')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Copy client setup commands' })).toBeInTheDocument();
+    const connect = screen.getByRole('region', { name: 'Connect a client' });
+    expect(await within(connect).findByText("echo '<token>' | docker login cr.acme.io -u d.ismoilov --password-stdin")).toBeInTheDocument();
+    expect(within(connect).getByRole('button', { name: 'Copy Docker set-up commands' })).toBeInTheDocument();
+    expect(within(connect).getByRole('link', { name: 'Create an access token' })).toHaveAttribute('href', '/account#my-tokens-title');
+  });
+
+  it('switches the client snippet between the suggested repositories', async () => {
+    const user = userEvent.setup();
+    renderApp('/');
+    const connect = await screen.findByRole('region', { name: 'Connect a client' });
+    await user.click(await within(connect).findByRole('radio', { name: 'npm' }));
+    expect(within(connect).getByText('registry=https://pkg.acme.io/repository/npm-group/')).toBeInTheDocument();
+    expect(within(connect).getByText('//pkg.acme.io/repository/npm-group/:_authToken=<token>')).toBeInTheDocument();
+    expect(within(connect).queryByText('Publish')).not.toBeInTheDocument();
   });
 
   it('keeps the selected range in the URL', async () => {

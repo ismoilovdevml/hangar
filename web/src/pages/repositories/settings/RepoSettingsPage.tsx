@@ -11,11 +11,12 @@ import { CopyButton } from '../../../components/CopyButton';
 import { ErrorNote } from '../../../components/ErrorNote';
 import { FormatBadge } from '../../../components/FormatBadge';
 import { IconPackage } from '../../../components/icons';
+import { ClientSetup } from '../../../components/ClientSetup';
 import { PageHeader } from '../../../components/PageHeader';
 import { Panel } from '../../../components/Panel';
 import { Pill, StatusDot } from '../../../components/Pill';
 import { FORMAT_META, formatBytes } from '../../../lib/format';
-import { isDirty, repoClientConfig, repoToForm, storedInput, toRepositoryUpdate } from '../../../lib/repoSettings';
+import { isDirty, repoClientTarget, repoToForm, storedInput, toRepositoryUpdate } from '../../../lib/repoSettings';
 import {
   isFormat,
   repositoryYaml,
@@ -248,8 +249,8 @@ function SettingsForm({ repo }: { repo: Repository }) {
               </dd>
             </dl>
             <div className="summary__code repo-settings__client">
-              <p className="summary__label">Client configuration</p>
-              <CodeBlock label="client configuration" lines={repoClientConfig(repo)} />
+              <p className="summary__label">Connect a client</p>
+              <ClientSetup targets={[repoClientTarget(repo)]} />
             </div>
             <div className="summary__code">
               <p className="summary__label">Same thing as code</p>

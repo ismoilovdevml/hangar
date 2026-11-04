@@ -199,8 +199,8 @@ export function upstreamHealth(range: OverviewRange): UpstreamHealth[] {
 
 export const clientEndpoints: ClientEndpoint[] = [
   { format: 'docker', endpoint: 'cr.acme.io', repository: 'docker-group' },
-  { format: 'npm', endpoint: 'https://pkg.acme.io/npm/', repository: 'npm-group' },
-  { format: 'pypi', endpoint: 'https://pkg.acme.io/pypi/simple', repository: 'pypi-group' },
+  { format: 'npm', endpoint: 'https://pkg.acme.io/repository/npm-group/', repository: 'npm-group' },
+  { format: 'pypi', endpoint: 'https://pkg.acme.io/repository/pypi-group/', repository: 'pypi-group' },
 ];
 
 /* ---------- repositories, blob stores, cleanup policies ---------- */

@@ -1,5 +1,5 @@
 import type { Repository, RepositoryInput } from '../api/types';
-import { clientSnippet, type CodeLine } from './clientSnippets';
+import { clientLines, type ClientTarget, type CodeLine } from './clientSnippets';
 import { initialRepoForm, toRepositoryInput, type ProxyMode, type RepoForm } from './repositories';
 
 /** The settings form pre-filled from a repository as the API returns it (secrets are never returned). */
@@ -97,50 +97,24 @@ export function isDirty(f: RepoForm, r: Repository): boolean {
   return JSON.stringify(a) !== JSON.stringify(b) || !!f.authPassword || !!f.authToken;
 }
 
-/** The registry host docker clients log in to: the repository URL up to the first slash. */
-const dockerHost = (url: string) => url.replace(/^https?:\/\//, '').split('/')[0] ?? url;
+/** Whether clients can upload through this repository. */
+export const acceptsUploads = (r: Repository) => r.type === 'hosted' || (r.type === 'group' && !!r.config.group?.write_member);
 
-const slash = (u: string) => (u.endsWith('/') ? u : `${u}/`);
+/** The client target for one repository, built from its server-provided URL. */
+export const repoClientTarget = (r: Repository, username?: string): ClientTarget => ({
+  format: r.format,
+  repository: r.name,
+  url: r.url,
+  type: r.type,
+  publishes: acceptsUploads(r),
+  username,
+});
 
 /**
  * Copyable client configuration for one repository: how to read from it, and
  * for hosted repositories (and groups with a write member) how to publish.
- * Credentials are placeholders; tokens come from Access & audit.
+ * Credentials are placeholders; tokens come from My account.
  */
-export function repoClientConfig(r: Repository): CodeLine[] {
-  const endpoint = r.format === 'docker' ? dockerHost(r.url) : r.url;
-  const lines = clientSnippet([{ format: r.format, endpoint, repository: r.name }], 1);
-  const publishes = r.type === 'hosted' || (r.type === 'group' && !!r.config.group?.write_member);
-  if (!publishes) return lines;
-  const url = slash(r.url);
-  const push: CodeLine[] = [];
-  switch (r.format) {
-    case 'docker':
-      push.push({ text: `docker tag app:1.0 ${r.url}/app:1.0` }, { text: `docker push ${r.url}/app:1.0` });
-      break;
-    case 'npm': {
-      const noScheme = url.replace(/^https?:/, '');
-      push.push({ text: `npm config set ${noScheme}:_authToken "$HANGAR_TOKEN"` }, { text: `npm publish --registry ${url}` });
-      break;
-    }
-    case 'pypi':
-      push.push({ text: `twine upload --repository-url ${url} -u token -p "$HANGAR_TOKEN" dist/*` });
-      break;
-    case 'maven':
-      push.push(
-        { text: '# pom.xml <distributionManagement><repository><url>', comment: true },
-        { text: url },
-        { text: 'mvn deploy' },
-      );
-      break;
-    case 'nuget':
-      push.push({ text: `dotnet nuget push app.1.0.0.nupkg -s ${url}index.json -k "$HANGAR_TOKEN"` });
-      break;
-    case 'raw':
-      push.push({ text: `curl -u "token:$HANGAR_TOKEN" --upload-file ./app.tar.gz ${url}path/app.tar.gz` });
-      break;
-    default:
-      return lines;
-  }
-  return [...lines, { text: '# Publish', comment: true }, ...push];
+export function repoClientConfig(r: Repository, username?: string): CodeLine[] {
+  return clientLines(repoClientTarget(r, username));
 }

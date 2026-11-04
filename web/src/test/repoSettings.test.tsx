@@ -59,9 +59,10 @@ describe('repository settings', () => {
   it('shows the YAML and copyable client configuration for the repository', async () => {
     renderApp('/repositories/npm-internal/settings');
     await screen.findByRole('form', { name: 'Settings of npm-internal' });
-    const client = screen.getByRole('button', { name: 'Copy client configuration' }).parentElement!;
-    expect(client).toHaveTextContent('npm config set registry https://pkg.acme.io/repository/npm-internal/');
-    expect(client).toHaveTextContent('npm publish --registry https://pkg.acme.io/repository/npm-internal/');
+    const setup = screen.getByRole('button', { name: 'Copy npm set-up commands' }).parentElement!;
+    expect(setup).toHaveTextContent('registry=https://pkg.acme.io/repository/npm-internal/');
+    const publish = screen.getByRole('button', { name: 'Copy npm publish commands' }).parentElement!;
+    expect(publish).toHaveTextContent('npm publish --registry https://pkg.acme.io/repository/npm-internal/');
     expect(screen.getByRole('button', { name: 'Copy repository configuration as YAML' }).parentElement).toHaveTextContent('name: npm-internal');
   });
 

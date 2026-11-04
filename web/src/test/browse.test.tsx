@@ -20,7 +20,7 @@ describe('package browser', () => {
     const pkgs = await within(tree).findByRole('list', { name: 'Packages in npm-internal' });
     expect(within(pkgs).getAllByRole('link').map((a) => a.textContent)).toEqual(['@acme/eslint-config1 versions', '@acme/ui-kit2 versions']);
     expect(await screen.findByRole('heading', { level: 1, name: 'npm-internal' })).toBeInTheDocument();
-    expect(screen.getByText('npm config set registry https://pkg.acme.io/repository/npm-internal/')).toBeInTheDocument();
+    expect(screen.getByText('registry=https://pkg.acme.io/repository/npm-internal/')).toBeInTheDocument();
 
     await user.type(within(tree).getByLabelText('Filter packages'), 'eslint');
     expect(within(pkgs).getAllByRole('link')).toHaveLength(1);
