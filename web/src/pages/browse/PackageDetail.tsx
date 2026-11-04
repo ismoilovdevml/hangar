@@ -36,7 +36,7 @@ import { Fact } from './AssetDetail';
 import { dateTime, deleteMessage, shortDigest } from './detailUtil';
 import { FormatIcon } from '../../components/FormatIcon';
 import { Markdown } from './Markdown';
-import { safeHref } from './urlPolicy';
+import { safeHref, safeImageSrc } from './urlPolicy';
 
 const route = getRouteApi('/app/browse');
 
@@ -138,7 +138,7 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
     <div className="pkg-layout">
       <Panel className="pkg-head pkg-layout__main" aria-label={`${label} ${c.version}`}>
         <div className="pkg-head__row">
-          <span className="pkg-head__mark"><FormatIcon format={c.format} size={32} /></span>
+          <PackageMark format={c.format} iconUrl={info.data?.icon_url} />
           <div className="pkg-head__text">
             <div className="pkg-head__titles">
               <h1 className="pkg-head__title">{label}</h1>
@@ -421,6 +421,23 @@ function VersionCard({ c, newest, cached, totalDownloads, info, infoPending, fin
   );
 }
 
+/* ---------------------------------------------------------------- header */
+
+/** The package's own icon when it has one (NuGet), else the format's logo. */
+function PackageMark({ format, iconUrl }: { format: string; iconUrl?: string }) {
+  const [failed, setFailed] = useState<string | null>(null);
+  const src = iconUrl ? safeImageSrc(iconUrl) : null;
+  return (
+    <span className="pkg-head__mark">
+      {src && failed !== src ? (
+        <img className="pkg-head__icon" src={src} alt="" width={36} height={36} referrerPolicy="no-referrer" onError={() => setFailed(src)} />
+      ) : (
+        <FormatIcon format={format} size={32} />
+      )}
+    </span>
+  );
+}
+
 /* ---------------------------------------------------------------- readme */
 
 function ReadmeTab({ c, q }: { c: ComponentDetail; q: ReturnType<typeof useComponentInfo> }) {
@@ -445,10 +462,11 @@ function ReadmeTab({ c, q }: { c: ComponentDetail; q: ReturnType<typeof useCompo
   }
   return (
     <article className="readme" aria-label="README">
-      {r.format === 'markdown' ? <Markdown source={r.content} /> : <pre className="readme__text">{r.content}</pre>}
+      {r.format === 'markdown' ? <Markdown source={r.content} images={r.images} /> : <pre className="readme__text">{r.content}</pre>}
       <p className="meta readme__source">
         From {r.source}
         {r.truncated ? '; cut at 512 KiB' : ''}.
+        {r.format === 'markdown' && q.data.readme_images === 'off' && ' Images hosted elsewhere are turned off on this server; their descriptions are shown instead.'}
       </p>
     </article>
   );

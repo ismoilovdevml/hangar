@@ -48,7 +48,8 @@
 /* ---------- package header ---------- */
 .pkg-head { gap: 18px; }
 .pkg-head__row { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
-.pkg-head__mark { flex: none; width: 52px; height: 52px; display: inline-flex; align-items: center; justify-content: center; border-radius: 14px; background: var(--surface-solid); box-shadow: var(--shadow-raised); }
+.pkg-head__mark { flex: none; width: 52px; height: 52px; display: inline-flex; align-items: center; justify-content: center; border-radius: 14px; background: var(--surface-solid); box-shadow: var(--shadow-raised); overflow: hidden; }
+.pkg-head__icon { width: 36px; height: 36px; object-fit: contain; border-radius: 8px; }
 .pkg-head__text { flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .pkg-head__titles { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
 .pkg-head__title { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink-strong); line-height: 1.2; overflow-wrap: anywhere; }
@@ -115,8 +116,19 @@
 .markdown .md-code { margin: 0; padding: 14px 16px; border-radius: var(--r-small); background: var(--code-bg); color: var(--code-ink); overflow-x: auto; }
 .markdown .md-code code { padding: 0; background: none; color: inherit; font-size: 13px; white-space: pre; }
 .markdown hr { border: 0; border-top: 1px solid var(--hairline-strong); }
-.markdown .md-img { max-width: 100%; height: auto; vertical-align: middle; }
-.markdown .md-img-blocked, .markdown .md-link-blocked { color: var(--ink-3); }
+/* README images: inline like on code hosts, so consecutive badges (linked or
+   not) form one row; bounded so a large picture cannot take over the page. */
+.markdown .md-img { max-width: 100%; max-height: 640px; height: auto; vertical-align: middle; object-fit: contain; }
+.markdown a:has(> .md-img) { text-decoration: none; }
+.markdown .md-img-chip {
+  display: inline-flex; align-items: center; gap: 5px; max-width: 100%; margin: 1px 0; padding: 1px 8px; vertical-align: middle;
+  border: 1px solid var(--hairline-strong); border-radius: 999px; background: var(--surface-muted);
+  color: var(--ink-3); font-size: 12px; line-height: 18px; white-space: nowrap;
+}
+.markdown .md-img-chip svg { flex: none; }
+.markdown .md-img-chip__text { overflow: hidden; text-overflow: ellipsis; }
+.markdown a .md-img-chip { color: var(--lake-ink); border-color: var(--hairline-strong); }
+.markdown .md-link-blocked { color: var(--ink-3); }
 .markdown .md-table { overflow-x: auto; }
 .markdown table { border-collapse: collapse; font-size: 13.5px; }
 .markdown th, .markdown td { padding: 6px 10px; border: 1px solid var(--hairline-strong); text-align: left; }

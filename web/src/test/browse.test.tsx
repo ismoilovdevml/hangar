@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
@@ -152,9 +152,32 @@ describe('package browser: package', () => {
     expect(within(readme).getByText('npm install @acme/ui-kit')).toBeInTheDocument();
     expect(within(readme).queryByRole('link', { name: 'Unsafe link' })).toBeNull();
     expect(within(readme).getByText('Unsafe link')).toBeInTheDocument();
-    expect(within(readme).getByText('[image: blocked image]')).toBeInTheDocument();
+    // Badges load through the server and stay linked; an unresolved image is a chip.
+    const ci = within(readme).getByRole('img', { name: 'Build' });
+    expect(ci.getAttribute('src')).toMatch(/^\/api\/v1\/components\/c_311\/readme-images\/[^?]+\?u=https%3A%2F%2Fci\.example\.com/);
+    expect(ci.closest('a')).toHaveAttribute('href', 'https://ci.example.com/acme/ui-kit');
+    expect(ci.closest('p')).toBe(within(readme).getByRole('img', { name: 'npm' }).closest('p'));
+    expect(within(readme).getByRole('img', { name: 'Screenshot' })).toHaveAttribute('width', '420');
+    expect(within(readme).getByRole('img', { name: 'blocked image' })).toHaveClass('md-img-chip');
     expect(readme.querySelector('script')).toBeNull();
     expect(readme.textContent).not.toContain('alert');
+    expect(readme.textContent).not.toContain('[image');
+  });
+
+  it('shows a NuGet package icon in the header, falling back to the format logo', async () => {
+    renderApp('/browse?repo=nuget-internal&name=acme.core');
+    const head = await screen.findByRole('region', { name: 'acme.core 1.2.0' });
+    const icon = await waitFor(() => {
+      const img = head.querySelector<HTMLImageElement>('.pkg-head__icon');
+      expect(img).not.toBeNull();
+      return img!;
+    });
+    expect(icon.getAttribute('src')).toMatch(/^\/api\/v1\/components\/c_nuget\/readme-images\/[^?]+\?p=icon\.svg$/);
+    fireEvent.error(icon);
+    expect(head.querySelector('.pkg-head__icon')).toBeNull();
+    expect(head.querySelector('.pkg-head__mark svg')).not.toBeNull();
+    const readme = await screen.findByRole('article', { name: 'README' });
+    expect(within(readme).getByRole('img', { name: 'Acme.Core' }).getAttribute('src')).toContain('?p=docs%2Fimages%2Fbanner.svg');
   });
 
   it('lists versions with the newest marked, sizes, and switches through the URL', async () => {
