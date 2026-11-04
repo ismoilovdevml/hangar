@@ -13,11 +13,24 @@ export function summarySentence(m: OverviewMetrics): string {
   return `${lead} ${plural(pub, 'package')} published since yesterday, ${pushes}.`;
 }
 
+/**
+ * Why a component is not scanned, as a short sentence-case label: Docker
+ * images say "Image scanning not configured" rather than looking clean.
+ */
+export function unsupportedText(reason: string | undefined, format?: string): string {
+  if (reason) return reason.charAt(0).toUpperCase() + reason.slice(1);
+  return format === 'docker' ? 'Image scanning not configured' : 'No advisory source';
+}
+
 /** Security pill text and tone for a component's scan result. */
 export function scanPill(scan: ScanSummary): { text: string; tone: Tone } {
   switch (scan.state) {
     case 'pending':
-      return { text: 'Scanning', tone: 'neutral' };
+      return { text: 'Not scanned yet', tone: 'neutral' };
+    case 'failed':
+      return { text: 'Scan failed', tone: 'warn' };
+    case 'unsupported':
+      return { text: unsupportedText(scan.scan_error), tone: 'neutral' };
     case 'quarantined':
       return { text: 'Quarantined', tone: 'bad' };
     case 'clean':

@@ -17,6 +17,7 @@ import type {
   BlobStore,
   BlobStoreInput,
   ComponentDetail,
+  ComponentFindings,
   FindingPage,
   PublishedComponentPage,
   Repository,
@@ -140,16 +141,25 @@ export function useComponentDependents(id: string | undefined) {
   });
 }
 
-/** Security findings, or null when the server has no scanner data for components. */
+/**
+ * Security findings, or null when there is nothing honest to list: the
+ * server has no scanner, the format is not scanned (Docker images), or the
+ * component has not been scanned successfully yet and has no findings. An
+ * empty list therefore always means "scanned, nothing known".
+ */
 export function useComponentFindings(id: string | undefined) {
   return useQuery({
     queryKey: catalogKeys.findings(id ?? ''),
     enabled: !!id,
     retry: false,
-    queryFn: ({ signal }) =>
-      optional('findings', () =>
-        apiFetch<FindingPage>(`/components/${encodeURIComponent(id!)}/findings`, { query: { limit: 200 }, signal }),
-      ),
+    queryFn: async ({ signal }): Promise<FindingPage | null> => {
+      const page = await optional('findings', () =>
+        apiFetch<ComponentFindings>(`/components/${encodeURIComponent(id!)}/findings`, { query: { limit: 200 }, signal }),
+      );
+      if (!page) return null;
+      if (page.scan && page.scan.status !== 'ok' && page.items.length === 0) return null;
+      return page;
+    },
   });
 }
 

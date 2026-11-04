@@ -3126,7 +3126,7 @@ components:
           description: Last scan attempt
         scan_error:
           type: string
-          description: Why the last scan failed
+          description: Why the last scan failed, or why the format is not scanned (`image scanning not configured`)
     Publisher:
       type: object
       required: [kind, display_name]

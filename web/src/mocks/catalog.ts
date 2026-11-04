@@ -1,7 +1,8 @@
 /**
  * Mock packages (components, assets), search and blob store management for
  * unit tests and offline UI work. Shapes follow api/openapi.yaml; the endpoints
- * the server does not implement yet (dependents, findings) answer 501 as it does.
+ * the server does not implement yet (dependents) answer 501 as it does; findings
+ * live in findings.ts.
  */
 import { http, HttpResponse, type HttpResponseResolver } from 'msw';
 import type {
@@ -614,7 +615,6 @@ export function catalogHandlers(guard: Guard, readableRepos: () => string[], rep
     ),
 
     http.get(api('/components/:id/dependents'), withGuard(() => notImplemented('endpoint GET dependents'))),
-    http.get(api('/components/:id/findings'), withGuard(() => notImplemented('endpoint GET findings'))),
 
     http.get(
       api('/search'),

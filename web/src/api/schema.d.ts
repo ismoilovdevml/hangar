@@ -432,6 +432,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repositories/{name}:scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Queues a vulnerability scan of every component of the repository (npm, Maven, PyPI, NuGet and Go repositories). Requires `system:security:write` or write access to the repository; audited as `repository.scan`. Repeated requests within the same minute are one scan. */
+        post: operations["scanRepository"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repositories/{name}/browse": {
         parameters: {
             query?: never;
@@ -647,9 +666,29 @@ export interface paths {
             };
             cookie?: never;
         };
+        /** @description Unresolved findings of the component (open, assigned, waived) and its scan state. */
         get: operations["listComponentFindings"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{id}:scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Scans the component against the advisory database now and answers when done. Components of formats without an advisory source (Docker images) are not scanned; the result says `unsupported`. Requires `system:security:write` or write access to the repository. */
+        post: operations["scanComponent"];
         delete?: never;
         options?: never;
         head?: never;
@@ -715,7 +754,43 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Findings of the components in repositories the caller can read, most severe first. Without `status`, fixed findings are left out. `totals`, `fixable`, `waived` and `components` count open findings (open or assigned) of the same repositories and ignore the other filters. */
         get: operations["listFindings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings/trend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description One point per day (UTC), oldest first, built from the stored findings: active findings (first seen and not yet fixed) by severity at the end of the day, plus findings first seen and fixed that day. Findings of deleted components are not counted. */
+        get: operations["getFindingTrend"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get: operations["getFinding"];
         put?: never;
         post?: never;
         delete?: never;
@@ -735,8 +810,27 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Accepts the risk of a finding until a date. Requires `system:security:write`; audited as `finding.waive`. A waived finding no longer counts as open and no longer quarantines its component. At the expiry the finding is re-opened (audited as `finding.waiver_expired`) and the quarantine policy applies again. */
         post: operations["waiveFinding"];
+        /** @description Re-opens a waived finding. Requires `system:security:write`; audited as `finding.waiver_revoke`. */
         delete: operations["revokeWaiver"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scanning/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Scanner configuration and scan coverage of the readable repositories */
+        get: operations["getScanningStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1953,6 +2047,13 @@ export interface components {
                 packages_affected: number;
                 quarantined: number;
                 open_findings: number;
+                /** @description Whether the numbers rest on scans; null on servers without a scanner */
+                scanning?: {
+                    enabled: boolean;
+                    scanned_components: number;
+                    /** Format: date-time */
+                    last_scan_at: string | null;
+                } | null;
             };
             traffic: components["schemas"]["TrafficBucket"][];
             storage_by_format: {
@@ -2175,14 +2276,24 @@ export interface components {
                 reclaimable_bytes: components["schemas"]["Bytes"];
             };
         };
-        /** @enum {string} */
-        ScanState: "pending" | "clean" | "findings" | "quarantined";
+        /**
+         * @description pending: never scanned; clean: scanned, no open finding; findings: open or assigned findings; quarantined: blocked from download; failed: the last scan failed; unsupported: the format has no advisory source (Docker images: image scanning not configured).
+         * @enum {string}
+         */
+        ScanState: "pending" | "clean" | "findings" | "quarantined" | "failed" | "unsupported";
         ScanSummary: {
             state: components["schemas"]["ScanState"];
             critical: number;
             high: number;
             medium: number;
             low: number;
+            /**
+             * Format: date-time
+             * @description Last scan attempt
+             */
+            scanned_at?: string | null;
+            /** @description Why the last scan failed, or why the format is not scanned (`image scanning not configured`) */
+            scan_error?: string;
         };
         Publisher: {
             /** @enum {string} */
@@ -2396,35 +2507,156 @@ export interface components {
              * @example GHSA-xxxx-xxxx-xxxx
              */
             advisory_id: string;
+            /** @description Other ids of the same advisory (CVE, GHSA) */
+            aliases?: string[];
+            /** @description One-line summary of the advisory */
             title: string;
+            /** @description Advisory text (Markdown); only in GET /findings/{id} */
+            details?: string;
             severity: components["schemas"]["Severity"];
+            /** @description CVSS base score */
             cvss?: number | null;
+            /** @description CVSS v4.0 or v3.x vector the score comes from */
+            cvss_vector?: string | null;
+            /** @description Package name as the advisory names it */
             package: string;
             installed: string;
+            /** @description Lowest version that fixes the installed one; null when no fix is known */
             fixed_in?: string | null;
+            fixed_versions?: string[];
+            /** @example >=4.0.0, <4.5.1; >=4.6.0, <4.7.2 */
+            affected_versions?: string;
+            references?: {
+                /**
+                 * @example ADVISORY
+                 * @example WEB
+                 * @example FIX
+                 * @example PACKAGE
+                 */
+                type: string;
+                url: string;
+            }[];
             status: components["schemas"]["FindingStatus"];
+            /** @description The component is quarantined */
             quarantined?: boolean;
+            /** @description Readable components with an unresolved finding for the same advisory */
             affected_components: number;
+            /** @description Reason of the current waiver, or of the last one when it expired */
             waiver_reason?: string | null;
             /** Format: date-time */
             waiver_until?: string | null;
+            waived_by?: string | null;
+            /** Format: date-time */
+            waived_at?: string | null;
             assignee?: string | null;
+            /** @example osv */
+            source?: string;
             first_seen_at?: components["schemas"]["Timestamp"];
+            last_seen_at?: components["schemas"]["Timestamp"];
+            /**
+             * Format: date-time
+             * @description When a rescan stopped reporting the advisory (status fixed)
+             */
+            resolved_at?: string | null;
+            /** Format: date-time */
+            advisory_published_at?: string | null;
+            /** Format: date-time */
+            advisory_modified_at?: string | null;
+            component?: {
+                id: string;
+                repository: string;
+                format: components["schemas"]["Format"];
+                namespace: string;
+                name: string;
+                version: string;
+            };
+        };
+        ComponentScan: {
+            /** @enum {string} */
+            status: "never" | "ok" | "failed" | "unsupported";
+            /** @description Why the last scan failed, or why the format is not scanned */
+            error?: string;
+            /** Format: date-time */
+            scanned_at: string | null;
+        };
+        ComponentFindings: components["schemas"]["FindingPage"] & {
+            scan: components["schemas"]["ComponentScan"];
+        };
+        ScanCounts: {
+            scanned: number;
+            failed: number;
+            findings: number;
+            new_findings: number;
+            quarantined: number;
+            released: number;
+        };
+        ScanResult: {
+            component_id: string;
+            scan: components["schemas"]["ComponentScan"];
+            summary: components["schemas"]["ScanCounts"];
+        };
+        RepositoryScanQueued: {
+            repository: string;
+            components: number;
+        };
+        SeverityCounts: {
+            critical: number;
+            high: number;
+            medium: number;
+            low: number;
+            unknown?: number;
+        };
+        FindingTrendPoint: {
+            /** Format: date */
+            date: string;
+            critical: number;
+            high: number;
+            medium: number;
+            /** @description Low and unknown */
+            low: number;
+            new: number;
+            resolved: number;
+        };
+        FindingTrend: {
+            days: number;
+            items: components["schemas"]["FindingTrendPoint"][];
+        };
+        ScanningStatus: {
+            enabled: boolean;
+            /** @example osv */
+            source: string;
+            /** @example https://api.osv.dev */
+            source_url: string;
+            rescan_interval: components["schemas"]["Duration"];
+            supported_formats: string[];
+            coverage: {
+                scanned: number;
+                failed: number;
+                never: number;
+                unsupported: number;
+                /** Format: date-time */
+                last_scan_at: string | null;
+            };
         };
         FindingPage: {
             items: components["schemas"]["Finding"][];
             next_cursor?: components["schemas"]["NextCursor"];
         };
         FindingList: components["schemas"]["FindingPage"] & {
-            totals: {
-                critical: number;
-                high: number;
-                medium: number;
-                low: number;
-            };
+            /** @description Findings matching the filters */
+            total: number;
+            /** @description Open findings by severity */
+            totals: components["schemas"]["SeverityCounts"];
+            /** @description Open findings with a known fix, by severity */
+            fixable: components["schemas"]["SeverityCounts"];
+            /** @description Findings under an active waiver */
+            waived: number;
+            /** @description Components with an open finding */
+            components: number;
         };
         WaiverInput: {
             reason: string;
+            /** @description In the future, at most a year ahead */
             until: components["schemas"]["Timestamp"];
         };
         /**
@@ -2553,7 +2785,8 @@ export interface components {
         };
         /**
          * @description Types this server runs: cleanup (cleanup policies), blob_compaction,
-         *     docker_gc, auth_purge, audit_partitions. The others are reserved.
+         *     docker_gc, auth_purge, audit_partitions, rescan (vulnerability
+         *     rescan against new advisories). The others are reserved.
          * @enum {string}
          */
         TaskType: "cleanup" | "blob_compaction" | "docker_gc" | "auth_purge" | "audit_partitions" | "rescan" | "reindex" | "directory_sync" | "db_backup" | "replication" | "proxy_metadata_refresh" | "blob_store_move";
@@ -3917,6 +4150,48 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    scanRepository: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scan queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryScanQueued"];
+                };
+            };
+            /** @description The format has no advisory source (e.g. Docker images) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Scanning is turned off (`scanning.enabled`) */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     browseRepository: {
         parameters: {
             query?: {
@@ -4328,7 +4603,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FindingPage"];
+                    "application/json": components["schemas"]["ComponentFindings"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    scanComponent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scan finished (also when it failed; see `scan.status`) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanResult"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Scanning is turned off (`scanning.enabled`) */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };
@@ -4388,7 +4697,7 @@ export interface operations {
                 /**
                  * @description Free text plus qualifiers: `format:npm`, `repo:npm-hosted`, `sha256:ab12`,
                  *     `cve:CVE-2026-1234`, `unused:>90d`, `license:GPL-3.0`, `published:<2026-01-01`,
-                 *     `security:findings` (pending, clean, findings, quarantined). Each free-text word is
+                 *     `security:findings` (pending, clean, findings, quarantined, failed, unsupported); `cve:` also matches aliases. Each free-text word is
                  *     a prefix match on the package coordinates.
                  */
                 q?: string;
@@ -4418,11 +4727,17 @@ export interface operations {
     listFindings: {
         parameters: {
             query?: {
-                severity?: components["schemas"]["Severity"];
-                status?: components["schemas"]["FindingStatus"];
+                /** @description One or more severities, comma-separated */
+                severity?: string;
+                /** @description One or more of open, assigned, waived, fixed, comma-separated */
+                status?: string;
                 fix_available?: boolean;
                 /** @description Only components pulled in the last N days */
                 in_production_days?: number;
+                /** @description Exact repository name */
+                repository?: string;
+                /** @description Matches the advisory id, an alias (CVE), the package or the title */
+                q?: string;
                 /** @description Opaque cursor from the previous page's `next_cursor` */
                 cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];
@@ -4442,6 +4757,54 @@ export interface operations {
                     "application/json": components["schemas"]["FindingList"];
                 };
             };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    getFindingTrend: {
+        parameters: {
+            query?: {
+                days?: number;
+                repository?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Daily points */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingTrend"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    getFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The finding with the advisory text and references */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     waiveFinding: {
@@ -4469,6 +4832,8 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     revokeWaiver: {
@@ -4482,13 +4847,35 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Waiver removed */
+            /** @description Waiver removed (or there was none) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Finding"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getScanningStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanningStatus"];
                 };
             };
         };

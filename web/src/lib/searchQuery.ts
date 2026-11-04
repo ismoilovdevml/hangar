@@ -22,7 +22,7 @@ export const QUALIFIERS: { key: QualifierKey; hint: string; example: string }[] 
 
 const KEYS = new Set<string>(QUALIFIERS.map((q) => q.key));
 
-export const SECURITY_STATES = ['pending', 'clean', 'findings', 'quarantined'] as const;
+export const SECURITY_STATES = ['pending', 'clean', 'findings', 'quarantined', 'failed', 'unsupported'] as const;
 export type SecurityState = (typeof SECURITY_STATES)[number];
 
 export interface Token {

@@ -1,6 +1,6 @@
 import type { ScanState, ScanSummary, SearchHit } from '../api/types';
 import type { Tone } from './format';
-import { componentName } from './overview';
+import { componentName, unsupportedText } from './overview';
 
 /** A search hit's package name in its format's idiom (older servers send only coordinates). */
 export const hitName = (h: SearchHit) => componentName({ format: h.format, namespace: h.namespace, name: h.name ?? h.coordinates });
@@ -27,13 +27,17 @@ export function downloadHref(url: string): string {
  * The security state as a pill, with the worst severity spelled out. Search
  * hits carry only the state; "pending" also covers servers without a scanner.
  */
-export function securityPill(scan: ScanSummary | ScanState): { label: string; tone: Tone } {
+export function securityPill(scan: ScanSummary | ScanState, format?: string): { label: string; tone: Tone } {
   const s: ScanSummary = typeof scan === 'string' ? { state: scan, critical: 0, high: 0, medium: 0, low: 0 } : scan;
   switch (s.state) {
     case 'clean':
       return { label: 'Clean', tone: 'ok' };
     case 'pending':
       return { label: 'Not scanned', tone: 'neutral' };
+    case 'failed':
+      return { label: 'Scan failed', tone: 'warn' };
+    case 'unsupported':
+      return { label: unsupportedText(s.scan_error, format), tone: 'neutral' };
     case 'quarantined':
       return { label: 'Quarantined', tone: 'bad' };
     case 'findings':

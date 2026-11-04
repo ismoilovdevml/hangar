@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/scanning"
 	"github.com/ismoilovdevml/hangar/internal/search"
 )
 
@@ -145,7 +146,8 @@ type ScanSummary struct {
 	High     int    `json:"high"`
 	Medium   int    `json:"medium"`
 	Low      int    `json:"low"`
-	// ScannedAt is the last scan attempt; Error why it failed.
+	// ScannedAt is the last scan attempt; Error why it failed, or why the
+	// format is not scanned.
 	ScannedAt *time.Time `json:"scanned_at"`
 	Error     string     `json:"scan_error,omitempty"`
 }
@@ -240,6 +242,9 @@ func scanComponent(row pgx.Row) (*ComponentRow, error) {
 	if r.Scan.ScannedAt != nil {
 		t := r.Scan.ScannedAt.UTC()
 		r.Scan.ScannedAt = &t
+	}
+	if r.Scan.State == scanning.StatusUnsupported {
+		r.Scan.Error = scanning.UnsupportedReason(r.Format)
 	}
 	if r.LastDownloadedAt != nil {
 		t := r.LastDownloadedAt.UTC()

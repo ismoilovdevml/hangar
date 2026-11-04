@@ -123,6 +123,28 @@ function CacheKpi({ m }: { m: OverviewMetrics }) {
 
 function IssuesKpi({ m }: { m: OverviewMetrics }) {
   const crit = m.issues.critical;
+  const scanning = m.issues.scanning;
+  // Zero critical issues only means "clear" once packages have been scanned.
+  if (scanning && (!scanning.enabled || scanning.scanned_components === 0)) {
+    const off = !scanning.enabled;
+    return (
+      <KpiCard
+        label="Critical issues"
+        tag={{ text: off ? 'Scanning off' : 'Not scanned yet', tone: 'neutral' }}
+        value={<NotAvailable reason={off ? 'Vulnerability scanning is turned off' : 'No package has been scanned yet'} />}
+        meter={{ value: 0, label: 'Critical share of open findings', color: 'var(--chart-2)' }}
+        note={
+          off ? (
+            'Vulnerability scanning is turned off on this server.'
+          ) : (
+            <>
+              No package scanned yet. <Link to="/vulnerabilities">Vulnerabilities</Link>
+            </>
+          )
+        }
+      />
+    );
+  }
   return (
     <KpiCard
       label="Critical issues"

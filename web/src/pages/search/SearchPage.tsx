@@ -35,7 +35,9 @@ const SECURITY_LABEL: Record<SecurityState, string> = {
   clean: 'Clean',
   findings: 'Has findings',
   quarantined: 'Quarantined',
-  pending: 'Not scanned',
+  pending: 'Not scanned yet',
+  failed: 'Scan failed',
+  unsupported: 'No advisory source',
 };
 
 export function SearchPage() {
@@ -204,7 +206,7 @@ function ResultList({
     <ol ref={listRef} className="result-list" aria-label="Search results" aria-busy={busy || undefined} onKeyDown={onKeyDown}>
       {hits.map((h) => {
         const name = hitName(h);
-        const pill = securityPill(h.security);
+        const pill = securityPill(h.security, h.format);
         return (
           <li key={h.component_id} className="result glass">
             <Link
