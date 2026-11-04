@@ -34,26 +34,88 @@ export interface ClusterSummary {
   total: number;
   leader?: SystemNode;
   versions: string[];
-  /** One sentence for the summary panel. */
-  message: string;
+  /** Checks of the nodes that answer: healthy ones and all of them. */
+  passing: number;
+  checks: number;
+  /** The page's headline: "Everything is working", "1 check needs attention". */
+  headline: string;
+  /** Things to know beyond the checks (no scheduler leader). */
+  notes: string[];
 }
+
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** Overall state of the installation from its nodes. A node is up while it publishes heartbeats. */
 export function summarize(nodes: SystemNode[]): ClusterSummary {
-  const up = nodes.filter((n) => !n.stale).length;
-  const leader = nodes.find((n) => n.role === 'leader' && !n.stale);
-  const versions = [...new Set(nodes.filter((n) => !n.stale).map((n) => n.version))].sort();
+  const live = nodes.filter((n) => !n.stale);
+  const up = live.length;
+  const leader = live.find((n) => n.role === 'leader');
+  const versions = [...new Set(live.map((n) => n.version))].sort();
   // A silent node degrades the installation; it is down only when no node answers.
-  const live = worst(nodes.filter((n) => !n.stale).map((n) => n.status));
-  const status: HealthStatus = up === 0 && nodes.length > 0 ? 'down' : up < nodes.length ? worst([live, 'degraded']) : live;
-  let message = 'All nodes and subsystems are healthy.';
-  if (nodes.length === 0) message = 'No node has reported yet.';
-  else if (up < nodes.length) message = `${nodes.length - up} of ${nodes.length} nodes are not responding.`;
-  else if (status === 'down') message = 'A subsystem is down; see the details below.';
-  else if (status === 'degraded') message = 'Something needs attention; see the subsystems marked degraded.';
-  if (up > 0 && !leader) message += ' No node holds the scheduler lock, so scheduled tasks do not start.';
-  return { status, up, total: nodes.length, leader, versions, message };
+  const liveStatus = worst(live.map((n) => n.status));
+  const status: HealthStatus = up === 0 && nodes.length > 0 ? 'down' : up < nodes.length ? worst([liveStatus, 'degraded']) : liveStatus;
+  const subs = live.flatMap((n) => n.subsystems);
+  const down = subs.filter((s) => s.status === 'down').length;
+  const degraded = subs.filter((s) => s.status === 'degraded').length;
+  const silent = nodes.length - up;
+
+  let headline = 'Everything is working';
+  if (nodes.length === 0) headline = 'Waiting for the first report';
+  else if (up === 0) headline = 'No node is responding';
+  else if (down > 0) headline = `${count(down, 'check is', 'checks are')} down`;
+  else if (degraded > 0) headline = `${count(degraded, 'check needs', 'checks need')} attention`;
+  else if (silent > 0) headline = `${count(silent, 'node is', 'nodes are')} not responding`;
+
+  const notes: string[] = [];
+  if (up > 0 && !leader) notes.push('No node holds the scheduler lock, so scheduled tasks do not start.');
+  return { status, up, total: nodes.length, leader, versions, passing: subs.length - down - degraded, checks: subs.length, headline, notes };
 }
+
+/** "v1.0.0" for release versions, other builds ("dev") as they are. */
+export function versionText(v: string): string {
+  return /^\d/.test(v) ? `v${v}` : v;
+}
+
+const pad = (n: number) => String(n).padStart(2, '0');
+const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** UTC time of day for times today ("17:37"), with the date otherwise ("3 Nov 17:37"). */
+export function shortTime(iso: string, now: Date): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const clockText = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+  return d.toISOString().slice(0, 10) === now.toISOString().slice(0, 10) ? clockText : `${d.getUTCDate()} ${MONTH[d.getUTCMonth()]} ${clockText}`;
+}
+
+/** "08:52–10:32", or with dates when the period is not within today. */
+export function period(from: string, to: string, now: Date): string {
+  const a = shortTime(from, now);
+  const b = shortTime(to, now);
+  return a.includes(' ') || b.includes(' ') ? `${a} – ${b}` : `${a}–${b}`;
+}
+
+/** A fact value that is a full ISO timestamp (shown as a time instead). */
+export function isTimestamp(v: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.test(v);
+}
+
+/** The headline value of a check: its own metric, else its latency. */
+export function checkMetric(s: Subsystem): string {
+  if (s.metric) return s.metric;
+  return s.latency_ms !== undefined ? `${s.latency_ms} ms` : '';
+}
+
+/** Subsystems to open at first: those not healthy on nodes that answer. */
+export function problemKeys(nodes: SystemNode[]): Set<string> {
+  const keys = new Set<string>();
+  for (const n of nodes) {
+    if (n.stale) continue;
+    for (const s of n.subsystems) if (s.status !== 'healthy') keys.add(checkKey(n, s));
+  }
+  return keys;
+}
+
+export const checkKey = (n: SystemNode, s: Subsystem) => `${n.id}/${s.name}`;
 
 /** "12 s ago", "4 min ago", "3 h ago" from an ISO time. */
 export function ago(iso: string, now: Date): string {
