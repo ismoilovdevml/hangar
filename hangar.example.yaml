@@ -1,24 +1,41 @@
-# Hangar configuration example. Copy to hangar.yaml (or hangar.local.yaml, which
-# is git-ignored) and run: hangar serve --config hangar.yaml
+# Hangar configuration reference. Copy to hangar.yaml (or hangar.local.yaml,
+# which is git-ignored) and run: hangar serve --config hangar.yaml
+#
+# Every key below is a real setting, shown with its default (except where a
+# comment says otherwise). Unknown keys are rejected at start, so typos fail
+# loudly. Delete what you do not change.
 #
 # Every setting can be overridden by an environment variable named HANGAR_ plus
 # its path in upper case joined with underscores, e.g. database.url ->
-# HANGAR_DATABASE_URL, storage.s3.secret_access_key -> HANGAR_STORAGE_S3_SECRET_ACCESS_KEY.
-# Keep secrets in the environment, not in this file.
+# HANGAR_DATABASE_URL, storage.s3.secret_access_key ->
+# HANGAR_STORAGE_S3_SECRET_ACCESS_KEY. Lists take comma-separated values.
+# Precedence: environment, then this file, then defaults.
+#
+# Keep secrets in the environment, not in this file: database.url (when it
+# carries a password), storage.s3.secret_access_key, storage.s3.session_token,
+# http.proxy_password, docker.token_key, bootstrap.admin_password,
+# security.secret_key (alias HANGAR_SECRET_KEY), security.previous_secret_keys.
+# Deployment guides: docs/deploy/.
 
 server:
+  # Listen address.
   addr: ":8080"
-  # External URL clients use; appears in generated metadata (npm tarball URLs, ...).
+  # External URL clients use, without trailing slash. Every absolute link
+  # Hangar generates (npm tarball URLs, the Docker token realm, Maven/PyPI
+  # links) is built from it, never from the request Host header.
   base_url: "http://localhost:8080"
   # Name shown in the UI header and /api/v1/system/status.
   instance_name: hangar
+  # Time allowed to read request headers (slow-header protection).
   read_header_timeout: 10s
+  # Idle keep-alive connections are closed after this long.
   idle_timeout: 120s
-  # Time allowed for in-flight requests (large uploads) to finish on shutdown.
+  # Time in-flight requests (large uploads) get to finish on shutdown.
   shutdown_timeout: 30s
   # Reverse proxies / load balancers (CIDRs or IPs) whose X-Forwarded-For,
-  # X-Forwarded-Proto and X-Forwarded-Host headers are trusted. Requests from
-  # other peers have these headers ignored. Generated links always use base_url.
+  # X-Forwarded-Proto and X-Forwarded-Host headers are trusted. Behind a proxy
+  # this must list it, or every client shares the proxy's IP for rate limits
+  # and audit. Requests from other peers have these headers ignored.
   trusted_proxies: []
   #  - 10.0.0.0/8
 
@@ -27,35 +44,63 @@ log:
   format: json # json or text
 
 database:
-  # Set via HANGAR_DATABASE_URL in production.
+  # PostgreSQL 16+. Default: empty (required). Set HANGAR_DATABASE_URL in
+  # production; percent-encode special characters in the password.
   url: "postgres://hangar@localhost:5432/hangar?sslmode=disable"
+  # Connection pool per process; size PostgreSQL max_connections for
+  # nodes x max_conns plus maintenance headroom.
   max_conns: 20
   min_conns: 2
   conn_lifetime: 1h
-  # Apply pending schema migrations on `hangar serve` (or run `hangar migrate up`).
+  # Apply pending schema migrations on `hangar serve` (default false; or run
+  # `hangar migrate up`). Let only one process migrate at a time.
   migrate_on_start: true
 
-# Default blob store, registered on first start.
+# Default blob store, registered on first start as "default".
 storage:
   kind: fs # fs or s3
   fs:
+    # Root directory; blobs/ and tmp/ must be on the same filesystem.
     path: ./data/blobs
   s3:
     endpoint: "" # e.g. http://minio:9000; empty = AWS
-    region: us-east-1
-    bucket: hangar
+    region: us-east-1 # default ""
+    bucket: hangar # default "" (required for kind=s3)
+    # Key prefix inside the bucket, e.g. "hangar/".
     prefix: ""
+    # Static credentials. Leave both empty for the AWS default chain
+    # (environment, shared config, IRSA / EKS Pod Identity, instance profile).
     access_key_id: ""
     secret_access_key: "" # use HANGAR_STORAGE_S3_SECRET_ACCESS_KEY
-    use_path_style: true
+    # Temporary credentials only.
+    session_token: "" # use HANGAR_STORAGE_S3_SESSION_TOKEN
+    # Path-style URLs (MinIO and most S3-compatible services); false for AWS.
+    use_path_style: true # default false
+    # PEM bundle trusted for the endpoint (private CA).
+    ca_file: ""
+    # Multipart part size in bytes, 5 MiB to 5 GiB; 0 = 16 MiB.
+    part_size: 0
+  # Blob garbage collection (job blob.gc, run daily by the leader node).
+  gc:
+    # How long an unreferenced blob is kept before its bytes are deleted.
+    # Must be longer than 24h (the Docker upload session lifetime). Backups of
+    # the blob store must finish within this period after the database dump.
+    grace_period: 48h
+    # Blobs deleted per transaction.
+    batch_size: 100
+    # Abandoned temporary uploads older than this are removed; negative
+    # disables temp cleanup.
+    temp_max_age: 24h
 
 nats:
-  # Single node: run NATS JetStream inside the hangar process.
+  # Single node: run NATS JetStream inside the hangar process. Several nodes:
+  # embedded=false and url pointing at a NATS cluster with JetStream.
   embedded: true
+  # Embedded JetStream state.
   data_dir: ./data/nats
   # Expose the embedded server (host:port); empty = in-process only.
   listen: ""
-  # Cluster mode: set embedded=false and point at the NATS cluster.
+  # External cluster, e.g. nats://user:password@nats:4222.
   url: ""
 
 # Outbound HTTP for proxy repositories (Maven Central, npmjs, Docker Hub, ...).
@@ -81,12 +126,91 @@ http:
   max_idle_conns: 200
   max_idle_conns_per_host: 32
   user_agent: "" # default Hangar/<version>
+  # Internal addresses proxy repositories may reach. The outbound address
+  # policy blocks loopback, private, link-local (cloud metadata) and similar
+  # ranges by default: list CIDRs, IPs, host names or ".domain" suffixes of
+  # internal mirrors here.
+  allow_private_networks: []
+  #  - 10.20.0.0/16
+  #  - .corp.example
+
+# Local authentication.
+auth:
+  # argon2id cost. Hashes made with other parameters keep working and are
+  # re-hashed on the next successful login.
+  argon2:
+    memory_kib: 65536
+    iterations: 3
+    parallelism: 2
+    salt_length: 16
+    key_length: 32
+  # Simultaneous argon2 computations (each uses memory_kib).
+  max_concurrent_hashes: 4
+  password:
+    min_length: 12 # at least 8
+    max_length: 256
+    # Character classes required (lower, upper, digit, other).
+    min_classes: 0
+    # Allow passwords that contain the user name.
+    allow_username: false
+  # Lock an account after max_attempts failed passwords within window, for
+  # duration. A negative max_attempts disables lockout.
+  lockout:
+    max_attempts: 5
+    window: 15m
+    duration: 15m
+  # Browser sessions.
+  session:
+    ttl: 12h
+    # Lifetime with "remember me".
+    remember_ttl: 720h
+    cookie_name: hangar_session
+    csrf_cookie_name: hangar_csrf
+    csrf_header: X-CSRF-Token
+    # Drop the Secure cookie attribute. Only for plain-HTTP setups other than
+    # localhost; never in production.
+    insecure: false
+  # Default lifetime of short-lived tokens (registry bearer tokens, CLI logins).
+  session_token_ttl: 15m
+  max_session_token_ttl: 24h
+  # Cap on personal and service-account token expiry.
+  max_token_lifetime: 8784h
+  # Tokens expiring within this period are flagged to their owner.
+  token_expiry_warning: 336h
+  # Verified Basic credentials are remembered this long, so clients that send
+  # them on every request (Maven, pip) skip argon2. Negative disables.
+  basic_cache_ttl: 2m
+  # Authorization decisions are cached; other cluster nodes see role changes
+  # after at most this long.
+  authz_cache_ttl: 5s
+  # Login attempts per client IP. A negative per_minute disables the limit.
+  login_rate:
+    per_minute: 10
+    burst: 10
+  # How often token and user last-used times are written back.
+  usage_flush_interval: 30s
+
+docker:
+  # Signs Docker registry tokens and upload URLs (HMAC). At least 32 random
+  # bytes (`openssl rand -base64 48`); every node needs the same value. Empty:
+  # a random per-process key, so registry logins and unfinished uploads do not
+  # survive a restart or work across nodes.
+  token_key: "" # use HANGAR_DOCKER_TOKEN_KEY
+
+# First administrator, created on start when both are set and no enabled
+# administrator exists. Nothing changes once one exists; remove them after
+# the first sign-in. Alternative: `hangar admin bootstrap`.
+bootstrap:
+  admin_user: ""
+  admin_password: "" # use HANGAR_BOOTSTRAP_ADMIN_PASSWORD
 
 scanner:
   # Trivy server in client/server mode; empty disables scanning.
   trivy_url: ""
 
 metrics:
+  # Serve Prometheus metrics (no authentication: keep the path off public
+  # hosts). Metrics are recorded either way for the Overview screen.
   enabled: true
   path: /metrics
 
@@ -94,8 +218,9 @@ metrics:
 security:
   # 32 random bytes, base64 or hex: `openssl rand -base64 32`. Encrypts proxy
   # upstream credentials and S3 keys stored in the database. Set it through
-  # HANGAR_SECRET_KEY; every node needs the same value. Without it,
-  # repositories and blob stores that carry credentials are refused.
+  # HANGAR_SECRET_KEY; every node needs the same value and backups need it to
+  # be useful. Without it, repositories and blob stores that carry credentials
+  # are refused.
   secret_key: ""
   # Keys that still decrypt values after a rotation (comma-separated in
   # HANGAR_SECURITY_PREVIOUS_SECRET_KEYS). Run `hangar admin rotate-secrets`,
