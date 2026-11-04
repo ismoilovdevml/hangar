@@ -122,6 +122,10 @@ func (h *handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case code == http.StatusBadGateway:
 		h.log(r).Warn("raw: upstream failure", "path", r.URL.Path, "err", err)
 		msg = "upstream unavailable"
+	case code == http.StatusTooManyRequests:
+		h.log(r).Warn("raw: upstream rate limited", "path", r.URL.Path, "err", err)
+		msg = "upstream rate limited, retry later"
+		core.SetRetryAfter(w.Header(), err)
 	case code >= http.StatusInternalServerError:
 		h.log(r).Error("raw: request failed", "method", r.Method, "path", r.URL.Path, "err", err)
 		msg = "internal error"

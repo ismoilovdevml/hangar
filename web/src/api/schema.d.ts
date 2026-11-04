@@ -208,6 +208,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repositories/{name}/cache:invalidate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Proxy repositories only. Forgets the remote answers the repository remembers in memory on every node — 404s in the negative cache and rate-limit (429 Retry-After) holds — so the next request asks the remote again. Cached content is kept. Requires repository administration; audited as `repository.cache_invalidate`. */
+        post: operations["invalidateRepositoryCache"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/blob-stores": {
         parameters: {
             query?: never;
@@ -999,6 +1018,13 @@ export interface components {
             /** @description p50 over the last 5 minutes; null without recent traffic */
             latency_ms: number | null;
         };
+        CacheInvalidation: {
+            repository: string;
+            /** @description Remembered remote 404s dropped on the answering node */
+            negative_entries: number;
+            /** @description Hosts whose rate-limit hold was lifted on the answering node */
+            rate_limited_hosts: number;
+        };
         UpstreamHealthPage: {
             items: components["schemas"]["UpstreamHealth"][];
             next_cursor?: components["schemas"]["NextCursor"];
@@ -1024,7 +1050,16 @@ export interface components {
             /** @description Disable TLS verification for this remote (audited) */
             insecure_skip_verify?: boolean;
             connect_timeout?: components["schemas"]["Duration"];
+            /** @description Wait for response headers */
             read_timeout?: components["schemas"]["Duration"];
+            /** @description Longest wait for more body bytes (default 60s). A stalled transfer is aborted, or resumed with a Range request when the remote supports it; there is no overall limit for large blobs. */
+            body_timeout?: components["schemas"]["Duration"];
+            /** @description Connection cap per remote host; 0 = unlimited */
+            max_conns_per_host?: number;
+            /** @description Keep-alive pool size per host; 0 = server-wide `http.max_idle_conns_per_host` */
+            max_idle_conns_per_host?: number;
+            /** @description Speak HTTP/1.1 only (remotes or TLS-inspecting proxies with broken HTTP/2) */
+            disable_http2?: boolean;
         };
         /** @description Dedicated entry point, mainly for Docker clients that need a host root */
         ConnectorConfig: {
@@ -1048,6 +1083,12 @@ export interface components {
                 http?: components["schemas"]["UpstreamHTTP"];
                 circuit_failures?: number;
                 circuit_open_for?: components["schemas"]["Duration"];
+                /** @description Other hosts the remote links to that may be fetched on its behalf (tarball or file CDNs, API hosts): host, host:port or `.domain` for its subdomains. Never sent the remote's credentials. Formats add their own (PyPI `files.pythonhosted.org`, the hosts a NuGet service index names). */
+                related_hosts?: string[];
+                /** @description Offline mode: never contact the remote; serve cached content (also when stale) and answer 404 for anything not cached. */
+                offline?: boolean;
+                /** @description Requests in flight to the remote and its related hosts; 0 = unlimited */
+                max_concurrent_requests?: number;
             };
             group?: {
                 /** @description Member repository names in resolution order */
@@ -2037,6 +2078,31 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    invalidateRepositoryCache: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Invalidated; counts are for the node that answered */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CacheInvalidation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listBlobStores: {

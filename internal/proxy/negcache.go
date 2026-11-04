@@ -31,6 +31,20 @@ func (c *negCache) hit(path string, now time.Time) bool {
 	return true
 }
 
+// purge forgets every entry and returns how many were still live.
+func (c *negCache) purge(now time.Time) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := 0
+	for _, exp := range c.entries {
+		if now.Before(exp) {
+			n++
+		}
+	}
+	clear(c.entries)
+	return n
+}
+
 func (c *negCache) add(path string, now time.Time, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

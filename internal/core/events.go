@@ -22,6 +22,11 @@ const (
 	EventUpstreamStatus       = "upstream.status" // proxy remote became healthy/slow/blocked
 )
 
+// EventRepositoryCacheInvalidated is published when an administrator purges
+// the remote answers a proxy repository remembers (404s, rate limits); every
+// node drops its copy.
+const EventRepositoryCacheInvalidated = "repository.cache_invalidated"
+
 // Event is a fact that already happened. Handlers must be idempotent: delivery
 // is at-least-once in clustered mode.
 type Event struct {

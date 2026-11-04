@@ -3,6 +3,7 @@ package nuget
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -362,9 +363,7 @@ func (h *handler) searchProxy(ctx context.Context, repo *core.Repository, q sear
 	if err != nil {
 		return 0, nil, err
 	}
-	if idx.Search == "" || !strings.HasPrefix(idx.Search, h.remoteBase(repo)+"/") {
-		// The search service is missing or on another host (nuget.org): search
-		// the packages this proxy has cached instead.
+	cachedOnly := func() (int, []hit, error) {
 		hits, err := h.searchHosted(ctx, repo, q)
 		if err != nil {
 			return 0, nil, err
@@ -372,6 +371,10 @@ func (h *handler) searchProxy(ctx context.Context, repo *core.Repository, q sear
 		total := len(hits)
 		end := min(q.skip+q.take, len(hits))
 		return total, hits[min(q.skip, end):end], nil
+	}
+	if idx.Search == "" {
+		// No search service upstream: search the packages this proxy has cached.
+		return cachedOnly()
 	}
 	params := url.Values{}
 	if q.q != "" {
@@ -391,6 +394,12 @@ func (h *handler) searchProxy(ctx context.Context, repo *core.Repository, q sear
 		sep = "&"
 	}
 	b, err := h.fetchDoc(ctx, repo, idx.Search+sep+params.Encode(), maxSearchResults)
+	if errors.Is(err, core.ErrUpstream) {
+		// Search host down, rate limited or the repository is offline:
+		// answer from what this proxy has cached rather than fail.
+		h.log().WarnContext(ctx, "nuget upstream search failed, searching the cache", "repo", repo.Name, "err", err)
+		return cachedOnly()
+	}
 	if err != nil {
 		return 0, nil, err
 	}

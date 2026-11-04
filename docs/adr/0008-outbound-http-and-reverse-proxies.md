@@ -24,6 +24,26 @@ Outbound (proxy repositories):
   the remote's own scheme and host, never to redirect targets (CDNs), and never
   override an `Authorization` header the caller set (OCI token flow).
 - No overall client timeout: transfers are bounded by request contexts.
+  Per remote, `body_timeout` bounds each wait for body bytes (stall
+  detection) and broken downloads resume with Range/If-Range when the remote
+  advertises byte ranges and a strong validator; connection pools
+  (`max_conns_per_host`, `max_idle_conns_per_host`) and HTTP/2
+  (`disable_http2`, health pings) are tunable.
+- Related hosts (amended 2026-11-04): a remote's own documents may link to
+  other hosts (PyPI files on files.pythonhosted.org, nuget.org search on
+  azuresearch-*.nuget.org, npm tarball CDNs). Formats fetch them with
+  `UpstreamRequest.URL` through the repository's upstream, so the same SSRF
+  guard, outbound proxy, request collapsing, negative cache and metrics apply,
+  with a circuit breaker and rate-limit hold per host. A host is accepted only
+  when it is the remote's, in `ProxyConfig.RelatedHosts`, or in the request's
+  format-supplied list (PyPI `file_hosts`, the hosts a NuGet service index
+  names); credentials stay on the remote's origin. Formats never build their
+  own outbound clients for remote content.
+- Rate limits: 429 (and 503 with `Retry-After`) is retried after the
+  remote's `Retry-After` within a per-request budget (10s); otherwise the host
+  is held until the wait passes and the client gets 429 with `Retry-After`
+  (`core.ErrRateLimited`), or the cached copy. 429s are excluded from the
+  circuit breaker.
 
 Inbound (reverse proxies):
 - `server.base_url` is the single source for every absolute link Hangar

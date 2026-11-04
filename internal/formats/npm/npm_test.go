@@ -550,6 +550,50 @@ func TestProxy(t *testing.T) {
 	})
 }
 
+func TestProxyTarballCDNAndRateLimit(t *testing.T) {
+	ts := newServer(t)
+	tgz := makeTarball(t, "cdnpkg", "1.0.0")
+	s1 := sha1.Sum(tgz)
+	var cdnHits atomic.Int32
+	up := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/cdnpkg":
+			_, _ = io.WriteString(w, `{"name":"cdnpkg","dist-tags":{"latest":"1.0.0"},"versions":{"1.0.0":{"name":"cdnpkg","version":"1.0.0",
+"dist":{"shasum":"`+hex.EncodeToString(s1[:])+`","tarball":"https://cdn.example.net/files/cdnpkg-1.0.0.tgz?sig=x"}}}}`)
+		case r.Host == "cdn.example.net" && r.URL.Path == "/files/cdnpkg-1.0.0.tgz":
+			cdnHits.Add(1)
+			_, _ = w.Write(tgz)
+		case r.URL.Path == "/limited":
+			w.Header().Set("Retry-After", "7")
+			w.WriteHeader(http.StatusTooManyRequests)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	for name, related := range map[string][]string{"npm-cdn": {"cdn.example.net"}, "npm-nocdn": nil} {
+		ts.repos[name] = ts.env.AddRepo(t, &core.Repository{Name: name, Format: npm.Name, Type: core.RepoProxy,
+			Config: core.RepoConfig{Proxy: &core.ProxyConfig{RemoteURL: "https://registry.example.org", RelatedHosts: related}}})
+		ts.env.Upstreams.Set(name, up)
+		if r := ts.do(t, http.MethodGet, "/repository/"+name+"/cdnpkg", "bob", nil); r.StatusCode != http.StatusOK {
+			t.Fatalf("%s packument = %d", name, r.StatusCode)
+		}
+	}
+	// The tarball lives on the registry's CDN: fetched there when it is a related host.
+	resp := ts.do(t, http.MethodGet, "/repository/npm-cdn/cdnpkg/-/cdnpkg-1.0.0.tgz", "bob", nil)
+	if b := readAll(t, resp); resp.StatusCode != http.StatusOK || !bytes.Equal(b, tgz) || cdnHits.Load() != 1 {
+		t.Fatalf("CDN tarball = %d (%d bytes), cdn hits %d", resp.StatusCode, len(b), cdnHits.Load())
+	}
+	// Without the related host the remote itself is asked, as before.
+	if r := ts.do(t, http.MethodGet, "/repository/npm-nocdn/cdnpkg/-/cdnpkg-1.0.0.tgz", "bob", nil); r.StatusCode != http.StatusNotFound || cdnHits.Load() != 1 {
+		t.Fatalf("tarball without related host = %d, cdn hits %d", r.StatusCode, cdnHits.Load())
+	}
+	// A rate-limited remote is passed on as 429 with its Retry-After.
+	r := ts.do(t, http.MethodGet, "/repository/npm-cdn/limited", "bob", nil)
+	if r.StatusCode != http.StatusTooManyRequests || r.Header.Get("Retry-After") != "7" {
+		t.Fatalf("rate limited = %d Retry-After=%q", r.StatusCode, r.Header.Get("Retry-After"))
+	}
+}
+
 func TestGroupMerge(t *testing.T) {
 	ts := newServer(t)
 	hostedTgz := ts.publish(t, "npm-hosted", "shared", "1.0.0", "latest")

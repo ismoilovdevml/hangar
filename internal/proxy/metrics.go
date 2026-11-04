@@ -32,10 +32,50 @@ var (
 	}, []string{"format"})
 )
 
-// RegisterMetrics registers the proxy cache counters on r. Registering on a
-// registry that already has them is not an error.
+// Results of hangar_proxy_upstream_requests_total besides status classes
+// ("2xx" ... "5xx").
+const (
+	resultRateLimited = "rate_limited" // 429 after the Retry-After budget, or the host is still gated
+	resultError       = "error"        // connection, TLS, timeout or blocked by the address policy
+	resultCircuitOpen = "circuit_open" // failed fast: the host's breaker is open
+	resultOffline     = "offline"      // the repository is in offline mode
+)
+
+// Reasons of hangar_proxy_upstream_retries_total.
+const (
+	retryReasonError     = "error"
+	retryReason5xx       = "5xx"
+	retryReasonRateLimit = "rate_limited"
+)
+
+var (
+	requestsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "hangar_proxy_upstream_requests_total",
+		Help: "Requests from proxy repositories to their remotes and related hosts, by final result (status class, rate_limited, error, circuit_open, offline). Retries are counted once.",
+	}, []string{"repository", "host", "result"})
+	requestDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "hangar_proxy_upstream_request_duration_seconds",
+		Help:    "Time from sending a proxy remote request to its response headers, including retries.",
+		Buckets: []float64{0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60},
+	}, []string{"repository"})
+	retriesTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "hangar_proxy_upstream_retries_total",
+		Help: "Retried proxy remote requests by reason (error, 5xx, rate_limited).",
+	}, []string{"repository", "reason"})
+	resumesTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "hangar_proxy_upstream_resumes_total",
+		Help: "Interrupted proxy remote downloads continued with a Range request.",
+	}, []string{"repository"})
+	inflight = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "hangar_proxy_upstream_inflight_requests",
+		Help: "Proxy remote requests in flight (waiting for a slot, waiting for headers or streaming a body).",
+	}, []string{"repository"})
+)
+
+// RegisterMetrics registers the proxy cache and upstream metrics on r.
+// Registering on a registry that already has them is not an error.
 func RegisterMetrics(r prometheus.Registerer) error {
-	for _, c := range []prometheus.Collector{cacheRequests, cacheHitBytes} {
+	for _, c := range []prometheus.Collector{cacheRequests, cacheHitBytes, requestsTotal, requestDuration, retriesTotal, resumesTotal, inflight} {
 		if err := r.Register(c); err != nil {
 			var are prometheus.AlreadyRegisteredError
 			if !errors.As(err, &are) {
@@ -44,6 +84,20 @@ func RegisterMetrics(r prometheus.Registerer) error {
 		}
 	}
 	return nil
+}
+
+// statusClass is the requests_total result of an HTTP status.
+func statusClass(code int) string {
+	switch {
+	case code >= 500:
+		return "5xx"
+	case code >= 400:
+		return "4xx"
+	case code >= 300:
+		return "3xx"
+	default:
+		return "2xx"
+	}
 }
 
 // CacheHit records a proxy request of format answered from the local cache

@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
-	"github.com/ismoilovdevml/hangar/internal/core/coretest"
 )
 
 // remote is a fake index: project "foo" in JSON (files on the remote itself
@@ -87,9 +87,9 @@ func (rm *remote) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func newProxyFixture(t *testing.T, ttl time.Duration) (*fixture, *remote, *core.Repository) {
 	t.Helper()
 	rm := newRemote(t)
-	f := newFixture(t, func(env *coretest.Env, d *core.Deps) {
-		d.HTTPClients = handlerClients{hosts: map[string]http.Handler{"files.example": rm, "evil.example": rm}}
-	})
+	// rm serves the remote and files.example (a file host); evil.example is
+	// linked but not a file host, so it is never contacted.
+	f := newFixture(t)
 	proxy := f.env.AddRepo(t, &core.Repository{Name: "pypi-proxy", Format: "pypi", Type: core.RepoProxy, Config: core.RepoConfig{
 		Proxy:  &core.ProxyConfig{RemoteURL: "https://pypi.example", MetadataTTL: core.Duration(ttl)},
 		Format: map[string]any{"file_hosts": []any{"files.example"}},
@@ -190,16 +190,12 @@ func TestProxyFiles(t *testing.T) {
 	if _, err := f.env.Components.GetAsset(t.Context(), proxy.ID, "packages/foo/foo-0.9.tar.gz"); err == nil {
 		t.Error("file with mismatching hash was cached")
 	}
-	// the remote's 404 is remembered
+	// the remote's 404 answers 404 (remembering it is the core Upstream's
+	// negative cache, so an administrator purge covers it)
 	for range 2 {
 		if rec := f.get(t, "/repository/pypi-proxy/simple/missing/", "", "bob", "secret"); rec.Code != 404 {
 			t.Fatalf("missing = %d", rec.Code)
 		}
-	}
-	before := f.env.Upstreams.Calls("pypi-proxy")
-	f.get(t, "/repository/pypi-proxy/simple/missing/", "", "bob", "secret")
-	if f.env.Upstreams.Calls("pypi-proxy") != before {
-		t.Error("negative cache not used")
 	}
 	// proxies are read-only
 	if rec := f.do(t, uploadRequest(t, "/repository/pypi-proxy/", "foo", "1.0", rm.sdist, nil)); rec.Code != http.StatusMethodNotAllowed {
@@ -224,6 +220,48 @@ func TestProxyRevalidationAndStale(t *testing.T) {
 	// a project never cached cannot be served while the remote is down
 	if rec := f.get(t, "/repository/pypi-proxy/simple/bar/", "", "bob", "secret"); rec.Code != http.StatusBadGateway {
 		t.Errorf("uncached while down = %d", rec.Code)
+	}
+}
+
+func TestProxyRateLimitedAndOffline(t *testing.T) {
+	f, rm, proxyRepo := newProxyFixture(t, time.Nanosecond)
+	page := func(project string) *httptest.ResponseRecorder {
+		return f.get(t, "/repository/pypi-proxy/simple/"+project+"/", pipAccept, "bob", "secret")
+	}
+	if rec := page("foo"); rec.Code != http.StatusOK {
+		t.Fatalf("foo = %d", rec.Code)
+	}
+	limited := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "30")
+		http.Error(w, "slow down", http.StatusTooManyRequests)
+	})
+	f.env.Upstreams.Set("pypi-proxy", limited)
+	// cached: served stale while the remote rate-limits us
+	if rec := page("foo"); rec.Code != http.StatusOK {
+		t.Errorf("cached page while rate limited = %d", rec.Code)
+	}
+	// not cached: 429 with the remote's Retry-After, not 502
+	rec := page("bar")
+	if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") != "30" {
+		t.Errorf("uncached while rate limited = %d Retry-After=%q %s", rec.Code, rec.Header().Get("Retry-After"), rec.Body.String())
+	}
+
+	// offline mode: the cache only, misses are 404, the remote is not asked
+	f.env.Upstreams.Set("pypi-proxy", rm)
+	offline := *proxyRepo
+	pc := *offline.Config.Proxy
+	pc.Offline = true
+	offline.Config.Proxy = &pc
+	f.env.Repos.Put(&offline)
+	before := f.env.Upstreams.Calls("pypi-proxy")
+	if rec := page("foo"); rec.Code != http.StatusOK {
+		t.Errorf("cached page offline = %d", rec.Code)
+	}
+	if rec := page("bar"); rec.Code != http.StatusNotFound {
+		t.Errorf("uncached page offline = %d", rec.Code)
+	}
+	if f.env.Upstreams.Calls("pypi-proxy") != before {
+		t.Error("offline repository contacted its remote")
 	}
 }
 

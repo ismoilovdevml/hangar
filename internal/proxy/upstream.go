@@ -9,7 +9,9 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sony/gobreaker/v2"
@@ -28,40 +30,65 @@ type upstream struct {
 	guard        *Guard
 	proxied      func(*url.URL) bool
 	maxRedirects int
+	related      []string // ProxyConfig.RelatedHosts
+	offline      bool
 
-	breaker *gobreaker.TwoStepCircuitBreaker[struct{}]
-	flights flightGroup
-	neg     negCache
-	negTTL  time.Duration
-	tokens  tokenStore
-	tf      *tokenFetcher
-	stats   stats
+	breaker  *gobreaker.TwoStepCircuitBreaker[struct{}] // the remote's own host
+	breakers breakerSet                                 // related hosts
+	throttle throttleGate
+	slots    chan struct{} // nil = unlimited concurrent requests
+	flights  flightGroup
+	neg      negCache
+	negTTL   time.Duration
+	tokens   tokenStore
+	tf       *tokenFetcher
+	stats    stats
 
-	retries int
-	backoff time.Duration
-	slow    time.Duration
-	now     func() time.Time
-	log     *slog.Logger
-	onState func(u *upstream, prev, cur State)
+	retries        int
+	backoff        time.Duration
+	retryAfterMax  time.Duration // total Retry-After wait per request
+	throttleMax    time.Duration // longest a 429 keeps a host gated
+	bodyTimeout    time.Duration
+	maxResumes     int
+	slow           time.Duration
+	now            func() time.Time
+	log            *slog.Logger
+	onState        func(u *upstream, prev, cur State)
+	newBreakerFunc func(name string) *gobreaker.TwoStepCircuitBreaker[struct{}]
 }
 
 var _ core.Upstream = (*upstream)(nil)
 
-// errServerStatus marks a 5xx answer for the circuit breaker.
-var errServerStatus = errors.New("remote answered 5xx")
+// Errors the circuit breaker sees. errThrottled is excluded from its counts:
+// a remote that rate-limits us is up, and tripping the breaker would turn a
+// short wait into CircuitOpenFor of failed requests.
+var (
+	errServerStatus = errors.New("remote answered 5xx")
+	errThrottled    = errors.New("remote answered 429")
+)
+
+// ErrOfflineMode is wrapped by Fetch errors of a repository in offline mode
+// (ProxyConfig.Offline), together with core.ErrNotFound and core.ErrUpstream.
+var ErrOfflineMode = errors.New("proxy repository is in offline mode")
 
 // Fetch implements core.Upstream.
 //
-// Order of operations: path validation, negative cache (a remembered 404 is
-// answered without a request), then one shared request per identical
-// (method, URL, headers, validators) among concurrent callers. That request
-// passes the circuit breaker, the SSRF guard (remote and every redirect hop),
+// Order of operations: target validation (Path under the remote, or URL on
+// the remote's or a related host), offline mode, negative cache (a
+// remembered 404 is answered without a request), the rate-limit gate (a host
+// that answered 429 is not asked again until its Retry-After passed), then
+// one shared request per identical (method, URL, headers, validators) among
+// concurrent callers. That request waits for a concurrency slot, passes the
+// host's circuit breaker and the SSRF guard (target and every redirect hop),
 // retries GET/HEAD on connection errors and 5xx with jittered exponential
-// backoff, and answers an OCI token challenge once.
+// backoff and on 429 within the Retry-After budget, and answers an OCI token
+// challenge once (the remote's own host only). Its body is guarded against
+// stalls and resumed with a Range request when the remote supports it.
 //
-// Responses with any status are returned as responses, including 5xx after
-// the last retry; transport failures, blocked addresses and an open circuit
-// return errors wrapping core.ErrUpstream.
+// Responses with any status but 429 are returned as responses, including
+// 5xx after the last retry; transport failures, blocked addresses, an open
+// circuit and offline mode return errors wrapping core.ErrUpstream, a final
+// 429 an error wrapping core.ErrRateLimited (see core.Upstream).
 func (u *upstream) Fetch(ctx context.Context, req core.UpstreamRequest) (*core.UpstreamResponse, error) {
 	method := req.Method
 	if method == "" {
@@ -70,16 +97,46 @@ func (u *upstream) Fetch(ctx context.Context, req core.UpstreamRequest) (*core.U
 	if method != http.MethodGet && method != http.MethodHead {
 		return nil, fmt.Errorf("upstream method %q: want GET or HEAD: %w", method, core.ErrInvalid)
 	}
-	target, err := u.resolve(req.Path)
+	target, primary, err := u.target(req)
 	if err != nil {
 		return nil, err
+	}
+	if u.offline {
+		requestsTotal.WithLabelValues(u.name, target.Host, resultOffline).Inc()
+		return nil, fmt.Errorf("upstream %s: %w, %s is not cached: %w: %w", u.name, ErrOfflineMode, target.Redacted(), core.ErrNotFound, core.ErrUpstream)
 	}
 	if u.negTTL > 0 && u.neg.hit(target.String(), u.now()) {
 		return &core.UpstreamResponse{StatusCode: http.StatusNotFound, Header: http.Header{}, Body: http.NoBody}, nil
 	}
+	if wait, gated := u.throttle.gated(target.Host, u.now()); gated {
+		requestsTotal.WithLabelValues(u.name, target.Host, resultRateLimited).Inc()
+		return nil, rateLimited(u.name, target.Host, wait)
+	}
 	return u.flights.do(ctx, flightKey(method, target, req), func(ctx context.Context) (*core.UpstreamResponse, error) {
-		return u.fetch(ctx, method, target, req)
+		return u.fetch(ctx, method, target, req, primary)
 	})
+}
+
+// target returns the URL to request and whether it is on the remote's own
+// origin (which gets the remote's credentials and token flow).
+func (u *upstream) target(req core.UpstreamRequest) (*url.URL, bool, error) {
+	if req.URL == "" {
+		t, err := u.resolve(req.Path)
+		return t, true, err
+	}
+	t, err := url.Parse(req.URL)
+	if err != nil || (t.Scheme != "http" && t.Scheme != "https") || t.Host == "" || t.User != nil || t.Opaque != "" {
+		return nil, false, fmt.Errorf("upstream url %q: want an absolute http(s) URL: %w", core.RedactURL(req.URL), core.ErrInvalid)
+	}
+	t.Fragment = ""
+	if t.Scheme == u.base.Scheme && strings.EqualFold(t.Host, u.base.Host) {
+		return t, true, nil
+	}
+	if core.MatchHost(u.related, t.Host) || core.MatchHost(req.RelatedHosts, t.Host) {
+		return t, false, nil
+	}
+	return nil, false, fmt.Errorf("upstream url %s: host %s is neither the remote nor a related host of repository %s: %w",
+		t.Redacted(), t.Host, u.name, core.ErrInvalid)
 }
 
 // resolve joins path to the remote URL, keeping its escaping (npm's
@@ -119,19 +176,47 @@ func flightKey(method string, target *url.URL, req core.UpstreamRequest) string 
 	return b.String()
 }
 
-func (u *upstream) fetch(ctx context.Context, method string, target *url.URL, req core.UpstreamRequest) (*core.UpstreamResponse, error) {
-	done, err := u.breaker.Allow()
+func (u *upstream) breakerFor(host string, primary bool) *gobreaker.TwoStepCircuitBreaker[struct{}] {
+	if primary {
+		return u.breaker
+	}
+	return u.breakers.get(strings.ToLower(host), u.newBreakerFunc)
+}
+
+func (u *upstream) fetch(ctx context.Context, method string, target *url.URL, req core.UpstreamRequest, primary bool) (*core.UpstreamResponse, error) {
+	host := target.Host
+	release, err := u.acquire(ctx)
 	if err != nil {
+		return nil, err
+	}
+	br := u.breakerFor(host, primary)
+	done, err := br.Allow()
+	if err != nil {
+		release()
 		u.noteState()
-		return nil, fmt.Errorf("upstream %s: %w: %w", u.name, err, core.ErrUpstream)
+		requestsTotal.WithLabelValues(u.name, host, resultCircuitOpen).Inc()
+		return nil, fmt.Errorf("upstream %s (%s): %w: %w", u.name, host, err, core.ErrUpstream)
 	}
 	start := u.now()
-	resp, err := u.roundTrip(ctx, method, target, req) //nolint:bodyclose // the body is handed to the caller
+	resp, cancel, err := u.roundTrip(ctx, method, target, req, primary)
 	if err != nil {
-		done(err)
-		if errors.Is(err, ErrBlocked) {
+		release()
+		var tr *throttledError
+		switch {
+		case errors.As(err, &tr):
+			done(errThrottled)
+			u.throttle.hold(host, u.now(), min(max(tr.after, time.Second), u.throttleMax))
+			requestsTotal.WithLabelValues(u.name, host, resultRateLimited).Inc()
+			u.noteState()
+			u.log.Warn("upstream rate limited", "repository", u.name, "url", target.Redacted(), "retry_after", tr.after)
+			return nil, rateLimited(u.name, host, tr.after)
+		case errors.Is(err, ErrBlocked):
+			done(err)
 			u.stats.setBlocked(true)
+		default:
+			done(err)
 		}
+		requestsTotal.WithLabelValues(u.name, host, resultError).Inc()
 		u.noteState()
 		u.log.Warn("upstream request failed", "repository", u.name, "url", target.Redacted(), "error", err)
 		return nil, fmt.Errorf("upstream %s: %w: %w", u.name, err, core.ErrUpstream)
@@ -142,18 +227,46 @@ func (u *upstream) fetch(ctx context.Context, method string, target *url.URL, re
 		done(nil)
 	}
 	now := u.now()
-	u.stats.observe(now.Sub(start), now)
-	switch {
-	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		u.stats.setBlocked(true)
-	case resp.StatusCode < http.StatusInternalServerError:
-		u.stats.setBlocked(false)
+	requestDuration.WithLabelValues(u.name).Observe(now.Sub(start).Seconds())
+	requestsTotal.WithLabelValues(u.name, host, statusClass(resp.StatusCode)).Inc()
+	if primary {
+		u.stats.observe(now.Sub(start), now)
+		switch {
+		case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+			u.stats.setBlocked(true)
+		case resp.StatusCode < http.StatusInternalServerError:
+			u.stats.setBlocked(false)
+		}
 	}
 	if resp.StatusCode == http.StatusNotFound && u.negTTL > 0 {
 		u.neg.add(target.String(), now, u.negTTL)
 	}
 	u.noteState()
-	return toUpstreamResponse(method, resp), nil
+	out := toUpstreamResponse(method, resp)
+	if out.Body == http.NoBody {
+		cancel()
+		release()
+		return out, nil
+	}
+	out.Body = u.newBody(ctx, bodyRequest{method: method, target: target, req: req, primary: primary}, resp, cancel, release)
+	return out, nil
+}
+
+// acquire waits for a concurrency slot (ProxyConfig.MaxConcurrentRequests)
+// and returns its release function.
+func (u *upstream) acquire(ctx context.Context) (func(), error) {
+	inflight.WithLabelValues(u.name).Inc()
+	dec := func() { inflight.WithLabelValues(u.name).Dec() }
+	if u.slots == nil {
+		return sync.OnceFunc(dec), nil
+	}
+	select {
+	case u.slots <- struct{}{}:
+		return sync.OnceFunc(func() { <-u.slots; dec() }), nil
+	case <-ctx.Done():
+		dec()
+		return nil, ctx.Err()
+	}
 }
 
 func toUpstreamResponse(method string, resp *http.Response) *core.UpstreamResponse {
@@ -175,23 +288,87 @@ func toUpstreamResponse(method string, resp *http.Response) *core.UpstreamRespon
 	return out
 }
 
-// roundTrip runs the request with retries.
-func (u *upstream) roundTrip(ctx context.Context, method string, target *url.URL, req core.UpstreamRequest) (*http.Response, error) {
+// throttledError is a final 429 inside roundTrip.
+type throttledError struct{ after time.Duration }
+
+func (e *throttledError) Error() string { return "remote answered 429 Too Many Requests" }
+
+// rateLimited is the error Fetch returns for a rate-limited host.
+func rateLimited(repo, host string, after time.Duration) error {
+	return &core.RetryAfterError{After: after, Err: fmt.Errorf("upstream %s: %s answered 429 Too Many Requests: %w: %w",
+		repo, host, core.ErrRateLimited, core.ErrUpstream)}
+}
+
+// roundTrip runs the request with retries. It returns the final response
+// with the cancel function of its request context, which the caller must
+// call once the body is done.
+func (u *upstream) roundTrip(ctx context.Context, method string, target *url.URL, req core.UpstreamRequest, primary bool) (*http.Response, context.CancelFunc, error) {
 	if err := u.check(ctx, target); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	var waited time.Duration // Retry-After waits so far
 	for attempt := 0; ; attempt++ {
-		resp, err := u.attempt(ctx, method, target, req)
-		if attempt >= u.retries || !retryable(resp, err) {
-			return resp, err
-		}
-		if resp != nil {
+		actx, cancel := context.WithCancel(ctx)
+		resp, err := u.attempt(actx, method, target, req, primary)
+		var wait time.Duration
+		switch {
+		case err == nil && resp.StatusCode == http.StatusTooManyRequests:
+			after, ok := retryAfter(resp.Header, u.now())
 			discard(resp)
+			cancel()
+			if !ok {
+				after = u.backoffFor(attempt)
+			}
+			if attempt >= u.retries || waited+after > u.retryAfterMax {
+				return nil, nil, &throttledError{after: after}
+			}
+			retriesTotal.WithLabelValues(u.name, retryReasonRateLimit).Inc()
+			waited += after
+			wait = after
+		case attempt >= u.retries || !retryable(resp, err):
+			if err != nil {
+				cancel()
+				return nil, nil, err
+			}
+			return resp, cancel, nil
+		default:
+			wait = u.backoffFor(attempt)
+			reason := retryReasonError
+			if resp != nil {
+				reason = retryReason5xx
+				// A 503 with Retry-After says when to come back; honour it
+				// within the same budget as 429.
+				if after, ok := retryAfter(resp.Header, u.now()); ok && waited+after <= u.retryAfterMax {
+					waited += after
+					wait = after
+				}
+				discard(resp)
+			}
+			cancel()
+			retriesTotal.WithLabelValues(u.name, reason).Inc()
 		}
-		if err := sleep(ctx, u.backoffFor(attempt)); err != nil {
-			return nil, err
+		if err := sleep(ctx, wait); err != nil {
+			return nil, nil, err
 		}
 	}
+}
+
+// retryAfter parses a Retry-After header: delay-seconds or an HTTP date.
+func retryAfter(h http.Header, now time.Time) (time.Duration, bool) {
+	v := strings.TrimSpace(h.Get("Retry-After"))
+	if v == "" {
+		return 0, false
+	}
+	if secs, err := strconv.ParseInt(v, 10, 64); err == nil {
+		if secs < 0 {
+			return 0, false
+		}
+		return time.Duration(min(secs, int64(24*time.Hour/time.Second))) * time.Second, true
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		return max(t.Sub(now), 0), true
+	}
+	return 0, false
 }
 
 func retryable(resp *http.Response, err error) bool {
@@ -212,6 +389,9 @@ func (u *upstream) backoffFor(attempt int) time.Duration {
 }
 
 func sleep(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return ctx.Err()
+	}
 	t := time.NewTimer(d)
 	defer t.Stop()
 	select {
@@ -222,8 +402,10 @@ func sleep(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// attempt sends one request, answering a Bearer token challenge once.
-func (u *upstream) attempt(ctx context.Context, method string, target *url.URL, req core.UpstreamRequest) (*http.Response, error) {
+// attempt sends one request. On the remote's own origin it answers a Bearer
+// token challenge once; related hosts never get the remote's credentials or
+// a token obtained with them.
+func (u *upstream) attempt(ctx context.Context, method string, target *url.URL, req core.UpstreamRequest, primary bool) (*http.Response, error) {
 	hreq, err := http.NewRequestWithContext(ctx, method, target.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("upstream request: %w", err)
@@ -238,6 +420,9 @@ func (u *upstream) attempt(ctx context.Context, method string, target *url.URL, 
 	}
 	if !req.Conditional.LastModified.IsZero() {
 		hreq.Header.Set("If-Modified-Since", req.Conditional.LastModified.UTC().Format(http.TimeFormat))
+	}
+	if !primary {
+		return u.client.Do(hreq)
 	}
 	// An Authorization header set by the caller is theirs to manage.
 	callerAuth := hreq.Header.Get("Authorization") != ""

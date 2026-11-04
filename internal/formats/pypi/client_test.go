@@ -16,14 +16,9 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/core/coretest"
 	"github.com/ismoilovdevml/hangar/internal/formats"
 	"github.com/ismoilovdevml/hangar/internal/formats/pypi"
+	"github.com/ismoilovdevml/hangar/internal/httpclient"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
-
-// directClients reaches the internet without proxy settings (tests only).
-type directClients struct{}
-
-func (directClients) ForUpstream(string, core.UpstreamHTTP, *core.UpstreamAuth) (*http.Client, error) {
-	return &http.Client{Timeout: 2 * time.Minute}, nil
-}
 
 // pathLog records request paths served by the test server.
 type pathLog struct {
@@ -137,7 +132,17 @@ func TestRealClients(t *testing.T) {
 	}))
 	env.BaseURL = "http://" + srv.Listener.Addr().String()
 	deps := env.Deps()
-	deps.HTTPClients = directClients{}
+	// The real upstream engine: pypi.org pages, files from files.pythonhosted.org
+	// as a related host, honouring HTTP(S)_PROXY from the environment.
+	clients, err := httpclient.New(httpclient.Options{UseEnvironment: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	upstreams, err := proxy.New(proxy.Options{HTTPClients: clients})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deps.Upstreams = upstreams
 	h = formats.NewHandler(deps, pypi.New())
 	srv.Start() // after h is set: links need the listener address first
 	defer srv.Close()

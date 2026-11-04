@@ -74,6 +74,10 @@ type packument struct {
 	Modified string
 	// Extra holds every other top-level field (description, readme, users, ...).
 	Extra map[string]json.RawMessage
+	// origins maps relative tarball paths to the absolute URLs a proxied
+	// packument gave for tarballs outside the remote URL (a registry's
+	// tarball CDN). Set by relativizeTarballs; never serialised.
+	origins map[string]string
 }
 
 func newPackument(name string) *packument {
@@ -271,8 +275,14 @@ func (p *packument) relativizeTarballs(n pkgName, remote string) {
 			}
 		}
 		if rel == "" {
-			t, _, _ = strings.Cut(t, "?")
-			rel = n.Full + "/-/" + t[strings.LastIndex(t, "/")+1:]
+			name, _, _ := strings.Cut(t, "?")
+			rel = n.Full + "/-/" + name[strings.LastIndex(name, "/")+1:]
+			if strings.HasPrefix(t, "https://") || strings.HasPrefix(t, "http://") {
+				if p.origins == nil {
+					p.origins = map[string]string{}
+				}
+				p.origins[rel] = t
+			}
 		}
 		m.setDist("tarball", rel)
 	}
