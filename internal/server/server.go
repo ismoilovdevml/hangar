@@ -23,11 +23,17 @@ import (
 
 // RouterOptions are the parts the router is built from.
 type RouterOptions struct {
-	Logger         *slog.Logger
-	Metrics        *observability.Metrics // nil disables /metrics
-	MetricsPath    string
-	Health         *health.Checker
-	TrustedProxies TrustedProxies
+	Logger *slog.Logger
+	// Metrics records the HTTP and format request metrics; nil records none.
+	Metrics *observability.Metrics
+	// MetricsPath serves Metrics.Registry for Prometheus; empty serves no
+	// endpoint (metrics are still recorded, e.g. for the Overview screen).
+	MetricsPath string
+	// AccessLogSampleRatio is the share of requests written to the access
+	// log (0 to 1); server errors are always logged.
+	AccessLogSampleRatio float64
+	Health               *health.Checker
+	TrustedProxies       TrustedProxies
 	// API is the fully wired REST API, mounted at /api/v1; nil serves none.
 	API *api.API
 	// Formats and Deps serve the package protocols; nil Formats serves none.
@@ -51,7 +57,9 @@ func NewRouter(o RouterOptions) http.Handler {
 	sec := newHardening(o.Security)
 	r := chi.NewRouter()
 	r.Use(RequestInfo(o.TrustedProxies))
-	r.Use(Observe(o.Logger, o.Metrics))
+	r.Use(observability.HTTPMiddleware(observability.HTTPOptions{
+		Logger: o.Logger, Metrics: o.Metrics, AccessLogSampleRatio: o.AccessLogSampleRatio, QuietPaths: quietPaths(o.MetricsPath),
+	}))
 	r.Use(Recover(o.Logger))
 	r.Use(sec.headers)
 	r.Use(sec.cors)
@@ -63,12 +71,8 @@ func NewRouter(o RouterOptions) http.Handler {
 		if o.Health != nil {
 			ops.Get("/readyz", o.Health.Readiness)
 		}
-		if o.Metrics != nil {
-			path := o.MetricsPath
-			if path == "" {
-				path = "/metrics"
-			}
-			ops.Method(http.MethodGet, path, promhttp.HandlerFor(o.Metrics.Registry, promhttp.HandlerOpts{Registry: o.Metrics.Registry}))
+		if o.Metrics != nil && o.MetricsPath != "" {
+			ops.Method(http.MethodGet, o.MetricsPath, promhttp.HandlerFor(o.Metrics.Registry, promhttp.HandlerOpts{Registry: o.Metrics.Registry}))
 		}
 	})
 
@@ -92,6 +96,15 @@ func NewRouter(o RouterOptions) http.Handler {
 	ui := uiHeaders(sec.bodyLimit(maxOtherBody)(webui.Handler()))
 	r.NotFound(ui.ServeHTTP)
 	return r
+}
+
+// quietPaths are logged at debug level: probes and scrapes.
+func quietPaths(metricsPath string) map[string]bool {
+	q := map[string]bool{"/healthz": true, "/readyz": true}
+	if metricsPath != "" {
+		q[metricsPath] = true
+	}
+	return q
 }
 
 // Config for Run.

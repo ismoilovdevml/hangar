@@ -1,0 +1,20 @@
+# Minimal Prometheus configuration for Hangar. The job must be named "hangar"
+# (the HangarDown alert selects up{job="hangar"}). List every node: metrics
+# are per node, and the dashboards aggregate across them.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 30s
+
+rule_files:
+  - hangar-alerts.yml
+
+scrape_configs:
+  - job_name: hangar
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - hangar-1.internal:8080
+          - hangar-2.internal:8080
+    # If /metrics is reachable from untrusted networks, restrict it at the
+    # reverse proxy instead of exposing it publicly.

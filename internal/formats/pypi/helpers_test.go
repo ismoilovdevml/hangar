@@ -168,23 +168,6 @@ func (f *fixture) upload(t *testing.T, path, name, version string, d dist) {
 	}
 }
 
-// handlerClients is a core.HTTPClientFactory whose clients are served by handlers per host.
-type handlerClients struct{ hosts map[string]http.Handler }
-
-func (c handlerClients) ForUpstream(string, core.UpstreamHTTP, *core.UpstreamAuth) (*http.Client, error) {
-	return &http.Client{Transport: c}, nil
-}
-
-func (c handlerClients) RoundTrip(r *http.Request) (*http.Response, error) {
-	h, ok := c.hosts[r.URL.Host]
-	if !ok {
-		return nil, fmt.Errorf("no route to %s", r.URL.Host)
-	}
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, r)
-	return rec.Result(), nil
-}
-
 func sha256Hex(b []byte) string { s := sha256.Sum256(b); return hex.EncodeToString(s[:]) }
 
 func md5B64(b []byte) string {

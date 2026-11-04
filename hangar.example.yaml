@@ -121,3 +121,21 @@ security:
     upload_body_bytes: 0 # 0 = unlimited; uploads are streamed
     # A request body that sends nothing for this long is aborted.
     body_idle_timeout: 2m
+
+# Tracing and access log. Metrics and the log format are configured above;
+# see docs/operations/monitoring.md for every metric, log field and span.
+observability:
+  tracing:
+    # Export OpenTelemetry traces over OTLP/HTTP.
+    enabled: false
+    # Collector URL; without a path /v1/traces is used. Collector auth headers
+    # come from OTEL_EXPORTER_OTLP_HEADERS.
+    endpoint: "" # e.g. http://otel-collector:4318
+    # Share of new traces recorded (0 to 1). Requests carrying a sampled W3C
+    # traceparent header are always recorded.
+    sample_ratio: 0.1
+    service_name: hangar
+  access_log:
+    # Share of requests written to the access log (0 to 1). Server errors
+    # (5xx) are always logged.
+    sample_ratio: 1

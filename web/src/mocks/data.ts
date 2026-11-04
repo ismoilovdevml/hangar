@@ -16,9 +16,9 @@ import type {
   RepositoryStatus,
   RepositoryType,
   Session,
-  SystemStatus,
   UpstreamHealth,
 } from '../api/types';
+import type { SystemStatusDetail } from '../api/opsTypes';
 
 const TB = 1e12;
 const GB = 1e9;
@@ -39,13 +39,23 @@ export const session: Session = {
   privileges: ['system:*'],
 };
 
-export const systemStatus: SystemStatus = {
+export const systemStatus: SystemStatusDetail = {
   state: 'ok',
   message: 'All systems normal',
   version: '1.0.0',
   instance_name: 'acme-platform',
   nodes_up: 3,
   nodes_total: 3,
+  build: { version: '1.0.0', commit: '237ab95', date: '2026-11-03T18:00:00Z', go_version: 'go1.27.0' },
+  uptime_seconds: 1_209_600,
+  web_ui: true,
+  base_url: 'https://pkg.acme.io',
+  registry_host: 'cr.acme.io',
+  dependencies: [
+    { name: 'blobstore', status: 'ok', latency_ms: 12 },
+    { name: 'database', status: 'ok', latency_ms: 2 },
+    { name: 'eventbus', status: 'ok', latency_ms: 1 },
+  ],
 };
 
 export const authProviders: AuthProviders = {

@@ -183,17 +183,29 @@ func TestProxy(t *testing.T) {
 	if rec.Code != 200 || strings.Contains(rec.Body.String(), "upstream.test") || !strings.Contains(rec.Body.String(), `"q":"remote"`) {
 		t.Errorf("proxied search = %d %s", rec.Code, rec.Body)
 	}
-	// A search service on another host is not followed (SSRF guard covers the
-	// remote only): the proxy searches what it has cached.
+	// A search service on another host (nuget.org's azuresearch-*) is a
+	// related host declared by the service index: it is followed through the
+	// repository's upstream. When it fails, the proxy searches its cache.
 	feed.offHost.Store(true)
 	f.env.AddRepo(t, &core.Repository{Name: "nuget-proxy-offhost", Format: nuget.Name, Type: core.RepoProxy,
 		Config: core.RepoConfig{Proxy: &core.ProxyConfig{RemoteURL: remote}}})
 	f.env.Upstreams.Set("nuget-proxy-offhost", feed)
 	f.get("/repository/nuget-proxy-offhost/v3-flatcontainer/remote.pkg/1.0.0/remote.pkg.1.0.0.nupkg")
+	rec = f.get("/repository/nuget-proxy-offhost/query?q=remote")
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"q":"remote"`) || strings.Contains(rec.Body.String(), "upstream.test") {
+		t.Errorf("off-host search = %d %s", rec.Code, rec.Body)
+	}
+	f.env.Upstreams.Set("nuget-proxy-offhost", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/query" {
+			http.Error(w, "search down", http.StatusServiceUnavailable)
+			return
+		}
+		feed.ServeHTTP(w, r)
+	}))
 	var sr searchResult
 	f.getJSON("/repository/nuget-proxy-offhost/query?q=remote", &sr)
-	if sr.ids() != "Remote.Pkg@1.0.0" || strings.Contains(fmt.Sprint(sr), "upstream.test") {
-		t.Errorf("off-host fallback search = %+v", sr)
+	if sr.ids() != "Remote.Pkg@1.0.0" || strings.Contains(fmt.Sprint(sr), "upstream.test") || strings.Contains(fmt.Sprint(sr), "q:remote") {
+		t.Errorf("fallback search of the cache = %+v", sr)
 	}
 	feed.offHost.Store(false)
 

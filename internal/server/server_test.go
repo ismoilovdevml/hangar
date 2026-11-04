@@ -76,12 +76,13 @@ func newTestRouter(t *testing.T) (http.Handler, *health.Checker) {
 	hc.Add("database", func(context.Context) error { return nil })
 	deps := env.Deps()
 	h := NewRouter(RouterOptions{
-		Logger:  discard(),
-		Metrics: observability.NewMetrics(),
-		Health:  hc,
-		API:     &api.API{Deps: deps, Health: hc, Formats: reg.Names(), Started: time.Now()},
-		Formats: reg,
-		Deps:    deps,
+		Logger:      discard(),
+		Metrics:     observability.NewMetrics(),
+		MetricsPath: "/metrics",
+		Health:      hc,
+		API:         &api.API{Deps: deps, Health: hc, Formats: reg.Names(), Started: time.Now()},
+		Formats:     reg,
+		Deps:        deps,
 		FormatMiddleware: []func(http.Handler) http.Handler{func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("X-Format-Middleware", "yes")

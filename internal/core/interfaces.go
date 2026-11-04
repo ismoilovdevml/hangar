@@ -73,6 +73,18 @@ type UpstreamRequest struct {
 	Method string // GET (default) or HEAD
 	// Path is relative to ProxyConfig.RemoteURL, e.g. "lodash" or "v2/library/nginx/manifests/1.27".
 	Path string
+	// URL, when set, is an absolute http(s) URL requested instead of Path:
+	// a resource the remote links to, such as a PyPI file on
+	// files.pythonhosted.org or nuget.org's search service. Its host must be
+	// the remote's own host or match ProxyConfig.RelatedHosts or RelatedHosts
+	// below (see MatchHost); anything else fails with ErrInvalid. Related
+	// hosts get the same SSRF guard, outbound proxy, TLS settings, retries
+	// and request collapsing as the remote, but never its credentials.
+	URL string
+	// RelatedHosts are host patterns the format trusts for this request in
+	// addition to ProxyConfig.RelatedHosts: format defaults (PyPI's
+	// file_hosts) or hosts the remote itself declared (a NuGet service index).
+	RelatedHosts []string
 	// Header is added to the outgoing request (e.g. Accept for OCI manifests).
 	Header      http.Header
 	Conditional Conditional
@@ -95,6 +107,14 @@ type UpstreamResponse struct {
 // token-challenge flow), the SSRF allow-list, the circuit breaker and
 // per-path singleflight. A 404 is returned as a response, not an error;
 // transport failures and an open circuit return ErrUpstream.
+//
+// A remote that keeps answering 429 Too Many Requests (after bounded
+// Retry-After waits) yields an error wrapping both ErrRateLimited and
+// ErrUpstream that carries the remote's Retry-After (see RetryAfter):
+// formats serve a cached copy when they have one, otherwise answer 429.
+// A repository in offline mode (ProxyConfig.Offline) never contacts the
+// remote: Fetch fails with an error wrapping ErrNotFound and ErrUpstream, so
+// cached content is still served and a cache miss answers 404.
 type Upstream interface {
 	Fetch(ctx context.Context, req UpstreamRequest) (*UpstreamResponse, error)
 }

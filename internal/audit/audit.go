@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -84,6 +85,22 @@ type Log struct {
 	queue  chan core.AuditEvent
 	flush  chan chan struct{}
 	done   chan struct{}
+
+	rejected atomic.Uint64 // Record gave up on a full queue
+	lost     atomic.Uint64 // batch inserts that failed every retry
+}
+
+// Stats is a snapshot of the writer, for metrics.
+type Stats struct {
+	Queued   int    // events waiting to be written
+	Capacity int    // queue size
+	Rejected uint64 // events refused with ErrBackpressure since start
+	Lost     uint64 // events not stored after every retry (written to the log instead)
+}
+
+// Stats returns the current queue length and the drop counters.
+func (l *Log) Stats() Stats {
+	return Stats{Queued: len(l.queue), Capacity: cap(l.queue), Rejected: l.rejected.Load(), Lost: l.lost.Load()}
 }
 
 var _ core.AuditLog = (*Log)(nil)
@@ -144,6 +161,7 @@ func (l *Log) Record(ctx context.Context, e core.AuditEvent) error {
 	case l.queue <- e:
 		return nil
 	case <-t.C:
+		l.rejected.Add(1)
 		l.opts.Logger.Error("audit queue full; event rejected", eventAttrs(e)...)
 		return ErrBackpressure
 	}
@@ -267,6 +285,7 @@ func (l *Log) write(batch []core.AuditEvent) {
 			backoff *= 4
 		}
 	}
+	l.lost.Add(uint64(len(batch)))
 	for _, e := range batch {
 		l.opts.Logger.Error("audit event not stored", append(eventAttrs(e), "error", err)...)
 	}

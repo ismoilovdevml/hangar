@@ -3,8 +3,11 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"regexp"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -132,6 +135,84 @@ type ProxyConfig struct {
 	// Offline after this many consecutive failures, for CircuitOpenFor.
 	CircuitFailures int      `json:"circuit_failures,omitempty" yaml:"circuit_failures,omitempty"`
 	CircuitOpenFor  Duration `json:"circuit_open_for,omitempty" yaml:"circuit_open_for,omitempty"`
+	// RelatedHosts lists other hosts the remote links to that may be fetched
+	// on its behalf (UpstreamRequest.URL): tarball or file CDNs, API hosts.
+	// Entries are host names, host:port, or domain suffixes starting with a
+	// dot (".example.org" matches its subdomains); see MatchHost. Formats add
+	// their own defaults (PyPI's files.pythonhosted.org, the hosts a NuGet
+	// service index names). The remote's credentials are never sent there.
+	RelatedHosts []string `json:"related_hosts,omitempty" yaml:"related_hosts,omitempty"`
+	// Offline switches the repository to offline mode: the remote is never
+	// contacted, cached content is served (also when stale) and anything
+	// not cached answers 404. Unlike Repository.Online=false, which takes
+	// the whole repository out of service, an offline proxy keeps serving
+	// its cache (air-gapped sites, planned remote outages).
+	Offline bool `json:"offline,omitempty" yaml:"offline,omitempty"`
+	// MaxConcurrentRequests bounds the requests in flight to the remote and
+	// its related hosts, counting each until its body is read; further
+	// requests wait. 0 = unlimited.
+	MaxConcurrentRequests int `json:"max_concurrent_requests,omitempty" yaml:"max_concurrent_requests,omitempty"`
+}
+
+// MatchHost reports whether host (a URL's host, optionally with port)
+// matches one of patterns: a host name or host:port compared
+// case-insensitively, or a ".suffix" matching that domain's subdomains.
+// A pattern without a port matches the host on any port.
+func MatchHost(patterns []string, host string) bool {
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	bare := host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		bare = strings.TrimSuffix(h, ".")
+	}
+	for _, p := range patterns {
+		p = strings.ToLower(strings.TrimSpace(p))
+		switch {
+		case p == "":
+		case strings.HasPrefix(p, "."):
+			if strings.HasSuffix(bare, p) && len(bare) > len(p) {
+				return true
+			}
+		case p == host || p == bare:
+			return true
+		}
+	}
+	return false
+}
+
+// validateTuning checks related hosts and the numeric limits.
+func (c *ProxyConfig) validateTuning() error {
+	for _, h := range c.RelatedHosts {
+		if err := ValidateHostPattern(h); err != nil {
+			return fmt.Errorf("related_hosts: %w", err)
+		}
+	}
+	switch {
+	case c.MaxConcurrentRequests < 0:
+		return fmt.Errorf("max_concurrent_requests must not be negative: %w", ErrInvalid)
+	case c.HTTP.MaxConnsPerHost < 0 || c.HTTP.MaxIdleConnsPerHost < 0:
+		return fmt.Errorf("http connection limits must not be negative: %w", ErrInvalid)
+	case c.HTTP.ConnectTimeout < 0 || c.HTTP.ReadTimeout < 0 || c.HTTP.BodyTimeout < 0:
+		return fmt.Errorf("http timeouts must not be negative: %w", ErrInvalid)
+	}
+	return nil
+}
+
+// ValidateHostPattern checks one RelatedHosts entry.
+func ValidateHostPattern(p string) error {
+	if strings.ContainsAny(p, "/?#@ *") {
+		return fmt.Errorf("host %q: want a host name, host:port or .domain: %w", p, ErrInvalid)
+	}
+	h := strings.TrimPrefix(p, ".")
+	if hn, port, err := net.SplitHostPort(h); err == nil && !strings.HasPrefix(p, ".") {
+		if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
+			return fmt.Errorf("host %q: bad port: %w", p, ErrInvalid)
+		}
+		h = hn
+	}
+	if h == "" || strings.ContainsAny(h, "/?#@ *:") || strings.HasPrefix(h, ".") {
+		return fmt.Errorf("host %q: want a host name, host:port or .domain: %w", p, ErrInvalid)
+	}
+	return nil
 }
 
 // Upstream auth kinds.
@@ -191,9 +272,21 @@ type UpstreamHTTP struct {
 	// InsecureSkipVerify disables TLS verification for this remote. Audited; avoid.
 	InsecureSkipVerify bool `json:"insecure_skip_verify,omitempty" yaml:"insecure_skip_verify,omitempty"`
 	// ConnectTimeout bounds TCP connect + TLS handshake; ReadTimeout bounds the
-	// wait for response headers. Body transfer is bounded by the request context.
+	// wait for response headers. Body transfer has no overall limit (large
+	// blobs stream for minutes) but BodyTimeout bounds each wait for more
+	// body bytes: a transfer that stalls that long is aborted or, when the
+	// remote supports ranges, resumed.
 	ConnectTimeout Duration `json:"connect_timeout,omitempty" yaml:"connect_timeout,omitempty"`
 	ReadTimeout    Duration `json:"read_timeout,omitempty" yaml:"read_timeout,omitempty"`
+	BodyTimeout    Duration `json:"body_timeout,omitempty" yaml:"body_timeout,omitempty"`
+	// MaxConnsPerHost caps connections (idle and active) per remote host;
+	// 0 = unlimited. MaxIdleConnsPerHost overrides the server-wide
+	// http.max_idle_conns_per_host keep-alive pool size.
+	MaxConnsPerHost     int `json:"max_conns_per_host,omitempty" yaml:"max_conns_per_host,omitempty"`
+	MaxIdleConnsPerHost int `json:"max_idle_conns_per_host,omitempty" yaml:"max_idle_conns_per_host,omitempty"`
+	// DisableHTTP2 speaks HTTP/1.1 only, for remotes or TLS-inspecting
+	// proxies with broken HTTP/2.
+	DisableHTTP2 bool `json:"disable_http2,omitempty" yaml:"disable_http2,omitempty"`
 }
 
 // ValidateProxy checks the Proxy field syntax.
@@ -290,6 +383,9 @@ func (r *Repository) Validate() error {
 			if err := a.Validate(); err != nil {
 				return fmt.Errorf("repository %q: %w", r.Name, err)
 			}
+		}
+		if err := r.Config.Proxy.validateTuning(); err != nil {
+			return fmt.Errorf("repository %q: %w", r.Name, err)
 		}
 	case RepoGroup:
 		if r.Config.Group == nil || len(r.Config.Group.Members) == 0 {

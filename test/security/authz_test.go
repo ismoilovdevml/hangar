@@ -70,6 +70,7 @@ var apiPolicy = map[string]policy{
 	"POST /repositories":                         privileged,
 	"PUT /repositories/{name}":                   privileged,
 	"DELETE /repositories/{name}":                privileged,
+	"POST /repositories/{name}/cache:invalidate": privileged,
 	"GET /blob-stores":                           privileged,
 	"POST /blob-stores":                          privileged,
 	"GET /blob-stores/{name}":                    privileged,

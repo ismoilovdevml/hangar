@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -29,6 +30,10 @@ type upstreamResources struct {
 	Flat         string // PackageBaseAddress/3.0.0, trailing slash
 	Registration string // best registrations hive, trailing slash
 	Search       string // SearchQueryService
+	// Hosts are the hosts of every resource in the service index. The remote
+	// declares them, so they are trusted as related hosts of the repository
+	// (nuget.org serves search from azuresearch-*.nuget.org).
+	Hosts []string
 }
 
 type serviceIndexDoc struct {
@@ -78,6 +83,15 @@ func parseServiceIndex(b []byte) (*upstreamResources, error) {
 	if res.Flat == "" {
 		return nil, fmt.Errorf("upstream service index has no PackageBaseAddress/3.0.0: %w", core.ErrUpstream)
 	}
+	seen := map[string]bool{}
+	for _, r := range doc.Resources {
+		if u, err := url.Parse(r.ID); err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.Host != "" && u.User == nil {
+			if h := strings.ToLower(u.Host); !seen[h] {
+				seen[h] = true
+				res.Hosts = append(res.Hosts, h)
+			}
+		}
+	}
 	return res, nil
 }
 
@@ -90,7 +104,9 @@ func (h *handler) upstreamIndex(ctx context.Context, repo *core.Repository) (*up
 		return h.fetchDoc(ctx, repo, h.remoteBase(repo)+"/"+cfg.ServiceIndex, maxServiceIndex)
 	})
 	if err != nil {
-		if errors.Is(err, core.ErrNotFound) {
+		// A remote without a service index is broken (502); an offline-mode
+		// repository that never cached one has nothing to serve (404).
+		if errors.Is(err, core.ErrNotFound) && !errors.Is(err, core.ErrUpstream) {
 			return nil, fmt.Errorf("upstream service index not found: %w", core.ErrUpstream)
 		}
 		return nil, err
@@ -103,19 +119,34 @@ func (h *handler) remoteBase(repo *core.Repository) string {
 }
 
 // fetch GETs an absolute upstream URL through the repository's Upstream
-// (auth, SSRF guard, circuit breaker, request collapsing). Only URLs under
-// the remote URL can be fetched; resources a service index places on other
-// hosts are not followed.
+// (SSRF guard, circuit breaker, request collapsing, outbound proxy, rate
+// limits). URLs under the remote URL are remote paths and get the remote's
+// credentials; resources the service index places on other hosts (search,
+// registrations, CDNs) are fetched as related hosts, without them. Hosts
+// neither in the service index nor in the repository's related_hosts are
+// refused.
 func (h *handler) fetch(ctx context.Context, repo *core.Repository, abs string) (*core.UpstreamResponse, error) {
-	rel, ok := strings.CutPrefix(abs, h.remoteBase(repo)+"/")
-	if !ok {
-		return nil, fmt.Errorf("upstream resource %s is outside remote_url: %w", abs, core.ErrUpstream)
+	req := core.UpstreamRequest{Header: http.Header{"Accept": {"application/json, */*"}}}
+	if rel, ok := strings.CutPrefix(abs, h.remoteBase(repo)+"/"); ok {
+		req.Path = rel
+	} else {
+		// The service index itself is under the remote URL, so this lookup
+		// never recurses.
+		idx, err := h.upstreamIndex(ctx, repo)
+		if err != nil {
+			return nil, err
+		}
+		req.URL, req.RelatedHosts = abs, idx.Hosts
 	}
 	up, err := h.deps.Upstreams.ForRepository(ctx, repo)
 	if err != nil {
 		return nil, err
 	}
-	return up.Fetch(ctx, core.UpstreamRequest{Path: rel, Header: http.Header{"Accept": {"application/json, */*"}}})
+	resp, err := up.Fetch(ctx, req)
+	if errors.Is(err, core.ErrInvalid) && req.URL != "" {
+		return nil, fmt.Errorf("upstream resource %s is outside the remote and its related hosts: %w", abs, core.ErrUpstream)
+	}
+	return resp, err
 }
 
 // fetchDoc fetches a JSON document of at most limit bytes. 404 is ErrNotFound.

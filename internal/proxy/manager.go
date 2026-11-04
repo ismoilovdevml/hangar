@@ -14,8 +14,21 @@
 //   - a circuit breaker: after CircuitFailures consecutive connection errors
 //     or 5xx answers the remote is offline for CircuitOpenFor, requests fail
 //     fast with core.ErrUpstream, then one probe is let through;
-//   - a negative cache: a 404 is remembered for NegativeCacheTTL;
+//   - a negative cache: a 404 is remembered for NegativeCacheTTL (purged by
+//     InvalidateCache);
 //   - retries with jittered backoff for GET/HEAD on connection errors and 5xx;
+//   - rate limits: a 429 (or a 503 with Retry-After) is retried after the
+//     remote's Retry-After while the waits fit RetryAfterBudget; otherwise the
+//     host is gated until Retry-After passes and Fetch fails with
+//     core.ErrRateLimited carrying the wait. 429s never trip the breaker;
+//   - related hosts: UpstreamRequest.URL may name the remote's own host or a
+//     related host (ProxyConfig.RelatedHosts, UpstreamRequest.RelatedHosts),
+//     each with its own breaker and rate-limit gate, never sent the remote's
+//     credentials;
+//   - transfer limits: MaxConcurrentRequests slots per remote, a stall
+//     timeout between body reads (UpstreamHTTP.BodyTimeout) and resumption of
+//     broken downloads with Range requests when the remote supports them;
+//   - offline mode (ProxyConfig.Offline): the remote is never contacted;
 //   - registry token auth: a `WWW-Authenticate: Bearer realm=...` challenge is
 //     answered by fetching a token from the realm (anonymously or with the
 //     repository's upstream credentials), cached per scope until shortly
@@ -37,6 +50,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"slices"
 	"sync"
 	"time"
 
@@ -53,6 +67,16 @@ const (
 	DefaultSlowThreshold   = 2 * time.Second
 	DefaultCircuitFailures = 5
 	DefaultCircuitOpenFor  = 30 * time.Second
+	// DefaultRetryAfterBudget is the longest a request waits in total for a
+	// remote's Retry-After before answering the client 429 itself.
+	DefaultRetryAfterBudget = 10 * time.Second
+	// DefaultThrottleMax caps how long a 429 keeps a host gated, whatever
+	// Retry-After the remote sent.
+	DefaultThrottleMax = 10 * time.Minute
+	// DefaultBodyTimeout is the longest a body read waits for data.
+	DefaultBodyTimeout = 60 * time.Second
+	// DefaultMaxResumes is how often one download is resumed with Range.
+	DefaultMaxResumes = 3
 )
 
 // Options configure a Manager.
@@ -81,6 +105,18 @@ type Options struct {
 	// set ProxyConfig.CircuitFailures / CircuitOpenFor.
 	CircuitFailures int
 	CircuitOpenFor  time.Duration
+	// RetryAfterBudget bounds the Retry-After waits of one request; 0 selects
+	// DefaultRetryAfterBudget, negative never waits.
+	RetryAfterBudget time.Duration
+	// ThrottleMax caps a host's rate-limit gate (DefaultThrottleMax).
+	ThrottleMax time.Duration
+	// BodyTimeout applies to repositories that do not set
+	// UpstreamHTTP.BodyTimeout; 0 selects DefaultBodyTimeout, negative
+	// disables the stall timeout.
+	BodyTimeout time.Duration
+	// MaxResumes bounds Range resumptions per download; 0 selects
+	// DefaultMaxResumes, negative disables resumption.
+	MaxResumes int
 	// Now is the clock (tests).
 	Now func() time.Time
 }
@@ -134,6 +170,27 @@ func New(opts Options) (*Manager, error) {
 	if opts.CircuitOpenFor <= 0 {
 		opts.CircuitOpenFor = DefaultCircuitOpenFor
 	}
+	switch {
+	case opts.RetryAfterBudget == 0:
+		opts.RetryAfterBudget = DefaultRetryAfterBudget
+	case opts.RetryAfterBudget < 0:
+		opts.RetryAfterBudget = 0
+	}
+	if opts.ThrottleMax <= 0 {
+		opts.ThrottleMax = DefaultThrottleMax
+	}
+	switch {
+	case opts.BodyTimeout == 0:
+		opts.BodyTimeout = DefaultBodyTimeout
+	case opts.BodyTimeout < 0:
+		opts.BodyTimeout = 0
+	}
+	switch {
+	case opts.MaxResumes == 0:
+		opts.MaxResumes = DefaultMaxResumes
+	case opts.MaxResumes < 0:
+		opts.MaxResumes = 0
+	}
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
@@ -182,10 +239,58 @@ func (m *Manager) Invalidate(name string) {
 // reconfigured repositories are released promptly on every node.
 func (m *Manager) Watch(ctx context.Context, bus core.EventBus) (core.Subscription, error) {
 	return bus.Subscribe(ctx, "repository.*", func(_ context.Context, e core.Event) {
-		if e.Type == core.EventRepositoryUpdated || e.Type == core.EventRepositoryDeleted {
+		switch e.Type {
+		case core.EventRepositoryUpdated, core.EventRepositoryDeleted:
 			m.Invalidate(e.Repository)
+		case core.EventRepositoryCacheInvalidated:
+			m.purge(e.Repository)
 		}
 	})
+}
+
+// CacheInvalidation reports what InvalidateCache dropped on this node.
+type CacheInvalidation struct {
+	Repository string `json:"repository"`
+	// NegativeEntries are remembered 404s dropped on this node.
+	NegativeEntries int `json:"negative_entries"`
+	// RateLimitedHosts are hosts whose rate-limit gate was lifted on this node.
+	RateLimitedHosts int `json:"rate_limited_hosts"`
+}
+
+// InvalidateCache forgets the remote answers a proxy repository remembers
+// in memory (404s in the negative cache, rate-limit gates), so the next
+// request asks the remote again: after a package was published upstream,
+// or a rate limit was lifted. Cached content is not touched. With an event
+// bus the other nodes are told to do the same (repository.cache_invalidated).
+func (m *Manager) InvalidateCache(ctx context.Context, repo *core.Repository) (CacheInvalidation, error) {
+	if repo == nil || repo.Type != core.RepoProxy || repo.Config.Proxy == nil {
+		return CacheInvalidation{}, fmt.Errorf("repository is not a proxy: %w", core.ErrInvalid)
+	}
+	res := m.purge(repo.Name)
+	if m.opts.Events != nil {
+		ev := core.Event{Type: core.EventRepositoryCacheInvalidated, Actor: core.PrincipalFrom(ctx).Name, Repository: repo.Name}
+		if err := m.opts.Events.Publish(ctx, ev); err != nil {
+			return res, fmt.Errorf("publish cache invalidation: %w", err)
+		}
+	}
+	return res, nil
+}
+
+func (m *Manager) purge(name string) CacheInvalidation {
+	res := CacheInvalidation{Repository: name}
+	m.mu.Lock()
+	u, ok := m.entries[name]
+	m.mu.Unlock()
+	if !ok {
+		return res
+	}
+	now := u.now()
+	res.NegativeEntries = u.neg.purge(now)
+	res.RateLimitedHosts = u.throttle.clear(now)
+	u.noteState()
+	m.opts.Logger.Info("proxy cache invalidated", "repository", name,
+		"negative_entries", res.NegativeEntries, "rate_limited_hosts", res.RateLimitedHosts)
+	return res
 }
 
 // Health returns the health of a proxy repository's remote. A remote that
@@ -196,6 +301,10 @@ func (m *Manager) Health(repo *core.Repository) HealthItem {
 		return it
 	}
 	it.URL = core.RedactURL(repo.Config.Proxy.RemoteURL)
+	if repo.Config.Proxy.Offline {
+		it.State = StateOffline
+		return it
+	}
 	fp, err := fingerprint(repo.Config.Proxy)
 	if err != nil {
 		return it
@@ -254,21 +363,34 @@ func (m *Manager) build(name string, cfg *core.ProxyConfig, fp string) (*upstrea
 	if openFor <= 0 {
 		openFor = m.opts.CircuitOpenFor
 	}
+	bodyTimeout := m.opts.BodyTimeout
+	if cfg.HTTP.BodyTimeout > 0 {
+		bodyTimeout = cfg.HTTP.BodyTimeout.D()
+	}
 	u := &upstream{
-		name:         name,
-		remoteRaw:    cfg.RemoteURL,
-		base:         base,
-		fingerprint:  fp,
-		guard:        m.opts.Guard,
-		proxied:      func(*url.URL) bool { return false },
-		maxRedirects: m.opts.MaxRedirects,
-		negTTL:       negativeTTL(cfg),
-		retries:      m.opts.Retries,
-		backoff:      m.opts.RetryBackoff,
-		slow:         m.opts.SlowThreshold,
-		now:          m.opts.Now,
-		log:          m.opts.Logger,
-		onState:      m.stateChanged,
+		name:          name,
+		remoteRaw:     cfg.RemoteURL,
+		base:          base,
+		fingerprint:   fp,
+		guard:         m.opts.Guard,
+		proxied:       func(*url.URL) bool { return false },
+		maxRedirects:  m.opts.MaxRedirects,
+		related:       slices.Clone(cfg.RelatedHosts),
+		offline:       cfg.Offline,
+		negTTL:        negativeTTL(cfg),
+		retries:       m.opts.Retries,
+		backoff:       m.opts.RetryBackoff,
+		retryAfterMax: m.opts.RetryAfterBudget,
+		throttleMax:   m.opts.ThrottleMax,
+		bodyTimeout:   bodyTimeout,
+		maxResumes:    m.opts.MaxResumes,
+		slow:          m.opts.SlowThreshold,
+		now:           m.opts.Now,
+		log:           m.opts.Logger,
+		onState:       m.stateChanged,
+	}
+	if cfg.MaxConcurrentRequests > 0 {
+		u.slots = make(chan struct{}, cfg.MaxConcurrentRequests)
 	}
 	if ps, ok := m.opts.HTTPClients.(proxySelector); ok {
 		httpCfg := cfg.HTTP
@@ -282,14 +404,20 @@ func (m *Manager) build(name string, cfg *core.ProxyConfig, fp string) (*upstrea
 	client := *hc
 	client.CheckRedirect = u.checkRedirect
 	u.client = &client
-	u.breaker = gobreaker.NewTwoStepCircuitBreaker[struct{}](gobreaker.Settings{
-		Name:        name,
-		MaxRequests: 1,
-		Timeout:     openFor,
-		ReadyToTrip: func(c gobreaker.Counts) bool { return int64(c.ConsecutiveFailures) >= int64(failures) },
-		// A caller giving up or a blocked address says nothing about the remote's health.
-		IsExcluded: func(err error) bool { return errors.Is(err, context.Canceled) || errors.Is(err, ErrBlocked) },
-	})
+	u.newBreakerFunc = func(host string) *gobreaker.TwoStepCircuitBreaker[struct{}] {
+		return gobreaker.NewTwoStepCircuitBreaker[struct{}](gobreaker.Settings{
+			Name:        name + " " + host,
+			MaxRequests: 1,
+			Timeout:     openFor,
+			ReadyToTrip: func(c gobreaker.Counts) bool { return int64(c.ConsecutiveFailures) >= int64(failures) },
+			// A caller giving up, a blocked address or a rate limit says
+			// nothing about the remote being down.
+			IsExcluded: func(err error) bool {
+				return errors.Is(err, context.Canceled) || errors.Is(err, ErrBlocked) || errors.Is(err, errThrottled)
+			},
+		})
+	}
+	u.breaker = u.newBreakerFunc(base.Host)
 	var auth *core.UpstreamAuth
 	if cfg.Auth != nil {
 		a := *cfg.Auth

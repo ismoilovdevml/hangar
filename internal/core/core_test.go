@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -110,6 +111,16 @@ func TestRepositoryValidate(t *testing.T) {
 			Config: RepoConfig{Group: &GroupConfig{Members: []string{"npm-hosted"}}}}, true},
 		{"bad policy", Repository{Name: "npm-hosted", Format: "npm", Type: RepoHosted, BlobStore: "default",
 			Config: RepoConfig{Hosted: &HostedConfig{WritePolicy: "sometimes"}}}, false},
+		{"proxy tuning", proxyWith(func(c *ProxyConfig) {
+			c.RelatedHosts = []string{"files.pythonhosted.org", ".nuget.org", "cdn.example:8443"}
+			c.MaxConcurrentRequests = 16
+			c.Offline = true
+			c.HTTP = UpstreamHTTP{BodyTimeout: Duration(time.Minute), MaxConnsPerHost: 8, MaxIdleConnsPerHost: 4, DisableHTTP2: true}
+		}), true},
+		{"bad related host", proxyWith(func(c *ProxyConfig) { c.RelatedHosts = []string{"https://cdn.example/"} }), false},
+		{"negative concurrency", proxyWith(func(c *ProxyConfig) { c.MaxConcurrentRequests = -1 }), false},
+		{"negative conns", proxyWith(func(c *ProxyConfig) { c.HTTP.MaxConnsPerHost = -1 }), false},
+		{"negative body timeout", proxyWith(func(c *ProxyConfig) { c.HTTP.BodyTimeout = Duration(-time.Second) }), false},
 	}
 	for _, tt := range tests {
 		err := tt.repo.Validate()
@@ -169,9 +180,30 @@ func TestCredentialsFromRequest(t *testing.T) {
 	}
 }
 
+func proxyWith(mod func(*ProxyConfig)) Repository {
+	c := &ProxyConfig{RemoteURL: "https://pypi.org"}
+	mod(c)
+	return Repository{Name: "pypi-proxy", Format: "pypi", Type: RepoProxy, BlobStore: "default", Config: RepoConfig{Proxy: c}}
+}
+
 func TestHTTPStatus(t *testing.T) {
 	if s := HTTPStatus(errors.Join(errors.New("x"), ErrWriteDenied)); s != http.StatusConflict {
 		t.Fatalf("status = %d", s)
+	}
+	// A rate-limited upstream answers 429, not 502, and carries Retry-After.
+	rl := &RetryAfterError{After: 1500 * time.Millisecond, Err: errors.Join(ErrRateLimited, ErrUpstream)}
+	if s := HTTPStatus(fmt.Errorf("wrapped: %w", rl)); s != http.StatusTooManyRequests {
+		t.Fatalf("rate limited status = %d", s)
+	}
+	h := http.Header{}
+	SetRetryAfter(h, fmt.Errorf("wrapped: %w", rl))
+	if h.Get("Retry-After") != "2" {
+		t.Fatalf("Retry-After = %q, want 2 (rounded up)", h.Get("Retry-After"))
+	}
+	h = http.Header{}
+	SetRetryAfter(h, ErrUpstream)
+	if _, ok := h["Retry-After"]; ok {
+		t.Fatal("Retry-After set without a wait")
 	}
 	if s := HTTPStatus(errors.New("boom")); s != http.StatusInternalServerError {
 		t.Fatalf("status = %d", s)

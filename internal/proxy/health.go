@@ -17,7 +17,8 @@ type State string
 const (
 	// StateHealthy: requests succeed with normal latency.
 	StateHealthy State = "healthy"
-	// StateSlow: requests succeed but latency is above the slow threshold.
+	// StateSlow: requests succeed but latency is above the slow threshold,
+	// or the remote rate-limits us (429) and asked us to come back later.
 	StateSlow State = "slow"
 	// StateBlocked: the remote is reachable but refuses us (401/403, a token
 	// service denying our credentials) or the address is blocked by the
@@ -93,6 +94,9 @@ func (u *upstream) state(now time.Time) State {
 	}
 	if l, ok := u.stats.latency(now); ok && l > u.slow {
 		return StateSlow
+	}
+	if _, gated := u.throttle.gated(u.base.Host, now); gated {
+		return StateSlow // rate limited: answers come, only later
 	}
 	return StateHealthy
 }

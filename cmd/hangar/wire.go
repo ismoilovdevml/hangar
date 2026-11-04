@@ -30,6 +30,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/service/component"
 	"github.com/ismoilovdevml/hangar/internal/service/repository"
 	"github.com/ismoilovdevml/hangar/internal/storage"
+	"github.com/ismoilovdevml/hangar/internal/storage/fs"
 	"github.com/ismoilovdevml/hangar/internal/storage/registry"
 	"github.com/ismoilovdevml/hangar/internal/storage/s3"
 	"github.com/ismoilovdevml/hangar/internal/tasks/blobgc"
@@ -46,6 +47,9 @@ const (
 	jobAuthPurge       = "auth.purge_expired"
 	jobAuditPartitions = "audit.ensure_partitions"
 )
+
+// jobMaxAttempts is how often a failing job runs before it is dropped.
+const jobMaxAttempts = 5
 
 // app is a fully wired server. close releases everything in reverse order of
 // construction.
@@ -67,10 +71,13 @@ func (a *app) close() {
 
 // openAuth builds the audit log and the auth service, the part of the wiring
 // the admin CLI shares with the server. Close the auth service before the
-// audit log so its final records are written.
-func openAuth(cfg config.Config, pool *pgxpool.Pool, bus core.EventBus, log *slog.Logger) (*audit.Log, *auth.Service, error) {
+// audit log so its final records are written. metrics (may be nil) counts
+// authentication failures and lockouts.
+func openAuth(cfg config.Config, pool *pgxpool.Pool, bus core.EventBus, metrics *observability.Metrics, log *slog.Logger) (*audit.Log, *auth.Service, error) {
 	auditLog := audit.New(pool, audit.Options{Logger: log})
-	authSvc, err := auth.New(pool, auth.Options{Config: cfg.Auth, Audit: auditLog, Events: bus, Logger: log})
+	authSvc, err := auth.New(pool, auth.Options{
+		Config: cfg.Auth, Audit: observability.ObserveAuth(auditLog, metrics), Events: bus, Logger: log,
+	})
 	if err != nil {
 		closeAudit(auditLog, log)
 		return nil, nil, err
@@ -91,8 +98,9 @@ func closeAudit(l *audit.Log, log *slog.Logger) {
 //	events -> audit -> blob stores -> auth (+ authorizer) -> repositories ->
 //	components -> proxy upstreams -> formats -> API -> jobs and scheduler
 //
-// On error everything built so far is closed again.
-func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log *slog.Logger, started time.Time) (_ *app, err error) {
+// On error everything built so far is closed again. metrics receives every
+// collector; the pool's statement tracer was installed when it was opened.
+func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *observability.Metrics, log *slog.Logger, started time.Time) (_ *app, err error) {
 	a := &app{}
 	defer func() {
 		if err != nil {
@@ -109,15 +117,21 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log *slog
 	}
 	a.onClose(rt.Close)
 	bus := events.NewBus(rt.Conn, log)
-	queue, err := events.NewQueue(ctx, rt.JS, events.QueueOptions{}, log)
+	queue, err := events.NewQueue(ctx, rt.JS, events.QueueOptions{MaxAttempts: jobMaxAttempts}, log)
 	if err != nil {
+		return nil, err
+	}
+	if err := metrics.RegisterJobQueue(rt.JS, rt.Conn, log); err != nil {
 		return nil, err
 	}
 
 	// Audit log and authentication. The audit log closes after every service
 	// that records into it.
-	auditLog, authSvc, err := openAuth(cfg, pool, bus, log)
+	auditLog, authSvc, err := openAuth(cfg, pool, bus, metrics, log)
 	if err != nil {
+		return nil, err
+	}
+	if err := metrics.RegisterAudit(auditLog); err != nil {
 		return nil, err
 	}
 	a.onClose(func() { closeAudit(auditLog, log) })
@@ -157,6 +171,8 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log *slog
 	blobs := registry.New(pool, registry.Options{
 		Static: map[string]core.BlobStore{DefaultBlobStore: store}, Fallback: store, Logger: log,
 	})
+	// Request-path blob access is timed per driver; GC uses the stores directly.
+	observedBlobs := observability.InstrumentBlobStores(blobs, metrics, blobDriver)
 
 	// Formats (repositories validate against them).
 	reg, err := builtin.RegistryWith(builtin.Options{Docker: docker.Options{TokenKey: []byte(cfg.Docker.TokenKey)}})
@@ -182,7 +198,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log *slog
 	if err := authz.Subscribe(ctx, bus); err != nil {
 		return nil, err
 	}
-	comps := component.New(pool, component.Options{AuthZ: authz, Audit: auditLog, Events: bus, Blobs: blobs, Logger: log})
+	comps := component.New(pool, component.Options{AuthZ: authz, Audit: auditLog, Events: bus, Blobs: observedBlobs, Logger: log})
 	a.onClose(func() { _ = comps.Close() })
 
 	// Outbound HTTP and proxy upstreams.
@@ -216,8 +232,8 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log *slog
 	deps := core.Deps{
 		Repos:       repos,
 		Components:  comps,
-		Blobs:       blobs,
-		Upstreams:   upstreams,
+		Blobs:       observedBlobs,
+		Upstreams:   observability.InstrumentUpstreams(upstreams, metrics),
 		HTTPClients: clients,
 		// Package clients authenticate per request; signed-in web UI users
 		// may also download with their session (see DownloadSessions).
@@ -231,15 +247,32 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log *slog
 		BaseURL: cfg.Server.BaseURL,
 	}
 
+	// Format handlers additionally tag each request with the repository and
+	// principal it resolved, for logs, spans and per-format metrics.
+	formatDeps := deps
+	formatDeps.Repos = observability.TagRepositories(repos)
+	formatDeps.Auth = observability.TagAuthenticator(deps.Auth)
+
 	// Metrics are always collected (the Overview screen reads them);
 	// metrics.enabled only controls the /metrics endpoint.
-	metrics := observability.NewMetrics()
 	if err := proxy.RegisterMetrics(metrics.Registry); err != nil {
+		return nil, err
+	}
+	if err := metrics.RegisterDBPool(pool); err != nil {
+		return nil, err
+	}
+	healthReporter := proxy.NewHealthReporter(upstreams, repos)
+	if err := metrics.RegisterUpstreamHealth(healthReporter, log); err != nil {
+		return nil, err
+	}
+	usage, err := metrics.RegisterStorageUsage(pool, 0, log)
+	if err != nil {
 		return nil, err
 	}
 	statsCtx, stopStats := context.WithCancel(context.WithoutCancel(ctx))
 	stats := api.NewRequestStats(metrics.Registry, started)
 	go stats.Run(statsCtx)
+	go usage.Run(statsCtx)
 	a.onClose(stopStats)
 
 	hc := health.New(2 * time.Second)
@@ -247,6 +280,9 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log *slog
 	hc.Add("blobstore", store.Ping)
 	hc.Add("eventbus", rt.Ping)
 	a.health = hc
+	if err := metrics.RegisterReadiness(hc); err != nil {
+		return nil, err
+	}
 
 	authOpts := httpapi.Options{
 		Organization: httpapi.Organization{Slug: cfg.Server.InstanceName, Name: cfg.Server.InstanceName},
@@ -262,8 +298,9 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log *slog
 		Catalog:        catalog.New(pool, catalog.Options{Sealer: storeSealer(keyring)}),
 		Search:         search.New(pool),
 		Audit:          auditLog,
-		Upstreams:      proxy.NewHealthReporter(upstreams, repos),
-		AuthMiddleware: httpapi.Middleware(authSvc, authOpts),
+		Upstreams:      healthReporter,
+		UpstreamCache:  upstreams,
+		AuthMiddleware: chainMiddleware(httpapi.Middleware(authSvc, authOpts), observability.TagPrincipal),
 		RequestStats:   stats,
 		AuthRoutes:     api.RouteFunc(func(r chi.Router) { httpapi.Register(r, authSvc, authOpts) }),
 	}
@@ -273,13 +310,15 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log *slog
 	if err != nil {
 		return nil, err
 	}
-	var exposed *observability.Metrics
+	metricsPath := ""
 	if cfg.Metrics.Enabled {
-		exposed = metrics
+		metricsPath = cfg.Metrics.Path
 	}
 	a.router = server.NewRouter(server.RouterOptions{
-		Logger: log, Metrics: exposed, MetricsPath: cfg.Metrics.Path, Health: hc, TrustedProxies: trusted,
-		API: restAPI, Formats: reg, Deps: deps,
+		Logger: log, Metrics: metrics, MetricsPath: metricsPath,
+		AccessLogSampleRatio: cfg.Observability.AccessLog.SampleRatio,
+		Health:               hc, TrustedProxies: trusted,
+		API: restAPI, Formats: reg, Deps: formatDeps,
 		FormatMiddleware: []func(http.Handler) http.Handler{httpapi.DownloadSessions(authSvc)},
 		Security:         securityOptions(cfg),
 	})
@@ -312,7 +351,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log *slog
 		},
 	}
 	for typ, h := range handlers {
-		if err := queue.Handle(typ, h); err != nil {
+		if err := queue.Handle(typ, observability.InstrumentJob(metrics, typ, jobMaxAttempts, h)); err != nil {
 			return nil, err
 		}
 	}
@@ -333,6 +372,22 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log *slog
 	a.onClose(func() { stopSched(); <-schedDone })
 
 	return a, nil
+}
+
+// blobDriver names a blob store's driver for metrics.
+func blobDriver(s core.BlobStore) string {
+	switch s.(type) {
+	case *fs.Store:
+		return "fs"
+	case *s3.Store:
+		return s3.Kind
+	}
+	return ""
+}
+
+// chainMiddleware runs first, then second, then the handler.
+func chainMiddleware(first, second func(http.Handler) http.Handler) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler { return first(second(next)) }
 }
 
 // bootstrapFromConfig creates the first administrator from

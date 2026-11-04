@@ -48,8 +48,26 @@ func serveCmd(args []string, stderr io.Writer) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	t := cfg.Observability.Tracing
+	stopTracing, err := observability.SetupTracing(ctx, observability.TracingOptions{
+		Enabled: t.Enabled, Endpoint: t.Endpoint, SampleRatio: t.SampleRatio, ServiceName: t.ServiceName,
+	}, log)
+	if err != nil {
+		return err
+	}
+	// Runs last: flushes the spans of the shutdown itself.
+	defer func() {
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := stopTracing(sctx); err != nil {
+			log.Warn("tracing: shutdown", "error", err)
+		}
+	}()
+
+	metrics := observability.NewMetrics()
 	pool, err := db.Open(ctx, cfg.Database.URL, db.PoolOptions{
 		MaxConns: cfg.Database.MaxConns, MinConns: cfg.Database.MinConns, ConnLifetime: cfg.Database.ConnLifetime,
+		Tracer: observability.NewQueryTracer(metrics),
 	})
 	if err != nil {
 		return err
@@ -59,7 +77,7 @@ func serveCmd(args []string, stderr io.Writer) error {
 		return err
 	}
 
-	a, err := build(ctx, cfg, pool, log, time.Now())
+	a, err := build(ctx, cfg, pool, metrics, log, time.Now())
 	if err != nil {
 		return err
 	}

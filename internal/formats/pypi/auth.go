@@ -47,6 +47,10 @@ func (h *handler) writeError(w http.ResponseWriter, r *http.Request, err error) 
 	case code == http.StatusBadGateway:
 		h.log.WarnContext(r.Context(), "pypi upstream failed", "path", r.URL.Path, "err", err)
 		msg = "upstream unavailable"
+	case code == http.StatusTooManyRequests:
+		h.log.WarnContext(r.Context(), "pypi upstream rate limited", "path", r.URL.Path, "err", err)
+		msg = "upstream rate limited, retry later"
+		core.SetRetryAfter(w.Header(), err)
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")

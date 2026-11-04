@@ -64,7 +64,7 @@ func withAuth(cfg config.Config, log *slog.Logger, fn func(ctx context.Context, 
 	if err := ensureSchema(ctx, pool, false, log); err != nil {
 		return err
 	}
-	auditLog, svc, err := openAuth(cfg, pool, nil, log)
+	auditLog, svc, err := openAuth(cfg, pool, nil, nil, log)
 	if err != nil {
 		return err
 	}

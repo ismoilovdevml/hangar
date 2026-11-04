@@ -8,7 +8,7 @@ Every number shown in the UI comes from the API.
 |---|---|
 | Repository | Named container of one **format** and one **type**: `hosted`, `proxy` or `group`. |
 | Hosted | Clients publish here. Write policy: `allow`, `allow_once` (immutable versions), `deny`. |
-| Proxy | Fetches from a remote URL on demand and caches. Has metadata TTL, content TTL, negative-cache TTL, upstream auth, circuit breaker. |
+| Proxy | Fetches from a remote URL on demand and caches. Has metadata TTL, content TTL, negative-cache TTL, upstream auth, circuit breaker, related hosts, rate-limit (429) handling, concurrency and transfer limits, offline mode. |
 | Group | Ordered list of member repositories of the same format behind one URL. Reads resolve in member order; writes go to a designated hosted member (Docker/npm). |
 | Component | A package version (e.g. `payments-api:2.14.0`, `@acme/ui-kit@5.3.1`, `com.acme:ledger-core:7.0.0`). |
 | Asset | A file belonging to a component (jar, pom, tgz, wheel, manifest, layer…). |
