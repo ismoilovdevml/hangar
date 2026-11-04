@@ -36,6 +36,10 @@
 # UI, REST API and every package format (/repository/<repo>/..., /v2/...).
 {$HANGAR_DOMAIN} {
 	import security_headers
+	# Prometheus metrics are unauthenticated: scrape them on the internal
+	# network (hangar:8080/metrics), never through the public host.
+	@metrics path /metrics
+	respond @metrics 404
 	import hangar_upstream
 	log
 }
