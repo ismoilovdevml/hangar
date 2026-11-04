@@ -1691,6 +1691,13 @@ export interface components {
             component_count: number;
             created_at: components["schemas"]["Timestamp"];
             updated_at: components["schemas"]["Timestamp"];
+            /**
+             * Format: date-time
+             * @description Latest upload, cache fill or download in this repository (for a group, in its
+             *     direct members); null when there was none. Downloads are counted in batches,
+             *     so this can lag by the download statistics flush interval.
+             */
+            last_activity_at: string | null;
         };
         RepositoryList: {
             items: components["schemas"]["Repository"][];
@@ -2965,6 +2972,11 @@ export interface operations {
                 format?: components["schemas"]["Format"];
                 /** @description Substring of the repository name */
                 q?: string;
+                /**
+                 * @description Order of the list, before paging (default `name`). A leading `-` reverses it;
+                 *     ties are broken by name. Repositories without activity sort as the oldest.
+                 */
+                sort?: "name" | "-name" | "type" | "-type" | "format" | "-format" | "last_activity" | "-last_activity";
                 /** @description Opaque cursor from the previous page's `next_cursor` */
                 cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];

@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -205,6 +206,24 @@ func TestRepositories(t *testing.T) {
 		t.Errorf("filtered = %+v", list)
 	}
 	f.expect("admin", "GET", "/api/v1/repositories?type=weird", nil, 400)
+
+	// Sorting happens before paging; repositories without activity come last when newest is first.
+	active := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+	f.api.Catalog = fakeCatalog{stats: map[string]catalog.RepoStats{npmHosted.ID: {LastActivityAt: active}}}
+	_ = json.Unmarshal(f.expect("alice", "GET", "/api/v1/repositories?sort=-last_activity", nil, 200), &list)
+	if len(list.Items) != 3 || list.Items[0].Name != "npm-hosted" || list.Items[0].LastActivityAt == nil || !list.Items[0].LastActivityAt.Equal(active) ||
+		list.Items[1].LastActivityAt != nil {
+		t.Errorf("by last activity = %+v", list.Items)
+	}
+	_ = json.Unmarshal(f.expect("alice", "GET", "/api/v1/repositories?sort=-name&limit=1", nil, 200), &list)
+	if len(list.Items) != 1 || list.Items[0].Name != "npm-proxy" {
+		t.Errorf("by name descending = %+v", list.Items)
+	}
+	_ = json.Unmarshal(f.expect("alice", "GET", "/api/v1/repositories?sort=type", nil, 200), &list)
+	if got := []core.RepoType{list.Items[0].Type, list.Items[1].Type, list.Items[2].Type}; !slices.Equal(got, []core.RepoType{core.RepoGroup, core.RepoHosted, core.RepoProxy}) {
+		t.Errorf("by type = %v", got)
+	}
+	f.expect("alice", "GET", "/api/v1/repositories?sort=size", nil, 400)
 
 	// Reads of a repository the caller may not see answer 404.
 	f.expect("alice", "GET", "/api/v1/repositories/maven-releases", nil, 404)

@@ -55,9 +55,16 @@ func New(pool *pgxpool.Pool, opts Options) *Catalog {
 type RepoStats struct {
 	SizeBytes      int64
 	ComponentCount int64
+	// LastActivityAt is the latest upload, cache fill or download (zero when
+	// there was none). A group takes the latest of its direct members.
+	LastActivityAt time.Time
 }
 
-// repoStatsSQL computes RepoStats for every repository. Hosted and proxy
+// repoStatsSQL computes RepoStats for every repository. Last activity comes
+// from asset timestamps the write and download paths already keep; a group
+// takes the latest of all its (nested) members.
+//
+// Hosted and proxy
 // repositories: the sum of their asset sizes (before deduplication) and their
 // component count. Groups store nothing themselves; they report what they
 // serve: every blob stored by their members (nested groups resolved) counted
@@ -83,15 +90,27 @@ group_components AS (
 	SELECT l.group_id, count(DISTINCT (co.namespace, co.name, co.version)) AS n
 	FROM leaves l JOIN components co ON co.repo_id = l.member_id
 	GROUP BY l.group_id
+),
+own_last AS (
+	SELECT a.repo_id, max(GREATEST(a.updated_at, a.last_downloaded_at)) AS last
+	FROM assets a GROUP BY a.repo_id
+),
+group_last AS (
+	SELECT l.group_id, max(o.last) AS last
+	FROM leaves l JOIN own_last o ON o.repo_id = l.member_id
+	GROUP BY l.group_id
 )
 SELECT r.id::text,
 	CASE WHEN r.type = 'group' THEN COALESCE(gs.size, 0)
 		ELSE COALESCE((SELECT sum(a.size) FROM assets a WHERE a.repo_id = r.id), 0) END::bigint,
 	CASE WHEN r.type = 'group' THEN COALESCE(gc.n, 0)
-		ELSE (SELECT count(*) FROM components co WHERE co.repo_id = r.id) END::bigint
+		ELSE (SELECT count(*) FROM components co WHERE co.repo_id = r.id) END::bigint,
+	CASE WHEN r.type = 'group' THEN gl.last ELSE ol.last END
 FROM repositories r
 LEFT JOIN group_size gs ON gs.group_id = r.id
-LEFT JOIN group_components gc ON gc.group_id = r.id`
+LEFT JOIN group_components gc ON gc.group_id = r.id
+LEFT JOIN group_last gl ON gl.group_id = r.id
+LEFT JOIN own_last ol ON ol.repo_id = r.id`
 
 // RepositoryStats returns totals for every repository, keyed by repository id.
 func (c *Catalog) RepositoryStats(ctx context.Context) (map[string]RepoStats, error) {
@@ -104,8 +123,12 @@ func (c *Catalog) RepositoryStats(ctx context.Context) (map[string]RepoStats, er
 	for rows.Next() {
 		var id string
 		var s RepoStats
-		if err := rows.Scan(&id, &s.SizeBytes, &s.ComponentCount); err != nil {
+		var last *time.Time
+		if err := rows.Scan(&id, &s.SizeBytes, &s.ComponentCount, &last); err != nil {
 			return nil, fmt.Errorf("repository stats: %w", err)
+		}
+		if last != nil {
+			s.LastActivityAt = last.UTC()
 		}
 		out[id] = s
 	}

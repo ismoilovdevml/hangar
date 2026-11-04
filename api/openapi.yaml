@@ -361,6 +361,14 @@ paths:
           in: query
           description: Substring of the repository name
           schema: { type: string }
+        - name: sort
+          in: query
+          description: |
+            Order of the list, before paging (default `name`). A leading `-` reverses it;
+            ties are broken by name. Repositories without activity sort as the oldest.
+          schema:
+            type: string
+            enum: [name, -name, type, -type, format, -format, last_activity, -last_activity]
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
       responses:
@@ -2292,7 +2300,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/RepositoryInput"
         - type: object
-          required: [id, url, status, size_bytes, component_count, created_at, updated_at]
+          required: [id, url, status, size_bytes, component_count, created_at, updated_at, last_activity_at]
           properties:
             id: { type: string }
             url:
@@ -2313,6 +2321,13 @@ components:
                 its members, nested groups resolved.
             created_at: { $ref: "#/components/schemas/Timestamp" }
             updated_at: { $ref: "#/components/schemas/Timestamp" }
+            last_activity_at:
+              type: [string, "null"]
+              format: date-time
+              description: |
+                Latest upload, cache fill or download in this repository (for a group, in its
+                direct members); null when there was none. Downloads are counted in batches,
+                so this can lag by the download statistics flush interval.
     RepositoryList:
       type: object
       required: [items, counts]
