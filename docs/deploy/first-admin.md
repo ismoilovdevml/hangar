@@ -62,7 +62,7 @@ is `false`, for automated setups that keep using the configured password.
 
 | Install | Where |
 |---|---|
-| Compose (`install.sh`) | Generated: `admin` with the password in `<data>/secrets/initial-admin-password` (`bootstrap.admin_password_file`), printed once by the installer; the file is removed after the first password change |
+| Compose (`install.sh`) | Not used: the stack relies on the generated administrator. Its password file is `<data>/secrets/initial-admin-password`, and the installer prints the password once ([install-compose.md](install-compose.md#first-administrator)). |
 | Helm | `bootstrapAdmin.username` / `password`, or `bootstrapAdmin.existingSecret` (keys `admin-username`, `admin-password`) |
 | systemd | `/etc/hangar/hangar.env` |
 
