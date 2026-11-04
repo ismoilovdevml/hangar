@@ -63,8 +63,10 @@ type Options struct {
 	Events core.EventBus
 	// Repos is used for AnonymousRead; it may also be set later with
 	// Authorizer().SetRepositories.
-	Repos  core.RepositoryService
-	Logger *slog.Logger
+	Repos core.RepositoryService
+	// Directory is required when Config.LDAP is enabled.
+	Directory Directory
+	Logger    *slog.Logger
 	// Now overrides the clock (tests).
 	Now func() time.Time
 }
@@ -78,6 +80,8 @@ type Service struct {
 	events core.EventBus
 	log    *slog.Logger
 	now    func() time.Time
+
+	dir Directory
 
 	hasher    *Hasher
 	dummyHash string
@@ -117,6 +121,7 @@ func New(pool *pgxpool.Pool, opts Options) (*Service, error) {
 		cfg:        cfg,
 		audit:      opts.Audit,
 		events:     opts.Events,
+		dir:        opts.Directory,
 		log:        opts.Logger,
 		now:        opts.Now,
 		hasher:     NewHasher(cfg.Argon2, cfg.MaxConcurrentHashes),
@@ -130,6 +135,17 @@ func New(pool *pgxpool.Pool, opts Options) (*Service, error) {
 	}
 	if s.now == nil {
 		s.now = time.Now
+	}
+	if cfg.LDAP.Enabled && s.dir == nil {
+		return nil, fmt.Errorf("auth: auth.ldap is enabled but no directory is configured: %w", core.ErrInvalid)
+	}
+	if cfg.ExternalEnabled() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := s.prepareExternal(ctx)
+		cancel()
+		if err != nil {
+			return nil, fmt.Errorf("auth: %w", err)
+		}
 	}
 	s.basicKey = make([]byte, 32)
 	if _, err := rand.Read(s.basicKey); err != nil {

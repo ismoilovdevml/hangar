@@ -48,6 +48,11 @@ type Config struct {
 	// UsageFlushInterval is how often token last_used_at and user
 	// last_active_at are written back.
 	UsageFlushInterval time.Duration `yaml:"usage_flush_interval"`
+
+	// OIDC is single sign-on with an OpenID Connect provider.
+	OIDC OIDCConfig `yaml:"oidc"`
+	// LDAP is sign-in with an LDAP directory or Active Directory.
+	LDAP LDAPConfig `yaml:"ldap"`
 }
 
 // Argon2Params are argon2id cost parameters.
@@ -115,6 +120,8 @@ func DefaultConfig() Config {
 		AuthZCacheTTL:      5 * time.Second,
 		LoginRate:          RateLimit{PerMinute: 10, Burst: 10},
 		UsageFlushInterval: 30 * time.Second,
+		OIDC:               OIDCConfig{AutoCreate: true},
+		LDAP:               LDAPConfig{AutoCreate: true},
 	}
 }
 
@@ -193,6 +200,8 @@ func (c Config) WithDefaults() Config {
 	if c.UsageFlushInterval <= 0 {
 		c.UsageFlushInterval = d.UsageFlushInterval
 	}
+	c.OIDC = c.OIDC.withDefaults()
+	c.LDAP = c.LDAP.withDefaults()
 	return c
 }
 
@@ -217,5 +226,5 @@ func (c Config) Validate() error {
 	case c.MaxTokenLifetime < time.Hour:
 		return fmt.Errorf("auth.max_token_lifetime %s: must be at least 1h: %w", c.MaxTokenLifetime, core.ErrInvalid)
 	}
-	return nil
+	return c.validateExternal()
 }
