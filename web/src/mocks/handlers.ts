@@ -12,6 +12,7 @@ import * as data from './data';
 import { onMockLiveEvent, opsHandlers, resetOpsMockState } from './ops';
 import { resetSystemMockState, systemHandlers } from './system';
 import { resetSettingsState, settingsHandlers } from './settings';
+import { openAPIHandlers } from './openapi';
 import { allows } from '../lib/can';
 
 const api = (path: string) => `*/api/v1${path}`;
@@ -164,6 +165,7 @@ function validateRepository(body: RepositoryInput): string | null {
 }
 
 export const handlers = [
+  ...openAPIHandlers,
   ...catalogHandlers(
     guard,
     () => state.repositories.map((r) => r.name),

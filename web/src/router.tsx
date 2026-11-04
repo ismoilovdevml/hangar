@@ -14,6 +14,8 @@ import { isRange } from './lib/format';
 import { LoginPage } from './pages/LoginPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { safeRedirect } from './lib/redirect';
+import { ApiDocsPage } from './pages/apidocs/ApiDocsPage';
+import { DocsShell } from './pages/apidocs/DocsShell';
 import { OverviewPage } from './pages/overview/OverviewPage';
 import { RepoCreatePage } from './pages/repositories/RepoCreatePage';
 import { RepositoriesPage } from './pages/repositories/RepositoriesPage';
@@ -102,6 +104,21 @@ const changePasswordRoute = createRoute({
     if (!session.password_change_required) throw redirect({ href: safeRedirect(search.redirect), replace: true });
   },
   component: ChangePasswordPage,
+});
+
+/** Public pages that use the app shell when signed in and stand alone otherwise. */
+const docsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'docs',
+  component: DocsShell,
+});
+
+/** The API reference renders the server's public OpenAPI document. */
+const apiDocsRoute = createRoute({
+  getParentRoute: () => docsRoute,
+  path: '/api-docs',
+  staticData: { title: 'API reference', inSettings: true },
+  component: ApiDocsPage,
 });
 
 /** Everything behind sign-in shares the shell and the session check. */
@@ -330,6 +347,7 @@ const systemLogsRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   loginRoute,
   changePasswordRoute,
+  docsRoute.addChildren([apiDocsRoute]),
   appRoute.addChildren([
     overviewRoute,
     browseRoute,

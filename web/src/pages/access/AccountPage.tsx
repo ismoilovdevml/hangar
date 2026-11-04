@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useSession } from '../../api/hooks';
 import { IconPlus } from '../../components/icons';
 import { PageHeader } from '../../components/PageHeader';
@@ -180,7 +180,14 @@ function MyTokens() {
         </button>
       }
     >
-      <p className="meta panel-intro">For CLIs and scripts: use a token as the password with docker, npm, Maven, pip and NuGet, or as a Bearer token for the API.</p>
+      <p className="meta panel-intro">
+        For package clients, scripts, CI jobs and other automation: use a token as the password with docker, npm, Maven, pip and NuGet, or
+        as a Bearer token for the REST API (see the{' '}
+        <Link className="link-strong" to="/api-docs">
+          API reference
+        </Link>
+        ). Give each integration its own token with only the permissions it needs.
+      </p>
       {tokens.isError ? (
         <FormError error={tokens.error} />
       ) : (

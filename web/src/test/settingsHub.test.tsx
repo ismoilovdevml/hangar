@@ -49,8 +49,8 @@ describe('settings hub', () => {
     expect(within(mine).getByRole('link', { name: /^My account/ })).toHaveAttribute('href', '/account');
     expect(within(mine).getByRole('link', { name: /^Access tokens/ })).toHaveTextContent('1 token expiring soon');
     expect(within(mine).getByRole('link', { name: /^Access tokens/ })).toHaveAttribute('href', '/account#my-tokens-title');
-    // This build has no API reference page, so there is no link to one.
-    expect(screen.queryByRole('link', { name: /^API reference/ })).not.toBeInTheDocument();
+    // This build has the API reference page, so the hub links to it.
+    expect(screen.getByRole('link', { name: /^API reference/ })).toHaveAttribute('href', '/api-docs');
 
     const status = await screen.findByRole('link', { name: 'All systems normal' });
     expect(status).toHaveAttribute('href', '/system/status');

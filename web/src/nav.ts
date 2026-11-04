@@ -38,7 +38,8 @@ export type AppPath =
   | '/settings'
   | '/settings/system'
   | '/settings/authentication'
-  | '/settings/proxies';
+  | '/settings/proxies'
+  | '/api-docs';
 
 /** `system:<area>:<action>` the signed-in user must hold to see an entry (the server still authorizes every call). */
 export interface Requirement {
@@ -126,6 +127,7 @@ export const SETTINGS_PAGES: NavSection = {
       requires: { area: 'settings', action: 'read' },
     },
     { to: '/settings/system', label: 'System', icon: IconTerminal, keywords: 'version build addresses base url endpoints configuration hangar.yaml' },
+    { to: '/api-docs', label: 'API reference', icon: IconTerminal, keywords: 'rest api openapi endpoints curl automation integration scripts token' },
     {
       to: '/system/status',
       label: 'System status',

@@ -47,6 +47,7 @@ describe('settings pages', () => {
       '/settings/authentication',
       '/settings/proxies',
       '/settings/system',
+      '/api-docs',
       '/system/status',
       '/system/logs',
       '/audit',
