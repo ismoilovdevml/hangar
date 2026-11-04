@@ -24,7 +24,7 @@ test('login renders and signs in', async ({ page }) => {
     await page.setViewportSize(size);
     await page.goto('/login');
     await expect(page.getByRole('link', { name: 'Continue with company SSO' })).toBeVisible();
-    await expect(page.getByText('All systems normal')).toBeVisible();
+    await expect(page.getByText('All systems normal')).toHaveCount(0);
     await page.getByLabel('Username').fill('d.ismoilov');
     await page.getByLabel('Password').fill('password1234');
     await page.getByLabel('Remember me').check();

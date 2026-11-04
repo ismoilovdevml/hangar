@@ -7,7 +7,16 @@ import { useNow } from '../lib/useNow';
 
 const route = getRouteApi('/login');
 
-const STATUS_TONE = { ok: 'ok', degraded: 'warn', down: 'bad' } as const;
+const DOCS_URL = 'https://github.com/ismoilovdevml/hangar/tree/main/docs/guides';
+const API_URL = 'https://github.com/ismoilovdevml/hangar/blob/main/api/openapi.yaml';
+
+/** Messages for `?error=` set by the single sign-on callback. */
+const SSO_ERRORS: Record<string, string> = {
+  access_denied: 'Single sign-on was cancelled or denied.',
+  not_allowed: 'Your account is not allowed to use this registry. Ask an administrator for access.',
+  account_conflict: 'A local account with the same username already exists. Ask an administrator to link it.',
+  expired: 'The sign-in took too long. Please try again.',
+};
 
 function waitText(secs: number): string {
   if (secs <= 0) return 'now';
@@ -38,7 +47,7 @@ function loginError(err: unknown, expired: boolean): string {
 }
 
 export function LoginPage() {
-  const { redirect } = route.useSearch();
+  const { redirect, error: ssoError } = route.useSearch();
   const router = useRouter();
   const providers = useAuthProviders();
   const status = useSystemStatus();
@@ -52,7 +61,8 @@ export function LoginPage() {
 
   const p = providers.data;
   const sys = status.data;
-  const instance = sys?.instance_name;
+  const instance = sys?.instance_name && sys.instance_name.toLowerCase() !== 'hangar' ? sys.instance_name : 'Hangar';
+  const external = Boolean(p?.oidc || p?.ldap.enabled || (p?.saml.enabled && p.saml.start_url));
 
   const [missing, setMissing] = useState(false);
   // When a lockout (423) or rate limit (429) ends, as epoch milliseconds.
@@ -91,32 +101,22 @@ export function LoginPage() {
     ? 'Enter your username and password.'
     : login.isError
       ? loginError(login.error, secsLeft === 0)
-      : null;
+      : ssoError
+        ? (SSO_ERRORS[ssoError] ?? 'Single sign-on failed. Please try again.')
+        : null;
 
   return (
     <div className="login wall wall--center">
-      <header className="login__header">
-        <div className="brand brand--static">
-          <span className="brand__mark brand__mark--lg">
-            <IconLogo size={18} />
-          </span>
-          <span className="brand__name brand__name--lg">Hangar</span>
-        </div>
-        {sys && (
-          <p className="login__status" role="status">
-            <span className={`status__dot dot-${STATUS_TONE[sys.state]}`} aria-hidden="true" />
-            {sys.message}
-          </p>
-        )}
-      </header>
-
       <main className="login__main">
         <form className="login-card glass" onSubmit={onSubmit} aria-labelledby="login-title" noValidate>
           <div className="login-card__intro">
+            <span className="brand__mark brand__mark--lg login-card__mark" aria-hidden="true">
+              <IconLogo size={20} />
+            </span>
             <h1 id="login-title" className="login-card__title">
               Welcome back
             </h1>
-            <p className="login-card__sub">{instance ? `Sign in to ${instance} registry` : 'Sign in to your registry'}</p>
+            <p className="login-card__sub">Sign in to {instance}</p>
           </div>
 
           {p?.oidc && (
@@ -145,7 +145,9 @@ export function LoginPage() {
             </div>
           )}
 
-          <div className="divider">{realm === 'ldap' ? 'with your directory account' : 'or with a local account'}</div>
+          {external && (
+            <div className="divider">{realm === 'ldap' ? 'with your directory account' : 'or with a local account'}</div>
+          )}
 
           <label className="field">
             <span className="field__label">{realm === 'ldap' ? 'Directory username' : 'Username'}</span>
@@ -183,9 +185,6 @@ export function LoginPage() {
               <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
               Remember me
             </label>
-            <a href="/api/v1/auth/password-reset" className="link-strong">
-              Forgot password?
-            </a>
           </div>
 
           {errorText && (
@@ -198,18 +197,17 @@ export function LoginPage() {
             {login.isPending ? 'Signing in…' : waiting ? `Try again ${waitText(secsLeft ?? 0)}` : 'Sign in'}
           </button>
 
-          <p className="login-card__hint">
-            For CI and CLI, use an access token:
-            <br />
-            <code className="inline-code">hangar login --token</code>
-          </p>
         </form>
       </main>
 
       <footer className="login__footer">
         <span>{sys ? `Hangar ${sys.version}` : 'Hangar'}</span>
-        <a href="/docs/">Documentation</a>
-        <a href="/api/v1/openapi.yaml">API reference</a>
+        <a href={DOCS_URL} target="_blank" rel="noreferrer">
+          Documentation
+        </a>
+        <a href={API_URL} target="_blank" rel="noreferrer">
+          API reference
+        </a>
       </footer>
     </div>
   );
