@@ -169,6 +169,30 @@
   S3 drivers) instead of leaking a blob per request; sessions resume on any
   node and across restarts; the hourly built-in task `docker-upload-cleanup`
   ends abandoned sessions and releases leftover chunks to blob compaction.
+- **npm**: unpublished versions leave a tombstone and cannot be published
+  again (`403`), as on the public registry; set
+  `config.format.reuse_unpublished_versions: true` to allow reuse.
+  Unpublishing now also needs `repo:<name>:write` (it rewrites the package
+  state).
+- **npm**: package state changes (publish, dist-tags, deprecate, unpublish)
+  are serialised per package across all nodes with PostgreSQL advisory locks
+  (a dedicated pool of up to 16 connections per node), so concurrent dist-tag
+  updates on different nodes are no longer lost.
+- **Performance**: hosted npm packuments are rendered once per change (about
+  6x the throughput of the previous build; 100-version packument p95 from
+  99 ms to 4 ms); generated Maven metadata is cached with event invalidation
+  (document and checksums always agree); repository lookups are cached;
+  component and asset listings keep using their indexes under generic query
+  plans. Results: `docs/operations/performance.md`.
+- **NuGet**: hosted search uses a PostgreSQL full-text index (migration
+  `00070`). Words now match as prefixes of tokens: `json` and `newt` find
+  `Newtonsoft.Json`, a substring such as `tonsoft` no longer does.
+- **Events**: `asset.published` and `asset.deleted` for assets without a
+  component (repository metadata, raw files).
+- **Tools**: `cmd/hangar-seed` fills a database with synthetic components and
+  assets; k6 load scenarios in `test/load`.
+- **Docs**: user guides in `docs/guides` (getting started, one page per
+  client, CI integration, REST API) and a shorter README.
 
 ## M0 — Skeleton (2026-11-03)
 
