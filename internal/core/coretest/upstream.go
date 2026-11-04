@@ -115,7 +115,7 @@ func (f *fakeUpstream) Fetch(ctx context.Context, req core.UpstreamRequest) (*co
 		f.h.ServeHTTP(rec, hreq)
 		resp = rec.Result()
 	} else {
-		resp, err = http.DefaultClient.Do(hreq) //nolint:bodyclose // the body is returned to the caller
+		resp, err = http.DefaultClient.Do(hreq)
 		if err != nil {
 			return nil, fmt.Errorf("fetch %s: %w: %w", hreq.URL, err, core.ErrUpstream)
 		}
