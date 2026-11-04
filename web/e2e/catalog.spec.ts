@@ -83,6 +83,10 @@ test('search with qualifiers, facets and keyboard', async ({ page }) => {
   await box.press('Enter');
   await box.press('Enter');
   await expect(page).toHaveURL(/q=repo%3Adocker-prod/);
+  // Wait for the new results before moving focus into them.
+  await expect(page.getByRole('list', { name: 'Search results' }).getByRole('link').first()).toHaveText(
+    /auth-gateway|payments-api/,
+  );
   await box.press('ArrowDown');
   await expect(page.getByRole('list', { name: 'Search results' }).getByRole('link').first()).toBeFocused();
   await page.keyboard.press('Enter');
