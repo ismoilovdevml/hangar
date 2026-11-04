@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- **Web: Packages** (`/browse`): repository tree with packages and their
+  newest versions; package header with format, version selector, signed,
+  quarantine and security state; install command per client (npm/pnpm/Yarn,
+  pip/uv/Poetry, Maven/Gradle/pom, dotnet/PackageReference, Docker/Podman,
+  curl/wget) with copy; Overview (digest, checksums, size, downloads, last
+  download, licence, source), Versions (delete with confirmation, disabled
+  without delete rights) and Files/Layers (checksums, downloads with the
+  signed-in session). Dependents and Vulnerabilities tabs appear only when the
+  server reports them.
+- **Web: Search**: query box with qualifier and value completion, facets for
+  format, security and repository that edit the query, highlighted results,
+  sorting, paging, keyboard navigation and shareable URLs.
+- **Web: Blob stores**: totals (used, dedup savings, growth and time to full,
+  reclaimable), per-store usage against the soft quota and state; add
+  filesystem or S3 stores (secret write-only); store page with the
+  repositories using it, soft quota editing and deletion of empty stores.
+- **Web: Repository settings** (`/repositories/<name>/settings`, opened from a
+  repository row): the New repository form pre-filled, online/offline switch,
+  delete with typed confirmation and copyable client configuration.
+
 - **Secrets at rest**: proxy upstream passwords, tokens and header values,
   passwords in proxy remote and outbound proxy URLs, and S3 keys of blob
   stores are encrypted in the database (AES-256-GCM envelope encryption,
