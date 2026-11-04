@@ -59,7 +59,7 @@ test('deleting a version asks first', async ({ page }) => {
   await dialog.getByRole('button', { name: 'Delete version' }).click();
   await expect(dialog).toBeHidden();
   await expect(page).not.toHaveURL(/version=5\.3\.0/);
-  await expect(page.getByLabel('Version')).toHaveCount(0); // one version left: no selector
+  await expect(page.getByLabel('Version', { exact: true })).toHaveCount(0); // one version left: no selector
 });
 
 test('search with qualifiers, facets and keyboard', async ({ page }) => {
