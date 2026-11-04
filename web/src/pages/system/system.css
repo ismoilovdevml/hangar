@@ -8,34 +8,6 @@
 }
 .auto-refresh__pulse { width: 8px; height: 8px; }
 
-/* ---------- picker (select-only combobox) ---------- */
-.picker {
-  position: relative; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 4px 0 12px;
-  background: var(--glass-bg-strong); border: 1px solid var(--track); border-radius: var(--r-control);
-}
-.picker:focus-within { border-color: var(--lake); box-shadow: var(--focus-ring); }
-.picker__label { font-size: 13px; color: var(--ink-3); }
-.picker__button {
-  display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 8px; max-width: 260px;
-  border: 0; border-radius: var(--r-small); background: transparent; color: var(--ink);
-  font-size: 13px; font-weight: 700; cursor: pointer;
-}
-.picker__button:focus, .picker__button:focus-visible { outline: none; box-shadow: none; }
-.picker__button svg { color: var(--ink-3); flex: none; }
-.picker__value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.picker__list {
-  position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 100%; max-height: 300px; overflow-y: auto;
-  margin: 0; padding: 6px; list-style: none;
-  border-radius: var(--r-control); background: var(--glass-bg-strong); box-shadow: var(--shadow-modal);
-}
-.picker__option {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 40px; padding: 0 12px;
-  border-radius: var(--r-small); font-size: 14px; color: var(--ink); cursor: pointer; white-space: nowrap;
-}
-.picker__option.is-active { background: var(--lake-soft); color: var(--lake-ink); }
-.picker__option[aria-selected='true'] { font-weight: 700; }
-.picker__hint { font-size: 12px; font-weight: 500; color: var(--ink-3); }
-
 /* ---------- status ---------- */
 .system-summary__state { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .node-panel__badges { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -109,7 +81,6 @@
 
 @media (max-width: 860px) {
   .log-filter { width: 100%; }
-  .picker__button { max-width: 180px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .log-view { scroll-behavior: auto; }

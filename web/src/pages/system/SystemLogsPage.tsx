@@ -6,12 +6,12 @@ import { ErrorNote } from '../../components/ErrorNote';
 import { IconSearch } from '../../components/icons';
 import { IconDownload } from '../../components/opsIcons';
 import { PageHeader } from '../../components/PageHeader';
+import { Select, type SelectOption } from '../../components/Select';
 import { Panel } from '../../components/Panel';
 import { fetchWholeBuffer, isOlderServer, LOGS_REFRESH_MS, useLogStream, useSystemNodes, type LogFilters } from './api';
 import { AutoRefresh } from './AutoRefresh';
 import { LogList } from './LogList';
 import { isLogLevel, LOG_LEVELS, toJsonLines, type SystemLogsSearch } from './model';
-import { Picker, type PickerOption } from './Picker';
 import './system.css';
 
 const route = getRouteApi('/app/system/logs');
@@ -68,7 +68,7 @@ function Forbidden() {
 
 interface LogsViewProps {
   filters: LogFilters;
-  nodeOptions: PickerOption<string>[];
+  nodeOptions: SelectOption<string>[];
   onNode: (node: string) => void;
   onFilter: (p: SystemLogsSearch) => void;
 }
@@ -77,6 +77,8 @@ function LogsView({ filters, nodeOptions, onNode, onFilter }: LogsViewProps) {
   const [paused, setPaused] = useState(false);
   const stream = useLogStream(filters, paused);
   const [download, setDownload] = useState<{ busy: boolean; error?: string }>({ busy: false });
+  const nodeId = useId();
+  const levelId = useId();
 
   const forbidden = stream.error instanceof ApiRequestError && stream.error.status === 403;
   const node = stream.node ?? filters.node ?? '';
@@ -112,13 +114,24 @@ function LogsView({ filters, nodeOptions, onNode, onFilter }: LogsViewProps) {
       <Panel flush aria-label="Log records" className="logs-panel">
         <div className="repo-toolbar logs-toolbar">
           <div className="repo-toolbar__filters repo-toolbar__filters--start">
-            <Picker label="Node" options={nodeOptions} value={filters.node ?? ''} onChange={onNode} />
-            <Picker
-              label="Level"
-              options={LOG_LEVELS.map((l) => ({ value: l.value, label: l.label }))}
-              value={filters.level ?? ''}
-              onChange={(v) => onFilter({ level: isLogLevel(v) ? v : undefined })}
-            />
+            <div className="filter-select">
+              <label htmlFor={nodeId} className="filter-select__label">
+                Node
+              </label>
+              <Select id={nodeId} variant="inline" options={nodeOptions} value={filters.node ?? ''} onChange={onNode} />
+            </div>
+            <div className="filter-select">
+              <label htmlFor={levelId} className="filter-select__label">
+                Level
+              </label>
+              <Select
+                id={levelId}
+                variant="inline"
+                options={LOG_LEVELS.map((l) => ({ value: l.value, label: l.label }))}
+                value={filters.level ?? ''}
+                onChange={(v) => onFilter({ level: isLogLevel(v) ? v : undefined })}
+              />
+            </div>
             <TextFilter value={filters.q ?? ''} onChange={(q) => onFilter({ q })} />
           </div>
           <button type="button" className="button button--secondary" onClick={() => void onDownload()} disabled={download.busy || stream.status !== 'ready'}>
@@ -187,7 +200,7 @@ export function SystemLogsPage() {
   // Always name the node: behind a load balancer each request may reach a
   // different one, and a cursor only means something to the node that made it.
   const current = nodes.data?.current;
-  const nodeOptions: PickerOption<string>[] = nodes.data
+  const nodeOptions: SelectOption<string>[] = nodes.data
     ? nodes.data.items.map((n) => ({
         value: n.id,
         label: n.id,
