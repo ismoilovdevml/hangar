@@ -60,6 +60,8 @@ func TestLoggerNeverWritesSecrets(t *testing.T) {
 				"password": secrets[2], "nested": map[string]any{"token": secrets[0]}, "note": "with " + secrets[0],
 			}, "headers", map[string]string{"Authorization": "Bearer " + secrets[0], "X-Note": secrets[1]})
 			log.With("token", secrets[0]).WithGroup("req").Info("grouped", "client_secret", secrets[6], "args", []string{secrets[0]})
+			log.Info("request headers", "headers", http.Header{"Authorization": {"Bearer " + secrets[0]}, "Cookie": {secrets[6]}},
+				"form", url.Values{"password": {secrets[2]}}, "values", []any{"Basic " + secrets[4]})
 			out := buf.String()
 			assertNoSecrets(t, out)
 			if !strings.Contains(out, Redacted) {
