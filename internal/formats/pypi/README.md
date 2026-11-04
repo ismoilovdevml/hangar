@@ -60,13 +60,18 @@ link hashes, `data-requires-python`, `data-yanked`, and
   to HTML, and cached at `simple/{project}/index.json` for
   `proxy.metadata_ttl` (default 30m), then revalidated with ETag /
   Last-Modified; a stale copy is served when the remote fails. Remote 404s are
-  remembered for `proxy.negative_cache_ttl` (default 5m). Files are downloaded
-  on first request, verified against the page's sha256 (or md5), cached at the
-  same `packages/` paths and never re-fetched. Files on the remote's host go
-  through the repository's upstream (auth, circuit breaker); files on other
-  hosts are fetched with the shared outbound client only if the host is in
-  `config.format.file_hosts` (default `["files.pythonhosted.org"]`), without
-  the remote's credentials. Cache fills are published as the reading principal
+  remembered by the core upstream for `proxy.negative_cache_ttl` (default 5m;
+  `POST /api/v1/repositories/{name}/cache:invalidate` forgets them). Files
+  are downloaded on first request, verified against the page's sha256 (or
+  md5), cached at the same `packages/` paths and never re-fetched. All
+  downloads go through the repository's upstream (SSRF guard, circuit
+  breaker, request collapsing, outbound proxy, Retry-After handling, resumed
+  transfers). Files on other hosts are fetched only if the host is in
+  `config.format.file_hosts` (default `["files.pythonhosted.org"]`, `.domain`
+  suffixes allowed) or `proxy.related_hosts`, without the remote's
+  credentials. A remote answering 429 for an uncached page or file is passed
+  on as 429 with its `Retry-After`; in `proxy.offline` mode only cached
+  pages and files are served. Cache fills are published as the reading principal
   (the component service authorizes `repo:<proxy>:read` for proxy publishes,
   or `repo:<group>:read` when the read came through a group).
 - **Group**: project pages merge members in order, first member wins per

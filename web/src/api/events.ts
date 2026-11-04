@@ -87,6 +87,20 @@ function batchedInvalidate(qc: QueryClient, delayMs: number) {
   };
 }
 
+type LiveListener = (event: LiveEvent) => void;
+const listeners = new Set<LiveListener>();
+
+/**
+ * Lets a screen react to live events directly (task progress bars, run logs)
+ * instead of waiting for the batched refetch. Returns the unsubscribe function.
+ */
+export function subscribeLiveEvents(listener: LiveListener): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
 export const LiveStatusContext = createContext<LiveStatus>('connecting');
 
 export function useLiveStatus(): LiveStatus {
@@ -115,10 +129,20 @@ export function useLiveEvents(onUnauthorized: () => void, enabled = true): LiveS
       onUnauthorized: () => unauthorized.current(),
       onMessage: (m) => {
         if (!isLiveType(m.event)) return;
+        let event: LiveEvent;
         try {
-          applyLiveEvent(qc, { type: m.event, data: JSON.parse(m.data) } as LiveEvent, batch.invalidate);
+          event = { type: m.event, data: JSON.parse(m.data) } as LiveEvent;
+          applyLiveEvent(qc, event, batch.invalidate);
         } catch {
           // A malformed frame is skipped; the next refetch reconciles state.
+          return;
+        }
+        for (const l of listeners) {
+          try {
+            l(event);
+          } catch {
+            // One screen's bug must not stop the stream for the others.
+          }
         }
       },
     });

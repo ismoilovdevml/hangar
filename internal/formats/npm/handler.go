@@ -46,6 +46,9 @@ func writeError(w http.ResponseWriter, err error) {
 	if code == http.StatusUnauthorized {
 		w.Header().Set("WWW-Authenticate", `Basic realm="Hangar"`)
 	}
+	if code == http.StatusTooManyRequests {
+		core.SetRetryAfter(w.Header(), err) // npm retries 429 after Retry-After
+	}
 	writeJSON(w, code, map[string]string{"error": msg})
 }
 

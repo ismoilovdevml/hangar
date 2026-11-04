@@ -66,6 +66,12 @@ type UpstreamHealth interface {
 	List(ctx context.Context, cursor string, limit int) (core.Page[proxy.HealthItem], error)
 }
 
+// UpstreamCache forgets the remote answers a proxy repository remembers
+// (implemented by *proxy.Manager).
+type UpstreamCache interface {
+	InvalidateCache(ctx context.Context, repo *core.Repository) (proxy.CacheInvalidation, error)
+}
+
 // BlobStoreProbe reports the live state of a blob store by name: "ok",
 // "degraded", "unavailable" or "read_only", plus the recent write latency
 // (nil if unknown). The storage subsystem implements it.
@@ -100,6 +106,7 @@ type API struct {
 	Search         Searcher
 	Audit          AuditReader
 	Upstreams      UpstreamHealth
+	UpstreamCache  UpstreamCache
 	BlobStoreProbe BlobStoreProbe
 	// Cleanup manages cleanup policies; Tasks manages scheduled tasks and runs.
 	Cleanup CleanupPolicies
@@ -149,6 +156,7 @@ func (a *API) Mount(r chi.Router) {
 		r.Get("/repositories/{name}", a.getRepository)
 		r.Put("/repositories/{name}", a.updateRepository)
 		r.Delete("/repositories/{name}", a.deleteRepository)
+		r.Post("/repositories/{name}/cache:invalidate", a.invalidateRepositoryCache)
 
 		r.Get("/blob-stores", a.listBlobStores)
 		r.Post("/blob-stores", a.createBlobStore)

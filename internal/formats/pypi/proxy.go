@@ -120,13 +120,6 @@ func (h *handler) metadataTTL(repo *core.Repository) time.Duration {
 	return DefaultMetadataTTL
 }
 
-func (h *handler) negativeTTL(repo *core.Repository) time.Duration {
-	if d := repo.Config.Proxy.NegativeCacheTTL.D(); d > 0 {
-		return d
-	}
-	return DefaultNegativeCacheTTL
-}
-
 // index returns the remote's project page of name, from cache while fresh
 // (ProxyConfig.MetadataTTL), revalidating with ETag/Last-Modified after that,
 // and serving the stale copy when the remote is unreachable.
@@ -143,13 +136,6 @@ func (h *handler) index(ctx context.Context, repo *core.Repository, name string)
 		if time.Since(fetched) < h.metadataTTL(repo) {
 			proxy.NoteCacheHit(ctx, cachedAsset.Size)
 			return cached, nil
-		}
-	} else {
-		h.mu.Lock()
-		until, neg := h.negative[key]
-		h.mu.Unlock()
-		if neg && time.Now().Before(until) {
-			return nil, fmt.Errorf("project %q (remote, cached miss): %w", name, core.ErrNotFound)
 		}
 	}
 	v, err, _ := h.flight.Do("index:"+key, func() (any, error) {
@@ -232,9 +218,6 @@ func (h *handler) refreshIndex(ctx context.Context, repo *core.Repository, name 
 		h.mu.Unlock()
 		return cached, nil
 	case resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone:
-		h.mu.Lock()
-		h.negative[key] = time.Now().Add(h.negativeTTL(repo))
-		h.mu.Unlock()
 		return nil, fmt.Errorf("project %q not found on remote: %w", name, core.ErrNotFound)
 	case resp.StatusCode != http.StatusOK:
 		return stale(fmt.Errorf("remote answered %d for project %q: %w", resp.StatusCode, name, core.ErrUpstream))
@@ -260,7 +243,6 @@ func (h *handler) refreshIndex(ctx context.Context, repo *core.Repository, name 
 	}
 	h.mu.Lock()
 	h.checked[key] = time.Now()
-	delete(h.negative, key)
 	h.mu.Unlock()
 	return idx, nil
 }
@@ -593,10 +575,13 @@ func (h *handler) fetchAndStore(ctx context.Context, repo *core.Repository, name
 	return assets[0], nil
 }
 
-// fetchURL GETs an absolute URL from a proxy's remote page: through the
-// repository's Upstream when it is under the remote URL (so remote auth,
-// circuit breaker and SSRF guard apply), otherwise through the shared
-// outbound client, only for allowed file hosts and without remote credentials.
+// fetchURL GETs an absolute URL from a proxy's remote page through the
+// repository's Upstream: a URL under the remote URL as a remote path, any
+// other as a related-host URL (files.pythonhosted.org for pypi.org). The
+// Upstream applies the SSRF guard, breaker, request collapsing, outbound
+// proxy and rate limits to both, and sends the remote's credentials only to
+// the remote's own origin. Hosts other than the remote's must be in
+// file_hosts or the repository's related_hosts.
 func (h *handler) fetchURL(ctx context.Context, repo *core.Repository, raw string) (io.ReadCloser, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -607,34 +592,21 @@ func (h *handler) fetchURL(ctx context.Context, repo *core.Repository, raw strin
 	if err != nil {
 		return nil, fmt.Errorf("remote URL: %w", core.ErrInvalid)
 	}
-	if strings.HasPrefix(raw, base) {
-		up, err := h.deps.Upstreams.ForRepository(ctx, repo)
-		if err != nil {
-			return nil, err
+	req := core.UpstreamRequest{Path: strings.TrimPrefix(raw, base)}
+	if !strings.HasPrefix(raw, base) {
+		cfg := formatConfig(repo)
+		if !fileHostAllowed(cfg, remote.Host, u.Host) && !core.MatchHost(repo.Config.Proxy.RelatedHosts, u.Host) {
+			return nil, fmt.Errorf("remote links to %s, which is not in file_hosts: %w", u.Host, core.ErrUpstream)
 		}
-		resp, err := up.Fetch(ctx, core.UpstreamRequest{Path: strings.TrimPrefix(raw, base)})
-		if err != nil {
-			return nil, err
-		}
-		return checkFileResponse(resp.StatusCode, resp.Body, raw)
+		req = core.UpstreamRequest{URL: raw, RelatedHosts: cfg.FileHosts}
 	}
-	if !fileHostAllowed(formatConfig(repo), remote.Host, u.Host) {
-		return nil, fmt.Errorf("remote links to %s, which is not in file_hosts: %w", u.Host, core.ErrUpstream)
-	}
-	if h.deps.HTTPClients == nil {
-		return nil, fmt.Errorf("no outbound HTTP client configured: %w", core.ErrUpstream)
-	}
-	client, err := h.deps.HTTPClients.ForUpstream(u.Scheme+"://"+u.Host+"/", repo.Config.Proxy.HTTP, nil)
+	up, err := h.deps.Upstreams.ForRepository(ctx, repo)
 	if err != nil {
-		return nil, fmt.Errorf("outbound client: %w: %w", err, core.ErrUpstream)
+		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	resp, err := up.Fetch(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("remote file URL %q: %w", raw, core.ErrUpstream)
-	}
-	resp, err := client.Do(req) //nolint:bodyclose // closed by checkFileResponse or the caller
-	if err != nil {
-		return nil, fmt.Errorf("fetch %s: %w: %w", u.Redacted(), err, core.ErrUpstream)
+		return nil, err
 	}
 	return checkFileResponse(resp.StatusCode, resp.Body, raw)
 }

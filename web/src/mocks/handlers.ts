@@ -6,6 +6,7 @@
 import { delay, http, HttpResponse } from 'msw';
 import type { ApiError, LoginRequest, OverviewRange, Repository, RepositoryInput, RepositoryType } from '../api/types';
 import * as data from './data';
+import { onMockLiveEvent, opsHandlers, resetOpsMockState } from './ops';
 
 const api = (path: string) => `*/api/v1${path}`;
 
@@ -27,6 +28,7 @@ let state = initialState();
 
 export function resetMockState(): void {
   state = initialState();
+  resetOpsMockState();
 }
 
 /** Test helpers: inspect or change the mock server's state. */
@@ -67,10 +69,16 @@ export const LIVE_INTERVAL_MS = 25_000;
 function eventStream(): ReadableStream<Uint8Array> {
   const enc = new TextEncoder();
   let timer: ReturnType<typeof setInterval> | undefined;
+  let unsubscribe: (() => void) | undefined;
   let n = 0;
   return new ReadableStream({
     start(controller) {
       controller.enqueue(enc.encode('retry: 3000\n\n'));
+      // Task progress from runs started in the mocked task API.
+      unsubscribe = onMockLiveEvent((type, payload) => {
+        n++;
+        controller.enqueue(enc.encode(`id: ${n}\nevent: ${type}\ndata: ${JSON.stringify(payload)}\n\n`));
+      });
       timer = setInterval(() => {
         const seed = data.LIVE_SEEDS[n % data.LIVE_SEEDS.length]!;
         n++;
@@ -80,6 +88,7 @@ function eventStream(): ReadableStream<Uint8Array> {
     },
     cancel() {
       clearInterval(timer);
+      unsubscribe?.();
     },
   });
 }
@@ -222,9 +231,7 @@ export const handlers = [
   }),
 
   http.get(api('/blob-stores'), ({ request }) => guard(request) ?? HttpResponse.json(data.blobStoreList())),
-  http.get(api('/cleanup-policies'), ({ request }) =>
-    guard(request) ?? HttpResponse.json({ items: data.cleanupPolicies, next_cursor: null }),
-  ),
+  ...opsHandlers(guard),
 
   http.get(api('/events'), ({ request }) =>
     guard(request) ??

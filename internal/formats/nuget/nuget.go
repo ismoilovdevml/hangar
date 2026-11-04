@@ -272,6 +272,9 @@ func (h *handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case code == http.StatusUnauthorized:
 		w.Header().Set("WWW-Authenticate", `Basic realm="Hangar NuGet"`)
 		msg = "authentication required"
+	case code == http.StatusTooManyRequests:
+		h.log().WarnContext(r.Context(), "nuget upstream rate limited", "path", r.URL.Path, "err", err)
+		core.SetRetryAfter(w.Header(), err)
 	case code >= 500:
 		h.log().ErrorContext(r.Context(), "nuget request failed", "method", r.Method, "path", r.URL.Path, "err", err)
 		if !errors.Is(err, core.ErrUpstream) && !errors.Is(err, core.ErrNotImplemented) {

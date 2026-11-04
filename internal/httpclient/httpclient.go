@@ -37,6 +37,14 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/core"
 )
 
+// HTTP/2 connection health: a ping is sent after http2PingAfter without
+// frames, and the connection is closed when it is not answered within
+// http2PingTimeout.
+const (
+	http2PingAfter   = 30 * time.Second
+	http2PingTimeout = 15 * time.Second
+)
+
 // Options are the server-wide defaults (config section `http`).
 type Options struct {
 	Proxy          string
@@ -276,12 +284,27 @@ func (f *Factory) transport(cfg core.UpstreamHTTP) (*http.Transport, error) {
 			f.addProxyAddr(pu) // f.mu is held by ForUpstream
 		}
 	}
+	idlePerHost := f.opts.MaxIdleConnsPerHost
+	if cfg.MaxIdleConnsPerHost > 0 {
+		idlePerHost = cfg.MaxIdleConnsPerHost
+	}
+	// HTTP/2 is negotiated by ALPN (also through CONNECT proxies); HTTP/1.1
+	// keeps working for remotes and proxies that do not offer it. Health
+	// pings detect HTTP/2 connections that died silently (NAT or proxy idle
+	// timeouts), which would otherwise hang every stream multiplexed on them.
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	if !cfg.DisableHTTP2 {
+		protocols.SetHTTP2(true)
+	}
 	return &http.Transport{
 		Proxy:                 proxy,
 		DialContext:           f.dialContext(connect),
-		ForceAttemptHTTP2:     true,
+		Protocols:             protocols,
+		HTTP2:                 &http.HTTP2Config{SendPingTimeout: http2PingAfter, PingTimeout: http2PingTimeout},
 		MaxIdleConns:          f.opts.MaxIdleConns,
-		MaxIdleConnsPerHost:   f.opts.MaxIdleConnsPerHost,
+		MaxIdleConnsPerHost:   idlePerHost,
+		MaxConnsPerHost:       cfg.MaxConnsPerHost,
 		IdleConnTimeout:       f.opts.IdleConnTimeout,
 		TLSHandshakeTimeout:   f.opts.TLSHandshakeTimeout,
 		ResponseHeaderTimeout: read,
@@ -355,8 +378,8 @@ func parseLooseProxy(raw string) (*url.URL, error) {
 
 func cacheKey(remote *url.URL, cfg core.UpstreamHTTP, auth *core.UpstreamAuth) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%t\x00%d\x00%d", remote.Scheme, remote.Host, cfg.Proxy, cfg.CABundle,
-		cfg.InsecureSkipVerify, cfg.ConnectTimeout, cfg.ReadTimeout)
+	fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%t\x00%d\x00%d\x00%d\x00%d\x00%t", remote.Scheme, remote.Host, cfg.Proxy, cfg.CABundle,
+		cfg.InsecureSkipVerify, cfg.ConnectTimeout, cfg.ReadTimeout, cfg.MaxConnsPerHost, cfg.MaxIdleConnsPerHost, cfg.DisableHTTP2)
 	if auth != nil {
 		fmt.Fprintf(h, "\x00%s\x00%s\x00%s\x00%s\x00%s", auth.Kind, auth.Username, auth.Password, auth.Token, auth.HeaderName)
 	}

@@ -283,6 +283,27 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /repositories/{name}/cache:invalidate:
+    parameters:
+      - $ref: "#/components/parameters/RepositoryName"
+    post:
+      tags: [repositories]
+      operationId: invalidateRepositoryCache
+      description: >-
+        Proxy repositories only. Forgets the remote answers the repository
+        remembers in memory on every node — 404s in the negative cache and
+        rate-limit (429 Retry-After) holds — so the next request asks the
+        remote again. Cached content is kept. Requires repository
+        administration; audited as `repository.cache_invalidate`.
+      responses:
+        "200":
+          description: Invalidated; counts are for the node that answered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CacheInvalidation" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ---------------------------------------------------------------- blob stores
   /blob-stores:
@@ -1656,6 +1677,17 @@ components:
         latency_ms:
           type: [integer, "null"]
           description: p50 over the last 5 minutes; null without recent traffic
+    CacheInvalidation:
+      type: object
+      required: [repository, negative_entries, rate_limited_hosts]
+      properties:
+        repository: { type: string }
+        negative_entries:
+          type: integer
+          description: Remembered remote 404s dropped on the answering node
+        rate_limited_hosts:
+          type: integer
+          description: Hosts whose rate-limit hold was lifted on the answering node
     UpstreamHealthPage:
       type: object
       required: [items]
@@ -1695,7 +1727,26 @@ components:
           type: boolean
           description: Disable TLS verification for this remote (audited)
         connect_timeout: { $ref: "#/components/schemas/Duration" }
-        read_timeout: { $ref: "#/components/schemas/Duration" }
+        read_timeout:
+          $ref: "#/components/schemas/Duration"
+          description: Wait for response headers
+        body_timeout:
+          $ref: "#/components/schemas/Duration"
+          description: >-
+            Longest wait for more body bytes (default 60s). A stalled
+            transfer is aborted, or resumed with a Range request when the
+            remote supports it; there is no overall limit for large blobs.
+        max_conns_per_host:
+          type: integer
+          minimum: 0
+          description: Connection cap per remote host; 0 = unlimited
+        max_idle_conns_per_host:
+          type: integer
+          minimum: 0
+          description: Keep-alive pool size per host; 0 = server-wide `http.max_idle_conns_per_host`
+        disable_http2:
+          type: boolean
+          description: Speak HTTP/1.1 only (remotes or TLS-inspecting proxies with broken HTTP/2)
     ConnectorConfig:
       type: object
       description: Dedicated entry point, mainly for Docker clients that need a host root
@@ -1728,6 +1779,24 @@ components:
             http: { $ref: "#/components/schemas/UpstreamHTTP" }
             circuit_failures: { type: integer, minimum: 0 }
             circuit_open_for: { $ref: "#/components/schemas/Duration" }
+            related_hosts:
+              type: array
+              description: >-
+                Other hosts the remote links to that may be fetched on its
+                behalf (tarball or file CDNs, API hosts): host, host:port or
+                `.domain` for its subdomains. Never sent the remote's
+                credentials. Formats add their own (PyPI `files.pythonhosted.org`,
+                the hosts a NuGet service index names).
+              items: { type: string }
+            offline:
+              type: boolean
+              description: >-
+                Offline mode: never contact the remote; serve cached content
+                (also when stale) and answer 404 for anything not cached.
+            max_concurrent_requests:
+              type: integer
+              minimum: 0
+              description: Requests in flight to the remote and its related hosts; 0 = unlimited
         group:
           type: object
           required: [members]
@@ -2198,7 +2267,8 @@ components:
         next_cursor: { $ref: "#/components/schemas/NextCursor" }
     CleanupCandidate:
       type: object
-      required: [id, repository, format, namespace, name, version, size_bytes, created_at, last_downloaded_at, download_count]
+      required: [id, repository, format, namespace, name, version, size_bytes, created_at, published_at, last_downloaded_at,
+        download_count]
       properties:
         id: { type: string }
         repository: { type: string }
@@ -2208,6 +2278,9 @@ components:
         version: { type: string }
         size_bytes: { $ref: "#/components/schemas/Bytes" }
         created_at: { $ref: "#/components/schemas/Timestamp" }
+        published_at:
+          allOf: [{ $ref: "#/components/schemas/Timestamp" }]
+          description: Same as created_at (the name PublishedComponent uses)
         last_downloaded_at: { type: [string, "null"], format: date-time }
         download_count: { type: integer }
     CleanupRepositorySummary:

@@ -58,9 +58,14 @@ versions each) are inlined in the index, from 128 on pages are linked.
   service index path is `format.service_index` (default `v3/index.json`).
   Metadata is cached for `metadata_ttl` (0 = 1h, negative = always
   revalidate), stale copies are served when the remote fails; packages are
-  cached forever. Every upstream URL is rewritten to Hangar. Resources outside
-  `remote_url` (nuget.org's search host) are fetched with `Deps.HTTPClients`
-  without the remote's credentials. Cache fills are published as the reader;
+  cached forever. Every upstream URL is rewritten to Hangar. Resources the
+  service index places outside `remote_url` (nuget.org's search host
+  `azuresearch-*.nuget.org`) are related hosts: fetched through the
+  repository's upstream (SSRF guard, breaker, outbound proxy, rate limits)
+  without the remote's credentials. When the search service fails, is rate
+  limited or the repository is in `proxy.offline` mode, search answers from
+  the cached packages; other uncached reads answer 429 (with `Retry-After`)
+  or 404 respectively. Cache fills are published as the reader;
   a read through a group fills a proxy member's cache on the group's
   `repo:<group>:read`.
 - Group: versions, registrations and search results are merged across

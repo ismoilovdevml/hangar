@@ -177,6 +177,42 @@ func TestProxyServesStaleWhenRemoteFails(t *testing.T) {
 	}
 }
 
+func TestProxyRateLimitedAndOffline(t *testing.T) {
+	fx := newFixture(t, proxyRepo("raw-proxy", time.Minute, 0))
+	rm := newRemote(map[string]string{"/f": "cached"})
+	fx.env.Upstreams.Set("raw-proxy", rm)
+	fx.do(http.MethodGet, "raw-proxy/f", nil, as("bob"))
+	fx.env.Upstreams.Set("raw-proxy", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "12")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	fx.clock.Advance(time.Hour)
+	if code, _, body := fx.do(http.MethodGet, "raw-proxy/f", nil, as("bob")); code != http.StatusOK || body != "cached" {
+		t.Errorf("stale while rate limited = %d %q", code, body)
+	}
+	if code, h, _ := fx.do(http.MethodGet, "raw-proxy/never-cached", nil, as("bob")); code != http.StatusTooManyRequests || h.Get("Retry-After") != "12" {
+		t.Errorf("uncached while rate limited = %d Retry-After=%q, want 429 12", code, h.Get("Retry-After"))
+	}
+
+	// Offline mode: cached content only, misses are 404.
+	fx.env.Upstreams.Set("raw-proxy", rm)
+	repo, err := fx.env.Repos.Get(context.Background(), "raw-proxy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	offline := *repo
+	pc := *offline.Config.Proxy
+	pc.Offline = true
+	offline.Config.Proxy = &pc
+	fx.env.Repos.Put(&offline)
+	if code, _, body := fx.do(http.MethodGet, "raw-proxy/f", nil, as("bob")); code != http.StatusOK || body != "cached" {
+		t.Errorf("offline cached = %d %q", code, body)
+	}
+	if code, _, _ := fx.do(http.MethodGet, "raw-proxy/never-cached", nil, as("bob")); code != http.StatusNotFound {
+		t.Errorf("offline uncached = %d, want 404", code)
+	}
+}
+
 func TestProxyUnreachableRemote(t *testing.T) {
 	dead := httptest.NewServer(http.NotFoundHandler())
 	url := dead.URL

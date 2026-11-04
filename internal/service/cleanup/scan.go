@@ -29,14 +29,16 @@ type position struct {
 
 // Candidate is a version a policy deletes (schema CleanupCandidate).
 type Candidate struct {
-	ID               string     `json:"id"`
-	Repository       string     `json:"repository"`
-	Format           string     `json:"format"`
-	Namespace        string     `json:"namespace"`
-	Name             string     `json:"name"`
-	Version          string     `json:"version"`
-	SizeBytes        int64      `json:"size_bytes"`
-	CreatedAt        time.Time  `json:"created_at"`
+	ID         string    `json:"id"`
+	Repository string    `json:"repository"`
+	Format     string    `json:"format"`
+	Namespace  string    `json:"namespace"`
+	Name       string    `json:"name"`
+	Version    string    `json:"version"`
+	SizeBytes  int64     `json:"size_bytes"`
+	CreatedAt  time.Time `json:"created_at"`
+	// PublishedAt equals CreatedAt (the field name PublishedComponent uses).
+	PublishedAt      time.Time  `json:"published_at"`
 	LastDownloadedAt *time.Time `json:"last_downloaded_at"`
 	DownloadCount    int64      `json:"download_count"`
 }
@@ -164,7 +166,8 @@ ORDER BY c.namespace, c.name, c.created_at DESC, c.id DESC`, repo.ID, first[0], 
 			case deleteIt:
 				c := pkg[i]
 				cand := Candidate{ID: c.ID, Repository: repo.Name, Format: repo.Format, Namespace: c.Namespace, Name: c.Name,
-					Version: c.Version, SizeBytes: c.Size, CreatedAt: c.CreatedAt.UTC(), DownloadCount: c.DownloadCount}
+					Version: c.Version, SizeBytes: c.Size, CreatedAt: c.CreatedAt.UTC(), PublishedAt: c.CreatedAt.UTC(),
+					DownloadCount: c.DownloadCount}
 				if c.LastDownloadedAt != nil {
 					t := c.LastDownloadedAt.UTC()
 					cand.LastDownloadedAt = &t

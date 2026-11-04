@@ -216,3 +216,40 @@ func TestM1Settings(t *testing.T) {
 		}
 	}
 }
+
+func TestObservabilitySettings(t *testing.T) {
+	t.Setenv("HANGAR_CONFIG", "")
+	t.Setenv("HANGAR_DATABASE_URL", "postgres://x/y")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o := cfg.Observability; o.Tracing.Enabled || o.Tracing.SampleRatio != 0.1 || o.AccessLog.SampleRatio != 1 || o.Tracing.ServiceName != "hangar" {
+		t.Errorf("defaults = %+v", o)
+	}
+
+	t.Setenv("HANGAR_OBSERVABILITY_TRACING_ENABLED", "true")
+	t.Setenv("HANGAR_OBSERVABILITY_TRACING_ENDPOINT", "https://otel:s3cret@collector.example:4318")
+	t.Setenv("HANGAR_OBSERVABILITY_TRACING_SAMPLE_RATIO", "0.25")
+	t.Setenv("HANGAR_OBSERVABILITY_ACCESS_LOG_SAMPLE_RATIO", "0.5")
+	cfg, err = Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o := cfg.Observability; !o.Tracing.Enabled || o.Tracing.SampleRatio != 0.25 || o.AccessLog.SampleRatio != 0.5 {
+		t.Errorf("parsed = %+v", o)
+	}
+	if strings.Contains(cfg.Redacted().Observability.Tracing.Endpoint, "s3cret") {
+		t.Error("tracing endpoint password not redacted")
+	}
+
+	t.Setenv("HANGAR_OBSERVABILITY_TRACING_ENDPOINT", "")
+	t.Setenv("HANGAR_OBSERVABILITY_TRACING_SAMPLE_RATIO", "1.5")
+	t.Setenv("HANGAR_OBSERVABILITY_ACCESS_LOG_SAMPLE_RATIO", "-1")
+	_, err = Load("")
+	for _, want := range []string{"tracing.endpoint", "tracing.sample_ratio", "access_log.sample_ratio"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("validation error %v does not mention %s", err, want)
+		}
+	}
+}
