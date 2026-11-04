@@ -13,12 +13,13 @@ import { usePermissions } from '../../api/permissions';
 import type { Finding, FindingList, ScanningStatus, Severity } from '../../api/types';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
-import { FormatBadge } from '../../components/FormatBadge';
+import { FormatIcon } from '../../components/FormatIcon';
 import { IconSearch } from '../../components/icons';
 import { KpiCard, KpiCardSkeleton } from '../../components/KpiCard';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
+import { Select, type SelectOption } from '../../components/Select';
 import { relativeTime } from '../../lib/format';
 import { plural } from '../../lib/overview';
 import {
@@ -34,7 +35,6 @@ import {
   type VulnSearch,
 } from '../../lib/vulnerabilities';
 import { FindingDrawer } from './FindingDrawer';
-import { Picker } from './Picker';
 import { TrendChart } from './TrendChart';
 import './vulnerabilities.css';
 
@@ -156,6 +156,19 @@ function ScannerPanel({ status, repo, canScanRepo }: { status?: ScanningStatus; 
   );
 }
 
+/** A labelled filter pill around the shared Select. */
+function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: readonly SelectOption[]; onChange: (v: string) => void }) {
+  const id = useId();
+  return (
+    <div className="filter-select">
+      <label htmlFor={id} className="filter-select__label">
+        {label}
+      </label>
+      <Select id={id} variant="inline" value={value} options={options} onChange={onChange} />
+    </div>
+  );
+}
+
 /** Free-text filter: typed locally, written to the URL after a short pause. */
 function SearchFilter({ value, onChange }: { value: string; onChange: (q: string | undefined) => void }) {
   const [draft, setDraft] = useState(value);
@@ -237,7 +250,10 @@ export function VulnerabilitiesPage() {
   const severityOptions = [{ value: '', label: 'All' }, ...SEVERITIES.map((s) => ({ value: s, label: SEVERITY_META[s].label }))];
   const statusOptions = STATUS_FILTERS.map((f) => ({ value: f.id, label: f.label }));
   const fixOptions = FIX_FILTERS.map((f) => ({ value: f.id, label: f.label }));
-  const repoOptions = [{ value: '', label: 'All' }, ...(repos.data ?? []).map((r) => ({ value: r.name, label: r.name }))];
+  const repoOptions: SelectOption[] = [
+    { value: '', label: 'All' },
+    ...(repos.data ?? []).map((r) => ({ value: r.name, label: r.name, icon: <FormatIcon format={r.format} size={16} label={null} /> })),
+  ];
   if (search.repo && !repoOptions.some((o) => o.value === search.repo)) repoOptions.push({ value: search.repo, label: search.repo });
 
   const columns: Column<Finding>[] = [
@@ -273,7 +289,7 @@ export function VulnerabilitiesPage() {
       header: 'Package',
       cell: (f) => (
         <span className="vrow-package">
-          {f.component && <FormatBadge format={f.component.format} size={28} />}
+          {f.component && <FormatIcon format={f.component.format} size={18} />}
           <span className="vrow-package__name">{packageAt(f)}</span>
         </span>
       ),
@@ -345,20 +361,20 @@ export function VulnerabilitiesPage() {
       <Panel flush aria-label="Findings" className="vfindings">
         <div className="repo-toolbar">
           <div className="repo-toolbar__filters repo-toolbar__filters--start vfilters">
-            <Picker
+            <FilterSelect
               label="Severity"
               value={search.severity ?? ''}
               options={severityOptions}
               onChange={(v) => setFilter({ severity: (v || undefined) as Severity | undefined })}
             />
-            <Picker
+            <FilterSelect
               label="Status"
               value={search.status ?? 'active'}
               options={statusOptions}
               onChange={(v) => setFilter({ status: v === 'active' ? undefined : (v as VulnSearch['status']) })}
             />
-            <Picker label="Fix" value={search.fix ?? 'any'} options={fixOptions} onChange={(v) => setFilter({ fix: v === 'any' ? undefined : (v as VulnSearch['fix']) })} />
-            <Picker label="Repository" value={search.repo ?? ''} options={repoOptions} onChange={(v) => setFilter({ repo: v || undefined })} />
+            <FilterSelect label="Fix" value={search.fix ?? 'any'} options={fixOptions} onChange={(v) => setFilter({ fix: v === 'any' ? undefined : (v as VulnSearch['fix']) })} />
+            <FilterSelect label="Repository" value={search.repo ?? ''} options={repoOptions} onChange={(v) => setFilter({ repo: v || undefined })} />
             <SearchFilter value={search.q ?? ''} onChange={(q) => setFilter({ q })} />
           </div>
         </div>

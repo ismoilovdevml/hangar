@@ -44,34 +44,33 @@ describe('vulnerabilities', () => {
     const table = await screen.findByRole('table', { name: 'Findings' });
     await within(table).findByRole('button', { name: 'GHSA-ghhp-997w-qr28' });
 
-    const severity = screen.getByRole('button', { name: 'Severity All' });
-    expect(severity).toHaveAttribute('aria-haspopup', 'listbox');
+    const severity = screen.getByRole('combobox', { name: 'Severity' });
+    expect(severity).toHaveTextContent('All');
     severity.focus();
     await user.keyboard('{ArrowDown}');
-    const listbox = screen.getByRole('listbox', { name: 'Severity' });
-    expect(listbox).toHaveFocus();
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
     await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
     await waitFor(() => expect(search(history).get('severity')).toBe('high'));
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Severity High' })).toHaveFocus();
+    expect(screen.getByRole('combobox', { name: 'Severity' })).toHaveTextContent('High');
     await waitFor(() => expect(within(table).queryByRole('button', { name: 'GHSA-ghhp-997w-qr28' })).not.toBeInTheDocument());
     expect(within(table).getByRole('button', { name: 'GHSA-p6mc-m468-83gw' })).toBeInTheDocument();
 
     // Status: waived only.
-    await user.click(screen.getByRole('button', { name: 'Status Not fixed' }));
+    await user.click(screen.getByRole('combobox', { name: 'Status' }));
     await user.click(screen.getByRole('option', { name: 'Waived' }));
     await waitFor(() => expect(search(history).get('status')).toBe('waived'));
     await within(table).findByRole('button', { name: 'GHSA-35jh-r3h4-6jhm' });
     expect(within(table).getAllByRole('row')).toHaveLength(2);
 
     // Escape closes without choosing.
-    await user.click(screen.getByRole('button', { name: 'Fix Any' }));
+    await user.click(screen.getByRole('combobox', { name: 'Fix' }));
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     expect(search(history).get('fix')).toBeNull();
 
     // Nothing matches: a way back.
-    await user.click(screen.getByRole('button', { name: 'Fix Any' }));
+    await user.click(screen.getByRole('combobox', { name: 'Fix' }));
     await user.click(screen.getByRole('option', { name: 'No fix yet' }));
     expect(await within(table).findByText(/No findings match these filters/)).toBeInTheDocument();
     await user.click(within(table).getByRole('link', { name: 'Clear filters' }));
