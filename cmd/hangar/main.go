@@ -27,6 +27,7 @@ Usage:
                                                     create the first administrator
   hangar admin   token create --user NAME --name LABEL --scopes LIST [--expires 90d]
                                                     create a personal access token
+  hangar admin   rotate-secrets [--dry-run]        re-encrypt stored secrets with security.secret_key
   hangar version [--json]                           print build information
 
 Configuration is read from --config (or $HANGAR_CONFIG) and HANGAR_* environment

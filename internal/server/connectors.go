@@ -113,6 +113,7 @@ func (c *ConnectorListeners) listen(port int) (*http.Server, error) {
 		Handler:           c.handler,
 		ReadHeaderTimeout: c.cfg.ReadHeaderTimeout,
 		IdleTimeout:       c.cfg.IdleTimeout,
+		MaxHeaderBytes:    c.cfg.MaxHeaderBytes,
 		ErrorLog:          slog.NewLogLogger(c.log.Handler(), slog.LevelWarn),
 		BaseContext:       func(net.Listener) context.Context { return c.base },
 	}

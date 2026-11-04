@@ -147,6 +147,14 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	a.auth = authSvc
 	authz := authSvc.Authorizer()
 
+	// Secret encryption: stored credentials are sealed with the keyring and
+	// opened only by the code that uses them (proxy upstreams, blob store
+	// drivers). See secrets.go.
+	keyring, err := openSecrets(ctx, cfg, pool, log)
+	if err != nil {
+		return nil, err
+	}
+
 	// Blob storage: the configured store is pinned as "default"; other rows
 	// of blob_stores are opened on demand by driver kind.
 	store, err := storage.Open(cfg.Storage)
@@ -157,6 +165,10 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		var m map[string]any
 		if err := json.Unmarshal(sc.Config, &m); err != nil {
 			return nil, fmt.Errorf("blob store %s config: %w", sc.Name, core.ErrInvalid)
+		}
+		m, err := keyring.OpenStoreConfig(m)
+		if err != nil {
+			return nil, fmt.Errorf("blob store %s credentials: %w", sc.Name, err)
 		}
 		return s3.Open(ctx, m)
 	})
@@ -183,9 +195,20 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		}
 	}
 
+	// The SSRF guard checks remote URLs when repositories are saved, every
+	// redirect hop and, at connect time, every dialled address.
+	guard, err := proxy.NewGuard(cfg.HTTP.AllowPrivateNetworks)
+	if err != nil {
+		return nil, fmt.Errorf("http.allow_private_networks: %w", err)
+	}
+
 	// Repositories and components. The authorizer needs the repositories for
 	// anonymous read, and the repository service needs the authorizer.
-	repos := repository.New(pool, repository.Options{Formats: reg.Get, AuthZ: authz, Audit: auditLog, Events: bus, Logger: log})
+	repos := repository.New(pool, repository.Options{Formats: reg.Get, AuthZ: authz, Audit: auditLog, Events: bus, Logger: log,
+		Secrets: repoSealer(keyring),
+		RemoteCheck: func(ctx context.Context, remoteURL string) error {
+			return guard.ValidateRemote(ctx, remoteURL, false)
+		}})
 	authz.SetRepositories(repos)
 	if err := authz.Subscribe(ctx, bus); err != nil {
 		return nil, err
@@ -193,12 +216,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	comps := component.New(pool, component.Options{AuthZ: authz, Audit: auditLog, Events: bus, Blobs: observedBlobs, Logger: log})
 	a.onClose(func() { _ = comps.Close() })
 
-	// Outbound HTTP and proxy upstreams. The SSRF guard checks remote URLs,
-	// redirect hops and, at connect time, every dialled address.
-	guard, err := proxy.NewGuard(cfg.HTTP.AllowPrivateNetworks)
-	if err != nil {
-		return nil, fmt.Errorf("http.allow_private_networks: %w", err)
-	}
+	// Outbound HTTP and proxy upstreams.
 	userAgent := cfg.HTTP.UserAgent
 	if userAgent == "" {
 		userAgent = version.UserAgent()
@@ -214,7 +232,9 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	if err != nil {
 		return nil, err
 	}
-	upstreams, err := proxy.New(proxy.Options{HTTPClients: clients, Guard: guard, Events: bus, Logger: log})
+	// A nil keyring still opens: it passes plaintext through and refuses
+	// sealed values, so ciphertext is never sent to a remote.
+	upstreams, err := proxy.New(proxy.Options{HTTPClients: clients, Guard: guard, Events: bus, Logger: log, Secrets: keyring})
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +310,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Health:         hc,
 		Formats:        reg.Names(),
 		Started:        started,
-		Catalog:        catalog.New(pool, catalog.Options{ConfiguredStores: []string{DefaultBlobStore}}),
+		Catalog:        catalog.New(pool, catalog.Options{Sealer: storeSealer(keyring), ConfiguredStores: []string{DefaultBlobStore}}),
 		Search:         search.New(pool),
 		Audit:          auditLog,
 		Upstreams:      healthReporter,
@@ -315,6 +335,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Health:               hc, TrustedProxies: trusted,
 		API: restAPI, Formats: reg, Deps: formatDeps,
 		FormatMiddleware: []func(http.Handler) http.Handler{httpapi.DownloadSessions(authSvc)},
+		Security:         securityOptions(cfg),
 	})
 
 	// First administrator from the environment.

@@ -126,12 +126,10 @@ func TestAuthentication(t *testing.T) {
 	f := newFixture(t)
 	f.seedRepos()
 	f.api.Catalog = fakeCatalog{}
-	// Anonymous sees nothing private; invalid credentials are rejected.
-	var list repositoryList
-	_ = json.Unmarshal(f.expect("", "GET", "/api/v1/repositories", nil, 200), &list)
-	if len(list.Items) != 0 || list.NextCursor != nil {
-		t.Errorf("anonymous list = %+v", list)
-	}
+	// Anonymous callers must sign in for everything but the public routes;
+	// invalid credentials are rejected.
+	f.expect("", "GET", "/api/v1/repositories", nil, 401)
+	f.expect("", "GET", "/api/v1/system/version", nil, 200)
 	resp, b := f.do("", "GET", "/api/v1/repositories", nil, "Authorization", "Bearer hgr_wrong")
 	if resp.StatusCode != http.StatusUnauthorized || !strings.Contains(string(b), `"code":"unauthenticated"`) {
 		t.Errorf("bad token = %d %s", resp.StatusCode, b)
@@ -158,7 +156,7 @@ func TestNoAuthZFailsClosed(t *testing.T) {
 	deps := env.Deps()
 	deps.AuthZ = nil
 	r := chi.NewRouter()
-	(&API{Deps: deps}).Mount(r)
+	(&API{Deps: deps, AuthMiddleware: signedIn}).Mount(r)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/audit", nil))
 	if rec.Code != 501 {
@@ -437,9 +435,17 @@ func TestEventStream(t *testing.T) {
 	}
 }
 
+// signedIn authenticates every request as a user, for tests of what
+// happens after authentication.
+func signedIn(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r.WithContext(core.WithPrincipal(r.Context(), &core.Principal{Name: "alice", Kind: core.PrincipalUser})))
+	})
+}
+
 func TestNotImplementedShape(t *testing.T) {
 	r := chi.NewRouter()
-	(&API{}).Mount(r)
+	(&API{AuthMiddleware: signedIn}).Mount(r)
 	for _, p := range []string{"/api/v1/cleanup-policies", "/api/v1/repositories"} {
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))

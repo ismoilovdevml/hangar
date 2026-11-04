@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 	"time"
 
@@ -39,8 +40,25 @@ type Options struct {
 	Audit core.AuditLog
 	// Events receives repository.created/updated/deleted.
 	Events core.EventBus
-	Logger *slog.Logger
+	// Secrets seals the write-only secrets of a configuration (proxy upstream
+	// password and token, passwords in remote and outbound proxy URLs) before
+	// it is stored; reads return them sealed. Nil refuses configurations that
+	// carry a secret (the database rejects plaintext secrets as well).
+	Secrets ConfigSealer
+	// RemoteCheck vets a proxy repository's remote URL on create and update
+	// (the outbound address policy); its error is returned as is.
+	RemoteCheck func(ctx context.Context, remoteURL string) error
+	Logger      *slog.Logger
 }
+
+// ConfigSealer seals the secrets of a repository configuration in place
+// (implemented by *secrets.Keyring).
+type ConfigSealer interface {
+	SealRepoConfig(cfg *core.RepoConfig) error
+}
+
+// errNoSealer is returned for a secret when no ConfigSealer is configured.
+var errNoSealer = fmt.Errorf("storing repository secrets requires secret encryption (security.secret_key): %w", core.ErrNotImplemented)
 
 // Service implements core.RepositoryService on PostgreSQL.
 type Service struct {
@@ -218,7 +236,7 @@ func (s *Service) Create(ctx context.Context, in *core.Repository) (*core.Reposi
 	if err := s.authorize(ctx, "repository.create", in.Name); err != nil {
 		return nil, err
 	}
-	r, err := s.prepare(in)
+	r, err := s.prepare(ctx, in)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +284,7 @@ func (s *Service) Update(ctx context.Context, in *core.Repository) (*core.Reposi
 	if err := s.authorize(ctx, "repository.update", in.Name); err != nil {
 		return nil, err
 	}
-	r, err := s.prepare(in)
+	r, err := s.prepare(ctx, in)
 	if err != nil {
 		return nil, err
 	}
@@ -401,7 +419,7 @@ UPDATE blobs b
 }
 
 // prepare validates in and returns a normalised copy.
-func (s *Service) prepare(in *core.Repository) (*core.Repository, error) {
+func (s *Service) prepare(ctx context.Context, in *core.Repository) (*core.Repository, error) {
 	r := cloneRepo(in)
 	c := &r.Config
 	switch r.Type {
@@ -439,7 +457,48 @@ func (s *Service) prepare(in *core.Repository) (*core.Repository, error) {
 			return nil, err
 		}
 	}
+	if r.Type == core.RepoProxy && s.opts.RemoteCheck != nil {
+		if err := s.opts.RemoteCheck(ctx, r.Config.Proxy.RemoteURL); err != nil {
+			return nil, fmt.Errorf("repository %q: %w", r.Name, err)
+		}
+	}
+	if err := s.seal(r); err != nil {
+		return nil, err
+	}
 	return r, nil
+}
+
+// seal encrypts the configuration's secrets before it is stored.
+func (s *Service) seal(r *core.Repository) error {
+	if s.opts.Secrets == nil {
+		if hasSecrets(r.Config) {
+			return fmt.Errorf("repository %q: %w", r.Name, errNoSealer)
+		}
+		return nil
+	}
+	if err := s.opts.Secrets.SealRepoConfig(&r.Config); err != nil {
+		return fmt.Errorf("repository %q: %w", r.Name, err)
+	}
+	return nil
+}
+
+// hasSecrets reports whether cfg carries a write-only secret.
+func hasSecrets(cfg core.RepoConfig) bool {
+	p := cfg.Proxy
+	if p == nil {
+		return false
+	}
+	if a := p.Auth; a != nil && (a.Password != "" || a.Token != "") {
+		return true
+	}
+	for _, raw := range []string{p.RemoteURL, p.HTTP.Proxy} {
+		if u, err := url.Parse(raw); err == nil && u.User != nil {
+			if pw, ok := u.User.Password(); ok && pw != "" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 type memberRef struct {

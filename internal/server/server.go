@@ -42,6 +42,9 @@ type RouterOptions struct {
 	// FormatMiddleware wraps the format routes (/repository/..., /v2/...),
 	// e.g. resolving browser sessions for downloads from the web UI.
 	FormatMiddleware []func(http.Handler) http.Handler
+	// Security configures the hardening middleware: security headers, CORS,
+	// body limits and per-IP rate limits (security.go).
+	Security Security
 }
 
 // NewRouter builds the full route tree:
@@ -51,28 +54,38 @@ type RouterOptions struct {
 //	/repository/{repo}/... /v2/... format protocols
 //	everything else                web UI (SPA)
 func NewRouter(o RouterOptions) http.Handler {
+	sec := newHardening(o.Security)
 	r := chi.NewRouter()
 	r.Use(RequestInfo(o.TrustedProxies))
 	r.Use(observability.HTTPMiddleware(observability.HTTPOptions{
 		Logger: o.Logger, Metrics: o.Metrics, AccessLogSampleRatio: o.AccessLogSampleRatio, QuietPaths: quietPaths(o.MetricsPath),
 	}))
 	r.Use(Recover(o.Logger))
+	r.Use(sec.headers)
+	r.Use(sec.cors)
 
-	r.Get("/healthz", health.Liveness)
-	r.Head("/healthz", health.Liveness)
-	if o.Health != nil {
-		r.Get("/readyz", o.Health.Readiness)
-	}
-	if o.Metrics != nil && o.MetricsPath != "" {
-		r.Method(http.MethodGet, o.MetricsPath, promhttp.HandlerFor(o.Metrics.Registry, promhttp.HandlerOpts{Registry: o.Metrics.Registry}))
-	}
+	r.Group(func(ops chi.Router) {
+		ops.Use(sec.bodyLimit(maxOtherBody))
+		ops.Get("/healthz", health.Liveness)
+		ops.Head("/healthz", health.Liveness)
+		if o.Health != nil {
+			ops.Get("/readyz", o.Health.Readiness)
+		}
+		if o.Metrics != nil && o.MetricsPath != "" {
+			ops.Method(http.MethodGet, o.MetricsPath, promhttp.HandlerFor(o.Metrics.Registry, promhttp.HandlerOpts{Registry: o.Metrics.Registry}))
+		}
+	})
 
 	if o.API != nil {
-		o.API.Mount(r)
+		r.Group(func(g chi.Router) {
+			g.Use(apiHeaders, sec.apiRateLimit, sec.failedAuthLimit, sec.bodyLimit(o.Security.APIBodyBytes))
+			o.API.Mount(g)
+		})
 	}
 
 	if o.Formats != nil {
 		r.Group(func(g chi.Router) {
+			g.Use(packageHeaders, sec.failedAuthLimit, sec.bodyLimit(o.Security.UploadBodyBytes))
 			for _, mw := range o.FormatMiddleware {
 				g.Use(mw)
 			}
@@ -80,7 +93,7 @@ func NewRouter(o RouterOptions) http.Handler {
 		})
 	}
 
-	ui := webui.Handler()
+	ui := uiHeaders(sec.bodyLimit(maxOtherBody)(webui.Handler()))
 	r.NotFound(ui.ServeHTTP)
 	return r
 }
@@ -100,6 +113,8 @@ type Config struct {
 	ReadHeaderTimeout time.Duration
 	IdleTimeout       time.Duration
 	ShutdownTimeout   time.Duration
+	// MaxHeaderBytes bounds the request line and headers (0 = 1 MiB).
+	MaxHeaderBytes int
 	// DrainDelay keeps serving (with /readyz failing) before shutdown starts,
 	// so load balancers notice. 0 in tests and single-node setups.
 	DrainDelay time.Duration
@@ -114,8 +129,11 @@ func Run(ctx context.Context, cfg Config, h http.Handler, hc *health.Checker, lo
 		Handler:           h,
 		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
 		IdleTimeout:       cfg.IdleTimeout,
+		MaxHeaderBytes:    cfg.MaxHeaderBytes,
 		// No ReadTimeout/WriteTimeout: multi-GB uploads and downloads stream
-		// for as long as the client keeps them moving.
+		// for as long as the client keeps them moving. Slow-header clients are
+		// cut off by ReadHeaderTimeout, stalled bodies by the body idle
+		// timeout of the router (Security.BodyIdleTimeout).
 		ErrorLog:    slog.NewLogLogger(log.Handler(), slog.LevelWarn),
 		BaseContext: func(net.Listener) context.Context { return context.WithoutCancel(ctx) },
 	}

@@ -101,3 +101,28 @@ func TestImplementedRoutesAreDocumented(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// PublicRoutes must be exactly the operations documented with `security: []`.
+func TestPublicRoutesMatchSpec(t *testing.T) {
+	paths, _ := loadSpec(t)["paths"].(map[string]any)
+	documented := map[string]bool{}
+	for p, item := range paths {
+		ops, _ := item.(map[string]any)
+		for method, op := range ops {
+			m, _ := op.(map[string]any)
+			if sec, ok := m["security"].([]any); ok && len(sec) == 0 {
+				documented[strings.ToUpper(method)+" "+p] = true
+			}
+		}
+	}
+	for k := range documented {
+		if !PublicRoutes[k] {
+			t.Errorf("%s is public in api/openapi.yaml but not in PublicRoutes", k)
+		}
+	}
+	for k := range PublicRoutes {
+		if !documented[k] {
+			t.Errorf("%s is in PublicRoutes but not documented with security: []", k)
+		}
+	}
+}

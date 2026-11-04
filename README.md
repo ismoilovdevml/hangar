@@ -17,6 +17,7 @@ clients that authenticate with tokens, never runtime dependencies.
 - [Formats and acceptance tests](docs/FORMATS.md)
 - [Design system](docs/DESIGN_SYSTEM.md)
 - [Roadmap](docs/ROADMAP.md)
+- [Security](docs/security.md) · [reporting vulnerabilities](SECURITY.md)
 
 ## Getting started
 

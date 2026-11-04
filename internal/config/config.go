@@ -47,6 +47,8 @@ type Config struct {
 	Bootstrap Bootstrap   `yaml:"bootstrap"`
 	Scanner   Scanner     `yaml:"scanner"`
 	Metrics   Metrics     `yaml:"metrics"`
+	// Security: encryption of stored secrets and HTTP hardening (security.go).
+	Security Security `yaml:"security"`
 	// Observability configures tracing and access log sampling.
 	Observability Observability `yaml:"observability"`
 }
@@ -255,7 +257,8 @@ func Default() Config {
 			MaxIdleConns:        200,
 			MaxIdleConnsPerHost: 32,
 		},
-		Metrics: Metrics{Enabled: true, Path: "/metrics"},
+		Metrics:  Metrics{Enabled: true, Path: "/metrics"},
+		Security: DefaultSecurity(),
 		Observability: Observability{
 			Tracing:   Tracing{SampleRatio: 0.1, ServiceName: "hangar"},
 			AccessLog: AccessLog{SampleRatio: 1},
@@ -367,6 +370,7 @@ func (c *Config) Validate() error {
 	if c.Metrics.Path == "" || !strings.HasPrefix(c.Metrics.Path, "/") {
 		errs = append(errs, fmt.Errorf("metrics.path %q must start with /", c.Metrics.Path))
 	}
+	errs = append(errs, c.Security.validate()...)
 	if t := c.Observability.Tracing; t.Enabled {
 		if u, err := url.Parse(t.Endpoint); err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 			errs = append(errs, fmt.Errorf("observability.tracing.endpoint %q must be an http:// or https:// URL when tracing is enabled",
@@ -394,6 +398,7 @@ func ApplyEnv(cfg *Config, lookup func(string) (string, bool)) error {
 			errs = append(errs, fmt.Errorf("%s: %w", name, err))
 		}
 	})
+	applySecretKeyAlias(cfg, lookup)
 	return errors.Join(errs...)
 }
 
@@ -491,6 +496,7 @@ func (c Config) Redacted() Config {
 	c.HTTP.Proxy = redactURL(c.HTTP.Proxy)
 	c.Database.URL = redactURL(c.Database.URL)
 	c.NATS.URL = redactURL(c.NATS.URL)
+	c.Security = c.Security.redacted()
 	c.Observability.Tracing.Endpoint = redactURL(c.Observability.Tracing.Endpoint)
 	return c
 }

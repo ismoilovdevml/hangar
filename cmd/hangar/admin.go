@@ -27,6 +27,9 @@ const adminUsage = `usage:
   hangar admin token create --user NAME --name LABEL --scopes LIST [--expires 90d] [--config FILE]
         create a personal access token for NAME and print it once
         LIST is comma-separated, e.g. "repo:*:read,repo:*:write"
+  hangar admin rotate-secrets [--dry-run] [--json] [--config FILE]
+        seal stored plaintext secrets and re-encrypt secrets sealed with a
+        previous key (security.previous_secret_keys) under security.secret_key
 `
 
 // adminCmd runs administrative commands directly against the database, for
@@ -37,6 +40,8 @@ func adminCmd(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return adminBootstrap(args[1:], stdin, stdout, stderr)
 	case len(args) >= 2 && args[0] == "token" && args[1] == "create":
 		return adminTokenCreate(args[2:], stdout, stderr)
+	case len(args) >= 1 && args[0] == "rotate-secrets":
+		return adminRotateSecrets(args[1:], stdout, stderr)
 	case len(args) >= 1 && (args[0] == "help" || args[0] == "-h" || args[0] == "--help"):
 		_, _ = fmt.Fprint(stdout, adminUsage)
 		return nil

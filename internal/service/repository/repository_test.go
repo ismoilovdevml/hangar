@@ -15,6 +15,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/core/coretest"
+	"github.com/ismoilovdevml/hangar/internal/secrets"
 	"github.com/ismoilovdevml/hangar/internal/service/repository"
 	"github.com/ismoilovdevml/hangar/internal/service/repository/pgtest"
 )
@@ -46,8 +47,12 @@ type fixture struct {
 	authz  *coretest.AuthZ
 	audit  *coretest.AuditLog
 	events *coretest.EventBus
+	keys   *secrets.Keyring
 	ctx    context.Context
 }
+
+// testKey is a fixed 32-byte key encryption key for tests.
+const testKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
@@ -61,7 +66,12 @@ func newFixture(t *testing.T) *fixture {
 		events: coretest.NewEventBus(),
 	}
 	f.authz.Grant("admin", "system:repos:admin")
-	f.svc = repository.New(pool, repository.Options{Formats: formats, AuthZ: f.authz, Audit: f.audit, Events: f.events})
+	keys, err := secrets.NewKeyring(testKey, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.keys = keys
+	f.svc = repository.New(pool, repository.Options{Formats: formats, AuthZ: f.authz, Audit: f.audit, Events: f.events, Secrets: keys})
 	f.ctx = coretest.AsUser(context.Background(), "admin")
 	return f
 }
@@ -137,6 +147,17 @@ func TestCreateGetRoundTrip(t *testing.T) {
 		if got.Name != in.Name || got.Format != in.Format || got.Type != in.Type || got.BlobStore != in.BlobStore ||
 			got.Online != in.Online || got.Description != in.Description {
 			t.Errorf("%s: scalar fields differ: got %+v", in.Name, got)
+		}
+		if got.Config.Proxy != nil {
+			// Secrets come back sealed; opened they equal the input.
+			if a := got.Config.Proxy.Auth; a != nil && !secrets.IsSealed(a.Token) {
+				t.Errorf("%s: token not sealed: %q", in.Name, a.Token)
+			}
+			opened, err := f.keys.OpenProxyConfig(got.Config.Proxy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got.Config.Proxy = opened
 		}
 		if !reflect.DeepEqual(got.Config, in.Config) {
 			a, _ := json.Marshal(got.Config)

@@ -13,7 +13,7 @@ import (
 
 type fakeSealer struct{}
 
-func (fakeSealer) Seal(p []byte) (string, error) { return "sealed:" + strconv.Itoa(len(p)), nil }
+func (fakeSealer) Seal(p []byte) (string, error) { return "hgs1.fake." + strconv.Itoa(len(p)), nil }
 
 func TestNewBlobStoreValidate(t *testing.T) {
 	neg := int64(-1)
@@ -186,7 +186,7 @@ func TestCatalogIntegration(t *testing.T) {
 	if bs.S3 == nil || bs.S3.SecretSealed != "" || bs.S3.SecretAccessKey != "" || bs.Location() != "s3://hangar/blobs" {
 		t.Errorf("created = %+v", bs.S3)
 	}
-	if raw := apitest.QueryString(t, pool, `SELECT config->>'secret_access_key_sealed' FROM blob_stores WHERE name = 's3-main'`); raw != "sealed:2" {
+	if raw := apitest.QueryString(t, pool, `SELECT config->>'secret_access_key_sealed' FROM blob_stores WHERE name = 's3-main'`); raw != "hgs1.fake.2" {
 		t.Errorf("stored secret = %q", raw)
 	}
 	if _, totals, _ = c.BlobStores(ctx); totals.CapacityBytes != nil {
