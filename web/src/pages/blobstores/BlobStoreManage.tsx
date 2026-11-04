@@ -6,7 +6,8 @@ import { usePermissions } from '../../api/permissions';
 import type { BlobStore } from '../../api/types';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Panel } from '../../components/Panel';
-import { quotaBytes, quotaToForm, type QuotaUnit } from '../../lib/blobStores';
+import { Select } from '../../components/Select';
+import { QUOTA_UNITS, quotaBytes, quotaToForm, type QuotaUnit } from '../../lib/blobStores';
 import { formatBytes, formatCompact } from '../../lib/format';
 
 function message(err: unknown, action: string): string {
@@ -70,10 +71,7 @@ export function BlobStoreManage({ s }: { s: BlobStore }) {
             <label htmlFor="manage-quota-unit" className="visually-hidden">
               Quota unit
             </label>
-            <select id="manage-quota-unit" className="input" value={unit} disabled={!canAdmin} onChange={(e) => setUnit(e.target.value as QuotaUnit)}>
-              <option value="GB">GB</option>
-              <option value="TB">TB</option>
-            </select>
+            <Select<QuotaUnit> id="manage-quota-unit" value={unit} disabled={!canAdmin} options={QUOTA_UNITS} onChange={setUnit} />
           </div>
           <span id="manage-quota-hint" className={invalid ? 'field__error' : 'field__hint'}>
             {invalid ? 'Enter a positive number, or leave empty for no quota.' : 'A warning threshold, not a hard limit. Empty removes it.'}

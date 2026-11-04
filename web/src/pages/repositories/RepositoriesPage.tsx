@@ -8,6 +8,7 @@ import { ErrorNote } from '../../components/ErrorNote';
 import { IconDatabase, IconGlobe, IconGroup, IconPackage, IconPlus, IconSearch } from '../../components/icons';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
+import { Select } from '../../components/Select';
 import { Pill, StatusDot } from '../../components/Pill';
 import { FORMAT_META, formatBytes } from '../../lib/format';
 import { plural } from '../../lib/overview';
@@ -253,19 +254,13 @@ export function RepositoriesPage() {
               <label htmlFor={formatId} className="filter-select__label">
                 Format
               </label>
-              <select
+              <Select
                 id={formatId}
-                className="filter-select__input"
+                variant="inline"
                 value={format ?? ''}
-                onChange={(e) => setFilter({ format: isFormat(e.target.value) ? e.target.value : undefined })}
-              >
-                <option value="">All formats</option>
-                {ALL_FORMATS.map((f) => (
-                  <option key={f} value={f}>
-                    {FORMAT_META[f].label}
-                  </option>
-                ))}
-              </select>
+                options={[{ value: '', label: 'All formats' }, ...ALL_FORMATS.map((f) => ({ value: f, label: FORMAT_META[f].label }))]}
+                onChange={(v) => setFilter({ format: isFormat(v) ? v : undefined })}
+              />
             </div>
             <NameFilter value={q ?? ''} onChange={(v) => setFilter({ q: v })} />
           </div>

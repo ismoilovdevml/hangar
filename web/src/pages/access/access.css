@@ -36,7 +36,7 @@ button.tabs__item { background: transparent; cursor: pointer; }
 
 /* ---------- dialogs ---------- */
 .dialog-scrim {
-  position: fixed; inset: 0; z-index: 60; display: flex; justify-content: center; align-items: flex-start;
+  position: fixed; inset: 0; z-index: var(--z-modal); display: flex; justify-content: center; align-items: flex-start;
   padding: 8vh 16px 16px; background: var(--scrim); overflow-y: auto;
 }
 .dialog-scrim--drawer { justify-content: flex-end; align-items: stretch; padding: 0; }
@@ -108,7 +108,7 @@ select.input--sm { padding-right: 32px; background-position: right 10px center; 
 }
 .system-grid { display: flex; flex-direction: column; gap: 6px; }
 .system-grid__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--hairline); }
-.system-grid__row select { width: 130px; flex: none; }
+.system-grid__row .select { width: 130px; flex: none; }
 .scope-preview { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: var(--r-control); background: var(--surface-muted); }
 .scope-preview__list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--ink); }
 .secret-box {
@@ -142,12 +142,12 @@ select.input--sm { padding-right: 32px; background-position: right 10px center; 
 @media (max-width: 640px) {
   .privilege-row { grid-template-columns: minmax(0, 1fr) 36px; }
   .privilege-row > :nth-child(2), .privilege-row > :nth-child(3) { grid-column: 1 / 2; }
-  .privilege-row > button { grid-row: 1; grid-column: 2; }
+  .privilege-row > .icon-button { grid-row: 1; grid-column: 2; }
   .session-list__row, .perm-list__row { flex-direction: column; align-items: flex-start; }
   .perm-list__grants { align-items: flex-start; text-align: left; }
   .dialog-scrim { padding: 16px 8px; }
   .dialog__head { padding: 16px 16px 6px; }
   .dialog__body { padding: 6px 16px 16px; }
   .dialog--drawer { border-radius: 0; }
-  .system-grid__row select { width: 110px; }
+  .system-grid__row .select { width: 110px; }
 }

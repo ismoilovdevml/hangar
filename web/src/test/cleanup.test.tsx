@@ -1,3 +1,4 @@
+import { choose, valueOf } from './choose';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -33,15 +34,15 @@ describe('cleanup policies', () => {
     await screen.findByRole('heading', { level: 2, name: 'New policy' });
 
     await user.type(screen.getByLabelText('Name'), 'docker-dev-prune');
-    await user.selectOptions(screen.getByLabelText('Format'), 'docker');
+    await choose(user, screen.getByLabelText('Format'), 'docker');
     const days = screen.getByLabelText('Days since published');
     await user.clear(days);
     await user.type(days, '30');
     await user.click(screen.getByLabelText(/Use condition: and not downloaded/));
     await user.click(screen.getByLabelText(/Use condition: keep the newest/));
     await user.type(screen.getByLabelText('tags matching'), '3.*');
-    await waitFor(() => expect(within(screen.getByLabelText('Add repository')).getByRole('option', { name: /docker-dev/ })).toBeInTheDocument());
-    await user.selectOptions(screen.getByLabelText('Add repository'), 'docker-dev');
+    await waitFor(() => expect(screen.getByLabelText('Add repository')).toBeEnabled());
+    await choose(user, screen.getByLabelText('Add repository'), 'docker-dev');
     expect(screen.getByRole('button', { name: 'Remove docker-dev' })).toBeInTheDocument();
     expect(screen.getByText(/next 5 Nov 2026|next \d+ \w+ \d{4}/).closest('p')).toHaveTextContent('Every day at 03:00 UTC · 0 3 * * *');
 
@@ -102,7 +103,7 @@ describe('cleanup policies', () => {
     const user = userEvent.setup();
     renderApp('/cleanup?create=true');
     await screen.findByRole('heading', { level: 2, name: 'New policy' });
-    await user.selectOptions(screen.getByLabelText('How often'), 'custom');
+    await choose(user, screen.getByLabelText('How often'), 'custom');
     const cron = screen.getByLabelText('Cron expression');
     expect(cron).toHaveValue('0 3 * * *');
     await user.clear(cron);

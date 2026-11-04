@@ -1,3 +1,4 @@
+import { choose, valueOf } from './choose';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -35,7 +36,7 @@ describe('audit log', () => {
     const table = await screen.findByRole('table', { name: 'Audit events, newest first' });
     await within(table).findAllByText('d.ismoilov');
 
-    await user.selectOptions(screen.getByLabelText('Outcome'), 'denied');
+    await choose(user, screen.getByLabelText('Outcome'), 'denied');
     await waitFor(() => expect(search(history).get('outcome')).toBe('denied'));
     await waitFor(() => expect(within(table).queryByText('Success')).not.toBeInTheDocument());
     expect(within(table).getAllByText('Denied').length).toBeGreaterThan(0);
@@ -63,7 +64,7 @@ describe('audit log', () => {
   it('restores a custom range from a shared link', async () => {
     renderApp('/audit?range=custom&from=2026-01-01T00:00:00.000Z&to=2026-01-02T00:00:00.000Z');
     expect(await screen.findByText('No events match these filters.', { exact: false })).toBeInTheDocument();
-    expect(screen.getByLabelText('Time range')).toHaveValue('custom');
+    expect(valueOf(screen.getByLabelText('Time range'))).toBe('custom');
     expect(screen.getByLabelText('From (UTC)')).toHaveValue('2026-01-01T00:00');
   });
 

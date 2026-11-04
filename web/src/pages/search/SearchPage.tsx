@@ -7,6 +7,7 @@ import type { FacetValue, SearchHit, SearchResult, SearchSort } from '../../api/
 import { ErrorNote } from '../../components/ErrorNote';
 import { FormatBadge } from '../../components/FormatBadge';
 import { Pill } from '../../components/Pill';
+import { Select } from '../../components/Select';
 import { FORMAT_META, formatCompact, relativeTime } from '../../lib/format';
 import { hasVersion, hitName, securityPill } from '../../lib/packages';
 import { isFormat } from '../../lib/repositories';
@@ -153,13 +154,7 @@ function SortSelect({ value, onChange }: { value: SearchSort; onChange: (s: Sear
       <label htmlFor={id} className="filter-select__label">
         Sort
       </label>
-      <select id={id} className="filter-select__input" value={value} onChange={(e) => onChange(e.target.value as SearchSort)}>
-        {SEARCH_SORTS.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.label}
-          </option>
-        ))}
-      </select>
+      <Select<SearchSort> id={id} variant="inline" value={value} options={SEARCH_SORTS.map((s) => ({ value: s.id, label: s.label }))} onChange={onChange} />
     </div>
   );
 }
@@ -300,19 +295,14 @@ function Facets({ q, result, onChange }: { q: string; result: SearchResult; onCh
         <label htmlFor={repoId} className="facet__title">
           Repository
         </label>
-        <select
+        <Select
           id={repoId}
-          className="input"
-          value={selectedRepos.length === 1 ? selectedRepos[0] : ''}
-          onChange={(e) => onChange(setQualifier(q, 'repo', e.target.value ? [e.target.value] : []))}
-        >
-          <option value="">All repositories</option>
-          {repos.map((r) => (
-            <option key={r.value} value={r.value}>
-              {r.value} ({r.count})
-            </option>
-          ))}
-        </select>
+          size="sm"
+          value={selectedRepos.length === 1 ? selectedRepos[0]! : ''}
+          placeholder={selectedRepos.length > 1 ? `${selectedRepos.length} repositories` : 'All repositories'}
+          options={[{ value: '', label: 'All repositories' }, ...repos.map((r) => ({ value: r.value, label: r.value, hint: `${r.count} ${r.count === 1 ? 'result' : 'results'}` }))]}
+          onChange={(v) => onChange(setQualifier(q, 'repo', v ? [v] : []))}
+        />
       </div>
     </aside>
   );

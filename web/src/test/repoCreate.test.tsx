@@ -1,3 +1,4 @@
+import { choose, valueOf } from './choose';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -65,7 +66,7 @@ describe('new repository form', () => {
     const user = userEvent.setup();
     renderApp('/repositories/new?format=docker&type=proxy');
     await user.click(await screen.findByText('Upstream credentials and connection'));
-    await user.selectOptions(screen.getByLabelText('Authentication'), 'header');
+    await choose(user, screen.getByLabelText('Authentication'), 'header');
     await user.click(screen.getByLabelText('Through this proxy'));
     await user.type(screen.getByLabelText('Proxy URL'), 'ftp://proxy');
     await user.type(screen.getByLabelText(/Extra trusted certificates/), 'not a pem');
@@ -86,11 +87,11 @@ describe('new repository form', () => {
     await user.clear(screen.getByLabelText('Name'));
     await user.type(screen.getByLabelText('Name'), 'npm-mirror');
     await user.click(screen.getByText('Upstream credentials and connection'));
-    await user.selectOptions(screen.getByLabelText('Authentication'), 'bearer');
+    await choose(user, screen.getByLabelText('Authentication'), 'bearer');
     await user.type(screen.getByLabelText('Token'), 's3cret-token');
     await user.click(screen.getByLabelText('Direct connection'));
     await user.type(screen.getByLabelText(/Extra trusted certificates/), '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----');
-    await user.selectOptions(screen.getByLabelText('Cleanup policy'), 'keep-last-20');
+    await choose(user, screen.getByLabelText('Cleanup policy'), 'keep-last-20');
 
     // The YAML preview mirrors the form but never shows the secret.
     const yaml = yamlText();
@@ -135,13 +136,13 @@ describe('new repository form', () => {
     const user = userEvent.setup();
     renderApp('/repositories/new?format=npm&type=group');
     const add = await screen.findByLabelText('Repository to add');
-    await waitFor(() => expect(within(add).getByRole('option', { name: 'npmjs-proxy (proxy)' })).toBeInTheDocument());
-    await user.selectOptions(add, 'npmjs-proxy');
+    await waitFor(() => expect(add).toBeEnabled());
+    await choose(user, add, 'npmjs-proxy');
     await user.click(screen.getByRole('button', { name: 'Add member' }));
-    await user.selectOptions(add, 'npm-internal');
+    await choose(user, add, 'npm-internal');
     await user.click(screen.getByRole('button', { name: 'Add member' }));
     await user.click(screen.getByRole('button', { name: 'Move npm-internal up' }));
-    await user.selectOptions(screen.getByLabelText('Publishing through the group'), 'npm-internal');
+    await choose(user, screen.getByLabelText('Publishing through the group'), 'npm-internal');
     await user.clear(screen.getByLabelText('Name'));
     await user.type(screen.getByLabelText('Name'), 'npm-everything');
     expect(screen.queryByLabelText('Blob store')).not.toBeInTheDocument();
@@ -165,7 +166,7 @@ describe('new repository form', () => {
     const name = await screen.findByLabelText('Name');
     await user.clear(name);
     await user.type(name, 'npm-internal');
-    await waitFor(() => expect(screen.getByLabelText('Blob store')).toHaveValue('s3-eu-primary'));
+    await waitFor(() => expect(valueOf(screen.getByLabelText('Blob store'))).toBe('s3-eu-primary'));
     await user.click(screen.getByRole('button', { name: 'Create repository' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('A repository with this name already exists. Choose another name.');
     expect(screen.getByLabelText('Name')).toHaveAccessibleDescription(/A repository with this name already exists\./);

@@ -1,3 +1,4 @@
+import { choose, valueOf } from './choose';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
@@ -55,7 +56,7 @@ describe('repositories list', () => {
     expect(within(table).getByText('dockerhub-proxy')).toBeInTheDocument();
     expect(within(tabs).getByRole('link', { name: /^Proxy/ })).toHaveAttribute('aria-current', 'page');
 
-    await user.selectOptions(screen.getByLabelText('Format'), 'npm');
+    await choose(user, screen.getByLabelText('Format'), 'npm');
     await waitFor(() => expect(search(history).get('format')).toBe('npm'));
     expect(search(history).get('type')).toBe('proxy');
     await waitFor(() => expect(within(table).queryByText('dockerhub-proxy')).not.toBeInTheDocument());
@@ -76,7 +77,7 @@ describe('repositories list', () => {
     const table = await screen.findByRole('table', { name: 'Repositories' });
     expect(await within(table).findByText('docker-all')).toBeInTheDocument();
     expect(within(table).getAllByRole('row')).toHaveLength(2); // header + one group
-    expect(screen.getByLabelText('Format')).toHaveValue('docker');
+    expect(valueOf(screen.getByLabelText('Format'))).toBe('docker');
     expect(within(screen.getByRole('navigation', { name: 'Repository type' })).getByRole('link', { name: /^Group/ })).toHaveAttribute(
       'aria-current',
       'page',

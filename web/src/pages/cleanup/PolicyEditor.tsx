@@ -15,6 +15,7 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { IconDownload, IconPlay, IconX } from '../../components/opsIcons';
 import { NotAvailable } from '../../components/NotAvailable';
 import { Panel } from '../../components/Panel';
+import { Select } from '../../components/Select';
 import {
   draftFromPolicy,
   draftToInput,
@@ -265,19 +266,12 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
               </div>
               <div className="field">
                 <label htmlFor={ids.format}>Format</label>
-                <select
+                <Select
                   id={ids.format}
-                  className="input"
                   value={draft.format}
-                  onChange={(e) => update({ format: isFormat(e.target.value) ? e.target.value : '' })}
-                >
-                  <option value="">Any format</option>
-                  {ALL_FORMATS.map((f) => (
-                    <option key={f} value={f}>
-                      {FORMAT_META[f].label}
-                    </option>
-                  ))}
-                </select>
+                  options={[{ value: '', label: 'Any format' }, ...ALL_FORMATS.map((f) => ({ value: f, label: FORMAT_META[f].label }))]}
+                  onChange={(v) => update({ format: isFormat(v) ? v : '' })}
+                />
               </div>
               <div className="field policy-form__wide">
                 <label htmlFor={ids.desc}>
@@ -392,20 +386,17 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
                     <label htmlFor={ids.repo} className="visually-hidden">
                       Add repository
                     </label>
-                    <select
+                    <Select
                       id={ids.repo}
+                      variant="inline"
                       className="chip__select"
                       value=""
-                      onChange={(e) => e.target.value && update({ repositories: [...draft.repositories, e.target.value] })}
+                      placeholder={repos.isPending ? 'Loading repositories…' : candidates.length === 0 ? 'No more repositories' : 'Add repository'}
+                      disabled={repos.isPending || candidates.length === 0}
+                      options={candidates.map((r) => ({ value: r.name, label: r.name, hint: r.type }))}
+                      onChange={(v) => update({ repositories: [...draft.repositories, v] })}
                       aria-invalid={(showErrors && !!errors.repositories) || undefined}
-                    >
-                      <option value="">{repos.isPending ? 'Loading repositories…' : 'Add repository'}</option>
-                      {candidates.map((r) => (
-                        <option key={r.id} value={r.name}>
-                          {r.name} ({r.type})
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </li>
                 )}
               </ul>

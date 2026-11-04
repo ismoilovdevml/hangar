@@ -9,6 +9,7 @@ import { IconRefresh } from '../../components/opsIcons';
 import { Meter } from '../../components/Meter';
 import { NotAvailable } from '../../components/NotAvailable';
 import { PageHeader } from '../../components/PageHeader';
+import { Select } from '../../components/Select';
 import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
 import {
@@ -214,37 +215,25 @@ export function TasksPage() {
               <label htmlFor={typeId} className="filter-select__label">
                 Type
               </label>
-              <select
+              <Select<TaskType | ''>
                 id={typeId}
-                className="filter-select__input"
+                variant="inline"
                 value={search.type ?? ''}
-                onChange={(e) => setFilter({ type: (ALL_TASK_TYPES as string[]).includes(e.target.value) ? (e.target.value as TaskType) : undefined })}
-              >
-                <option value="">All types</option>
-                {ALL_TASK_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {TASK_TYPES[t].label}
-                  </option>
-                ))}
-              </select>
+                options={[{ value: '', label: 'All types' }, ...ALL_TASK_TYPES.map((t) => ({ value: t, label: TASK_TYPES[t].label }))]}
+                onChange={(v) => setFilter({ type: v || undefined })}
+              />
             </div>
             <div className="filter-select">
               <label htmlFor={statusId} className="filter-select__label">
                 Status
               </label>
-              <select
+              <Select
                 id={statusId}
-                className="filter-select__input"
+                variant="inline"
                 value={search.status ?? ''}
-                onChange={(e) => setFilter({ status: TASK_STATUS_FILTERS.find((f) => f.id === e.target.value)?.id })}
-              >
-                <option value="">Any status</option>
-                {TASK_STATUS_FILTERS.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.label}
-                  </option>
-                ))}
-              </select>
+                options={[{ value: '', label: 'Any status' }, ...TASK_STATUS_FILTERS.map((f) => ({ value: f.id, label: f.label }))]}
+                onChange={(v) => setFilter({ status: TASK_STATUS_FILTERS.find((f) => f.id === v)?.id })}
+              />
             </div>
             <NameFilter value={search.q ?? ''} onChange={(q) => setFilter({ q })} />
           </div>

@@ -1,3 +1,4 @@
+import { choose, valueOf } from './choose';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -35,13 +36,13 @@ describe('access & audit: members', () => {
     const { history } = renderApp('/access');
     const table = await screen.findByRole('table', { name: 'Members' });
     await within(table).findByText('Jasur Karimov');
-    await user.selectOptions(screen.getByLabelText('Status'), 'locked');
+    await choose(user, screen.getByLabelText('Status'), 'locked');
     await waitFor(() => expect(search(history).get('status')).toBe('locked'));
     await waitFor(() => expect(within(table).queryByText('Jasur Karimov')).not.toBeInTheDocument());
     expect(within(table).getByText('Bekzod Yusupov')).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText('Status'), '');
-    await user.selectOptions(screen.getByLabelText('Role'), 'Admin');
+    await choose(user, screen.getByLabelText('Status'), '');
+    await choose(user, screen.getByLabelText('Role'), 'Admin');
     await waitFor(() => expect(search(history).get('role')).toBe('Admin'));
     await waitFor(() => expect(within(table).queryByText('Bekzod Yusupov')).not.toBeInTheDocument());
     expect(within(table).getByText('Nodira Tursunova')).toBeInTheDocument();
@@ -201,7 +202,7 @@ describe('access & audit: roles and audit', () => {
     const pattern = within(first).getByLabelText('Repository name or pattern');
     await user.clear(pattern);
     await user.type(pattern, 'npm-*');
-    await user.selectOptions(within(first).getByLabelText('Action'), 'write');
+    await choose(user, within(first).getByLabelText('Action'), 'write');
     expect(within(first).getByText('Publish to repositories matching npm-*')).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: /Administration privilege/ }));
     const second = within(dialog).getByRole('group', { name: 'Privilege 2' });

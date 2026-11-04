@@ -3,6 +3,7 @@ import { useSession } from '../../api/hooks';
 import { CopyButton } from '../../components/CopyButton';
 import { DataTable, type Column } from '../../components/DataTable';
 import { Pill } from '../../components/Pill';
+import { Select } from '../../components/Select';
 import { relativeTime } from '../../lib/format';
 import { useNow } from '../../lib/useNow';
 import { useCreateToken, useRepositoryNames, useRevokeToken, type Token, type TokenCreated } from './api';
@@ -384,13 +385,13 @@ function TokenForm({ owner, onCreated, onCancel }: { owner?: string; onCreated: 
                     <span className="option__title">{a.label}</span>
                     <span className="option__hint">{a.hint}</span>
                   </span>
-                  <select id={id} className="input input--sm" value={current} onChange={(e) => setSystem(a.id, e.target.value)}>
-                    {SYSTEM_LEVELS.map((l) => (
-                      <option key={l} value={l}>
-                        {l ? l.charAt(0).toUpperCase() + l.slice(1) : 'None'}
-                      </option>
-                    ))}
-                  </select>
+                  <Select
+                    id={id}
+                    size="sm"
+                    value={current}
+                    options={SYSTEM_LEVELS.map((l) => ({ value: l, label: l ? l.charAt(0).toUpperCase() + l.slice(1) : 'None' }))}
+                    onChange={(v) => setSystem(a.id, v)}
+                  />
                 </label>
               );
             })}

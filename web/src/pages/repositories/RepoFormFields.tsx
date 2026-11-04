@@ -7,6 +7,7 @@ import { useCleanupPolicies, useRepositoriesByFormat } from '../../api/hooks';
 import type { WritePolicy } from '../../api/types';
 import { IconArrowDown, IconArrowUp, IconClose } from '../../components/icons';
 import { Pill } from '../../components/Pill';
+import { Select } from '../../components/Select';
 import { FORMAT_META } from '../../lib/format';
 import {
   GROUP_WRITE_FORMATS,
@@ -20,6 +21,13 @@ import {
 } from '../../lib/repositories';
 import { errorId, fieldId, invalidProps } from './repoFormHelpers';
 import './repoForm.css';
+
+const AUTH_KINDS: { value: AuthKind; label: string }[] = [
+  { value: 'none', label: 'None (public registry)' },
+  { value: 'basic', label: 'Username and password' },
+  { value: 'bearer', label: 'Bearer token' },
+  { value: 'header', label: 'Token in a custom header' },
+];
 
 export function FieldError({ field, errors }: { field: RepoFormField; errors: RepoFormErrors }) {
   const msg = errors[field];
@@ -70,11 +78,12 @@ export function RepoSettingsFields({ form, selfName, set, setForm, errors, blur,
         {form.type === 'hosted' && (
           <div className="field">
             <label htmlFor="repo-writePolicy" className="field__label">Re-uploads</label>
-            <select id="repo-writePolicy" className="input" value={form.writePolicy} onChange={(e) => set('writePolicy', e.target.value as WritePolicy)}>
-              {(Object.keys(WRITE_POLICY_LABEL) as WritePolicy[]).map((p) => (
-                <option key={p} value={p}>{WRITE_POLICY_LABEL[p]}</option>
-              ))}
-            </select>
+            <Select<WritePolicy>
+              id="repo-writePolicy"
+              value={form.writePolicy}
+              options={(Object.keys(WRITE_POLICY_LABEL) as WritePolicy[]).map((p) => ({ value: p, label: WRITE_POLICY_LABEL[p] }))}
+              onChange={(v) => set('writePolicy', v)}
+            />
           </div>
         )}
 
@@ -84,20 +93,18 @@ export function RepoSettingsFields({ form, selfName, set, setForm, errors, blur,
 
         <div className="field">
           <label htmlFor="repo-cleanup" className="field__label">Cleanup policy</label>
-          <select
+          <Select
             id="repo-cleanup"
-            className="input"
             value={form.cleanupPolicy}
-            onChange={(e) => set('cleanupPolicy', e.target.value)}
+            onChange={(v) => set('cleanupPolicy', v)}
             disabled={!policies.data && !form.cleanupPolicy}
             aria-describedby="repo-cleanup-hint"
-          >
-            <option value="">Keep everything</option>
-            {(missingPolicy || (!policies.data && form.cleanupPolicy)) && <option value={form.cleanupPolicy}>{form.cleanupPolicy}</option>}
-            {policyOptions.map((p) => (
-              <option key={p.name} value={p.name}>{p.description ? `${p.name} · ${p.description}` : p.name}</option>
-            ))}
-          </select>
+            options={[
+              { value: '', label: 'Keep everything' },
+              ...(missingPolicy || (!policies.data && form.cleanupPolicy) ? [{ value: form.cleanupPolicy, label: form.cleanupPolicy }] : []),
+              ...policyOptions.map((p) => ({ value: p.name, label: p.name, hint: p.description || undefined })),
+            ]}
+          />
           <span id="repo-cleanup-hint" className="field__hint">
             {policies.isError
               ? 'Cleanup policies are not available on this server yet.'
@@ -199,28 +206,22 @@ function GroupMembers({
         )}
         <div className="members__add">
           <label htmlFor={fieldId('members')} className="visually-hidden">Repository to add</label>
-          <select
-            className="input"
+          <Select
             value={candidate}
-            onChange={(e) => setCandidate(e.target.value)}
-            disabled={!form.format || repos.isPending}
-            {...invalidProps('members', errors)}
-          >
-            <option value="">
-              {!form.format
+            onChange={setCandidate}
+            disabled={!form.format || repos.isPending || candidates.length === 0}
+            placeholder={
+              !form.format
                 ? 'Pick a format first'
                 : repos.isPending
                   ? 'Loading repositories…'
                   : candidates.length === 0
                     ? `No other ${FORMAT_META[form.format].label} repositories`
-                    : 'Choose a repository…'}
-            </option>
-            {candidates.map((r) => (
-              <option key={r.name} value={r.name}>
-                {r.name} ({TYPE_META[r.type].label.toLowerCase()})
-              </option>
-            ))}
-          </select>
+                    : 'Choose a repository…'
+            }
+            options={candidates.map((r) => ({ value: r.name, label: r.name, hint: TYPE_META[r.type].label }))}
+            {...invalidProps('members', errors)}
+          />
           <button
             type="button"
             className="button button--secondary"
@@ -239,17 +240,12 @@ function GroupMembers({
       {form.format && GROUP_WRITE_FORMATS.includes(form.format) && (
         <div className="field">
           <label htmlFor={fieldId('writeMember')} className="field__label">Publishing through the group</label>
-          <select
-            className="input"
+          <Select
             value={form.writeMember}
-            onChange={(e) => set('writeMember', e.target.value)}
+            onChange={(v) => set('writeMember', v)}
+            options={[{ value: '', label: 'Read-only group' }, ...hostedMembers.map((m) => ({ value: m, label: `Send uploads to ${m}` }))]}
             {...invalidProps('writeMember', errors, 'repo-write-hint')}
-          >
-            <option value="">Read-only group</option>
-            {hostedMembers.map((m) => (
-              <option key={m} value={m}>Send uploads to {m}</option>
-            ))}
-          </select>
+          />
           <span id="repo-write-hint" className="field__hint">Only hosted members can receive uploads</span>
           <FieldError field="writeMember" errors={errors} />
         </div>
@@ -319,12 +315,7 @@ function ProxySettings({
         <div className="form-grid">
           <div className="field">
             <label htmlFor="repo-authKind" className="field__label">Authentication</label>
-            <select id="repo-authKind" className="input" value={form.authKind} onChange={(e) => set('authKind', e.target.value as AuthKind)}>
-              <option value="none">None (public registry)</option>
-              <option value="basic">Username and password</option>
-              <option value="bearer">Bearer token</option>
-              <option value="header">Token in a custom header</option>
-            </select>
+            <Select<AuthKind> id="repo-authKind" value={form.authKind} options={AUTH_KINDS} onChange={(v) => set('authKind', v)} />
             <span className="field__hint">Sent only to the remote's own host. Stored encrypted, never shown again.</span>
           </div>
           {form.authKind === 'basic' && (

@@ -1,3 +1,4 @@
+import { choose, valueOf } from './choose';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -36,17 +37,17 @@ describe('scheduled tasks', () => {
     const table = await screen.findByRole('table', { name: 'Scheduled tasks' });
     await within(table).findByText('Backup database');
 
-    await user.selectOptions(screen.getByLabelText('Status'), 'failed');
+    await choose(user, screen.getByLabelText('Status'), 'failed');
     await waitFor(() => expect(search(history).get('status')).toBe('failed'));
     expect(within(table).getAllByRole('row')).toHaveLength(2);
     expect(within(table).getByText('Replicate to us-east')).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText('Status'), '');
-    await user.selectOptions(screen.getByLabelText('Type'), 'db_backup');
+    await choose(user, screen.getByLabelText('Status'), '');
+    await choose(user, screen.getByLabelText('Type'), 'db_backup');
     await waitFor(() => expect(search(history).get('type')).toBe('db_backup'));
     expect(within(table).getAllByRole('row')).toHaveLength(2);
 
-    await user.selectOptions(screen.getByLabelText('Type'), '');
+    await choose(user, screen.getByLabelText('Type'), '');
     await user.type(screen.getByLabelText('Filter tasks by name'), 'active directory');
     await waitFor(() => expect(search(history).get('q')).toBe('active directory'));
     await waitFor(() => expect(within(table).getAllByRole('row')).toHaveLength(2));

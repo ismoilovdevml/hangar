@@ -6,6 +6,7 @@ import type { Format, RepositoryType } from '../../api/types';
 import { CodeBlock } from '../../components/CodeBlock';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
+import { Select } from '../../components/Select';
 import { FORMAT_META } from '../../lib/format';
 import {
   ALL_FORMATS,
@@ -145,22 +146,15 @@ export function RepoCreatePage() {
       {form.type !== 'group' && (
         <div className="field">
           <label htmlFor="repo-blobStore" className="field__label">Blob store</label>
-          <select
-            className="input"
+          <Select
             value={effective.blobStore}
-            onChange={(e) => set('blobStore', e.target.value)}
+            onChange={(v) => set('blobStore', v)}
             onBlur={blur('blobStore')}
             disabled={stores.isPending}
+            placeholder={stores.isPending ? 'Loading…' : writableStores.length === 0 ? 'No writable blob store' : 'Choose a blob store'}
+            options={(stores.data?.items ?? []).map((b) => ({ value: b.name, label: blobStoreOption(b), disabled: !blobStoreWritable(b) }))}
             {...invalidProps('blobStore', shownErrors, 'repo-blob-hint')}
-          >
-            {stores.isPending && <option value="">Loading…</option>}
-            {stores.data && writableStores.length === 0 && <option value="">No writable blob store</option>}
-            {(stores.data?.items ?? []).map((b) => (
-              <option key={b.name} value={b.name} disabled={!blobStoreWritable(b)}>
-                {blobStoreOption(b)}
-              </option>
-            ))}
-          </select>
+          />
           <span id="repo-blob-hint" className="field__hint">
             {stores.isError ? 'Could not load blob stores.' : 'Where the bytes are kept'}
           </span>
