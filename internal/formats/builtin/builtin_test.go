@@ -16,7 +16,7 @@ func TestBuiltinFormatsRegisterAndMount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := reg.Names(); !slices.Equal(got, []string{"docker", "maven", "npm", "pypi", "raw"}) {
+	if got := reg.Names(); !slices.Equal(got, []string{"docker", "maven", "npm", "nuget", "pypi", "raw"}) {
 		t.Fatalf("names = %v", got)
 	}
 	env := coretest.NewEnv(t)
@@ -26,12 +26,11 @@ func TestBuiltinFormatsRegisterAndMount(t *testing.T) {
 			t.Errorf("%s: Validate = %v", f.Name(), err)
 		}
 	}
+	// Every format is mounted behind the dispatcher; unknown repositories are 404.
 	h := formats.NewHandler(env.Deps(), Formats()...)
-	for _, path := range []string{"/repository/raw-hosted/a/b.txt", "/repository/npm-hosted/@acme%2fui", "/v2/"} {
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
-		if rec.Code != http.StatusNotImplemented {
-			t.Errorf("GET %s = %d, want 501 from the stub", path, rec.Code)
-		}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/repository/missing/x", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("GET unknown repository = %d, want 404", rec.Code)
 	}
 }
