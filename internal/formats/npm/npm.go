@@ -77,15 +77,19 @@ type Format struct {
 	// when Deps.Locks is not set (single process).
 	locks [64]sync.Mutex
 	now   func() time.Time
-	// docs caches parsed stored documents (version manifests, package
-	// state) by blob digest. Blobs are immutable, so entries never go stale.
-	docs *docCache
+	// docs caches stored documents (version manifests, package state) by
+	// blob digest; rendered caches hosted packuments by input fingerprint.
+	// Neither can go stale (see docCache).
+	docs     *docCache
+	rendered *docCache
 }
 
 var _ core.Format = (*Format)(nil)
 
 // New returns the npm format.
-func New() *Format { return &Format{now: time.Now, docs: newDocCache(defaultDocCacheBytes)} }
+func New() *Format {
+	return &Format{now: time.Now, docs: newDocCache(defaultDocCacheBytes), rendered: newDocCache(defaultDocCacheBytes)}
+}
 
 // Name implements core.Format.
 func (f *Format) Name() string { return Name }

@@ -3,6 +3,7 @@ package npm_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -181,5 +182,52 @@ func TestClusterLockAndDocumentCache(t *testing.T) {
 	packumentFor(t, ts, "npm-hosted", "@acme/many")
 	if n := store.gets.Load() - before; n != 0 {
 		t.Fatalf("cached packument read %d blobs", n)
+	}
+}
+
+// The rendered-packument cache is keyed by the packument's inputs, so every
+// change (new version, dist-tag, deprecation, unpublish) shows at once.
+func TestRenderedPackumentFollowsChanges(t *testing.T) {
+	ts := newServer(t)
+	ts.publish(t, "npm-hosted", "cached", "1.0.0", "latest")
+	get := func(abbreviated bool) map[string]any {
+		t.Helper()
+		hdr := []string{}
+		if abbreviated {
+			hdr = append(hdr, "Accept", "application/vnd.npm.install-v1+json")
+		}
+		return decodeJSON(t, ts.do(t, http.MethodGet, "/repository/npm-hosted/cached", "alice", nil, hdr...))
+	}
+	for range 2 {
+		if doc := get(true); len(doc["versions"].(map[string]any)) != 1 {
+			t.Fatalf("abbreviated = %v", doc)
+		}
+	}
+	ts.publish(t, "npm-hosted", "cached", "1.1.0", "latest")
+	if doc := get(true); len(doc["versions"].(map[string]any)) != 2 || doc["dist-tags"].(map[string]any)["latest"] != "1.1.0" {
+		t.Fatalf("after publish: %v", doc)
+	}
+	r := ts.do(t, http.MethodPut, "/repository/npm-hosted/-/package/cached/dist-tags/beta", "alice",
+		strings.NewReader(`"1.0.0"`), "Content-Type", "application/json")
+	if r.StatusCode != http.StatusCreated {
+		t.Fatalf("dist-tag = %d", r.StatusCode)
+	}
+	if doc := get(false); doc["dist-tags"].(map[string]any)["beta"] != "1.0.0" {
+		t.Fatalf("after dist-tag: %v", doc["dist-tags"])
+	}
+	doc := packumentFor(t, ts, "npm-hosted", "cached")
+	doc["versions"].(map[string]any)["1.0.0"].(map[string]any)["deprecated"] = "use 1.1.0"
+	b, _ := json.Marshal(doc)
+	if r := ts.do(t, http.MethodPut, "/repository/npm-hosted/cached", "alice", bytes.NewReader(b)); r.StatusCode != http.StatusOK {
+		t.Fatalf("deprecate = %d %s", r.StatusCode, readAll(t, r))
+	}
+	if v := get(true)["versions"].(map[string]any)["1.0.0"].(map[string]any); v["deprecated"] != "use 1.1.0" {
+		t.Fatalf("after deprecate: %v", v)
+	}
+	if r := ts.do(t, http.MethodDelete, "/repository/npm-hosted/cached/-/cached-1.1.0.tgz/-rev/x", "alice", nil); r.StatusCode != http.StatusOK {
+		t.Fatalf("unpublish = %d", r.StatusCode)
+	}
+	if doc := get(true); len(doc["versions"].(map[string]any)) != 1 || doc["dist-tags"].(map[string]any)["latest"] != "1.0.0" {
+		t.Fatalf("after unpublish: %v", doc)
 	}
 }
