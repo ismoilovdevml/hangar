@@ -171,7 +171,7 @@
 
 /* ---------- audit ---------- */
 .audit-filters__form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 14px; align-items: start; }
-.audit-filters__actions { display: flex; flex-wrap: wrap; gap: 10px; align-self: end; padding-bottom: 2px; }
+.audit-filters__actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; }
 .audit-filters__actions .button { min-height: 46px; }
 .audit-table td { vertical-align: top; }
 .audit-toggle-cell { width: 44px; padding-right: 0 !important; }

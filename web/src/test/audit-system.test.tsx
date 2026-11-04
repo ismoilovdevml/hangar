@@ -133,3 +133,17 @@ describe('system', () => {
     expect(await screen.findByText(/does not list cluster nodes yet; it reports 3 of 3 up/)).toBeInTheDocument();
   });
 });
+
+describe('older servers', () => {
+  it('says plainly when cleanup policies are not supported yet', async () => {
+    server.use(http.get('*/api/v1/cleanup-policies', () => HttpResponse.json({ code: 'not_implemented', message: 'cleanup' }, { status: 501 })));
+    renderApp('/cleanup');
+    expect(await screen.findByText(/does not support cleanup policies yet/, {}, { timeout: 5000 })).toBeInTheDocument();
+  });
+
+  it('says plainly when tasks are not supported yet', async () => {
+    server.use(http.get('*/api/v1/tasks', () => HttpResponse.json({ code: 'not_implemented', message: 'tasks' }, { status: 501 })));
+    renderApp('/tasks');
+    expect(await screen.findByText(/does not report scheduled tasks yet/, {}, { timeout: 5000 })).toBeInTheDocument();
+  });
+});

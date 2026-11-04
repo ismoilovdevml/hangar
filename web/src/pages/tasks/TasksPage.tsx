@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { useCanSystem, useTaskLiveUpdates, useTasks } from '../../api/ops';
+import { isMissingEndpoint, useCanSystem, useTaskLiveUpdates, useTasks } from '../../api/ops';
 import type { Task, TaskRun, TaskType } from '../../api/opsTypes';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
@@ -249,7 +249,9 @@ export function TasksPage() {
             <NameFilter value={search.q ?? ''} onChange={(q) => setFilter({ q })} />
           </div>
         </div>
-        {tasks.isError ? (
+        {tasks.isError && isMissingEndpoint(tasks.error) ? (
+          <p className="meta panel-note">This server does not report scheduled tasks yet. Upgrade Hangar to see and run them here.</p>
+        ) : tasks.isError ? (
           <ErrorNote what="scheduled tasks" onRetry={() => void tasks.refetch()} />
         ) : (
           <DataTable

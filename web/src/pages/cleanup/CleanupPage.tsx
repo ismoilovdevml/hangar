@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { useAllCleanupPolicies, useCanSystem } from '../../api/ops';
+import { isMissingEndpoint, useAllCleanupPolicies, useCanSystem } from '../../api/ops';
 import { ErrorNote } from '../../components/ErrorNote';
 import { IconPlus } from '../../components/icons';
 import { PageHeader } from '../../components/PageHeader';
@@ -56,7 +56,9 @@ export function CleanupPage() {
 
       <div className="cleanup-layout">
         <Panel as="nav" className="policy-list" aria-label="Cleanup policies">
-          {policies.isError ? (
+          {policies.isError && isMissingEndpoint(policies.error) ? (
+            <p className="meta">This server does not support cleanup policies yet. Upgrade Hangar to manage them here.</p>
+          ) : policies.isError ? (
             <ErrorNote what="cleanup policies" onRetry={() => void policies.refetch()} />
           ) : policies.isPending ? (
             <p className="meta">Loading policies…</p>
