@@ -4,6 +4,7 @@ go 1.27.3
 
 require (
 	github.com/go-chi/chi/v5 v5.5.0
+	github.com/google/go-containerregistry v0.22.1
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/minio/minio-go/v7 v7.4.1
 	github.com/nats-io/nats-server/v2 v2.15.2
@@ -21,6 +22,8 @@ require (
 	github.com/antithesishq/antithesis-sdk-go v0.8.0-default-no-op // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/docker/cli v29.7.2+incompatible // indirect
+	github.com/docker/docker-credential-helpers v0.9.3 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/google/go-tpm v0.9.8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -38,12 +41,15 @@ require (
 	github.com/nats-io/jwt/v2 v2.8.2 // indirect
 	github.com/nats-io/nkeys v0.4.16 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
+	github.com/opencontainers/go-digest v1.0.0 // indirect
+	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/common v0.72.0 // indirect
 	github.com/prometheus/procfs v0.22.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/sethvargo/go-retry v0.5.0 // indirect
+	github.com/sirupsen/logrus v1.10.2 // indirect
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
@@ -52,4 +58,5 @@ require (
 	golang.org/x/time v0.16.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/ini.v1 v1.67.3 // indirect
+	gotest.tools/v3 v3.5.2 // indirect
 )

@@ -105,7 +105,7 @@ func TestRouter(t *testing.T) {
 		{"/api/v1/repositories", 501, `"not_implemented"`},
 		{"/repository/raw-hosted/file.txt", 401, "authentication required"},
 		{"/repository/absent/file.txt", 404, "not found"},
-		{"/v2/", 501, "docker format"},
+		{"/v2/", 401, "UNAUTHORIZED"},
 		{"/repositories", 200, "<html"},
 	}
 	for _, tt := range tests {
