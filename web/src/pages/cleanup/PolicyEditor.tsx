@@ -15,6 +15,7 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { IconDownload, IconPlay, IconX } from '../../components/opsIcons';
 import { NotAvailable } from '../../components/NotAvailable';
 import { Panel } from '../../components/Panel';
+import { formatOptions } from '../../components/formatOptions';
 import { Select } from '../../components/Select';
 import {
   draftFromPolicy,
@@ -29,7 +30,7 @@ import {
   type Toggle,
 } from '../../lib/cleanup';
 import { scheduleToCron, describeCron } from '../../lib/cron';
-import { FORMAT_META, formatBytes } from '../../lib/format';
+import { formatBytes } from '../../lib/format';
 import { ALL_FORMATS, isFormat } from '../../lib/repositories';
 import { formatUtc } from '../../lib/tasks';
 import { RunHistory } from './RunHistory';
@@ -269,7 +270,7 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
                 <Select
                   id={ids.format}
                   value={draft.format}
-                  options={[{ value: '', label: 'Any format' }, ...ALL_FORMATS.map((f) => ({ value: f, label: FORMAT_META[f].label }))]}
+                  options={formatOptions(ALL_FORMATS, 'Any format')}
                   onChange={(v) => update({ format: isFormat(v) ? v : '' })}
                 />
               </div>

@@ -12,6 +12,7 @@ import { ErrorNote } from '../../../components/ErrorNote';
 import { FormatBadge } from '../../../components/FormatBadge';
 import { IconPackage } from '../../../components/icons';
 import { ClientSetup } from '../../../components/ClientSetup';
+import { FormatName } from '../../../components/FormatIcon';
 import { PageHeader } from '../../../components/PageHeader';
 import { Panel } from '../../../components/Panel';
 import { Pill, StatusDot } from '../../../components/Pill';
@@ -225,7 +226,9 @@ function SettingsForm({ repo }: { repo: Repository }) {
           <Panel title="Summary" titleId="summary-title" as="div" className="summary">
             <dl className="summary__list">
               <dt>Format</dt>
-              <dd>{formatLabel}</dd>
+              <dd>
+                <FormatName format={repo.format} />
+              </dd>
               <dt>Type</dt>
               <dd>
                 <Pill tone={TYPE_META[repo.type].tone}>{TYPE_META[repo.type].label}</Pill>

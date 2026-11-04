@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, type KeyboardEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { ApiRequestError } from '../../api/client';
 import { flatItems, useAllRepositories, useSearch } from '../../api/catalog';
@@ -6,6 +6,7 @@ import { useFormats } from '../../api/hooks';
 import type { FacetValue, SearchHit, SearchResult, SearchSort } from '../../api/types';
 import { ErrorNote } from '../../components/ErrorNote';
 import { FormatBadge } from '../../components/FormatBadge';
+import { FormatIcon } from '../../components/FormatIcon';
 import { Pill } from '../../components/Pill';
 import { Select } from '../../components/Select';
 import { FORMAT_META, formatCompact, relativeTime } from '../../lib/format';
@@ -235,10 +236,11 @@ function ResultList({
   );
 }
 
-function FacetCheckbox({ label, count, checked, onChange }: { label: string; count: number; checked: boolean; onChange: () => void }) {
+function FacetCheckbox({ label, icon, count, checked, onChange }: { label: string; icon?: ReactNode; count: number; checked: boolean; onChange: () => void }) {
   return (
     <label className="facet-option">
       <input type="checkbox" checked={checked} onChange={onChange} />
+      {icon}
       <span className="facet-option__label">{label}</span>
       <span className="facet-option__count">{count}</span>
     </label>
@@ -269,6 +271,7 @@ function Facets({ q, result, onChange }: { q: string; result: SearchResult; onCh
           <FacetCheckbox
             key={f.value}
             label={isFormat(f.value) ? FORMAT_META[f.value].label : f.value}
+            icon={<FormatIcon format={f.value} size={16} label={null} />}
             count={f.count}
             checked={selectedFormats.includes(f.value)}
             onChange={() => onChange(toggleQualifierValue(q, 'format', f.value))}

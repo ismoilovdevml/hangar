@@ -9,6 +9,8 @@ export interface SelectOption<T extends string = string> {
   /** Secondary text under the label, also matched by the search box. */
   hint?: string;
   disabled?: boolean;
+  /** Decorative mark before the label (a format logo), also shown in the trigger. */
+  icon?: ReactNode;
 }
 
 interface SelectProps<T extends string> {
@@ -293,6 +295,7 @@ export function Select<T extends string>({
         }}
       >
         {prefix}
+        {selected?.icon && <span className="select__icon">{selected.icon}</span>}
         <span className={selected ? 'select__value' : 'select__value select__placeholder'}>{selected?.label ?? placeholder}</span>
         <IconChevronUpDown size={14} />
       </button>
@@ -356,6 +359,7 @@ export function Select<T extends string>({
                     }}
                     onClick={() => pick(o)}
                   >
+                    {o.icon && <span className="select-option__icon">{o.icon}</span>}
                     <span className="select-option__text">
                       <span className="select-option__label">{o.label}</span>
                       {o.hint && <span className="select-option__hint">{o.hint}</span>}

@@ -82,8 +82,13 @@
 /* ---------- format badge ---------- */
 .format-badge {
   flex: none; display: grid; place-items: center;
-  border-radius: 9px; font-weight: 700; letter-spacing: .02em; line-height: 1;
+  border-radius: 9px; background: var(--surface-solid); border: 1px solid var(--hairline);
+  color: var(--ink-3); line-height: 1;
 }
+.format-icon { flex: none; display: inline-block; vertical-align: middle; }
+.format-icon--generic { color: var(--ink-3); }
+/* a mark next to its name, in tables, pickers and summaries */
+.format-label { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 
 /* ---------- meter ---------- */
 .meter { width: 100%; background: var(--track); overflow: hidden; }
@@ -199,6 +204,7 @@ select.input:disabled { opacity: .7; }
   color: var(--ink); text-align: left; cursor: pointer;
 }
 .select > svg { flex: none; color: var(--ink-3); }
+.select__icon, .select-option__icon { flex: none; display: inline-flex; }
 .select__value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .select__placeholder { color: var(--ink-3); }
 .select:disabled { cursor: not-allowed; opacity: .6; }

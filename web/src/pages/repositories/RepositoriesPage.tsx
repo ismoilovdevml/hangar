@@ -8,9 +8,11 @@ import { ErrorNote } from '../../components/ErrorNote';
 import { IconDatabase, IconGlobe, IconGroup, IconPackage, IconPlus, IconSearch } from '../../components/icons';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
+import { FormatName } from '../../components/FormatIcon';
+import { formatOptions } from '../../components/formatOptions';
 import { Select } from '../../components/Select';
 import { Pill, StatusDot } from '../../components/Pill';
-import { FORMAT_META, formatBytes } from '../../lib/format';
+import { formatBytes } from '../../lib/format';
 import { plural } from '../../lib/overview';
 import { ALL_FORMATS, displayUrl, isFormat, repoSubtitle, STATUS_META, TYPE_META } from '../../lib/repositories';
 
@@ -158,7 +160,7 @@ export function RepositoriesPage() {
       ),
     },
     { key: 'type', header: 'Type', cell: (r) => <Pill tone={TYPE_META[r.type].tone}>{TYPE_META[r.type].label}</Pill> },
-    { key: 'format', header: 'Format', className: 'muted', cell: (r) => (isFormat(r.format) ? FORMAT_META[r.format].label : r.format) },
+    { key: 'format', header: 'Format', className: 'muted', cell: (r) => <FormatName format={r.format} /> },
     {
       key: 'url',
       header: 'URL',
@@ -258,7 +260,7 @@ export function RepositoriesPage() {
                 id={formatId}
                 variant="inline"
                 value={format ?? ''}
-                options={[{ value: '', label: 'All formats' }, ...ALL_FORMATS.map((f) => ({ value: f, label: FORMAT_META[f].label }))]}
+                options={formatOptions(ALL_FORMATS, 'All formats')}
                 onChange={(v) => setFilter({ format: isFormat(v) ? v : undefined })}
               />
             </div>

@@ -6,6 +6,7 @@ import type { Format, RepositoryType } from '../../api/types';
 import { CodeBlock } from '../../components/CodeBlock';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
+import { FormatIcon, FormatName } from '../../components/FormatIcon';
 import { Select } from '../../components/Select';
 import { FORMAT_META } from '../../lib/format';
 import {
@@ -193,7 +194,10 @@ export function RepoCreatePage() {
                       disabled={off}
                       onChange={() => chooseFormat(f)}
                     />
-                    <span className="choice__title">{FORMAT_META[f].label}</span>
+                    <span className="choice__title choice__title--format">
+                      <FormatIcon format={f} size={20} label={null} tone={off ? 'current' : 'brand'} />
+                      {FORMAT_META[f].label}
+                    </span>
                     <span className="choice__hint">{off ? 'Not enabled on this server' : FORMAT_HINT[f]}</span>
                   </label>
                 );
@@ -234,7 +238,7 @@ export function RepoCreatePage() {
           <Panel title="Summary" titleId="summary-title" as="div" className="summary">
             <dl className="summary__list">
               <dt>Format</dt>
-              <dd>{form.format && isFormat(form.format) ? FORMAT_META[form.format].label : '—'}</dd>
+              <dd>{form.format && isFormat(form.format) ? <FormatName format={form.format} /> : '—'}</dd>
               <dt>Type</dt>
               <dd>{form.type ? TYPE_META[form.type].label : '—'}</dd>
               <dt>URL</dt>
