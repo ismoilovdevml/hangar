@@ -15,6 +15,7 @@ export type CleanupCriteria = Schemas['CleanupCriteria'];
 export type CleanupPolicyInput = Schemas['CleanupPolicyInput'];
 export type CleanupPolicy = Schemas['CleanupPolicy'];
 export type CleanupPreview = Schemas['CleanupPreview'];
+export type CleanupCandidate = Schemas['CleanupCandidate'];
 
 /**
  * One execution of a policy (not in the contract yet:

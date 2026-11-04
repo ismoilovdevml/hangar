@@ -285,10 +285,14 @@ export const cleanupPolicies: CleanupPolicy[] = [
     id: 'cp_01', name: 'keep-last-20', description: 'keep last 20 · delete unused after 90 days', format: null,
     criteria: { keep_newest: 20, not_downloaded_days: 90 }, repositories: ['docker-dev'], schedule: '0 2 * * *',
     enabled: true, schedule_text: 'Every day at 02:00 UTC', created_at: '2026-02-01T10:00:00Z',
+    updated_at: '2026-02-01T10:00:00Z', effective_repositories: ['docker-dev'], task_id: 'cleanup/keep-last-20',
+    next_run_at: null, last_run: null,
   },
   {
     id: 'cp_02', name: 'snapshots-14d', description: 'snapshots older than 14 days', format: 'maven',
     criteria: { older_than_days: 14, prerelease_only: true }, repositories: ['maven-snapshots'], schedule: '0 3 * * *',
     enabled: true, schedule_text: 'Every day at 03:00 UTC', created_at: '2026-02-01T10:00:00Z',
+    updated_at: '2026-02-01T10:00:00Z', effective_repositories: ['maven-snapshots'], task_id: 'cleanup/snapshots-14d',
+    next_run_at: null, last_run: null,
   },
 ];
