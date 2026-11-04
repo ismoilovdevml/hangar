@@ -12,7 +12,7 @@ Every server also publishes its own reference, with its real URLs:
 |---|---|
 | `<base_url>/api-docs` | API reference in the web UI: every endpoint by area, schemas, curl examples and "Try it" (also under Settings → API reference) |
 | `<base_url>/api/v1/openapi.yaml`, `/api/v1/openapi.json` | the OpenAPI 3.1 document ([api/openapi.yaml](../../api/openapi.yaml)); public, no token needed |
-| `<base_url>/api/v1/agent-guide.md` | a short Markdown guide for automated clients: authentication, errors, paging, limits and examples |
+| `<base_url>/api/v1/automation-guide.md` | a short Markdown guide for automated clients: authentication, errors, paging, limits and examples |
 | `<base_url>/llms.txt` | a plain-text index of the documents above, at the conventional root path |
 
 Placeholders:
@@ -70,7 +70,7 @@ Every request may carry one of:
 
 Every route requires sign-in except `GET /system/status`, `GET /system/version`,
 `GET /auth/providers`, `POST /auth/login` and the documents `GET /openapi.yaml`,
-`GET /openapi.json` and `GET /agent-guide.md`; anonymous calls to anything else
+`GET /openapi.json` and `GET /automation-guide.md`; anonymous calls to anything else
 answer `401`. (Package endpoints are different: repositories with
 `anonymous_read` serve downloads without credentials.) Wrong, expired or revoked
 credentials answer `401`; a locked account answers `423`. Token-authenticated

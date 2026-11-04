@@ -52,7 +52,7 @@ var PublicRoutes = map[string]bool{
 	"GET /auth/oidc/callback": true,
 	"GET /openapi.yaml":       true,
 	"GET /openapi.json":       true,
-	"GET /agent-guide.md":     true,
+	"GET /automation-guide.md":     true,
 }
 
 // requireSignIn answers 401 to anonymous callers of every route that is not

@@ -178,7 +178,7 @@ describe('access & audit: tokens', () => {
     expect(await within(secretDialog).findByText(`//pkg.acme.io/repository/npm-internal/:_authToken=${secret}`)).toBeInTheDocument();
     expect(within(secretDialog).getByText(/dotnet nuget push <package>.nupkg -s https:\/\/pkg.acme.io\/repository\/nuget-internal\/index.json/)).toBeInTheDocument();
     await user.click(within(secretDialog).getByRole('radio', { name: 'Automation' }));
-    expect(within(secretDialog).getByText('Give this to an automation or agent')).toBeInTheDocument();
+    expect(within(secretDialog).getByText('Give this to an automated client')).toBeInTheDocument();
     expect(within(secretDialog).getByText('# Start with the guide: https://pkg.acme.io/llms.txt')).toBeInTheDocument();
     expect(within(secretDialog).getByRole('link', { name: '/llms.txt' })).toHaveAttribute('href', '/llms.txt');
 

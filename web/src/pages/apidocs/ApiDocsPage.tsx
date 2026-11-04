@@ -184,7 +184,7 @@ export function ApiDocsPage() {
                   /llms.txt
                 </a>{' '}
                 and the{' '}
-                <a className="link-strong" href="/api/v1/agent-guide.md" target="_blank" rel="noreferrer">
+                <a className="link-strong" href="/api/v1/automation-guide.md" target="_blank" rel="noreferrer">
                   automation guide
                 </a>{' '}
                 are written for scripts and automated clients, with this server’s URLs. The raw document:{' '}

@@ -112,7 +112,7 @@ func TestRouter(t *testing.T) {
 		{"/api/v1/system/status", 200, `"dependencies"`},
 		{"/api/v1/system/version", 200, `"go_version"`},
 		{"/api/v1/openapi.yaml", 200, "openapi: 3.1.0"},
-		{"/llms.txt", 200, "/api/v1/agent-guide.md"},
+		{"/llms.txt", 200, "/api/v1/automation-guide.md"},
 		{"/api-docs", 200, "<html"},
 		{"/api/v1/formats", 401, `"unauthenticated"`},
 		{"/api/v1/repositories", 401, `"unauthenticated"`},

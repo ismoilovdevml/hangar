@@ -102,7 +102,7 @@ export function SecretPanel({ token, note, onDone }: { token: TokenCreated; note
       )}
       {tab === 'automation' && (
         <div className="reveal-section">
-          <p className="field__label">Give this to an automation or agent</p>
+          <p className="field__label">Give this to an automated client</p>
           <p className="meta">
             Scripts, CI jobs and other automated clients need only these lines. The guide at{' '}
             <a className="link-strong" href="/llms.txt" target="_blank" rel="noreferrer">

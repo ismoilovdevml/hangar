@@ -3,7 +3,7 @@
 ## Unreleased
 
 - **Automation-friendly API**: the OpenAPI document is public at
-  `/api/v1/openapi.yaml` and `/api/v1/openapi.json`; `/api/v1/agent-guide.md`
+  `/api/v1/openapi.yaml` and `/api/v1/openapi.json`; `/api/v1/automation-guide.md`
   and `/llms.txt` give scripts and automated clients a short guide with the
   server's real URLs (authentication, error body, paging, rate limits, common
   calls). `GET /me` (same body as `GET /auth/session`) now includes a `token`

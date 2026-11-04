@@ -99,7 +99,7 @@ they publish and download through each format's own protocol under
 
 ## Start here
 
-- [Automation guide]({{BASE}}/api/v1/agent-guide.md): authentication, errors, pagination, rate limits and the most useful calls, with examples
+- [Automation guide]({{BASE}}/api/v1/automation-guide.md): authentication, errors, pagination, rate limits and the most useful calls, with examples
 - [OpenAPI document (YAML)]({{BASE}}/api/v1/openapi.yaml): every endpoint and schema
 - [OpenAPI document (JSON)]({{BASE}}/api/v1/openapi.json): the same document as JSON
 - [API reference]({{BASE}}/api-docs): the document rendered for people

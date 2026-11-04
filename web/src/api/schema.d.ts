@@ -182,7 +182,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agent-guide.md": {
+    "/automation-guide.md": {
         parameters: {
             query?: never;
             header?: never;

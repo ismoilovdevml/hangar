@@ -242,7 +242,7 @@ var passwordChangeRoutes = map[string]routeKind{
 	"GET /system/version":     routePublic,
 	"GET /openapi.yaml":       routePublic,
 	"GET /openapi.json":       routePublic,
-	"GET /agent-guide.md":     routePublic,
+	"GET /automation-guide.md":     routePublic,
 }
 
 func passwordChangeRoute(r *http.Request) routeKind {

@@ -167,7 +167,7 @@ func (a *API) Mount(r chi.Router) {
 
 		r.Get("/openapi.yaml", a.openAPIYAML)
 		r.Get("/openapi.json", a.openAPIJSON)
-		r.Get("/agent-guide.md", a.automationGuide)
+		r.Get("/automation-guide.md", a.automationGuide)
 
 		r.Get("/system/status", a.systemStatus)
 		r.Get("/system/version", func(w http.ResponseWriter, _ *http.Request) {

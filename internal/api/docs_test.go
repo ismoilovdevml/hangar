@@ -18,7 +18,7 @@ func TestPublicDocuments(t *testing.T) {
 	for _, c := range []struct{ path, contentType, contains string }{
 		{"/api/v1/openapi.yaml", "application/yaml", "openapi: 3.1.0"},
 		{"/api/v1/openapi.json", "application/json", `"openapi":"3.1.0"`},
-		{"/api/v1/agent-guide.md", "text/markdown", "/api/v1/openapi.yaml"},
+		{"/api/v1/automation-guide.md", "text/markdown", "/api/v1/openapi.yaml"},
 	} {
 		resp, body := f.do("", http.MethodGet, c.path, nil)
 		if resp.StatusCode != http.StatusOK {
@@ -53,7 +53,7 @@ func TestDocumentsUseConfiguredBaseURL(t *testing.T) {
 	a.LLMsTxt(rec, httptest.NewRequest(http.MethodGet, "http://10.0.0.5:8080/llms.txt", nil))
 	body := rec.Body.String()
 	for _, want := range []string{
-		"https://hangar.example.com/api/v1/agent-guide.md",
+		"https://hangar.example.com/api/v1/automation-guide.md",
 		"https://hangar.example.com/api/v1/openapi.yaml",
 		"https://hangar.example.com/api-docs",
 	} {
@@ -65,7 +65,7 @@ func TestDocumentsUseConfiguredBaseURL(t *testing.T) {
 		t.Errorf("llms.txt uses the request host or leaves placeholders:\n%s", body)
 	}
 	rec = httptest.NewRecorder()
-	a.automationGuide(rec, httptest.NewRequest(http.MethodGet, "/api/v1/agent-guide.md", nil))
+	a.automationGuide(rec, httptest.NewRequest(http.MethodGet, "/api/v1/automation-guide.md", nil))
 	if g := rec.Body.String(); !strings.Contains(g, "docker login hangar.example.com") || strings.Contains(g, "{{") {
 		t.Errorf("guide host substitution:\n%s", g)
 	}

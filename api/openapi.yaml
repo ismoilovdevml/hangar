@@ -30,7 +30,7 @@ info:
       `Retry-After`. Retry 429 and 5xx answers with backoff, never other 4xx.
 
     This document is served at `/api/v1/openapi.yaml` (and `.json`), rendered
-    at `/api-docs`; `/api/v1/agent-guide.md` is a short guide for scripts and
+    at `/api-docs`; `/api/v1/automation-guide.md` is a short guide for scripts and
     other automated clients, indexed by `/llms.txt`.
   license:
     name: See repository
@@ -243,7 +243,7 @@ paths:
           content:
             application/json:
               schema: { type: object, additionalProperties: true }
-  /agent-guide.md:
+  /automation-guide.md:
     get:
       tags: [docs]
       operationId: getAutomationGuide
