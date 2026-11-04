@@ -232,6 +232,17 @@ func TestCatalogIntegration(t *testing.T) {
 	if len(o.Published) != 4 || published != 2 {
 		t.Errorf("published buckets = %+v", o.Published)
 	}
+	if o.Activity != (Activity{Published: 2, Cached: 0, PushesRejected: 1}) {
+		t.Errorf("activity over the buckets = %+v", o.Activity)
+	}
+	o, err = c.Overview(ctx, OverviewQuery{Now: now, Start: now.Add(-3 * time.Hour).Truncate(time.Hour), Bucket: time.Hour,
+		WindowStart: now.Add(-90 * time.Minute)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.Activity != (Activity{Published: 1, Cached: 0, PushesRejected: 1}) {
+		t.Errorf("activity over 90 minutes = %+v", o.Activity)
+	}
 
 	fd, err := c.FormatDownloads(ctx)
 	if err != nil || fd["npm"] != 55 || fd["maven"] != 7 {

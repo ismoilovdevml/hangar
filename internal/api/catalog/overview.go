@@ -25,6 +25,16 @@ type OverviewQuery struct {
 	Now    time.Time
 	Start  time.Time     // first bucket start
 	Bucket time.Duration // bucket width (> 0)
+	// WindowStart starts the range the Activity counts cover (up to Now);
+	// zero means Start.
+	WindowStart time.Time
+}
+
+// Activity counts what happened to the catalog over the overview range.
+type Activity struct {
+	Published      int64 // components published to hosted repositories
+	Cached         int64 // components fetched into proxy repositories
+	PushesRejected int64 // component.publish audit records with outcome error or denied
 }
 
 // Overview holds the database-backed numbers of the Overview screen.
@@ -51,6 +61,8 @@ type Overview struct {
 
 	// StorageByFormat sums each distinct blob once per format.
 	StorageByFormat []FormatBytes
+	// Activity covers [WindowStart, Now).
+	Activity Activity
 	// Published is the number of components published to hosted
 	// repositories per bucket from Start to Now (every bucket present, oldest
 	// first).
@@ -63,6 +75,10 @@ func (c *Catalog) Overview(ctx context.Context, q OverviewQuery) (*Overview, err
 		return nil, fmt.Errorf("overview: bad window %v..%v/%v", q.Start, q.Now, q.Bucket)
 	}
 	since := q.Now.Add(-24 * time.Hour)
+	window := q.WindowStart
+	if window.IsZero() {
+		window = q.Start
+	}
 	b := &pgx.Batch{}
 	b.Queue(`SELECT COALESCE(sum(size) FILTER (WHERE soft_deleted_at IS NULL), 0)::bigint,
 			COALESCE(sum(size) FILTER (WHERE soft_deleted_at IS NULL AND created_at >= $1), 0)::bigint
@@ -88,6 +104,13 @@ func (c *Catalog) Overview(ctx context.Context, q OverviewQuery) (*Overview, err
 		FROM components c JOIN repositories r ON r.id = c.repo_id
 		WHERE r.type = 'hosted' AND c.created_at >= $2 AND c.created_at < $3 GROUP BY 1`,
 		fmt.Sprintf("%d microseconds", q.Bucket.Microseconds()), q.Start, q.Now)
+	b.Queue(`SELECT
+			count(*) FILTER (WHERE r.type = 'hosted'),
+			count(*) FILTER (WHERE r.type = 'proxy')
+		FROM components c JOIN repositories r ON r.id = c.repo_id
+		WHERE c.created_at >= $1`, window)
+	b.Queue(`SELECT count(*) FROM audit_events
+		WHERE action = 'component.publish' AND outcome IN ('error', 'denied') AND at >= $1`, window)
 
 	br := c.pool.SendBatch(ctx, b)
 	defer func() { _ = br.Close() }()
@@ -139,6 +162,12 @@ func (c *Catalog) Overview(ctx context.Context, q OverviewQuery) (*Overview, err
 	}
 	for t := q.Start.UTC(); t.Before(q.Now); t = t.Add(q.Bucket) {
 		o.Published = append(o.Published, Bucket{Start: t, Count: counts[t.UnixMicro()]})
+	}
+	if err := br.QueryRow().Scan(&o.Activity.Published, &o.Activity.Cached); err != nil {
+		return nil, fmt.Errorf("overview activity: %w", err)
+	}
+	if err := br.QueryRow().Scan(&o.Activity.PushesRejected); err != nil {
+		return nil, fmt.Errorf("overview rejected pushes: %w", err)
 	}
 	return o, nil
 }

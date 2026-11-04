@@ -2018,6 +2018,8 @@ export interface components {
             downloads: number | null;
             /** @description Components published to hosted repositories in the bucket (proxy cache fills are not counted) */
             uploads: number;
+            /** @description Requests served by every node in the bucket (as in `requests.total`); null like `downloads` */
+            requests: number | null;
         };
         OverviewMetrics: {
             range: components["schemas"]["OverviewRange"];
@@ -2026,6 +2028,15 @@ export interface components {
                 /** @description Components published to hosted repositories in the last 24 hours */
                 published_since_yesterday: number;
                 failed_pushes: number;
+            };
+            /** @description What happened to the catalog over the range (from the range start to now) */
+            activity: {
+                /** @description Components published to hosted repositories */
+                published: number;
+                /** @description Components fetched from a remote into proxy repositories */
+                cached: number;
+                /** @description Publish attempts that failed or were denied (component.publish audit records with outcome error or denied) */
+                pushes_rejected: number;
             };
             storage: {
                 used_bytes: components["schemas"]["Bytes"];
@@ -2053,6 +2064,10 @@ export interface components {
                  * @description Start of the period the numbers cover; later than the range start when recording began inside the range (first start of a version with traffic statistics); null when nothing was recorded yet
                  */
                 coverage_start: string | null;
+                /** @description Requests of `total` answered with a 5xx status; counted from the version that introduced it on */
+                server_errors: number | null;
+                /** @description Requests of `total` refused with 401 or 403; counted from the version that introduced it on */
+                denied: number | null;
             };
             /**
              * @description Proxy cache effectiveness over the range, every format, every node.

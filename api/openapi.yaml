@@ -2755,7 +2755,7 @@ components:
       default: today
     TrafficBucket:
       type: object
-      required: [start, downloads, uploads]
+      required: [start, downloads, uploads, requests]
       properties:
         start: { $ref: "#/components/schemas/Timestamp" }
         downloads:
@@ -2764,9 +2764,12 @@ components:
         uploads:
           type: integer
           description: Components published to hosted repositories in the bucket (proxy cache fills are not counted)
+        requests:
+          type: [integer, "null"]
+          description: Requests served by every node in the bucket (as in `requests.total`); null like `downloads`
     OverviewMetrics:
       type: object
-      required: [range, generated_at, summary, storage, requests, cache, issues, traffic, storage_by_format]
+      required: [range, generated_at, summary, activity, storage, requests, cache, issues, traffic, storage_by_format]
       properties:
         range: { $ref: "#/components/schemas/OverviewRange" }
         generated_at: { $ref: "#/components/schemas/Timestamp" }
@@ -2778,6 +2781,20 @@ components:
               type: integer
               description: Components published to hosted repositories in the last 24 hours
             failed_pushes: { type: integer }
+        activity:
+          type: object
+          description: What happened to the catalog over the range (from the range start to now)
+          required: [published, cached, pushes_rejected]
+          properties:
+            published:
+              type: integer
+              description: Components published to hosted repositories
+            cached:
+              type: integer
+              description: Components fetched from a remote into proxy repositories
+            pushes_rejected:
+              type: integer
+              description: Publish attempts that failed or were denied (component.publish audit records with outcome error or denied)
         storage:
           type: object
           required: [used_bytes, capacity_bytes, added_bytes_24h]
@@ -2795,7 +2812,7 @@ components:
             the database, so the numbers survive restarts; whole minutes are
             counted. Every value is null when traffic statistics are not
             available.
-          required: [total, trend_pct, peak_total, p95_ms, coverage_start]
+          required: [total, trend_pct, peak_total, p95_ms, coverage_start, server_errors, denied]
           properties:
             total: { type: [integer, "null"] }
             trend_pct:
@@ -2811,6 +2828,12 @@ components:
               type: [string, "null"]
               format: date-time
               description: Start of the period the numbers cover; later than the range start when recording began inside the range (first start of a version with traffic statistics); null when nothing was recorded yet
+            server_errors:
+              type: [integer, "null"]
+              description: Requests of `total` answered with a 5xx status; counted from the version that introduced it on
+            denied:
+              type: [integer, "null"]
+              description: Requests of `total` refused with 401 or 403; counted from the version that introduced it on
         cache:
           type: object
           description: |

@@ -99,6 +99,9 @@ func TestRecorderAndStore(t *testing.T) {
 	rec3 := NewRecorder(pool, node2.m.Registry, Options{Started: day.Add(2 * time.Hour)})
 	rec3.now = func() time.Time { return clock }
 	node2.serve(3, "/v2/*", "GET", "200", 0.02)
+	node2.serve(2, "/repository/{repo}/*", "PUT", "401", 0.02)
+	node2.serve(1, "/api/v1/repositories", "GET", "403", 0.02)
+	node2.serve(1, "/repository/{repo}/*", "GET", "502", 0.02)
 	if err := rec3.Flush(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +118,7 @@ func TestRecorderAndStore(t *testing.T) {
 	if !o.CoverageStart.Equal(day.Add(time.Hour)) {
 		t.Errorf("coverage = %v", o.CoverageStart)
 	}
-	if o.Requests != 41 { // 10+2+5+1 + 20 + 3
+	if o.Requests != 45 { // 10+2+5+1 + 20 + 3+2+1+1
 		t.Errorf("requests = %d", o.Requests)
 	}
 	if o.PrevRequests != nil {
@@ -127,14 +130,20 @@ func TestRecorderAndStore(t *testing.T) {
 	if len(o.Downloads) != 2 || o.Downloads[0] != 15 || o.Downloads[1] != 23 {
 		t.Errorf("downloads = %v", o.Downloads)
 	}
+	if len(o.BucketRequests) != 2 || o.BucketRequests[0] != 18 || o.BucketRequests[1] != 27 {
+		t.Errorf("bucket requests = %v", o.BucketRequests)
+	}
+	if o.ServerErrors != 1 || o.Denied != 3 {
+		t.Errorf("server errors %d denied %d, want 1 3", o.ServerErrors, o.Denied)
+	}
 	if o.CacheHits != 5 || o.CacheMisses != 1 || o.CacheHitBytes != 1500 {
 		t.Errorf("cache = %d/%d/%d", o.CacheHits, o.CacheMisses, o.CacheHitBytes)
 	}
-	if o.Latency.Total() != 41 {
+	if o.Latency.Total() != 45 {
 		t.Errorf("latency observations = %d", o.Latency.Total())
 	}
 	if p95, ok := o.Latency.Quantile(RequestBounds, .95); !ok || p95 <= .01 || p95 > .025 {
-		t.Errorf("p95 = %v", p95) // 39 of 41 at 20ms
+		t.Errorf("p95 = %v", p95) // 43 of 45 at 20ms
 	}
 
 	// Window 02:00-03:00 only sees the second process and node; its previous
@@ -144,22 +153,22 @@ func TestRecorderAndStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if o2.Requests != 23 || o2.PrevRequests == nil || *o2.PrevRequests != 18 || o2.CacheHits != 1 {
+	if o2.Requests != 27 || o2.PrevRequests == nil || *o2.PrevRequests != 18 || o2.CacheHits != 1 {
 		t.Errorf("02:00 window = %+v prev %v", o2, o2.PrevRequests)
 	}
-	if o2.PeakRequests != 23 {
+	if o2.PeakRequests != 27 {
 		t.Errorf("peak = %d", o2.PeakRequests)
 	}
 
 	// A one-hour window at 03:00-04:00 is quiet. No hour holds both the
 	// 01:00 and the 02:00 minutes, so the busiest hour since coverage is one
-	// that holds the 02:00 minute (23 requests).
+	// that holds the 02:00 minute (27 requests).
 	o3, err := store.Overview(ctx, OverviewQuery{Start: day.Add(3 * time.Hour), End: day.Add(4 * time.Hour),
 		BucketStart: day.Add(3 * time.Hour), Bucket: time.Hour})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if o3.Requests != 0 || o3.PeakRequests != 23 || o3.CacheHits+o3.CacheMisses != 0 {
+	if o3.Requests != 0 || o3.PeakRequests != 27 || o3.ServerErrors+o3.Denied != 0 || o3.CacheHits+o3.CacheMisses != 0 {
 		t.Errorf("quiet window = %+v", o3)
 	}
 

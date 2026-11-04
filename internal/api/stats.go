@@ -24,6 +24,8 @@ type requestNumbers struct {
 	PeakTotal     *int64     `json:"peak_total"`
 	P95MS         *float64   `json:"p95_ms"`
 	CoverageStart *time.Time `json:"coverage_start"`
+	ServerErrors  *int64     `json:"server_errors"`
+	Denied        *int64     `json:"denied"`
 }
 
 // cacheNumbers is the cache block of OverviewMetrics.
@@ -35,7 +37,8 @@ type cacheNumbers struct {
 }
 
 func requestsFrom(o *rollup.Overview, start time.Time) requestNumbers {
-	out := requestNumbers{Total: ptr(o.Requests), PeakTotal: ptr(o.PeakRequests)}
+	out := requestNumbers{Total: ptr(o.Requests), PeakTotal: ptr(o.PeakRequests),
+		ServerErrors: ptr(o.ServerErrors), Denied: ptr(o.Denied)}
 	if !o.CoverageStart.IsZero() {
 		out.CoverageStart = ptr(maxTime(start, o.CoverageStart).UTC())
 	}
