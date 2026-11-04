@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 )
@@ -38,6 +39,28 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 }
 
 var errSignIn = fmt.Errorf("sign in required: %w", core.ErrUnauthenticated)
+
+// PublicRoutes are the only operations anonymous callers may use: those
+// documented with `security: []` in api/openapi.yaml (a test keeps the two
+// in sync). Keys are "METHOD /path" relative to Prefix.
+var PublicRoutes = map[string]bool{
+	"GET /system/status":  true,
+	"GET /system/version": true,
+	"GET /auth/providers": true,
+	"POST /auth/login":    true,
+}
+
+// requireSignIn answers 401 to anonymous callers of every route that is not
+// in PublicRoutes, before any handler (or the not-implemented fallback) runs.
+func requireSignIn(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if core.PrincipalFrom(r.Context()).IsAnonymous() && !PublicRoutes[r.Method+" "+strings.TrimPrefix(r.URL.Path, Prefix)] {
+			WriteError(w, http.StatusUnauthorized, "unauthenticated", "sign in required")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 // requireUser fails for the anonymous principal.
 func requireUser(ctx context.Context) error {

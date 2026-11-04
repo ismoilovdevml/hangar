@@ -128,6 +128,7 @@ func (a *API) Mount(r chi.Router) {
 		} else {
 			r.Use(a.authenticate)
 		}
+		r.Use(requireSignIn)
 
 		r.Get("/system/status", a.systemStatus)
 		r.Get("/system/version", func(w http.ResponseWriter, _ *http.Request) {
