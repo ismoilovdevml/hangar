@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- **README images**: badges, logos and screenshots in package READMEs now
+  load. The package info API returns, for every image of a README, a
+  same-origin URL signed by the server (`readme.images`); Hangar fetches
+  remote images through the outbound proxy and address policy (https only,
+  5 MiB, images only, content sniffed, SVG sandboxed) and caches them for
+  24 hours in memory and PostgreSQL (`readme_image_cache`, migration
+  `00160`). New endpoint `GET /components/{id}/readme-images/{sig}`. Relative
+  image paths are served from the package (.nupkg, npm tarball) or resolved
+  in the source repository on github.com / gitlab.com; image links copied
+  from github.com pages are unwrapped. New setting `ui.readme_images`
+  (`proxy` default, `direct`, `off`) and `ui.readme_images_allow_http`; see
+  [security](security.md#readme-images) for the privacy trade-off.
+- **README rendering**: badge rows stay on one line, linked images stay
+  clickable, `<img width>` is honoured, images are bounded and load lazily
+  without a referrer, and an image that is not shown or fails to load becomes
+  a small chip with its alternative text instead of `[image: …]`.
+- **Package icon**: NuGet packages show their own icon (`<icon>` in the
+  .nupkg, or `<iconUrl>` through the image proxy) in the package header
+  (`icon_url` in the package info API).
 - **Fewer release files**: the compose stack ships as one `hangar-compose.tar.gz`
   and only Linux binaries are published (`hangar-linux-amd64`,
   `hangar-linux-arm64`), next to `install.sh` and `SHA256SUMS`. The installer
