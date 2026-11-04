@@ -1,21 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { ScreenSkeleton } from './ScreenSkeleton';
 
-export function VulnerabilitiesPage() {
-  return (
-    <ScreenSkeleton
-      title="Vulnerabilities"
-      description="Every package is scanned when it arrives and again when new advisories appear."
-      planned={[
-        'Critical, high, medium and low counts.',
-        'Findings with advisory, severity, package, fixed-in version, affected components and status.',
-        'Filters for fix available, in production and waived; waivers need a reason and an expiry.',
-        'Quarantine, signature and licence policies, and a 30-day trend.',
-      ]}
-    />
-  );
-}
-
 export function ClusterPage() {
   return (
     <ScreenSkeleton

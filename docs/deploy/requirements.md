@@ -9,7 +9,8 @@
 | Blob storage | yes | **S3-compatible** (AWS S3, MinIO, Ceph RGW, ...) or a **filesystem path**. Blobs are content-addressed and immutable. Several nodes need S3 or a shared ReadWriteMany volume. |
 | NATS with JetStream | yes | Events and the job queue. Embedded in the process for a single node; an external cluster (3 nodes) for several nodes. |
 | Reverse proxy / ingress | for TLS | Hangar serves plain HTTP. Terminate TLS in Caddy, Traefik, a cloud load balancer or an ingress controller. |
-| Trivy server | no | `scanner.trivy_url`; vulnerability scanning is not active in this release. |
+| OSV API (`api.osv.dev:443`) or a mirror | no | Vulnerability scanning of npm, Maven, PyPI, NuGet and Go packages (`scanning.osv.url`); without it scans fail and are retried. |
+| Trivy server | no | `scanner.trivy_url` is reserved for container image scanning, which is not active yet. |
 
 PostgreSQL user rights: Hangar needs to own its schema (create tables,
 indexes, partitions and run migrations). Create a dedicated database and

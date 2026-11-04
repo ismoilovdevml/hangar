@@ -61,9 +61,18 @@ type overviewMetrics struct {
 		PackagesAffected int64 `json:"packages_affected"`
 		Quarantined      int64 `json:"quarantined"`
 		OpenFindings     int64 `json:"open_findings"`
+		// Scanning is null on servers without a scanner.
+		Scanning *issueScanning `json:"scanning"`
 	} `json:"issues"`
 	Traffic         []trafficBucket `json:"traffic"`
 	StorageByFormat []formatBytes   `json:"storage_by_format"`
+}
+
+// issueScanning tells whether the issue numbers rest on scans.
+type issueScanning struct {
+	Enabled           bool       `json:"enabled"`
+	ScannedComponents int64      `json:"scanned_components"`
+	LastScanAt        *time.Time `json:"last_scan_at"`
 }
 
 func (a *API) overview(w http.ResponseWriter, r *http.Request) {
@@ -96,6 +105,14 @@ func (a *API) overview(w http.ResponseWriter, r *http.Request) {
 	out.Storage.UsedBytes, out.Storage.CapacityBytes, out.Storage.AddedBytes24h = o.UsedBytes, o.CapacityBytes, o.AddedBytes24h
 	out.Issues.Critical, out.Issues.PackagesAffected = o.CriticalFindings, o.PackagesAffected
 	out.Issues.Quarantined, out.Issues.OpenFindings = o.Quarantined, o.OpenFindings
+	if a.Scanning != nil {
+		var last *time.Time
+		if o.LastScanAt != nil {
+			t := o.LastScanAt.UTC()
+			last = &t
+		}
+		out.Issues.Scanning = &issueScanning{Enabled: a.Scanning.Enabled(), ScannedComponents: o.ScannedComponents, LastScanAt: last}
+	}
 	for _, f := range o.StorageByFormat {
 		out.StorageByFormat = append(out.StorageByFormat, formatBytes{Format: f.Format, Bytes: f.Bytes})
 	}

@@ -1,7 +1,8 @@
 /**
  * Mock packages (components, assets), search and blob store management for
  * unit tests and offline UI work. Shapes follow api/openapi.yaml; the endpoints
- * the server does not implement yet (dependents, findings) answer 501 as it does.
+ * the server does not implement yet (dependents) answer 501 as it does; findings
+ * live in findings.ts.
  */
 import { http, HttpResponse, type HttpResponseResolver } from 'msw';
 import type {
@@ -28,6 +29,8 @@ type Guard = (request: Request, mutating?: boolean) => Response | null;
 
 const clean: ScanSummary = { state: 'clean', critical: 0, high: 0, medium: 0, low: 0 };
 const pending: ScanSummary = { state: 'pending', critical: 0, high: 0, medium: 0, low: 0 };
+/** What the server reports for images: not scanned, never "clean". */
+const imageNotScanned: ScanSummary = { state: 'unsupported', critical: 0, high: 0, medium: 0, low: 0, scan_error: 'image scanning not configured' };
 const BASE_URL = 'https://pkg.acme.io';
 const HOST = 'cr.acme.io';
 
@@ -65,7 +68,7 @@ const SEEDS: Seed[] = [
   { id: 'c_8701_p', repo: 'docker-prod', format: 'docker', name: 'payments-api', version: '2.13.1', daysAgo: 14, size: 183e6, downloads: 902, by: ci(8701), scan: { state: 'findings', critical: 0, high: 1, medium: 0, low: 2 } },
   { id: 'c_8790', repo: 'docker-prod', format: 'docker', name: 'auth-gateway', version: '3.2.0', daysAgo: 0, size: 92e6, downloads: 220, by: ci(8790), scan: { state: 'findings', critical: 1, high: 0, medium: 0, low: 0 } },
   { id: 'c_311', repo: 'npm-internal', format: 'npm', ns: '@acme', name: 'ui-kit', version: '5.3.1', daysAgo: 0, size: 412_000, downloads: 8100, by: ci(311), extra: { license: 'MIT', attributes: { description: 'Acme UI components', license: 'MIT' } } },
-  { id: 'c_309', repo: 'npm-internal', format: 'npm', ns: '@acme', name: 'ui-kit', version: '5.3.0', daysAgo: 9, size: 409_000, downloads: 2400, by: ci(309) },
+  { id: 'c_309', repo: 'npm-internal', format: 'npm', ns: '@acme', name: 'ui-kit', version: '5.3.0', daysAgo: 9, size: 409_000, downloads: 2400, by: ci(309), scan: { state: 'findings', critical: 0, high: 1, medium: 0, low: 0 } },
   { id: 'c_312', repo: 'npm-internal', format: 'npm', ns: '@acme', name: 'eslint-config', version: '3.0.1', daysAgo: 2, size: 12_000, downloads: 640, by: ci(312), scan: pending },
   { id: 'c_ledger', repo: 'maven-releases', format: 'maven', ns: 'com.acme', name: 'ledger-core', version: '7.0.0', daysAgo: 3, size: 2.4e6, downloads: 9000, by: { kind: 'user', display_name: 'Jasur Karimov' } },
   { id: 'c_log4j', repo: 'maven-central', format: 'maven', ns: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.24.1', daysAgo: 30, size: 1.9e6, downloads: 84_000, by: { kind: 'service_account', display_name: 'proxy' } },
@@ -106,7 +109,7 @@ function toDetail(s: Seed, now: number): ComponentDetail {
     repository: s.repo,
     publisher: s.by ?? { kind: 'user', display_name: 'admin' },
     published_at: new Date(now - s.daysAgo * 86_400_000 - 60_000).toISOString(),
-    scan: s.scan ?? clean,
+    scan: s.scan ?? (s.format === 'docker' ? imageNotScanned : clean),
     download_count: s.downloads,
     last_downloaded_at: s.downloads ? new Date(now - 120_000).toISOString() : null,
     size_bytes: s.size,
@@ -235,7 +238,9 @@ function runSearch(q: string, sort: string, readable: Set<string>) {
   const security = values('security');
   const shas = values('sha256');
   for (const s of shas) if (!/^[0-9a-f]{4,64}$/.test(s)) throw new Error(`sha256:${s}: want 4 to 64 hex digits`);
-  for (const s of security) if (!['pending', 'clean', 'findings', 'quarantined'].includes(s)) throw new Error(`security:${s}: want pending, clean, findings or quarantined`);
+  for (const s of security) if (!['pending', 'clean', 'findings', 'quarantined', 'failed', 'unsupported'].includes(s)) {
+    throw new Error(`security:${s}: want pending, clean, findings, quarantined, failed or unsupported`);
+  }
 
   const match = (c: ComponentDetail, skip: string) =>
     readable.has(c.repository) &&
@@ -614,7 +619,6 @@ export function catalogHandlers(guard: Guard, readableRepos: () => string[], rep
     ),
 
     http.get(api('/components/:id/dependents'), withGuard(() => notImplemented('endpoint GET dependents'))),
-    http.get(api('/components/:id/findings'), withGuard(() => notImplemented('endpoint GET findings'))),
 
     http.get(
       api('/search'),

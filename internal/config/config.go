@@ -47,6 +47,7 @@ type Config struct {
 	Docker    Docker      `yaml:"docker"`
 	Bootstrap Bootstrap   `yaml:"bootstrap"`
 	Scanner   Scanner     `yaml:"scanner"`
+	Scanning  Scanning    `yaml:"scanning"`
 	Metrics   Metrics     `yaml:"metrics"`
 	// Security: encryption of stored secrets and HTTP hardening (security.go).
 	Security Security `yaml:"security"`
@@ -199,10 +200,31 @@ type HTTP struct {
 	AllowPrivateNetworks []string `yaml:"allow_private_networks"`
 }
 
-// Scanner configures vulnerability scanning.
+// Scanner is reserved for container image scanning, which is not active
+// yet. Package scanning is configured in Scanning.
 type Scanner struct {
-	// TrivyURL is the Trivy server (client/server mode); empty disables scanning.
+	// TrivyURL is a Trivy server (client/server mode). Not used yet.
 	TrivyURL string `yaml:"trivy_url"`
+}
+
+// Scanning configures vulnerability scanning of package components (npm,
+// Maven, PyPI, NuGet, Go) against an OSV advisory database.
+type Scanning struct {
+	// Enabled turns scanning on (arrival scans, the rescan task, scan now).
+	Enabled bool `yaml:"enabled"`
+	// RescanInterval is how old a component's last scan may get before the
+	// hourly rescan task checks it again against new advisories.
+	RescanInterval time.Duration `yaml:"rescan_interval"`
+	OSV            OSV           `yaml:"osv"`
+}
+
+// OSV is the advisory database the scanner queries.
+type OSV struct {
+	// URL is the API root: https://api.osv.dev or an internal mirror serving
+	// the same API (/v1/querybatch, /v1/vulns/{id}). Requests go through the
+	// outbound HTTP settings (http.proxy, http.ca_file); a mirror on a
+	// private address must be listed in http.allow_private_networks.
+	URL string `yaml:"url"`
 }
 
 // Metrics configures the Prometheus endpoint.
@@ -265,6 +287,7 @@ func Default() Config {
 			MaxIdleConnsPerHost: 32,
 		},
 		Metrics:  Metrics{Enabled: true, Path: "/metrics"},
+		Scanning: Scanning{Enabled: true, RescanInterval: 24 * time.Hour, OSV: OSV{URL: "https://api.osv.dev"}},
 		Security: DefaultSecurity(),
 		Observability: Observability{
 			Tracing:   Tracing{SampleRatio: 0.1, ServiceName: "hangar"},
@@ -384,6 +407,14 @@ func (c *Config) Validate() error {
 		errs = append(errs, fmt.Errorf("metrics.path %q must start with /", c.Metrics.Path))
 	}
 	errs = append(errs, c.Security.validate()...)
+	if c.Scanning.Enabled {
+		if u, err := url.Parse(c.Scanning.OSV.URL); err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			errs = append(errs, fmt.Errorf("scanning.osv.url %q must be an http:// or https:// URL", redactURL(c.Scanning.OSV.URL)))
+		}
+		if c.Scanning.RescanInterval < time.Hour {
+			errs = append(errs, fmt.Errorf("scanning.rescan_interval %s must be at least 1h", c.Scanning.RescanInterval))
+		}
+	}
 	if t := c.Observability.Tracing; t.Enabled {
 		if u, err := url.Parse(t.Endpoint); err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 			errs = append(errs, fmt.Errorf("observability.tracing.endpoint %q must be an http:// or https:// URL when tracing is enabled",

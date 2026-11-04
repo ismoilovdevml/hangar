@@ -125,6 +125,8 @@ type API struct {
 	// Monitor and Logs serve the System status and System logs screens.
 	Monitor SystemMonitor
 	Logs    SystemLogs
+	// Scanning finds vulnerabilities and manages findings and waivers.
+	Scanning Scanner
 	// AuthMiddleware authenticates every /api/v1 request (session cookie,
 	// CSRF, Bearer/Basic) and stores the principal with core.WithPrincipal.
 	// When nil, only Basic/Bearer credentials are accepted, via Deps.Auth.
@@ -178,6 +180,7 @@ func (a *API) Mount(r chi.Router) {
 		r.Delete("/repositories/{name}", a.deleteRepository)
 		r.Post("/repositories/{name}/cache:invalidate", a.invalidateRepositoryCache)
 		r.Get("/repositories/{name}/browse", a.browseRepository)
+		r.Post("/repositories/{name}:scan", a.scanRepository)
 
 		r.Get("/blob-stores", a.listBlobStores)
 		r.Post("/blob-stores", a.createBlobStore)
@@ -214,6 +217,15 @@ func (a *API) Mount(r chi.Router) {
 		r.Get("/components/{id}/info", a.getComponentInfo)
 		r.Get("/assets/{id}", a.getAsset)
 		r.Delete("/assets/{id}", a.deleteAsset)
+		r.Get("/components/{id}/findings", a.listComponentFindings)
+		r.Post("/components/{id}:scan", a.scanComponent)
+
+		r.Get("/findings", a.listFindings)
+		r.Get("/findings/trend", a.findingTrend)
+		r.Get("/findings/{id}", a.getFinding)
+		r.Post("/findings/{id}/waiver", a.waiveFinding)
+		r.Delete("/findings/{id}/waiver", a.revokeWaiver)
+		r.Get("/scanning/status", a.scanningStatus)
 
 		r.Get("/search", a.search)
 		r.Get("/audit", a.listAudit)

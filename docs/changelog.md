@@ -109,6 +109,42 @@
 - Migration `00110` adds `component_info`, the cache of extracted package
   facts (dropped with the version).
 
+- **Vulnerability scanning** of npm, Maven, PyPI, NuGet and Go packages
+  against the OSV advisory database (`scanning.osv.url`, default
+  `https://api.osv.dev`, or a mirror) through the shared outbound HTTP client:
+  batched `querybatch` requests with pagination, advisory details cached by
+  modification time, rate limiting and retries with backoff. Severity from
+  CVSS v4.0 / v3.x / v2 vectors or the database's own rating; *fixed in* from
+  the affected ranges. Scans on arrival (hosted publish or proxy caching, in
+  repositories with `scan_on_arrival`), on demand
+  (`POST /components/{id}:scan`, `POST /repositories/{name}:scan`) and in the
+  hourly built-in task `vulnerability-rescan`, which rechecks versions older
+  than `scanning.rescan_interval` (default 24h). `scanning.enabled` turns it
+  off. Docker images are labelled *image scanning not configured*.
+- **Findings**: advisory id and aliases (CVE, GHSA), summary and text, CVSS
+  score and vector, affected and fixed versions, references, first and last
+  seen; findings no longer reported become *fixed* and re-open if they come
+  back. Per-component scan status (never, ok, failed with the error, last
+  scan time) in `ScanSummary` and new scan states `failed` and `unsupported`
+  (also in search: `security:failed`; `cve:` now matches aliases).
+- **Waivers** need a reason and an end date at most a year ahead
+  (`system:security:write`), are audited, and re-open the finding when they
+  expire. **Quarantine critical** (repository setting, off by default) blocks
+  downloads of versions with an open critical finding and lifts the block
+  when it is fixed, waived or the setting is turned off.
+- New endpoints `GET /findings/{id}`, `GET /findings/trend`,
+  `GET /scanning/status`; `GET /findings` gains `repository`, `q`,
+  multi-value `severity`/`status`, `total`, `fixable`, `waived` and
+  `components`; `GET /components/{id}/findings` reports the scan state.
+- **Web: Vulnerabilities** replaces the placeholder: severity cards, 30-day
+  trend, scanner coverage with *Scan repository now*, findings table with
+  severity, status, fix and repository filters and search, and a finding
+  drawer with references, waiver form, revoke and rescan. The Overview
+  *Critical issues* card says when nothing has been scanned yet or scanning
+  is off instead of showing *Clear*.
+- Migration `00100` adds `component_scans` and the advisory columns of
+  `findings`. Guide: [docs/guides/vulnerabilities.md](guides/vulnerabilities.md).
+
 - **Single sign-on (OIDC)**: "Continue with SSO" through any OpenID Connect
   provider (`auth.oidc`): authorization code flow with PKCE (S256),
   `client_secret_basic` or `client_secret_post`, encrypted state cookie,

@@ -14,6 +14,7 @@ Practical, copy-paste guides for running Hangar and connecting package clients t
 | [CI integration](ci.md) | GitLab CI, GitHub Actions, Jenkins and Gitea Actions with tokens |
 | [REST API](api.md) | Authentication, common calls, pagination, errors |
 | [Access management](access.md) | Members, service accounts, roles, privileges and token scopes |
+| [Vulnerability scanning](vulnerabilities.md) | OSV scanning of npm, Maven, PyPI, NuGet and Go packages, waivers, quarantine, mirrors |
 | [Single sign-on](sso.md) | OIDC (Keycloak example) and LDAP / Active Directory sign-in, group to role mapping, troubleshooting |
 
 Operators also need [docs/security.md](../security.md) (secret key, hardening,

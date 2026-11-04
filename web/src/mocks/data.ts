@@ -134,7 +134,13 @@ export function overview(range: OverviewRange, now = Date.now()): OverviewMetric
     storage: { used_bytes: 4.82 * TB, capacity_bytes: 12 * TB, added_bytes_24h: 38 * GB },
     requests: { total: r.total, trend_pct: r.trend, peak_total: r.peak, p95_ms: 41, coverage_start: null },
     cache: cacheNumbers(range),
-    issues: { critical: 7, packages_affected: 3, quarantined: 2, open_findings: 39 },
+    issues: {
+      critical: 7,
+      packages_affected: 3,
+      quarantined: 2,
+      open_findings: 39,
+      scanning: { enabled: true, scanned_components: 1840, last_scan_at: new Date(now - 40 * 60_000).toISOString() },
+    },
     traffic: traffic(range, now),
     storage_by_format: [
       { format: 'docker', bytes: 2.91 * TB },

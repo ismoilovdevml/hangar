@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/scanning"
 	"github.com/ismoilovdevml/hangar/internal/search"
 )
 
@@ -140,11 +141,15 @@ func (c *Catalog) RepositoryStats(ctx context.Context) (map[string]RepoStats, er
 
 // ScanSummary counts open findings by severity.
 type ScanSummary struct {
-	State    string `json:"state"` // pending, clean, findings, quarantined
+	State    string `json:"state"` // pending, clean, findings, quarantined, failed, unsupported
 	Critical int    `json:"critical"`
 	High     int    `json:"high"`
 	Medium   int    `json:"medium"`
 	Low      int    `json:"low"`
+	// ScannedAt is the last scan attempt; Error why it failed, or why the
+	// format is not scanned.
+	ScannedAt *time.Time `json:"scanned_at"`
+	Error     string     `json:"scan_error,omitempty"`
 }
 
 // ComponentRow is a component with its repository, publisher kind and scan summary.
@@ -208,10 +213,12 @@ func decodeCursor(s string) (cursor, error) {
 const componentSelect = `
 	SELECT c.id::text, c.repo_id::text, r.name, r.format, c.namespace, c.name, c.version, c.created_at,
 		c.published_by, c.last_downloaded_at, c.download_count, c.quarantined, c.attributes,
-		COALESCE(u.kind, 'user'), f.critical, f.high, f.medium, f.low, (` + "%s" + `)
+		COALESCE(u.kind, 'user'), f.critical, f.high, f.medium, f.low, (` + "%s" + `), cs.scanned_at,
+		CASE WHEN cs.status = 'failed' THEN cs.error ELSE '' END
 	FROM components c
 	JOIN repositories r ON r.id = c.repo_id
 	LEFT JOIN users u ON u.username = c.published_by AND c.published_by <> ''
+	LEFT JOIN component_scans cs ON cs.component_id = c.id
 	CROSS JOIN LATERAL (
 		SELECT count(*) FILTER (WHERE severity = 'critical') AS critical,
 			count(*) FILTER (WHERE severity = 'high') AS high,
@@ -227,10 +234,18 @@ func scanComponent(row pgx.Row) (*ComponentRow, error) {
 	var attrs map[string]any
 	if err := row.Scan(&r.ID, &r.RepositoryID, &r.Repository, &r.Format, &r.Namespace, &r.Name, &r.Version,
 		&r.CreatedAt, &r.PublishedBy, &r.LastDownloadedAt, &r.DownloadCount, &r.Quarantined, &attrs,
-		&r.PublisherKind, &r.Scan.Critical, &r.Scan.High, &r.Scan.Medium, &r.Scan.Low, &r.Scan.State); err != nil {
+		&r.PublisherKind, &r.Scan.Critical, &r.Scan.High, &r.Scan.Medium, &r.Scan.Low, &r.Scan.State,
+		&r.Scan.ScannedAt, &r.Scan.Error); err != nil {
 		return nil, err
 	}
 	r.CreatedAt = r.CreatedAt.UTC()
+	if r.Scan.ScannedAt != nil {
+		t := r.Scan.ScannedAt.UTC()
+		r.Scan.ScannedAt = &t
+	}
+	if r.Scan.State == scanning.StatusUnsupported {
+		r.Scan.Error = scanning.UnsupportedReason(r.Format)
+	}
 	if r.LastDownloadedAt != nil {
 		t := r.LastDownloadedAt.UTC()
 		r.LastDownloadedAt = &t

@@ -28,7 +28,9 @@ import type { Format, RepositoryType } from './api/types';
 import { AccessPage } from './pages/access/AccessPage';
 import { isAccessTab, type AccessSearch } from './pages/access/model';
 import { AccountPage } from './pages/access/AccountPage';
-import { ClusterPage, NotFoundPage, VulnerabilitiesPage } from './pages/screens';
+import { ClusterPage, NotFoundPage } from './pages/screens';
+import { VulnerabilitiesPage } from './pages/vulnerabilities/VulnerabilitiesPage';
+import { validateVulnSearch, type VulnSearch } from './lib/vulnerabilities';
 import { AuditPage } from './pages/audit/AuditPage';
 import { CleanupPage, type CleanupSearch } from './pages/cleanup/CleanupPage';
 import { SystemPage } from './pages/settings/SystemPage';
@@ -212,6 +214,14 @@ const taskDetailRoute = createRoute({
   component: TaskDetailPage,
 });
 
+const vulnerabilitiesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/vulnerabilities',
+  staticData: { title: 'Vulnerabilities' },
+  validateSearch: (s: Record<string, unknown>): VulnSearch => validateVulnSearch(s),
+  component: VulnerabilitiesPage,
+});
+
 const auditRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/audit',
@@ -298,7 +308,7 @@ const routeTree = rootRoute.addChildren([
     blobStoresRoute,
     blobStoreRoute,
     cleanupRoute,
-    page('/vulnerabilities', 'Vulnerabilities', VulnerabilitiesPage),
+    vulnerabilitiesRoute,
     accessRoute,
     accountRoute,
     tasksRoute,

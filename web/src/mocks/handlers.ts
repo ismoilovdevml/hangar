@@ -7,6 +7,7 @@ import { delay, http, HttpResponse } from 'msw';
 import type { ApiError, LoginRequest, OverviewRange, Repository, RepositoryInput, RepositoryType } from '../api/types';
 import { accessHandlers, resetAccessState } from './access';
 import { catalogHandlers, resetCatalogState } from './catalog';
+import { findingsHandlers, resetFindingsState } from './findings';
 import * as data from './data';
 import { onMockLiveEvent, opsHandlers, resetOpsMockState } from './ops';
 import { resetSystemMockState, systemHandlers } from './system';
@@ -38,6 +39,7 @@ export function resetMockState(): void {
   resetCatalogState();
   resetSystemMockState();
   resetSettingsState();
+  resetFindingsState();
 }
 
 /** Test helpers: inspect or change the mock server's state. */
@@ -131,6 +133,11 @@ export const handlers = [
     () => state.repositories,
   ),
   ...settingsHandlers(guard, () => state.repositories, () => allows(data.session.privileges, 'system', 'settings', 'admin')),
+  ...findingsHandlers(
+    guard,
+    () => state.repositories.map((r) => r.name),
+    (name) => state.repositories.find((r) => r.name === name)?.format,
+  ),
 
   http.get(api('/system/status'), () => HttpResponse.json(data.systemStatus)),
   http.get(api('/formats'), () => HttpResponse.json({ items: data.formats.map((name) => ({ name })) })),

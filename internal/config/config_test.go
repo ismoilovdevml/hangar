@@ -253,3 +253,30 @@ func TestObservabilitySettings(t *testing.T) {
 		}
 	}
 }
+
+func TestScanningSettings(t *testing.T) {
+	t.Setenv("HANGAR_DATABASE_URL", "postgres://localhost/hangar")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Scanning.Enabled || cfg.Scanning.RescanInterval != 24*time.Hour || cfg.Scanning.OSV.URL != "https://api.osv.dev" {
+		t.Fatalf("scanning defaults = %+v", cfg.Scanning)
+	}
+	t.Setenv("HANGAR_SCANNING_OSV_URL", "https://osv-mirror.example.com")
+	t.Setenv("HANGAR_SCANNING_RESCAN_INTERVAL", "6h")
+	if cfg, err = Load(""); err != nil || cfg.Scanning.OSV.URL != "https://osv-mirror.example.com" || cfg.Scanning.RescanInterval != 6*time.Hour {
+		t.Fatalf("scanning from env = %+v, %v", cfg.Scanning, err)
+	}
+	t.Setenv("HANGAR_SCANNING_OSV_URL", "osv-mirror.example.com")
+	t.Setenv("HANGAR_SCANNING_RESCAN_INTERVAL", "10m")
+	_, err = Load("")
+	if err == nil || !strings.Contains(err.Error(), "scanning.osv.url") || !strings.Contains(err.Error(), "scanning.rescan_interval") {
+		t.Fatalf("validation = %v", err)
+	}
+	// Turned off, the scanner settings are not checked.
+	t.Setenv("HANGAR_SCANNING_ENABLED", "false")
+	if _, err := Load(""); err != nil {
+		t.Fatalf("disabled scanning = %v", err)
+	}
+}
