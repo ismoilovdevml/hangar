@@ -62,19 +62,16 @@ describe('new repository form', () => {
     expect(screen.getByLabelText('Name')).toHaveFocus();
   });
 
-  it('requires credentials for upstream auth and a valid outbound proxy', async () => {
+  it('requires credentials for upstream auth and a valid CA bundle', async () => {
     const user = userEvent.setup();
     renderApp('/repositories/new?format=docker&type=proxy');
     await user.click(await screen.findByText('Upstream credentials and connection'));
     await choose(user, screen.getByLabelText('Authentication'), 'header');
-    await user.click(screen.getByLabelText('Through this proxy'));
-    await user.type(screen.getByLabelText('Proxy URL'), 'ftp://proxy');
     await user.type(screen.getByLabelText(/Extra trusted certificates/), 'not a pem');
     await user.click(screen.getByRole('button', { name: 'Create repository' }));
 
     expect(screen.getByLabelText('Header name')).toHaveAccessibleDescription('Enter a header name such as Private-Token.');
     expect(screen.getByLabelText('Header value')).toHaveAccessibleDescription('Enter the header value.');
-    expect(screen.getByLabelText('Proxy URL')).toHaveAccessibleDescription(/Use an http:\/\/, https:\/\/ or socks5:\/\/ proxy address/);
     expect(screen.getByLabelText(/Extra trusted certificates/)).toHaveAccessibleDescription(/Paste PEM certificates/);
   });
 
@@ -89,7 +86,7 @@ describe('new repository form', () => {
     await user.click(screen.getByText('Upstream credentials and connection'));
     await choose(user, screen.getByLabelText('Authentication'), 'bearer');
     await user.type(screen.getByLabelText('Token'), 's3cret-token');
-    await user.click(screen.getByLabelText('Direct connection'));
+    await choose(user, screen.getByLabelText('Outbound proxy'), 'none');
     await user.type(screen.getByLabelText(/Extra trusted certificates/), '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----');
     await choose(user, screen.getByLabelText('Cleanup policy'), 'keep-last-20');
 

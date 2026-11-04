@@ -7,7 +7,13 @@ export function repoToForm(r: Repository): RepoForm {
   const c = r.config;
   const p = c.proxy;
   const http = p?.http;
-  const proxyMode: ProxyMode = !http?.proxy || http.proxy === 'inherit' ? 'inherit' : http.proxy === 'none' ? 'none' : 'url';
+  const proxyMode: ProxyMode = http?.proxy_name
+    ? 'named'
+    : !http?.proxy || http.proxy === 'inherit'
+      ? 'inherit'
+      : http.proxy === 'none'
+        ? 'none'
+        : 'url';
   return {
     ...initialRepoForm(r.format, r.type),
     name: r.name,
@@ -22,6 +28,7 @@ export function repoToForm(r: Repository): RepoForm {
     authUsername: p?.auth?.username ?? '',
     authHeader: p?.auth?.header_name ?? '',
     proxyMode,
+    proxyName: http?.proxy_name ?? '',
     proxyUrl: proxyMode === 'url' ? (http?.proxy ?? '') : '',
     caBundle: (http?.ca_bundle ?? '').trimEnd(),
     members: c.group?.members ? [...c.group.members] : [],

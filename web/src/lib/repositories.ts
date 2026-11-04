@@ -128,7 +128,8 @@ export const blobStoreWritable = (b: BlobStore) => b.state !== 'read_only' && b.
 /* ---------------------------------------------------------------- form */
 
 export type AuthKind = 'none' | UpstreamAuth['kind'];
-export type ProxyMode = 'inherit' | 'none' | 'url';
+/** inherit = platform default proxy; named = proxyName; none = direct; url = a proxy URL (stored before named proxies). */
+export type ProxyMode = 'inherit' | 'named' | 'none' | 'url';
 
 export interface RepoForm {
   format: Format | undefined;
@@ -147,6 +148,7 @@ export interface RepoForm {
   authToken: string;
   authHeader: string;
   proxyMode: ProxyMode;
+  proxyName: string;
   proxyUrl: string;
   caBundle: string;
   members: string[];
@@ -175,6 +177,7 @@ export function initialRepoForm(format?: Format, type?: RepositoryType): RepoFor
     authToken: '',
     authHeader: '',
     proxyMode: 'inherit',
+    proxyName: '',
     proxyUrl: '',
     caBundle: '',
     members: [],
@@ -203,6 +206,7 @@ export type RepoFormField =
   | 'authPassword'
   | 'authToken'
   | 'authHeader'
+  | 'proxyName'
   | 'proxyUrl'
   | 'caBundle'
   | 'members'
@@ -263,6 +267,7 @@ export function validateRepoForm(
       if (!/^[A-Za-z0-9-]+$/.test(f.authHeader.trim())) e.authHeader = 'Enter a header name such as Private-Token.';
       if (!f.authToken && !keepSecret) e.authToken = 'Enter the header value.';
     }
+    if (f.proxyMode === 'named' && !f.proxyName) e.proxyName = 'Pick a proxy.';
     if (f.proxyMode === 'url' && !isUrl(f.proxyUrl.trim(), ['http:', 'https:', 'socks5:'])) {
       e.proxyUrl = 'Use an http://, https:// or socks5:// proxy address.';
     }
@@ -313,6 +318,7 @@ export function toRepositoryInput(f: RepoForm): RepositoryInput {
     if (f.authKind === 'header') proxy.auth = { kind: 'header', header_name: f.authHeader.trim(), token: f.authToken };
     const http: NonNullable<typeof proxy.http> = {};
     if (f.proxyMode === 'none') http.proxy = 'none';
+    if (f.proxyMode === 'named') http.proxy_name = f.proxyName;
     if (f.proxyMode === 'url') http.proxy = f.proxyUrl.trim();
     if (f.caBundle.trim()) http.ca_bundle = f.caBundle.trim() + '\n';
     if (Object.keys(http).length) proxy.http = http;
@@ -364,7 +370,7 @@ export function repositoryYaml(input: RepositoryInput): string {
       };
     }
     if (p.http) {
-      proxy.http = { proxy: p.http.proxy ? redactUrl(p.http.proxy) : undefined, ca_bundle: p.http.ca_bundle };
+      proxy.http = { proxy: p.http.proxy ? redactUrl(p.http.proxy) : undefined, proxy_name: p.http.proxy_name, ca_bundle: p.http.ca_bundle };
     }
     cfg.proxy = proxy;
   }
