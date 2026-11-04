@@ -72,3 +72,51 @@ func TestEntryValidation(t *testing.T) {
 		t.Fatal("entry without interval and type accepted")
 	}
 }
+
+// Tickers run only on the leader, and move to the new leader on failover.
+func TestTickersRunOnlyOnLeader(t *testing.T) {
+	pool := pgtest.Pool(t)
+	key := rand.Int64N(1<<40) + 1
+	type node struct {
+		ticks   atomic.Int32
+		leader  atomic.Bool
+		cancel  context.CancelFunc
+		stopped chan struct{}
+	}
+	start := func() *node {
+		n := &node{stopped: make(chan struct{})}
+		tick := scheduler.TickerFunc(func(_ context.Context, now time.Time) (time.Time, error) {
+			if !n.leader.Load() {
+				t.Error("ticker called on a follower")
+			}
+			n.ticks.Add(1)
+			return now.Add(10 * time.Millisecond), nil // clamped to >= 1s
+		})
+		s, err := scheduler.New(pool, coretest.NewJobQueue(), scheduler.Options{Tickers: []scheduler.Ticker{tick},
+			RetryEvery: 50 * time.Millisecond, LockKey: key, OnLeader: n.leader.Store})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		n.cancel = cancel
+		go func() { s.Run(ctx); close(n.stopped) }()
+		return n
+	}
+	a := start()
+	waitFor(t, "first leader", a.leader.Load)
+	b := start()
+	var once sync.Once
+	t.Cleanup(func() { once.Do(a.cancel); b.cancel(); <-b.stopped })
+	waitFor(t, "leader ticks", func() bool { return a.ticks.Load() >= 1 })
+	time.Sleep(300 * time.Millisecond)
+	if n := a.ticks.Load(); n > 2 {
+		t.Fatalf("ticker ran %d times in ~0.3s; minimum gap ignored", n)
+	}
+	if b.ticks.Load() != 0 {
+		t.Fatalf("follower ticked %d times", b.ticks.Load())
+	}
+	once.Do(a.cancel)
+	<-a.stopped
+	waitFor(t, "failover", b.leader.Load)
+	waitFor(t, "new leader ticks", func() bool { return b.ticks.Load() >= 1 })
+}

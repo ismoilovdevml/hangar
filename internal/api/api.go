@@ -43,6 +43,8 @@ type Catalog interface {
 	BlobStores(ctx context.Context) ([]*catalog.BlobStore, catalog.Totals, error)
 	BlobStore(ctx context.Context, name string) (*catalog.BlobStore, error)
 	CreateBlobStore(ctx context.Context, n catalog.NewBlobStore) (*catalog.BlobStore, error)
+	UpdateBlobStore(ctx context.Context, name string, n catalog.NewBlobStore) (*catalog.BlobStore, error)
+	DeleteBlobStore(ctx context.Context, name string) error
 	Overview(ctx context.Context, q catalog.OverviewQuery) (*catalog.Overview, error)
 	FormatDownloads(ctx context.Context) (map[string]int64, error)
 }
@@ -106,6 +108,9 @@ type API struct {
 	Upstreams      UpstreamHealth
 	UpstreamCache  UpstreamCache
 	BlobStoreProbe BlobStoreProbe
+	// Cleanup manages cleanup policies; Tasks manages scheduled tasks and runs.
+	Cleanup CleanupPolicies
+	Tasks   TaskManager
 	// AuthMiddleware authenticates every /api/v1 request (session cookie,
 	// CSRF, Bearer/Basic) and stores the principal with core.WithPrincipal.
 	// When nil, only Basic/Bearer credentials are accepted, via Deps.Auth.
@@ -156,6 +161,29 @@ func (a *API) Mount(r chi.Router) {
 		r.Get("/blob-stores", a.listBlobStores)
 		r.Post("/blob-stores", a.createBlobStore)
 		r.Get("/blob-stores/{name}", a.getBlobStore)
+		r.Put("/blob-stores/{name}", a.updateBlobStore)
+		r.Delete("/blob-stores/{name}", a.deleteBlobStore)
+
+		r.Get("/cleanup-policies", a.listCleanupPolicies)
+		r.Post("/cleanup-policies", a.createCleanupPolicy)
+		r.Post("/cleanup-policies/preview", a.previewCleanupPolicy)
+		r.Get("/cleanup-policies/{name}", a.getCleanupPolicy)
+		r.Put("/cleanup-policies/{name}", a.updateCleanupPolicy)
+		r.Delete("/cleanup-policies/{name}", a.deleteCleanupPolicy)
+		r.Post("/cleanup-policies/{name}/run", a.runCleanupPolicy)
+		r.Post("/cleanup-policies/{name}/stop", a.stopCleanupPolicy)
+		r.Get("/cleanup-policies/{name}/runs", a.listCleanupPolicyRuns)
+
+		r.Get("/tasks", a.listTasks)
+		r.Post("/tasks", a.createTask)
+		r.Get("/tasks/{id}", a.getTask)
+		r.Put("/tasks/{id}", a.updateTask)
+		r.Delete("/tasks/{id}", a.deleteTask)
+		r.Post("/tasks/{id}/run", a.runTask)
+		r.Post("/tasks/{id}/stop", a.stopTask)
+		r.Get("/tasks/{id}/runs", a.listTaskRuns)
+		r.Get("/tasks/{id}/runs/{run_id}", a.getTaskRun)
+		r.Get("/tasks/{id}/runs/{run_id}/log", a.getTaskRunLog)
 
 		r.Get("/components", a.listComponents)
 		r.Get("/components/{id}", a.getComponent)
@@ -214,6 +242,8 @@ type systemStatus struct {
 	Message       string       `json:"message"`
 	Version       string       `json:"version"`
 	InstanceName  string       `json:"instance_name"`
+	BaseURL       string       `json:"base_url"`
+	RegistryHost  string       `json:"registry_host"`
 	NodesUp       int          `json:"nodes_up"`
 	NodesTotal    int          `json:"nodes_total"`
 	Build         version.Info `json:"build"`
@@ -229,6 +259,8 @@ func (a *API) systemStatus(w http.ResponseWriter, r *http.Request) {
 		Message:       "All systems normal",
 		Version:       build.Version,
 		InstanceName:  a.InstanceName,
+		BaseURL:       a.baseURL(),
+		RegistryHost:  a.defaultRegistryHost(),
 		NodesUp:       1, // single node until cluster membership lands
 		NodesTotal:    1,
 		Build:         build,
