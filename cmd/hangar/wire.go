@@ -30,6 +30,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/server"
 	"github.com/ismoilovdevml/hangar/internal/service/cleanup"
 	"github.com/ismoilovdevml/hangar/internal/service/component"
+	"github.com/ismoilovdevml/hangar/internal/service/lock"
 	"github.com/ismoilovdevml/hangar/internal/service/repository"
 	"github.com/ismoilovdevml/hangar/internal/storage"
 	"github.com/ismoilovdevml/hangar/internal/storage/fs"
@@ -210,6 +211,11 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 			return guard.ValidateRemote(ctx, remoteURL, false)
 		}})
 	authz.SetRepositories(repos)
+	repoWatch, err := repos.Watch(ctx, bus)
+	if err != nil {
+		return nil, err
+	}
+	a.onClose(func() { _ = repoWatch.Unsubscribe() })
 	if err := authz.Subscribe(ctx, bus); err != nil {
 		return nil, err
 	}
@@ -258,6 +264,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Events:  bus,
 		Jobs:    queue,
 		Audit:   auditLog,
+		Locks:   lock.New(pool, lock.Options{Logger: log}),
 		Logger:  log,
 		BaseURL: cfg.Server.BaseURL,
 	}
