@@ -43,6 +43,32 @@
   in `docs/operations/runbooks.md`.
 - **Fix**: request metrics (and the Overview screen numbers) are recorded when
   `metrics.enabled` is false; only the `/metrics` endpoint is turned off.
+- **Proxy related hosts**: proxy repositories fetch resources their remote
+  links to on other hosts through the same upstream engine (SSRF guard,
+  per-host circuit breaker, request collapsing, negative cache, outbound
+  proxy, metrics), never sending the remote's credentials there. PyPI file
+  downloads (files.pythonhosted.org) and NuGet search/registration hosts named
+  by the service index (azuresearch-*.nuget.org) use it; npm follows tarball
+  CDNs listed in the new `proxy.related_hosts`.
+- **Rate limits (429)**: a remote's `Retry-After` is honoured for retries
+  within a 10s budget; beyond that clients get 429 with the remote's
+  `Retry-After` instead of 502 (a cached copy is served when there is one),
+  the host is held until the wait passes and 429s no longer trip the circuit
+  breaker. A rate-limited remote reports `slow` on the upstream health page.
+- **Upstream tuning** per proxy repository: `max_concurrent_requests`,
+  `http.max_conns_per_host`, `http.max_idle_conns_per_host`,
+  `http.disable_http2`, and `http.body_timeout` (stall timeout between body
+  reads; 60s default). HTTP/2 is negotiated with health pings; interrupted
+  large downloads resume with Range/If-Range when the remote supports it.
+- **Offline mode** (`proxy.offline`): a proxy repository serves only its
+  cache and answers 404 for anything not cached, without contacting the remote.
+- **Cache purge**: `POST /api/v1/repositories/{name}/cache:invalidate` forgets
+  a proxy repository's remembered 404s and rate-limit holds on every node
+  (audited).
+- **Metrics**: `hangar_proxy_upstream_requests_total{repository,host,result}`,
+  `hangar_proxy_upstream_request_duration_seconds`,
+  `hangar_proxy_upstream_retries_total`, `hangar_proxy_upstream_resumes_total`,
+  `hangar_proxy_upstream_inflight_requests`.
 
 ## M0 — Skeleton (2026-11-03)
 
