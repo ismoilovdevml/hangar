@@ -44,7 +44,7 @@ storage:
     endpoint: "" # e.g. http://minio:9000; empty = AWS
     region: us-east-1
     bucket: hangar
-    prefix: blobs/
+    prefix: ""
     access_key_id: ""
     secret_access_key: "" # use HANGAR_STORAGE_S3_SECRET_ACCESS_KEY
     use_path_style: true

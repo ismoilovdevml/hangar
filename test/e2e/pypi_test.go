@@ -118,8 +118,9 @@ func TestPyPI(t *testing.T) {
 		twine := []string{"-m", "twine", "upload", "--non-interactive", "--disable-progress-bar",
 			"--repository-url", base + "/repository/" + hosted + "/", "-u", "__token__", "-p", token}
 		pypiRun(t, proj, env, vpy, append(append([]string{}, twine...), dists...)...)
-		// allow_once: uploading the same files again does not fail
-		pypiRun(t, proj, env, vpy, append(append(append([]string{}, twine...), "--skip-existing"), dists...)...)
+		// allow_once: uploading identical files again does not fail. (twine
+		// only accepts --skip-existing for a few public indexes.)
+		pypiRun(t, proj, env, vpy, append(append([]string{}, twine...), dists...)...)
 	})
 	t.Run("pip install via group", func(t *testing.T) {
 		pypiRun(t, work, env, vpy, "-m", "pip", "install", "--no-cache-dir", "--index-url", index, "hangar-e2e-tiny==0.1.0", "six")

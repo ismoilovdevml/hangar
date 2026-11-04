@@ -215,21 +215,6 @@ func TestGroup(t *testing.T) {
 	f.mustPush("nuget-hosted", "Remote.Pkg", "3.0.0", "")
 	f.mustPush("nuget-hosted", "Local.Only", "1.0.0", "")
 
-	// A reader of the group only cannot fill the proxy cache, but still gets the package.
-	f.env.Auth.AddUser("groupie", "pw")
-	f.env.AuthZ.Grant("groupie", "repo:nuget-group:read")
-	req := httptest.NewRequest(http.MethodGet, "/repository/nuget-group/v3-flatcontainer/remote.pkg/1.0.0/remote.pkg.1.0.0.nupkg", nil)
-	req.SetBasicAuth("groupie", "pw")
-	rec := httptest.NewRecorder()
-	f.h.ServeHTTP(rec, req)
-	proxy, _ := f.env.Repos.Get(t.Context(), "nuget-proxy")
-	if rec.Code != 200 {
-		t.Fatalf("group-only reader = %d %s", rec.Code, rec.Body)
-	}
-	if _, err := f.env.Components.GetAsset(t.Context(), proxy.ID, "v3-flatcontainer/remote.pkg/1.0.0/remote.pkg.1.0.0.nupkg"); err == nil {
-		t.Error("cache filled without read access to the proxy")
-	}
-
 	var flat struct {
 		Versions []string `json:"versions"`
 	}
@@ -269,5 +254,41 @@ func TestGroup(t *testing.T) {
 	}
 	if rec := f.get("/repository/nuget-group/v3-flatcontainer/none/index.json"); rec.Code != 404 {
 		t.Errorf("group missing = %d", rec.Code)
+	}
+}
+
+// A reader holding only the group's read privilege restores a package that
+// only the group's proxy member has: the proxy caches it on the group's read.
+func TestGroupReadFillsProxyWithGroupPrivilegeOnly(t *testing.T) {
+	f, _ := newProxyFixture(t)
+	f.env.Auth.AddUser("groupie", "pw")
+	f.env.AuthZ.Grant("groupie", "repo:nuget-group:read")
+	get := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.SetBasicAuth("groupie", "pw")
+		rec := httptest.NewRecorder()
+		f.h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := get("/repository/nuget-group/v3-flatcontainer/remote.pkg/index.json"); rec.Code != http.StatusOK {
+		t.Fatalf("version list through group = %d %s", rec.Code, rec.Body)
+	}
+	if rec := get("/repository/nuget-group/v3-flatcontainer/remote.pkg/1.0.0/remote.pkg.1.0.0.nupkg"); rec.Code != http.StatusOK {
+		t.Fatalf("package through group = %d %s", rec.Code, rec.Body)
+	}
+	proxy, err := f.env.Repos.Get(t.Context(), "nuget-proxy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := f.env.Components.GetAsset(t.Context(), proxy.ID, "v3-flatcontainer/remote.pkg/1.0.0/remote.pkg.1.0.0.nupkg")
+	if err != nil {
+		t.Fatalf("proxy cache not filled: %v", err)
+	}
+	if c, err := f.env.Components.GetComponentByID(t.Context(), a.ComponentID); err != nil || c.PublishedBy != "groupie" {
+		t.Fatalf("cached component = %+v, %v", c, err)
+	}
+	if rec := get("/repository/nuget-proxy/v3-flatcontainer/remote.pkg/index.json"); rec.Code != http.StatusForbidden {
+		t.Errorf("direct read of the member = %d, want 403", rec.Code)
 	}
 }

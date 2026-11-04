@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
 // Limits for upstream metadata documents read into memory.
@@ -159,6 +160,7 @@ func (h *handler) cachedDoc(ctx context.Context, repo *core.Repository, path str
 	}
 	if asset != nil && h.now().Sub(asset.UpdatedAt) < metadataTTL(repo.Config.Proxy) {
 		if b, err := h.readAsset(ctx, repo, asset); err == nil {
+			proxy.NoteCacheHit(ctx, asset.Size)
 			return b, nil
 		}
 	}
@@ -167,11 +169,14 @@ func (h *handler) cachedDoc(ctx context.Context, repo *core.Repository, path str
 		if asset != nil && !errors.Is(err, core.ErrNotFound) {
 			if stale, rerr := h.readAsset(ctx, repo, asset); rerr == nil {
 				h.log().WarnContext(ctx, "nuget upstream failed; serving stale metadata", "repo", repo.Name, "path", path, "err", err)
+				proxy.NoteCacheHit(ctx, asset.Size)
 				return stale, nil
 			}
 		}
+		proxy.NoteCacheMiss(ctx)
 		return nil, err
 	}
+	proxy.NoteCacheMiss(ctx)
 	if err := h.storeMetadata(ctx, repo, path, b); err != nil {
 		h.log().WarnContext(ctx, "nuget cache store failed", "repo", repo.Name, "path", path, "err", err)
 	}
@@ -304,11 +309,11 @@ func metadataTTL(cfg *core.ProxyConfig) time.Duration {
 
 // cachePackage downloads lid/lver from the upstream flat container and
 // stores it like a pushed package, published as the reader that asked for it
-// (a proxy cache fill needs read access only). Packages are immutable: once
-// cached they are never fetched again. When the reader may not fill the
-// cache (it reached the proxy through a group it can read, but not the proxy
-// itself), the package is served without being recorded: the returned assets
-// point at the stored blobs but are not in the repository.
+// (a proxy cache fill needs read access to the proxy, or to the group the
+// reader came through). Packages are immutable: once cached they are never
+// fetched again. When the reader may not fill the cache, the package is
+// served without being recorded: the returned assets point at the stored
+// blobs but are not in the repository.
 func (h *handler) cachePackage(ctx context.Context, repo *core.Repository, lid, lver string) ([]*core.Asset, error) {
 	idx, err := h.upstreamIndex(ctx, repo)
 	if err != nil {

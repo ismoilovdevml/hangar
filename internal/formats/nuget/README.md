@@ -61,8 +61,8 @@ versions each) are inlined in the index, from 128 on pages are linked.
   cached forever. Every upstream URL is rewritten to Hangar. Resources outside
   `remote_url` (nuget.org's search host) are fetched with `Deps.HTTPClients`
   without the remote's credentials. Cache fills are published as the reader;
-  a reader who reached the proxy only through a group gets the package served
-  without being cached.
+  a read through a group fills a proxy member's cache on the group's
+  `repo:<group>:read`.
 - Group: versions, registrations and search results are merged across
   members (first member wins per version); content comes from the first member
   that has it; pushes go to `write_member`.

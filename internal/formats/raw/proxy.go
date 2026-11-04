@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
 // Asset attributes recorded on cached proxy content.
@@ -33,6 +34,7 @@ func (h *handler) proxyAsset(ctx context.Context, repo *core.Repository, clean s
 	switch {
 	case err == nil:
 		if h.fresh(cached, cfg.ContentTTL.D()) {
+			proxy.NoteCacheHit(ctx, cached.Size)
 			return cached, nil
 		}
 	case errors.Is(err, core.ErrNotFound):
@@ -50,12 +52,26 @@ func (h *handler) proxyAsset(ctx context.Context, repo *core.Repository, clean s
 		return h.fetch(fctx, repo, clean, cached)
 	})
 	if err != nil {
+		proxy.NoteCacheMiss(ctx)
 		if errors.Is(err, core.ErrNotFound) {
 			h.neg.add(key, cfg.NegativeCacheTTL.D())
 		}
 		return nil, err
 	}
-	return v.(*core.Asset), nil
+	res := v.(fillResult)
+	if res.fromCache {
+		proxy.NoteCacheHit(ctx, res.asset.Size)
+	} else {
+		proxy.NoteCacheMiss(ctx)
+	}
+	return res.asset, nil
+}
+
+// fillResult is the outcome of one upstream fill, shared by the requests
+// collapsed into it.
+type fillResult struct {
+	asset     *core.Asset
+	fromCache bool // the cached copy was served (revalidated with 304, or stale)
 }
 
 func (h *handler) fresh(a *core.Asset, ttl time.Duration) bool {
@@ -72,17 +88,17 @@ func (h *handler) fresh(a *core.Asset, ttl time.Duration) bool {
 // fetch downloads clean from repo's remote into the cache. cached, if not
 // nil, is revalidated with a conditional request and returned when the
 // remote cannot be used.
-func (h *handler) fetch(ctx context.Context, repo *core.Repository, clean string, cached *core.Asset) (*core.Asset, error) {
-	stale := func(cause error) (*core.Asset, error) {
+func (h *handler) fetch(ctx context.Context, repo *core.Repository, clean string, cached *core.Asset) (fillResult, error) {
+	stale := func(cause error) (fillResult, error) {
 		if cached != nil {
 			h.deps.Logger.Warn("raw: serving stale cached content", "repository", repo.Name, "path", clean, "err", cause)
-			return cached, nil
+			return fillResult{asset: cached, fromCache: true}, nil
 		}
-		return nil, cause
+		return fillResult{}, cause
 	}
 	up, err := h.deps.Upstreams.ForRepository(ctx, repo)
 	if err != nil {
-		return nil, err
+		return fillResult{}, err
 	}
 	req := core.UpstreamRequest{Method: http.MethodGet, Path: escapePath(clean)}
 	if cached != nil {
@@ -108,7 +124,7 @@ func (h *handler) fetch(ctx context.Context, repo *core.Repository, clean string
 		if err != nil {
 			return stale(err)
 		}
-		return out, nil
+		return fillResult{asset: out, fromCache: true}, nil
 	case resp.StatusCode == http.StatusOK:
 		a, err := h.store(ctx, repo, clean, resp.Body, contentType(resp.Header.Get("Content-Type"), clean), nil)
 		if err != nil {
@@ -118,7 +134,8 @@ func (h *handler) fetch(ctx context.Context, repo *core.Repository, clean string
 			return stale(fmt.Errorf("download %s: got %d of %d bytes: %w", clean, a.Size, resp.ContentLength, core.ErrUpstream))
 		}
 		a.Attributes = cacheAttributes(h.now(), resp, nil)
-		return h.publish(ctx, repo, a)
+		out, err := h.publish(ctx, repo, a)
+		return fillResult{asset: out}, err
 	case resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone:
 		// Content already cached stays available when the remote drops it.
 		return stale(fmt.Errorf("%s: remote answered %d: %w", clean, resp.StatusCode, core.ErrNotFound))

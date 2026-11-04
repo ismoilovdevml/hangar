@@ -131,6 +131,11 @@ func (g *Guard) CheckAddr(a netip.Addr) error {
 	return nil
 }
 
+// AllowsHost reports whether host (lower case, no trailing dot) is on the
+// allow-list by name. It suits httpclient.Options.DialAllowHost, so
+// allow-listed internal mirrors are not refused by the dial-time check.
+func (g *Guard) AllowsHost(host string) bool { return g.hostAllowed(host) }
+
 func (g *Guard) hostAllowed(host string) bool {
 	for _, h := range g.allowHosts {
 		if host == h || (strings.HasPrefix(h, ".") && (strings.HasSuffix(host, h) || host == h[1:])) {

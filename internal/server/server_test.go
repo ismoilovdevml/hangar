@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ismoilovdevml/hangar/internal/api"
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/core/coretest"
 	"github.com/ismoilovdevml/hangar/internal/formats/builtin"
@@ -73,13 +74,20 @@ func newTestRouter(t *testing.T) (http.Handler, *health.Checker) {
 	env.AddRepo(t, &core.Repository{Name: "raw-hosted", Format: "raw", Type: core.RepoHosted})
 	hc := health.New(time.Second)
 	hc.Add("database", func(context.Context) error { return nil })
+	deps := env.Deps()
 	h := NewRouter(RouterOptions{
 		Logger:  discard(),
 		Metrics: observability.NewMetrics(),
 		Health:  hc,
+		API:     &api.API{Deps: deps, Health: hc, Formats: reg.Names(), Started: time.Now()},
 		Formats: reg,
-		Deps:    env.Deps(),
-		Started: time.Now(),
+		Deps:    deps,
+		FormatMiddleware: []func(http.Handler) http.Handler{func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("X-Format-Middleware", "yes")
+				next.ServeHTTP(w, r)
+			})
+		}},
 	})
 	return h, hc
 }
@@ -115,6 +123,11 @@ func TestRouter(t *testing.T) {
 		}
 		if rec.Header().Get(HeaderRequestID) != "abc-123" {
 			t.Errorf("GET %s: request id not echoed", tt.path)
+		}
+	}
+	for path, want := range map[string]string{"/repository/raw-hosted/file.txt": "yes", "/v2/": "yes", "/api/v1/formats": "", "/healthz": ""} {
+		if got := do(http.MethodGet, path).Header().Get("X-Format-Middleware"); got != want {
+			t.Errorf("GET %s: format middleware header = %q, want %q", path, got, want)
 		}
 	}
 	rec := do(http.MethodGet, "/metrics")

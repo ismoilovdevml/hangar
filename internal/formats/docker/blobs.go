@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
 // localBlob finds a blob of image in a hosted or proxy repository. Manifests
@@ -25,12 +26,14 @@ func (h *handler) localBlob(ctx context.Context, repo *core.Repository, image st
 }
 
 func (h *handler) getBlob(w http.ResponseWriter, r *http.Request, rq *request) {
-	ctx := r.Context()
 	d, ok := parseOCIDigest(rq.ref)
 	if !ok {
 		writeError(w, http.StatusBadRequest, codeDigestInvalid, "invalid digest "+rq.ref)
 		return
 	}
+	ctx, tally := proxy.WithCacheTally(r.Context())
+	defer tally.Record(Name, r.Method)
+	r = r.WithContext(ctx)
 	repos, err := h.contentRepos(ctx, rq.repo)
 	if err != nil {
 		h.internal(w, r, "resolve group", err)
@@ -40,6 +43,9 @@ func (h *handler) getBlob(w http.ResponseWriter, r *http.Request, rq *request) {
 	for _, m := range repos {
 		a, err := h.localBlob(ctx, m, rq.image, d)
 		if err == nil {
+			if m.Type == core.RepoProxy {
+				proxy.NoteCacheHit(ctx, a.Size)
+			}
 			h.serveAsset(w, r, m, a, d, a.ContentType)
 			return
 		}

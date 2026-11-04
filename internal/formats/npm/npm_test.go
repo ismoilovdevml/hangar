@@ -511,7 +511,7 @@ func TestProxy(t *testing.T) {
 			t.Fatalf("upstream tarball fetches = %d, want 1", n)
 		}
 		c, err := ts.env.Components.GetComponent(t.Context(), ts.repos["npm-remote"].ID, "@ext", "lib", "1.0.0")
-		if err != nil || c.PublishedBy != "system" {
+		if err != nil || c.PublishedBy != "bob" { // a cache fill is published as the reader
 			t.Fatalf("cached component = %+v, %v", c, err)
 		}
 	})
@@ -613,5 +613,51 @@ func TestValidateAndCoordinates(t *testing.T) {
 		if got := f.Coordinates(&core.Asset{Path: path}); got.Namespace != want.Namespace || got.Name != want.Name || got.Version != want.Version {
 			t.Errorf("Coordinates(%s) = %+v", path, got)
 		}
+	}
+}
+
+// A reader holding only the group's read privilege installs a package that
+// only the group's proxy member has: the proxy caches it on the group's read.
+func TestGroupReadFillsProxyWithGroupPrivilegeOnly(t *testing.T) {
+	ts := newServer(t)
+	tgz := ts.publish(t, "npm-upstream", "remote-only", "1.0.0", "latest")
+	ts.env.Auth.AddUser("carol", "secret")
+	ts.env.AuthZ.Grant("carol", "repo:npm-group:read")
+
+	r := ts.do(t, http.MethodGet, "/repository/npm-group/remote-only", "carol", nil)
+	if r.StatusCode != http.StatusOK {
+		t.Fatalf("packument through group = %d %s", r.StatusCode, readAll(t, r))
+	}
+	doc := decodeJSON(t, r)
+	dist := doc["versions"].(map[string]any)["1.0.0"].(map[string]any)["dist"].(map[string]any)
+	resp := ts.do(t, http.MethodGet, strings.TrimPrefix(dist["tarball"].(string), ts.url), "carol", nil)
+	if !bytes.Equal(readAll(t, resp), tgz) {
+		t.Fatalf("tarball through group = %d, wrong bytes", resp.StatusCode)
+	}
+	c, err := ts.env.Components.GetComponent(t.Context(), ts.repos["npm-proxy"].ID, "", "remote-only", "1.0.0")
+	if err != nil || c.PublishedBy != "carol" {
+		t.Fatalf("proxy cache fill = %+v, %v", c, err)
+	}
+	if r := ts.do(t, http.MethodGet, "/repository/npm-proxy/remote-only", "carol", nil); r.StatusCode != http.StatusForbidden {
+		t.Fatalf("direct read of the member = %d, want 403", r.StatusCode)
+	}
+}
+
+// Anonymous clients fill the cache of a proxy that allows anonymous reads.
+func TestAnonymousProxyRead(t *testing.T) {
+	ts := newServer(t)
+	open := ts.env.AddRepo(t, &core.Repository{Name: "npm-open", Format: npm.Name, Type: core.RepoProxy, Config: core.RepoConfig{
+		AnonymousRead: true, Proxy: &core.ProxyConfig{RemoteURL: ts.url + "/repository/npm-upstream"}}})
+	tgz := ts.publish(t, "npm-upstream", "public-lib", "2.0.0", "latest")
+
+	if r := ts.do(t, http.MethodGet, "/repository/npm-open/public-lib", "", nil); r.StatusCode != http.StatusOK {
+		t.Fatalf("anonymous packument = %d %s", r.StatusCode, readAll(t, r))
+	}
+	resp := ts.do(t, http.MethodGet, "/repository/npm-open/public-lib/-/public-lib-2.0.0.tgz", "", nil)
+	if !bytes.Equal(readAll(t, resp), tgz) {
+		t.Fatalf("anonymous tarball = %d, wrong bytes", resp.StatusCode)
+	}
+	if _, err := ts.env.Components.GetComponent(t.Context(), open.ID, "", "public-lib", "2.0.0"); err != nil {
+		t.Fatalf("anonymous read did not fill the cache: %v", err)
 	}
 }

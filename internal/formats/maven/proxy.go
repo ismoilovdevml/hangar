@@ -41,6 +41,7 @@ func (h *handler) resolveProxy(ctx context.Context, repo *core.Repository, mp *m
 	switch {
 	case err == nil:
 		if proxy.FreshnessOf(repo.Config.Proxy).IsFresh(a.Kind, a.UpdatedAt) {
+			proxy.NoteCacheHit(ctx, a.Size)
 			return assetEntity(repo, a), nil
 		}
 		return h.fetchRemote(ctx, repo, mp, a)
@@ -56,8 +57,10 @@ func (h *handler) fetchRemote(ctx context.Context, repo *core.Repository, mp *ma
 	stale := func(err error) (*entity, error) {
 		if cached != nil {
 			h.log.Warn("remote unavailable, serving cached copy", "repository", repo.Name, "path", mp.path, "err", err)
+			proxy.NoteCacheHit(ctx, cached.Size)
 			return assetEntity(repo, cached), nil
 		}
+		proxy.NoteCacheMiss(ctx)
 		return nil, err
 	}
 	up, err := h.deps.Upstreams.ForRepository(ctx, repo)
@@ -79,12 +82,15 @@ func (h *handler) fetchRemote(ctx context.Context, repo *core.Repository, mp *ma
 	switch {
 	case resp.NotModified && cached != nil:
 		h.touch(ctx, repo, cached)
+		proxy.NoteCacheHit(ctx, cached.Size)
 		return assetEntity(repo, cached), nil
 	case resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone:
+		proxy.NoteCacheMiss(ctx)
 		return nil, fmt.Errorf("%s: not found upstream: %w", mp.path, core.ErrNotFound)
 	case resp.StatusCode != http.StatusOK:
 		return stale(fmt.Errorf("%s: remote answered %d: %w", mp.path, resp.StatusCode, core.ErrUpstream))
 	}
+	proxy.NoteCacheMiss(ctx)
 
 	bs, err := h.deps.Blobs.ForRepository(ctx, repo)
 	if err != nil {

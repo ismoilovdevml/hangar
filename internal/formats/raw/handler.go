@@ -89,7 +89,9 @@ func allowedMethods(t core.RepoType) []string {
 }
 
 // authorize authenticates the request and checks action on repo. The
-// returned context carries the principal.
+// returned context carries the principal and, for a read of a group, the
+// group the members are read through (core.WithAccessVia), so proxy members
+// fill their cache on the strength of the group's read privilege.
 func (h *handler) authorize(ctx context.Context, r *http.Request, repo *core.Repository, action core.Action) (context.Context, error) {
 	p, err := h.deps.Auth.Authenticate(ctx, core.CredentialsFromRequest(r))
 	if err != nil {
@@ -98,6 +100,9 @@ func (h *handler) authorize(ctx context.Context, r *http.Request, repo *core.Rep
 	ctx = core.WithPrincipal(ctx, p)
 	if err := h.deps.AuthZ.Authorize(ctx, p, action, core.RepoResource(repo.Name)); err != nil {
 		return ctx, err
+	}
+	if action == core.ActionRead && repo.Type == core.RepoGroup {
+		ctx = core.WithAccessVia(ctx, repo.Name)
 	}
 	return ctx, nil
 }

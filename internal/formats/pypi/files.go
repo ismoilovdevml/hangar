@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
 // serveFile answers GET/HEAD packages/{project}/{filename}: a distribution
@@ -27,6 +28,8 @@ func (h *handler) serveFile(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, fmt.Errorf("no such file: %w", core.ErrNotFound))
 		return
 	}
+	ctx, tally := proxy.WithCacheTally(ctx)
+	defer tally.Record(Name, r.Method)
 	asset, owner, err := h.openFile(ctx, repo, name, filename, 0)
 	if err != nil {
 		h.writeError(w, r, err)
@@ -98,11 +101,13 @@ func (h *handler) openFile(ctx context.Context, repo *core.Repository, name, fil
 	case core.RepoProxy:
 		a, err := h.deps.Components.GetAsset(ctx, repo.ID, filePath(name, filename))
 		if err == nil {
+			proxy.NoteCacheHit(ctx, a.Size)
 			return a, repo, nil
 		}
 		if !errors.Is(err, core.ErrNotFound) {
 			return nil, nil, err
 		}
+		proxy.NoteCacheMiss(ctx)
 		a, err = h.cacheFile(ctx, repo, name, filename)
 		if err != nil {
 			return nil, nil, err

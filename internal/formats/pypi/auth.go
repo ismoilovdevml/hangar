@@ -24,6 +24,10 @@ func (h *handler) authorize(w http.ResponseWriter, r *http.Request, repo *core.R
 		h.writeError(w, r, err)
 		return ctx, false
 	}
+	if action == core.ActionRead && repo.Type == core.RepoGroup {
+		// Proxy members fill their cache on the group's read privilege.
+		ctx = core.WithAccessVia(ctx, repo.Name)
+	}
 	return ctx, true
 }
 

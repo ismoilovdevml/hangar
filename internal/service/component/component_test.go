@@ -823,3 +823,58 @@ func TestRepositoryDeleteReleasesBlobs(t *testing.T) {
 	f.wantBlob(t, shared, 1, false)
 	f.wantBlob(t, own, 0, true)
 }
+
+// A reader that reaches a proxy member through a group holds the group's read
+// right, not the member's: the cache fill is authorized against the group.
+func TestPublishAccessViaGroup(t *testing.T) {
+	f := newFixture(t)
+	f.authz.Grant("group-reader", "repo:raw-group:read")
+	proxyRepo := f.repo(t, "raw-proxy", core.RepoProxy, "")
+	hostedRepo := f.repo(t, "raw-h", core.RepoHosted, core.WriteAllow)
+	d := f.blob(t, "via group")
+	req := core.PublishRequest{Assets: []*core.Asset{asset("p/1/p", d, "")}}
+	reader := coretest.AsUser(context.Background(), "group-reader")
+
+	if _, _, err := f.svc.Publish(reader, proxyRepo, req); !errors.Is(err, core.ErrForbidden) {
+		t.Fatalf("direct cache fill without member read = %v, want ErrForbidden", err)
+	}
+	via := core.WithAccessVia(reader, "raw-group")
+	if _, _, err := f.svc.Publish(via, proxyRepo, req); err != nil {
+		t.Fatalf("cache fill via group = %v", err)
+	}
+	// Hosted writes are unaffected: the group read right never grants write.
+	if _, _, err := f.svc.Publish(via, hostedRepo, req); !errors.Is(err, core.ErrForbidden) {
+		t.Fatalf("hosted publish via group = %v, want ErrForbidden", err)
+	}
+	// Other groups do not help.
+	if _, _, err := f.svc.Publish(core.WithAccessVia(reader, "other-group"), proxyRepo, req); !errors.Is(err, core.ErrForbidden) {
+		t.Fatalf("cache fill via foreign group = %v, want ErrForbidden", err)
+	}
+}
+
+// Failed publishes are audited with their outcome, not only denials.
+func TestPublishFailuresAudited(t *testing.T) {
+	f := newFixture(t)
+	r := f.repo(t, "raw-h", core.RepoHosted, core.WriteAllow)
+	absent := core.SHA256Of([]byte("never stored"))
+	_, _, err := f.svc.Publish(f.ctx, r, core.PublishRequest{Assets: []*core.Asset{asset("a", absent, "")}})
+	if err == nil {
+		t.Fatal("publish of a missing blob succeeded")
+	}
+	_, _, err = f.svc.Publish(f.ctx, r, core.PublishRequest{})
+	if !errors.Is(err, core.ErrInvalid) {
+		t.Fatalf("empty publish = %v", err)
+	}
+	var errs int
+	for _, e := range f.audit.Events("component.publish") {
+		if e.Outcome == core.OutcomeError {
+			errs++
+			if e.Details["error"] == "" || e.Details["error"] == nil {
+				t.Errorf("error audit without detail: %+v", e)
+			}
+		}
+	}
+	if errs != 2 {
+		t.Fatalf("error audits = %d, want 2: %+v", errs, f.audit.Events("component.publish"))
+	}
+}

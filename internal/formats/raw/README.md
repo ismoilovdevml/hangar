@@ -116,6 +116,8 @@ asset) and publishes `component.deleted`; PUT publishes `component.published`.
   completes even if the first client disconnects (bounded at one hour).
 - Cache fills publish as the requesting principal; `ComponentService`
   authorizes a proxy publish as a read, so readers need no write permission.
+  A read through a group fills a proxy member's cache on the group's
+  `repo:<group>:read` (the outermost group the client addressed).
 
 ## Group
 

@@ -107,30 +107,60 @@ func New(pool *pgxpool.Pool, opts Options) *Service {
 
 // Publish implements core.ComponentService. Hosted repositories require
 // repo:<name>:write and honour the write policy. Proxy repositories cache
-// remote content on behalf of a reader, so they require repo:<name>:read and
-// have no write policy.
+// remote content on behalf of a reader, so they require repo:<name>:read (or
+// repo:<group>:read when the reader came through a group, core.WithAccessVia)
+// and have no write policy. Every outcome, including invalid requests and
+// failures, is audited.
 func (s *Service) Publish(ctx context.Context, repo *core.Repository, req core.PublishRequest) (*core.Component, []*core.Asset, error) {
 	if repo == nil {
 		return nil, nil, fmt.Errorf("publish: nil repository: %w", core.ErrInvalid)
 	}
-	if repo.Type == core.RepoGroup {
-		return nil, nil, fmt.Errorf("publish to group %q: resolve the write member first: %w", repo.Name, core.ErrInvalid)
-	}
-	action, need := "component.publish", core.ActionWrite
+	action, need, authRepo := "component.publish", core.ActionWrite, repo
 	if repo.Type == core.RepoProxy {
 		action, need = "component.cache", core.ActionRead
+		if g := core.AccessViaFrom(ctx); g != "" {
+			authRepo = &core.Repository{Name: g, Type: core.RepoGroup}
+		}
 	}
 	target := publishTarget(repo, req.Component)
-	if err := s.authorize(ctx, need, repo, action, target); err != nil {
+	if repo.Type == core.RepoGroup {
+		err := fmt.Errorf("publish to group %q: resolve the write member first: %w", repo.Name, core.ErrInvalid)
+		s.recordFailure(ctx, action, target, err)
 		return nil, nil, err
 	}
+	if err := s.authorize(ctx, need, authRepo, action, target); err != nil {
+		return nil, nil, err
+	}
+	comp, out, err := s.publish(ctx, repo, req)
+	if err != nil {
+		s.recordFailure(ctx, action, target, err)
+		return nil, nil, err
+	}
+	s.record(ctx, action, target, core.OutcomeSuccess, map[string]any{"assets": len(out)})
+	if comp != nil {
+		s.emit(ctx, core.EventComponentPublished, repo, target, comp)
+	}
+	return comp, out, nil
+}
+
+// recordFailure audits a failed publish: denied for write-policy refusals,
+// error for everything else.
+func (s *Service) recordFailure(ctx context.Context, action, target string, err error) {
+	outcome := core.OutcomeError
+	if errors.Is(err, core.ErrWriteDenied) || errors.Is(err, core.ErrForbidden) {
+		outcome = core.OutcomeDenied
+	}
+	s.record(ctx, action, target, outcome, map[string]any{"error": err.Error()})
+}
+
+// publish is Publish after authorization: validation and the transaction.
+func (s *Service) publish(ctx context.Context, repo *core.Repository, req core.PublishRequest) (*core.Component, []*core.Asset, error) {
 	policy := core.WriteAllow
 	if repo.Type == core.RepoHosted {
 		policy = repo.WritePolicy()
 	}
 	if policy == core.WriteDeny {
-		s.record(ctx, action, target, core.OutcomeDenied, map[string]any{"reason": "write policy deny"})
-		return nil, nil, fmt.Errorf("repository %q: %w", repo.Name, core.ErrWriteDenied)
+		return nil, nil, fmt.Errorf("repository %q: write policy deny: %w", repo.Name, core.ErrWriteDenied)
 	}
 	if !isUUID(repo.ID) {
 		return nil, nil, fmt.Errorf("repository %q: %w", repo.Name, core.ErrNotFound)
@@ -183,19 +213,10 @@ func (s *Service) Publish(ctx context.Context, repo *core.Repository, req core.P
 		return refs.apply(ctx, tx, storeID)
 	})
 	if err != nil {
-		outcome := core.OutcomeError
-		if errors.Is(err, core.ErrWriteDenied) {
-			outcome = core.OutcomeDenied
-		}
-		s.record(ctx, action, target, outcome, map[string]any{"error": err.Error()})
 		return nil, nil, err
 	}
 	if comp != nil {
 		comp.Repository, comp.Format = repo.Name, repo.Format
-	}
-	s.record(ctx, action, target, core.OutcomeSuccess, map[string]any{"assets": len(out)})
-	if comp != nil {
-		s.emit(ctx, core.EventComponentPublished, repo, target, comp)
 	}
 	return comp, out, nil
 }

@@ -28,10 +28,14 @@ type RouterOptions struct {
 	MetricsPath    string
 	Health         *health.Checker
 	TrustedProxies TrustedProxies
-	Formats        *formats.Registry
-	Deps           core.Deps
-	InstanceName   string
-	Started        time.Time
+	// API is the fully wired REST API, mounted at /api/v1; nil serves none.
+	API *api.API
+	// Formats and Deps serve the package protocols; nil Formats serves none.
+	Formats *formats.Registry
+	Deps    core.Deps
+	// FormatMiddleware wraps the format routes (/repository/..., /v2/...),
+	// e.g. resolving browser sessions for downloads from the web UI.
+	FormatMiddleware []func(http.Handler) http.Handler
 }
 
 // NewRouter builds the full route tree:
@@ -59,14 +63,17 @@ func NewRouter(o RouterOptions) http.Handler {
 		r.Method(http.MethodGet, path, promhttp.HandlerFor(o.Metrics.Registry, promhttp.HandlerOpts{Registry: o.Metrics.Registry}))
 	}
 
-	names := []string{}
-	if o.Formats != nil {
-		names = o.Formats.Names()
+	if o.API != nil {
+		o.API.Mount(r)
 	}
-	(&api.API{Deps: o.Deps, InstanceName: o.InstanceName, Health: o.Health, Formats: names, Started: o.Started}).Mount(r)
 
 	if o.Formats != nil {
-		formats.Mount(r, o.Formats, o.Deps)
+		r.Group(func(g chi.Router) {
+			for _, mw := range o.FormatMiddleware {
+				g.Use(mw)
+			}
+			formats.Mount(g, o.Formats, o.Deps)
+		})
 	}
 
 	ui := webui.Handler()

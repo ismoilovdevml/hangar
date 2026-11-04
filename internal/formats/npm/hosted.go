@@ -347,15 +347,11 @@ func (h *handler) update(w http.ResponseWriter, ctx context.Context, repo *core.
 		return nil
 	}
 	state.Time["modified"] = h.nowString()
-	wctx := ctx
-	if len(deprecations) == 0 {
-		wctx = systemContext(ctx) // the principal was authorised for delete
-	}
 	if len(cur.Versions) > len(removed) {
-		if err := h.writeMetadata(wctx, repo, bs, statePath(name), state, nil); err != nil {
+		if err := h.writeMetadata(ctx, repo, bs, statePath(name), state, nil); err != nil {
 			return err
 		}
-	} else if err := h.deps.Components.DeleteAsset(wctx, repo, statePath(name)); err != nil && !errors.Is(err, core.ErrNotFound) {
+	} else if err := h.deps.Components.DeleteAsset(ctx, repo, statePath(name)); err != nil && !errors.Is(err, core.ErrNotFound) {
 		return err
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": name.Full})
@@ -495,6 +491,13 @@ func (h *handler) deleteTarball(w http.ResponseWriter, r *http.Request, repo *co
 	if err != nil {
 		return err
 	}
+	if len(cur.Versions) > 1 {
+		// The package state (dist-tags) of the remaining versions is
+		// rewritten below, which is a write: check it before removing anything.
+		if err := h.authorize(ctx, core.ActionWrite, target); err != nil {
+			return err
+		}
+	}
 	if err := h.removeVersions(ctx, target, name, map[string]bool{c.Version: true}); err != nil {
 		return err
 	}
@@ -509,10 +512,10 @@ func (h *handler) deleteTarball(w http.ResponseWriter, r *http.Request, repo *co
 		}
 		dropVersions(state, map[string]bool{c.Version: true}, cur)
 		state.Time["modified"] = h.nowString()
-		if err := h.writeMetadata(systemContext(ctx), target, bs, statePath(name), state, nil); err != nil {
+		if err := h.writeMetadata(ctx, target, bs, statePath(name), state, nil); err != nil {
 			return err
 		}
-	} else if err := h.deps.Components.DeleteAsset(systemContext(ctx), target, statePath(name)); err != nil && !errors.Is(err, core.ErrNotFound) {
+	} else if err := h.deps.Components.DeleteAsset(ctx, target, statePath(name)); err != nil && !errors.Is(err, core.ErrNotFound) {
 		return err
 	}
 	ok(w, http.StatusOK)

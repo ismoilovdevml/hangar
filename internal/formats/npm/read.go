@@ -25,13 +25,6 @@ func wantsAbbreviated(r *http.Request) bool {
 	return strings.Contains(r.Header.Get("Accept"), mediaAbbreviated) && r.URL.Query().Get("write") != "true"
 }
 
-// systemContext marks internal bookkeeping writes (proxy cache fills,
-// package state after an authorised unpublish) so they do not require the
-// requesting principal to hold repo:<name>:write.
-func systemContext(ctx context.Context) context.Context {
-	return core.WithPrincipal(ctx, &core.Principal{Name: "system", Kind: core.PrincipalServiceAccount, Source: "npm"})
-}
-
 func readBlobJSON(ctx context.Context, bs core.BlobStore, d core.Digest, v any) error {
 	rc, err := bs.Get(ctx, d)
 	if err != nil {

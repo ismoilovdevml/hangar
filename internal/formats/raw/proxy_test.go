@@ -9,8 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/core/coretest"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
 func asAlice() context.Context { return coretest.AsUser(context.Background(), "alice") }
@@ -280,4 +283,94 @@ func TestGroupFirstMemberHit(t *testing.T) {
 	if code, _, _ := fx.do(http.MethodGet, "raw-group/other", nil, as("bob")); code != http.StatusBadGateway {
 		t.Errorf("miss with failing proxy member = %d, want 502", code)
 	}
+}
+
+// A reader who may read the group, but none of its members, pulls through a
+// nested group: the proxy member fills its cache on the outer group's read
+// privilege.
+func TestGroupReadFillsProxyCacheWithGroupPrivilegeOnly(t *testing.T) {
+	fx := newFixture(t, proxyRepo("raw-proxy", 0, 0),
+		&core.Repository{Name: "raw-inner", Format: Name, Type: core.RepoGroup,
+			Config: core.RepoConfig{Group: &core.GroupConfig{Members: []string{"raw-proxy"}}}},
+		&core.Repository{Name: "raw-group", Format: Name, Type: core.RepoGroup,
+			Config: core.RepoConfig{Group: &core.GroupConfig{Members: []string{"raw-hosted", "raw-inner"}}}})
+	fx.env.Upstreams.Set("raw-proxy", newRemote(map[string]string{"/tool.bin": "remote bytes"}))
+	fx.env.Auth.AddUser("carol", "secret")
+	fx.env.AuthZ.Grant("carol", "repo:raw-group:read")
+
+	code, _, body := fx.do(http.MethodGet, "raw-group/tool.bin", nil, as("carol"))
+	if code != http.StatusOK || body != "remote bytes" {
+		t.Fatalf("first pull through group = %d %q", code, body)
+	}
+	if _, err := fx.env.Components.GetAsset(context.Background(), mustRepo(t, fx, "raw-proxy").ID, "tool.bin"); err != nil {
+		t.Fatalf("proxy cache not filled: %v", err)
+	}
+	if au := fx.env.Audit.Events("component.publish"); len(au) != 1 || au[0].Actor != "carol" {
+		t.Errorf("cache fill audit = %+v", au)
+	}
+	if code, _, _ := fx.do(http.MethodGet, "raw-proxy/tool.bin", nil, as("carol")); code != http.StatusForbidden {
+		t.Errorf("direct read of the member = %d, want 403", code)
+	}
+}
+
+// cacheCounters reads this format's proxy cache counters.
+func cacheCounters(t *testing.T) (hits, misses, hitBytes float64) {
+	t.Helper()
+	reg := prometheus.NewRegistry()
+	if err := proxy.RegisterMetrics(reg); err != nil {
+		t.Fatal(err)
+	}
+	fams, err := reg.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fams {
+		for _, m := range f.GetMetric() {
+			l := map[string]string{}
+			for _, lp := range m.GetLabel() {
+				l[lp.GetName()] = lp.GetValue()
+			}
+			if l["format"] != Name {
+				continue
+			}
+			v := m.GetCounter().GetValue()
+			switch {
+			case f.GetName() == proxy.MetricCacheHitBytes:
+				hitBytes = v
+			case l["result"] == proxy.CacheResultHit:
+				hits = v
+			case l["result"] == proxy.CacheResultMiss:
+				misses = v
+			}
+		}
+	}
+	return hits, misses, hitBytes
+}
+
+func TestProxyCacheMetrics(t *testing.T) {
+	fx := newFixture(t, proxyRepo("raw-proxy", 0, 0), proxyRepo("raw-proxy-empty", 0, time.Hour),
+		&core.Repository{Name: "raw-group", Format: Name, Type: core.RepoGroup,
+			Config: core.RepoConfig{Group: &core.GroupConfig{Members: []string{"raw-hosted", "raw-proxy-empty", "raw-proxy"}}}})
+	fx.env.Upstreams.Set("raw-proxy", newRemote(map[string]string{"/a.bin": "0123456789"}))
+	fx.env.Upstreams.Set("raw-proxy-empty", newRemote(map[string]string{}))
+	fx.put("raw-hosted/local.bin", "hosted")
+
+	step := func(name, method, path string, wantHits, wantMisses, wantBytes float64) {
+		t.Helper()
+		h0, m0, b0 := cacheCounters(t)
+		if code, _, _ := fx.do(method, path, nil, as("bob")); code != http.StatusOK {
+			t.Fatalf("%s: %s %s = %d", name, method, path, code)
+		}
+		h1, m1, b1 := cacheCounters(t)
+		if h1-h0 != wantHits || m1-m0 != wantMisses || b1-b0 != wantBytes {
+			t.Errorf("%s: hits +%v misses +%v bytes +%v, want +%v +%v +%v", name, h1-h0, m1-m0, b1-b0, wantHits, wantMisses, wantBytes)
+		}
+	}
+	// Both proxy members asked their remotes: one miss for the request.
+	step("first pull", http.MethodGet, "raw-group/a.bin", 0, 1, 0)
+	// The empty member answers from its negative cache, the other from its cache.
+	step("cached pull", http.MethodGet, "raw-group/a.bin", 1, 0, 10)
+	step("cached HEAD", http.MethodHead, "raw-group/a.bin", 1, 0, 0)
+	step("direct cached pull", http.MethodGet, "raw-proxy/a.bin", 1, 0, 10)
+	step("hosted", http.MethodGet, "raw-group/local.bin", 0, 0, 0)
 }

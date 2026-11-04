@@ -22,6 +22,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
 // maxGroupDepth bounds nested group resolution.
@@ -120,6 +121,10 @@ func (h *handler) begin(w http.ResponseWriter, r *http.Request, action core.Acti
 		h.fail(w, r, err)
 		return ctx, nil, Config{}, false
 	}
+	if action == core.ActionRead && repo.Type == core.RepoGroup {
+		// Proxy members fill their cache on the group's read privilege.
+		ctx = core.WithAccessVia(ctx, repo.Name)
+	}
 	return ctx, repo, cfg, true
 }
 
@@ -161,6 +166,8 @@ func (h *handler) get(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
+	ctx, tally := proxy.WithCacheTally(ctx)
+	defer tally.Record(Name, r.Method)
 	e, err := h.resolve(ctx, repo, mp, 0)
 	if errors.Is(err, core.ErrNotFound) {
 		// A directory addressed without its trailing slash.
@@ -172,6 +179,12 @@ func (h *handler) get(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.fail(w, r, err)
 		return
+	}
+	// Count what is served, not the documents it was built from.
+	if e.asset != nil {
+		tally.SetSize(e.asset.Size)
+	} else {
+		tally.SetSize(int64(len(e.data)))
 	}
 	h.serve(w, r.WithContext(ctx), e)
 }

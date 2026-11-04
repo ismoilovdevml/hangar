@@ -14,15 +14,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ismoilovdevml/hangar/internal/config"
-	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/db"
-	"github.com/ismoilovdevml/hangar/internal/events"
-	"github.com/ismoilovdevml/hangar/internal/formats/builtin"
-	"github.com/ismoilovdevml/hangar/internal/health"
-	"github.com/ismoilovdevml/hangar/internal/httpclient"
 	"github.com/ismoilovdevml/hangar/internal/observability"
 	"github.com/ismoilovdevml/hangar/internal/server"
-	"github.com/ismoilovdevml/hangar/internal/storage"
 	"github.com/ismoilovdevml/hangar/internal/version"
 )
 
@@ -53,9 +47,7 @@ func serveCmd(args []string, stderr io.Writer) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	started := time.Now()
 
-	// Database.
 	pool, err := db.Open(ctx, cfg.Database.URL, db.PoolOptions{
 		MaxConns: cfg.Database.MaxConns, MinConns: cfg.Database.MinConns, ConnLifetime: cfg.Database.ConnLifetime,
 	})
@@ -67,82 +59,18 @@ func serveCmd(args []string, stderr io.Writer) error {
 		return err
 	}
 
-	// Blob storage.
-	store, err := storage.Open(cfg.Storage)
+	a, err := build(ctx, cfg, pool, log, time.Now())
 	if err != nil {
 		return err
 	}
+	defer a.close()
 
-	// Event bus and job queue.
-	rt, err := events.Open(ctx, events.Options{
-		Embedded: cfg.NATS.Embedded, DataDir: cfg.NATS.DataDir, Listen: cfg.NATS.Listen, URL: cfg.NATS.URL,
-	}, log)
-	if err != nil {
-		return err
-	}
-	defer rt.Close()
-	queue, err := events.NewQueue(ctx, rt.JS, events.QueueOptions{}, log)
-	if err != nil {
-		return err
-	}
-	defer queue.Close()
-
-	// Outbound HTTP for proxy repositories.
-	userAgent := cfg.HTTP.UserAgent
-	if userAgent == "" {
-		userAgent = version.UserAgent()
-	}
-	clients, err := httpclient.New(httpclient.Options{
-		Proxy: cfg.HTTP.Proxy, ProxyUsername: cfg.HTTP.ProxyUsername, ProxyPassword: cfg.HTTP.ProxyPassword,
-		NoProxy: cfg.HTTP.NoProxy, UseEnvironment: cfg.HTTP.UseEnvironment, CAFile: cfg.HTTP.CAFile,
-		ConnectTimeout: cfg.HTTP.ConnectTimeout, ReadTimeout: cfg.HTTP.ReadTimeout,
-		IdleConnTimeout: cfg.HTTP.IdleConnTimeout, MaxIdleConns: cfg.HTTP.MaxIdleConns,
-		MaxIdleConnsPerHost: cfg.HTTP.MaxIdleConnsPerHost, UserAgent: userAgent,
-	})
-	if err != nil {
-		return err
-	}
-
-	trusted, err := server.ParseTrustedProxies(cfg.Server.TrustedProxies)
-	if err != nil {
-		return err
-	}
-	reg, err := builtin.Registry()
-	if err != nil {
-		return err
-	}
-
-	hc := health.New(2 * time.Second)
-	hc.Add("database", func(ctx context.Context) error { return pool.Ping(ctx) })
-	hc.Add("blobstore", store.Ping)
-	hc.Add("eventbus", rt.Ping)
-
-	// Core services are wired here. Repositories, components, auth, authz,
-	// audit and upstreams are not built yet; until then /repository routes
-	// are disabled and the API answers 501 for them.
-	deps := core.Deps{
-		Blobs:       storage.Single{Store: store},
-		HTTPClients: clients,
-		Events:      events.NewBus(rt.Conn, log),
-		Jobs:        queue,
-		Logger:      log,
-		BaseURL:     cfg.Server.BaseURL,
-	}
-
-	var metrics *observability.Metrics
-	if cfg.Metrics.Enabled {
-		metrics = observability.NewMetrics()
-	}
-	router := server.NewRouter(server.RouterOptions{
-		Logger: log, Metrics: metrics, MetricsPath: cfg.Metrics.Path, Health: hc,
-		TrustedProxies: trusted, Formats: reg, Deps: deps, Started: started, InstanceName: cfg.Server.InstanceName,
-	})
 	err = server.Run(ctx, server.Config{
 		Addr:              cfg.Server.Addr,
 		ReadHeaderTimeout: cfg.Server.ReadHeaderTimeout,
 		IdleTimeout:       cfg.Server.IdleTimeout,
 		ShutdownTimeout:   cfg.Server.ShutdownTimeout,
-	}, router, hc, log, nil)
+	}, a.router, a.health, log, nil)
 	if err != nil {
 		return err
 	}

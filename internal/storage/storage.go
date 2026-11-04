@@ -8,7 +8,29 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/config"
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/storage/fs"
+	"github.com/ismoilovdevml/hangar/internal/storage/s3"
 )
+
+// S3Config converts the storage.s3 settings to the driver configuration.
+func S3Config(c config.S3Storage) s3.Config {
+	return s3.Config{
+		Endpoint: c.Endpoint, Region: c.Region, Bucket: c.Bucket, Prefix: c.Prefix,
+		AccessKeyID: c.AccessKeyID, SecretAccessKey: c.SecretAccessKey, SessionToken: c.SessionToken,
+		UsePathStyle: c.UsePathStyle, CAFile: c.CAFile, PartSize: c.PartSize,
+	}
+}
+
+// RegistryConfig is the blob_stores.config document of the configured
+// default store (secrets excluded: they stay in the process configuration).
+func RegistryConfig(cfg config.Storage) map[string]any {
+	switch cfg.Kind {
+	case "s3":
+		return map[string]any{"endpoint": cfg.S3.Endpoint, "region": cfg.S3.Region, "bucket": cfg.S3.Bucket,
+			"prefix": cfg.S3.Prefix, "use_path_style": cfg.S3.UsePathStyle}
+	default:
+		return map[string]any{"path": cfg.FS.Path}
+	}
+}
 
 // Store is a blob store that can also report its health.
 type Store interface {
@@ -22,7 +44,7 @@ func Open(cfg config.Storage) (Store, error) {
 	case "fs":
 		return fs.New(cfg.FS.Path)
 	case "s3":
-		return nil, fmt.Errorf("s3 blob store: %w", core.ErrNotImplemented)
+		return s3.New(context.Background(), S3Config(cfg.S3))
 	default:
 		return nil, fmt.Errorf("storage kind %q: %w", cfg.Kind, core.ErrInvalid)
 	}
