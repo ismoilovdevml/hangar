@@ -147,7 +147,8 @@ const SEED_POLICIES: CleanupPolicyInput[] = [
 ];
 
 function policyFrom(input: CleanupPolicyInput, id: string, createdAt: string, now: number): CleanupPolicy {
-  const { preview_token: _token, ...rest } = input;
+  const rest = { ...input };
+  delete rest.preview_token;
   const schedule = input.schedule ?? null;
   const enabled = input.enabled ?? true;
   return {
