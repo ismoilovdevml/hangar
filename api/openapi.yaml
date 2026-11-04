@@ -330,6 +330,15 @@ paths:
     put:
       tags: [blob-stores]
       operationId: updateBlobStore
+      description: |
+        Name and kind cannot change. `soft_quota_bytes` (null or absent removes
+        the quota), S3 credentials, region and path style can always change.
+        The location (`fs.path`, S3 bucket, prefix, endpoint) can change only
+        while the store holds no repositories and no blobs. A config section
+        left out keeps the current one; an S3 secret left out keeps the stored
+        secret unless `access_key_id` changes. Stores defined by the server
+        configuration only accept a new soft quota. Requires
+        `system:blobstores:admin`; audited.
       requestBody:
         required: true
         content:
@@ -341,14 +350,28 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BlobStore" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`in_use`: the location of a store that holds content cannot change"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
     delete:
       tags: [blob-stores]
       operationId: deleteBlobStore
+      description: |
+        Deletes an empty store: no repository uses it and no blob (live or
+        awaiting compaction) is recorded in it. Bytes in the backend are not
+        touched. Stores defined by the server configuration cannot be deleted.
+        Requires `system:blobstores:admin`; audited.
       responses:
         "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: Repositories still use the store
+          description: "`in_use`: repositories or blobs still use the store, or it comes from the server configuration"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -597,16 +620,24 @@ paths:
     get:
       tags: [cleanup]
       operationId: listCleanupPolicies
+      description: Requires `system:cleanup:read`. Every endpoint that changes something, and preview, requires `system:cleanup:write`.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
       responses:
         "200":
-          description: Policies
+          description: Policies by name
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CleanupPolicyPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       tags: [cleanup]
       operationId: createCleanupPolicy
-      description: Rejected unless the same criteria were previewed (`preview_token`).
+      description: |
+        Rejected with 400 `preview_required` unless the same name, format,
+        criteria and repositories were previewed within the last hour
+        (`preview_token`). Audited.
       requestBody:
         required: true
         content:
@@ -619,11 +650,27 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CleanupPolicy" }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /cleanup-policies/preview:
     post:
       tags: [cleanup]
       operationId: previewCleanupPolicy
       summary: Dry run of (possibly unsaved) criteria
+      description: |
+        Lists exactly what a run would delete now, with sizes, and issues a
+        `preview_token` for saving these rules. With `Accept: text/csv` or
+        `?format=csv` every candidate is streamed as CSV instead (columns
+        repository, format, namespace, name, version, size_bytes, created_at,
+        last_downloaded_at, download_count, id).
+      parameters:
+        - name: sample
+          in: query
+          description: Number of candidates in `sample` (default 100)
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+        - name: format
+          in: query
+          schema: { type: string, enum: [csv] }
       requestBody:
         required: true
         content:
@@ -637,12 +684,11 @@ paths:
               schema: { $ref: "#/components/schemas/CleanupPreview" }
             text/csv:
               schema: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /cleanup-policies/{name}:
     parameters:
-      - name: name
-        in: path
-        required: true
-        schema: { type: string }
+      - $ref: "#/components/parameters/CleanupPolicyRef"
     get:
       tags: [cleanup]
       operationId: getCleanupPolicy
@@ -656,6 +702,10 @@ paths:
     put:
       tags: [cleanup]
       operationId: updateCleanupPolicy
+      description: |
+        Replaces the policy. The name cannot change. A new `preview_token` is
+        required when the format, criteria or repositories change; schedule,
+        description and `enabled` can change without one. Audited.
       requestBody:
         required: true
         content:
@@ -667,26 +717,95 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CleanupPolicy" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
     delete:
       tags: [cleanup]
       operationId: deleteCleanupPolicy
+      description: Deletes the policy with its task and run history. A running policy must be stopped first.
       responses:
         "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`already_running`: stop the run first"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /cleanup-policies/{name}/run:
+    parameters:
+      - $ref: "#/components/parameters/CleanupPolicyRef"
+    post:
+      tags: [cleanup]
+      operationId: runCleanupPolicy
+      summary: Run the policy now (also when disabled; disabling only stops the schedule)
+      responses:
+        "202":
+          description: Run queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskRun" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`already_running`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /cleanup-policies/{name}/stop:
+    parameters:
+      - $ref: "#/components/parameters/CleanupPolicyRef"
+    post:
+      tags: [cleanup]
+      operationId: stopCleanupPolicy
+      responses:
+        "202":
+          description: Cancellation requested (a queued run is cancelled at once)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskRun" }
+        "409":
+          description: "`not_running`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /cleanup-policies/{name}/runs:
+    parameters:
+      - $ref: "#/components/parameters/CleanupPolicyRef"
+    get:
+      tags: [cleanup]
+      operationId: listCleanupPolicyRuns
+      summary: Run history, newest first (`result` holds a CleanupRunResult)
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Runs
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskRunPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ---------------------------------------------------------------- tasks
   /tasks:
     get:
       tags: [tasks]
       operationId: listTasks
+      description: |
+        Built-in maintenance tasks, the tasks of cleanup policies and tasks
+        added by administrators, with their last run, plus the active runs.
+        Requires `system:tasks:read`; every task endpoint that changes
+        something requires `system:tasks:write` and is audited.
       responses:
         "200":
           description: Scheduled tasks and the runs in progress
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TaskList" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       tags: [tasks]
       operationId: createTask
+      description: Adds a task of a creatable type (`blob_compaction`, `docker_gc`). Cleanup tasks belong to cleanup policies.
       requestBody:
         required: true
         content:
@@ -698,9 +817,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Task" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /tasks/{id}:
     parameters:
-      - $ref: "#/components/parameters/Id"
+      - $ref: "#/components/parameters/TaskRef"
     get:
       tags: [tasks]
       operationId: getTask
@@ -714,6 +835,10 @@ paths:
     put:
       tags: [tasks]
       operationId: updateTask
+      description: |
+        Changes description, schedule, config and `enabled`; name and type are
+        fixed. Built-in tasks can be edited (not deleted). Tasks of cleanup
+        policies answer 409 `managed`: edit the policy.
       requestBody:
         required: true
         content:
@@ -725,14 +850,27 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Task" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`managed`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
     delete:
       tags: [tasks]
       operationId: deleteTask
       responses:
         "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`managed` (built in or a cleanup policy's task) or `already_running`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /tasks/{id}/run:
     parameters:
-      - $ref: "#/components/parameters/Id"
+      - $ref: "#/components/parameters/TaskRef"
     post:
       tags: [tasks]
       operationId: runTask
@@ -742,26 +880,34 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TaskRun" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: Already running
+          description: "`already_running`"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
   /tasks/{id}/stop:
     parameters:
-      - $ref: "#/components/parameters/Id"
+      - $ref: "#/components/parameters/TaskRef"
     post:
       tags: [tasks]
       operationId: stopTask
+      description: A queued run is cancelled at once; a running one stops within a few seconds and ends as `cancelled`.
       responses:
         "202":
           description: Cancellation requested
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TaskRun" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_running`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /tasks/{id}/runs:
     parameters:
-      - $ref: "#/components/parameters/Id"
+      - $ref: "#/components/parameters/TaskRef"
     get:
       tags: [tasks]
       operationId: listTaskRuns
@@ -774,6 +920,49 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TaskRunPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /tasks/{id}/runs/{run_id}:
+    parameters:
+      - $ref: "#/components/parameters/TaskRef"
+      - $ref: "#/components/parameters/RunId"
+    get:
+      tags: [tasks]
+      operationId: getTaskRun
+      summary: One run with its result
+      responses:
+        "200":
+          description: Run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskRun" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /tasks/{id}/runs/{run_id}/log:
+    parameters:
+      - $ref: "#/components/parameters/TaskRef"
+      - $ref: "#/components/parameters/RunId"
+    get:
+      tags: [tasks]
+      operationId: getTaskRunLog
+      summary: Log lines of a run, oldest first
+      description: |
+        Poll with `after` set to the last `seq` seen to follow a running run.
+        The server keeps the newest 256 KiB of a run's log; `truncated` is set
+        when older lines were dropped.
+      parameters:
+        - name: after
+          in: query
+          description: Only lines with a greater `seq`
+          schema: { type: integer, minimum: 0 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 5000, default: 1000 }
+      responses:
+        "200":
+          description: Log lines
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskRunLog" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ---------------------------------------------------------------- access
   /users:
@@ -1137,6 +1326,23 @@ components:
       in: path
       required: true
       schema: { $ref: "#/components/schemas/RepositoryName" }
+    CleanupPolicyRef:
+      name: name
+      in: path
+      required: true
+      description: Policy name or id
+      schema: { type: string }
+    TaskRef:
+      name: id
+      in: path
+      required: true
+      description: Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded)
+      schema: { type: string }
+    RunId:
+      name: run_id
+      in: path
+      required: true
+      schema: { type: string }
 
   responses:
     BadRequest:
@@ -1333,6 +1539,12 @@ components:
           description: Short sentence, e.g. "All systems normal"
         version: { type: string }
         instance_name: { type: string }
+        base_url:
+          type: string
+          description: server.base_url, the externally visible URL clients are configured with (empty if unset)
+        registry_host:
+          type: string
+          description: host[:port] docker clients use, from server.base_url (repositories with a connector use their own)
         nodes_up: { type: integer }
         nodes_total: { type: integer }
         build: { $ref: "#/components/schemas/BuildInfo" }
@@ -1549,7 +1761,9 @@ components:
         blob_store:
           type: string
           description: Required for hosted and proxy repositories
-        online: { type: boolean, default: true }
+        online:
+          type: boolean
+          description: Optional; true when omitted
         config: { $ref: "#/components/schemas/RepositoryConfig" }
     RepositoryStatus:
       type: string
@@ -1594,7 +1808,11 @@ components:
       properties:
         name: { type: string }
         kind: { type: string, enum: [fs, s3] }
-        soft_quota_bytes: { $ref: "#/components/schemas/Bytes" }
+        soft_quota_bytes:
+          type: [integer, "null"]
+          format: int64
+          minimum: 1
+          description: Soft quota; null or absent = none
         fs:
           type: object
           properties:
@@ -1865,22 +2083,82 @@ components:
     # ------------------------------------------------------------ cleanup
     CleanupCriteria:
       type: object
-      description: All set conditions must hold (AND); keep rules always win.
+      description: |
+        Scope: `version_include` (if set) must match and, with
+        `prerelease_only`, only pre-release / snapshot versions count. Versions
+        matching `version_exclude` or a `keep_matching` glob, quarantined
+        versions and versions under legal hold (component attribute
+        `legal_hold: true`) are never deleted and do not use `keep_newest`
+        slots. Of the rest, the `keep_newest` most recently published versions
+        per package are kept; the others are deleted when every set condition
+        holds (AND). At least one of `older_than_days`, `not_downloaded_days`,
+        `prerelease_only` or `keep_newest >= 1` is required.
       properties:
-        older_than_days: { type: integer, minimum: 1 }
-        not_downloaded_days: { type: integer, minimum: 1 }
-        keep_newest: { type: integer, minimum: 0 }
+        older_than_days:
+          type: integer
+          minimum: 1
+          maximum: 36500
+          description: Published more than N days ago
+        not_downloaded_days:
+          type: integer
+          minimum: 1
+          maximum: 36500
+          description: Not downloaded for N days (never-downloaded versions count from publication)
+        keep_newest: { type: integer, minimum: 0, maximum: 100000, description: Versions kept per package }
         keep_matching:
           type: array
           description: Version/tag globs never deleted (e.g. `release-*`, `latest`)
+          maxItems: 100
           items: { type: string }
+        version_include:
+          type: string
+          description: RE2 regular expression; only matching versions are in scope
+        version_exclude:
+          type: string
+          description: RE2 regular expression; matching versions are never deleted
         prerelease_only:
           type: boolean
-          description: Only pre-release / snapshot versions
+          description: |
+            Only pre-release / snapshot versions: Maven `-SNAPSHOT` and unstable
+            qualifiers, PEP 440 pre/dev releases for PyPI, SemVer pre-release
+            identifiers otherwise
+        min_size_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Only versions at least this large (sum of their assets)
     CleanupPolicyInput:
       type: object
-      required: [name, criteria, repositories]
+      required: [name, criteria]
       properties:
+        name: { $ref: "#/components/schemas/RepositoryName" }
+        description: { type: string, maxLength: 1000 }
+        format:
+          oneOf:
+            - $ref: "#/components/schemas/Format"
+            - type: "null"
+        criteria: { $ref: "#/components/schemas/CleanupCriteria" }
+        repositories:
+          type: array
+          description: |
+            Hosted or proxy repositories attached by the policy. The policy
+            also applies to repositories whose `config.cleanup_policies` names it.
+          items: { type: string }
+        schedule:
+          type: [string, "null"]
+          description: 5-field cron in UTC (or @daily, @hourly, ...); null = manual only
+        enabled:
+          type: boolean
+          description: Optional; true when omitted. A disabled policy does not run on its schedule.
+        preview_token:
+          type: string
+          description: From a preview of identical name, format, criteria and repositories; required to save them
+    CleanupPolicy:
+      type: object
+      required: [id, name, description, format, criteria, repositories, effective_repositories, schedule,
+        schedule_text, enabled, task_id, next_run_at, last_run, created_at, updated_at]
+      properties:
+        id: { type: string }
         name: { type: string }
         description: { type: string }
         format:
@@ -1891,25 +2169,25 @@ components:
         repositories:
           type: array
           items: { type: string }
-        schedule:
-          type: [string, "null"]
-          description: 5-field cron in UTC; null = manual only
-        enabled: { type: boolean, default: true }
-        preview_token:
+        effective_repositories:
+          type: array
+          description: Repositories the policy cleans (attached plus those naming it in their config)
+          items: { type: string }
+        schedule: { type: [string, "null"] }
+        schedule_text:
           type: string
-          description: From a preview of identical criteria; required to save
-    CleanupPolicy:
-      allOf:
-        - $ref: "#/components/schemas/CleanupPolicyInput"
-        - type: object
-          required: [id, schedule_text, created_at]
-          properties:
-            id: { type: string }
-            schedule_text:
-              type: string
-              description: Human form of the schedule, e.g. "Every day at 02:00 UTC"
-            next_run_at: { type: [string, "null"], format: date-time }
-            created_at: { $ref: "#/components/schemas/Timestamp" }
+          description: Human form of the schedule, e.g. "Every day at 02:00 UTC"
+        enabled: { type: boolean }
+        task_id:
+          type: string
+          description: The policy's task (`cleanup/<name>`) in /tasks
+        next_run_at: { type: [string, "null"], format: date-time }
+        last_run:
+          oneOf:
+            - $ref: "#/components/schemas/TaskRun"
+            - type: "null"
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
     CleanupPolicyPage:
       type: object
       required: [items]
@@ -1918,21 +2196,72 @@ components:
           type: array
           items: { $ref: "#/components/schemas/CleanupPolicy" }
         next_cursor: { $ref: "#/components/schemas/NextCursor" }
-    CleanupPreview:
+    CleanupCandidate:
       type: object
-      required: [component_count, bytes, sample, preview_token]
+      required: [id, repository, format, namespace, name, version, size_bytes, created_at, last_downloaded_at, download_count]
       properties:
+        id: { type: string }
+        repository: { type: string }
+        format: { type: string }
+        namespace: { type: string }
+        name: { type: string }
+        version: { type: string }
+        size_bytes: { $ref: "#/components/schemas/Bytes" }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        last_downloaded_at: { type: [string, "null"], format: date-time }
+        download_count: { type: integer }
+    CleanupRepositorySummary:
+      type: object
+      required: [repository, component_count, bytes]
+      properties:
+        repository: { type: string }
         component_count: { type: integer }
         bytes: { $ref: "#/components/schemas/Bytes" }
+    CleanupPreview:
+      type: object
+      required: [component_count, bytes, held_count, repositories, sample, truncated, evaluated_at, preview_token, expires_at]
+      properties:
+        component_count: { type: integer }
+        bytes:
+          allOf: [{ $ref: "#/components/schemas/Bytes" }]
+          description: Sum of the candidates' asset sizes (shared blobs are freed only when no other asset uses them)
+        held_count:
+          type: integer
+          description: Versions that match but are kept for quarantine or legal hold
+        repositories:
+          type: array
+          items: { $ref: "#/components/schemas/CleanupRepositorySummary" }
         sample:
           type: array
-          items: { $ref: "#/components/schemas/PublishedComponent" }
+          description: The first candidates by repository and package; the CSV export lists all
+          items: { $ref: "#/components/schemas/CleanupCandidate" }
+        truncated: { type: boolean }
+        evaluated_at: { $ref: "#/components/schemas/Timestamp" }
         preview_token: { type: string }
+        expires_at: { $ref: "#/components/schemas/Timestamp" }
+    CleanupRunResult:
+      type: object
+      description: TaskRun.result of a cleanup run
+      properties:
+        policy: { type: string }
+        evaluated_at: { $ref: "#/components/schemas/Timestamp" }
+        deleted: { type: integer }
+        bytes: { $ref: "#/components/schemas/Bytes" }
+        failed: { type: integer }
+        gone: { type: integer, description: Candidates deleted by someone else during the run }
+        held: { type: integer }
+        repositories:
+          type: array
+          items: { $ref: "#/components/schemas/CleanupRepositorySummary" }
 
     # ------------------------------------------------------------ tasks
     TaskType:
       type: string
-      enum: [cleanup, blob_compaction, docker_gc, rescan, reindex, directory_sync, db_backup, replication, proxy_metadata_refresh, blob_store_move]
+      description: |
+        Types this server runs: cleanup (cleanup policies), blob_compaction,
+        docker_gc, auth_purge, audit_partitions. The others are reserved.
+      enum: [cleanup, blob_compaction, docker_gc, auth_purge, audit_partitions, rescan, reindex, directory_sync, db_backup,
+        replication, proxy_metadata_refresh, blob_store_move]
     TaskRunStatus:
       type: string
       enum: [queued, running, succeeded, failed, cancelled]
@@ -1940,42 +2269,99 @@ components:
       type: object
       required: [name, type]
       properties:
-        name: { type: string }
+        name: { $ref: "#/components/schemas/RepositoryName" }
         type: { $ref: "#/components/schemas/TaskType" }
-        description: { type: string }
-        schedule: { type: [string, "null"], description: 5-field cron in UTC }
+        description: { type: string, maxLength: 1000 }
+        schedule: { type: [string, "null"], description: 5-field cron in UTC (or @daily, ...); null = manual only }
         config:
           type: object
           additionalProperties: true
-        enabled: { type: boolean, default: true }
+          description: |
+            Per type. blob_compaction: `blob_store` (name; default all),
+            `orphan_scan` (bool). docker_gc: `older_than_days` (default 7),
+            `repositories` (default all hosted and proxy docker repositories),
+            `dry_run`. Others take none.
+        enabled:
+          type: boolean
+          description: Optional; true when omitted
     TaskRun:
       type: object
-      required: [id, task_id, status, progress, created_at]
+      required: [id, task_id, task_name, task_type, status, progress, message, triggered_by, node, cancel_requested,
+        created_at, started_at, finished_at]
       properties:
         id: { type: string }
         task_id: { type: string }
         task_name: { type: string }
+        task_type: { $ref: "#/components/schemas/TaskType" }
         status: { $ref: "#/components/schemas/TaskRunStatus" }
         progress: { type: number, minimum: 0, maximum: 1 }
         message: { type: string }
-        triggered_by: { type: string }
-        node: { type: string }
+        triggered_by:
+          type: string
+          description: Principal name, or `schedule`
+        node:
+          type: string
+          description: Host name of the node executing (or that last executed) the run
+        cancel_requested: { type: boolean }
         created_at: { $ref: "#/components/schemas/Timestamp" }
         started_at: { type: [string, "null"], format: date-time }
         finished_at: { type: [string, "null"], format: date-time }
+        components_deleted:
+          type: integer
+          description: Cleanup runs - components deleted so far (from the result)
+        bytes_freed:
+          allOf: [{ $ref: "#/components/schemas/Bytes" }]
+          description: Cleanup, docker GC and blob compaction runs - bytes released (from the result)
+        result:
+          type: object
+          additionalProperties: true
+          description: Summary of a finished run, per type (cleanup runs - CleanupRunResult)
+    TaskRunLogLine:
+      type: object
+      required: [seq, at, level, message]
+      properties:
+        seq: { type: integer, description: Line number within the stored log }
+        at: { $ref: "#/components/schemas/Timestamp" }
+        level: { type: string, enum: [debug, info, warn, error] }
+        message: { type: string }
+    TaskRunLog:
+      type: object
+      required: [items, truncated]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TaskRunLogLine" }
+        truncated:
+          type: boolean
+          description: Older lines were dropped (the log keeps its newest 256 KiB)
     Task:
-      allOf:
-        - $ref: "#/components/schemas/TaskInput"
-        - type: object
-          required: [id, schedule_text]
-          properties:
-            id: { type: string }
-            schedule_text: { type: string }
-            last_run:
-              oneOf:
-                - $ref: "#/components/schemas/TaskRun"
-                - type: "null"
-            next_run_at: { type: [string, "null"], format: date-time }
+      type: object
+      required: [id, name, type, description, schedule, schedule_text, config, enabled, builtin, next_run_at, last_run,
+        created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        type: { $ref: "#/components/schemas/TaskType" }
+        description: { type: string }
+        schedule: { type: [string, "null"] }
+        schedule_text: { type: string }
+        config:
+          type: object
+          additionalProperties: true
+        enabled: { type: boolean }
+        builtin:
+          type: boolean
+          description: Provided by the server; can be edited and disabled, not deleted
+        policy_id:
+          type: string
+          description: Set for the task of a cleanup policy
+        last_run:
+          oneOf:
+            - $ref: "#/components/schemas/TaskRun"
+            - type: "null"
+        next_run_at: { type: [string, "null"], format: date-time }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
     TaskList:
       type: object
       required: [items, running]
@@ -1985,7 +2371,7 @@ components:
           items: { $ref: "#/components/schemas/Task" }
         running:
           type: array
-          description: Runs in progress ("Running now" banner)
+          description: Queued and running runs ("Running now" banner)
           items: { $ref: "#/components/schemas/TaskRun" }
     TaskRunPage:
       type: object
@@ -2249,10 +2635,12 @@ components:
             type: { const: task.progress }
             data:
               type: object
-              required: [task_id, progress]
+              required: [task_id, run_id, progress]
               properties:
                 task_id: { type: string }
                 run_id: { type: string }
+                task_name: { type: string }
+                status: { $ref: "#/components/schemas/TaskRunStatus" }
                 progress: { type: number, minimum: 0, maximum: 1 }
                 message: { type: string }
         - type: object
