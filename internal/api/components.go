@@ -33,6 +33,8 @@ type publishedComponent struct {
 	Scan             catalog.ScanSummary `json:"scan"`
 	DownloadCount    int64               `json:"download_count"`
 	LastDownloadedAt *time.Time          `json:"last_downloaded_at"`
+	// SizeBytes is the content size, reported by the versions listing only.
+	SizeBytes *int64 `json:"size_bytes,omitempty"`
 }
 
 func toPublished(c *catalog.ComponentRow) publishedComponent {
@@ -285,9 +287,21 @@ func (a *API) listComponentVersions(w http.ResponseWriter, r *http.Request) {
 		a.writeErr(w, r, err)
 		return
 	}
+	ids := make([]string, 0, len(p.Items))
+	for _, it := range p.Items {
+		ids = append(ids, it.ID)
+	}
+	sizes, err := a.Catalog.ComponentSizes(ctx, ids)
+	if err != nil {
+		a.writeErr(w, r, err)
+		return
+	}
 	items := make([]publishedComponent, 0, len(p.Items))
 	for _, it := range p.Items {
-		items = append(items, toPublished(it))
+		pc := toPublished(it)
+		size := sizes[it.ID]
+		pc.SizeBytes = &size
+		items = append(items, pc)
 	}
 	WriteJSON(w, http.StatusOK, newPage(items, p.NextCursor))
 }
