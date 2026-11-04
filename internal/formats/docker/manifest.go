@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime"
 	"net/http"
 	"strconv"
@@ -187,7 +188,7 @@ func (h *handler) findManifest(ctx context.Context, hdr http.Header, repo *core.
 	if err != nil {
 		return nil, err
 	}
-	var firstErr error
+	var miss memberMisses
 	for _, m := range repos {
 		var hit *manifestHit
 		if m.Type == core.RepoProxy {
@@ -198,14 +199,47 @@ func (h *handler) findManifest(ctx context.Context, hdr http.Header, repo *core.
 		if err == nil {
 			return hit, nil
 		}
-		if !errors.Is(err, core.ErrNotFound) && firstErr == nil {
-			firstErr = err
+		miss.note(ctx, h.log, repo, m, err)
+	}
+	return nil, miss.result(fmt.Sprintf("manifest %s:%s", image, ref))
+}
+
+// memberMisses collects why the members of repo did not serve a request.
+//
+// For a group, an unreachable or rate-limiting remote of a proxy member is a
+// miss, not a failure: the group answers MANIFEST_UNKNOWN / BLOB_UNKNOWN when
+// no member has the content. Otherwise a Docker Hub outage would break
+// pushes through the group, whose clients probe every manifest and layer
+// first and abort on anything but 200 or 404. A proxy addressed directly
+// still reports the remote failure (502 / 429).
+type memberMisses struct {
+	failed      error  // first error that is not a miss
+	unreachable string // first member whose remote could not be asked
+}
+
+func (m *memberMisses) note(ctx context.Context, log *slog.Logger, repo, member *core.Repository, err error) {
+	switch {
+	case errors.Is(err, core.ErrNotFound):
+	case repo.Type == core.RepoGroup && errors.Is(err, core.ErrUpstream):
+		log.DebugContext(ctx, "docker: group member remote unavailable, treated as a miss",
+			"group", repo.Name, "member", member.Name, "err", err)
+		if m.unreachable == "" {
+			m.unreachable = member.Name
 		}
+	case m.failed == nil:
+		m.failed = err
 	}
-	if firstErr != nil {
-		return nil, firstErr
+}
+
+func (m *memberMisses) result(what string) error {
+	switch {
+	case m.failed != nil:
+		return m.failed
+	case m.unreachable != "":
+		return fmt.Errorf("%s: %w (the remote of %s could not be reached)", what, core.ErrNotFound, m.unreachable)
+	default:
+		return fmt.Errorf("%s: %w", what, core.ErrNotFound)
 	}
-	return nil, fmt.Errorf("manifest %s:%s: %w", image, ref, core.ErrNotFound)
 }
 
 func (h *handler) getManifest(w http.ResponseWriter, r *http.Request, rq *request) {

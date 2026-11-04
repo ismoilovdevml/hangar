@@ -21,6 +21,8 @@ type handler struct {
 	tokenTTL  time.Duration
 	uploadTTL time.Duration
 	now       func() time.Time
+	// unknown remembers names proxy remotes said they do not serve.
+	unknown nameCache
 }
 
 // authResult is who sent a request and, for registry tokens, what the token grants.
@@ -306,6 +308,8 @@ func (h *handler) fail(w http.ResponseWriter, r *http.Request, rq *request, err 
 	case errors.Is(err, core.ErrUnauthenticated), errors.Is(err, core.ErrForbidden):
 		action, _ := actionFor(rq.kind, r.Method)
 		h.deny(w, r, rq.auth, err, rq.repo.Name, rq.name, action)
+	case errors.Is(err, errRateLimited):
+		writeError(w, http.StatusTooManyRequests, codeTooManyRequests, "the remote registry of this proxy repository is rate limiting requests; retry later")
 	case core.HTTPStatus(err) >= 500 && !errors.Is(err, core.ErrUpstream) && !errors.Is(err, core.ErrOffline):
 		h.internal(w, r, "request", err)
 	default:

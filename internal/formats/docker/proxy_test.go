@@ -20,9 +20,10 @@ import (
 
 // fakeHub is an in-memory OCI registry standing in for Docker Hub.
 type fakeHub struct {
-	reg  http.Handler
-	down atomic.Bool
-	gets atomic.Int32 // GET /v2/.../manifests/ requests
+	reg      http.Handler
+	down     atomic.Bool
+	gets     atomic.Int32 // GET /v2/.../manifests/ requests
+	blobGets atomic.Int32 // GET /v2/.../blobs/ requests
 }
 
 func (f *fakeHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -32,6 +33,9 @@ func (f *fakeHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/manifests/") {
 		f.gets.Add(1)
+	}
+	if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/blobs/") {
+		f.blobGets.Add(1)
 	}
 	w.Header().Set("RateLimit-Remaining", "99;w=21600")
 	f.reg.ServeHTTP(w, r)
@@ -150,11 +154,34 @@ func TestProxyBlobDedupAcrossRepos(t *testing.T) {
 		Config: core.RepoConfig{Proxy: &core.ProxyConfig{RemoteURL: upSrv.URL}}})
 
 	// The layer already exists in the shared blob store (pushed to a hosted repo).
-	d := tr.pushBlob("docker-hosted/base", []byte("common layer"), alice)
+	layer := []byte("common layer")
+	d := tr.pushBlob("docker-hosted/base", layer, alice)
+
+	// The remote does not serve it under this name: the stored copy must not
+	// be handed out (it may belong to a private image).
 	resp, body := tr.do(http.MethodGet, "/v2/ghcr-proxy/base/blobs/"+string(d), nil, alice)
+	tr.expect(resp, body, http.StatusNotFound)
+	if errCode(body) != "BLOB_UNKNOWN" {
+		t.Fatalf("code = %s", body)
+	}
+
+	// The remote serves it: confirmed with a HEAD only, the bytes are linked
+	// from the store instead of being downloaded again.
+	up := &testReg{t: t, srv: upSrv}
+	up.pushBlob("shared/base", layer)
+	resp, body = tr.do(http.MethodGet, "/v2/ghcr-proxy/shared/base/blobs/"+string(d), nil, alice)
 	tr.expect(resp, body, http.StatusOK)
-	if tr.env.Upstreams.Calls("ghcr-proxy") != 0 {
-		t.Fatal("blob present in the store was fetched from the remote")
+	if string(body) != string(layer) {
+		t.Fatalf("blob = %q", body)
+	}
+	if n := hub.blobGets.Load(); n != 0 {
+		t.Fatalf("blob present in the store was downloaded from the remote (%d GETs)", n)
+	}
+	calls := tr.env.Upstreams.Calls("ghcr-proxy")
+	resp, body = tr.do(http.MethodGet, "/v2/ghcr-proxy/shared/base/blobs/"+string(d), nil, alice)
+	tr.expect(resp, body, http.StatusOK)
+	if tr.env.Upstreams.Calls("ghcr-proxy") != calls {
+		t.Fatal("linked blob is not served from the cache")
 	}
 }
 

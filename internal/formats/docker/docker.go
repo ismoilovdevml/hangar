@@ -5,6 +5,7 @@
 package docker
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -117,7 +118,19 @@ func (f *Format) newHandler(deps core.Deps) *handler {
 	if o.Now == nil {
 		o.Now = time.Now
 	}
-	return &handler{deps: deps, log: log, sign: signer{key: key}, tokenTTL: o.TokenTTL, uploadTTL: o.UploadTTL, now: o.Now}
+	h := &handler{deps: deps, log: log, sign: signer{key: key}, tokenTTL: o.TokenTTL, uploadTTL: o.UploadTTL, now: o.Now}
+	if deps.Events != nil {
+		// A changed remote URL or credentials may serve names the old one did not.
+		_, err := deps.Events.Subscribe(context.Background(), "repository.*", func(_ context.Context, e core.Event) {
+			if e.Repository != "" {
+				h.unknown.forget(e.Repository)
+			}
+		})
+		if err != nil {
+			log.Warn("docker: cannot watch repository changes", "err", err)
+		}
+	}
+	return h
 }
 
 // Validate implements core.Format.

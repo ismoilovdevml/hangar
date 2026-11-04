@@ -61,14 +61,6 @@ func closeBody(resp *core.UpstreamResponse) {
 	}
 }
 
-// upstreamStatusErr turns an unexpected remote status into an error.
-func upstreamStatusErr(what string, status int) error {
-	if status == http.StatusNotFound {
-		return fmt.Errorf("%s: remote answered 404: %w", what, core.ErrNotFound)
-	}
-	return fmt.Errorf("%s: remote answered %d: %w", what, status, core.ErrUpstream)
-}
-
 func (h *handler) fetch(ctx context.Context, repo *core.Repository, method, path, accept string) (*core.UpstreamResponse, error) {
 	up, err := h.deps.Upstreams.ForRepository(ctx, repo)
 	if err != nil {
@@ -99,7 +91,12 @@ func (h *handler) proxyManifest(ctx context.Context, hdr http.Header, repo *core
 	if local != nil && (isDigest(ref) || h.fresh(repo, local.asset)) {
 		return fromCache()
 	}
-	path := "v2/" + upstreamName(repo, image) + "/manifests/" + ref
+	remoteName := upstreamName(repo, image)
+	if local == nil && h.unknown.unknown(repo, remoteName, h.now()) {
+		proxy.NoteCacheMiss(ctx)
+		return nil, fmt.Errorf("manifest %s:%s: %w", image, ref, errNameUnknownCached)
+	}
+	path := "v2/" + remoteName + "/manifests/" + ref
 	if local != nil {
 		resp, err := h.fetch(ctx, repo, http.MethodHead, path, acceptManifests)
 		if err != nil {
@@ -133,7 +130,7 @@ func (h *handler) proxyManifest(ctx context.Context, hdr http.Header, repo *core
 			return fromCache()
 		}
 		proxy.NoteCacheMiss(ctx)
-		return nil, upstreamStatusErr("manifest "+image+":"+ref, resp.StatusCode)
+		return nil, h.remoteMiss(repo, remoteName, "manifest "+image+":"+ref, resp)
 	}
 	proxy.NoteCacheMiss(ctx)
 	body, err := readManifestBody(resp.Body)
@@ -188,18 +185,33 @@ func (h *handler) touchTag(ctx context.Context, repo *core.Repository, image, ta
 	})
 }
 
-// proxyBlob serves a blob missing from a proxy repository's cache: from the
-// shared blob store if another repository already holds the bytes, otherwise
-// streamed from the remote to the client while it is written to the store.
-// served reports whether a response was written.
+// proxyBlob serves a blob missing from a proxy repository's cache, streamed
+// from the remote to the client while it is written to the store. When the
+// shared blob store already holds the bytes (another repository or image has
+// them), the remote is only asked whether it serves the blob under this name
+// (a HEAD, which Docker Hub does not count as a pull) and the stored copy is
+// linked. Without that confirmation a proxy would hand out any stored blob to
+// anyone who knows its digest, including blobs of private or quarantined
+// images, and a push through a group would see layers "exist" that its write
+// member does not have. served reports whether a response was written.
 func (h *handler) proxyBlob(w http.ResponseWriter, r *http.Request, repo *core.Repository, image string, d core.Digest) (served bool, err error) {
 	ctx := r.Context()
 	bs, err := h.deps.Blobs.ForRepository(ctx, repo)
 	if err != nil {
 		return false, err
 	}
+	remoteName := upstreamName(repo, image)
+	if h.unknown.unknown(repo, remoteName, h.now()) {
+		proxy.NoteCacheMiss(ctx)
+		return false, fmt.Errorf("blob %s: %w", d, errNameUnknownCached)
+	}
+	path := "v2/" + remoteName + "/blobs/" + string(d)
 	if d.Algorithm() == core.AlgorithmSHA256 {
 		if info, err := bs.Stat(ctx, d); err == nil {
+			if err := h.remoteHasBlob(ctx, w.Header(), repo, remoteName, path, d); err != nil {
+				proxy.NoteCacheMiss(ctx)
+				return false, err
+			}
 			proxy.NoteCacheHit(ctx, info.Size)
 			a := h.cacheFill(ctx, repo, core.PublishRequest{Assets: []*core.Asset{blobAsset(image, d, d, info.Size)}})[0]
 			h.serveAsset(w, r, repo, a, d, a.ContentType)
@@ -207,7 +219,6 @@ func (h *handler) proxyBlob(w http.ResponseWriter, r *http.Request, repo *core.R
 		}
 	}
 	proxy.NoteCacheMiss(ctx)
-	path := "v2/" + upstreamName(repo, image) + "/blobs/" + string(d)
 	if r.Method == http.MethodHead {
 		resp, err := h.fetch(ctx, repo, http.MethodHead, path, "")
 		if err != nil {
@@ -216,7 +227,7 @@ func (h *handler) proxyBlob(w http.ResponseWriter, r *http.Request, repo *core.R
 		closeBody(resp)
 		copyRateLimit(w.Header(), resp.Header)
 		if resp.StatusCode != http.StatusOK {
-			return false, upstreamStatusErr("blob "+string(d), resp.StatusCode)
+			return false, h.remoteMiss(repo, remoteName, "blob "+string(d), resp)
 		}
 		hd := w.Header()
 		hd.Set("Content-Type", "application/octet-stream")
@@ -238,7 +249,7 @@ func (h *handler) proxyBlob(w http.ResponseWriter, r *http.Request, repo *core.R
 	defer closeBody(resp)
 	copyRateLimit(w.Header(), resp.Header)
 	if resp.StatusCode != http.StatusOK {
-		return false, upstreamStatusErr("blob "+string(d), resp.StatusCode)
+		return false, h.remoteMiss(repo, remoteName, "blob "+string(d), resp)
 	}
 	hs := d.NewDigester()
 	if hs == nil {
@@ -267,28 +278,55 @@ func (h *handler) proxyBlob(w http.ResponseWriter, r *http.Request, repo *core.R
 	return true, nil
 }
 
-// proxyTags lists the remote's tags (falling back to the cache).
-func (h *handler) proxyTags(ctx context.Context, hdr http.Header, repo *core.Repository, image string) ([]string, error) {
+// remoteHasBlob confirms with a HEAD that the remote serves blob d under
+// remoteName. It returns nil if it does, ErrNotFound if it does not, and
+// ErrUpstream if the remote cannot be asked.
+func (h *handler) remoteHasBlob(ctx context.Context, hdr http.Header, repo *core.Repository, remoteName, path string, d core.Digest) error {
+	resp, err := h.fetch(ctx, repo, http.MethodHead, path, "")
+	if err != nil {
+		return err
+	}
+	closeBody(resp)
+	copyRateLimit(hdr, resp.Header)
+	if resp.StatusCode != http.StatusOK {
+		return h.remoteMiss(repo, remoteName, "blob "+string(d), resp)
+	}
+	return nil
+}
+
+// proxyTags lists the remote's tags merged with the cached ones (only the
+// cached ones when the remote cannot be reached). known reports whether the
+// image exists: cached tags, or a remote that listed it.
+func (h *handler) proxyTags(ctx context.Context, hdr http.Header, repo *core.Repository, image string) (tags []string, known bool, err error) {
 	local, err := h.localTags(ctx, repo, image)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	resp, err := h.fetch(ctx, repo, http.MethodGet, "v2/"+upstreamName(repo, image)+"/tags/list", "application/json")
+	known = len(local) > 0
+	remoteName := upstreamName(repo, image)
+	if h.unknown.unknown(repo, remoteName, h.now()) {
+		return local, known, nil
+	}
+	resp, err := h.fetch(ctx, repo, http.MethodGet, "v2/"+remoteName+"/tags/list", "application/json")
 	if err != nil {
-		return local, nil
+		// Remote down: an image we cannot rule out is reported as known.
+		return local, true, nil
 	}
 	defer closeBody(resp)
 	copyRateLimit(hdr, resp.Header)
 	if resp.StatusCode != http.StatusOK {
-		return local, nil
+		if err := h.remoteMiss(repo, remoteName, "tags of "+image, resp); !errors.Is(err, core.ErrNotFound) {
+			known = true // remote failing: do not claim the name is unknown
+		}
+		return local, known, nil
 	}
 	var tl struct {
 		Tags []string `json:"tags"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(&tl); err != nil {
-		return local, nil
+		return local, true, nil
 	}
-	return append(local, tl.Tags...), nil
+	return append(local, tl.Tags...), true, nil
 }
 
 // proxyReferrers asks the remote for referrers (falling back to the cache).

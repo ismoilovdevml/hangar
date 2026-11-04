@@ -83,9 +83,12 @@ func (h *handler) serveTags(w http.ResponseWriter, r *http.Request, rq *request)
 	var tags []string
 	exists := false
 	for _, m := range repos {
-		var t []string
+		var (
+			t     []string
+			known bool
+		)
 		if m.Type == core.RepoProxy {
-			t, err = h.proxyTags(ctx, w.Header(), m, rq.image)
+			t, known, err = h.proxyTags(ctx, w.Header(), m, rq.image)
 		} else {
 			t, err = h.localTags(ctx, m, rq.image)
 		}
@@ -94,7 +97,7 @@ func (h *handler) serveTags(w http.ResponseWriter, r *http.Request, rq *request)
 			return
 		}
 		tags = append(tags, t...)
-		if !exists && (len(t) > 0 || m.Type == core.RepoProxy || h.imageExists(ctx, m, rq.image)) {
+		if !exists && (len(t) > 0 || known || (m.Type != core.RepoProxy && h.imageExists(ctx, m, rq.image))) {
 			exists = true
 		}
 	}
