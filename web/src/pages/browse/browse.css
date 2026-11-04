@@ -118,14 +118,14 @@
 .markdown hr { border: 0; border-top: 1px solid var(--hairline-strong); }
 /* README images: inline like on code hosts, so consecutive badges (linked or
    not) form one row; bounded so a large picture cannot take over the page. */
-.markdown .md-img { max-width: 100%; max-height: 640px; height: auto; vertical-align: middle; object-fit: contain; }
+.markdown .md-img { display: inline; max-width: 100%; max-height: 640px; height: auto; vertical-align: middle; object-fit: contain; }
 .markdown a:has(> .md-img) { text-decoration: none; }
 .markdown .md-img-chip {
   display: inline-flex; align-items: center; gap: 5px; max-width: 100%; margin: 1px 0; padding: 1px 8px; vertical-align: middle;
   border: 1px solid var(--hairline-strong); border-radius: 999px; background: var(--surface-muted);
   color: var(--ink-3); font-size: 12px; line-height: 18px; white-space: nowrap;
 }
-.markdown .md-img-chip svg { flex: none; }
+.markdown .md-img-chip svg { display: block; flex: none; }
 .markdown .md-img-chip__text { overflow: hidden; text-overflow: ellipsis; }
 .markdown a .md-img-chip { color: var(--lake-ink); border-color: var(--hairline-strong); }
 .markdown .md-link-blocked { color: var(--ink-3); }
