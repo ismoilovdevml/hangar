@@ -279,3 +279,54 @@ export function validateProxy(f: ProxyForm, creating: boolean, passwordStored: b
 export function hostPort(host: string, port: number | string): string {
   return host.includes(':') ? `[${host}]:${port}` : `${host}:${port}`;
 }
+
+/** What the "Proxy address" field holds, split into the proxy's parts. */
+export interface ProxyAddress {
+  scheme: 'http' | 'https';
+  host: string;
+  port: string;
+  username?: string;
+  password?: string;
+}
+
+/**
+ * Reads a proxy address as people write it in HTTPS_PROXY:
+ * `http://proxy.example.com:3128`, `proxy.example.com:3128` (http assumed),
+ * `https://user:pass@[2001:db8::1]:8443`. Returns an error sentence instead
+ * when it cannot be read.
+ */
+export function parseProxyAddress(text: string): ProxyAddress | { error: string } {
+  const s = text.trim();
+  if (!s) return { error: 'Enter the proxy address, e.g. http://proxy.example.com:3128.' };
+  const m = /^(?:([a-z][a-z0-9+.-]*):\/\/)?(?:([^@/\s]*)@)?(\[[^\]\s]+\]|[^:/\s@]+)(?::(\d*))?\/?$/i.exec(s);
+  if (!m) return { error: 'Write it as scheme://host:port, e.g. http://proxy.example.com:3128.' };
+  const scheme = (m[1] ?? 'http').toLowerCase();
+  if (scheme !== 'http' && scheme !== 'https') return { error: `Use http:// or https:// (${scheme}:// proxies are not supported).` };
+  const port = m[4] ?? '';
+  if (!port) return { error: 'Add the port, e.g. :3128.' };
+  const out: ProxyAddress = { scheme, host: m[3]!.replace(/^\[|\]$/g, ''), port };
+  if (m[2]) {
+    const i = m[2].indexOf(':');
+    out.username = decodeURIComponent(i < 0 ? m[2] : m[2].slice(0, i));
+    if (i >= 0) out.password = decodeURIComponent(m[2].slice(i + 1));
+  }
+  return out;
+}
+
+/** The address of a proxy, as the "Proxy address" field shows it. */
+export function proxyAddress(f: Pick<ProxyForm, 'scheme' | 'host' | 'port'>): string {
+  return f.host ? `${f.scheme}://${hostPort(f.host, f.port)}` : '';
+}
+
+/** A free proxy name for a host: the host itself, made valid ("proxy.example.com", "proxy.example.com-2"). */
+export function proxyNameFor(host: string, taken: readonly string[]): string {
+  const base = host
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^[^a-z0-9]+/, '')
+    .slice(0, 60);
+  if (!base) return '';
+  let name = base;
+  for (let i = 2; name === 'config' || taken.includes(name); i++) name = `${base}-${i}`;
+  return name;
+}

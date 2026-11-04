@@ -138,6 +138,11 @@ export const mockSettings = {
       password_configured: false, source: 'file', file_fields: PROXY_FILE_FIELDS, repositories: 0, inheriting: 0, created_at: null, updated_at: null,
     });
   },
+  /** No proxies at all, as on a server that reaches the internet directly. */
+  noProxies(environmentProxy = '') {
+    state.proxies = [];
+    state.environmentProxy = environmentProxy;
+  },
   get oidc() {
     return state.oidc;
   },

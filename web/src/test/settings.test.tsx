@@ -362,55 +362,128 @@ describe('authentication settings', () => {
 });
 
 describe('proxies', () => {
-  /** The proxies table once loaded. */
-  const table = async () => {
-    await screen.findByRole('row', { name: /corp-proxy/ });
-    return screen.getByRole('table', { name: 'Outbound proxies' });
+  /** The proxy list once loaded. */
+  const proxyList = async () => {
+    await screen.findByRole('listitem', { name: 'corp-proxy' });
+    return screen.getByRole('list', { name: 'Outbound proxies' });
   };
 
-  it('lists proxies with the default and usage', async () => {
+  it('says how remotes are reached when there is no proxy', async () => {
+    mockSettings.noProxies();
     renderApp('/settings/proxies');
-    const rows = within(await table()).getAllByRole('row');
-    expect(rows).toHaveLength(3);
-    expect(rows[1]).toHaveTextContent('corp-proxy');
-    expect(rows[1]).toHaveTextContent('Platform default');
-    expect(rows[1]).toHaveTextContent('3128');
-    expect(rows[2]).toHaveTextContent('dmz-proxy');
+    expect(await screen.findByRole('heading', { name: 'Connecting directly' })).toBeInTheDocument();
+    expect(screen.getByText(/Add one only if your network blocks direct internet access/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add a proxy' })).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Outbound proxies' })).not.toBeInTheDocument();
   });
 
-  it('validates and creates a proxy', async () => {
+  it('names the proxy from the server environment when there is one', async () => {
+    mockSettings.noProxies('http://proxy.example.com:3128 (HTTPS_PROXY)');
+    renderApp('/settings/proxies');
+    expect(await screen.findByRole('heading', { name: 'Using the server’s proxy' })).toBeInTheDocument();
+    expect(screen.getByText('http://proxy.example.com:3128 (HTTPS_PROXY)')).toBeInTheDocument();
+  });
+
+  it('adds the first proxy with the short form', async () => {
+    mockSettings.noProxies();
     const posts = capture('POST', '/proxies');
     const user = userEvent.setup();
     renderApp('/settings/proxies');
-    await table();
-    await user.click(screen.getByRole('button', { name: 'New proxy' }));
-    const editor = screen.getByRole('form', { name: 'New proxy' });
-    await user.clear(within(editor).getByLabelText('Port'));
-    await user.click(within(editor).getByRole('button', { name: 'Create proxy' }));
-    expect(within(editor).getByLabelText('Name')).toHaveAccessibleDescription('Enter a name.');
-    expect(within(editor).getByLabelText('Host')).toHaveAccessibleDescription('Enter the proxy host name or IP address.');
-    expect(within(editor).getByLabelText('Port')).toHaveAccessibleDescription('Enter a port between 1 and 65535.');
+    await user.click(await screen.findByRole('button', { name: 'Add a proxy' }));
+    const form = screen.getByRole('form', { name: 'New proxy' });
+    const address = within(form).getByLabelText('Proxy address');
+    await user.click(within(form).getByRole('button', { name: 'Save' }));
+    expect(address).toHaveAccessibleDescription('Enter the proxy address, e.g. http://proxy.example.com:3128.');
+    await user.type(address, 'proxy.example.com');
+    await user.click(within(form).getByRole('button', { name: 'Save' }));
+    expect(address).toHaveAccessibleDescription('Add the port, e.g. :3128.');
+    await user.type(address, ':3128');
+    expect(within(form).getByText('proxy.example.com', { selector: 'code' })).toBeInTheDocument();
+    await user.click(within(form).getByRole('checkbox', { name: 'Use for every proxy repository' }));
+    await user.click(within(form).getByRole('button', { name: 'Test' }));
+    expect(await within(form).findByText(/api\.nuget\.org answered 200 in 184 ms/)).toBeInTheDocument();
+    await user.click(within(form).getByRole('button', { name: 'Save' }));
 
-    await user.type(within(editor).getByLabelText('Name'), 'edge');
-    await choose(user, within(editor).getByLabelText('Scheme'), 'https');
-    await user.type(within(editor).getByLabelText('Host'), 'edge-proxy.example.com');
-    await user.type(within(editor).getByLabelText('Port'), '8443');
-    await user.type(within(editor).getByLabelText(/No proxy for/), '.corp.example{Enter}');
-    await user.type(within(editor).getByLabelText(/Redirect target hosts/), '.cdn.example{Enter}');
-    await user.click(within(editor).getByRole('button', { name: 'Create proxy' }));
-
-    expect(await screen.findByText('Proxy edge created and in use on every node.')).toBeInTheDocument();
+    expect(await screen.findByText('Proxy proxy.example.com saved and in use on every node.')).toBeInTheDocument();
     expect(posts[0]).toEqual({
-      name: 'edge', scheme: 'https', host: 'edge-proxy.example.com', port: 8443, username: '', password: '', clear_password: false,
+      name: 'proxy.example.com', scheme: 'http', host: 'proxy.example.com', port: 3128, username: '', password: '', clear_password: false,
+      no_proxy: [], redirect_hosts: [], ca_pem: '', default: true,
+    });
+    const row = await screen.findByRole('listitem', { name: 'proxy.example.com' });
+    expect(row).toHaveTextContent('Platform default');
+  });
+
+  it('keeps credentials, exceptions and certificates behind the disclosures', async () => {
+    const posts = capture('POST', '/proxies');
+    const user = userEvent.setup();
+    renderApp('/settings/proxies');
+    await proxyList();
+    await user.click(screen.getByRole('button', { name: 'Add another proxy' }));
+    const form = screen.getByRole('form', { name: 'New proxy' });
+    expect(within(form).queryByLabelText('Username')).not.toBeInTheDocument();
+    expect(within(form).queryByLabelText(/Skip the proxy for/)).not.toBeInTheDocument();
+
+    // Credentials typed into the address move to their own fields.
+    const address = within(form).getByLabelText('Proxy address');
+    await user.type(address, 'https://svc:pa55@edge-proxy.example.com:8443');
+    await user.tab();
+    expect(address).toHaveValue('https://edge-proxy.example.com:8443');
+    expect(within(form).getByRole('button', { name: 'Needs a username and password' })).toHaveAttribute('aria-expanded', 'true');
+    expect(within(form).getByLabelText('Username')).toHaveValue('svc');
+
+    await user.click(within(form).getByRole('button', { name: 'Choose a name' }));
+    const name = within(form).getByLabelText('Name');
+    expect(name).toHaveValue('edge-proxy.example.com');
+    await user.clear(name);
+    await user.type(name, 'Edge');
+    await user.click(within(form).getByRole('button', { name: 'Exceptions and certificates' }));
+    await user.type(within(form).getByLabelText(/Skip the proxy for/), '.corp.example{Enter}');
+    await user.type(within(form).getByLabelText(/Redirect target hosts/), '.cdn.example{Enter}');
+    await user.click(within(form).getByRole('button', { name: 'Save' }));
+    expect(name).toHaveAccessibleDescription("Use lower-case letters, digits, '.', '_' or '-', starting with a letter or digit.");
+    await user.clear(name);
+    await user.type(name, 'edge');
+    await user.click(within(form).getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText('Proxy edge saved and in use on every node.')).toBeInTheDocument();
+    expect(posts[0]).toEqual({
+      name: 'edge', scheme: 'https', host: 'edge-proxy.example.com', port: 8443, username: 'svc', password: 'pa55', clear_password: false,
       no_proxy: ['.corp.example'], redirect_hosts: ['.cdn.example'], ca_pem: '', default: false,
     });
-    expect(within(await table()).getByRole('row', { name: /edge-proxy\.example\.com/ })).toBeInTheDocument();
+  });
+
+  it('lists proxies with the default and usage', async () => {
+    renderApp('/settings/proxies');
+    const items = within(await proxyList()).getAllByRole('listitem');
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent('corp-proxy');
+    expect(items[0]).toHaveTextContent('Platform default');
+    expect(items[0]).toHaveTextContent('http://proxy.acme.example:3128');
+    expect(items[0]).toHaveTextContent(/\d+ inherit it/);
+    expect(items[1]).toHaveTextContent('dmz-proxy');
+  });
+
+  it('edits a proxy and keeps its stored password', async () => {
+    const puts = capture('PUT', '/proxies/corp-proxy');
+    const user = userEvent.setup();
+    renderApp('/settings/proxies');
+    await proxyList();
+    await user.click(screen.getByRole('button', { name: 'Edit corp-proxy' }));
+    const form = screen.getByRole('form', { name: 'Proxy corp-proxy' });
+    expect(within(form).getByLabelText('Proxy address')).toHaveValue('http://proxy.acme.example:3128');
+    expect(within(form).getByLabelText('Password')).toHaveAccessibleDescription('A password is stored. Type a new one to replace it.');
+    expect(within(form).getByRole('button', { name: 'Exceptions and certificates' })).toHaveAttribute('aria-expanded', 'true');
+    await user.clear(within(form).getByLabelText('Proxy address'));
+    await user.type(within(form).getByLabelText('Proxy address'), 'http://proxy2.acme.example:8080');
+    await user.click(within(form).getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Proxy corp-proxy saved and in use on every node.')).toBeInTheDocument();
+    expect(puts[0]).toMatchObject({ host: 'proxy2.acme.example', port: 8080, password: '', clear_password: false, default: true });
   });
 
   it('tests a proxy through the API and shows status and latency', async () => {
     const user = userEvent.setup();
     renderApp('/settings/proxies');
-    await table();
+    await proxyList();
     await user.click(screen.getByRole('button', { name: 'Test corp-proxy' }));
     const panel = await screen.findByRole('region', { name: 'Test of corp-proxy' });
     expect(within(panel).getByRole('status')).toHaveTextContent('HTTP 200 in 184 ms');
@@ -421,7 +494,7 @@ describe('proxies', () => {
     nuget.config.proxy!.http = { proxy_name: 'dmz-proxy' };
     const user = userEvent.setup();
     renderApp('/settings/proxies');
-    await table();
+    await proxyList();
     await user.click(screen.getByRole('button', { name: 'Delete dmz-proxy' }));
     const dialog = screen.getByRole('alertdialog');
     expect(dialog).toHaveTextContent('1 repositories select this proxy');
@@ -434,15 +507,30 @@ describe('proxies', () => {
     mockSettings.proxyFromFile();
     const user = userEvent.setup();
     renderApp('/settings/proxies');
-    await screen.findByRole('row', { name: /^config/ });
-    const rows = within(await table()).getAllByRole('row');
-    expect(rows[1]).toHaveTextContent('config');
-    expect(rows[1]).toHaveTextContent('set in configuration file');
-    expect(within(rows[1]!).queryByRole('button', { name: 'Delete config' })).not.toBeInTheDocument();
-    await user.click(within(rows[1]!).getByRole('button', { name: 'View config' }));
-    const editor = screen.getByRole('form', { name: 'Proxy config' });
-    expect(within(editor).getByLabelText(/^Host/)).toBeDisabled();
-    expect(within(editor).queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    const row = await screen.findByRole('listitem', { name: 'config' });
+    expect(row).toHaveTextContent('set in configuration file');
+    expect(within(row).queryByRole('button', { name: 'Delete config' })).not.toBeInTheDocument();
+    await user.click(within(row).getByRole('button', { name: 'View config' }));
+    const form = screen.getByRole('form', { name: 'Proxy config' });
+    expect(within(form).getByLabelText(/^Proxy address/)).toBeDisabled();
+    expect(within(form).queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    await user.click(within(form).getByRole('button', { name: 'Close' }));
+
+    // Another proxy cannot become the default while the file sets one.
+    await user.click(screen.getByRole('button', { name: 'Add another proxy' }));
+    const add = screen.getByRole('form', { name: 'New proxy' });
+    const def = within(add).getByRole('checkbox', { name: 'Use for every proxy repository' });
+    expect(def).toBeDisabled();
+    expect(def).toHaveAccessibleDescription('The proxy of the configuration file is the default.');
+  });
+
+  it('shows proxies read-only without system:settings:admin', async () => {
+    server.use(http.get('*/api/v1/auth/session', () => HttpResponse.json({ ...session, privileges: ['repo:*:read', 'system:settings:read'] })));
+    mockSettings.noProxies();
+    renderApp('/settings/proxies');
+    expect(await screen.findByRole('heading', { name: 'Connecting directly' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add a proxy' })).not.toBeInTheDocument();
+    expect(screen.getByText('Adding a proxy needs system:settings:admin.')).toBeInTheDocument();
   });
 });
 
