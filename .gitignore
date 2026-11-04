@@ -22,3 +22,6 @@ hangar.local.yaml
 # Embedded web build (copied from web/dist at release build time)
 /internal/webui/dist/*
 !/internal/webui/dist/.gitkeep
+
+# Load test summaries
+/test/load/load-results/
