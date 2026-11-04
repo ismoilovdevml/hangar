@@ -87,7 +87,10 @@ type Migrator struct {
 // NewMigrator builds a migrator over pool. Close it when done (the pool stays open).
 func NewMigrator(pool *pgxpool.Pool) (*Migrator, error) {
 	sqlDB := stdlib.OpenDBFromPool(pool)
-	p, err := goose.NewProvider(goose.DialectPostgres, sqlDB, Migrations())
+	// Feature branches take migration numbers from separate ranges, so a
+	// release can bring a migration numbered below one an earlier release
+	// already applied. Apply such migrations instead of refusing to start.
+	p, err := goose.NewProvider(goose.DialectPostgres, sqlDB, Migrations(), goose.WithAllowOutofOrder(true))
 	if err != nil {
 		_ = sqlDB.Close()
 		return nil, fmt.Errorf("load migrations: %w", err)
