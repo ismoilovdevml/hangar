@@ -15,19 +15,20 @@ import { LoginPage } from './pages/LoginPage';
 import { OverviewPage } from './pages/overview/OverviewPage';
 import { RepoCreatePage } from './pages/repositories/RepoCreatePage';
 import { RepositoriesPage } from './pages/repositories/RepositoriesPage';
+import { RepoSettingsPage } from './pages/repositories/settings/RepoSettingsPage';
+import { BrowsePage } from './pages/browse/BrowsePage';
+import { SearchPage } from './pages/search/SearchPage';
+import { isBrowseTab, type BrowseTab } from './lib/packages';
+import { isSearchSort } from './lib/searchQuery';
+import { BlobStoresPage } from './pages/blobstores/BlobStoresPage';
+import { BlobStoreDetailPage } from './pages/blobstores/BlobStoreDetailPage';
+import type { SearchSort } from './api/types';
 import { isFormat, isRepoType } from './lib/repositories';
 import type { Format, RepositoryType } from './api/types';
 import { AccessPage } from './pages/access/AccessPage';
 import { isAccessTab, type AccessSearch } from './pages/access/model';
 import { AccountPage } from './pages/access/AccountPage';
-import {
-  BlobStoresPage,
-  BrowsePage,
-  ClusterPage,
-  NotFoundPage,
-  SearchPage,
-  VulnerabilitiesPage,
-} from './pages/screens';
+import { ClusterPage, NotFoundPage, VulnerabilitiesPage } from './pages/screens';
 import { AuditPage } from './pages/audit/AuditPage';
 import { CleanupPage, type CleanupSearch } from './pages/cleanup/CleanupPage';
 import { SystemPage } from './pages/settings/SystemPage';
@@ -96,14 +97,25 @@ const overviewRoute = createRoute({
   component: OverviewPage,
 });
 
+export interface BrowseSearch {
+  repo?: string;
+  /** Namespace (scope, groupId, path); absent = any namespace with this name. */
+  ns?: string;
+  name?: string;
+  version?: string;
+  tab?: BrowseTab;
+}
+
 const browseRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/browse',
   staticData: { title: 'Packages' },
-  validateSearch: (s: Record<string, unknown>): { repo?: string; name?: string; version?: string } => ({
+  validateSearch: (s: Record<string, unknown>): BrowseSearch => ({
     repo: str(s.repo),
+    ns: str(s.ns),
     name: str(s.name),
     version: str(s.version),
+    tab: isBrowseTab(s.tab) ? s.tab : undefined,
   }),
   component: BrowsePage,
 });
@@ -143,7 +155,10 @@ const searchRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/search',
   staticData: { title: 'Search' },
-  validateSearch: (s: Record<string, unknown>): { q?: string } => ({ q: str(s.q) }),
+  validateSearch: (s: Record<string, unknown>): { q?: string; sort?: SearchSort } => ({
+    q: str(s.q),
+    sort: isSearchSort(s.sort) ? s.sort : undefined,
+  }),
   component: SearchPage,
 });
 
@@ -214,6 +229,29 @@ const accountRoute = createRoute({
   component: AccountPage,
 });
 
+/** Settings live under the name (not at /repositories/$name) so a repository called "new" stays reachable. */
+const repoSettingsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/repositories/$name/settings',
+  staticData: { title: 'Repository settings' },
+  component: RepoSettingsPage,
+});
+
+const blobStoresRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/blob-stores',
+  staticData: { title: 'Blob stores' },
+  validateSearch: (s: Record<string, unknown>): { add?: boolean } => ({ add: s.add === true || s.add === 'true' ? true : undefined }),
+  component: BlobStoresPage,
+});
+
+const blobStoreRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/blob-stores/$name',
+  staticData: { title: 'Blob store' },
+  component: BlobStoreDetailPage,
+});
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   appRoute.addChildren([
@@ -222,7 +260,9 @@ const routeTree = rootRoute.addChildren([
     searchRoute,
     repositoriesRoute,
     repoCreateRoute,
-    page('/blob-stores', 'Blob stores', BlobStoresPage),
+    repoSettingsRoute,
+    blobStoresRoute,
+    blobStoreRoute,
     cleanupRoute,
     page('/vulnerabilities', 'Vulnerabilities', VulnerabilitiesPage),
     accessRoute,
