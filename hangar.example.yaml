@@ -11,11 +11,22 @@
 # HANGAR_STORAGE_S3_SECRET_ACCESS_KEY. Lists take comma-separated values.
 # Precedence: environment, then this file, then defaults.
 #
-# Keep secrets in the environment, not in this file: database.url (when it
-# carries a password), storage.s3.secret_access_key, storage.s3.session_token,
-# http.proxy_password, docker.token_key, bootstrap.admin_password,
-# security.secret_key (alias HANGAR_SECRET_KEY), security.previous_secret_keys.
+# Keep secrets out of this file: put them in secrets_dir (below) or in the
+# environment. Secrets: database.url (when it carries a password),
+# storage.s3.secret_access_key, storage.s3.session_token, http.proxy_password,
+# docker.token_key, bootstrap.admin_password, security.secret_key (alias
+# HANGAR_SECRET_KEY), security.previous_secret_keys, auth.oidc.client_secret,
+# auth.ldap.bind_password.
 # Deployment guides: docs/deploy/.
+
+# Directory of secret files, one per setting, named after its path in this
+# file: <secrets_dir>/security.secret_key, <secrets_dir>/database.url,
+# <secrets_dir>/auth.oidc.client_secret. A file's contents (trailing line
+# breaks dropped) override this file; environment variables override the
+# files. Names without a dot are ignored; a dotted name that is not a setting
+# or an empty file stops the start. Works with Kubernetes secret volumes.
+# The compose installer sets it to <data>/secrets (HANGAR_SECRETS_DIR).
+secrets_dir: ""
 
 server:
   # Listen address.

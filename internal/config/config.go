@@ -1,10 +1,12 @@
 // Package config loads Hangar's configuration from a YAML file and HANGAR_*
 // environment variables.
 //
-// Precedence (highest first): environment, file, defaults. Every leaf setting
-// has an environment variable named HANGAR_ + its YAML path upper-cased and
-// joined with "_": database.url -> HANGAR_DATABASE_URL, storage.fs.path ->
-// HANGAR_STORAGE_FS_PATH. Secrets should come from the environment.
+// Precedence (highest first): environment, secrets directory, file, defaults.
+// Every leaf setting has an environment variable named HANGAR_ + its YAML path
+// upper-cased and joined with "_": database.url -> HANGAR_DATABASE_URL,
+// storage.fs.path -> HANGAR_STORAGE_FS_PATH. Secrets come from the
+// environment or from files in secrets_dir, one file per setting named after
+// its YAML path (security.secret_key); see secretfiles.go.
 package config
 
 import (
@@ -18,6 +20,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +38,12 @@ const EnvConfigFile = "HANGAR_CONFIG"
 
 // Config is the whole server configuration. See hangar.example.yaml.
 type Config struct {
+	// SecretsDir is a directory of secret files, one per setting, named after
+	// the setting's YAML path (security.secret_key, database.url). Their
+	// contents override this file; environment variables override them.
+	// Files whose name has no dot are ignored. Env: HANGAR_SECRETS_DIR.
+	SecretsDir string `yaml:"secrets_dir"`
+
 	Server   Server   `yaml:"server"`
 	Log      Log      `yaml:"log"`
 	Database Database `yaml:"database"`
@@ -352,6 +361,13 @@ func Load(path string) (Config, error) {
 			return cfg, fmt.Errorf("parse %s: %w", path, err)
 		}
 	}
+	secretsDir := cfg.SecretsDir
+	if v, ok := os.LookupEnv(EnvPrefix + "SECRETS_DIR"); ok {
+		secretsDir = v
+	}
+	if err := ApplySecretsDir(&cfg, secretsDir); err != nil {
+		return cfg, err
+	}
 	if err := ApplyEnv(&cfg, os.LookupEnv); err != nil {
 		return cfg, err
 	}
@@ -499,7 +515,15 @@ func EnvVars() []string {
 
 var durationType = reflect.TypeFor[time.Duration]()
 
+// walk calls fn with the environment variable name of every leaf setting.
 func walk(v reflect.Value, prefix string, fn func(string, reflect.Value)) {
+	walkPath(v, nil, func(path []string, fv reflect.Value) {
+		fn(prefix+strings.ToUpper(strings.Join(path, "_")), fv)
+	})
+}
+
+// walkPath calls fn with the YAML path of every leaf setting.
+func walkPath(v reflect.Value, path []string, fn func([]string, reflect.Value)) {
 	t := v.Type()
 	for i := range t.NumField() {
 		f := t.Field(i)
@@ -507,13 +531,13 @@ func walk(v reflect.Value, prefix string, fn func(string, reflect.Value)) {
 		if tag == "" || tag == "-" {
 			continue
 		}
-		name := prefix + strings.ToUpper(tag)
+		p := append(slices.Clip(path), tag)
 		fv := v.Field(i)
 		if fv.Kind() == reflect.Struct && fv.Type() != durationType {
-			walk(fv, name+"_", fn)
+			walkPath(fv, p, fn)
 			continue
 		}
-		fn(name, fv)
+		fn(p, fv)
 	}
 }
 
