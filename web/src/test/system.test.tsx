@@ -10,8 +10,11 @@ import {
   inlineAttrs,
   offsets,
   rowHeight,
+  period,
+  shortTime,
   summarize,
   toJsonLines,
+  versionText,
   visibleRange,
   ROW_HEIGHT,
   type LogRecord,
@@ -25,32 +28,89 @@ const withPrivileges = (privileges: string[]) =>
   server.use(http.get('*/api/v1/auth/session', () => HttpResponse.json({ ...session, privileges })));
 
 describe('system status', () => {
-  it('shows every node with its role, version and subsystems', async () => {
+  it('shows a single healthy node as a calm checklist', async () => {
+    const user = userEvent.setup();
+    systemMockState.singleNode();
     renderApp('/system/status');
-    const summary = await screen.findByRole('region', { name: 'Summary' });
-    expect(within(summary).getByText('Degraded')).toBeInTheDocument();
-    expect(within(summary).getByText('1 of 3 nodes are not responding.')).toBeInTheDocument();
-    expect(within(summary).getByText('2 of 3')).toBeInTheDocument();
-    // The silent node's older version does not count.
-    expect(within(summary).getByText('Version')).toBeInTheDocument();
-    expect(within(summary).getByText('1.0.0')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Everything is working' })).toBeInTheDocument();
+    const summary = screen.getByRole('region', { name: 'Summary' });
+    expect(within(summary).getByText('7 of 7 checks passing · hangar-1 · v1.0.0')).toBeInTheDocument();
+
+    const list = screen.getByRole('list', { name: 'Checks of hangar-1' });
+    const rows = within(list).getAllByRole('button', { expanded: false });
+    expect(rows.length).toBe(7);
+    // Nothing is wrong, so every row starts closed; a single node has no own heading.
+    expect(within(list.closest('section')!).queryByRole('heading')).not.toBeInTheDocument();
+
+    const db = within(list).getByRole('button', { name: /^Database \(healthy\)/ });
+    expect(db).toHaveTextContent('PostgreSQL 17.2 · 6 of 40 connections in use');
+    expect(db).toHaveTextContent('2 ms');
+    await user.click(db);
+    expect(db).toHaveAttribute('aria-expanded', 'true');
+    const detail = document.getElementById(db.getAttribute('aria-controls')!)!;
+    expect(within(detail).getByText('Connections in use').nextSibling).toHaveTextContent('6 of 40');
+    expect(within(detail).getByText('db.hangar.example.com:5432/hangar')).toBeInTheDocument();
+    expect(detail).toHaveTextContent(/Healthy since \d+ \w{3} \d{2}:\d{2} · checked \d+ s ago/);
+    expect(within(detail).getByRole('link', { name: 'Logs of hangar-1' })).toHaveAttribute('href', '/system/logs?node=hangar-1');
+
+    const proxies = within(list).getByRole('button', { name: /^Upstream proxies \(healthy\)/ });
+    await user.click(proxies);
+    const pd = document.getElementById(proxies.getAttribute('aria-controls')!)!;
+    expect(within(pd).getByText(/^Was degraded \d{2}:\d{2}.\d{2}:\d{2}$/)).toHaveAttribute('title', '2 of 3 healthy · 1 slow');
+    expect(within(pd).getByRole('link', { name: 'Repositories' })).toBeInTheDocument();
+
+    await user.click(db);
+    expect(db).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByText(/Scheduler leader/)).toHaveTextContent('Scheduler leader');
+    expect(screen.getByText('http://10.0.1.11:8080')).toBeInTheDocument();
+  });
+
+  it('groups several nodes and opens the checks that need attention', async () => {
+    renderApp('/system/status');
+    expect(await screen.findByRole('heading', { level: 1, name: '1 check needs attention' })).toBeInTheDocument();
+    const summary = screen.getByRole('region', { name: 'Summary' });
+    // The silent node's older version and checks do not count.
+    expect(within(summary).getByText('13 of 14 checks passing · 2 of 3 nodes up · v1.0.0')).toBeInTheDocument();
 
     const one = screen.getByRole('region', { name: /^hangar-1/ });
     expect(within(one).getByText('This node')).toBeInTheDocument();
     expect(within(one).getByText('Scheduler leader')).toBeInTheDocument();
-    expect(within(one).getByText('http://10.0.1.11:8080')).toBeInTheDocument();
-    const subsystems = within(one).getByRole('list', { name: 'Subsystems of hangar-1' });
-    expect(within(subsystems).getAllByRole('listitem').length).toBe(7);
-    const db = within(subsystems).getByRole('listitem', { name: 'PostgreSQL: Healthy' });
-    expect(within(db).getByText('Ping 2 ms; 6 of 40 connections in use')).toBeInTheDocument();
-    expect(within(db).getByText('PostgreSQL 17.2')).toBeInTheDocument();
-    expect(db.querySelector('.subsystem__meta')).toHaveTextContent(/^Checked \d+ s ago · 2 ms$/);
+    expect(within(one).getByRole('button', { name: /^Task scheduler \(healthy\)/ })).toHaveTextContent('leader');
 
     const two = screen.getByRole('region', { name: /^hangar-2/ });
-    expect(within(two).getByRole('listitem', { name: 'Upstream proxies: Degraded' })).toHaveTextContent('maven-central');
+    const proxies = within(two).getByRole('button', { name: /^Upstream proxies \(degraded\)/ });
+    expect(proxies).toHaveAttribute('aria-expanded', 'true');
+    expect(within(two).getByText('Offline remotes').nextSibling).toHaveTextContent('maven-central');
+    expect(within(two).getAllByRole('button', { expanded: true }).length).toBe(1);
 
     const three = screen.getByRole('region', { name: /^hangar-3/ });
+    expect(within(three).getByText('Not responding')).toBeInTheDocument();
     expect(within(three).getByRole('note')).toHaveTextContent(/No heartbeat for 30 min/);
+    expect(within(three).queryAllByRole('button', { expanded: true }).length).toBe(0);
+  });
+
+  it('formats a timestamp fact as a time', async () => {
+    const user = userEvent.setup();
+    systemMockState.singleNode();
+    renderApp('/system/status');
+    const row = await screen.findByRole('button', { name: /^Task scheduler \(healthy\)/ });
+    await user.click(row);
+    const detail = document.getElementById(row.getAttribute('aria-controls')!)!;
+    const time = within(detail).getByText('Role since').nextSibling!.firstChild as HTMLElement;
+    expect(time.tagName).toBe('TIME');
+    expect(time).toHaveTextContent(/^\d+ \w{3} \d{2}:\d{2}$/);
+    expect(within(detail).getByRole('link', { name: 'Scheduled tasks' })).toHaveAttribute('href', '/tasks');
+  });
+
+  it('hides the logs link without the cluster admin privilege', async () => {
+    const user = userEvent.setup();
+    withPrivileges(['system:cluster:read']);
+    systemMockState.singleNode();
+    renderApp('/system/status');
+    const db = await screen.findByRole('button', { name: /^Database \(healthy\)/ });
+    await user.click(db);
+    const detail = document.getElementById(db.getAttribute('aria-controls')!)!;
+    expect(within(detail).queryByRole('link')).not.toBeInTheDocument();
   });
 
   it('refreshes on demand and can pause auto-refresh', async () => {
@@ -61,12 +121,17 @@ describe('system status', () => {
     const before = systemMockState.nodesRequests;
     await user.click(within(controls).getByRole('button', { name: 'Refresh now' }));
     await waitFor(() => expect(systemMockState.nodesRequests).toBe(before + 1));
-    await waitFor(() => expect(within(controls).getByText(/Refreshing in \d+ s/)).toBeInTheDocument());
 
-    await user.click(within(controls).getByRole('button', { name: 'Pause' }));
-    expect(within(controls).getByText('Auto-refresh paused')).toBeInTheDocument();
-    await user.click(within(controls).getByRole('button', { name: 'Resume' }));
-    expect(within(controls).queryByText('Auto-refresh paused')).not.toBeInTheDocument();
+    await user.click(within(controls).getByRole('button', { name: 'Live · every 15 s – pause' }));
+    expect(within(controls).getByRole('button', { name: 'Paused – resume' })).toBeInTheDocument();
+    await user.click(within(controls).getByRole('button', { name: 'Paused – resume' }));
+    expect(within(controls).getByRole('button', { name: 'Live · every 15 s – pause' })).toBeInTheDocument();
+  });
+
+  it('shows a skeleton while the first answer loads', async () => {
+    server.use(http.get('*/api/v1/system/nodes', () => new Promise<Response>(() => {})));
+    renderApp('/system/status');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Checking every node…' })).toBeInTheDocument();
   });
 
   it('explains the missing privilege instead of loading', async () => {
@@ -222,12 +287,27 @@ describe('system model', () => {
       id, hostname: id, url: '', version: '1.0.0', commit: '', started_at: '', uptime_seconds: 1, last_heartbeat: '',
       role: 'follower', status: 'healthy', stale: false, current: false, subsystems: [], ...patch,
     });
-    expect(summarize([node('a', { role: 'leader' })]).message).toBe('All nodes and subsystems are healthy.');
-    const s = summarize([node('a', { status: 'degraded' })]);
-    expect(s.status).toBe('degraded');
-    expect(s.message).toMatch(/No node holds the scheduler lock/);
-    expect(summarize([]).message).toBe('No node has reported yet.');
+    const sub = (status: 'healthy' | 'degraded' | 'down') => ({ name: status, label: status, status, detail: '', checked_at: '' });
+    const ok = summarize([node('a', { role: 'leader', subsystems: [sub('healthy'), sub('healthy')] })]);
+    expect(ok).toMatchObject({ headline: 'Everything is working', passing: 2, checks: 2, notes: [] });
+    const s = summarize([node('a', { status: 'degraded', subsystems: [sub('healthy'), sub('degraded')] })]);
+    expect(s).toMatchObject({ status: 'degraded', headline: '1 check needs attention', passing: 1, checks: 2 });
+    expect(s.notes[0]).toMatch(/No node holds the scheduler lock/);
+    expect(summarize([node('a', { status: 'down', role: 'leader', subsystems: [sub('down'), sub('down'), sub('degraded')] })]).headline).toBe('2 checks are down');
+    expect(summarize([]).headline).toBe('Waiting for the first report');
+    expect(summarize([node('a', { role: 'leader' }), node('b', { stale: true, status: 'down' })]).headline).toBe('1 node is not responding');
+    expect(summarize([node('a', { stale: true, status: 'down' })]).headline).toBe('No node is responding');
     expect(summarize([node('a', { role: 'leader' }), node('b', { stale: true, status: 'down' })]).status).toBe('degraded');
     expect(summarize([node('a', { stale: true, status: 'down' })]).status).toBe('down');
+  });
+
+  it('formats times and versions', () => {
+    const now = new Date('2026-11-03T12:00:00Z');
+    expect(shortTime('2026-11-03T08:52:10Z', now)).toBe('08:52');
+    expect(shortTime('2026-11-01T23:05:00Z', now)).toBe('1 Nov 23:05');
+    expect(period('2026-11-03T08:52:00Z', '2026-11-03T10:32:00Z', now)).toBe('08:52–10:32');
+    expect(period('2026-11-02T23:00:00Z', '2026-11-03T01:00:00Z', now)).toBe('2 Nov 23:00 – 01:00');
+    expect(versionText('0.1.1')).toBe('v0.1.1');
+    expect(versionText('dev')).toBe('dev');
   });
 });

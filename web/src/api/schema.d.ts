@@ -1935,13 +1935,27 @@ export interface components {
         SystemSubsystem: {
             /** @description database, blobstores, eventbus, scheduler, search, auth, upstreams */
             name: string;
-            /** @description Display name, e.g. PostgreSQL */
+            /** @description Display name, e.g. Database or Sign-in (OIDC) */
             label: string;
             status: components["schemas"]["SystemStatusLevel"];
             /** @description One sentence explaining the status */
             detail: string;
             checked_at: components["schemas"]["Timestamp"];
             latency_ms?: number;
+            /** @description The check's one headline value, e.g. "2 ms", "22% free", "leader" */
+            metric?: string;
+            /** @description What the check probes, without credentials (database address, blob store path, event bus URL, index name) */
+            target?: string;
+            /** @description When this node first saw the current status; at the earliest, its first check after start */
+            since?: components["schemas"]["Timestamp"];
+            /** @description The most recent finished period in which this node saw the subsystem not healthy. Kept in memory; a restart forgets it. */
+            last_incident?: {
+                status: components["schemas"]["SystemStatusLevel"];
+                /** @description Explanation at the worst point of the period */
+                detail: string;
+                started_at: components["schemas"]["Timestamp"];
+                ended_at: components["schemas"]["Timestamp"];
+            };
             /** @description Labelled values in display order (pool usage, free space, ...) */
             facts?: {
                 label: string;

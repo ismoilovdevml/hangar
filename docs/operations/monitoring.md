@@ -246,28 +246,43 @@ issued it.
 
 ## System status screen
 
-**Operations → System status** (privilege `system:cluster:read`) shows every
-node: id, host name, its own URL, version and commit, uptime, last heartbeat
-and scheduler role (the leader schedules tasks; every node executes them). For
-each node it shows these subsystems, each `healthy`, `degraded` or `down`
-with a sentence, the time it was checked and details:
+**Operations → System status** (privilege `system:cluster:read`) opens with a
+headline for the whole installation (*Everything is working*, *1 check needs
+attention*, *2 checks are down*, *1 node is not responding*), the number of
+checks passing on the nodes that answer, and the version. Below it, every
+node has a checklist with one row per subsystem: its state, one sentence and
+a headline value. Rows that are degraded or down open by themselves; any row
+opens on click to show its details, what the check probes (database address,
+blob store path, event bus URL, index name), since when the status holds,
+the last incident (*Was degraded 08:52–10:32*), when it was checked and a
+link to the page that helps (logs of that node, Blob stores, Scheduled
+tasks, Authentication, Repositories). Under each checklist: host name,
+scheduler role (the leader schedules tasks; every node executes them),
+uptime, last heartbeat, the node's own URL and commit. With more than one
+node, each checklist has the node's name, role and state above it.
 
-| Subsystem | Healthy when | Degraded when | Down when |
-|---|---|---|---|
-| PostgreSQL | The readiness ping answers | Every pooled connection is in use, or the ping takes over 500 ms | The ping fails |
-| Blob stores | Every store answers its ping | A filesystem store has under 10 % and under 5 GiB free | A store cannot be opened or reached |
-| NATS / JetStream | Connected and JetStream answers | | Disconnected or JetStream unavailable |
-| Task scheduler | Task runs can be read | A scheduled task is more than an hour late, or runs cannot be read | |
-| Search index | The full-text index is valid and a probe search is fast | The index is missing or invalid, or the probe takes over 500 ms | The probe fails |
-| External sign-in | OIDC and LDAP worked at their last use (or are not configured) | A provider failed; local accounts still sign in | |
-| Upstream proxies | No proxy remote is offline or blocked | A remote is offline or blocked | |
+| Subsystem | Headline value | Healthy when | Degraded when | Down when |
+|---|---|---|---|---|
+| Database | Ping time | The readiness ping answers | Every pooled connection is in use, or the ping takes over 500 ms | The ping fails |
+| Blob storage | Least free space of the filesystem stores, else the slowest ping | Every store answers its ping | A filesystem store has under 10 % and under 5 GiB free | A store cannot be opened or reached |
+| Event bus | Readiness ping time | Connected and JetStream answers | | Disconnected or JetStream unavailable |
+| Task scheduler | `leader` or `follower` | Task runs can be read | A scheduled task is more than an hour late, or runs cannot be read | |
+| Search index | Probe search time | The full-text index is valid and a probe search is fast | The index is missing or invalid, or the probe takes over 500 ms | The probe fails |
+| Sign-in | `ok`, `failing` or `local` | OIDC and LDAP worked at their last use (or are not configured) | A provider failed; local accounts still sign in | |
+| Upstream proxies | Slowest smoothed remote latency, or `no traffic` without requests in the last 5 minutes | No proxy remote is offline or blocked | A remote is offline or blocked | |
+
+*Since* and the last incident come from the node's own observations: since
+is when the node first saw the current status (at the earliest, its first
+check after start), and an incident is a period that was not healthy, shown
+with its worst state once it has ended. Both live in memory, so a restart
+starts them over.
 
 Each node runs its checks every 15 s (each bounded to 3 s) and writes them to
 the `system_nodes` table, so any node can show all of them. A node without a
 heartbeat for 45 s is shown as **not responding** (`stale`, `down`) with its
 last report; one silent for an hour is no longer listed, and a node that stops
-cleanly removes itself at once. The screen refreshes every 15 s and can be
-paused. If the database cannot be read, the answering node is shown alone.
+cleanly removes itself at once. The screen refreshes every 15 s; the
+*Live · every 15 s* toggle pauses it and the round button refreshes at once. If the database cannot be read, the answering node is shown alone.
 
 The same data is available as JSON: `GET /api/v1/system/nodes` (every node),
 `GET /api/v1/system/health` (the answering node, checked now) and

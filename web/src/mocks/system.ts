@@ -21,65 +21,93 @@ interface NodeLogs {
   next: number;
 }
 
-function sub(name: string, label: string, status: Subsystem['status'], detail: string, facts: [string, string][] = [], latency?: number): Subsystem {
+interface SubExtra {
+  latency?: number;
+  metric?: string;
+  target?: string;
+  /** How long the subsystem has had its status, in ms. */
+  sinceMs?: number;
+  incident?: Subsystem['last_incident'];
+}
+
+function sub(name: string, label: string, status: Subsystem['status'], detail: string, facts: [string, string][] = [], extra: SubExtra = {}): Subsystem {
+  const now = Date.now();
   return {
     name,
     label,
     status,
     detail,
-    checked_at: new Date(Date.now() - 4_000).toISOString(),
-    latency_ms: latency,
+    checked_at: new Date(now - 4_000).toISOString(),
+    latency_ms: extra.latency,
+    metric: extra.metric,
+    target: extra.target,
+    since: new Date(now - (extra.sinceMs ?? 86_400_000)).toISOString(),
+    last_incident: extra.incident,
     facts: facts.map(([l, value]) => ({ label: l, value })),
   };
 }
 
-function subsystems(degraded: boolean): Subsystem[] {
+const HOUR = 3_600_000;
+
+function subsystems(degraded: boolean, uptimeMs: number): Subsystem[] {
+  const iso = (agoMs: number) => new Date(Date.now() - agoMs).toISOString();
+  const since = uptimeMs;
   return [
-    sub('database', 'PostgreSQL', 'healthy', 'Ping 2 ms; 6 of 40 connections in use', [
+    sub('database', 'Database', 'healthy', 'PostgreSQL 17.2 · 6 of 40 connections in use', [
       ['Server', 'PostgreSQL 17.2'],
       ['Connections in use', '6 of 40'],
       ['Idle connections', '4'],
       ['Waited for a connection', '0 times, 0s in total'],
-    ], 2),
-    sub('blobstores', 'Blob stores', 'healthy', '2 of 2 reachable', [
+    ], { latency: 2, metric: '2 ms', target: 'db.hangar.example.com:5432/hangar', sinceMs: since }),
+    sub('blobstores', 'Blob storage', 'healthy', '2 of 2 reachable', [
       ['default (fs)', 'Reachable; 412.6 GiB free of 1.8 TiB (22%)'],
       ['s3-archive (s3)', 'Reachable (38 ms)'],
-    ]),
-    sub('eventbus', 'NATS / JetStream', 'healthy', 'Connected; JetStream holds 1 stream', [
+    ], { metric: '22% free', sinceMs: since }),
+    sub('eventbus', 'Event bus', 'healthy', 'JetStream · external cluster · 1 stream, 4 consumers', [
       ['Mode', 'External cluster'],
       ['Server', 'nats://nats-1.hangar.example.com:4222'],
       ['Reconnects', '0'],
       ['Streams', '1'],
       ['Consumers', '4'],
       ['Stored', '1.2 MiB'],
-    ], 1),
-    sub('scheduler', 'Task scheduler', 'healthy', 'Follower: another node schedules tasks; this one executes them', [
+    ], { latency: 1, metric: '1 ms', target: 'nats://nats-1.hangar.example.com:4222', sinceMs: since }),
+    sub('scheduler', 'Task scheduler', 'healthy', 'Another node is the leader; this one runs tasks · 0 active, 0 failed in 24 h', [
+      ['Role since', iso(since)],
       ['Active runs', '0'],
       ['Failed runs (24 h)', '0'],
       ['Overdue tasks', '0'],
-    ]),
-    sub('search', 'Search index', 'healthy', 'Index valid; searches answer normally', [
+    ], { metric: 'follower', sinceMs: since }),
+    sub('search', 'Search index', 'healthy', 'Index valid · about 18342 components', [
       ['Components (estimate)', '18342'],
       ['Probe query', '3ms'],
-    ], 3),
-    sub('auth', 'External sign-in', 'healthy', 'OIDC enabled', [['OIDC', 'Working']]),
+    ], { latency: 3, metric: '3 ms', target: 'components_document_idx', sinceMs: since }),
+    sub('auth', 'Sign-in (OIDC)', 'healthy', 'OIDC enabled · worked at last use', [['OIDC', 'Working']], { metric: 'ok', sinceMs: since }),
     degraded
-      ? sub('upstreams', 'Upstream proxies', 'degraded', '3 proxy repositories: 2 healthy, 1 offline', [
+      ? sub('upstreams', 'Upstream proxies', 'degraded', '2 of 3 healthy · 1 offline', [
           ['Healthy', '2'],
           ['Slow', '0'],
           ['Blocked', '0'],
           ['Offline', '1'],
           ['Offline remotes', 'maven-central'],
-        ])
-      : sub('upstreams', 'Upstream proxies', 'healthy', '3 proxy repositories: 3 healthy', [['Healthy', '3']]),
+        ], { metric: '180 ms', sinceMs: 25 * 60_000 })
+      : sub('upstreams', 'Upstream proxies', 'healthy', '3 of 3 healthy', [
+          ['Healthy', '3'],
+          ['Slow', '0'],
+          ['Blocked', '0'],
+          ['Offline', '0'],
+        ], {
+          metric: '140 ms',
+          sinceMs: 3 * HOUR,
+          incident: { status: 'degraded', detail: '2 of 3 healthy · 1 slow', started_at: iso(5 * HOUR), ended_at: iso(3 * HOUR) },
+        }),
   ];
 }
 
 function initialNodes(): SystemNode[] {
   const now = Date.now();
   const iso = (ms: number) => new Date(ms).toISOString();
-  const leader = subsystems(false).map((s) =>
-    s.name === 'scheduler' ? { ...s, detail: 'Leader: this node schedules tasks' } : s,
+  const leader = subsystems(false, 1_209_600_000).map((s) =>
+    s.name === 'scheduler' ? { ...s, detail: 'This node is the leader · 0 active, 0 failed in 24 h', metric: 'leader' } : s,
   );
   return [
     {
@@ -90,12 +118,12 @@ function initialNodes(): SystemNode[] {
     {
       id: 'hangar-2', hostname: 'hangar-2', url: 'http://10.0.2.11:8080', version: '1.0.0', commit: '237ab95c1d2e',
       started_at: iso(now - 86_400_000), uptime_seconds: 86_400, last_heartbeat: iso(now - 9_000),
-      role: 'follower', status: 'degraded', stale: false, current: false, subsystems: subsystems(true),
+      role: 'follower', status: 'degraded', stale: false, current: false, subsystems: subsystems(true, 86_400_000),
     },
     {
       id: 'hangar-3', hostname: 'hangar-3', url: 'http://10.0.3.11:8080', version: '0.9.4', commit: 'a91f00b7e6c3',
       started_at: iso(now - 7_200_000), uptime_seconds: 5_400, last_heartbeat: iso(now - 1_800_000),
-      role: 'follower', status: 'down', stale: true, current: false, subsystems: subsystems(false),
+      role: 'follower', status: 'down', stale: true, current: false, subsystems: subsystems(false, 5_400_000),
     },
   ];
 }
@@ -152,6 +180,10 @@ export const systemMockState = {
   },
   set growth(n: number) {
     state.growth = n;
+  },
+  /** Keeps only the answering node (a single-node installation). */
+  singleNode() {
+    state.nodes = state.nodes.filter((n) => n.current);
   },
 };
 

@@ -3,6 +3,7 @@ package sysmon
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -75,6 +76,61 @@ func TestCheckTimeoutAndPanic(t *testing.T) {
 	cancel()
 	if n := m2.Check(ctx); n.Status != StatusHealthy {
 		t.Fatalf("cancelled caller made the check fail: %+v", n)
+	}
+}
+
+// TestObserveTracksStatusChanges follows one subsystem through an incident:
+// Since moves with each change and the finished period, at its worst, becomes
+// the last incident.
+func TestObserveTracksStatusChanges(t *testing.T) {
+	m := New(nil, Options{NodeID: "n1"})
+	t0 := time.Date(2026, 11, 3, 8, 0, 0, 0, time.UTC)
+	step := func(minutes int, status, detail string) Subsystem {
+		s := Subsystem{Name: "db", CheckedAt: t0.Add(time.Duration(minutes) * time.Minute), Result: Result{Status: status, Detail: detail}}
+		m.observe(&s)
+		return s
+	}
+	at := func(minutes int) time.Time { return t0.Add(time.Duration(minutes) * time.Minute) }
+
+	if s := step(0, StatusHealthy, "ok"); !s.Since.Equal(t0) || s.LastIncident != nil {
+		t.Fatalf("first check = %+v", s)
+	}
+	if s := step(1, StatusHealthy, "ok"); !s.Since.Equal(t0) {
+		t.Fatalf("unchanged status moved since: %v", s.Since)
+	}
+	step(5, StatusDegraded, "slow")
+	if s := step(7, StatusDown, "unreachable"); !s.Since.Equal(at(7)) || s.LastIncident != nil {
+		t.Fatalf("during the incident = %+v", s)
+	}
+	step(9, StatusDegraded, "slow again")
+	s := step(12, StatusHealthy, "ok")
+	want := Incident{Status: StatusDown, Detail: "unreachable", StartedAt: at(5), EndedAt: at(12)}
+	if !s.Since.Equal(at(12)) || s.LastIncident == nil || *s.LastIncident != want {
+		t.Fatalf("after recovery = %+v, incident %+v", s, s.LastIncident)
+	}
+	// A new incident keeps the previous one until it ends.
+	if s = step(20, StatusDegraded, "pool exhausted"); s.LastIncident == nil || *s.LastIncident != want {
+		t.Fatalf("second incident replaced the last one early: %+v", s.LastIncident)
+	}
+	if s = step(21, StatusHealthy, "ok"); s.LastIncident.Status != StatusDegraded || !s.LastIncident.StartedAt.Equal(at(20)) {
+		t.Fatalf("second incident = %+v", s.LastIncident)
+	}
+
+	// A subsystem that starts unhealthy opens an incident at once.
+	step2 := Subsystem{Name: "bus", CheckedAt: t0, Result: Result{Status: StatusDown, Detail: "no"}}
+	m.observe(&step2)
+	step2 = Subsystem{Name: "bus", CheckedAt: at(3), Result: Result{Status: StatusHealthy}}
+	m.observe(&step2)
+	if step2.LastIncident == nil || !step2.LastIncident.StartedAt.Equal(t0) || !step2.LastIncident.EndedAt.Equal(at(3)) {
+		t.Fatalf("incident from the start = %+v", step2.LastIncident)
+	}
+}
+
+func TestCheckFillsSince(t *testing.T) {
+	m := New(nil, Options{NodeID: "n1", Checks: []Check{fixed("db", StatusHealthy)}})
+	n := m.Check(context.Background())
+	if s := n.Subsystems[0]; s.Since == nil || !s.Since.Equal(s.CheckedAt) || s.LastIncident != nil {
+		t.Fatalf("subsystem = %+v", s)
 	}
 }
 
@@ -179,11 +235,15 @@ func TestDatabaseSearchSchedulerChecks(t *testing.T) {
 	noReady := FromChecker(nil)
 
 	r := DatabaseCheck(pool, noReady).Run(ctx)
-	if r.Status != StatusHealthy || r.LatencyMS == nil || !hasFact(r, "Server") || !hasFact(r, "Connections in use") {
+	if r.Status != StatusHealthy || r.LatencyMS == nil || !hasFact(r, "Server") || !hasFact(r, "Connections in use") ||
+		!strings.HasPrefix(r.Detail, "PostgreSQL ") || !strings.HasSuffix(r.Metric, " ms") {
 		t.Fatalf("database = %+v", r)
 	}
+	if c := pool.Config().ConnConfig; r.Target != fmt.Sprintf("%s:%d/%s", c.Host, c.Port, c.Database) || strings.Contains(r.Target, "@") {
+		t.Fatalf("database target = %q", r.Target)
+	}
 	r = SearchCheck(pool).Run(ctx)
-	if r.Status != StatusHealthy || !strings.Contains(r.Detail, "Index valid") {
+	if r.Status != StatusHealthy || !strings.Contains(r.Detail, "Index valid") || r.Target != searchIndex || r.Metric == "" {
 		t.Fatalf("search = %+v", r)
 	}
 	apitest.Exec(t, pool, `DROP INDEX components_document_idx`)
@@ -193,7 +253,7 @@ func TestDatabaseSearchSchedulerChecks(t *testing.T) {
 
 	leader := func() (bool, time.Time) { return true, time.Now() }
 	r = SchedulerCheck(pool, leader).Run(ctx)
-	if r.Status != StatusHealthy || !strings.HasPrefix(r.Detail, "Leader") {
+	if r.Status != StatusHealthy || r.Detail != "This node is the leader · 0 active, 0 failed in 24 h" || r.Metric != RoleLeader {
 		t.Fatalf("scheduler = %+v", r)
 	}
 	apitest.Exec(t, pool, `INSERT INTO tasks (name, type, schedule, next_run_at) VALUES ('late', 'docker_gc', '0 * * * *', now() - interval '3 hours')`)
@@ -245,8 +305,14 @@ func TestBlobStoresCheck(t *testing.T) {
 		t.Errorf("fs store fact without free space: %+v", r.Facts[0])
 	}
 	stores = stores[:1]
-	if r = BlobStoresCheck(list, open, FromChecker(nil)).Run(ctx); r.Status != StatusHealthy || r.Detail != "Reachable" {
+	r = BlobStoresCheck(list, open, FromChecker(nil)).Run(ctx)
+	if r.Status != StatusHealthy || !strings.HasPrefix(r.Detail, "default (fs) · ") || !strings.Contains(r.Detail, " free of ") ||
+		r.Target != dir || !strings.HasSuffix(r.Metric, "% free") {
 		t.Fatalf("one healthy store = %+v", r)
+	}
+	stores = []BlobStore{{Name: "s3-ok", Kind: "s3"}}
+	if r = BlobStoresCheck(list, open, FromChecker(nil)).Run(ctx); r.Detail != "s3-ok (s3) · reachable" || r.Target != "s3-ok" || !strings.HasSuffix(r.Metric, " ms") {
+		t.Fatalf("one object store = %+v", r)
 	}
 	failing := func(context.Context) ([]BlobStore, error) { return nil, errors.New("db down") }
 	if r = BlobStoresCheck(failing, open, FromChecker(nil)).Run(ctx); r.Status != StatusDown {
@@ -255,8 +321,17 @@ func TestBlobStoresCheck(t *testing.T) {
 }
 
 func TestAuthCheck(t *testing.T) {
+	if c := AuthCheck(nil); c.Label != "Sign-in" {
+		t.Fatalf("label without providers = %q", c.Label)
+	}
 	if r := AuthCheck(nil).Run(context.Background()); r.Status != StatusHealthy || !strings.Contains(r.Detail, "local accounts") {
 		t.Fatalf("no providers = %+v", r)
+	}
+	oidc := AuthProvider{Name: "OIDC", Status: func() (bool, time.Time, error) { return true, time.Time{}, nil }}
+	if c := AuthCheck([]AuthProvider{oidc}); c.Label != "Sign-in (OIDC)" {
+		t.Fatalf("label = %q", c.Label)
+	} else if r := c.Run(context.Background()); r.Status != StatusHealthy || r.Metric != "ok" || r.Detail != "OIDC enabled · worked at last use" {
+		t.Fatalf("oidc = %+v", r)
 	}
 	at := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	r := AuthCheck([]AuthProvider{
@@ -274,10 +349,11 @@ func TestAuthCheck(t *testing.T) {
 }
 
 func TestUpstreamsCheck(t *testing.T) {
+	lat := func(v int64) *int64 { return &v }
 	items := []proxy.HealthItem{
-		{Name: "nuget-proxy", State: proxy.StateHealthy},
-		{Name: "npm-proxy", State: proxy.StateSlow},
-		{Name: "maven-central", State: proxy.StateOffline},
+		{Name: "nuget-proxy", URL: "https://api.nuget.org/v3/index.json", State: proxy.StateHealthy, LatencyMS: lat(140)},
+		{Name: "npm-proxy", URL: "https://registry.npmjs.org", State: proxy.StateSlow, LatencyMS: lat(2100)},
+		{Name: "maven-central", URL: "https://repo.maven.apache.org/maven2", State: proxy.StateOffline},
 	}
 	list := func(_ context.Context, cursor string, _ int) (core.Page[proxy.HealthItem], error) {
 		if cursor == "" {
@@ -286,7 +362,7 @@ func TestUpstreamsCheck(t *testing.T) {
 		return core.Page[proxy.HealthItem]{Items: items[2:]}, nil
 	}
 	r := UpstreamsCheck(list).Run(context.Background())
-	if r.Status != StatusDegraded || r.Detail != "3 proxy repositories: 1 healthy, 1 slow, 1 offline" {
+	if r.Status != StatusDegraded || r.Detail != "1 of 3 healthy · 1 slow, 1 offline" || r.Metric != "2100 ms" {
 		t.Fatalf("result = %+v", r)
 	}
 	if !hasFact(r, "Offline remotes") {
@@ -297,6 +373,26 @@ func TestUpstreamsCheck(t *testing.T) {
 	}
 	if r = UpstreamsCheck(empty).Run(context.Background()); r.Status != StatusHealthy || r.Detail != "No proxy repositories" {
 		t.Fatalf("none = %+v", r)
+	}
+	one := func(context.Context, string, int) (core.Page[proxy.HealthItem], error) {
+		return core.Page[proxy.HealthItem]{Items: items[:1]}, nil
+	}
+	if r = UpstreamsCheck(one).Run(context.Background()); r.Status != StatusHealthy || r.Detail != "1 of 1 healthy · api.nuget.org" || r.Metric != "140 ms" {
+		t.Fatalf("one = %+v", r)
+	}
+	idle := func(context.Context, string, int) (core.Page[proxy.HealthItem], error) {
+		return core.Page[proxy.HealthItem]{Items: []proxy.HealthItem{{Name: "pypi-proxy", URL: "https://pypi.org", State: proxy.StateHealthy}}}, nil
+	}
+	if r = UpstreamsCheck(idle).Run(context.Background()); r.Metric != "no traffic" {
+		t.Fatalf("idle = %+v", r)
+	}
+}
+
+func TestShortDuration(t *testing.T) {
+	for d, want := range map[time.Duration]string{143 * time.Microsecond: "143 µs", 12 * time.Millisecond: "12 ms", 1400 * time.Millisecond: "1.4 s"} {
+		if got := shortDuration(d); got != want {
+			t.Errorf("shortDuration(%s) = %q, want %q", d, got, want)
+		}
 	}
 }
 
