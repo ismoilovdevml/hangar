@@ -226,6 +226,10 @@ func clientCredentials(ctx context.Context, client *http.Client, cfg auth.OIDCCo
 	switch {
 	case resp.StatusCode == http.StatusOK:
 		return StepOK, "client id and secret accepted"
+	case body.Error == "unauthorized_client":
+		// The client authenticated but may not use this grant (some
+		// providers answer 401 here): the id and secret are right.
+		return StepOK, "client id and secret accepted (the client_credentials grant is not enabled for this client, which sign-in does not need)"
 	case resp.StatusCode == http.StatusUnauthorized || body.Error == "invalid_client":
 		return StepFailed, "the provider rejected the client id or secret" + describe(body.Error, body.Description)
 	}

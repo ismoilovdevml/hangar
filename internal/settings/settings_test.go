@@ -591,10 +591,17 @@ func TestOIDCTest(t *testing.T) {
 	if !res.OK || len(res.Steps) != 4 || res.Steps[3].Name != "client_credentials" {
 		t.Fatalf("result = %+v", res)
 	}
+	// A client without a service account: the provider authenticates it and
+	// then refuses the grant (401 unauthorized_client). The secret is right.
+	issuer.Set(func(is *oidctest.Issuer) { is.NoClientCredentials = true })
+	if res, _ = e.svc.TestOIDC(e.admin, settings.OIDCTestInput{Settings: &in}); !res.OK || res.Steps[3].Status != settings.StepOK {
+		t.Fatalf("unauthorized_client = %+v", res)
+	}
 	in.ClientSecret = "wrong"
 	if res, _ = e.svc.TestOIDC(e.admin, settings.OIDCTestInput{Settings: &in}); res.OK || res.Steps[3].Status != settings.StepFailed {
 		t.Fatalf("wrong secret = %+v", res)
 	}
+	issuer.Set(func(is *oidctest.Issuer) { is.NoClientCredentials = false })
 	// The stored secret is used when the form leaves it empty.
 	if _, err := e.svc.PutOIDC(e.admin, validOIDC(issuer.URL)); err != nil {
 		t.Fatal(err)
