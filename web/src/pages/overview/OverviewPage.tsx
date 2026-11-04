@@ -67,7 +67,7 @@ function RequestsKpi({ m, range, now }: { m: OverviewMetrics; range: OverviewRan
       <KpiCard
         label={label}
         value={<NotAvailable reason="Not reported" />}
-        note="This node does not report request statistics."
+        note="This server does not report request statistics."
       />
     );
   }
@@ -87,13 +87,22 @@ function RequestsKpi({ m, range, now }: { m: OverviewMetrics; range: OverviewRan
 }
 
 function CacheKpi({ m }: { m: OverviewMetrics }) {
-  const { hit_ratio: hit, bytes_saved: saved } = m.cache;
-  if (hit === null) {
+  const { hit_ratio: hit, bytes_saved: saved, hits, misses } = m.cache;
+  if (hits === null || misses === null) {
     return (
       <KpiCard
         label="Served from cache"
         value={<NotAvailable reason="Not reported" />}
-        note={saved !== null ? `${formatBytes(saved)} of downloads saved` : 'No proxy cache traffic measured yet.'}
+        note="This server does not report proxy cache statistics."
+      />
+    );
+  }
+  if (hit === null) {
+    return (
+      <KpiCard
+        label="Served from cache"
+        value={<NotAvailable reason="No proxy requests in this range" />}
+        note="No proxy repository served content in this range."
       />
     );
   }
@@ -106,7 +115,7 @@ function CacheKpi({ m }: { m: OverviewMetrics }) {
       value={formatPercent(hit)}
       unit="%"
       meter={{ value: hit, label: 'Cache hit ratio', color: 'var(--ok-bar)' }}
-      note={saved !== null ? `${formatBytes(saved)} of downloads saved` : 'Bytes saved not reported'}
+      note={join(`${formatCompact(hits)} of ${formatCompact(hits + misses)} requests`, saved !== null && `${formatBytes(saved)} saved`)}
     />
   );
 }
@@ -236,7 +245,7 @@ export function OverviewPage() {
       <div className="overview__bottom">
         <RecentlyPublished />
         <div className="overview__side">
-          <UpstreamSources />
+          <UpstreamSources range={range} />
           <ConnectClient />
         </div>
       </div>

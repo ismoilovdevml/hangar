@@ -21,7 +21,7 @@ describe('overview', () => {
     const cache = within(kpis).getByRole('article', { name: 'Served from cache' });
     expect(within(cache).getByText('94.2')).toBeInTheDocument();
     expect(within(cache).getByText('Healthy')).toBeInTheDocument();
-    expect(within(cache).getByText('2.1 TB of downloads saved')).toBeInTheDocument();
+    expect(within(cache).getByText(/^45\.4K of 48\.2K requests · \d+(\.\d)? GB saved$/)).toBeInTheDocument();
 
     const issues = within(kpis).getByRole('article', { name: 'Critical issues' });
     expect(within(issues).getByText('7')).toBeInTheDocument();
@@ -43,6 +43,11 @@ describe('overview', () => {
     expect(await within(upstreams).findByText('npmjs-proxy')).toBeInTheDocument();
     expect(within(upstreams).getByText('Blocked')).toBeInTheDocument();
     expect(within(upstreams).getByText('Unknown')).toBeInTheDocument();
+    expect(within(upstreams).getByText('Median latency · today')).toBeInTheDocument();
+    expect(within(upstreams).getByText('412 ms')).toHaveAttribute('title', 'Median of 860 remote requests');
+    // A remote without requests in the range: no latency, and why.
+    const pypi = within(upstreams).getByText('pypi-proxy').closest('li')!;
+    expect(within(pypi).getByTitle('No remote requests in this range')).toHaveTextContent('—');
 
     expect(await screen.findByText('docker login cr.acme.io')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy client setup commands' })).toBeInTheDocument();
@@ -57,5 +62,9 @@ describe('overview', () => {
     await waitFor(() => expect(history.location.search).toContain('range=7d'));
     expect(await screen.findByRole('article', { name: 'Requests · 7 days' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Traffic · 7 days' })).toBeInTheDocument();
+    // Upstream latency follows the range.
+    const upstreams = screen.getByRole('region', { name: 'Upstream sources' });
+    expect(await within(upstreams).findByText('Median latency · 7 days')).toBeInTheDocument();
+    expect(await within(upstreams).findByTitle('Median of 5.6K remote requests')).toHaveTextContent('412 ms');
   });
 });

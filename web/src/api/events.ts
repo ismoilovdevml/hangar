@@ -55,17 +55,16 @@ export function applyLiveEvent(qc: QueryClient, event: LiveEvent, invalidate: In
     case 'task.finished':
       invalidate(['tasks']);
       break;
-    case 'upstream.status':
-      qc.setQueryData<Page<UpstreamHealth>>(queryKeys.upstreams, (prev) => {
-        if (!prev) return prev;
-        const known = prev.items.some((u) => u.name === event.data.name);
-        return {
-          ...prev,
-          items: known ? prev.items.map((u) => (u.name === event.data.name ? event.data : u)) : [...prev.items, event.data],
-        };
-      });
+    case 'upstream.status': {
+      // The event carries the new state only: keep each row's recorded latency.
+      const { name, url, state } = event.data;
+      qc.setQueriesData<Page<UpstreamHealth>>({ queryKey: queryKeys.upstreams }, (prev) =>
+        prev && { ...prev, items: prev.items.map((u) => (u.name === name ? { ...u, url, state } : u)) },
+      );
+      invalidate(queryKeys.upstreams);
       invalidate(queryKeys.repositories);
       break;
+    }
   }
 }
 

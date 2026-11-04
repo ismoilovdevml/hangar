@@ -29,6 +29,7 @@ export const queryKeys = {
   overview: (range: OverviewRange) => ['metrics', 'overview', range] as const,
   recentComponents: ['components', 'recent'] as const,
   upstreams: ['upstreams', 'health'] as const,
+  upstreamHealth: (range: OverviewRange) => ['upstreams', 'health', range] as const,
   clientEndpoints: ['me', 'client-endpoints'] as const,
   repositories: ['repositories'] as const,
   repositoryList: (q: ListRepositoriesQuery) => ['repositories', 'list', q] as const,
@@ -121,11 +122,13 @@ export function useRecentComponents() {
   });
 }
 
-export function useUpstreamHealth() {
+/** Live state of every proxy remote, with the median latency recorded over `range`. */
+export function useUpstreamHealth(range: OverviewRange) {
   return useQuery({
-    queryKey: queryKeys.upstreams,
-    queryFn: ({ signal }) => apiFetch<Page<UpstreamHealth>>('/upstreams/health', { signal }),
+    queryKey: queryKeys.upstreamHealth(range),
+    queryFn: ({ signal }) => apiFetch<Page<UpstreamHealth>>('/upstreams/health', { query: { range }, signal }),
     refetchInterval: 30_000,
+    placeholderData: keepPreviousData,
   });
 }
 

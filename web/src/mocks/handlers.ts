@@ -186,7 +186,15 @@ export const handlers = [
     return HttpResponse.json({ items: data.recentComponents().slice(0, limit), next_cursor: null });
   }),
 
-  http.get(api('/upstreams/health'), ({ request }) => guard(request) ?? HttpResponse.json({ items: data.upstreams, next_cursor: null })),
+  http.get(api('/upstreams/health'), ({ request }) => {
+    const denied = guard(request);
+    if (denied) return denied;
+    const range = (new URL(request.url).searchParams.get('range') ?? 'today') as OverviewRange;
+    if (!RANGES.includes(range)) {
+      return error(400, { code: 'invalid_argument', message: 'range must be one of 1h, today, 7d, 30d' });
+    }
+    return HttpResponse.json({ items: data.upstreamHealth(range), next_cursor: null });
+  }),
   http.get(api('/me/client-endpoints'), ({ request }) => guard(request) ?? HttpResponse.json({ items: data.clientEndpoints, next_cursor: null })),
 
   http.get(api('/repositories'), ({ request }) => {

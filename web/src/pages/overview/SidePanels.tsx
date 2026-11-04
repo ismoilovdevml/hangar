@@ -1,10 +1,12 @@
 import { Link } from '@tanstack/react-router';
 import { useClientEndpoints, useUpstreamHealth } from '../../api/hooks';
-import type { UpstreamState } from '../../api/types';
+import type { OverviewRange, UpstreamHealth, UpstreamState } from '../../api/types';
 import { CodeBlock } from '../../components/CodeBlock';
 import { Panel } from '../../components/Panel';
 import { clientSnippet } from '../../lib/clientSnippets';
 import { ErrorNote } from '../../components/ErrorNote';
+import { NotAvailable } from '../../components/NotAvailable';
+import { formatCompact } from '../../lib/format';
 
 const UPSTREAM: Record<UpstreamState, { label: string; tone: 'ok' | 'warn' | 'bad' | 'neutral' }> = {
   healthy: { label: 'Healthy', tone: 'ok' },
@@ -14,10 +16,40 @@ const UPSTREAM: Record<UpstreamState, { label: string; tone: 'ok' | 'warn' | 'ba
   unknown: { label: 'Unknown', tone: 'neutral' },
 };
 
-export function UpstreamSources() {
-  const q = useUpstreamHealth();
+/** How the latency column reads for each range. */
+const LATENCY_RANGE: Record<OverviewRange, string> = {
+  '1h': 'last hour',
+  today: 'today',
+  '7d': '7 days',
+  '30d': '30 days',
+};
+
+function Latency({ u }: { u: UpstreamHealth }) {
+  if (u.latency_ms === null) {
+    const reason = u.requests === null ? 'Latency not reported' : 'No remote requests in this range';
+    return (
+      <span className="upstreams__lat" title={reason}>
+        <NotAvailable reason={reason} />
+      </span>
+    );
+  }
+  const n = u.requests ?? 0;
   return (
-    <Panel title="Upstream sources" titleId="upstreams-title" className="side-panel">
+    <span className="upstreams__lat" title={`Median of ${formatCompact(n)} remote ${n === 1 ? 'request' : 'requests'}`}>
+      {u.latency_ms} ms
+    </span>
+  );
+}
+
+export function UpstreamSources({ range }: { range: OverviewRange }) {
+  const q = useUpstreamHealth(range);
+  return (
+    <Panel
+      title="Upstream sources"
+      titleId="upstreams-title"
+      className="side-panel"
+      action={<span className="meta">Median latency · {LATENCY_RANGE[range]}</span>}
+    >
       {q.isError ? (
         <ErrorNote what="upstream health" onRetry={() => void q.refetch()} />
       ) : q.isPending ? (
@@ -36,16 +68,7 @@ export function UpstreamSources() {
                 <span className="upstreams__name" title={u.url}>
                   {u.name}
                 </span>
-                <span className="upstreams__lat">
-                  {u.latency_ms === null ? (
-                    <>
-                      <span aria-hidden="true">—</span>
-                      <span className="visually-hidden">no recent latency</span>
-                    </>
-                  ) : (
-                    `${u.latency_ms} ms`
-                  )}
-                </span>
+                <Latency u={u} />
                 <span className={`pill tone-${s.tone}`}>{s.label}</span>
               </li>
             );

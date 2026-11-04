@@ -92,7 +92,7 @@ describe('applyLiveEvent', () => {
     const qc = new QueryClient();
     const recent = recentComponents();
     qc.setQueryData<Page<PublishedComponent>>(queryKeys.recentComponents, { items: recent, next_cursor: null });
-    qc.setQueryData<Page<UpstreamHealth>>(queryKeys.upstreams, { items: upstreams, next_cursor: null });
+    qc.setQueryData<Page<UpstreamHealth>>(queryKeys.upstreamHealth('today'), { items: upstreams, next_cursor: null });
     const invalidated: unknown[] = [];
     const inv = (k: readonly unknown[]) => invalidated.push(k);
 
@@ -100,14 +100,18 @@ describe('applyLiveEvent', () => {
     applyLiveEvent(qc, { type: 'component.published', data: fresh }, inv);
     applyLiveEvent(qc, { type: 'component.quarantined', data: { id: recent[1]!.id, name: 'x', version: '1' } }, inv);
     applyLiveEvent(qc, { type: 'component.deleted', data: { id: recent[2]!.id } }, inv);
-    applyLiveEvent(qc, { type: 'upstream.status', data: { ...upstreams[1]!, state: 'healthy', latency_ms: 50 } }, inv);
+    const npm = upstreams[1]!;
+    applyLiveEvent(qc, { type: 'upstream.status', data: { name: npm.name, url: npm.url, state: 'healthy', previous: 'slow' } }, inv);
 
     const items = qc.getQueryData<Page<PublishedComponent>>(queryKeys.recentComponents)!.items;
     expect(items[0]!.id).toBe('c_new');
     expect(items.find((c) => c.id === recent[1]!.id)!.scan.state).toBe('quarantined');
     expect(items.some((c) => c.id === recent[2]!.id)).toBe(false);
-    const up = qc.getQueryData<Page<UpstreamHealth>>(queryKeys.upstreams)!.items;
-    expect(up.find((u) => u.name === 'npmjs-proxy')).toMatchObject({ state: 'healthy', latency_ms: 50 });
+    const up = qc.getQueryData<Page<UpstreamHealth>>(queryKeys.upstreamHealth('today'))!.items;
+    // The new state is applied; the recorded latency stays.
+    expect(up.find((u) => u.name === 'npmjs-proxy')).toMatchObject({ state: 'healthy', latency_ms: npm.latency_ms });
+    expect(up).toHaveLength(upstreams.length);
+    expect(invalidated).toContainEqual(queryKeys.upstreams);
     expect(invalidated).toContainEqual(['metrics', 'overview']);
   });
 });

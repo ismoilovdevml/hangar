@@ -6,11 +6,11 @@ import { CopyButton } from '../../components/CopyButton';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
 import { IconDatabase, IconGlobe, IconGroup, IconPackage, IconPlus, IconSearch } from '../../components/icons';
-import { NotAvailable } from '../../components/NotAvailable';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
 import { FORMAT_META, formatBytes } from '../../lib/format';
+import { plural } from '../../lib/overview';
 import { ALL_FORMATS, displayUrl, isFormat, repoSubtitle, STATUS_META, TYPE_META } from '../../lib/repositories';
 
 const route = getRouteApi('/app/repositories');
@@ -93,6 +93,23 @@ function NameFilter({ value, onChange }: { value: string; onChange: (q: string |
   );
 }
 
+/**
+ * Stored size. A group stores nothing itself: it shows what it serves, its
+ * members' content with shared blobs counted once, and how many versions.
+ */
+function RepoSize({ r }: { r: Repository }) {
+  if (r.type !== 'group') return formatBytes(r.size_bytes);
+  const members = r.config.group?.members.length ?? 0;
+  return (
+    <span className="repo-size" title="Served from the members; blobs they share are counted once">
+      <span>
+        {formatBytes(r.size_bytes)} <span className="repo-size__sub">via {plural(members, 'member')}</span>
+      </span>
+      <span className="repo-size__sub">{plural(r.component_count, 'version')}</span>
+    </span>
+  );
+}
+
 export function RepositoriesPage() {
   const search = route.useSearch();
   const navigate = route.useNavigate();
@@ -155,7 +172,7 @@ export function RepositoriesPage() {
       header: 'Size',
       align: 'right',
       className: 'muted nowrap',
-      cell: (r) => (r.type === 'group' ? <NotAvailable reason="not applicable: groups store nothing themselves" /> : formatBytes(r.size_bytes)),
+      cell: (r) => <RepoSize r={r} />,
     },
     {
       key: 'status',

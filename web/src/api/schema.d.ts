@@ -289,7 +289,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Health of every proxy remote */
+        /**
+         * Health of every proxy remote
+         * @description Live state of each readable proxy repository's remote, plus the remote
+         *     latency recorded over `range` by every node (persisted, so it survives
+         *     restarts).
+         */
         get: operations["listUpstreamHealth"];
         put?: never;
         post?: never;
@@ -1478,15 +1483,16 @@ export interface components {
         OverviewRange: "1h" | "today" | "7d" | "30d";
         TrafficBucket: {
             start: components["schemas"]["Timestamp"];
-            /** @description Content downloads served by this node; null for buckets before it started or without request statistics */
+            /** @description Content downloads served by every node; null for buckets that ended before traffic recording started, or without traffic statistics */
             downloads: number | null;
-            /** @description Components published in the bucket (all nodes) */
+            /** @description Components published to hosted repositories in the bucket (proxy cache fills are not counted) */
             uploads: number;
         };
         OverviewMetrics: {
             range: components["schemas"]["OverviewRange"];
             generated_at: components["schemas"]["Timestamp"];
             summary: {
+                /** @description Components published to hosted repositories in the last 24 hours */
                 published_since_yesterday: number;
                 failed_pushes: number;
             };
@@ -1497,28 +1503,42 @@ export interface components {
                 added_bytes_24h: components["schemas"]["Bytes"];
             };
             /**
-             * @description Requests served by this node, from its Prometheus counters (probes,
-             *     /metrics and the event stream excluded). Counters restart with the
-             *     process: `coverage_start` says from when the numbers are observed.
-             *     Every value is null when request statistics are not available.
+             * @description Requests served by every node (probes, /metrics and the event
+             *     stream excluded). Each node adds its counters to per-minute rows in
+             *     the database, so the numbers survive restarts; whole minutes are
+             *     counted. Every value is null when traffic statistics are not
+             *     available.
              */
             requests: {
                 total: number | null;
-                /** @description Change versus the previous range of the same length, in percent; null without data for that range */
+                /** @description Change versus the previous range of the same length, in percent; null unless that range was recorded entirely and had requests */
                 trend_pct: number | null;
-                /** @description Busiest equivalent range in the last 30 days (of the observed history) */
+                /** @description Busiest recorded range of the same length ending in the last 30 days (5-minute resolution), at least `total` */
                 peak_total: number | null;
+                /** @description Estimated 95th percentile response time; null without requests */
                 p95_ms: number | null;
                 /**
                  * Format: date-time
-                 * @description Start of the period the numbers actually cover (later than the range start after a restart)
+                 * @description Start of the period the numbers cover; later than the range start when recording began inside the range (first start of a version with traffic statistics); null when nothing was recorded yet
                  */
-                coverage_start?: string | null;
+                coverage_start: string | null;
             };
-            /** @description Proxy cache effectiveness; null when the proxy subsystem reports no cache metrics. */
+            /**
+             * @description Proxy cache effectiveness over the range, every format, every node.
+             *     A client request counts once: a miss when any proxy repository
+             *     (directly or as a member of the group addressed) asked its remote
+             *     for the content, otherwise a hit when a proxy answered from its
+             *     cache. Requests answered by hosted repositories alone are not
+             *     counted. Every value is null when traffic statistics are not
+             *     available.
+             */
             cache: {
+                /** @description hits / (hits + misses); null when no proxy request was counted in the range */
                 hit_ratio: number | null;
+                /** @description Bytes served from proxy caches without contacting the remote */
                 bytes_saved: number | null;
+                hits: number | null;
+                misses: number | null;
             };
             issues: {
                 critical: number;
@@ -1542,8 +1562,14 @@ export interface components {
             name: string;
             url: string;
             state: components["schemas"]["UpstreamState"];
-            /** @description p50 over the last 5 minutes; null without recent traffic */
+            /**
+             * @description Median time to response headers of the remote requests recorded
+             *     over the range (estimated from a histogram); null without remote
+             *     requests in the range
+             */
             latency_ms: number | null;
+            /** @description Remote requests timed over the range; null when traffic statistics are not available */
+            requests: number | null;
         };
         CacheInvalidation: {
             repository: string;
@@ -1651,7 +1677,17 @@ export interface components {
             /** @description Client URL built from server.base_url */
             url: string;
             status: components["schemas"]["RepositoryStatus"];
+            /**
+             * @description Hosted and proxy: the total size of the repository's assets.
+             *     Group: what the group serves; every blob stored by its
+             *     members (nested groups resolved) counted once.
+             */
             size_bytes: components["schemas"]["Bytes"];
+            /**
+             * @description Hosted and proxy: the repository's components. Group: the
+             *     distinct component coordinates (namespace, name, version) of
+             *     its members, nested groups resolved.
+             */
             component_count: number;
             created_at: components["schemas"]["Timestamp"];
             updated_at: components["schemas"]["Timestamp"];
@@ -2399,7 +2435,14 @@ export interface components {
         } | {
             /** @constant */
             type: "upstream.status";
-            data: components["schemas"]["UpstreamHealth"];
+            /** @description A proxy remote changed state; latency is not included (see /upstreams/health) */
+            data: {
+                /** @description Proxy repository name */
+                name: string;
+                url: string;
+                state: components["schemas"]["UpstreamState"];
+                previous?: components["schemas"]["UpstreamState"];
+            };
         };
     };
     responses: {
@@ -2894,6 +2937,8 @@ export interface operations {
                 /** @description Opaque cursor from the previous page's `next_cursor` */
                 cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];
+                /** @description Window of `latency_ms` and `requests` (default `today`) */
+                range?: components["schemas"]["OverviewRange"];
             };
             header?: never;
             path?: never;
@@ -2910,6 +2955,7 @@ export interface operations {
                     "application/json": components["schemas"]["UpstreamHealthPage"];
                 };
             };
+            400: components["responses"]["BadRequest"];
         };
     };
     listRepositories: {

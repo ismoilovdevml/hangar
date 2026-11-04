@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
+import { formatBytes } from '../lib/format';
 import { repositories } from '../mocks/data';
 import { renderApp } from './render';
 
@@ -29,8 +30,16 @@ describe('repositories list', () => {
     expect(within(row).getByText('435 GB')).toBeInTheDocument();
     expect(within(row).getByRole('button', { name: 'Copy URL of npmjs-proxy' })).toBeInTheDocument();
     expect(within(within(table).getByText('ghcr-proxy').closest('tr')!).getByText('Blocked by policy')).toBeInTheDocument();
-    // Groups store nothing themselves: no invented size.
-    expect(within(within(table).getByText('docker-all').closest('tr')!).getByText('—')).toBeInTheDocument();
+    // A group stores nothing itself: it shows what it serves through its members.
+    const dockerAll = all.find((r) => r.name === 'docker-all')!;
+    const groupRow = within(table).getByText('docker-all').closest('tr')!;
+    expect(dockerAll.size_bytes).toBeGreaterThan(0);
+    expect(within(groupRow).getByText('via 3 members')).toBeInTheDocument();
+    expect(within(groupRow).getByText(`${dockerAll.component_count} versions`)).toBeInTheDocument();
+    expect(within(groupRow).getByTitle(/blobs they share are counted once/)).toHaveTextContent(
+      `${formatBytes(dockerAll.size_bytes)} via 3 members`,
+    );
+    expect(within(groupRow).queryByText('—')).not.toBeInTheDocument();
     expect(screen.getByText(`Showing 20 of ${all.length}`)).toBeInTheDocument();
   });
 
