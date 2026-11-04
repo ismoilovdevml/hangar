@@ -56,7 +56,7 @@ export function Sidebar() {
                   <Link
                     to={item.to}
                     className="nav-item"
-                    activeOptions={{ exact: item.to === '/' }}
+                    activeOptions={{ exact: item.to === '/' || item.to === '/settings' }}
                     activeProps={{ className: 'is-active' }}
                   >
                     <item.icon size={18} />
