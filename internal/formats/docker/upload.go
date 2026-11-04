@@ -175,6 +175,9 @@ func (h *handler) tryMount(w http.ResponseWriter, r *http.Request, rq *request, 
 		if err != nil {
 			continue
 		}
+		if _, blocked, err := h.quarantined(ctx, src, fromImage, d); err != nil || blocked {
+			return false // quarantined content is not copied out; upload it instead
+		}
 		stored := a.BlobDigest
 		if _, err := bs.Stat(ctx, stored); err != nil {
 			// Different blob store: copy the bytes once.

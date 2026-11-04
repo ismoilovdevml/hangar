@@ -258,10 +258,17 @@ func (h *handler) getManifest(w http.ResponseWriter, r *http.Request, rq *reques
 		return
 	}
 	if hit.asset.ComponentID != "" {
-		if c, err := h.deps.Components.GetComponentByID(ctx, hit.asset.ComponentID); err == nil && c.Quarantined {
-			writeError(w, http.StatusForbidden, codeDenied, "image "+rq.name+":"+rq.ref+" is quarantined")
+		c, err := h.deps.Components.GetComponentByID(ctx, hit.asset.ComponentID)
+		if err != nil && !errors.Is(err, core.ErrNotFound) {
+			h.internal(w, r, "quarantine check", err)
 			return
 		}
+		if err == nil && c.Quarantined {
+			writeError(w, http.StatusForbidden, codeDenied, "image "+rq.name+":"+rq.ref+" is quarantined by a security policy")
+			return
+		}
+	} else if !h.allowContent(w, r, rq, hit.repo, hit.digest) {
+		return
 	}
 	h.serveAsset(w, r, hit.repo, hit.asset, hit.digest, hit.mediaType)
 }
@@ -384,7 +391,8 @@ func (h *handler) storeManifest(ctx context.Context, repo *core.Repository, imag
 		return nil, fmt.Errorf("store manifest: %w", err)
 	}
 	at := m.artifactType(mt)
-	attrs := map[string]any{"digest": string(d), "media_type": mt}
+	attrs := refAttributes(m, mt)
+	attrs["digest"], attrs["media_type"] = string(d), mt
 	if at != "" {
 		attrs["artifact_type"] = at
 	}

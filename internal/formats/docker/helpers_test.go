@@ -29,7 +29,10 @@ type testReg struct {
 // newTestReg serves docker.New over HTTP with coretest fakes. Repositories:
 // docker-hosted (alice: read/write/delete, bob: read), docker-public
 // (anonymous read).
-func newTestReg(t *testing.T) *testReg {
+func newTestReg(t *testing.T) *testReg { return newTestRegWith(t, nil) }
+
+// newTestRegWith is newTestReg with a hook that may replace dependencies.
+func newTestRegWith(t *testing.T, adjust func(*core.Deps)) *testReg {
 	t.Helper()
 	env := coretest.NewEnv(t)
 	tr := &testReg{t: t, env: env, now: time.Now()}
@@ -44,7 +47,11 @@ func newTestReg(t *testing.T) *testReg {
 	env.Auth.AddUser("bob", "secret")
 	env.AuthZ.Grant("alice", "repo:*:read", "repo:*:write", "repo:*:delete")
 	env.AuthZ.Grant("bob", "repo:docker-hosted:read")
-	h = formats.NewHandler(env.Deps(), docker.NewWithOptions(docker.Options{
+	deps := env.Deps()
+	if adjust != nil {
+		adjust(&deps)
+	}
+	h = formats.NewHandler(deps, docker.NewWithOptions(docker.Options{
 		TokenKey: []byte(testKey),
 		Now:      func() time.Time { return tr.now },
 	}))

@@ -42,6 +42,12 @@ func (h *handler) getBlob(w http.ResponseWriter, r *http.Request, rq *request) {
 	var miss memberMisses
 	for _, m := range repos {
 		a, err := h.localBlob(ctx, m, rq.image, d)
+		if err == nil || (errors.Is(err, core.ErrNotFound) && m.Type == core.RepoProxy) {
+			// The first member that holds (or proxies) the content decides.
+			if !h.allowContent(w, r, rq, m, d) {
+				return
+			}
+		}
 		if err == nil {
 			if m.Type == core.RepoProxy {
 				proxy.NoteCacheHit(ctx, a.Size)

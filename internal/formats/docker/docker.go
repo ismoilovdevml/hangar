@@ -129,6 +129,15 @@ func (f *Format) newHandler(deps core.Deps) *handler {
 		if err != nil {
 			log.Warn("docker: cannot watch repository changes", "err", err)
 		}
+		// Publishes, deletes, quarantines and releases change what is blocked.
+		_, err = deps.Events.Subscribe(context.Background(), "component.*", func(_ context.Context, e core.Event) {
+			if e.Repository != "" {
+				h.quarantine.forget(e.Repository)
+			}
+		})
+		if err != nil {
+			log.Warn("docker: cannot watch component changes; quarantine changes apply after the cache TTL", "err", err)
+		}
 	}
 	return h
 }

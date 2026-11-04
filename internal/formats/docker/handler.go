@@ -23,6 +23,8 @@ type handler struct {
 	now       func() time.Time
 	// unknown remembers names proxy remotes said they do not serve.
 	unknown nameCache
+	// quarantine caches which digests of an image are blocked (quarantine.go).
+	quarantine quarantineCache
 }
 
 // authResult is who sent a request and, for registry tokens, what the token grants.
