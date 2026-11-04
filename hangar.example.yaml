@@ -284,8 +284,25 @@ bootstrap:
   admin_password: "" # use HANGAR_BOOTSTRAP_ADMIN_PASSWORD
 
 scanner:
-  # Trivy server in client/server mode; empty disables scanning.
+  # Reserved for container image scanning (not active yet): Docker images
+  # show "image scanning not configured".
   trivy_url: ""
+
+# Vulnerability scanning of npm, Maven, PyPI, NuGet and Go packages against
+# the OSV advisory database. Guide: docs/guides/vulnerabilities.md.
+scanning:
+  # Scan on arrival (repositories with scan_on_arrival), on demand and in the
+  # hourly "vulnerability-rescan" task. HANGAR_SCANNING_ENABLED.
+  enabled: true
+  # A component is checked again for new advisories once its last scan is
+  # older than this (at least 1h). HANGAR_SCANNING_RESCAN_INTERVAL.
+  rescan_interval: 24h
+  osv:
+    # OSV API root, or an internal mirror serving the same API. Requests go
+    # through the `http` section (proxy, CA bundle); list a mirror on a
+    # private address in http.allow_private_networks.
+    # HANGAR_SCANNING_OSV_URL.
+    url: https://api.osv.dev
 
 metrics:
   # Serve Prometheus metrics (no authentication: keep the path off public

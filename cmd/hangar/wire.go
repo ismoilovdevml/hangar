@@ -30,6 +30,8 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/observability"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 	"github.com/ismoilovdevml/hangar/internal/rollup"
+	"github.com/ismoilovdevml/hangar/internal/scanning"
+	"github.com/ismoilovdevml/hangar/internal/scanning/osv"
 	"github.com/ismoilovdevml/hangar/internal/search"
 	"github.com/ismoilovdevml/hangar/internal/secrets"
 	"github.com/ismoilovdevml/hangar/internal/server"
@@ -494,13 +496,34 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 			return nil, err
 		}
 	}
+	// Vulnerability scanning: arrival scans and repository scans run as jobs,
+	// the periodic rescan as a task.
+	scanner, err := buildScanner(cfg, pool, clients, deps)
+	if err != nil {
+		return nil, err
+	}
+	if err := scanner.HandleJobs(queue, func(typ string, h core.JobHandler) core.JobHandler {
+		return observability.InstrumentJob(metrics, typ, jobMaxAttempts, h)
+	}); err != nil {
+		return nil, err
+	}
 	// Stop executing jobs before the services they use are closed.
 	a.onClose(queue.Close)
+	stopScanEvents, err := scanner.Subscribe(ctx, bus)
+	if err != nil {
+		return nil, err
+	}
+	a.onClose(stopScanEvents)
+	sweepCtx, stopSweep := context.WithCancel(context.WithoutCancel(ctx))
+	sweepDone := make(chan struct{})
+	go func() { scanner.Run(sweepCtx); close(sweepDone) }()
+	a.onClose(func() { stopSweep(); <-sweepDone })
+	restAPI.Scanning = scanner
 
 	// Tasks: scheduled maintenance, cleanup policies and docker GC, executed
 	// as task runs on any node. Close hands running runs back to the queue
 	// before the queue stops.
-	taskSvc, cleanupSvc, err := buildTasks(ctx, cfg, pool, queue, deps, collector, authSvc, dockerFormat, log)
+	taskSvc, cleanupSvc, err := buildTasks(ctx, cfg, pool, queue, deps, collector, authSvc, dockerFormat, scanner, log)
 	if err != nil {
 		return nil, err
 	}
@@ -545,7 +568,7 @@ var dockerUploadCleanupTask = tasks.Builtin{Name: "docker-upload-cleanup", Type:
 // buildTasks wires the task service with every executor and the cleanup
 // policy service, and makes sure the built-in tasks exist.
 func buildTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, queue core.JobQueue, deps core.Deps,
-	collector *blobgc.Collector, authSvc *auth.Service, dockerFormat *docker.Format, log *slog.Logger,
+	collector *blobgc.Collector, authSvc *auth.Service, dockerFormat *docker.Format, scanner *scanning.Service, log *slog.Logger,
 ) (*tasks.Service, *cleanup.Service, error) {
 	if g := cfg.Storage.GC.GracePeriod; g > 0 && g <= docker.DefaultUploadTTL {
 		log.Warn("storage.gc.grace_period should exceed the docker upload session lifetime, or blobs of uploads "+
@@ -571,10 +594,11 @@ func buildTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, queu
 		x.Progress(1, fmt.Sprintf("Audit partitions ensured (%v created)", created))
 		return err
 	}), tasks.TypeOptions{})
-	builtins := builtinTasks
+	taskSvc.Register(scanning.TaskType, scanner.Executor(), tasks.TypeOptions{})
+	builtins := append(slices.Clone(builtinTasks), scanning.RescanTask)
 	if dockerFormat != nil {
 		taskSvc.Register(tasks.TypeDockerUploadCleanup, dockeruploads.Executor(dockerFormat, pool), tasks.TypeOptions{})
-		builtins = append(slices.Clone(builtinTasks), dockerUploadCleanupTask)
+		builtins = append(builtins, dockerUploadCleanupTask)
 	}
 	if err := taskSvc.EnsureBuiltins(ctx, builtins); err != nil {
 		return nil, nil, err
@@ -583,6 +607,31 @@ func buildTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, queu
 		return nil, nil, err
 	}
 	return taskSvc, cleanupSvc, nil
+}
+
+// buildScanner builds the vulnerability scanner. The OSV client goes
+// through the shared outbound HTTP client factory, so http.proxy,
+// http.ca_file and the address policy apply to it as to proxy remotes.
+func buildScanner(cfg config.Config, pool *pgxpool.Pool, clients *httpclient.Factory, deps core.Deps) (*scanning.Service, error) {
+	sc := cfg.Scanning
+	if sc.OSV.URL == "" {
+		sc.OSV.URL = osv.DefaultURL
+	}
+	client, err := clients.ForUpstream(sc.OSV.URL, core.UpstreamHTTP{}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("scanning.osv.url: %w", err)
+	}
+	advisories, err := osv.New(osv.Options{BaseURL: sc.OSV.URL, HTTPClient: client})
+	if err != nil {
+		return nil, fmt.Errorf("scanning.osv.url: %w", err)
+	}
+	if !sc.Enabled {
+		deps.Logger.Info("vulnerability scanning is turned off (scanning.enabled = false)")
+	}
+	return scanning.New(scanning.Options{
+		Pool: pool, Advisories: advisories, SourceURL: advisories.BaseURL(), Enabled: sc.Enabled,
+		RescanInterval: sc.RescanInterval, Events: deps.Events, Jobs: deps.Jobs, Audit: deps.Audit, Logger: deps.Logger,
+	})
 }
 
 // blobDriver names a blob store's driver for metrics.
