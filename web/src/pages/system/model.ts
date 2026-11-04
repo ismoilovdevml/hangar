@@ -43,7 +43,9 @@ export function summarize(nodes: SystemNode[]): ClusterSummary {
   const up = nodes.filter((n) => !n.stale).length;
   const leader = nodes.find((n) => n.role === 'leader' && !n.stale);
   const versions = [...new Set(nodes.filter((n) => !n.stale).map((n) => n.version))].sort();
-  const status = worst(nodes.map((n) => n.status));
+  // A silent node degrades the installation; it is down only when no node answers.
+  const live = worst(nodes.filter((n) => !n.stale).map((n) => n.status));
+  const status: HealthStatus = up === 0 && nodes.length > 0 ? 'down' : up < nodes.length ? worst([live, 'degraded']) : live;
   let message = 'All nodes and subsystems are healthy.';
   if (nodes.length === 0) message = 'No node has reported yet.';
   else if (up < nodes.length) message = `${nodes.length - up} of ${nodes.length} nodes are not responding.`;

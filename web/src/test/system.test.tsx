@@ -28,7 +28,7 @@ describe('system status', () => {
   it('shows every node with its role, version and subsystems', async () => {
     renderApp('/system/status');
     const summary = await screen.findByRole('region', { name: 'Summary' });
-    expect(within(summary).getByText('Down')).toBeInTheDocument();
+    expect(within(summary).getByText('Degraded')).toBeInTheDocument();
     expect(within(summary).getByText('1 of 3 nodes are not responding.')).toBeInTheDocument();
     expect(within(summary).getByText('2 of 3')).toBeInTheDocument();
     // The silent node's older version does not count.
@@ -227,5 +227,7 @@ describe('system model', () => {
     expect(s.status).toBe('degraded');
     expect(s.message).toMatch(/No node holds the scheduler lock/);
     expect(summarize([]).message).toBe('No node has reported yet.');
+    expect(summarize([node('a', { role: 'leader' }), node('b', { stale: true, status: 'down' })]).status).toBe('degraded');
+    expect(summarize([node('a', { stale: true, status: 'down' })]).status).toBe('down');
   });
 });

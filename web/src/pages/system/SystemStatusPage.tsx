@@ -70,8 +70,8 @@ function NodePanel({ node, now }: { node: SystemNode; now: Date }) {
     >
       {node.stale && (
         <p className="node-panel__stale" role="note">
-          No heartbeat for {ago(node.last_heartbeat, now).replace(' ago', '')}: the node is stopped, hung or cannot reach the database. The subsystems below are
-          its last report.
+          No heartbeat for {ago(node.last_heartbeat, now).replace(' ago', '')}: the node is stopped, hung or cannot reach the database.
+          {node.subsystems.length > 0 && ' The subsystems below are its last report.'}
         </p>
       )}
       <dl className="facts facts--compact">
