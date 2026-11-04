@@ -11,6 +11,11 @@
 
 set -euo pipefail
 
+# The whole script is one block: bash reads all of it before running any of
+# it, so a truncated download never runs, and commands that read stdin (the
+# script itself under `curl | bash`) cannot swallow the rest.
+{
+
 REPO=ismoilovdevml/hangar
 DEFAULT_IMAGE_REPO=ghcr.io/ismoilovdevml/hangar
 DEFAULT_DATA_DIR=/srv/hangar
@@ -450,6 +455,7 @@ confirm "Continue?" || die "cancelled"
 # ---- Release files ----------------------------------------------------------------
 stage=$(mktemp -d)
 migrating=0
+# shellcheck disable=SC2329 # run by the EXIT trap
 on_exit() {
 	local rc=$?
 	rm -rf "$stage"
@@ -649,7 +655,7 @@ fi
 if ((installed)) && [[ "$previous_version" != "$version" ]] && [[ -n "$(compose ps --status running -q postgres 2>/dev/null)" ]]; then
 	dump=$data/backups/pre-upgrade-${previous_version:-unknown}-$(date -u +%Y%m%dT%H%M%SZ).dump
 	log "backing up the database to $dump"
-	(umask 077 && compose exec -T postgres pg_dump -U "$pg_user" -d "$pg_db" --format=custom >"$dump") ||
+	(umask 077 && compose exec -T postgres pg_dump -U "$pg_user" -d "$pg_db" --format=custom </dev/null >"$dump") ||
 		die "database backup failed; nothing was changed (remove $dump and retry)"
 	# shellcheck disable=SC2012
 	ls -1t "$data"/backups/pre-upgrade-*.dump | tail -n +4 | while IFS= read -r old; do rm -f -- "$old"; done
@@ -776,3 +782,6 @@ When you no longer need it:
   docker volume rm $vol_pg $vol_data && rm -rf $legacy
 EOF
 fi
+
+exit 0
+}

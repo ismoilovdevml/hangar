@@ -38,7 +38,10 @@ compose)
 		awk -F= '$1 == "HANGAR_IMAGE" { print $2 }' .env
 		echo postgres:16.15-alpine ;;
 	"ps --status running -q postgres") [[ -z "${FAKE_PG_RUNNING:-}" ]] || echo 0123abcd ;;
-	exec\ -T\ postgres\ pg_dump*) echo "PGDMP fake dump" ;;
+	exec\ -T\ postgres\ pg_dump*)
+		# Like the real exec, read stdin: under `curl | bash` that is the script.
+		cat >/dev/null
+		echo "PGDMP fake dump" ;;
 	pull*) [[ -z "${FAKE_OFFLINE:-}" ]] ;;
 	*) : ;;
 	esac ;;
@@ -181,7 +184,7 @@ EOF
 
 run_install() {
 	OUT=$T/out.txt
-	bash "$INSTALL" "$@" >"$OUT" 2>&1
+	bash "$INSTALL" "$@" </dev/null >"$OUT" 2>&1
 	RC=$?
 }
 
@@ -299,6 +302,27 @@ test_rerun_upgrades_in_place() {
 	check "rerun same version" ok
 	check "no dump for the same version" absent "$T/log/docker.log" "pg_dump"
 	check "latest by default" true
+}
+
+# The documented `curl ... | sudo bash` form: the script arrives on stdin.
+test_piped_script() {
+	local D=$T/srv/hangar
+	bash -s -- --data-dir "$D" --version v9.9.9 --yes <"$INSTALL" >"$T/out.txt" 2>&1
+	RC=$? OUT=$T/out.txt
+	check "fresh install from stdin" ok
+	export FAKE_PG_RUNNING=1
+	make_release v9.9.10
+	bash -s -- --data-dir "$D" --version v9.9.10 --yes <"$INSTALL" >"$OUT" 2>&1
+	RC=$?
+	check "upgrade from stdin (exec reads stdin)" ok
+	check "finished after the dump" contains "$OUT" "upgraded to"
+	# A truncated download runs nothing.
+	head -c 4000 "$INSTALL" >"$T/partial.sh"
+	: >"$T/log/docker.log"
+	bash -s -- --data-dir "$T/other" --yes <"$T/partial.sh" >"$OUT" 2>&1
+	RC=$?
+	check "truncated script fails" test "$RC" -ne 0
+	check "truncated script runs no docker command" test ! -s "$T/log/docker.log"
 }
 
 test_latest_version_lookup() {
