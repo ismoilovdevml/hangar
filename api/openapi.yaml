@@ -1157,6 +1157,65 @@ paths:
               schema: { $ref: "#/components/schemas/Finding" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /findings/{id}/pullers:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [security]
+      operationId: getFindingPullers
+      description: >-
+        Who downloaded the finding's package version in the window, busiest
+        first (at most 10): the principal for authenticated pulls, otherwise
+        the client address and client kind from the user agent. Needs a
+        readable finding and `system:security:read` or `:write`. Pulls are
+        kept 90 days; `pulls_since` is the first day recorded.
+      parameters:
+        - $ref: "#/components/parameters/PullWindow"
+      responses:
+        "200":
+          description: Clients by pulls
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Pullers" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /findings/{id}/assignee:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    put:
+      tags: [security]
+      operationId: assignFinding
+      description: >-
+        Makes an active Hangar user responsible for the finding. Requires
+        `system:security:write`; audited as `finding.assign`. No
+        notification is sent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssigneeInput" }
+      responses:
+        "200":
+          description: Assigned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Finding" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [security]
+      operationId: unassignFinding
+      description: Removes the assignee. Requires `system:security:write`; audited as `finding.unassign`.
+      responses:
+        "200":
+          description: Unassigned (or there was no assignee)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Finding" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /scanning/status:
     get:
       tags: [security]
@@ -1168,6 +1227,170 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ScanningStatus" }
+
+  /vulnerabilities/fix-plan:
+    get:
+      tags: [security]
+      operationId: getFixPlan
+      description: >-
+        The unresolved findings of the readable repositories grouped by
+        package (format and package name): the vulnerable versions present,
+        the lowest upgrade per release line that fixes every finding with a
+        fix, and the downloads of the vulnerable versions in the pull window
+        with the number of distinct clients. A package is `in_use` when one
+        of its vulnerable versions was downloaded within `scanning.in_use_window`
+        (30 days by default). Tabs: `in_use` (default; in-use packages first),
+        `all` (by severity), `waived` (packages with waived findings). The
+        summary covers the open findings and ignores the tab. With
+        `format=csv` or `Accept: text/csv` the packages are returned as a CSV
+        file.
+      parameters:
+        - name: tab
+          in: query
+          schema: { type: string, enum: [in_use, all, waived], default: in_use }
+        - $ref: "#/components/parameters/PullWindow"
+        - name: assignee
+          in: query
+          description: Only findings assigned to this user; `me` is the caller
+          schema: { type: string, examples: ["me"] }
+        - name: repository
+          in: query
+          description: Exact repository name
+          schema: { type: string }
+        - name: q
+          in: query
+          description: Matches the package, the advisory id, an alias (CVE) or the title
+          schema: { type: string }
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, csv], default: json }
+      responses:
+        "200":
+          description: The fix plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FixPlan" }
+            text/csv:
+              schema:
+                type: string
+                description: >-
+                  Header package, format, repositories, advisories,
+                  vulnerable_versions, findings, max_severity, max_cvss,
+                  upgrade_to, upgrade_commands, pulls_<window>,
+                  clients_<window>, in_use, assignee, status
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /vulnerabilities/fix-plan/assign:
+    post:
+      tags: [security]
+      operationId: assignPackage
+      description: >-
+        Sets (or with a null or empty assignee removes) the assignee of every
+        unresolved finding of a package in the readable repositories. New
+        findings of an assigned package get the same assignee. Requires
+        `system:security:write`; audited once as `finding.assign` or
+        `finding.unassign` with target `package:<format>/<package>`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PackageAssignInput" }
+      responses:
+        "200":
+          description: The findings changed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PackageChange" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /vulnerabilities/fix-plan/waive:
+    post:
+      tags: [security]
+      operationId: waivePackage
+      description: >-
+        Waives the listed findings of a package, or all of its unresolved
+        findings when `finding_ids` is empty, with one reason and end date.
+        Requires `system:security:write`; each finding is audited as
+        `finding.waive`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PackageWaiverInput" }
+      responses:
+        "200":
+          description: The findings waived
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PackageChange" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /vulnerabilities/assignees:
+    get:
+      tags: [security]
+      operationId: listAssignees
+      description: Active users findings can be assigned to. Requires `system:security:write`.
+      parameters:
+        - name: q
+          in: query
+          description: Matches the username, display name or email
+          schema: { type: string }
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Assignee" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /vulnerabilities/rescan:
+    get:
+      tags: [security]
+      operationId: getRescan
+      description: The last "rescan every repository" and its progress. Requires `system:security:read` or `:write`.
+      responses:
+        "200":
+          description: The last run, or null
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [run]
+                properties:
+                  run:
+                    oneOf:
+                      - $ref: "#/components/schemas/Rescan"
+                      - type: "null"
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [security]
+      operationId: startRescan
+      description: >-
+        Queues a scan of every repository of a scanned format (one
+        repository scan job each). While a run is in progress it is returned
+        instead (200). Requires `system:security:write`; audited as
+        `vulnerability.rescan`.
+      responses:
+        "200":
+          description: A run is already in progress
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RescanStarted" }
+        "202":
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RescanStarted" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "501": { description: Scanning is turned off or not available }
 
   # ---------------------------------------------------------------- cleanup
   /cleanup-policies:
@@ -2375,6 +2598,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    PullWindow:
+      name: window
+      in: query
+      description: Pull window in days, e.g. 7d (1d..90d)
+      schema: { type: string, default: 7d, pattern: "^[0-9]{1,3}d?$" }
     RepositoryName:
       name: name
       in: path
@@ -3567,7 +3795,9 @@ components:
         waiver_until: { type: [string, "null"], format: date-time }
         waived_by: { type: [string, "null"] }
         waived_at: { type: [string, "null"], format: date-time }
-        assignee: { type: [string, "null"] }
+        assignee: { type: [string, "null"], description: Username of the Hangar user responsible }
+        assigned_by: { type: [string, "null"] }
+        assigned_at: { type: [string, "null"], format: date-time }
         source: { type: string, examples: ["osv"] }
         first_seen_at: { $ref: "#/components/schemas/Timestamp" }
         last_seen_at: { $ref: "#/components/schemas/Timestamp" }
@@ -3707,6 +3937,193 @@ components:
         until:
           allOf: [{ $ref: "#/components/schemas/Timestamp" }]
           description: In the future, at most a year ahead
+
+    Pullers:
+      type: object
+      required: [component_id, window_days, pulls, clients, pulls_since, items]
+      properties:
+        component_id: { type: string }
+        window_days: { type: integer }
+        pulls: { type: integer, description: Downloads in the window }
+        clients: { type: integer, description: Distinct clients in the window }
+        pulls_since: { type: [string, "null"], format: date, description: First day with pull records }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Puller" }
+    Puller:
+      type: object
+      required: [label, principal, kind, address, agent, pulls, last_at]
+      properties:
+        label: { type: string, examples: ["ci-publisher", "10.0.4.12 · NuGet"] }
+        principal: { type: [string, "null"] }
+        kind: { type: string, enum: [user, service_account, anonymous] }
+        address: { type: string }
+        agent: { type: string, description: Client kind from the user agent, examples: ["NuGet", "npm", "Browser"] }
+        pulls: { type: integer }
+        last_at: { $ref: "#/components/schemas/Timestamp" }
+    AssigneeInput:
+      type: object
+      required: [assignee]
+      properties:
+        assignee: { type: string, description: Username of an active user }
+    Assignee:
+      type: object
+      required: [username, display_name]
+      properties:
+        username: { type: string }
+        display_name: { type: string }
+    PackageAssignInput:
+      type: object
+      required: [package]
+      properties:
+        package: { type: string, description: "Package key `<format>:<package>`", examples: ["nuget:Newtonsoft.Json"] }
+        assignee: { type: [string, "null"], description: Username; null or empty removes the assignee }
+    PackageWaiverInput:
+      type: object
+      required: [package, reason, until]
+      properties:
+        package: { type: string, examples: ["nuget:Newtonsoft.Json"] }
+        finding_ids:
+          type: array
+          description: Findings of the package to waive; empty = every unresolved one
+          items: { type: string }
+        reason: { type: string, minLength: 3, maxLength: 2000 }
+        until:
+          allOf: [{ $ref: "#/components/schemas/Timestamp" }]
+          description: In the future, at most a year ahead
+    PackageChange:
+      type: object
+      required: [key, findings]
+      properties:
+        key: { type: string }
+        findings:
+          type: array
+          description: Ids of the findings changed
+          items: { type: string }
+    FixPlan:
+      type: object
+      required: [tab, window_days, in_use_days, pulls_since, summary, items]
+      properties:
+        tab: { type: string, enum: [in_use, all, waived] }
+        window_days: { type: integer }
+        in_use_days: { type: integer }
+        pulls_since: { type: [string, "null"], format: date }
+        summary: { $ref: "#/components/schemas/FixPlanSummary" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PackagePlan" }
+    FixPlanSummary:
+      type: object
+      required: [packages, packages_in_use, packages_to_upgrade, findings, findings_in_use, findings_unused, findings_fixed_in_use, waived_packages]
+      properties:
+        packages: { type: integer, description: Packages with open findings }
+        packages_in_use: { type: integer }
+        packages_to_upgrade: { type: integer, description: In-use packages whose upgrade fixes at least one finding }
+        findings: { type: integer, description: Open findings }
+        findings_in_use: { type: integer }
+        findings_unused: { type: integer }
+        findings_fixed_in_use: { type: integer, description: In-use findings the upgrades fix }
+        waived_packages: { type: integer }
+    UpgradeLine:
+      type: object
+      required: [line, from, to, command, fixes, unfixed]
+      properties:
+        line: { type: string, description: Major version of the vulnerable versions, examples: ["8"] }
+        from:
+          type: array
+          items: { type: string }
+        to: { type: [string, "null"], description: Lowest version fixing every fixable finding of the line }
+        command:
+          type: [string, "null"]
+          examples: ["dotnet add package System.Text.Json --version 8.0.5"]
+        fixes: { type: integer }
+        unfixed: { type: integer, description: Findings of the line without any fixing release }
+    PlanFinding:
+      type: object
+      required: [id, advisory_id, aliases, title, severity, cvss, status, installed, fixed_in, assignee, waiver_until, component_id, repository, in_use, pulls, clients]
+      properties:
+        id: { type: string }
+        advisory_id: { type: string }
+        aliases:
+          type: array
+          items: { type: string }
+        title: { type: string }
+        severity: { $ref: "#/components/schemas/Severity" }
+        cvss: { type: [number, "null"] }
+        status: { $ref: "#/components/schemas/FindingStatus" }
+        installed: { type: string }
+        fixed_in: { type: [string, "null"] }
+        assignee: { type: [string, "null"] }
+        waiver_until: { type: [string, "null"], format: date-time }
+        component_id: { type: string }
+        repository: { type: string }
+        in_use: { type: boolean }
+        pulls: { type: integer }
+        clients: { type: integer }
+    PackagePlan:
+      type: object
+      required: [key, format, package, repositories, advisories, versions, findings, max_severity, max_cvss, severities, upgrades, fixable, pulls, clients, in_use, last_pulled_at, assignee, assignee_mixed, items]
+      properties:
+        key: { type: string, examples: ["nuget:Newtonsoft.Json"] }
+        format: { $ref: "#/components/schemas/Format" }
+        package: { type: string }
+        repositories:
+          type: array
+          items: { type: string }
+        advisories:
+          type: array
+          description: Most severe first
+          items:
+            type: object
+            required: [id, aliases, severity, cvss]
+            properties:
+              id: { type: string }
+              aliases:
+                type: array
+                items: { type: string }
+              severity: { $ref: "#/components/schemas/Severity" }
+              cvss: { type: [number, "null"] }
+        versions:
+          type: array
+          description: Vulnerable versions in the registry, lowest first
+          items: { type: string }
+        findings: { type: integer }
+        max_severity: { $ref: "#/components/schemas/Severity" }
+        max_cvss: { type: [number, "null"] }
+        severities: { $ref: "#/components/schemas/SeverityCounts" }
+        upgrades:
+          type: array
+          items: { $ref: "#/components/schemas/UpgradeLine" }
+        fixable: { type: integer, description: Findings the upgrades fix }
+        pulls: { type: integer, description: Downloads of the vulnerable versions in the window }
+        clients: { type: integer, description: Distinct clients behind them }
+        in_use: { type: boolean }
+        last_pulled_at: { type: [string, "null"], format: date-time }
+        assignee: { type: [string, "null"], description: Shared by every finding; null when none or mixed }
+        assignee_mixed: { type: boolean }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlanFinding" }
+    Rescan:
+      type: object
+      required: [id, started_at, started_by, repositories, total, done, state]
+      properties:
+        id: { type: string }
+        started_at: { $ref: "#/components/schemas/Timestamp" }
+        started_by: { type: string }
+        repositories: { type: integer }
+        total: { type: integer, description: Components that existed when it started }
+        done: { type: integer, description: Of them, scanned since (successfully or not) }
+        state:
+          type: string
+          enum: [running, done, stalled]
+          description: stalled = not finished within 3 hours
+    RescanStarted:
+      type: object
+      required: [run, started]
+      properties:
+        run: { $ref: "#/components/schemas/Rescan" }
+        started: { type: boolean }
 
     # ------------------------------------------------------------ cleanup
     CleanupCriteria:
