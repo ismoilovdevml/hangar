@@ -59,11 +59,26 @@ export type ListRepositoriesQuery = NonNullable<operations['listRepositories']['
 
 /* ---------- blob stores / cleanup ---------- */
 
+export type BlobStoreInput = Schemas['BlobStoreInput'];
 export type BlobStore = Schemas['BlobStore'];
 export type BlobStoreState = BlobStore['state'];
 export type BlobStoreList = Schemas['BlobStoreList'];
 export type CleanupPolicy = Schemas['CleanupPolicy'];
 export type CleanupPolicyPage = Schemas['CleanupPolicyPage'];
+
+/* ---------- components, assets, search ---------- */
+
+export type ComponentDetail = Schemas['ComponentDetail'];
+export type PublishedComponentPage = Schemas['PublishedComponentPage'];
+export type Asset = Schemas['Asset'];
+export type AssetPage = Schemas['AssetPage'];
+export type Finding = Schemas['Finding'];
+export type FindingPage = Schemas['FindingPage'];
+export type Severity = Schemas['Severity'];
+export type FacetValue = Schemas['FacetValue'];
+export type SearchResult = Schemas['SearchResult'];
+export type SearchSort = NonNullable<NonNullable<operations['search']['parameters']['query']>['sort']>;
+export type ComponentSort = NonNullable<NonNullable<operations['listComponents']['parameters']['query']>['sort']>;
 
 /* ---------- live events (SSE /api/v1/events) ---------- */
 
