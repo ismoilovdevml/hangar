@@ -23,8 +23,12 @@ function capture(method: string, path: string) {
 
 afterEach(() => server.events.removeAllListeners());
 
-const oidcForm = () => screen.findByRole('form', { name: 'Single sign-on (OIDC)' });
-const ldapForm = () => screen.findByRole('form', { name: 'LDAP directory' });
+const presetForm = (name: string) => screen.findByRole('form', { name });
+const card = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}`) });
+type User = ReturnType<typeof userEvent.setup>;
+/** Opens the fields a preset fills in. */
+const customize = (user: User, form: HTMLElement) => user.click(within(form).getByRole('button', { name: 'Customize' }));
+const openRoles = (user: User, form: HTMLElement) => user.click(within(form).getByRole('button', { name: /^Groups and roles/ }));
 
 describe('settings navigation', () => {
   it('shows the Settings section to administrators', async () => {
@@ -45,26 +49,151 @@ describe('settings navigation', () => {
 });
 
 describe('authentication settings', () => {
-  it('shows the status, the redirect URI and the stored secret state', async () => {
+  it('opens on the provider in use, with its status, redirect URI and stored secret state', async () => {
     renderApp('/settings/authentication');
-    const form = await oidcForm();
-    expect(await screen.findByText('Single sign-on (OIDC)', { selector: 'strong' })).toBeInTheDocument();
+    const form = await presetForm('Keycloak');
+    const chips = screen.getByRole('list', { name: 'Sign-in methods' });
+    expect(await within(chips).findByText('company SSO')).toBeInTheDocument();
+    expect(within(chips).getByText('Active Directory')).toBeInTheDocument();
+    expect(within(chips).getByText('Local accounts')).toBeInTheDocument();
+    expect(card('Keycloak')).toHaveAttribute('aria-pressed', 'true');
+    expect(card('Keycloak')).toHaveTextContent('in use');
+    expect(card('Okta')).toHaveAttribute('aria-pressed', 'false');
     expect(within(form).getByText('https://hangar.acme.example/api/v1/auth/oidc/callback')).toBeInTheDocument();
     expect(within(form).getByRole('button', { name: 'Copy the redirect URI' })).toBeInTheDocument();
     const secret = within(form).getByLabelText('Client secret');
     expect(secret).toHaveValue('');
     expect(secret).toHaveAccessibleDescription('A secret is stored. Type a new one to replace it.');
-    expect(within(form).getByRole('switch', { name: 'Allow sign-in with single sign-on' })).toBeChecked();
+    expect(within(form).getByRole('switch', { name: 'Allow sign-in with Keycloak' })).toBeChecked();
+    expect(within(form).getByRole('list', { name: 'Preset values' })).toHaveTextContent('openid profile email');
+    expect(within(form).getByText(/New users get/)).toHaveTextContent('New users get Reader');
+    expect(within(form).getByRole('button', { name: 'Save' })).toBeInTheDocument();
+  });
+
+  it('prefills a new provider from its preset', async () => {
+    mockSettings.nothingSaved();
+    const puts = capture('PUT', '/identity-providers/oidc');
+    const user = userEvent.setup();
+    renderApp('/settings/authentication');
+
+    // Nothing saved yet: the first card, filled for Active Directory.
+    let form = await presetForm('Active Directory');
+    expect(within(form).getByText('Only 3 things to fill in. The rest is set for Active Directory.')).toBeInTheDocument();
+    expect(within(form).getByLabelText('Server')).toHaveAttribute('placeholder', 'ldaps://dc1.example.com');
+    await user.type(within(form).getByLabelText('Service account'), 'hangar-svc@example.com');
+    const used = within(form).getByRole('list', { name: 'Preset values' });
+    expect(used).toHaveTextContent('sAMAccountName');
+    expect(used).toHaveTextContent('nested groups on');
+    expect(used).toHaveTextContent('DC=example,DC=com');
+    await customize(user, form);
+    expect(within(form).getByLabelText('User base DN')).toHaveValue('DC=example,DC=com');
+    expect(within(form).getByLabelText('Group base DN')).toHaveValue('DC=example,DC=com');
+    expect(within(form).getByLabelText('Group filter')).toHaveValue('(member:1.2.840.113556.1.4.1941:={dn})');
+    expect(within(form).getByRole('checkbox', { name: /Resolve nested groups/ })).toBeChecked();
+
+    // FreeIPA keeps the account and searches its own user tree.
+    await user.click(card('FreeIPA'));
+    form = await presetForm('FreeIPA');
+    expect(within(form).getByLabelText('Service account')).toHaveValue('hangar-svc@example.com');
+    expect(within(form).getByRole('list', { name: 'Preset values' })).toHaveTextContent('cn=users,cn=accounts,dc=example,dc=com');
+
+    await user.click(card('Keycloak'));
+    form = await presetForm('Keycloak');
+    expect(within(form).getByLabelText('Issuer URL')).toHaveAttribute('placeholder', 'https://<host>/realms/<realm>');
+    expect(within(form).getByRole('button', { name: 'Add Keycloak' })).toBeInTheDocument();
+
+    await user.click(card('Google Workspace'));
+    form = await presetForm('Google Workspace');
+    expect(within(form).getByLabelText('Issuer URL')).toHaveValue('https://accounts.google.com');
+
+    await user.click(card('Microsoft Entra ID'));
+    form = await presetForm('Microsoft Entra ID');
+    const issuer = within(form).getByLabelText('Issuer URL');
+    expect(issuer).toHaveValue('');
+    await user.type(issuer, 'https://login.microsoftonline.com/<tenant-id>/v2.0');
+    await user.click(within(form).getByRole('button', { name: 'Add Microsoft Entra ID' }));
+    expect(issuer).toHaveAccessibleDescription('Replace the <…> part with your own value.');
+    expect(puts).toHaveLength(0);
+
+    await user.click(card('Okta'));
+    form = await presetForm('Okta');
+    await user.type(within(form).getByLabelText('Issuer URL'), 'https://acme.okta.com');
+    await user.type(within(form).getByLabelText('Client ID'), 'hangar');
+    await user.type(within(form).getByLabelText('Client secret'), 's3cret');
+    await user.click(within(form).getByRole('button', { name: 'Add Okta' }));
+    expect(await within(form).findByText('Saved. People can sign in with Okta on every node.')).toBeInTheDocument();
+    expect(puts[0]).toMatchObject({
+      enabled: true,
+      preset: 'okta',
+      issuer_url: 'https://acme.okta.com',
+      client_secret: 's3cret',
+      display_name: 'Okta',
+      scopes: ['openid', 'profile', 'email', 'groups'],
+      groups_claim: 'groups',
+    });
+    // Saved: the card is in use and the form now edits it.
+    expect(within(form).getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    expect(card('Okta')).toHaveTextContent('in use');
+  });
+
+  it('keeps typed secrets when switching presets', async () => {
+    mockSettings.nothingSaved();
+    const user = userEvent.setup();
+    renderApp('/settings/authentication');
+    await presetForm('Active Directory');
+    await user.click(card('Keycloak'));
+    let form = await presetForm('Keycloak');
+    await user.type(within(form).getByLabelText('Client ID'), 'hangar');
+    await user.type(within(form).getByLabelText('Client secret'), 'oidc-secret');
+
+    await user.click(card('Okta'));
+    form = await presetForm('Okta');
+    expect(within(form).getByLabelText('Client ID')).toHaveValue('hangar');
+    expect(within(form).getByLabelText('Client secret')).toHaveValue('oidc-secret');
+
+    await user.click(card('OpenLDAP'));
+    form = await presetForm('OpenLDAP');
+    await user.type(within(form).getByLabelText('Password'), 'bind-secret');
+
+    await user.click(card('Keycloak'));
+    form = await presetForm('Keycloak');
+    expect(within(form).getByLabelText('Client secret')).toHaveValue('oidc-secret');
+    await user.click(card('Active Directory'));
+    form = await presetForm('Active Directory');
+    expect(within(form).getByLabelText('Password')).toHaveValue('bind-secret');
+  });
+
+  it('asks for the new secret when another provider replaces the one in use', async () => {
+    const puts = capture('PUT', '/identity-providers/oidc');
+    const user = userEvent.setup();
+    renderApp('/settings/authentication');
+    await presetForm('Keycloak');
+    await user.click(card('Okta'));
+    const form = await presetForm('Okta');
+    expect(within(form).getByText(/Adding Okta replaces Keycloak \(company SSO\)/)).toBeInTheDocument();
+    expect(within(form).getByLabelText('Client ID')).toHaveValue('hangar');
+    expect(within(form).getByLabelText('Issuer URL')).toHaveValue('');
+    await user.type(within(form).getByLabelText('Issuer URL'), 'https://acme.okta.com');
+    await user.click(within(form).getByRole('button', { name: 'Switch to Okta' }));
+    expect(within(form).getByLabelText('Client secret')).toHaveAccessibleDescription('Enter the client secret Okta issued, or remove the stored one.');
+    expect(puts).toHaveLength(0);
+
+    // Back on Keycloak, the stored values return.
+    await user.click(card('Keycloak'));
+    const kc = await presetForm('Keycloak');
+    expect(within(kc).getByLabelText('Issuer URL')).toHaveValue('https://sso.acme.example/realms/acme');
   });
 
   it('saves the form, with the mapping table and the role pickers, and updates the login page', async () => {
     const puts = capture('PUT', '/identity-providers/oidc');
     const user = userEvent.setup();
     renderApp('/settings/authentication');
-    const form = await oidcForm();
+    const form = await presetForm('Keycloak');
+    await customize(user, form);
     const label = within(form).getByLabelText('Button label');
     await user.clear(label);
     await user.type(label, 'Acme SSO');
+    await openRoles(user, form);
     await user.click(within(form).getByRole('button', { name: 'Add mapping' }));
     await user.type(within(form).getByLabelText('Group, row 3'), '/auditors');
     await choose(user, within(form).getByLabelText('Add a role for /auditors'), 'Reader');
@@ -72,9 +201,10 @@ describe('authentication settings', () => {
     await choose(user, within(form).getByLabelText('Add a role for /auditors'), 'CI deployer');
     await user.click(within(form).getByRole('button', { name: 'Save' }));
 
-    expect(await within(form).findByText('Saved. Single sign-on is on for every node.')).toBeInTheDocument();
+    expect(await within(form).findByText('Saved. People can sign in with Acme SSO on every node.')).toBeInTheDocument();
     expect(puts).toHaveLength(1);
     expect(puts[0]).toMatchObject({
+      preset: 'keycloak',
       display_name: 'Acme SSO',
       client_secret: '',
       clear_client_secret: false,
@@ -92,10 +222,11 @@ describe('authentication settings', () => {
   it('checks fields before saving and shows server errors by field', async () => {
     const user = userEvent.setup();
     renderApp('/settings/authentication');
-    const form = await oidcForm();
+    const form = await presetForm('Keycloak');
     const issuer = within(form).getByLabelText('Issuer URL');
     await user.clear(issuer);
     await user.type(issuer, 'http://sso.example.com');
+    await openRoles(user, form);
     await user.click(within(form).getByRole('button', { name: 'Add mapping' }));
     await user.click(within(form).getByRole('button', { name: 'Save' }));
     expect(issuer).toHaveAccessibleDescription('Use https (http is accepted for localhost only).');
@@ -104,7 +235,7 @@ describe('authentication settings', () => {
     server.use(
       http.put('*/api/v1/identity-providers/oidc', () =>
         HttpResponse.json(
-          { code: 'invalid_argument', message: 'invalid settings', details: { fields: { 'group_roles[0].roles': 'role "Admin" does not exist' } } },
+          { code: 'invalid_argument', message: 'invalid settings', details: { fields: { 'group_roles[0].roles': 'role "Admin" does not exist', groups_claim: 'is not valid' } } },
           { status: 400 },
         ),
       ),
@@ -114,6 +245,8 @@ describe('authentication settings', () => {
     await user.click(within(form).getByRole('button', { name: 'Remove mapping row 3' }));
     await user.click(within(form).getByRole('button', { name: 'Save' }));
     expect(await within(form).findByText('role "Admin" does not exist')).toBeInTheDocument();
+    // An error in a preset field opens the details.
+    expect(within(form).getByLabelText('Groups')).toHaveAccessibleDescription('is not valid');
     expect(within(form).getByRole('alert')).toHaveTextContent('Fix the highlighted fields and save again.');
   });
 
@@ -121,8 +254,8 @@ describe('authentication settings', () => {
     const puts = capture('PUT', '/identity-providers/oidc');
     const user = userEvent.setup();
     renderApp('/settings/authentication');
-    const form = await oidcForm();
-    await user.click(within(form).getAllByRole('button', { name: 'Remove' })[0]!);
+    const form = await presetForm('Keycloak');
+    await user.click(within(form).getByRole('button', { name: 'Remove' }));
     expect(within(form).getByText('Removed when you save.')).toBeInTheDocument();
     await user.click(within(form).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(puts).toHaveLength(1));
@@ -134,19 +267,21 @@ describe('authentication settings', () => {
     const tests = capture('POST', '/identity-providers/oidc:test');
     const user = userEvent.setup();
     renderApp('/settings/authentication');
-    const form = await oidcForm();
+    const form = await presetForm('Keycloak');
     await user.click(within(form).getByRole('button', { name: 'Test' }));
     const result = await within(form).findByRole('status');
     expect(result).toHaveTextContent('Test passed');
     expect(result).toHaveTextContent('Discovery ok, credentials are verified at first sign-in');
     expect(result).toHaveTextContent('Client credentials');
-    expect(tests[0]).toMatchObject({ settings: { issuer_url: 'https://sso.acme.example/realms/acme' } });
+    expect(tests[0]).toMatchObject({ settings: { issuer_url: 'https://sso.acme.example/realms/acme', preset: 'keycloak' } });
   });
 
   it('looks an LDAP user up in a test', async () => {
     const user = userEvent.setup();
     renderApp('/settings/authentication');
-    const form = await ldapForm();
+    await presetForm('Keycloak');
+    await user.click(card('Active Directory'));
+    const form = await presetForm('Active Directory');
     await user.type(within(form).getByLabelText('Username to look up in the test'), 'jdoe');
     await user.click(within(form).getByRole('button', { name: 'Test' }));
     const result = await within(form).findByRole('status');
@@ -156,28 +291,73 @@ describe('authentication settings', () => {
   });
 
   it('shows providers from the configuration file read-only', async () => {
+    const tests = capture('POST', '/identity-providers/oidc:test');
     mockSettings.oidcFromFile();
+    const user = userEvent.setup();
     renderApp('/settings/authentication');
-    const form = await oidcForm();
+    // The file stores no preset: the issuer tells it is Keycloak.
+    const form = await presetForm('Keycloak');
     expect(within(form).getByText(/is set in the configuration file/)).toBeInTheDocument();
     expect(within(form).getByLabelText(/Issuer URL/)).toBeDisabled();
-    expect(within(form).getAllByText('set in configuration file').length).toBeGreaterThan(5);
+    expect(within(form).getAllByText('set in configuration file').length).toBeGreaterThan(2);
     expect(within(form).queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    await openRoles(user, form);
     expect(within(form).queryByRole('button', { name: 'Add mapping' })).not.toBeInTheDocument();
-    // The LDAP card stays editable.
-    const ldap = await ldapForm();
+    // Test runs against the file's settings.
+    await user.click(within(form).getByRole('button', { name: 'Test' }));
+    expect(await within(form).findByRole('status')).toHaveTextContent('Test passed');
+    expect(tests[0]).toEqual({});
+
+    // Another OIDC preset cannot replace it here.
+    await user.click(card('Okta'));
+    const okta = await screen.findByRole('region', { name: 'Okta' });
+    expect(within(okta).getByText(/the configuration file sets it/)).toBeInTheDocument();
+    expect(within(okta).queryByLabelText(/Issuer URL/)).not.toBeInTheDocument();
+    expect(within(okta).getByText('https://hangar.acme.example/api/v1/auth/oidc/callback')).toBeInTheDocument();
+
+    // The directory stays editable.
+    await user.click(card('Active Directory'));
+    const ldap = await presetForm('Active Directory');
     expect(within(ldap).getByRole('button', { name: 'Save' })).toBeInTheDocument();
   });
 
   it('turns LDAP sign-in off for the login page', async () => {
     const user = userEvent.setup();
     renderApp('/settings/authentication');
-    const form = await ldapForm();
-    await user.click(within(form).getByRole('switch', { name: 'Allow sign-in with directory accounts' }));
+    await presetForm('Keycloak');
+    await user.click(card('Active Directory'));
+    const form = await presetForm('Active Directory');
+    await user.click(within(form).getByRole('switch', { name: 'Allow sign-in with Active Directory' }));
     await user.click(within(form).getByRole('button', { name: 'Save' }));
     expect(await within(form).findByText('Saved. LDAP sign-in is off.')).toBeInTheDocument();
     const providers = await (await fetch('/api/v1/auth/providers')).json();
     expect(providers.ldap.enabled).toBe(false);
+  });
+
+  it('offers OpenID Connect or LDAP under Other', async () => {
+    const user = userEvent.setup();
+    renderApp('/settings/authentication');
+    await presetForm('Keycloak');
+    await user.click(card('Other'));
+    let form = await presetForm('Other');
+    expect(within(form).getByRole('radio', { name: 'OpenID Connect' })).toBeChecked();
+    expect(within(form).getByLabelText('Issuer URL')).toBeInTheDocument();
+    // Every field is open for a provider without a preset.
+    expect(within(form).getByLabelText('Button label')).toBeInTheDocument();
+    await user.click(within(form).getByRole('radio', { name: 'LDAP directory' }));
+    form = await presetForm('Other');
+    expect(within(form).getByLabelText('Server')).toBeInTheDocument();
+    expect(within(form).getByLabelText('User filter')).toBeInTheDocument();
+  });
+
+  it('shows the settings read-only without system:settings:admin', async () => {
+    server.use(http.get('*/api/v1/auth/session', () => HttpResponse.json({ ...session, privileges: ['repo:*:read', 'system:settings:read'] })));
+    renderApp('/settings/authentication');
+    const form = await presetForm('Keycloak');
+    expect(within(form).getByLabelText('Issuer URL')).toBeDisabled();
+    expect(within(form).getByText(/Read-only: changing sign-in needs system:settings:admin/)).toBeInTheDocument();
+    expect(within(form).queryByRole('button', { name: 'Test' })).not.toBeInTheDocument();
+    expect(within(form).queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
   });
 });
 

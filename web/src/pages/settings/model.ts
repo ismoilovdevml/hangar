@@ -86,7 +86,8 @@ export function validateOidc(f: OidcForm): Errors {
   const e: Errors = {};
   const issuer = f.issuer_url.trim();
   if (f.enabled && !issuer) e.issuer_url = 'Enter the issuer URL of your identity provider.';
-  if (issuer) {
+  if (/[<>]/.test(issuer)) e.issuer_url = 'Replace the <…> part with your own value.';
+  else if (issuer) {
     const u = parseUrl(issuer);
     if (!u || !u.host || (u.protocol !== 'https:' && u.protocol !== 'http:')) e.issuer_url = 'Use an absolute https:// URL.';
     else if (u.protocol === 'http:' && !isLoopback(u.hostname)) e.issuer_url = 'Use https (http is accepted for localhost only).';
@@ -165,8 +166,8 @@ export function validateLdap(f: LdapForm, passwordStored: boolean): Errors {
     else if (u[1] === 'ldaps' && f.start_tls) e.start_tls = 'StartTLS is for ldap:// addresses; ldaps:// is already encrypted.';
   }
   const hasPassword = (f.bind_password !== '' || passwordStored) && !f.clear_bind_password;
-  if (f.bind_dn.trim() && !hasPassword) e.bind_password = 'Enter the password of the bind DN.';
-  if (!f.bind_dn.trim() && f.bind_password) e.bind_dn = 'Enter the bind DN this password belongs to.';
+  if (f.bind_dn.trim() && !hasPassword) e.bind_password = 'Enter the password of the service account.';
+  if (!f.bind_dn.trim() && f.bind_password) e.bind_dn = 'Enter the service account this password belongs to.';
   if (f.enabled && !f.user_base_dn.trim()) e.user_base_dn = 'Enter where users are searched, e.g. DC=example,DC=com.';
   if (!f.user_filter.includes('{username}')) e.user_filter = 'The filter must contain {username}.';
   else if (!f.user_filter.trim().startsWith('(')) e.user_filter = 'Write an LDAP filter in parentheses.';
