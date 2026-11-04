@@ -10,6 +10,8 @@ import { catalogHandlers, resetCatalogState } from './catalog';
 import * as data from './data';
 import { onMockLiveEvent, opsHandlers, resetOpsMockState } from './ops';
 import { resetSystemMockState, systemHandlers } from './system';
+import { resetSettingsState, settingsHandlers } from './settings';
+import { allows } from '../lib/can';
 
 const api = (path: string) => `*/api/v1${path}`;
 
@@ -35,6 +37,7 @@ export function resetMockState(): void {
   resetAccessState();
   resetCatalogState();
   resetSystemMockState();
+  resetSettingsState();
 }
 
 /** Test helpers: inspect or change the mock server's state. */
@@ -127,9 +130,9 @@ export const handlers = [
     () => state.repositories.map((r) => r.name),
     () => state.repositories,
   ),
+  ...settingsHandlers(guard, () => state.repositories, () => allows(data.session.privileges, 'system', 'settings', 'admin')),
 
   http.get(api('/system/status'), () => HttpResponse.json(data.systemStatus)),
-  http.get(api('/auth/providers'), () => HttpResponse.json(data.authProviders)),
   http.get(api('/formats'), () => HttpResponse.json({ items: data.formats.map((name) => ({ name })) })),
 
   http.get(api('/auth/session'), () =>

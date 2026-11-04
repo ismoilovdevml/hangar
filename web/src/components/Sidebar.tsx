@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { useSession, useSystemStatus } from '../api/hooks';
+import { allows } from '../lib/can';
 import { NAV } from '../nav';
 import { initials, instanceName } from '../lib/format';
 import { IconClose, IconLogo, IconMenu } from './icons';
@@ -46,7 +47,7 @@ export function Sidebar() {
       <div className="sidebar__body" id={bodyId}>
         <InstanceBadge name={org?.name} environment={org?.environment} region={org?.region} loading={session.isPending} />
 
-        {NAV.map((section) => (
+        {NAV.filter((section) => !section.requires || allows(session.data?.privileges, 'system', section.requires.area, section.requires.action)).map((section) => (
           <div className="nav-section" key={section.title}>
             <h2 className="nav-section__title">{section.title}</h2>
             <ul className="nav-section__list">
