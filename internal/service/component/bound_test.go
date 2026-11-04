@@ -33,7 +33,7 @@ func TestPrefixUpperBound(t *testing.T) {
 	for _, p := range []string{"a", "com/acme/", "é", "x\U0010FFFF"} {
 		hi, _ := prefixUpperBound(p)
 		for _, suffix := range []string{"", "z", "\U0010FFFF\U0010FFFF", "ÿÿ"} {
-			if s := p + suffix; !(strings.Compare(s, p) >= 0 && strings.Compare(s, hi) < 0) {
+			if s := p + suffix; strings.Compare(s, p) < 0 || strings.Compare(s, hi) >= 0 {
 				t.Errorf("%q not in [%q, %q)", s, p, hi)
 			}
 		}

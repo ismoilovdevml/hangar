@@ -2,7 +2,7 @@ package maven_test
 
 import (
 	"context"
-	"crypto/sha1" //nolint:gosec // Maven checksum format under test
+	"crypto/sha1"
 	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
@@ -53,7 +53,7 @@ func newCachingFixture(t *testing.T) (*fixture, *countingComponents) {
 }
 
 func sha1Hex(s string) string {
-	sum := sha1.Sum([]byte(s)) //nolint:gosec // Maven checksum format under test
+	sum := sha1.Sum([]byte(s))
 	return hex.EncodeToString(sum[:])
 }
 
