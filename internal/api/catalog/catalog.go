@@ -51,20 +51,51 @@ func New(pool *pgxpool.Pool, opts Options) *Catalog {
 	return &Catalog{pool: pool, opts: opts}
 }
 
-// RepoStats are the totals of one repository's own content.
+// RepoStats are the totals of one repository's content.
 type RepoStats struct {
 	SizeBytes      int64
 	ComponentCount int64
 }
 
+// repoStatsSQL computes RepoStats for every repository. Hosted and proxy
+// repositories: the sum of their asset sizes (before deduplication) and their
+// component count. Groups store nothing themselves; they report what they
+// serve: every blob stored by their members (nested groups resolved) counted
+// once, and the distinct component coordinates of those members.
+const repoStatsSQL = `
+WITH RECURSIVE closure (group_id, member_id) AS (
+	SELECT group_id, member_id FROM group_members
+	UNION
+	SELECT c.group_id, gm.member_id FROM closure c JOIN group_members gm ON gm.group_id = c.member_id
+),
+leaves AS (
+	SELECT DISTINCT c.group_id, c.member_id, r.blob_store_id
+	FROM closure c JOIN repositories r ON r.id = c.member_id
+	WHERE r.type <> 'group'
+),
+group_size AS (
+	SELECT x.group_id, sum(x.size) AS size
+	FROM (SELECT DISTINCT l.group_id, l.blob_store_id, a.blob_digest, a.size
+		FROM leaves l JOIN assets a ON a.repo_id = l.member_id) x
+	GROUP BY x.group_id
+),
+group_components AS (
+	SELECT l.group_id, count(DISTINCT (co.namespace, co.name, co.version)) AS n
+	FROM leaves l JOIN components co ON co.repo_id = l.member_id
+	GROUP BY l.group_id
+)
+SELECT r.id::text,
+	CASE WHEN r.type = 'group' THEN COALESCE(gs.size, 0)
+		ELSE COALESCE((SELECT sum(a.size) FROM assets a WHERE a.repo_id = r.id), 0) END::bigint,
+	CASE WHEN r.type = 'group' THEN COALESCE(gc.n, 0)
+		ELSE (SELECT count(*) FROM components co WHERE co.repo_id = r.id) END::bigint
+FROM repositories r
+LEFT JOIN group_size gs ON gs.group_id = r.id
+LEFT JOIN group_components gc ON gc.group_id = r.id`
+
 // RepositoryStats returns totals for every repository, keyed by repository id.
-// Size is the sum of the repository's asset sizes (before deduplication).
 func (c *Catalog) RepositoryStats(ctx context.Context) (map[string]RepoStats, error) {
-	rows, err := c.pool.Query(ctx, `
-		SELECT r.id::text,
-			COALESCE((SELECT sum(a.size) FROM assets a WHERE a.repo_id = r.id), 0)::bigint,
-			(SELECT count(*) FROM components co WHERE co.repo_id = r.id)
-		FROM repositories r`)
+	rows, err := c.pool.Query(ctx, repoStatsSQL)
 	if err != nil {
 		return nil, fmt.Errorf("repository stats: %w", err)
 	}

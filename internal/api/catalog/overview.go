@@ -33,6 +33,8 @@ type Overview struct {
 	CapacityBytes *int64 // nil unless every blob store has a soft quota
 	AddedBytes24h int64
 
+	// PublishedLast24h counts components published to hosted repositories
+	// (proxy cache fills are not publications).
 	PublishedLast24h int64
 	// FailedPushes24h counts component.publish audit records with outcome
 	// error or denied in the last 24 hours.
@@ -45,8 +47,9 @@ type Overview struct {
 
 	// StorageByFormat sums each distinct blob once per format.
 	StorageByFormat []FormatBytes
-	// Published is the number of components published per bucket from
-	// Start to Now (every bucket present, oldest first).
+	// Published is the number of components published to hosted
+	// repositories per bucket from Start to Now (every bucket present, oldest
+	// first).
 	Published []Bucket
 }
 
@@ -63,7 +66,8 @@ func (c *Catalog) Overview(ctx context.Context, q OverviewQuery) (*Overview, err
 	b.Queue(`SELECT CASE WHEN count(*) > 0 AND count(*) = count(soft_quota_bytes) THEN sum(soft_quota_bytes) END::bigint
 		FROM blob_stores`)
 	b.Queue(`SELECT
-			(SELECT count(*) FROM components WHERE created_at >= $1),
+			(SELECT count(*) FROM components c JOIN repositories r ON r.id = c.repo_id
+				WHERE r.type = 'hosted' AND c.created_at >= $1),
 			(SELECT count(*) FROM audit_events WHERE action = 'component.publish' AND outcome IN ('error', 'denied') AND at >= $1),
 			(SELECT count(*) FROM findings WHERE status IN ('open', 'assigned')),
 			(SELECT count(*) FROM findings WHERE status IN ('open', 'assigned') AND severity = 'critical'),
@@ -74,8 +78,9 @@ func (c *Catalog) Overview(ctx context.Context, q OverviewQuery) (*Overview, err
 			FROM assets a JOIN repositories r ON r.id = a.repo_id WHERE r.blob_store_id IS NOT NULL) x
 		JOIN blobs bl ON bl.store_id = x.blob_store_id AND bl.digest = x.blob_digest AND bl.soft_deleted_at IS NULL
 		GROUP BY x.format ORDER BY 2 DESC, 1`)
-	b.Queue(`SELECT date_bin($1::interval, created_at, $2), count(*) FROM components
-		WHERE created_at >= $2 AND created_at < $3 GROUP BY 1`,
+	b.Queue(`SELECT date_bin($1::interval, c.created_at, $2), count(*)
+		FROM components c JOIN repositories r ON r.id = c.repo_id
+		WHERE r.type = 'hosted' AND c.created_at >= $2 AND c.created_at < $3 GROUP BY 1`,
 		fmt.Sprintf("%d microseconds", q.Bucket.Microseconds()), q.Start, q.Now)
 
 	br := c.pool.SendBatch(ctx, b)

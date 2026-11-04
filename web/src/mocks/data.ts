@@ -116,6 +116,15 @@ function traffic(range: OverviewRange, now: number) {
   });
 }
 
+/** Proxy requests per range: hits and misses, 94.2% from cache. */
+const CACHE_REQUESTS: Record<OverviewRange, number> = { '1h': 2_940, today: 48_200, '7d': 412_000, '30d': 1_730_000 };
+
+function cacheNumbers(range: OverviewRange): OverviewMetrics['cache'] {
+  const total = CACHE_REQUESTS[range];
+  const hits = Math.round(total * 0.942);
+  return { hit_ratio: Math.round((hits / total) * 10_000) / 10_000, bytes_saved: Math.round(hits * 1.21 * 1e6), hits, misses: total - hits };
+}
+
 export function overview(range: OverviewRange, now = Date.now()): OverviewMetrics {
   const r = REQUESTS[range];
   return {
@@ -124,7 +133,7 @@ export function overview(range: OverviewRange, now = Date.now()): OverviewMetric
     summary: { published_since_yesterday: 214, failed_pushes: 0 },
     storage: { used_bytes: 4.82 * TB, capacity_bytes: 12 * TB, added_bytes_24h: 38 * GB },
     requests: { total: r.total, trend_pct: r.trend, peak_total: r.peak, p95_ms: 41, coverage_start: null },
-    cache: { hit_ratio: 0.942, bytes_saved: 2.1 * TB },
+    cache: cacheNumbers(range),
     issues: { critical: 7, packages_affected: 3, quarantined: 2, open_findings: 39 },
     traffic: traffic(range, now),
     storage_by_format: [
@@ -166,14 +175,27 @@ export const LIVE_SEEDS: Omit<PublishedComponent, 'id' | 'published_at'>[] = [
   { format: 'pypi', name: 'acme-feature-store', version: '2.2.0', repository: 'pypi-internal', publisher: { kind: 'user', display_name: 'Malika Yusupova' }, scan: { ...clean, state: 'pending' } },
 ];
 
-/** Upstream health is reported per proxy repository (name = repository name). */
+/**
+ * Upstream health is reported per proxy repository (name = repository name):
+ * live state plus the median remote latency recorded over the range.
+ */
 export const upstreams: UpstreamHealth[] = [
-  { name: 'dockerhub-proxy', url: 'https://registry-1.docker.io', state: 'healthy', latency_ms: 88 },
-  { name: 'npmjs-proxy', url: 'https://registry.npmjs.org', state: 'slow', latency_ms: 412 },
-  { name: 'maven-central', url: 'https://repo1.maven.org/maven2/', state: 'healthy', latency_ms: 64 },
-  { name: 'pypi-proxy', url: 'https://pypi.org', state: 'unknown', latency_ms: null },
-  { name: 'ghcr-proxy', url: 'https://ghcr.io', state: 'blocked', latency_ms: null },
+  { name: 'dockerhub-proxy', url: 'https://registry-1.docker.io', state: 'healthy', latency_ms: 88, requests: 1_240 },
+  { name: 'npmjs-proxy', url: 'https://registry.npmjs.org', state: 'slow', latency_ms: 412, requests: 860 },
+  { name: 'maven-central', url: 'https://repo1.maven.org/maven2/', state: 'healthy', latency_ms: 64, requests: 312 },
+  { name: 'pypi-proxy', url: 'https://pypi.org', state: 'unknown', latency_ms: null, requests: 0 },
+  { name: 'ghcr-proxy', url: 'https://ghcr.io', state: 'blocked', latency_ms: null, requests: 0 },
 ];
+
+/** Fewer remote requests in shorter ranges; the hour may have none. */
+const UPSTREAM_SCALE: Record<OverviewRange, number> = { '1h': 0.02, today: 1, '7d': 6.5, '30d': 27 };
+
+export function upstreamHealth(range: OverviewRange): UpstreamHealth[] {
+  return upstreams.map((u) => {
+    const requests = Math.round((u.requests ?? 0) * UPSTREAM_SCALE[range]);
+    return { ...u, requests, latency_ms: requests > 0 ? u.latency_ms : null };
+  });
+}
 
 export const clientEndpoints: ClientEndpoint[] = [
   { format: 'docker', endpoint: 'cr.acme.io', repository: 'docker-group' },
@@ -224,7 +246,7 @@ const REPO_SEEDS: RepoSeed[] = [
 
 export function repositories(): Repository[] {
   const created = '2026-06-01T09:00:00Z';
-  return REPO_SEEDS.map(([name, format, type, description, bytes, status = 'online', extra = {}], i) => ({
+  const repos: Repository[] = REPO_SEEDS.map(([name, format, type, description, bytes, status = 'online', extra = {}], i) => ({
     id: `r_${String(i + 1).padStart(3, '0')}`,
     name,
     format,
@@ -242,10 +264,19 @@ export function repositories(): Repository[] {
     url: repositoryUrl(format, name),
     status,
     size_bytes: Math.round(bytes),
-    component_count: type === 'group' ? 0 : Math.round(bytes / (40 * 1e6)),
+    component_count: Math.round(bytes / (40 * 1e6)),
     created_at: created,
     updated_at: created,
   }));
+  // A group serves its members' content: the mock sums them (the server
+  // counts blobs shared by members once).
+  const byName = new Map(repos.map((r) => [r.name, r]));
+  for (const g of repos.filter((r) => r.type === 'group')) {
+    const members = (g.config.group?.members ?? []).map((m) => byName.get(m)).filter((m) => m !== undefined);
+    g.size_bytes = members.reduce((n, m) => n + m.size_bytes, 0);
+    g.component_count = members.reduce((n, m) => n + m.component_count, 0);
+  }
+  return repos;
 }
 
 export const blobStores: BlobStore[] = [

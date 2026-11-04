@@ -9,10 +9,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// Cache metric names. internal/api reads them for the Overview cache numbers.
+// Cache metric names. internal/rollup reads them for the Overview cache numbers.
 const (
 	MetricCacheRequests = "hangar_proxy_cache_requests_total"
 	MetricCacheHitBytes = "hangar_proxy_cache_hit_bytes_total"
+	// MetricUpstreamDuration is the remote latency histogram, labelled by
+	// repository; internal/rollup persists it for the Overview screen.
+	MetricUpstreamDuration = "hangar_proxy_upstream_request_duration_seconds"
 )
 
 // Cache results recorded by CacheHit and CacheMiss.
@@ -48,15 +51,19 @@ const (
 	retryReasonRateLimit = "rate_limited"
 )
 
+// UpstreamDurationBuckets are the bucket bounds (seconds) of
+// MetricUpstreamDuration.
+var UpstreamDurationBuckets = []float64{0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60}
+
 var (
 	requestsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "hangar_proxy_upstream_requests_total",
 		Help: "Requests from proxy repositories to their remotes and related hosts, by final result (status class, rate_limited, error, circuit_open, offline). Retries are counted once.",
 	}, []string{"repository", "host", "result"})
 	requestDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "hangar_proxy_upstream_request_duration_seconds",
+		Name:    MetricUpstreamDuration,
 		Help:    "Time from sending a proxy remote request to its response headers, including retries.",
-		Buckets: []float64{0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60},
+		Buckets: UpstreamDurationBuckets,
 	}, []string{"repository"})
 	retriesTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "hangar_proxy_upstream_retries_total",

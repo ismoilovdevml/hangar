@@ -13,7 +13,7 @@ function bareMetrics(): OverviewMetrics {
     ...m,
     storage: { used_bytes: 0, capacity_bytes: null, added_bytes_24h: 0 },
     requests: { total: null, trend_pct: null, peak_total: null, p95_ms: null, coverage_start: null },
-    cache: { hit_ratio: null, bytes_saved: null },
+    cache: { hit_ratio: null, bytes_saved: null, hits: null, misses: null },
     issues: { critical: 0, packages_affected: 0, quarantined: 0, open_findings: 0 },
     traffic: m.traffic.map((b) => ({ ...b, downloads: null, uploads: 0 })),
     storage_by_format: [],
@@ -37,12 +37,12 @@ describe('overview with metrics the server does not report', () => {
     const requests = within(kpis).getByRole('article', { name: 'Requests today' });
     expect(within(requests).getByText('—')).toBeInTheDocument();
     expect(within(requests).getByText('Not reported')).toBeInTheDocument();
-    expect(within(requests).getByText('This node does not report request statistics.')).toBeInTheDocument();
+    expect(within(requests).getByText('This server does not report request statistics.')).toBeInTheDocument();
     expect(within(requests).queryByRole('meter')).not.toBeInTheDocument();
 
     const cache = within(kpis).getByRole('article', { name: 'Served from cache' });
     expect(within(cache).getByText('—')).toBeInTheDocument();
-    expect(within(cache).getByText('No proxy cache traffic measured yet.')).toBeInTheDocument();
+    expect(within(cache).getByText('This server does not report proxy cache statistics.')).toBeInTheDocument();
     expect(within(cache).queryByText('Healthy')).not.toBeInTheDocument();
 
     expect(screen.getByText('Downloads (not recorded)')).toBeInTheDocument();
@@ -59,7 +59,7 @@ describe('overview with metrics the server does not report', () => {
     useMetrics({
       ...m,
       requests: { ...m.requests, trend_pct: null, p95_ms: null, coverage_start: restart.toISOString() },
-      cache: { hit_ratio: 0.5, bytes_saved: null },
+      cache: { hit_ratio: 0.5, bytes_saved: null, hits: 6, misses: 6 },
       traffic: m.traffic.map((b, i) => (i < 3 ? { ...b, downloads: null } : b)),
     });
     renderApp('/');
@@ -71,12 +71,23 @@ describe('overview with metrics the server does not report', () => {
     const cache = screen.getByRole('article', { name: 'Served from cache' });
     expect(within(cache).getByText('50.0')).toBeInTheDocument();
     expect(within(cache).getByText('Low')).toBeInTheDocument();
-    expect(within(cache).getByText('Bytes saved not reported')).toBeInTheDocument();
+    expect(within(cache).getByText('6 of 12 requests')).toBeInTheDocument();
 
     const table = screen.getByRole('table', { name: 'Traffic per interval' });
     expect(within(table).getAllByText('not recorded')).toHaveLength(3);
     const chart = screen.getByRole('region', { name: 'Traffic today' });
     expect(within(chart).getByText('Downloads', { selector: '.legend__item' })).toBeInTheDocument();
+  });
+
+  it('says when no proxy served content in the range', async () => {
+    const m = overview('1h');
+    useMetrics({ ...m, cache: { hit_ratio: null, bytes_saved: 0, hits: 0, misses: 0 } });
+    renderApp('/?range=1h');
+    await screen.findByText('No proxy repository served content in this range.');
+    const cache = screen.getByRole('article', { name: 'Served from cache' });
+    expect(within(cache).getByText('—')).toBeInTheDocument();
+    expect(within(cache).getByText('No proxy requests in this range')).toBeInTheDocument();
+    expect(within(cache).queryByRole('meter')).not.toBeInTheDocument();
   });
 
   it('explains empty upstream and client lists', async () => {

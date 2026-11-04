@@ -326,15 +326,24 @@ paths:
       tags: [overview]
       operationId: listUpstreamHealth
       summary: Health of every proxy remote
+      description: |
+        Live state of each readable proxy repository's remote, plus the remote
+        latency recorded over `range` by every node (persisted, so it survives
+        restarts).
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
+        - name: range
+          in: query
+          description: Window of `latency_ms` and `requests` (default `today`)
+          schema: { $ref: "#/components/schemas/OverviewRange" }
       responses:
         "200":
           description: Upstreams
           content:
             application/json:
               schema: { $ref: "#/components/schemas/UpstreamHealthPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
 
   # ---------------------------------------------------------------- repositories
   /repositories:
@@ -2005,10 +2014,10 @@ components:
         start: { $ref: "#/components/schemas/Timestamp" }
         downloads:
           type: [integer, "null"]
-          description: Content downloads served by this node; null for buckets before it started or without request statistics
+          description: Content downloads served by every node; null for buckets that ended before traffic recording started, or without traffic statistics
         uploads:
           type: integer
-          description: Components published in the bucket (all nodes)
+          description: Components published to hosted repositories in the bucket (proxy cache fills are not counted)
     OverviewMetrics:
       type: object
       required: [range, generated_at, summary, storage, requests, cache, issues, traffic, storage_by_format]
@@ -2019,7 +2028,9 @@ components:
           type: object
           required: [published_since_yesterday, failed_pushes]
           properties:
-            published_since_yesterday: { type: integer }
+            published_since_yesterday:
+              type: integer
+              description: Components published to hosted repositories in the last 24 hours
             failed_pushes: { type: integer }
         storage:
           type: object
@@ -2033,31 +2044,49 @@ components:
         requests:
           type: object
           description: |
-            Requests served by this node, from its Prometheus counters (probes,
-            /metrics and the event stream excluded). Counters restart with the
-            process: `coverage_start` says from when the numbers are observed.
-            Every value is null when request statistics are not available.
-          required: [total, trend_pct, peak_total, p95_ms]
+            Requests served by every node (probes, /metrics and the event
+            stream excluded). Each node adds its counters to per-minute rows in
+            the database, so the numbers survive restarts; whole minutes are
+            counted. Every value is null when traffic statistics are not
+            available.
+          required: [total, trend_pct, peak_total, p95_ms, coverage_start]
           properties:
             total: { type: [integer, "null"] }
             trend_pct:
               type: [number, "null"]
-              description: Change versus the previous range of the same length, in percent; null without data for that range
+              description: Change versus the previous range of the same length, in percent; null unless that range was recorded entirely and had requests
             peak_total:
               type: [integer, "null"]
-              description: Busiest equivalent range in the last 30 days (of the observed history)
-            p95_ms: { type: [number, "null"] }
+              description: Busiest recorded range of the same length ending in the last 30 days (5-minute resolution), at least `total`
+            p95_ms:
+              type: [number, "null"]
+              description: Estimated 95th percentile response time; null without requests
             coverage_start:
               type: [string, "null"]
               format: date-time
-              description: Start of the period the numbers actually cover (later than the range start after a restart)
+              description: Start of the period the numbers cover; later than the range start when recording began inside the range (first start of a version with traffic statistics); null when nothing was recorded yet
         cache:
           type: object
-          description: Proxy cache effectiveness; null when the proxy subsystem reports no cache metrics.
-          required: [hit_ratio, bytes_saved]
+          description: |
+            Proxy cache effectiveness over the range, every format, every node.
+            A client request counts once: a miss when any proxy repository
+            (directly or as a member of the group addressed) asked its remote
+            for the content, otherwise a hit when a proxy answered from its
+            cache. Requests answered by hosted repositories alone are not
+            counted. Every value is null when traffic statistics are not
+            available.
+          required: [hit_ratio, bytes_saved, hits, misses]
           properties:
-            hit_ratio: { type: [number, "null"], minimum: 0, maximum: 1 }
-            bytes_saved: { type: [integer, "null"] }
+            hit_ratio:
+              type: [number, "null"]
+              minimum: 0
+              maximum: 1
+              description: hits / (hits + misses); null when no proxy request was counted in the range
+            bytes_saved:
+              type: [integer, "null"]
+              description: Bytes served from proxy caches without contacting the remote
+            hits: { type: [integer, "null"] }
+            misses: { type: [integer, "null"] }
         issues:
           type: object
           required: [critical, packages_affected, quarantined, open_findings]
@@ -2083,7 +2112,7 @@ components:
       description: unknown = no health data for the remote
     UpstreamHealth:
       type: object
-      required: [name, url, state, latency_ms]
+      required: [name, url, state, latency_ms, requests]
       properties:
         name:
           type: string
@@ -2092,7 +2121,13 @@ components:
         state: { $ref: "#/components/schemas/UpstreamState" }
         latency_ms:
           type: [integer, "null"]
-          description: p50 over the last 5 minutes; null without recent traffic
+          description: |
+            Median time to response headers of the remote requests recorded
+            over the range (estimated from a histogram); null without remote
+            requests in the range
+        requests:
+          type: [integer, "null"]
+          description: Remote requests timed over the range; null when traffic statistics are not available
     CacheInvalidation:
       type: object
       required: [repository, negative_entries, rate_limited_hosts]
@@ -2264,8 +2299,18 @@ components:
               type: string
               description: Client URL built from server.base_url
             status: { $ref: "#/components/schemas/RepositoryStatus" }
-            size_bytes: { $ref: "#/components/schemas/Bytes" }
-            component_count: { type: integer }
+            size_bytes:
+              allOf: [{ $ref: "#/components/schemas/Bytes" }]
+              description: |
+                Hosted and proxy: the total size of the repository's assets.
+                Group: what the group serves; every blob stored by its
+                members (nested groups resolved) counted once.
+            component_count:
+              type: integer
+              description: |
+                Hosted and proxy: the repository's components. Group: the
+                distinct component coordinates (namespace, name, version) of
+                its members, nested groups resolved.
             created_at: { $ref: "#/components/schemas/Timestamp" }
             updated_at: { $ref: "#/components/schemas/Timestamp" }
     RepositoryList:
@@ -3273,6 +3318,16 @@ components:
           required: [type, data]
           properties:
             type: { const: upstream.status }
-            data: { $ref: "#/components/schemas/UpstreamHealth" }
+            data:
+              type: object
+              description: A proxy remote changed state; latency is not included (see /upstreams/health)
+              required: [name, url, state]
+              properties:
+                name:
+                  type: string
+                  description: Proxy repository name
+                url: { type: string }
+                state: { $ref: "#/components/schemas/UpstreamState" }
+                previous: { $ref: "#/components/schemas/UpstreamState" }
       discriminator:
         propertyName: type

@@ -170,6 +170,14 @@ func (a *API) renderEvent(ctx context.Context, e core.Event) liveEvent {
 		out = map[string]string{"id": comp.ID, "repository": comp.Repository}
 	case core.EventComponentQuarantined, core.EventComponentReleased:
 		out = comp
+	case core.EventUpstreamStatus:
+		var st struct {
+			State    string `json:"state"`
+			Previous string `json:"previous"`
+			URL      string `json:"url"`
+		}
+		_ = json.Unmarshal(e.Data, &st)
+		out = map[string]string{"name": e.Repository, "url": st.URL, "state": st.State, "previous": st.Previous}
 	}
 	if out != nil {
 		ev.Data, _ = json.Marshal(out)

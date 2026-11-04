@@ -28,6 +28,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/httpclient"
 	"github.com/ismoilovdevml/hangar/internal/observability"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/rollup"
 	"github.com/ismoilovdevml/hangar/internal/search"
 	"github.com/ismoilovdevml/hangar/internal/secrets"
 	"github.com/ismoilovdevml/hangar/internal/server"
@@ -339,11 +340,15 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	if err != nil {
 		return nil, err
 	}
+	// Traffic numbers of the Overview screen: this node's counters are added
+	// to per-minute rows in PostgreSQL, so they survive restarts and cover
+	// every node. The recorder writes a last time when the server stops.
 	statsCtx, stopStats := context.WithCancel(context.WithoutCancel(ctx))
-	stats := api.NewRequestStats(metrics.Registry, started)
-	go stats.Run(statsCtx)
+	recorder := rollup.NewRecorder(pool, metrics.Registry, rollup.Options{Started: started, Logger: log})
+	recorderDone := make(chan struct{})
+	go func() { recorder.Run(statsCtx); close(recorderDone) }()
 	go usage.Run(statsCtx)
-	a.onClose(stopStats)
+	a.onClose(func() { stopStats(); <-recorderDone })
 
 	hc := health.New(2 * time.Second)
 	hc.Add("database", func(ctx context.Context) error { return pool.Ping(ctx) })
@@ -376,7 +381,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Upstreams:      healthReporter,
 		UpstreamCache:  upstreams,
 		AuthMiddleware: chainMiddleware(httpapi.Middleware(authSvc, authOpts), observability.TagPrincipal),
-		RequestStats:   stats,
+		Traffic:        rollup.NewStore(pool),
 		AuthRoutes:     api.RouteFunc(func(r chi.Router) { httpapi.Register(r, authSvc, authOpts) }),
 	}
 	a.onClose(restAPI.Close)
