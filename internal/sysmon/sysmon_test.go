@@ -380,6 +380,12 @@ func TestUpstreamsCheck(t *testing.T) {
 	if r = UpstreamsCheck(one).Run(context.Background()); r.Status != StatusHealthy || r.Detail != "1 of 1 healthy · api.nuget.org" || r.Metric != "140 ms" {
 		t.Fatalf("one = %+v", r)
 	}
+	idle := func(context.Context, string, int) (core.Page[proxy.HealthItem], error) {
+		return core.Page[proxy.HealthItem]{Items: []proxy.HealthItem{{Name: "pypi-proxy", URL: "https://pypi.org", State: proxy.StateHealthy}}}, nil
+	}
+	if r = UpstreamsCheck(idle).Run(context.Background()); r.Metric != "no traffic" {
+		t.Fatalf("idle = %+v", r)
+	}
 }
 
 func TestShortDuration(t *testing.T) {

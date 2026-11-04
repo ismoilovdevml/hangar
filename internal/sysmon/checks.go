@@ -487,7 +487,9 @@ func UpstreamsCheck(list UpstreamLister) Check {
 		if total == 0 {
 			return Result{Status: StatusHealthy, Detail: "No proxy repositories"}
 		}
-		res := Result{Status: StatusHealthy}
+		// The slowest smoothed latency; none without traffic in the last
+		// proxy.LatencyWindow.
+		res := Result{Status: StatusHealthy, Metric: "no traffic"}
 		if slowest >= 0 {
 			res.Metric = fmt.Sprintf("%d ms", slowest)
 		}
