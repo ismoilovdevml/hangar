@@ -323,7 +323,10 @@ type Deps struct {
 	Events      EventBus
 	Jobs        JobQueue
 	Audit       AuditLog
-	Logger      *slog.Logger
+	// Locks serialises read-modify-write sequences across every node of a
+	// cluster (e.g. npm dist-tag updates). Nil means in-process locking only.
+	Locks  Locker
+	Logger *slog.Logger
 	// BaseURL is the externally visible URL of this server without a trailing
 	// slash (server.base_url, e.g. "https://hangar.acme.io"). Use it for every
 	// absolute link Hangar generates: npm tarball URLs, the OCI

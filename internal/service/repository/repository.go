@@ -49,7 +49,16 @@ type Options struct {
 	// (the outbound address policy); its error is returned as is.
 	RemoteCheck func(ctx context.Context, remoteURL string) error
 	Logger      *slog.Logger
+	// CacheTTL bounds how long Get, GetByID and Members answer from memory.
+	// Writes through this service invalidate the cache at once; writes on
+	// other nodes invalidate it through repository.* events (see Watch), so
+	// the TTL only limits staleness after a lost event. Zero means
+	// DefaultCacheTTL; negative disables the cache.
+	CacheTTL time.Duration
 }
+
+// DefaultCacheTTL is the default Options.CacheTTL.
+const DefaultCacheTTL = 30 * time.Second
 
 // ConfigSealer seals the secrets of a repository configuration in place
 // (implemented by *secrets.Keyring).
@@ -62,9 +71,10 @@ var errNoSealer = fmt.Errorf("storing repository secrets requires secret encrypt
 
 // Service implements core.RepositoryService on PostgreSQL.
 type Service struct {
-	pool *pgxpool.Pool
-	opts Options
-	log  *slog.Logger
+	pool  *pgxpool.Pool
+	opts  Options
+	log   *slog.Logger
+	cache *repoCache
 }
 
 var _ core.RepositoryService = (*Service)(nil)
@@ -75,7 +85,10 @@ func New(pool *pgxpool.Pool, opts Options) *Service {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Service{pool: pool, opts: opts, log: log}
+	if opts.CacheTTL == 0 {
+		opts.CacheTTL = DefaultCacheTTL
+	}
+	return &Service{pool: pool, opts: opts, log: log, cache: newRepoCache(opts.CacheTTL)}
 }
 
 // selectRepo returns every column scanRepo reads. Group members come from
@@ -118,6 +131,18 @@ func scanRepo(row pgx.Row) (*core.Repository, error) {
 
 // Get implements core.RepositoryService.
 func (s *Service) Get(ctx context.Context, name string) (*core.Repository, error) {
+	if r, ok := s.cache.get(name); ok {
+		return r, nil
+	}
+	gen := s.cache.generation()
+	r, err := s.get(ctx, name)
+	if err == nil {
+		s.cache.put(gen, r)
+	}
+	return r, err
+}
+
+func (s *Service) get(ctx context.Context, name string) (*core.Repository, error) {
 	r, err := scanRepo(s.pool.QueryRow(ctx, selectRepo+` WHERE r.name = $1`, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("repository %q: %w", name, core.ErrNotFound)
@@ -133,6 +158,10 @@ func (s *Service) GetByID(ctx context.Context, id string) (*core.Repository, err
 	if !IsUUID(id) {
 		return nil, fmt.Errorf("repository id %q: %w", id, core.ErrNotFound)
 	}
+	if r, ok := s.cache.getByID(id); ok {
+		return r, nil
+	}
+	gen := s.cache.generation()
 	r, err := scanRepo(s.pool.QueryRow(ctx, selectRepo+` WHERE r.id = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("repository id %q: %w", id, core.ErrNotFound)
@@ -140,6 +169,7 @@ func (s *Service) GetByID(ctx context.Context, id string) (*core.Repository, err
 	if err != nil {
 		return nil, fmt.Errorf("get repository %q: %w", id, err)
 	}
+	s.cache.put(gen, r)
 	return r, nil
 }
 
@@ -207,6 +237,10 @@ func (s *Service) Members(ctx context.Context, group *core.Repository) ([]*core.
 		}
 		id = g.ID
 	}
+	if ms, ok := s.cache.getMembers(id); ok {
+		return ms, nil
+	}
+	gen := s.cache.generation()
 	rows, err := s.pool.Query(ctx, `
 SELECT r.id::text, r.name, r.format, r.type, r.description, coalesce(bs.name, ''), r.online,
        r.config, r.created_at, r.updated_at,
@@ -225,7 +259,8 @@ SELECT r.id::text, r.name, r.format, r.type, r.description, coalesce(bs.name, ''
 	if err != nil {
 		return nil, fmt.Errorf("group %q members: %w", group.Name, err)
 	}
-	return out, nil
+	s.cache.putMembers(gen, id, out)
+	return cloneRepos(out), nil
 }
 
 // Create implements core.RepositoryService.
@@ -266,7 +301,8 @@ VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id::text`,
 		s.record(ctx, "repository.create", r.Name, core.OutcomeError, map[string]any{"error": err.Error()})
 		return nil, err
 	}
-	out, err := s.Get(ctx, r.Name)
+	s.cache.invalidate()
+	out, err := s.get(ctx, r.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -336,7 +372,8 @@ UPDATE repositories SET description = $2, config = $3, online = $4, updated_at =
 		}
 		return nil, err
 	}
-	out, err := s.Get(ctx, r.Name)
+	s.cache.invalidate()
+	out, err := s.get(ctx, r.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -387,6 +424,7 @@ SELECT coalesce(array_agg(g.name ORDER BY g.name), '{}')
 		}
 		return err
 	}
+	s.cache.invalidate()
 	s.record(ctx, "repository.delete", name, core.OutcomeSuccess, nil)
 	s.publish(ctx, core.EventRepositoryDeleted, deleted)
 	return nil
@@ -653,6 +691,7 @@ func cloneRepo(r *core.Repository) *core.Repository {
 		c.Config.Connector = &cc
 	}
 	c.Config.CleanupPolicies = append([]string(nil), r.Config.CleanupPolicies...)
+	c.Config.Format = cloneFormat(r.Config.Format)
 	return &c
 }
 

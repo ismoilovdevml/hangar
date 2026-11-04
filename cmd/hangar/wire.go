@@ -30,6 +30,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/server"
 	"github.com/ismoilovdevml/hangar/internal/service/cleanup"
 	"github.com/ismoilovdevml/hangar/internal/service/component"
+	"github.com/ismoilovdevml/hangar/internal/service/lock"
 	"github.com/ismoilovdevml/hangar/internal/service/repository"
 	"github.com/ismoilovdevml/hangar/internal/storage"
 	"github.com/ismoilovdevml/hangar/internal/storage/fs"
@@ -210,6 +211,11 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 			return guard.ValidateRemote(ctx, remoteURL, false)
 		}})
 	authz.SetRepositories(repos)
+	repoWatch, err := repos.Watch(ctx, bus)
+	if err != nil {
+		return nil, err
+	}
+	a.onClose(func() { _ = repoWatch.Unsubscribe() })
 	if err := authz.Subscribe(ctx, bus); err != nil {
 		return nil, err
 	}
@@ -244,6 +250,13 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	}
 	a.onClose(func() { _ = watch.Unsubscribe() })
 
+	// Cluster-wide named locks (npm package state) on their own small pool.
+	locks, err := lock.New(ctx, pool, lock.Options{Logger: log})
+	if err != nil {
+		return nil, err
+	}
+	a.onClose(locks.Close)
+
 	deps := core.Deps{
 		Repos:       repos,
 		Components:  comps,
@@ -258,6 +271,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Events:  bus,
 		Jobs:    queue,
 		Audit:   auditLog,
+		Locks:   locks,
 		Logger:  log,
 		BaseURL: cfg.Server.BaseURL,
 	}

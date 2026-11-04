@@ -88,3 +88,13 @@ versions each) are inlined in the index, from 128 on pages are linked.
 - `HANGAR_TEST_NUGET_ORG=1` additionally restores real packages from
   api.nuget.org through a proxy.
 - `test/e2e/nuget_test.go` (tag `e2e`): the same flow against a running Hangar.
+
+## Search
+
+Hosted search (`/query` and the proxy fallback that searches cached packages)
+narrows candidates with the PostgreSQL full-text index on component text
+(migration 00070) and then applies the NuGet field rules (`id:`, `tags:`,
+`author:`, ...) to the latest listed version. Words match as token prefixes
+(`json` and `newt` match `Newtonsoft.Json`, `ewtonsoft` does not). At most
+10 000 matching packages are considered per query. An empty query lists the
+repository.

@@ -19,6 +19,8 @@ import (
 var (
 	// errVersionExists: npm versions are immutable (403, as the public registry answers).
 	errVersionExists = errors.New("cannot publish over a previously published version")
+	// errVersionUnpublished: the version was unpublished and left a tombstone.
+	errVersionUnpublished = errors.New("cannot publish over a previously unpublished version")
 	// errUnpublishDenied: the unpublish window has passed and the principal is not an admin.
 	errUnpublishDenied = errors.New("unpublish not allowed")
 )
@@ -151,7 +153,10 @@ func (h *handler) putPackage(w http.ResponseWriter, r *http.Request, repo *core.
 	if err != nil {
 		return err
 	}
-	unlock := h.f.lock(target.ID, name)
+	unlock, err := h.lock(ctx, target, name)
+	if err != nil {
+		return err
+	}
 	defer unlock()
 	body, err := parsePublishBody(r.Body, func(_ string, data io.Reader) (any, error) {
 		hs := newTarballHashes()
@@ -200,6 +205,16 @@ func (h *handler) publish(w http.ResponseWriter, ctx context.Context, repo *core
 	} else if !errors.Is(err, core.ErrNotFound) {
 		return err
 	}
+	state, err := h.loadState(ctx, repo, bs, name)
+	if err != nil {
+		return err
+	}
+	if at, gone := state.Unpublished[v]; gone {
+		if !repoConfig(repo).ReuseUnpublishedVersions {
+			return fmt.Errorf("%w: %s@%s was unpublished at %s; publish a new version", errVersionUnpublished, name.Full, v, at)
+		}
+		delete(state.Unpublished, v)
+	}
 	var att *attachment
 	for _, a := range body.Attachments {
 		if a.Result == nil {
@@ -246,10 +261,6 @@ func (h *handler) publish(w http.ResponseWriter, ctx context.Context, repo *core
 		return err
 	}
 
-	state, err := h.loadState(ctx, repo, bs, name)
-	if err != nil {
-		return err
-	}
 	var tags map[string]string
 	if raw, ok := body.Fields["dist-tags"]; ok {
 		if err := json.Unmarshal(raw, &tags); err != nil {
@@ -347,15 +358,37 @@ func (h *handler) update(w http.ResponseWriter, ctx context.Context, repo *core.
 		return nil
 	}
 	state.Time["modified"] = h.nowString()
-	if len(cur.Versions) > len(removed) {
-		if err := h.writeMetadata(ctx, repo, bs, statePath(name), state, nil); err != nil {
-			return err
-		}
-	} else if err := h.deps.Components.DeleteAsset(ctx, repo, statePath(name)); err != nil && !errors.Is(err, core.ErrNotFound) {
+	if err := h.saveState(ctx, repo, bs, name, state, removed, len(cur.Versions)-len(removed)); err != nil {
 		return err
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": name.Full})
 	return nil
+}
+
+// saveState writes the package state after versions were removed, adding
+// tombstones for them unless the repository allows version reuse. When no
+// version remains the document is deleted, unless it holds tombstones.
+func (h *handler) saveState(ctx context.Context, repo *core.Repository, bs core.BlobStore, name pkgName,
+	state *pkgState, removed map[string]bool, remaining int) error {
+	if len(removed) > 0 && !repoConfig(repo).ReuseUnpublishedVersions {
+		if state.Unpublished == nil {
+			state.Unpublished = map[string]string{}
+		}
+		now := h.nowString()
+		for v := range removed {
+			state.Unpublished[v] = now
+		}
+	}
+	if remaining <= 0 {
+		clear(state.DistTags)
+		if len(state.Unpublished) == 0 {
+			if err := h.deps.Components.DeleteAsset(ctx, repo, statePath(name)); err != nil && !errors.Is(err, core.ErrNotFound) {
+				return err
+			}
+			return nil
+		}
+	}
+	return h.writeMetadata(ctx, repo, bs, statePath(name), state, nil)
 }
 
 // dropVersions removes dist-tags pointing at removed versions and moves
@@ -436,7 +469,10 @@ func (h *handler) unpublishPackage(w http.ResponseWriter, r *http.Request, repo 
 	if err := h.authorize(ctx, core.ActionDelete, target); err != nil {
 		return err
 	}
-	unlock := h.f.lock(target.ID, name)
+	unlock, err := h.lock(ctx, target, name)
+	if err != nil {
+		return err
+	}
 	defer unlock()
 	comps, err := h.listVersions(ctx, target, name)
 	if err != nil {
@@ -449,10 +485,25 @@ func (h *handler) unpublishPackage(w http.ResponseWriter, r *http.Request, repo 
 	for _, c := range comps {
 		all[c.Version] = true
 	}
+	if !repoConfig(target).ReuseUnpublishedVersions {
+		// Tombstones are written to the package state: a write.
+		if err := h.authorize(ctx, core.ActionWrite, target); err != nil {
+			return err
+		}
+	}
+	bs, err := h.deps.Blobs.ForRepository(ctx, target)
+	if err != nil {
+		return err
+	}
+	state, err := h.loadState(ctx, target, bs, name)
+	if err != nil {
+		return err
+	}
 	if err := h.removeVersions(ctx, target, name, all); err != nil {
 		return err
 	}
-	if err := h.deps.Components.DeleteAsset(ctx, target, statePath(name)); err != nil && !errors.Is(err, core.ErrNotFound) {
+	state.Time["modified"] = h.nowString()
+	if err := h.saveState(ctx, target, bs, name, state, all, 0); err != nil {
 		return err
 	}
 	ok(w, http.StatusOK)
@@ -470,7 +521,10 @@ func (h *handler) deleteTarball(w http.ResponseWriter, r *http.Request, repo *co
 	if err := h.authorize(ctx, core.ActionDelete, target); err != nil {
 		return err
 	}
-	unlock := h.f.lock(target.ID, name)
+	unlock, err := h.lock(ctx, target, name)
+	if err != nil {
+		return err
+	}
 	defer unlock()
 	a, err := h.deps.Components.GetAsset(ctx, target.ID, rel)
 	if errors.Is(err, core.ErrNotFound) {
@@ -491,9 +545,9 @@ func (h *handler) deleteTarball(w http.ResponseWriter, r *http.Request, repo *co
 	if err != nil {
 		return err
 	}
-	if len(cur.Versions) > 1 {
-		// The package state (dist-tags) of the remaining versions is
-		// rewritten below, which is a write: check it before removing anything.
+	if len(cur.Versions) > 1 || !repoConfig(target).ReuseUnpublishedVersions {
+		// The package state (dist-tags, tombstones) is rewritten below,
+		// which is a write: check it before removing anything.
 		if err := h.authorize(ctx, core.ActionWrite, target); err != nil {
 			return err
 		}
@@ -505,17 +559,14 @@ func (h *handler) deleteTarball(w http.ResponseWriter, r *http.Request, repo *co
 	if err != nil {
 		return err
 	}
-	if len(cur.Versions) > 1 {
-		state, err := h.loadState(ctx, target, bs, name)
-		if err != nil {
-			return err
-		}
-		dropVersions(state, map[string]bool{c.Version: true}, cur)
-		state.Time["modified"] = h.nowString()
-		if err := h.writeMetadata(ctx, target, bs, statePath(name), state, nil); err != nil {
-			return err
-		}
-	} else if err := h.deps.Components.DeleteAsset(ctx, target, statePath(name)); err != nil && !errors.Is(err, core.ErrNotFound) {
+	state, err := h.loadState(ctx, target, bs, name)
+	if err != nil {
+		return err
+	}
+	removed := map[string]bool{c.Version: true}
+	dropVersions(state, removed, cur)
+	state.Time["modified"] = h.nowString()
+	if err := h.saveState(ctx, target, bs, name, state, removed, len(cur.Versions)-1); err != nil {
 		return err
 	}
 	ok(w, http.StatusOK)
@@ -579,7 +630,10 @@ func (h *handler) putDistTag(w http.ResponseWriter, r *http.Request, repo *core.
 	if err := readSmallJSON(r, &version); err != nil {
 		return err
 	}
-	unlock := h.f.lock(target.ID, name)
+	unlock, err := h.lock(ctx, target, name)
+	if err != nil {
+		return err
+	}
 	defer unlock()
 	if _, err := h.deps.Components.GetComponent(ctx, target.ID, name.Scope, name.Base, version); err != nil {
 		return fmt.Errorf("version %s of %s: %w", version, name.Full, err)
@@ -615,7 +669,10 @@ func (h *handler) deleteDistTag(w http.ResponseWriter, r *http.Request, repo *co
 	if err := h.authorize(ctx, core.ActionWrite, target); err != nil {
 		return err
 	}
-	unlock := h.f.lock(target.ID, name)
+	unlock, err := h.lock(ctx, target, name)
+	if err != nil {
+		return err
+	}
 	defer unlock()
 	bs, err := h.deps.Blobs.ForRepository(ctx, target)
 	if err != nil {

@@ -30,7 +30,7 @@ func status(err error) int {
 		return http.StatusMethodNotAllowed
 	case errors.Is(err, errTooLarge):
 		return http.StatusRequestEntityTooLarge
-	case errors.Is(err, errVersionExists), errors.Is(err, errUnpublishDenied):
+	case errors.Is(err, errVersionExists), errors.Is(err, errVersionUnpublished), errors.Is(err, errUnpublishDenied):
 		return http.StatusForbidden
 	}
 	return core.HTTPStatus(err)

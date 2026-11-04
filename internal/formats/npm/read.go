@@ -4,11 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,18 +22,6 @@ const timeFormat = "2006-01-02T15:04:05.000Z"
 
 func wantsAbbreviated(r *http.Request) bool {
 	return strings.Contains(r.Header.Get("Accept"), mediaAbbreviated) && r.URL.Query().Get("write") != "true"
-}
-
-func readBlobJSON(ctx context.Context, bs core.BlobStore, d core.Digest, v any) error {
-	rc, err := bs.Get(ctx, d)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = rc.Close() }()
-	if err := json.NewDecoder(io.LimitReader(rc, maxDocumentSize)).Decode(v); err != nil {
-		return fmt.Errorf("decode stored document %s: %w", d, err)
-	}
-	return nil
 }
 
 // listVersions returns every component (version) of a package in repo.
@@ -124,19 +111,30 @@ func (h *handler) groupDoc(ctx context.Context, group *core.Repository, name pkg
 type pkgState struct {
 	DistTags map[string]string `json:"dist-tags"`
 	Time     map[string]string `json:"time"`
+	// Unpublished holds tombstones: versions that were unpublished and may
+	// not be published again (version -> unpublish time). The state document
+	// outlives the package's last version to keep them.
+	Unpublished map[string]string `json:"unpublished,omitempty"`
 }
 
 func (h *handler) loadState(ctx context.Context, repo *core.Repository, bs core.BlobStore, name pkgName) (*pkgState, error) {
+	st, _, err := h.loadStateDigest(ctx, repo, bs, name)
+	return st, err
+}
+
+// loadStateDigest returns the package state and the digest of the stored
+// document ("" when there is none).
+func (h *handler) loadStateDigest(ctx context.Context, repo *core.Repository, bs core.BlobStore, name pkgName) (*pkgState, core.Digest, error) {
 	st := &pkgState{DistTags: map[string]string{}, Time: map[string]string{}}
 	a, err := h.deps.Components.GetAsset(ctx, repo.ID, statePath(name))
 	if errors.Is(err, core.ErrNotFound) {
-		return st, nil
+		return st, "", nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	if err := readBlobJSON(ctx, bs, a.BlobDigest, st); err != nil {
-		return nil, err
+	if err := h.f.readDoc(ctx, bs, a.BlobDigest, st); err != nil {
+		return nil, "", err
 	}
 	if st.DistTags == nil {
 		st.DistTags = map[string]string{}
@@ -144,7 +142,7 @@ func (h *handler) loadState(ctx context.Context, repo *core.Repository, bs core.
 	if st.Time == nil {
 		st.Time = map[string]string{}
 	}
-	return st, nil
+	return st, a.BlobDigest, nil
 }
 
 func (h *handler) readManifest(ctx context.Context, repo *core.Repository, bs core.BlobStore, name pkgName, version string) (manifest, error) {
@@ -153,15 +151,44 @@ func (h *handler) readManifest(ctx context.Context, repo *core.Repository, bs co
 		return nil, err
 	}
 	var m manifest
-	if err := readBlobJSON(ctx, bs, a.BlobDigest, &m); err != nil {
+	if err := h.f.readDoc(ctx, bs, a.BlobDigest, &m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-// hostedDoc renders a hosted repository's packument from its components,
-// version manifests and package state. Quarantined versions are left out.
-func (h *handler) hostedDoc(ctx context.Context, repo *core.Repository, name pkgName) (*packument, error) {
+// manifestAssets returns the stored version manifests of a package by path,
+// in one listing instead of one lookup per version.
+func (h *handler) manifestAssets(ctx context.Context, repo *core.Repository, name pkgName) (map[string]*core.Asset, error) {
+	out := map[string]*core.Asset{}
+	q := core.AssetQuery{RepositoryID: repo.ID, PathPrefix: name.Full + "/-/meta/", Limit: core.MaxPageSize}
+	for {
+		page, err := h.deps.Components.ListAssets(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		for _, a := range page.Items {
+			out[a.Path] = a
+		}
+		if page.NextCursor == "" {
+			return out, nil
+		}
+		q.Cursor = page.NextCursor
+	}
+}
+
+// hostedInputs is everything a hosted packument is rendered from.
+type hostedInputs struct {
+	bs          core.BlobStore
+	comps       []*core.Component
+	metas       map[string]*core.Asset // version manifests by path
+	state       *pkgState
+	stateDigest core.Digest
+}
+
+// loadHostedInputs reads a hosted package's versions, manifest assets and
+// state: three queries, plus a state blob read when it is not cached.
+func (h *handler) loadHostedInputs(ctx context.Context, repo *core.Repository, name pkgName) (*hostedInputs, error) {
 	comps, err := h.listVersions(ctx, repo, name)
 	if err != nil {
 		return nil, err
@@ -173,20 +200,66 @@ func (h *handler) hostedDoc(ctx context.Context, repo *core.Repository, name pkg
 	if err != nil {
 		return nil, err
 	}
-	st, err := h.loadState(ctx, repo, bs, name)
+	st, sd, err := h.loadStateDigest(ctx, repo, bs, name)
 	if err != nil {
 		return nil, err
 	}
+	metas, err := h.manifestAssets(ctx, repo, name)
+	if err != nil {
+		return nil, err
+	}
+	return &hostedInputs{bs: bs, comps: comps, metas: metas, state: st, stateDigest: sd}, nil
+}
+
+// fingerprint identifies the inputs: equal fingerprints render byte-identical
+// packuments, so a rendered body can be reused without any invalidation.
+func (in *hostedInputs) fingerprint(name pkgName) string {
+	hs := sha256.New()
+	_, _ = fmt.Fprintf(hs, "%s\x00%s\x00", name.Full, in.stateDigest)
+	for _, c := range in.comps {
+		var d core.Digest
+		if a := in.metas[manifestPath(name, c.Version)]; a != nil {
+			d = a.BlobDigest
+		}
+		_, _ = fmt.Fprintf(hs, "%s\x00%d\x00%t\x00%s\x00", c.Version, c.CreatedAt.UnixNano(), c.Quarantined, d)
+	}
+	return hex.EncodeToString(hs.Sum(nil))
+}
+
+// hostedDoc renders a hosted repository's packument from its components,
+// version manifests and package state. Quarantined versions are left out.
+func (h *handler) hostedDoc(ctx context.Context, repo *core.Repository, name pkgName) (*packument, error) {
+	in, err := h.loadHostedInputs(ctx, repo, name)
+	if err != nil {
+		return nil, err
+	}
+	doc, _, err := h.buildHostedDoc(ctx, repo, name, in)
+	return doc, err
+}
+
+// buildHostedDoc assembles the packument. complete is false when a version
+// manifest could not be read (the version is left out and logged), in which
+// case the result must not be cached.
+func (h *handler) buildHostedDoc(ctx context.Context, repo *core.Repository, name pkgName, in *hostedInputs) (*packument, bool, error) {
+	complete := true
 	doc := newPackument(name.Full)
-	for k, v := range st.Time {
+	for k, v := range in.state.Time {
 		doc.Time[k] = v
 	}
-	for _, c := range comps {
+	for _, c := range in.comps {
 		if c.Quarantined {
 			continue
 		}
-		m, err := h.readManifest(ctx, repo, bs, name, c.Version)
+		var m manifest
+		var err error
+		a, ok := in.metas[manifestPath(name, c.Version)]
+		if !ok {
+			err = fmt.Errorf("manifest of %s@%s: %w", name.Full, c.Version, core.ErrNotFound)
+		} else {
+			err = h.f.readDoc(ctx, in.bs, a.BlobDigest, &m)
+		}
 		if err != nil {
+			complete = false
 			h.deps.Logger.WarnContext(ctx, "npm version manifest unreadable", "repository", repo.Name,
 				"package", name.Full, "version", c.Version, "error", err)
 			continue
@@ -198,14 +271,40 @@ func (h *handler) hostedDoc(ctx context.Context, repo *core.Repository, name pkg
 		}
 	}
 	if len(doc.Versions) == 0 {
-		return nil, fmt.Errorf("package %s: %w", name.Full, core.ErrNotFound)
+		return nil, false, fmt.Errorf("package %s: %w", name.Full, core.ErrNotFound)
 	}
-	for t, v := range st.DistTags {
+	for t, v := range in.state.DistTags {
 		doc.DistTags[t] = v
 	}
 	doc.normalizeTags()
 	doc.Modified = doc.Time["modified"]
-	return doc, nil
+	return doc, complete, nil
+}
+
+// hostedPackument returns the rendered packument of a hosted repository,
+// reusing a previous rendering when its inputs are unchanged.
+func (h *handler) hostedPackument(ctx context.Context, repo *core.Repository, name pkgName, abbreviated bool) ([]byte, error) {
+	in, err := h.loadHostedInputs(ctx, repo, name)
+	if err != nil {
+		return nil, err
+	}
+	base := h.tarballBase(repo)
+	key := "packument\x00" + in.fingerprint(name) + "\x00" + base + "\x00" + strconv.FormatBool(abbreviated)
+	if body, ok := h.f.rendered.get(key); ok {
+		return body, nil
+	}
+	doc, complete, err := h.buildHostedDoc(ctx, repo, name, in)
+	if err != nil {
+		return nil, err
+	}
+	body, err := doc.render(base, abbreviated)
+	if err != nil {
+		return nil, err
+	}
+	if complete {
+		h.f.rendered.put(key, body)
+	}
+	return body, nil
 }
 
 func (h *handler) getPackument(w http.ResponseWriter, r *http.Request, repo *core.Repository, name pkgName) error {
@@ -214,13 +313,21 @@ func (h *handler) getPackument(w http.ResponseWriter, r *http.Request, repo *cor
 		return err
 	}
 	abbreviated := wantsAbbreviated(r)
-	doc, err := h.loadDoc(ctx, repo, name, abbreviated, 0)
-	if err != nil {
-		return err
-	}
-	body, err := doc.render(h.tarballBase(repo), abbreviated)
-	if err != nil {
-		return err
+	var body []byte
+	if repo.Type == core.RepoHosted {
+		b, err := h.hostedPackument(ctx, repo, name, abbreviated)
+		if err != nil {
+			return err
+		}
+		body = b
+	} else {
+		doc, err := h.loadDoc(ctx, repo, name, abbreviated, 0)
+		if err != nil {
+			return err
+		}
+		if body, err = doc.render(h.tarballBase(repo), abbreviated); err != nil {
+			return err
+		}
 	}
 	ct := mediaJSON
 	if abbreviated {

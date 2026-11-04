@@ -74,3 +74,14 @@ is rejected).
 - `test/e2e/maven_test.go` (tag `e2e`): real `mvn deploy`, `mvn install`,
   `mvn dependency:get` and `gradle publish`/`build` against a running server
   with Maven Central behind a proxy repository.
+
+## Metadata cache
+
+Generated `maven-metadata.xml` documents of hosted repositories are cached in
+memory (up to 20 000 documents, one minute at most). The document and all of
+its checksums (`.md5`, `.sha1`, `.sha256`, `.sha512` and the `X-Checksum-*`
+headers) are served from the same cached bytes, so they always agree. A
+repository's entries are dropped on every `component.*`, `asset.published`,
+`asset.deleted` and `repository.*` event from any node, and synchronously by
+this node's own Maven PUT and DELETE requests. The one-minute bound only
+matters if an event between nodes is lost.

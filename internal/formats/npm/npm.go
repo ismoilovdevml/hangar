@@ -15,6 +15,7 @@
 package npm
 
 import (
+	"context"
 	"fmt"
 	"hash/fnv"
 	"strings"
@@ -43,6 +44,11 @@ type Config struct {
 	UnpublishWindow *core.Duration `json:"unpublish_window,omitempty"`
 	// LoginTokenTTL is the lifetime of tokens issued by `npm login`. Unset = 30 days.
 	LoginTokenTTL core.Duration `json:"login_token_ttl,omitempty"`
+	// ReuseUnpublishedVersions lets a version number be published again after
+	// it was unpublished. By default (false) unpublishing leaves a tombstone
+	// and the version can never be reused, as on the public registry, so a
+	// version always names the same bytes for every client and lockfile.
+	ReuseUnpublishedVersions bool `json:"reuse_unpublished_versions,omitempty"`
 }
 
 func (c Config) unpublishWindow() time.Duration {
@@ -67,15 +73,23 @@ func repoConfig(repo *core.Repository) Config {
 
 // Format implements core.Format for npm.
 type Format struct {
-	// locks serialise read-modify-write of one package's state on this node.
+	// locks serialise read-modify-write of one package's state on this node
+	// when Deps.Locks is not set (single process).
 	locks [64]sync.Mutex
 	now   func() time.Time
+	// docs caches stored documents (version manifests, package state) by
+	// blob digest; rendered caches hosted packuments by input fingerprint.
+	// Neither can go stale (see docCache).
+	docs     *docCache
+	rendered *docCache
 }
 
 var _ core.Format = (*Format)(nil)
 
 // New returns the npm format.
-func New() *Format { return &Format{now: time.Now} }
+func New() *Format {
+	return &Format{now: time.Now, docs: newDocCache(defaultDocCacheBytes), rendered: newDocCache(defaultDocCacheBytes)}
+}
 
 // Name implements core.Format.
 func (f *Format) Name() string { return Name }
@@ -125,10 +139,16 @@ func (f *Format) Coordinates(a *core.Asset) core.Coordinates {
 	return c
 }
 
-func (f *Format) lock(repoID string, name pkgName) func() {
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(repoID + "\x00" + name.Full))
-	m := &f.locks[h.Sum32()%uint32(len(f.locks))]
+// lock serialises changes to one package of a hosted repository: across the
+// cluster through Deps.Locks, or within this process when it is not set.
+func (h *handler) lock(ctx context.Context, repo *core.Repository, name pkgName) (func(), error) {
+	key := "npm/" + repo.ID + "/" + name.Full
+	if h.deps.Locks != nil {
+		return h.deps.Locks.Lock(ctx, key)
+	}
+	sum := fnv.New32a()
+	_, _ = sum.Write([]byte(key))
+	m := &h.f.locks[sum.Sum32()%uint32(len(h.f.locks))]
 	m.Lock()
-	return m.Unlock
+	return m.Unlock, nil
 }
