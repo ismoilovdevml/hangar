@@ -1,0 +1,190 @@
+{{/* Names */}}
+{{- define "hangar.name" -}}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "hangar.fullname" -}}
+{{- if .Values.fullnameOverride -}}
+{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- $name := default .Chart.Name .Values.nameOverride -}}
+{{- if contains $name .Release.Name -}}
+{{- .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "hangar.natsName" -}}
+{{- printf "%s-nats" (include "hangar.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "hangar.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- default (include "hangar.fullname" .) .Values.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}
+
+{{/* Labels */}}
+{{- define "hangar.labels" -}}
+helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
+app.kubernetes.io/name: {{ include "hangar.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/version: {{ .Values.image.tag | default .Chart.AppVersion | trunc 63 | quote }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+app.kubernetes.io/part-of: hangar
+{{- with .Values.commonLabels }}
+{{ toYaml . }}
+{{- end }}
+{{- end -}}
+
+{{- define "hangar.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "hangar.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: server
+{{- end -}}
+
+{{- define "hangar.natsSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "hangar.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: nats
+{{- end -}}
+
+{{/* Image */}}
+{{- define "hangar.image" -}}
+{{- if .Values.image.digest -}}
+{{- printf "%s@%s" .Values.image.repository .Values.image.digest -}}
+{{- else -}}
+{{- printf "%s:%s" .Values.image.repository (.Values.image.tag | default .Chart.AppVersion) -}}
+{{- end -}}
+{{- end -}}
+
+{{/* Scaling */}}
+{{- define "hangar.multiReplica" -}}
+{{- if or .Values.autoscaling.enabled (gt (int .Values.replicaCount) 1) -}}true{{- end -}}
+{{- end -}}
+
+{{/* Secret names: the user's existing Secret or the chart's own. */}}
+{{- define "hangar.secretName" -}}{{ include "hangar.fullname" . }}{{- end -}}
+{{- define "hangar.databaseSecret" -}}{{ .Values.database.existingSecret | default (include "hangar.secretName" .) }}{{- end -}}
+{{- define "hangar.s3Secret" -}}{{ .Values.storage.s3.existingSecret | default (include "hangar.secretName" .) }}{{- end -}}
+{{- define "hangar.dockerTokenSecret" -}}{{ .Values.dockerTokenKey.existingSecret | default (include "hangar.secretName" .) }}{{- end -}}
+{{- define "hangar.bootstrapSecret" -}}{{ .Values.bootstrapAdmin.existingSecret | default (include "hangar.secretName" .) }}{{- end -}}
+{{- define "hangar.proxyPasswordSecret" -}}{{ .Values.httpProxyPassword.existingSecret | default (include "hangar.secretName" .) }}{{- end -}}
+{{- define "hangar.natsExternalSecret" -}}{{ .Values.nats.external.existingSecret | default (include "hangar.secretName" .) }}{{- end -}}
+{{- define "hangar.natsPasswordSecret" -}}{{ .Values.nats.bundled.existingSecret | default (include "hangar.natsName" .) }}{{- end -}}
+
+{{- define "hangar.s3StaticCredentials" -}}
+{{- if or .Values.storage.s3.existingSecret .Values.storage.s3.accessKeyID -}}true{{- end -}}
+{{- end -}}
+
+{{- define "hangar.bootstrapEnabled" -}}
+{{- if or .Values.bootstrapAdmin.existingSecret .Values.bootstrapAdmin.username -}}true{{- end -}}
+{{- end -}}
+
+{{/*
+A generated secret value that survives upgrades: the value already stored in
+Secret $name under $key (helm lookup), or a new random one.
+Usage: include "hangar.persistentRandom" (list $ "secret-name" "key")
+*/}}
+{{- define "hangar.persistentRandom" -}}
+{{- $root := index . 0 -}}
+{{- $existing := lookup "v1" "Secret" $root.Release.Namespace (index . 1) -}}
+{{- if and $existing $existing.data (hasKey $existing.data (index . 2)) -}}
+{{- index $existing.data (index . 2) | b64dec -}}
+{{- else -}}
+{{- randAlphaNum 48 -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Checksum of the secret settings supplied in values, so pods restart when they
+change. Generated values are left out on purpose: they would differ on every
+offline render.
+*/}}
+{{- define "hangar.secretValuesChecksum" -}}
+{{- $v := list .Values.database .Values.storage.s3 .Values.dockerTokenKey .Values.bootstrapAdmin .Values.httpProxyPassword .Values.nats.external .Values.nats.bundled.password .Values.nats.bundled.existingSecret -}}
+{{- toJson $v | sha256sum -}}
+{{- end -}}
+
+{{/* hangar.yaml: config values plus the keys the chart manages. */}}
+{{- define "hangar.configYaml" -}}
+{{- $cfg := deepCopy .Values.config -}}
+{{- $server := (get $cfg "server") | default (dict) -}}
+{{- $_ := set $server "addr" ":8080" -}}
+{{- $_ := set $cfg "server" $server -}}
+{{- $db := (get $cfg "database") | default (dict) -}}
+{{- $_ := unset $db "url" -}}
+{{- $_ := set $db "migrate_on_start" (eq .Values.migrations.mode "onStart") -}}
+{{- $_ := set $cfg "database" $db -}}
+{{- $storage := (get $cfg "storage") | default (dict) -}}
+{{- $_ := set $storage "kind" .Values.storage.kind -}}
+{{- $_ := unset $storage "fs" -}}
+{{- $_ := unset $storage "s3" -}}
+{{- if eq .Values.storage.kind "fs" -}}
+{{- $_ := set $storage "fs" (dict "path" "/var/lib/hangar/blobs") -}}
+{{- else -}}
+{{- $s3 := dict "endpoint" .Values.storage.s3.endpoint "region" .Values.storage.s3.region "bucket" .Values.storage.s3.bucket "prefix" .Values.storage.s3.prefix "use_path_style" .Values.storage.s3.usePathStyle -}}
+{{- if .Values.storage.s3.partSize -}}{{- $_ := set $s3 "part_size" (int64 .Values.storage.s3.partSize) -}}{{- end -}}
+{{- if .Values.storage.s3.caFile -}}{{- $_ := set $s3 "ca_file" .Values.storage.s3.caFile -}}{{- end -}}
+{{- $_ := set $storage "s3" $s3 -}}
+{{- end -}}
+{{- $_ := set $cfg "storage" $storage -}}
+{{- if eq .Values.nats.mode "embedded" -}}
+{{- $_ := set $cfg "nats" (dict "embedded" true "data_dir" "/var/lib/hangar/nats") -}}
+{{- else -}}
+{{- /* The URL (with credentials) comes from HANGAR_NATS_URL. */ -}}
+{{- $_ := set $cfg "nats" (dict "embedded" false) -}}
+{{- end -}}
+{{- $_ := unset $cfg "docker" -}}
+{{- $_ := unset $cfg "bootstrap" -}}
+{{- toYaml $cfg -}}
+{{- end -}}
+
+{{/* Fails the render with an actionable message on unsupported combinations. */}}
+{{- define "hangar.validate" -}}
+{{- $multi := include "hangar.multiReplica" . -}}
+{{- $base := dig "server" "base_url" "" .Values.config | toString -}}
+{{- if not (regexMatch "^https?://[^/]+" $base) -}}
+{{- fail "config.server.base_url is required: the external URL clients use, e.g. https://hangar.example.com" -}}
+{{- end -}}
+{{- if not (or .Values.database.url .Values.database.existingSecret) -}}
+{{- fail "set database.url or database.existingSecret (PostgreSQL connection URL)" -}}
+{{- end -}}
+{{- if not (has .Values.storage.kind (list "s3" "fs")) -}}
+{{- fail "storage.kind must be s3 or fs" -}}
+{{- end -}}
+{{- if and (eq .Values.storage.kind "s3") (not .Values.storage.s3.bucket) -}}
+{{- fail "storage.s3.bucket is required for storage.kind=s3" -}}
+{{- end -}}
+{{- if and (not .Values.storage.s3.existingSecret) (ne (empty .Values.storage.s3.accessKeyID) (empty .Values.storage.s3.secretAccessKey)) -}}
+{{- fail "storage.s3.accessKeyID and storage.s3.secretAccessKey must be set together" -}}
+{{- end -}}
+{{- if and (eq .Values.storage.kind "fs") $multi (not (has "ReadWriteMany" .Values.storage.fs.persistence.accessModes)) -}}
+{{- fail "storage.kind=fs with more than one replica (or autoscaling) needs storage.fs.persistence.accessModes [ReadWriteMany]; or use S3" -}}
+{{- end -}}
+{{- if not (has .Values.nats.mode (list "bundled" "external" "embedded")) -}}
+{{- fail "nats.mode must be bundled, external or embedded" -}}
+{{- end -}}
+{{- if and (eq .Values.nats.mode "embedded") $multi -}}
+{{- fail "nats.mode=embedded runs NATS inside one process: use replicaCount 1 without autoscaling, or nats.mode=bundled/external" -}}
+{{- end -}}
+{{- if and (eq .Values.nats.mode "external") (not (or .Values.nats.external.url .Values.nats.external.existingSecret)) -}}
+{{- fail "nats.mode=external needs nats.external.url or nats.external.existingSecret" -}}
+{{- end -}}
+{{- if and (eq .Values.nats.mode "bundled") .Values.nats.bundled.password (not (regexMatch "^[A-Za-z0-9]+$" .Values.nats.bundled.password)) -}}
+{{- fail "nats.bundled.password may contain only letters and digits (it is embedded in a URL)" -}}
+{{- end -}}
+{{- if not (has .Values.migrations.mode (list "job" "onStart" "none")) -}}
+{{- fail "migrations.mode must be job, onStart or none" -}}
+{{- end -}}
+{{- if and (eq .Values.migrations.mode "onStart") $multi -}}
+{{- fail "migrations.mode=onStart with several replicas would run migrations concurrently: use migrations.mode=job" -}}
+{{- end -}}
+{{- if and (not .Values.bootstrapAdmin.existingSecret) (ne (empty .Values.bootstrapAdmin.username) (empty .Values.bootstrapAdmin.password)) -}}
+{{- fail "bootstrapAdmin.username and bootstrapAdmin.password must be set together" -}}
+{{- end -}}
+{{- end -}}

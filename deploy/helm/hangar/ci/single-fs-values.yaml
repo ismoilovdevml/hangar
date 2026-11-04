@@ -1,0 +1,25 @@
+# Single node: one replica, filesystem blobs on a PVC, embedded NATS,
+# migrations on start, Gateway API routes.
+replicaCount: 1
+config:
+  server:
+    base_url: https://hangar.lab.example
+database:
+  url: postgres://hangar:secret@postgres.db.svc:5432/hangar?sslmode=disable
+storage:
+  kind: fs
+  fs:
+    persistence:
+      size: 200Gi
+      storageClass: fast-ssd
+nats:
+  mode: embedded
+migrations:
+  mode: onStart
+httpRoute:
+  enabled: true
+  parentRefs:
+    - name: public
+      namespace: gateway-system
+  hostnames: [hangar.lab.example]
+  registryHostnames: [registry.lab.example]

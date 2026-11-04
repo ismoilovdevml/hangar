@@ -1,0 +1,12 @@
+{{- include "hangar.validate" . -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "hangar.fullname" . }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+data:
+  hangar.yaml: |
+    # Rendered by the Helm chart from .Values.config; secrets come from the
+    # environment (HANGAR_*), which overrides this file.
+    {{- include "hangar.configYaml" . | nindent 4 }}

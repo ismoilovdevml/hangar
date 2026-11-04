@@ -1,0 +1,62 @@
+# Highly available: 3 replicas, bundled 3-node NATS, S3 via existing secrets,
+# ingress-nginx with a separate registry host, monitoring and network policies.
+replicaCount: 3
+config:
+  server:
+    base_url: https://hangar.example.com
+database:
+  existingSecret: hangar-db
+  existingSecretKey: uri
+storage:
+  kind: s3
+  s3:
+    endpoint: https://minio.storage.svc:9000
+    bucket: hangar-blobs
+    usePathStyle: true
+    partSize: 33554432
+    existingSecret: hangar-s3
+dockerTokenKey:
+  existingSecret: hangar-docker
+bootstrapAdmin:
+  existingSecret: hangar-admin
+ingress:
+  enabled: true
+  className: nginx
+  preset: nginx
+  host: hangar.example.com
+  registryHost: registry.example.com
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+podAntiAffinityPreset: hard
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: hangar
+        app.kubernetes.io/component: server
+metrics:
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: prometheus
+networkPolicy:
+  enabled: true
+  ingressFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+  egress:
+    enabled: true
+    to:
+      - ports:
+          - port: 5432
+            protocol: TCP
+          - port: 9000
+            protocol: TCP
+          - port: 443
+            protocol: TCP

@@ -1,0 +1,69 @@
+{{- if .Values.ingress.enabled }}
+{{- $svc := include "hangar.fullname" . -}}
+{{- $port := .Values.service.port -}}
+{{- $preset := dict -}}
+{{- if eq .Values.ingress.preset "nginx" -}}
+{{- /* Multi-GB layers and artifacts: no size limit, stream both ways, long transfers. */ -}}
+{{- $preset = dict
+  "nginx.ingress.kubernetes.io/proxy-body-size" "0"
+  "nginx.ingress.kubernetes.io/proxy-request-buffering" "off"
+  "nginx.ingress.kubernetes.io/proxy-buffering" "off"
+  "nginx.ingress.kubernetes.io/proxy-http-version" "1.1"
+  "nginx.ingress.kubernetes.io/proxy-connect-timeout" "15"
+  "nginx.ingress.kubernetes.io/proxy-read-timeout" "3600"
+  "nginx.ingress.kubernetes.io/proxy-send-timeout" "3600"
+-}}
+{{- else if and (eq .Values.ingress.preset "traefik") .Values.ingress.tls.enabled -}}
+{{- $preset = dict "traefik.ingress.kubernetes.io/router.tls" "true" -}}
+{{- end -}}
+{{- $annotations := mustMergeOverwrite $preset (.Values.ingress.annotations | default dict) }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $svc }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+  {{- with $annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host | quote }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+    {{- if .Values.ingress.registryHost }}
+    - hosts:
+        - {{ .Values.ingress.registryHost | quote }}
+      secretName: {{ .Values.ingress.tls.registrySecretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $svc }}
+                port:
+                  number: {{ $port }}
+    {{- if .Values.ingress.registryHost }}
+    # Docker / OCI clients only.
+    - host: {{ .Values.ingress.registryHost | quote }}
+      http:
+        paths:
+          - path: /v2
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $svc }}
+                port:
+                  number: {{ $port }}
+    {{- end }}
+{{- end }}

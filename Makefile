@@ -17,6 +17,9 @@ LDFLAGS     := -s -w \
                -X $(PKG)/internal/version.Commit=$(COMMIT) \
                -X $(PKG)/internal/version.Date=$(DATE)
 IMAGE       ?= hangar:dev
+SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct 2>/dev/null)
+HELM_CHART  := deploy/helm/hangar
+HELM_CI_VALUES := $(wildcard $(HELM_CHART)/ci/*-values.yaml)
 # Explicit package roots: web/node_modules may contain stray Go packages.
 GO_PACKAGES := ./cmd/... ./internal/... ./test/...
 WEB_PRESENT := $(wildcard web/package.json)
@@ -81,7 +84,38 @@ build-embed: web-build ## Build bin/hangar with web/dist embedded
 
 .PHONY: docker
 docker: ## Build the container image ($(IMAGE))
-	docker build -t $(IMAGE) --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) .
+	docker build -t $(IMAGE) --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) \
+		--build-arg SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) .
+
+## ---- Deployment artifacts (deploy/) ----------------------------------
+
+.PHONY: deploy-check
+deploy-check: helm-lint helm-template compose-config deploy-scripts-check ## Validate the Helm chart, compose stack and scripts
+
+.PHONY: helm-lint
+helm-lint: ## helm lint the chart with every value set in deploy/helm/hangar/ci
+	@set -e; for v in $(HELM_CI_VALUES); do echo "helm lint -f $$v"; helm lint --strict $(HELM_CHART) -f $$v; done
+
+.PHONY: helm-template
+helm-template: ## Render the chart with every CI value set (kubeconform validates when installed)
+	@set -e; for v in $(HELM_CI_VALUES); do \
+		echo "helm template -f $$v"; \
+		helm template hangar $(HELM_CHART) -n hangar -f $$v > /dev/null; \
+		if command -v kubeconform >/dev/null 2>&1; then \
+			helm template hangar $(HELM_CHART) -n hangar -f $$v | kubeconform -strict -ignore-missing-schemas -summary; \
+		fi; \
+	done
+
+.PHONY: compose-config
+compose-config: ## Validate deploy/compose with the example environment and dummy secrets
+	@tmp=$$(mktemp); trap 'rm -f $$tmp' EXIT; \
+	sed -E 's/^(HANGAR_DOCKER_TOKEN_KEY|POSTGRES_PASSWORD|HANGAR_STORAGE_S3_SECRET_ACCESS_KEY|MINIO_ROOT_PASSWORD|HANGAR_BOOTSTRAP_ADMIN_PASSWORD)=$$/\1=check-only-value/' \
+		deploy/compose/.env.example > $$tmp; \
+	docker compose -f deploy/compose/compose.yaml --env-file $$tmp config --quiet && echo "deploy/compose: ok"
+
+.PHONY: deploy-scripts-check
+deploy-scripts-check: ## shellcheck deploy/scripts
+	shellcheck -x deploy/scripts/*.sh
 
 ## ---- Quality -----------------------------------------------------------
 

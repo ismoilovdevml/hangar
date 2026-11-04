@@ -1,0 +1,24 @@
+{{- if and (eq .Values.storage.kind "fs") (not .Values.storage.fs.persistence.existingClaim) }}
+{{- $p := .Values.storage.fs.persistence }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "hangar.fullname" . }}-data
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+  annotations:
+    # Blobs outlive the release: `helm uninstall` keeps this claim.
+    helm.sh/resource-policy: keep
+    {{- with $p.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  accessModes:
+    {{- toYaml $p.accessModes | nindent 4 }}
+  {{- with $p.storageClass }}
+  storageClassName: {{ if eq . "-" }}""{{ else }}{{ . }}{{ end }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $p.size }}
+{{- end }}
