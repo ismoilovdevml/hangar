@@ -36,10 +36,13 @@ func loadConfig(fs *flag.FlagSet, args []string, stderr io.Writer) (config.Confi
 func serveCmd(args []string, stderr io.Writer) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	migrate := fs.Bool("migrate", false, "apply pending migrations before serving (also database.migrate_on_start)")
-	cfg, log, err := loadConfig(fs, args, stderr)
+	cfg, _, err := loadConfig(fs, args, stderr)
 	if err != nil {
 		return err
 	}
+	// Recent records are also kept in memory for the System logs screen.
+	logRing := observability.NewLogRing(cfg.Log.BufferSize)
+	log := observability.NewLoggerWithRing(stderr, cfg.Log.Level, cfg.Log.Format, logRing)
 	slog.SetDefault(log)
 	info := version.Get()
 	log.Info("starting hangar", "version", info.Version, "commit", info.Commit, "addr", cfg.Server.Addr,
@@ -77,7 +80,7 @@ func serveCmd(args []string, stderr io.Writer) error {
 		return err
 	}
 
-	a, err := build(ctx, cfg, pool, metrics, log, time.Now())
+	a, err := build(ctx, cfg, pool, metrics, log, time.Now(), logRing)
 	if err != nil {
 		return err
 	}

@@ -90,12 +90,18 @@ type Server struct {
 	ShutdownTimeout time.Duration `yaml:"shutdown_timeout"`
 	// TrustedProxies are CIDRs whose X-Forwarded-For is honoured for client IPs.
 	TrustedProxies []string `yaml:"trusted_proxies"`
+	// NodeID names this process on the System status and System logs
+	// screens; unique per node. Empty: the host name.
+	NodeID string `yaml:"node_id"`
 }
 
 // Log configures structured logging.
 type Log struct {
 	Level  string `yaml:"level"`  // debug, info, warn, error
 	Format string `yaml:"format"` // json or text
+	// BufferSize is how many recent records each node keeps in memory for
+	// the System logs screen (100 to 100000).
+	BufferSize int `yaml:"buffer_size"`
 }
 
 // Database configures PostgreSQL.
@@ -244,7 +250,7 @@ func Default() Config {
 			IdleTimeout:       120 * time.Second,
 			ShutdownTimeout:   30 * time.Second,
 		},
-		Log:      Log{Level: "info", Format: "json"},
+		Log:      Log{Level: "info", Format: "json", BufferSize: 5000},
 		Database: Database{MaxConns: 20, MinConns: 2, ConnLifetime: time.Hour},
 		Storage: Storage{Kind: "fs", FS: FSStorage{Path: "./data/blobs"},
 			GC: GC{GracePeriod: 48 * time.Hour, BatchSize: 100, TempMaxAge: 24 * time.Hour}},
@@ -312,6 +318,12 @@ func (c *Config) Validate() error {
 		errs = append(errs, fmt.Errorf("server.base_url %q must be an absolute URL", c.Server.BaseURL))
 	}
 	c.Server.BaseURL = strings.TrimSuffix(c.Server.BaseURL, "/")
+	if c.Log.BufferSize < 100 || c.Log.BufferSize > 100000 {
+		errs = append(errs, fmt.Errorf("log.buffer_size %d: want 100 to 100000", c.Log.BufferSize))
+	}
+	if len(c.Server.NodeID) > 128 {
+		errs = append(errs, errors.New("server.node_id: at most 128 characters"))
+	}
 	switch c.Storage.Kind {
 	case "fs":
 		if c.Storage.FS.Path == "" {

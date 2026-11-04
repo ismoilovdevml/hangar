@@ -38,10 +38,16 @@ server:
   # and audit. Requests from other peers have these headers ignored.
   trusted_proxies: []
   #  - 10.0.0.0/8
+  # Name of this node on the System status and System logs screens; must be
+  # unique per node. Default: empty (the host name).
+  node_id: ""
 
 log:
   level: info # debug, info, warn, error
   format: json # json or text
+  # Recent records each node keeps in memory for the System logs screen
+  # (100 to 100000; about 1 KiB each). Full logs stay on stderr.
+  buffer_size: 5000
 
 database:
   # PostgreSQL 16+. Default: empty (required). Set HANGAR_DATABASE_URL in

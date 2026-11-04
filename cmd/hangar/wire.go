@@ -41,6 +41,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/storage/fs"
 	"github.com/ismoilovdevml/hangar/internal/storage/registry"
 	"github.com/ismoilovdevml/hangar/internal/storage/s3"
+	"github.com/ismoilovdevml/hangar/internal/sysmon"
 	"github.com/ismoilovdevml/hangar/internal/tasks"
 	"github.com/ismoilovdevml/hangar/internal/tasks/blobgc"
 	"github.com/ismoilovdevml/hangar/internal/tasks/dockergc"
@@ -152,7 +153,9 @@ func closeAudit(l *audit.Log, log *slog.Logger) {
 //
 // On error everything built so far is closed again. metrics receives every
 // collector; the pool's statement tracer was installed when it was opened.
-func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *observability.Metrics, log *slog.Logger, started time.Time) (_ *app, err error) {
+func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *observability.Metrics, log *slog.Logger, started time.Time,
+	logRing *observability.LogRing,
+) (_ *app, err error) {
 	a := &app{}
 	defer func() {
 		if err != nil {
@@ -364,6 +367,20 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	if err != nil {
 		return nil, err
 	}
+	// System status and System logs: this node's checks, its heartbeat and
+	// its log buffer, served to the other nodes over NATS.
+	mon := newMonitor(monitorDeps{cfg: cfg, pool: pool, health: hc, nats: rt, blobStore: blobs.ByName,
+		upstreams: healthReporter, oidc: sso, auth: authSvc, started: started, log: log})
+	sysLogs := sysmon.NewLogs(mon.NodeID(), logRing, rt.Conn, log)
+	if err := sysLogs.Serve(); err != nil {
+		return nil, err
+	}
+	a.onClose(sysLogs.Close)
+	monCtx, stopMon := context.WithCancel(context.WithoutCancel(ctx))
+	monDone := make(chan struct{})
+	go func() { mon.Run(monCtx); close(monDone) }()
+	a.onClose(func() { stopMon(); <-monDone })
+
 	authOpts := httpapi.Options{
 		Organization: httpapi.Organization{Slug: cfg.Server.InstanceName, Name: cfg.Server.InstanceName},
 		BaseURL:      cfg.Server.BaseURL,
@@ -384,6 +401,8 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		UpstreamCache:  upstreams,
 		AuthMiddleware: chainMiddleware(httpapi.Middleware(authSvc, authOpts), observability.TagPrincipal),
 		Traffic:        rollup.NewStore(pool),
+		Monitor:        mon,
+		Logs:           sysLogs,
 		AuthRoutes:     api.RouteFunc(func(r chi.Router) { httpapi.Register(r, authSvc, authOpts) }),
 	}
 	a.onClose(restAPI.Close)
@@ -454,7 +473,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	})
 	restAPI.Tasks, restAPI.Cleanup = taskSvc, cleanupSvc
 
-	sched, err := scheduler.New(pool, queue, scheduler.Options{Logger: log, Tickers: []scheduler.Ticker{taskSvc}})
+	sched, err := scheduler.New(pool, queue, scheduler.Options{Logger: log, Tickers: []scheduler.Ticker{taskSvc}, OnLeader: mon.SetLeader})
 	if err != nil {
 		return nil, err
 	}

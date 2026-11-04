@@ -286,6 +286,105 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BuildInfo" }
+  /system/nodes:
+    get:
+      tags: [system]
+      operationId: listSystemNodes
+      summary: Every Hangar node with its role and subsystem health (System status screen)
+      description: |
+        This node is listed first with checks run now (reused for 5 s); other
+        nodes come from the heartbeat each node writes every 15 s. A node
+        silent for 45 s is `stale` and `down`; after an hour it is no longer
+        listed. Requires `system:cluster:read`. When the database cannot be
+        read only this node is returned, with `partial` set.
+      responses:
+        "200":
+          description: Nodes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemNodeList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /system/health:
+    get:
+      tags: [system]
+      operationId: getSystemHealth
+      summary: Subsystem health of the node that answers, checked now
+      description: |
+        Database, blob stores, NATS / JetStream, task scheduler, search index,
+        external sign-in and proxy upstreams, each `healthy`, `degraded` or
+        `down` with a detail sentence and the time it was checked. Always
+        200; read `status`. Requires `system:cluster:read`.
+      responses:
+        "200":
+          description: This node
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemNode" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /system/logs:
+    get:
+      tags: [system]
+      operationId: listSystemLogs
+      summary: Recent log records of a node from its in-memory buffer
+      description: |
+        Each node keeps its newest `log.buffer_size` records (default 5000)
+        in memory, scrubbed of credentials like the records written to
+        stderr. Without `cursor` the newest `limit` matching records are
+        returned (oldest first); pass the returned `cursor` to get only newer
+        records, and `wait` to hold the request until one arrives (long poll).
+        `cursor=0` reads the buffer from its oldest record (downloads). Other
+        nodes are asked over NATS. Full logs stay in the container or journal
+        output. Requires `system:cluster:admin`.
+      parameters:
+        - name: node
+          in: query
+          description: Node id from /system/nodes; default the node that answers
+          schema: { type: string }
+        - name: level
+          in: query
+          description: Minimum level; default every level the buffer holds
+          schema: { type: string, enum: [debug, info, warn, error] }
+        - name: q
+          in: query
+          description: Case-insensitive text in the message or attributes (at most 200 characters)
+          schema: { type: string, maxLength: 200 }
+        - name: since
+          in: query
+          description: RFC 3339 time, or a duration back from now such as `15m`
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 5000, default: 500 }
+        - name: cursor
+          in: query
+          description: "`cursor` of an earlier page: return only records after it"
+          schema: { type: string }
+        - name: wait
+          in: query
+          description: With `cursor`, seconds to wait for a matching record (long poll)
+          schema: { type: integer, minimum: 0, maximum: 30, default: 0 }
+      responses:
+        "200":
+          description: Records
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemLogPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: The node is not running or does not answer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "502":
+          description: The node did not answer in time
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /formats:
     get:
       tags: [system]
@@ -1705,6 +1804,10 @@ paths:
     get:
       tags: [cluster]
       operationId: listNodes
+      description: |
+        Nodes from the heartbeats behind /system/nodes, in the cluster summary
+        shape. `quorum` means more than half of the known nodes are up.
+        Requires `system:cluster:read`.
       responses:
         "200":
           description: Cluster members and dependency health
@@ -2087,6 +2190,107 @@ components:
         dependencies:
           type: array
           items: { $ref: "#/components/schemas/DependencyStatus" }
+
+    SystemStatusLevel:
+      type: string
+      enum: [healthy, degraded, down]
+    SystemSubsystem:
+      type: object
+      required: [name, label, status, detail, checked_at]
+      properties:
+        name:
+          type: string
+          description: database, blobstores, eventbus, scheduler, search, auth, upstreams
+        label: { type: string, description: "Display name, e.g. PostgreSQL" }
+        status: { $ref: "#/components/schemas/SystemStatusLevel" }
+        detail: { type: string, description: One sentence explaining the status }
+        checked_at: { $ref: "#/components/schemas/Timestamp" }
+        latency_ms: { type: integer }
+        facts:
+          type: array
+          description: Labelled values in display order (pool usage, free space, ...)
+          items:
+            type: object
+            required: [label, value]
+            properties:
+              label: { type: string }
+              value: { type: string }
+    SystemNode:
+      type: object
+      required: [id, hostname, url, version, commit, started_at, uptime_seconds, last_heartbeat, role, status, stale, current, subsystems]
+      properties:
+        id: { type: string, description: "server.node_id, default the host name" }
+        hostname: { type: string }
+        url: { type: string, description: Address of this node itself (not the load balancer) }
+        version: { type: string }
+        commit: { type: string }
+        started_at: { $ref: "#/components/schemas/Timestamp" }
+        uptime_seconds: { type: integer }
+        last_heartbeat: { $ref: "#/components/schemas/Timestamp" }
+        role:
+          type: string
+          enum: [leader, follower]
+          description: Scheduler role; the leader schedules tasks, every node executes them
+        status:
+          $ref: "#/components/schemas/SystemStatusLevel"
+        stale:
+          type: boolean
+          description: No heartbeat for three intervals; status is down
+        current:
+          type: boolean
+          description: The node that answered this request
+        subsystems:
+          type: array
+          items: { $ref: "#/components/schemas/SystemSubsystem" }
+    SystemNodeList:
+      type: object
+      required: [current, generated_at, items, partial]
+      properties:
+        current: { type: string, description: Id of the node that answered }
+        generated_at: { $ref: "#/components/schemas/Timestamp" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SystemNode" }
+        partial:
+          type: boolean
+          description: Only this node is listed because the database cannot be read
+        message: { type: string }
+    SystemLogRecord:
+      type: object
+      required: [seq, time, level, msg]
+      properties:
+        seq: { type: integer, description: Sequence number within the node's process }
+        time: { $ref: "#/components/schemas/Timestamp" }
+        level: { type: string, enum: [debug, info, warn, error] }
+        msg: { type: string }
+        attrs:
+          type: object
+          additionalProperties: true
+          description: Structured attributes (request_id, trace_id, principal, repository, error, ...); credentials are replaced by REDACTED
+    SystemLogPage:
+      type: object
+      required: [node, items, cursor, more, gap, buffer]
+      properties:
+        node: { type: string }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SystemLogRecord" }
+        cursor:
+          type: string
+          description: Pass back to get only newer records
+        more:
+          type: boolean
+          description: The limit cut this page short; ask again at once with `cursor`
+        gap:
+          type: boolean
+          description: Records after the cursor were overwritten before they were read, or the node restarted
+        buffer:
+          type: object
+          required: [size, capacity, oldest_seq]
+          properties:
+            size: { type: integer }
+            capacity: { type: integer }
+            oldest_seq: { type: integer }
 
     # ------------------------------------------------------------ overview
     OverviewRange:
