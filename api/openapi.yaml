@@ -848,6 +848,69 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ComponentInfo" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /components/{id}/readme-images/{sig}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+      - name: sig
+        in: path
+        required: true
+        schema: { type: string }
+        description: Signature the server issued for this component and source
+      - name: u
+        in: query
+        schema: { type: string }
+        description: Remote image URL (proxy mode). Exactly one of u and p.
+      - name: p
+        in: query
+        schema: { type: string }
+        description: File inside the package archive. Exactly one of u and p.
+    get:
+      tags: [components]
+      operationId: getReadmeImage
+      summary: An image of a version's README, or its icon
+      description: >-
+        Serves the URLs `GET /components/{id}/info` returns in
+        `readme.images` and `icon_url`; only URLs this server signed for the
+        component are accepted, so this is not an open proxy. `p` names a
+        file inside the .nupkg or npm tarball. `u` is a remote image the
+        server fetches when `ui.readme_images` is `proxy`: through the
+        outbound HTTP settings and the address policy (the URL and every
+        redirect hop), https only unless `ui.readme_images_allow_http`, at
+        most 5 MiB and 15 s, without cookies, credentials or referrer, and
+        cached for 24 hours (failures for 15 minutes). Only content that
+        sniffs as PNG, JPEG, GIF, WebP, AVIF or SVG is served, with
+        `Content-Security-Policy: default-src 'none'; style-src
+        'unsafe-inline'; frame-ancestors 'none'; sandbox` and
+        `X-Content-Type-Options: nosniff`. Needs read access to the
+        component's repository.
+      responses:
+        "200":
+          description: The image
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/gif: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+            image/avif: { schema: { type: string, format: binary } }
+            image/svg+xml: { schema: { type: string, format: binary } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: The URL is not signed by this server for this component (`invalid_signature`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "415":
+          description: The file is not a served image type (`not_an_image`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502":
+          description: The remote image could not be loaded (`image_unavailable`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /assets/{id}:
     parameters:
       - $ref: "#/components/parameters/Id"
@@ -3312,7 +3375,7 @@ components:
           description: Absent for Docker, whose files are fetched with the registry protocol
     Readme:
       type: object
-      required: [format, content, source, truncated]
+      required: [format, content, source, truncated, images]
       properties:
         format:
           type: string
@@ -3325,9 +3388,19 @@ components:
         truncated:
           type: boolean
           description: The README was longer than 512 KiB and was cut
+        images:
+          type: object
+          additionalProperties: { type: string }
+          description: >-
+            Each image source of a Markdown README, as written in it (Markdown
+            images and HTML img tags), mapped to the URL the browser loads:
+            a signed `/components/{id}/readme-images/...` URL, or in direct
+            mode the remote https URL itself. Relative paths are resolved
+            inside the package, else in the source repository (github.com,
+            gitlab.com). Sources left out are shown as their alternative text.
     ComponentInfo:
       type: object
-      required: [licenses, keywords]
+      required: [licenses, keywords, readme_images]
       properties:
         description: { type: string }
         licenses:
@@ -3339,6 +3412,13 @@ components:
           items: { type: string }
         homepage: { type: string }
         readme: { $ref: "#/components/schemas/Readme" }
+        icon_url:
+          type: string
+          description: The package's own icon (NuGet `<icon>` in the .nupkg, or `<iconUrl>`), loadable like `readme.images`
+        readme_images:
+          type: string
+          enum: [proxy, direct, off]
+          description: How README images on other hosts are shown (`ui.readme_images`)
 
     # ------------------------------------------------------------ search
     FacetValue:

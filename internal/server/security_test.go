@@ -307,3 +307,16 @@ func TestBodyIdleTimeout(t *testing.T) {
 		t.Errorf("results = %v", results)
 	}
 }
+
+// README images loaded directly from their hosts (ui.readme_images: direct)
+// widen img-src only; nothing else of the web UI's policy changes.
+func TestUIImageSources(t *testing.T) {
+	h := securedRouter(t, Security{UIImageSources: []string{"https:"}})
+	got := serve(h, httptest.NewRequest(http.MethodGet, "/", nil)).Header().Get("Content-Security-Policy")
+	if want := strings.Replace(CSPWebUI, "img-src 'self' data:;", "img-src 'self' data: https:;", 1); got != want || got == CSPWebUI {
+		t.Errorf("CSP = %q, want %q", got, want)
+	}
+	if got := serve(h, httptest.NewRequest(http.MethodGet, "/api/v1/system/status", nil)).Header().Get("Content-Security-Policy"); got != CSPAPI {
+		t.Errorf("API CSP = %q", got)
+	}
+}

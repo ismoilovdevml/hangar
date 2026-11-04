@@ -93,7 +93,7 @@ func NewRouter(o RouterOptions) http.Handler {
 		})
 	}
 
-	ui := uiHeaders(sec.bodyLimit(maxOtherBody)(webui.Handler()))
+	ui := sec.uiHeaders(sec.bodyLimit(maxOtherBody)(webui.Handler()))
 	r.NotFound(ui.ServeHTTP)
 	return r
 }

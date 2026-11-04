@@ -53,6 +53,23 @@ type Config struct {
 	Security Security `yaml:"security"`
 	// Observability configures tracing and access log sampling.
 	Observability Observability `yaml:"observability"`
+	// UI configures the web UI.
+	UI UI `yaml:"ui"`
+}
+
+// UI configures the web UI.
+type UI struct {
+	// ReadmeImages is how images in package READMEs that live on other hosts
+	// are shown: "proxy" (default) fetches them through Hangar, so browsers
+	// never contact those hosts; "direct" lets browsers load https images
+	// from their hosts (the content security policy allows https: images;
+	// those hosts see the viewer's IP address and that the README was
+	// opened); "off" shows their alternative text only. Images stored
+	// inside the package are always served by Hangar.
+	ReadmeImages string `yaml:"readme_images"`
+	// ReadmeImagesAllowHTTP loads http:// README images as written; by
+	// default they are upgraded to https://.
+	ReadmeImagesAllowHTTP bool `yaml:"readme_images_allow_http"`
 }
 
 // Docker configures the Docker / OCI format.
@@ -289,6 +306,7 @@ func Default() Config {
 		Metrics:  Metrics{Enabled: true, Path: "/metrics"},
 		Scanning: Scanning{Enabled: true, RescanInterval: 24 * time.Hour, OSV: OSV{URL: "https://api.osv.dev"}},
 		Security: DefaultSecurity(),
+		UI:       UI{ReadmeImages: "proxy"},
 		Observability: Observability{
 			Tracing:   Tracing{SampleRatio: 0.1, ServiceName: "hangar"},
 			AccessLog: AccessLog{SampleRatio: 1},
@@ -407,6 +425,13 @@ func (c *Config) Validate() error {
 		errs = append(errs, fmt.Errorf("metrics.path %q must start with /", c.Metrics.Path))
 	}
 	errs = append(errs, c.Security.validate()...)
+	switch c.UI.ReadmeImages = strings.ToLower(strings.TrimSpace(c.UI.ReadmeImages)); c.UI.ReadmeImages {
+	case "":
+		c.UI.ReadmeImages = "proxy"
+	case "proxy", "direct", "off":
+	default:
+		errs = append(errs, fmt.Errorf("ui.readme_images %q: want proxy, direct or off", c.UI.ReadmeImages))
+	}
 	if c.Scanning.Enabled {
 		if u, err := url.Parse(c.Scanning.OSV.URL); err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 			errs = append(errs, fmt.Errorf("scanning.osv.url %q must be an http:// or https:// URL", redactURL(c.Scanning.OSV.URL)))

@@ -360,3 +360,19 @@ observability:
     # Share of requests written to the access log (0 to 1). Server errors
     # (5xx) are always logged.
     sample_ratio: 1
+
+# Web UI.
+ui:
+  # Images in package READMEs that live on other hosts (badges, logos):
+  #   proxy  - Hangar fetches them (outbound proxy and address policy of the
+  #            `http` section, https only, 5 MiB, images only, cached 24h) and
+  #            serves them from its own origin. Browsers contact no other host.
+  #   direct - browsers load https images from their hosts. Simpler, but each
+  #            host learns the viewer's IP address and when a README is read.
+  #   off    - only the image's alternative text is shown.
+  # Images stored inside the package are always served by Hangar.
+  # HANGAR_UI_README_IMAGES.
+  readme_images: proxy
+  # Load http:// README images over plain HTTP instead of upgrading them to
+  # https://. HANGAR_UI_README_IMAGES_ALLOW_HTTP.
+  readme_images_allow_http: false
