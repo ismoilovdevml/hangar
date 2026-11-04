@@ -36,8 +36,8 @@ type Report struct {
 	Rows int `json:"rows"`
 }
 
-// Sweep walks every stored secret (repositories.config and
-// blob_stores.config) in one transaction, sealing plaintext values with the
+// Sweep walks every stored secret (repositories.config, blob_stores.config,
+// the sign-in settings and the outbound proxy passwords) in one transaction, sealing plaintext values with the
 // primary key and, with Rewrap, re-wrapping values sealed with previous keys.
 // It is idempotent and safe to run on several nodes at once (rows are locked).
 // Updated rows keep their updated_at: the secrets themselves do not change.
@@ -88,13 +88,24 @@ func Sweep(ctx context.Context, pool *pgxpool.Pool, k *Keyring, opts SweepOption
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 
 	tables := []struct {
-		table, query string
-		apply        func(doc map[string]any, where string) (bool, error)
+		table, query, update string
+		apply                func(doc map[string]any, where string) (bool, error)
 	}{
 		{"repositories", `SELECT id::text, name, config FROM repositories WHERE config ? 'proxy' ORDER BY name FOR UPDATE`,
+			`UPDATE repositories SET config = $2 WHERE id = $1`,
 			func(doc map[string]any, where string) (bool, error) { return mapRepoDoc(doc, visit(where)) }},
 		{"blob_stores", `SELECT id::text, name, config FROM blob_stores ORDER BY name FOR UPDATE`,
+			`UPDATE blob_stores SET config = $2 WHERE id = $1`,
 			func(doc map[string]any, where string) (bool, error) { return mapStoreDoc(doc, seal, visit(where)) }},
+		{"settings", `SELECT key, key, value FROM settings ORDER BY key FOR UPDATE`,
+			`UPDATE settings SET value = $2 WHERE key = $1`,
+			func(doc map[string]any, where string) (bool, error) {
+				return mapFields(doc, visit(where), "client_secret", "bind_password")
+			}},
+		{"outbound_proxies", `SELECT name, name, jsonb_build_object('password', password) FROM outbound_proxies
+			WHERE password <> '' ORDER BY name FOR UPDATE`,
+			`UPDATE outbound_proxies SET password = $2::jsonb ->> 'password' WHERE name = $1`,
+			func(doc map[string]any, where string) (bool, error) { return mapFields(doc, visit(where), "password") }},
 	}
 	for _, t := range tables {
 		updates, err := sweepTable(ctx, tx, t.table, t.query, t.apply)
@@ -105,7 +116,7 @@ func Sweep(ctx context.Context, pool *pgxpool.Pool, k *Keyring, opts SweepOption
 			continue
 		}
 		for id, doc := range updates {
-			if _, err := tx.Exec(ctx, `UPDATE `+t.table+` SET config = $2 WHERE id = $1`, id, doc); err != nil {
+			if _, err := tx.Exec(ctx, t.update, id, doc); err != nil {
 				return rep, fmt.Errorf("secrets sweep: update %s %s: %w", t.table, id, err)
 			}
 			rep.Rows++
@@ -158,6 +169,26 @@ func sweepTable(ctx context.Context, tx pgx.Tx, table, query string,
 		return nil, fmt.Errorf("secrets sweep: read %s: %w", table, err)
 	}
 	return out, nil
+}
+
+// mapFields applies fn to the non-empty string fields of doc named by
+// fields, reporting whether any changed.
+func mapFields(doc map[string]any, fn valueFunc, fields ...string) (bool, error) {
+	changed := false
+	for _, f := range fields {
+		v, ok := doc[f].(string)
+		if !ok || v == "" {
+			continue
+		}
+		nv, err := fn(f, v)
+		if err != nil {
+			return false, err
+		}
+		if nv != v {
+			doc[f], changed = nv, true
+		}
+	}
+	return changed, nil
 }
 
 // Err summarises a report's unreadable values as an error (nil if none).
