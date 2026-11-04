@@ -78,6 +78,31 @@ config:
   metrics:
     enabled: true
     path: /metrics
+  # HTTP hardening (docs/security.md). The secret key itself is set in
+  # secretKey below, never here.
+  security:
+    hsts:
+      max_age: 8760h
+      include_subdomains: false
+    cors:
+      allowed_origins: []
+    rate_limit:
+      api: { per_minute: 1200, burst: 300 }
+      failed_auth: { per_minute: 30, burst: 30 }
+    limits:
+      max_header_bytes: 131072
+      api_body_bytes: 1048576
+      upload_body_bytes: 0
+      body_idle_timeout: 2m
+  # Tracing and access log sampling (docs/operations/monitoring.md).
+  observability:
+    tracing:
+      enabled: false
+      endpoint: ""
+      sample_ratio: 0.1
+      service_name: hangar
+    access_log:
+      sample_ratio: 1
 
 # PostgreSQL 16+ (external: managed service, CloudNativePG, ...).
 database:
@@ -120,6 +145,21 @@ storage:
         - ReadWriteOnce
       size: 100Gi
       annotations: {}
+
+# Encrypts the credentials Hangar stores in PostgreSQL (proxy upstream
+# passwords, S3 keys of extra blob stores): 32 random bytes, base64 or hex
+# (`openssl rand -base64 32`). Generated once and kept across upgrades when
+# empty, and the chart's Secret survives `helm uninstall`. Back the key up
+# with the database: without it stored credentials cannot be decrypted. Set
+# value or existingSecret for GitOps tools that render offline.
+secretKey:
+  value: ""
+  # During a rotation: the old key(s) until `hangar admin rotate-secrets` ran.
+  previousKeys: []
+  existingSecret: ""
+  existingSecretKey: secret-key
+  # Optional key of existingSecret with comma-separated previous keys.
+  previousKeysKey: previous-secret-keys
 
 # Signs Docker registry tokens and upload URLs; every replica needs the same
 # key. Generated once and kept across upgrades when empty (helm lookup). With
@@ -290,6 +330,10 @@ service:
   type: ClusterIP
   port: 80
   annotations: {}
+  # Docker port connectors (repository config.connector.http_port), exposed
+  # on the Service under the same port numbers. They speak plain HTTP; prefer
+  # host connectors behind the Ingress where possible.
+  connectorPorts: []
 
 ingress:
   enabled: false
@@ -301,6 +345,9 @@ ingress:
   #   none     only `annotations`
   preset: nginx
   annotations: {}
+  # Answer the (unauthenticated) metrics path with 503 on the public host;
+  # Prometheus scrapes the pods directly.
+  blockMetrics: true
   # UI, API and every format.
   host: hangar.example.com
   # Optional separate host for Docker clients (only /v2/ is routed there).
@@ -315,6 +362,7 @@ ingress:
 httpRoute:
   enabled: false
   annotations: {}
+  blockMetrics: true
   parentRefs: []
   #  - name: public-gateway
   #    namespace: gateway-system

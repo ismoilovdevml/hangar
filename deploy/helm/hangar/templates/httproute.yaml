@@ -16,6 +16,16 @@ spec:
   hostnames:
     {{- toYaml .Values.httpRoute.hostnames | nindent 4 }}
   rules:
+    {{- if .Values.httpRoute.blockMetrics }}
+    # Unauthenticated metrics stay internal: this backend has no endpoints.
+    - matches:
+        - path:
+            type: Exact
+            value: {{ dig "metrics" "path" "/metrics" .Values.config }}
+      backendRefs:
+        - name: {{ $svc }}-blocked
+          port: 80
+    {{- end }}
     - matches:
         - path:
             type: PathPrefix

@@ -82,6 +82,11 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+            {{- range .Values.service.connectorPorts }}
+            - name: {{ printf "conn-%v" . }}
+              containerPort: {{ . }}
+              protocol: TCP
+            {{- end }}
           env:
             - name: HANGAR_CONFIG
               value: /etc/hangar/hangar.yaml
@@ -102,6 +107,18 @@ spec:
                   name: {{ include "hangar.s3Secret" . }}
                   key: {{ .Values.storage.s3.secretAccessKeyKey }}
             {{- end }}
+            - name: HANGAR_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hangar.secretKeySecret" . }}
+                  key: {{ .Values.secretKey.existingSecretKey }}
+            - name: HANGAR_SECURITY_PREVIOUS_SECRET_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hangar.secretKeySecret" . }}
+                  key: {{ .Values.secretKey.previousKeysKey }}
+                  # Present only during a key rotation.
+                  optional: true
             - name: HANGAR_DOCKER_TOKEN_KEY
               valueFrom:
                 secretKeyRef:

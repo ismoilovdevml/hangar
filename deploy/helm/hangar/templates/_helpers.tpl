@@ -71,6 +71,7 @@ app.kubernetes.io/component: nats
 {{- define "hangar.secretName" -}}{{ include "hangar.fullname" . }}{{- end -}}
 {{- define "hangar.databaseSecret" -}}{{ .Values.database.existingSecret | default (include "hangar.secretName" .) }}{{- end -}}
 {{- define "hangar.s3Secret" -}}{{ .Values.storage.s3.existingSecret | default (include "hangar.secretName" .) }}{{- end -}}
+{{- define "hangar.secretKeySecret" -}}{{ .Values.secretKey.existingSecret | default (include "hangar.secretName" .) }}{{- end -}}
 {{- define "hangar.dockerTokenSecret" -}}{{ .Values.dockerTokenKey.existingSecret | default (include "hangar.secretName" .) }}{{- end -}}
 {{- define "hangar.bootstrapSecret" -}}{{ .Values.bootstrapAdmin.existingSecret | default (include "hangar.secretName" .) }}{{- end -}}
 {{- define "hangar.proxyPasswordSecret" -}}{{ .Values.httpProxyPassword.existingSecret | default (include "hangar.secretName" .) }}{{- end -}}
@@ -88,13 +89,17 @@ app.kubernetes.io/component: nats
 {{/*
 A generated secret value that survives upgrades: the value already stored in
 Secret $name under $key (helm lookup), or a new random one.
-Usage: include "hangar.persistentRandom" (list $ "secret-name" "key")
+Usage: include "hangar.persistentRandom" (list $ "secret-name" "key" ["bytes"])
+New values are 48 letters and digits, or with "bytes" 32 random bytes in
+base64 (the format security.secret_key expects).
 */}}
 {{- define "hangar.persistentRandom" -}}
 {{- $root := index . 0 -}}
 {{- $existing := lookup "v1" "Secret" $root.Release.Namespace (index . 1) -}}
 {{- if and $existing $existing.data (hasKey $existing.data (index . 2)) -}}
 {{- index $existing.data (index . 2) | b64dec -}}
+{{- else if and (gt (len .) 3) (eq (index . 3) "bytes") -}}
+{{- randBytes 32 -}}
 {{- else -}}
 {{- randAlphaNum 48 -}}
 {{- end -}}
@@ -106,7 +111,7 @@ change. Generated values are left out on purpose: they would differ on every
 offline render.
 */}}
 {{- define "hangar.secretValuesChecksum" -}}
-{{- $v := list .Values.database .Values.storage.s3 .Values.dockerTokenKey .Values.bootstrapAdmin .Values.httpProxyPassword .Values.nats.external .Values.nats.bundled.password .Values.nats.bundled.existingSecret -}}
+{{- $v := list .Values.database .Values.storage.s3 .Values.secretKey .Values.dockerTokenKey .Values.bootstrapAdmin .Values.httpProxyPassword .Values.nats.external .Values.nats.bundled.password .Values.nats.bundled.existingSecret -}}
 {{- toJson $v | sha256sum -}}
 {{- end -}}
 
@@ -141,6 +146,10 @@ offline render.
 {{- end -}}
 {{- $_ := unset $cfg "docker" -}}
 {{- $_ := unset $cfg "bootstrap" -}}
+{{- $security := (get $cfg "security") | default (dict) -}}
+{{- $_ := unset $security "secret_key" -}}
+{{- $_ := unset $security "previous_secret_keys" -}}
+{{- if $security -}}{{- $_ := set $cfg "security" $security -}}{{- end -}}
 {{- toYaml $cfg -}}
 {{- end -}}
 
@@ -153,6 +162,14 @@ offline render.
 {{- end -}}
 {{- if not (or .Values.database.url .Values.database.existingSecret) -}}
 {{- fail "set database.url or database.existingSecret (PostgreSQL connection URL)" -}}
+{{- end -}}
+{{- range $path := list "database.url" "storage.s3.access_key_id" "storage.s3.secret_access_key" "storage.s3.session_token" "http.proxy_password" "docker.token_key" "bootstrap.admin_password" "security.secret_key" "security.previous_secret_keys" -}}
+{{- $parts := splitList "." $path -}}
+{{- $v := $.Values.config -}}
+{{- range $parts -}}{{- if kindIs "map" $v -}}{{- $v = get $v . -}}{{- else -}}{{- $v = "" -}}{{- end -}}{{- end -}}
+{{- if $v -}}
+{{- fail (printf "config.%s is a secret: set it through the chart's secret values (database, storage.s3, httpProxyPassword, dockerTokenKey, bootstrapAdmin, secretKey) so it never lands in the ConfigMap" $path) -}}
+{{- end -}}
 {{- end -}}
 {{- if not (has .Values.storage.kind (list "s3" "fs")) -}}
 {{- fail "storage.kind must be s3 or fs" -}}

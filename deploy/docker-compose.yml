@@ -111,6 +111,8 @@ services:
       HANGAR_STORAGE_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-hangar-secret}
       # Development only: stable registry tokens across restarts, plain-HTTP cookies.
       HANGAR_DOCKER_TOKEN_KEY: ${HANGAR_DOCKER_TOKEN_KEY:-dev-only-token-key-change-me-0123456789abcdef}
+      # 32 bytes, base64; development only.
+      HANGAR_SECRET_KEY: ${HANGAR_SECRET_KEY:-ZGV2LW9ubHktc2VjcmV0LWtleS0zMi1ieXRlcy0hISE=}
       HANGAR_BOOTSTRAP_ADMIN_USER: ${HANGAR_BOOTSTRAP_ADMIN_USER:-admin}
       HANGAR_BOOTSTRAP_ADMIN_PASSWORD: ${HANGAR_BOOTSTRAP_ADMIN_PASSWORD:-hangar-dev-password}
       HANGAR_NATS_EMBEDDED: "false"

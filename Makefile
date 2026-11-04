@@ -109,9 +109,11 @@ helm-template: ## Render the chart with every CI value set (kubeconform validate
 .PHONY: compose-config
 compose-config: ## Validate deploy/compose with the example environment and dummy secrets
 	@tmp=$$(mktemp); trap 'rm -f $$tmp' EXIT; \
-	sed -E 's/^(HANGAR_DOCKER_TOKEN_KEY|POSTGRES_PASSWORD|HANGAR_STORAGE_S3_SECRET_ACCESS_KEY|MINIO_ROOT_PASSWORD|HANGAR_BOOTSTRAP_ADMIN_PASSWORD)=$$/\1=check-only-value/' \
+	sed -E 's/^(HANGAR_DOCKER_TOKEN_KEY|HANGAR_SECRET_KEY|POSTGRES_PASSWORD|HANGAR_STORAGE_S3_SECRET_ACCESS_KEY|MINIO_ROOT_PASSWORD|HANGAR_BOOTSTRAP_ADMIN_PASSWORD)=$$/\1=check-only-value/' \
 		deploy/compose/.env.example > $$tmp; \
-	docker compose -f deploy/compose/compose.yaml --env-file $$tmp config --quiet && echo "deploy/compose: ok"
+	docker compose -f deploy/compose/compose.yaml --env-file $$tmp config --quiet && \
+	docker compose -f deploy/compose/compose.yaml -f deploy/compose/compose.connectors.example.yaml --env-file $$tmp config --quiet && \
+	echo "deploy/compose: ok"
 
 .PHONY: deploy-scripts-check
 deploy-scripts-check: ## shellcheck deploy/scripts

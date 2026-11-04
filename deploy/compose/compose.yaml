@@ -91,6 +91,9 @@ services:
       HANGAR_NATS_EMBEDDED: "true"
       HANGAR_NATS_DATA_DIR: /var/lib/hangar/nats
       HANGAR_DOCKER_TOKEN_KEY: ${HANGAR_DOCKER_TOKEN_KEY:?set HANGAR_DOCKER_TOKEN_KEY in .env (openssl rand -base64 48)}
+      # Encrypts credentials stored in the database (upstream passwords, S3 keys).
+      HANGAR_SECRET_KEY: ${HANGAR_SECRET_KEY:?set HANGAR_SECRET_KEY in .env (openssl rand -base64 32)}
+      HANGAR_SECURITY_PREVIOUS_SECRET_KEYS: ${HANGAR_SECURITY_PREVIOUS_SECRET_KEYS:-}
       HANGAR_BOOTSTRAP_ADMIN_USER: ${HANGAR_BOOTSTRAP_ADMIN_USER:-}
       HANGAR_BOOTSTRAP_ADMIN_PASSWORD: ${HANGAR_BOOTSTRAP_ADMIN_PASSWORD:-}
       # Corporate outbound proxy for proxy repositories (Maven Central, npmjs, Docker Hub).

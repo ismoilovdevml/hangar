@@ -18,6 +18,10 @@ spec:
     - ports:
         - port: http
           protocol: TCP
+        {{- range .Values.service.connectorPorts }}
+        - port: {{ . }}
+          protocol: TCP
+        {{- end }}
       {{- with .Values.networkPolicy.ingressFrom }}
       from:
         {{- toYaml . | nindent 8 }}

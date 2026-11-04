@@ -16,5 +16,12 @@ spec:
       port: {{ .Values.service.port }}
       targetPort: http
       protocol: TCP
+    {{- range .Values.service.connectorPorts }}
+    # Docker port connector (repository config.connector.http_port).
+    - name: {{ printf "conn-%v" . }}
+      port: {{ . }}
+      targetPort: {{ . }}
+      protocol: TCP
+    {{- end }}
   selector:
     {{- include "hangar.selectorLabels" . | nindent 4 }}

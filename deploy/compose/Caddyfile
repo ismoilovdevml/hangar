@@ -25,12 +25,10 @@
 	}
 }
 
+# Hangar sets HSTS (security.hsts), nosniff and CSP itself; it sees HTTPS
+# through X-Forwarded-Proto from this proxy (server.trusted_proxies).
 (security_headers) {
-	header {
-		Strict-Transport-Security "max-age=31536000"
-		X-Content-Type-Options nosniff
-		-Server
-	}
+	header -Server
 }
 
 # UI, REST API and every package format (/repository/<repo>/..., /v2/...).

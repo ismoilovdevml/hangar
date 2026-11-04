@@ -33,6 +33,13 @@ Hangar ({{ include "hangar.image" . }}) is deploying as "{{ include "hangar.full
 {{- else }}
      docker login {{ regexReplaceAll "^https?://" (dig "server" "base_url" "" .Values.config) "" }}
 {{- end }}
+{{- if and (not .Values.secretKey.value) (not .Values.secretKey.existingSecret) }}
+
+IMPORTANT: security.secret_key was generated and stored in Secret
+"{{ include "hangar.secretName" . }}" (kept on uninstall). It decrypts the credentials
+Hangar stores in the database: back it up together with your database backups:
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "hangar.secretName" . }} -o jsonpath='{.data.{{ .Values.secretKey.existingSecretKey }}}' | base64 -d
+{{- end }}
 {{- if and (not .Values.dockerTokenKey.value) (not .Values.dockerTokenKey.existingSecret) }}
 
 NOTE: the Docker token key was generated and is kept by `helm upgrade`. If this

@@ -46,6 +46,16 @@ spec:
     - host: {{ .Values.ingress.host | quote }}
       http:
         paths:
+          {{- if .Values.ingress.blockMetrics }}
+          # Unauthenticated metrics stay internal: this backend has no endpoints (503).
+          - path: {{ dig "metrics" "path" "/metrics" .Values.config }}
+            pathType: Exact
+            backend:
+              service:
+                name: {{ $svc }}-blocked
+                port:
+                  number: 80
+          {{- end }}
           - path: /
             pathType: Prefix
             backend:
