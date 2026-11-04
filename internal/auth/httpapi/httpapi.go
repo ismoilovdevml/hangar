@@ -1,0 +1,340 @@
+// Package httpapi serves the authentication and access-management part of
+// the REST API (api/openapi.yaml): /auth/*, /tokens, /users and /roles,
+// plus the middleware that authenticates every /api/v1 request from a
+// session cookie, a bearer token or HTTP Basic credentials, and enforces
+// CSRF protection for cookie sessions.
+package httpapi
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"mime"
+	"net"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/ismoilovdevml/hangar/internal/auth"
+	"github.com/ismoilovdevml/hangar/internal/core"
+)
+
+// Organization is shown by GET /auth/session (schema Organization).
+type Organization struct {
+	Slug        string `json:"slug"`
+	Name        string `json:"name"`
+	Environment string `json:"environment"`
+	Region      string `json:"region"`
+}
+
+// Options configure the handlers.
+type Options struct {
+	Organization Organization
+	// BaseURL is server.base_url; requests whose Origin matches it (or the
+	// request's own scheme and host) pass the cross-origin check.
+	BaseURL string
+	Logger  *slog.Logger
+}
+
+type handler struct {
+	svc  *auth.Service
+	cfg  auth.Config
+	opts Options
+	log  *slog.Logger
+}
+
+func newHandler(svc *auth.Service, opts Options) *handler {
+	h := &handler{svc: svc, cfg: svc.Config(), opts: opts, log: opts.Logger}
+	if h.log == nil {
+		h.log = slog.Default()
+	}
+	return h
+}
+
+// Routes returns a router with the authentication middleware and every route
+// of this package, with paths relative to /api/v1 (mount it there).
+func Routes(svc *auth.Service, opts Options) chi.Router {
+	r := chi.NewRouter()
+	r.Use(Middleware(svc, opts))
+	Register(r, svc, opts)
+	return r
+}
+
+// Register adds this package's routes to r, which is already serving
+// /api/v1 and has Middleware installed.
+func Register(r chi.Router, svc *auth.Service, opts Options) {
+	h := newHandler(svc, opts)
+	r.Get("/auth/providers", h.providers)
+	r.Post("/auth/login", h.login)
+	r.Post("/auth/logout", h.logout)
+	r.Get("/auth/session", h.session)
+
+	r.Get("/tokens", h.listTokens)
+	r.Post("/tokens", h.createToken)
+	r.Delete("/tokens/{id}", h.revokeToken)
+
+	r.Get("/users", h.listUsers)
+	r.Post("/users", h.createUser)
+	r.Get("/users/{id}", h.getUser)
+	r.Put("/users/{id}", h.updateUser)
+	r.Delete("/users/{id}", h.deleteUser)
+
+	r.Get("/roles", h.listRoles)
+	r.Post("/roles", h.createRole)
+	r.Put("/roles/{name}", h.updateRole)
+	r.Delete("/roles/{name}", h.deleteRole)
+}
+
+// ---------------------------------------------------------------- middleware
+
+type ctxKey struct{}
+
+// requestAuth is what Middleware learned about the request.
+type requestAuth struct {
+	session *auth.Session
+	secret  string // session cookie value
+}
+
+func authFrom(ctx context.Context) *requestAuth {
+	a, _ := ctx.Value(ctxKey{}).(*requestAuth)
+	return a
+}
+
+// Middleware authenticates the request and stores the principal with
+// core.WithPrincipal: an Authorization header (Bearer token, or Basic with a
+// password or token) wins; otherwise the session cookie; otherwise the
+// anonymous principal. Invalid header credentials answer 401 (423 while the
+// account is locked). Mutating requests authenticated by the session cookie
+// must carry the CSRF token header and, if the browser sent an Origin, come
+// from this server's origin. Running it twice is harmless.
+func Middleware(svc *auth.Service, opts Options) func(http.Handler) http.Handler {
+	h := newHandler(svc, opts)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			if authFrom(ctx) != nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			ra := &requestAuth{}
+			p := core.Anonymous()
+			if creds := core.CredentialsFromRequest(r); !creds.Empty() {
+				var err error
+				if p, err = svc.Authenticate(ctx, creds); err != nil {
+					h.writeError(w, r, err)
+					return
+				}
+			} else if c, err := r.Cookie(h.cfg.Session.CookieName); err == nil && c.Value != "" {
+				sp, sess, err := svc.SessionPrincipal(ctx, c.Value)
+				switch {
+				case errors.Is(err, core.ErrUnauthenticated):
+					h.clearCookies(w, r)
+				case err != nil:
+					h.writeError(w, r, err)
+					return
+				default:
+					p, ra.session, ra.secret = sp, sess, c.Value
+				}
+			}
+			if ra.session != nil && !safeMethod(r.Method) {
+				if !h.sameOrigin(r) {
+					writeErrorBody(w, http.StatusForbidden, "forbidden", "cross-origin request rejected", 0)
+					return
+				}
+				if !ra.session.ValidCSRF(r.Header.Get(h.cfg.Session.CSRFHeader)) {
+					writeErrorBody(w, http.StatusForbidden, "csrf_failed",
+						"missing or invalid "+h.cfg.Session.CSRFHeader+" header", 0)
+					return
+				}
+			}
+			ctx = context.WithValue(core.WithPrincipal(ctx, p), ctxKey{}, ra)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func safeMethod(m string) bool {
+	return m == http.MethodGet || m == http.MethodHead || m == http.MethodOptions || m == http.MethodTrace
+}
+
+// sameOrigin accepts requests without an Origin header (non-browser clients,
+// same-origin GETs) and those whose Origin is this server's.
+func (h *handler) sameOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	o, err := url.Parse(origin)
+	if err != nil || o.Host == "" {
+		return false
+	}
+	if h.opts.BaseURL != "" {
+		if b, err := url.Parse(h.opts.BaseURL); err == nil && strings.EqualFold(b.Scheme, o.Scheme) && strings.EqualFold(b.Host, o.Host) {
+			return true
+		}
+	}
+	info := core.RequestInfoFrom(r.Context())
+	scheme, host := info.Scheme, info.Host
+	if host == "" {
+		host = r.Host
+		scheme = "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+	}
+	return strings.EqualFold(o.Scheme, scheme) && strings.EqualFold(o.Host, host)
+}
+
+// ---------------------------------------------------------------- cookies
+
+func (h *handler) setCookies(w http.ResponseWriter, secret string, sess *auth.Session) {
+	maxAge := 0 // browser-session cookie unless "remember me"
+	var expires time.Time
+	if sess.Remember {
+		maxAge = int(time.Until(sess.ExpiresAt).Seconds())
+		expires = sess.ExpiresAt
+	}
+	secure := !h.cfg.Session.Insecure
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: Secure is on unless auth.session.insecure is set for plain-HTTP development
+		Name: h.cfg.Session.CookieName, Value: secret, Path: "/", MaxAge: maxAge, Expires: expires,
+		HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode,
+	})
+	// Readable by the web UI, which echoes it in the CSRF header.
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: intentionally not HttpOnly (double-submit token for the UI)
+		Name: h.cfg.Session.CSRFCookieName, Value: sess.CSRFToken, Path: "/", MaxAge: maxAge, Expires: expires,
+		HttpOnly: false, Secure: secure, SameSite: http.SameSiteLaxMode,
+	})
+	w.Header().Set(h.cfg.Session.CSRFHeader, sess.CSRFToken)
+}
+
+func (h *handler) clearCookies(w http.ResponseWriter, _ *http.Request) {
+	secure := !h.cfg.Session.Insecure
+	for _, name := range []string{h.cfg.Session.CookieName, h.cfg.Session.CSRFCookieName} {
+		http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: expiring cookies; attributes mirror setCookies
+			Name: name, Value: "", Path: "/", MaxAge: -1, Expires: time.Unix(0, 0),
+			HttpOnly: name == h.cfg.Session.CookieName, Secure: secure, SameSite: http.SameSiteLaxMode,
+		})
+	}
+}
+
+// ---------------------------------------------------------------- helpers
+
+// apiError is schema Error.
+type apiError struct {
+	Code       string `json:"code"`
+	Message    string `json:"message"`
+	RetryAfter int    `json:"retry_after,omitempty"`
+}
+
+var errRateLimited = errors.New("too many requests")
+
+type rateLimitedError struct{ wait time.Duration }
+
+func (e *rateLimitedError) Error() string { return "too many login attempts" }
+func (e *rateLimitedError) Unwrap() error { return errRateLimited }
+
+func writeJSON(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeErrorBody(w http.ResponseWriter, status int, code, msg string, retryAfter time.Duration) {
+	e := apiError{Code: code, Message: msg}
+	if retryAfter > 0 {
+		secs := int((retryAfter + time.Second - 1) / time.Second)
+		e.RetryAfter = secs
+		w.Header().Set("Retry-After", strconv.Itoa(secs))
+	}
+	writeJSON(w, status, e)
+}
+
+// writeError maps service errors to the Error body.
+func (h *handler) writeError(w http.ResponseWriter, r *http.Request, err error) {
+	var locked *auth.LockedError
+	var limited *rateLimitedError
+	switch {
+	case errors.As(err, &locked):
+		writeErrorBody(w, http.StatusLocked, "locked", "account is locked after repeated failed sign-ins", locked.RetryAfter(h.svc.Now()))
+	case errors.As(err, &limited):
+		writeErrorBody(w, http.StatusTooManyRequests, "rate_limited", limited.Error(), limited.wait)
+	case errors.Is(err, core.ErrUnauthenticated):
+		writeErrorBody(w, http.StatusUnauthorized, "unauthenticated", err.Error(), 0)
+	case errors.Is(err, core.ErrForbidden):
+		writeErrorBody(w, http.StatusForbidden, "forbidden", err.Error(), 0)
+	case errors.Is(err, core.ErrNotFound):
+		writeErrorBody(w, http.StatusNotFound, "not_found", err.Error(), 0)
+	case errors.Is(err, core.ErrAlreadyExists):
+		writeErrorBody(w, http.StatusConflict, "conflict", err.Error(), 0)
+	case errors.Is(err, core.ErrInvalid):
+		writeErrorBody(w, http.StatusBadRequest, "invalid_argument", err.Error(), 0)
+	case errors.Is(err, core.ErrNotImplemented):
+		writeErrorBody(w, http.StatusNotImplemented, "not_implemented", err.Error(), 0)
+	default:
+		h.log.ErrorContext(r.Context(), "auth api: internal error", "path", r.URL.Path, "error", err)
+		writeErrorBody(w, http.StatusInternalServerError, "internal", "internal server error", 0)
+	}
+}
+
+const maxBody = 1 << 20
+
+// decode reads a JSON body into v.
+func decode(w http.ResponseWriter, r *http.Request, v any) error {
+	if ct := r.Header.Get("Content-Type"); ct != "" {
+		if mt, _, err := mime.ParseMediaType(ct); err != nil || mt != "application/json" {
+			return fmt.Errorf("content type must be application/json: %w", core.ErrInvalid)
+		}
+	}
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBody))
+	if err := dec.Decode(v); err != nil {
+		return fmt.Errorf("invalid JSON body: %s: %w", err.Error(), core.ErrInvalid)
+	}
+	return nil
+}
+
+func queryInt(r *http.Request, name string) (int, error) {
+	s := r.URL.Query().Get(name)
+	if s == "" {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 1 || n > core.MaxPageSize {
+		return 0, fmt.Errorf("%s must be an integer between 1 and %d: %w", name, core.MaxPageSize, core.ErrInvalid)
+	}
+	return n, nil
+}
+
+func clientIP(r *http.Request) string {
+	if ip := core.RequestInfoFrom(r.Context()).RemoteIP; ip != "" {
+		return ip
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// page is a cursor page in API form (next_cursor null on the last page).
+type page[T any] struct {
+	Items      []T     `json:"items"`
+	NextCursor *string `json:"next_cursor"`
+}
+
+func newPage[T any](items []T, next string) page[T] {
+	p := page[T]{Items: items}
+	if p.Items == nil {
+		p.Items = []T{}
+	}
+	if next != "" {
+		p.NextCursor = &next
+	}
+	return p
+}
