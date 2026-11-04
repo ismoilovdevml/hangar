@@ -142,8 +142,8 @@
 - **Docker / OCI — upload sessions**: session records live in the blob
   store temp area (new optional `core.TempStore`, implemented by the fs and
   S3 drivers) instead of leaking a blob per request; sessions resume on any
-  node and across restarts; `(*docker.Format).CleanupUploads` ends abandoned
-  sessions and releases leftover chunks to blob GC.
+  node and across restarts; the hourly built-in task `docker-upload-cleanup`
+  ends abandoned sessions and releases leftover chunks to blob compaction.
 
 ## M0 — Skeleton (2026-11-03)
 

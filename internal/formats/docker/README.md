@@ -156,8 +156,10 @@ continue a session and sessions survive restarts (all nodes need the same
 - A finished (`PUT`) or cancelled (`DELETE`) session is removed; chunks that
   did not become the blob are journaled under `docker/garbage/<uuid>`.
   Sessions expire 24 hours after they start (`Options.UploadTTL`).
-- `(*docker.Format).CleanupUploads(ctx, docker.UploadCleanup{Release: ...})`
-  is the hook for the cleanup task: it ends abandoned sessions and passes
+- The built-in task `docker-upload-cleanup` (type `docker_upload_cleanup`,
+  hourly at minute 40, `internal/tasks/dockeruploads`) calls
+  `(*docker.Format).CleanupUploads(ctx, docker.UploadCleanup{Release: ...})`:
+  it ends abandoned sessions and passes
   every journaled chunk to `Release`, which must register the blob as
   unreferenced (a `blobs` row with `ref_count 0` unless one exists) so blob
   GC deletes it after its grace period unless an asset references it by
