@@ -1,4 +1,5 @@
 import { useInfiniteQuery, useQueries } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { buildUrl, apiFetch } from '../../api/client';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
@@ -66,6 +67,9 @@ export function AuditTab({ category, onCategory }: { category: string; onCategor
           onChange={onCategory}
         />
         <div className="repo-toolbar__filters">
+          <Link to="/audit" className="button button--secondary button--sm">
+            Full audit log
+          </Link>
           <a className="button button--secondary button--sm" href={buildUrl('/audit/export', { format: 'csv', action: cat.action })} download>
             Export CSV
           </a>

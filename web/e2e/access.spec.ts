@@ -31,11 +31,11 @@ test('access & audit renders members, roles, tokens and audit at desktop and pho
     for (const [tab, check] of [
       ['tokens', 'gitea deploy'],
       ['roles', 'CI deployer'],
-      ['audit', 'created b.yusupov'],
+      ['audit&events=signins', 'failed to sign in'],
     ] as const) {
       await page.goto(`/access?tab=${tab}`);
       await expect(page.getByText(check).first()).toBeVisible();
-      await page.screenshot({ path: shot(`access-${tab}-${size.width}`), fullPage: true });
+      await page.screenshot({ path: shot(`access-${tab.split('&')[0]}-${size.width}`), fullPage: true });
       await noOverflow(page, size.width);
     }
   }
