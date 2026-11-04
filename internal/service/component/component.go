@@ -23,6 +23,7 @@ import (
 	"slices"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -598,17 +599,27 @@ func (s *Service) ListComponents(ctx context.Context, q core.ComponentQuery) (co
 		}
 	}
 	limit := core.ClampLimit(q.Limit)
-	args := []any{q.RepositoryID, q.Namespace, q.Name, after != nil, "", "", "", limit + 1}
-	if after != nil {
-		args[4], args[5], args[6] = after.Namespace, after.Name, after.Version
+	// Only the filters in use are part of the statement: "$n IS NULL OR ..."
+	// forms defeat the (repo_id, namespace, name, version) index once
+	// PostgreSQL switches a prepared statement to a generic plan.
+	sql := selectComponent + ` WHERE c.repo_id = $1`
+	args := []any{q.RepositoryID}
+	if q.Namespace != nil {
+		args = append(args, *q.Namespace)
+		sql += fmt.Sprintf(` AND c.namespace = $%d`, len(args))
 	}
-	rows, err := s.pool.Query(ctx, selectComponent+`
- WHERE c.repo_id = $1
-   AND ($2::text IS NULL OR c.namespace = $2)
-   AND ($3 = '' OR c.name = $3)
-   AND (NOT $4 OR (c.namespace, c.name, c.version) > ($5, $6, $7))
- ORDER BY c.namespace, c.name, c.version
- LIMIT $8`, args...)
+	if q.Name != "" {
+		args = append(args, q.Name)
+		sql += fmt.Sprintf(` AND c.name = $%d`, len(args))
+	}
+	if after != nil {
+		args = append(args, after.Namespace, after.Name, after.Version)
+		n := len(args)
+		sql += fmt.Sprintf(` AND (c.namespace, c.name, c.version) > ($%d, $%d, $%d)`, n-2, n-1, n)
+	}
+	args = append(args, limit+1)
+	sql += fmt.Sprintf(` ORDER BY c.namespace, c.name, c.version LIMIT $%d`, len(args))
+	rows, err := s.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return page, fmt.Errorf("list components: %w", err)
 	}
@@ -659,19 +670,25 @@ func (s *Service) ListAssets(ctx context.Context, q core.AssetQuery) (core.Page[
 			return page, err
 		}
 	}
-	var compID *string
-	if q.ComponentID != "" {
-		compID = &q.ComponentID
-	}
-	prefix := likePrefix(trimLeadingSlash(q.PathPrefix))
 	limit := core.ClampLimit(q.Limit)
-	rows, err := s.pool.Query(ctx, `SELECT `+assetCols+` FROM assets
- WHERE repo_id = $1
-   AND ($2::uuid IS NULL OR component_id = $2)
-   AND path LIKE $3
-   AND ($4 = '' OR path COLLATE "C" > $4)
- ORDER BY path COLLATE "C"
- LIMIT $5`, q.RepositoryID, compID, prefix, after, limit+1)
+	// The prefix becomes a range on (repo_id, path COLLATE "C"), which the
+	// index answers in every plan; LIKE with a parameter cannot use it once a
+	// prepared statement runs with a generic plan, and a listing of one npm
+	// package or Maven directory then scans the whole repository.
+	prefix := trimLeadingSlash(q.PathPrefix)
+	sql := `SELECT ` + assetCols + ` FROM assets WHERE repo_id = $1 AND path COLLATE "C" >= $2 AND path COLLATE "C" > $3`
+	args := []any{q.RepositoryID, prefix, after}
+	if hi, ok := prefixUpperBound(prefix); ok {
+		args = append(args, hi)
+		sql += fmt.Sprintf(` AND path COLLATE "C" < $%d`, len(args))
+	}
+	if q.ComponentID != "" {
+		args = append(args, q.ComponentID)
+		sql += fmt.Sprintf(` AND component_id = $%d`, len(args))
+	}
+	args = append(args, limit+1)
+	sql += fmt.Sprintf(` ORDER BY path COLLATE "C" LIMIT $%d`, len(args))
+	rows, err := s.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return page, fmt.Errorf("list assets: %w", err)
 	}
@@ -697,17 +714,23 @@ func trimLeadingSlash(p string) string {
 	return p
 }
 
-// likePrefix escapes LIKE wildcards in p and appends '%'.
-func likePrefix(p string) string {
-	b := make([]byte, 0, len(p)+1)
-	for i := 0; i < len(p); i++ {
-		switch p[i] {
-		case '%', '_', '\\':
-			b = append(b, '\\')
+// prefixUpperBound returns the smallest string greater than every string
+// that starts with p, in byte (and so code point) order: p with its last
+// code point incremented. ok is false when there is none (p is empty or
+// made only of U+10FFFF).
+func prefixUpperBound(p string) (string, bool) {
+	for len(p) > 0 {
+		r, size := utf8.DecodeLastRuneInString(p)
+		p = p[:len(p)-size]
+		switch {
+		case r < 0xD7FF || (r >= 0xE000 && r < utf8.MaxRune):
+			return p + string(r+1), true
+		case r == 0xD7FF:
+			return p + string(rune(0xE000)), true
 		}
-		b = append(b, p[i])
+		// r is U+10FFFF: drop it and bump the previous code point.
 	}
-	return string(append(b, '%'))
+	return "", false
 }
 
 func encodeCursor(v any) string {

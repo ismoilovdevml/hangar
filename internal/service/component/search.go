@@ -29,14 +29,21 @@ func (s *Service) SearchComponents(ctx context.Context, q core.ComponentTextQuer
 	if limit <= 0 {
 		limit = DefaultMaxSearchNames
 	}
-	tsq := TextQuery(q.Text)
-	rows, err := s.pool.Query(ctx, `
-SELECT DISTINCT c.name FROM components c
- WHERE c.repo_id = $1
-   AND ($2::text IS NULL OR c.namespace = $2)
-   AND ($3 = '' OR hangar_component_document(c.namespace, c.name, c.attributes) @@ $3::tsquery)
- ORDER BY c.name
- LIMIT $4`, q.RepositoryID, q.Namespace, tsq, limit+1)
+	// Conditions are added only when used, so a generic plan still uses the
+	// full-text and (repo_id, namespace, ...) indexes.
+	sql := `SELECT DISTINCT c.name FROM components c WHERE c.repo_id = $1`
+	args := []any{q.RepositoryID}
+	if q.Namespace != nil {
+		args = append(args, *q.Namespace)
+		sql += fmt.Sprintf(` AND c.namespace = $%d`, len(args))
+	}
+	if tsq := TextQuery(q.Text); tsq != "" {
+		args = append(args, tsq)
+		sql += fmt.Sprintf(` AND hangar_component_document(c.namespace, c.name, c.attributes) @@ $%d::tsquery`, len(args))
+	}
+	args = append(args, limit+1)
+	sql += fmt.Sprintf(` ORDER BY c.name LIMIT $%d`, len(args))
+	rows, err := s.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, false, fmt.Errorf("search components: %w", err)
 	}
@@ -51,11 +58,13 @@ SELECT DISTINCT c.name FROM components c
 	if len(names) == 0 {
 		return []*core.Component{}, false, nil
 	}
-	rows, err = s.pool.Query(ctx, selectComponent+`
- WHERE c.repo_id = $1
-   AND ($2::text IS NULL OR c.namespace = $2)
-   AND c.name = ANY($3)
- ORDER BY c.name, c.namespace, c.version`, q.RepositoryID, q.Namespace, names)
+	sql = selectComponent + ` WHERE c.repo_id = $1 AND c.name = ANY($2)`
+	args = []any{q.RepositoryID, names}
+	if q.Namespace != nil {
+		args = append(args, *q.Namespace)
+		sql += ` AND c.namespace = $3`
+	}
+	rows, err = s.pool.Query(ctx, sql+` ORDER BY c.name, c.namespace, c.version`, args...)
 	if err != nil {
 		return nil, false, fmt.Errorf("search components: %w", err)
 	}
