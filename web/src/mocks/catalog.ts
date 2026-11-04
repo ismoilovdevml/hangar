@@ -649,7 +649,7 @@ export function catalogHandlers(guard: Guard, readableRepos: () => string[], rep
         const q = new URL(request.url).searchParams;
         const kind = q.has('u') ? 'u' : 'p';
         const svg = mockImage(kind, q.get(kind) ?? '');
-        if (!svg) return error(502, { code: 'image_unavailable', message: 'the image could not be loaded from its host' });
+        if (!svg) return error(404, { code: 'image_unavailable', message: 'the image could not be loaded from its host' });
         return new HttpResponse(svg, {
           headers: {
             'Content-Type': 'image/svg+xml',

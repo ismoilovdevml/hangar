@@ -130,9 +130,11 @@ func TestReadmeImages(t *testing.T) {
 	f.expect("alice", http.MethodGet, prefix+sig+"?p=a&u=b", nil, http.StatusBadRequest)
 	other := publishComponent(t, f.env, npmHosted, "other", "1.0.0")
 	f.expect("alice", http.MethodGet, strings.Replace(logo, c.ID, other.ID, 1), nil, http.StatusForbidden)
-	// A remote image that cannot be loaded is a gateway error.
+	// A remote image that cannot be loaded is missing, not a server error.
 	missing := prefix + svc.Sign(c.ID, readmeimg.KindURL, "https://img.example.com/gone.png") + "?u=" + url.QueryEscape("https://img.example.com/gone.png")
-	f.expect("alice", http.MethodGet, missing, nil, http.StatusBadGateway)
+	if b := f.expect("alice", http.MethodGet, missing, nil, http.StatusNotFound); !strings.Contains(string(b), "image_unavailable") {
+		t.Errorf("missing image body = %s", b)
+	}
 
 	// Direct mode: browsers load remote https images themselves; the server
 	// no longer fetches. Files of the package are still served.

@@ -148,8 +148,10 @@ func (a *API) getReadmeImage(w http.ResponseWriter, r *http.Request) {
 		}
 		img, err := a.ReadmeImages.Fetch(ctx, source)
 		if err != nil {
+			// A broken third-party badge is not a server failure: 404 keeps
+			// it out of error logs and 5xx alerts; the UI shows its text.
 			a.logger().DebugContext(ctx, "readme image unavailable", "component", c.ID, "error", err)
-			WriteError(w, http.StatusBadGateway, "image_unavailable", "the image could not be loaded from its host")
+			WriteError(w, http.StatusNotFound, "image_unavailable", "the image could not be loaded from its host")
 			return
 		}
 		ct, body, maxAge = img.ContentType, img.Body, remoteImageMaxAge

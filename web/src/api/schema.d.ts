@@ -4620,9 +4620,8 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            404: components["responses"]["NotFound"];
-            /** @description The file is not a served image type (`not_an_image`) */
-            415: {
+            /** @description No such component or file, remote images are not proxied (`not_found`), or the remote image could not be loaded or is not an image (`image_unavailable`; not a server error, so a broken third-party badge does not raise 5xx alerts) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4630,8 +4629,8 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The remote image could not be loaded (`image_unavailable`) */
-            502: {
+            /** @description The file is not a served image type (`not_an_image`) */
+            415: {
                 headers: {
                     [name: string]: unknown;
                 };

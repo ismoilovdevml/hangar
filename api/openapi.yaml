@@ -900,14 +900,17 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "415":
-          description: The file is not a served image type (`not_an_image`)
+        "404":
+          description: >-
+            No such component or file, remote images are not proxied
+            (`not_found`), or the remote image could not be loaded or is not
+            an image (`image_unavailable`; not a server error, so a broken
+            third-party badge does not raise 5xx alerts)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-        "502":
-          description: The remote image could not be loaded (`image_unavailable`)
+        "415":
+          description: The file is not a served image type (`not_an_image`)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
