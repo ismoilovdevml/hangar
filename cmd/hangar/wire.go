@@ -17,6 +17,8 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/audit"
 	"github.com/ismoilovdevml/hangar/internal/auth"
 	"github.com/ismoilovdevml/hangar/internal/auth/httpapi"
+	"github.com/ismoilovdevml/hangar/internal/auth/ldap"
+	"github.com/ismoilovdevml/hangar/internal/auth/oidc"
 	"github.com/ismoilovdevml/hangar/internal/config"
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/events"
@@ -27,6 +29,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/observability"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 	"github.com/ismoilovdevml/hangar/internal/search"
+	"github.com/ismoilovdevml/hangar/internal/secrets"
 	"github.com/ismoilovdevml/hangar/internal/server"
 	"github.com/ismoilovdevml/hangar/internal/service/cleanup"
 	"github.com/ismoilovdevml/hangar/internal/service/component"
@@ -84,14 +87,52 @@ func (a *app) close() {
 // authentication failures and lockouts.
 func openAuth(cfg config.Config, pool *pgxpool.Pool, bus core.EventBus, metrics *observability.Metrics, log *slog.Logger) (*audit.Log, *auth.Service, error) {
 	auditLog := audit.New(pool, audit.Options{Logger: log})
+	var dir auth.Directory
+	if cfg.Auth.LDAP.Enabled {
+		d, err := ldap.New(cfg.Auth.WithDefaults().LDAP, ldap.Options{Logger: log})
+		if err != nil {
+			closeAudit(auditLog, log)
+			return nil, nil, err
+		}
+		dir = d
+	}
 	authSvc, err := auth.New(pool, auth.Options{
-		Config: cfg.Auth, Audit: observability.ObserveAuth(auditLog, metrics), Events: bus, Logger: log,
+		Config: cfg.Auth, Audit: observability.ObserveAuth(auditLog, metrics), Events: bus, Directory: dir, Logger: log,
 	})
 	if err != nil {
 		closeAudit(auditLog, log)
 		return nil, nil, err
 	}
 	return auditLog, authSvc, nil
+}
+
+// openOIDC builds the OIDC provider when auth.oidc is enabled and starts its
+// discovery in the background. The state cookie key is derived from
+// security.secret_key so every node can finish a sign-in another started.
+func openOIDC(ctx context.Context, cfg config.Config, log *slog.Logger) (*oidc.Provider, error) {
+	if !cfg.Auth.OIDC.Enabled {
+		return nil, nil
+	}
+	var stateKey []byte
+	if cfg.Security.SecretKey != "" {
+		secret, err := secrets.ParseKey(cfg.Security.SecretKey)
+		if err != nil {
+			return nil, fmt.Errorf("security.secret_key: %w", err)
+		}
+		if stateKey, err = oidc.DeriveStateKey(secret); err != nil {
+			return nil, err
+		}
+	} else {
+		log.Warn("auth.oidc: security.secret_key is not set; a sign-in must finish on the node that started it")
+	}
+	p, err := oidc.New(cfg.Auth.WithDefaults().OIDC, oidc.Options{
+		RedirectURL: cfg.Server.BaseURL + oidc.CallbackPath, StateKey: stateKey, Logger: log,
+	})
+	if err != nil {
+		return nil, err
+	}
+	go p.Warm(context.WithoutCancel(ctx))
+	return p, nil
 }
 
 func closeAudit(l *audit.Log, log *slog.Logger) {
@@ -313,9 +354,14 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		return nil, err
 	}
 
+	sso, err := openOIDC(ctx, cfg, log)
+	if err != nil {
+		return nil, err
+	}
 	authOpts := httpapi.Options{
 		Organization: httpapi.Organization{Slug: cfg.Server.InstanceName, Name: cfg.Server.InstanceName},
 		BaseURL:      cfg.Server.BaseURL,
+		OIDC:         sso,
 		Logger:       log,
 	}
 	restAPI := &api.API{

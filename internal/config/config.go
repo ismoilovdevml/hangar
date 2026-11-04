@@ -9,6 +9,7 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -40,8 +41,8 @@ type Config struct {
 	Storage  Storage  `yaml:"storage"`
 	NATS     NATS     `yaml:"nats"`
 	HTTP     HTTP     `yaml:"http"`
-	// Auth tunes local authentication: password hashing, lockout, sessions,
-	// token lifetimes and caches.
+	// Auth tunes authentication: password hashing, lockout, sessions, token
+	// lifetimes, caches, and external sign-in (auth.oidc, auth.ldap).
 	Auth      auth.Config `yaml:"auth"`
 	Docker    Docker      `yaml:"docker"`
 	Bootstrap Bootstrap   `yaml:"bootstrap"`
@@ -466,6 +467,14 @@ func setValue(v reflect.Value, raw string) error {
 			return err
 		}
 		v.SetFloat(n)
+	case reflect.Map:
+		// Maps (auth.*.group_roles) are JSON objects:
+		// HANGAR_AUTH_OIDC_GROUP_ROLES='{"hangar-admins":["Admin"]}'.
+		m := reflect.New(v.Type())
+		if err := json.Unmarshal([]byte(raw), m.Interface()); err != nil {
+			return fmt.Errorf("want a JSON object: %w", err)
+		}
+		v.Set(m.Elem())
 	case reflect.Slice:
 		if v.Type().Elem().Kind() != reflect.String {
 			return fmt.Errorf("unsupported slice type %s", v.Type())
@@ -485,7 +494,8 @@ func setValue(v reflect.Value, raw string) error {
 
 // Redacted returns a copy safe to log: secrets and URL passwords masked.
 func (c Config) Redacted() Config {
-	for _, p := range []*string{&c.Storage.S3.SecretAccessKey, &c.Storage.S3.SessionToken, &c.Docker.TokenKey, &c.Bootstrap.AdminPassword} {
+	for _, p := range []*string{&c.Storage.S3.SecretAccessKey, &c.Storage.S3.SessionToken, &c.Docker.TokenKey, &c.Bootstrap.AdminPassword,
+		&c.Auth.OIDC.ClientSecret, &c.Auth.LDAP.BindPassword} {
 		if *p != "" {
 			*p = "REDACTED"
 		}

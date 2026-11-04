@@ -22,6 +22,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/auth"
+	"github.com/ismoilovdevml/hangar/internal/auth/oidc"
 	"github.com/ismoilovdevml/hangar/internal/core"
 )
 
@@ -39,7 +40,10 @@ type Options struct {
 	// BaseURL is server.base_url; requests whose Origin matches it (or the
 	// request's own scheme and host) pass the cross-origin check.
 	BaseURL string
-	Logger  *slog.Logger
+	// OIDC, when set, serves single sign-on at /auth/oidc/start and
+	// /auth/oidc/callback.
+	OIDC   *oidc.Provider
+	Logger *slog.Logger
 }
 
 type handler struct {
@@ -74,6 +78,9 @@ func Register(r chi.Router, svc *auth.Service, opts Options) {
 	r.Post("/auth/login", h.login)
 	r.Post("/auth/logout", h.logout)
 	r.Get("/auth/session", h.session)
+	r.Get("/auth/oidc/start", h.oidcStart)
+	r.Get("/auth/oidc/callback", h.oidcCallback)
+	r.Get("/identity-providers", h.identityProviders)
 
 	r.Get("/tokens", h.listTokens)
 	r.Post("/tokens", h.createToken)
@@ -278,7 +285,19 @@ func writeErrorBody(w http.ResponseWriter, status int, code, msg string, retryAf
 func (h *handler) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	var locked *auth.LockedError
 	var limited *rateLimitedError
+	var external *auth.ExternalError
 	switch {
+	case errors.As(err, &external) && external.Code == auth.CodeAccountDisabled:
+		writeErrorBody(w, http.StatusUnauthorized, "unauthenticated", "invalid username or password", 0)
+	case errors.As(err, &external) && external.Code == auth.CodeAccountConflict:
+		writeErrorBody(w, http.StatusConflict, "conflict", external.Message, 0)
+	case errors.As(err, &external) && external.Code == auth.CodeInvalidProfile:
+		writeErrorBody(w, http.StatusBadRequest, "invalid_argument", external.Message, 0)
+	case errors.As(err, &external):
+		writeErrorBody(w, http.StatusForbidden, "forbidden", external.Message, 0)
+	case errors.Is(err, auth.ErrDirectoryUnavailable):
+		h.log.WarnContext(r.Context(), "auth api: directory unavailable", "path", r.URL.Path, "error", err)
+		writeErrorBody(w, http.StatusServiceUnavailable, "unavailable", "the directory cannot be reached; try again later", 0)
 	case errors.As(err, &locked):
 		writeErrorBody(w, http.StatusLocked, "locked", "account is locked after repeated failed sign-ins", locked.RetryAfter(h.svc.Now()))
 	case errors.As(err, &limited):

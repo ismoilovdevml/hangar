@@ -125,8 +125,10 @@ are about to expire.
 privilege editor: add repository privileges (pattern × action) and
 administration privileges (area × action); each row is described in plain
 words. **Directory groups** map OIDC, LDAP or SAML groups to the role
-(`provider` is the identity provider name, `group` the group name); members
-of those groups get the role when they sign in. **Members** lists who has the
+(`provider` is the identity provider name, `oidc` or `ldap`; `group` the group
+name); members of those groups get the role when they sign in. Group
+mappings can also live in the configuration (`auth.oidc.group_roles`,
+`auth.ldap.group_roles`); see [Single sign-on](sso.md). **Members** lists who has the
 role directly and lets you add or remove people
 (`POST /roles/{name}/members`, `DELETE /roles/{name}/members/{id}`).
 
@@ -186,6 +188,9 @@ auth:
     ttl: 12h
     remember_ttl: 720h
 ```
+
+Sign-in with an OIDC provider or LDAP / Active Directory is configured under
+`auth.oidc` and `auth.ldap`; see [Single sign-on](sso.md).
 
 ## Operational notes
 

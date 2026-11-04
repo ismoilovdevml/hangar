@@ -12,10 +12,15 @@ const API_URL = 'https://github.com/ismoilovdevml/hangar/blob/main/api/openapi.y
 
 /** Messages for `?error=` set by the single sign-on callback. */
 const SSO_ERRORS: Record<string, string> = {
+  sso_unavailable: 'Single sign-on is unavailable right now. Try again later or use a local account.',
+  sso_state: 'The sign-in expired or was started in another tab. Please try again.',
+  sso_failed: 'Single sign-on failed. Please try again.',
   access_denied: 'Single sign-on was cancelled or denied.',
-  not_allowed: 'Your account is not allowed to use this registry. Ask an administrator for access.',
-  account_conflict: 'A local account with the same username already exists. Ask an administrator to link it.',
-  expired: 'The sign-in took too long. Please try again.',
+  group_denied: 'Your account is not in a group allowed to use this registry. Ask an administrator for access.',
+  account_conflict: 'A local account with the same username already exists. Ask an administrator to resolve it.',
+  not_provisioned: 'Your account has not been set up in this registry. Ask an administrator for access.',
+  invalid_profile: 'Your identity provider did not send a usable username. Ask an administrator to check the SSO setup.',
+  account_disabled: 'Your account is disabled. Ask an administrator.',
 };
 
 function waitText(secs: number): string {
@@ -40,7 +45,11 @@ function loginError(err: unknown, expired: boolean): string {
       if (expired) return 'You can try again now.';
       return `Too many sign-in attempts from this address. ${wait ? `Try again ${waitText(wait)}.` : 'Wait a moment and try again.'}`;
     }
-    if (err.status === 403) return 'The server rejected this sign-in request. Open Hangar from its own address and try again.';
+    if (err.status === 403) {
+      if (err.body?.code === 'forbidden' && err.body.message?.includes('cross-origin'))
+        return 'The server rejected this sign-in request. Open Hangar from its own address and try again.';
+      return err.body?.message ?? 'You are not allowed to sign in.';
+    }
     return err.body?.message ?? 'Sign-in failed. Please try again.';
   }
   return 'Cannot reach the server. Check your connection and try again.';

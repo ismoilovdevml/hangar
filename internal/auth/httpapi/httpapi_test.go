@@ -27,9 +27,9 @@ type testServer struct {
 	env *authtest.Env
 }
 
-func newServer(t *testing.T, cfg auth.Config) *testServer {
+func newServer(t *testing.T, cfg auth.Config, opts ...authtest.Option) *testServer {
 	t.Helper()
-	env := authtest.New(t, cfg)
+	env := authtest.New(t, cfg, opts...)
 	r := chi.NewRouter()
 	r.Mount("/api/v1", httpapi.Routes(env.Svc, httpapi.Options{
 		Organization: httpapi.Organization{Slug: "acme", Name: "Acme", Environment: "test", Region: "local"},

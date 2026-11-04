@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/auth"
+	"github.com/ismoilovdevml/hangar/internal/auth/oidc"
 	"github.com/ismoilovdevml/hangar/internal/core"
 )
 
@@ -22,17 +23,25 @@ type samlProvider struct {
 	StartURL *string `json:"start_url"`
 }
 
-// authProviders is schema AuthProviders. External providers arrive later;
-// until then only local sign-in is offered.
+type oidcProvider struct {
+	DisplayName string `json:"display_name"`
+	StartURL    string `json:"start_url"`
+}
+
+// authProviders is schema AuthProviders.
 type authProviders struct {
-	OIDC  any            `json:"oidc"`
+	OIDC  *oidcProvider  `json:"oidc"`
 	LDAP  providerToggle `json:"ldap"`
 	SAML  samlProvider   `json:"saml"`
 	Local providerToggle `json:"local"`
 }
 
 func (h *handler) providers(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, authProviders{Local: providerToggle{Enabled: true}})
+	out := authProviders{Local: providerToggle{Enabled: true}, LDAP: providerToggle{Enabled: h.cfg.LDAP.Enabled}}
+	if h.opts.OIDC != nil {
+		out.OIDC = &oidcProvider{DisplayName: h.opts.OIDC.DisplayName(), StartURL: oidc.StartPath}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // loginRequest is schema LoginRequest.
@@ -67,8 +76,10 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 	switch req.Realm {
 	case "", "local":
 	case "ldap":
-		writeErrorBody(w, http.StatusBadRequest, "invalid_argument", "LDAP sign-in is not enabled", 0)
-		return
+		if !h.cfg.LDAP.Enabled {
+			writeErrorBody(w, http.StatusBadRequest, "invalid_argument", "LDAP sign-in is not enabled", 0)
+			return
+		}
 	default:
 		writeErrorBody(w, http.StatusBadRequest, "invalid_argument", "realm must be local or ldap", 0)
 		return
@@ -77,7 +88,13 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		writeErrorBody(w, http.StatusBadRequest, "invalid_argument", "username and password are required", 0)
 		return
 	}
-	p, err := h.svc.Login(ctx, req.Username, req.Password)
+	var p *core.Principal
+	var err error
+	if req.Realm == "ldap" {
+		p, err = h.svc.LoginLDAP(ctx, req.Username, req.Password)
+	} else {
+		p, err = h.svc.Login(ctx, req.Username, req.Password)
+	}
 	if err != nil {
 		var locked *auth.LockedError
 		if errors.Is(err, core.ErrUnauthenticated) && !errors.As(err, &locked) {
@@ -87,17 +104,26 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, err)
 		return
 	}
+	if err := h.startSession(w, r, p, req.Remember); err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	h.writeSession(w, r, p, authMethodSession)
+}
+
+// startSession replaces any session the browser holds with a new one for p.
+func (h *handler) startSession(w http.ResponseWriter, r *http.Request, p *core.Principal, remember bool) error {
+	ctx := r.Context()
 	// Never keep a session id across a privilege change (session fixation).
 	if c, err := r.Cookie(h.cfg.Session.CookieName); err == nil && c.Value != "" {
 		_ = h.svc.DeleteSession(ctx, c.Value)
 	}
-	secret, sess, err := h.svc.CreateSession(ctx, p, req.Remember)
+	secret, sess, err := h.svc.CreateSession(ctx, p, remember)
 	if err != nil {
-		h.writeError(w, r, err)
-		return
+		return err
 	}
 	h.setCookies(w, secret, sess)
-	h.writeSession(w, r, p, authMethodSession)
+	return nil
 }
 
 func (h *handler) logout(w http.ResponseWriter, r *http.Request) {

@@ -33,7 +33,7 @@ const EnvDatabaseURL = "HANGAR_TEST_DATABASE_URL"
 var FastArgon2 = auth.Argon2Params{Memory: 1024, Iterations: 1, Parallelism: 1, SaltLength: 16, KeyLength: 32}
 
 // Migrations returns the base schema (00001-00006) and the auth ranges
-// (00020-00029, 00040-00049), so these tests do not depend on unrelated
+// (00020-00029, 00040-00049, 00080-00089), so these tests do not depend on unrelated
 // migrations.
 func Migrations(t testing.TB) fs.FS {
 	t.Helper()
@@ -58,7 +58,7 @@ func Migrations(t testing.TB) fs.FS {
 }
 
 func authMigration(n int) bool {
-	return n <= 6 || (n >= 20 && n <= 29) || (n >= 40 && n <= 49)
+	return n <= 6 || (n >= 20 && n <= 29) || (n >= 40 && n <= 49) || (n >= 80 && n <= 89)
 }
 
 // Pool connects to a fresh schema (dropped at cleanup). If migrate is true
@@ -151,22 +151,34 @@ type Env struct {
 	Clock *Clock
 }
 
+// Option adjusts the service options (e.g. to add a Directory).
+type Option func(*auth.Options)
+
+// WithDirectory sets the LDAP directory.
+func WithDirectory(d auth.Directory) Option {
+	return func(o *auth.Options) { o.Directory = d }
+}
+
 // New returns a service over a fresh migrated schema. cfg zero fields get
 // defaults, with FastArgon2 unless cfg.Argon2 is set.
-func New(t testing.TB, cfg auth.Config) *Env {
+func New(t testing.TB, cfg auth.Config, opts ...Option) *Env {
 	t.Helper()
-	return NewOnPool(t, Pool(t, true), cfg, NewClock())
+	return NewOnPool(t, Pool(t, true), cfg, NewClock(), opts...)
 }
 
 // NewOnPool returns a service over an existing pool (e.g. to change config
 // over the same data).
-func NewOnPool(t testing.TB, pool *pgxpool.Pool, cfg auth.Config, clock *Clock) *Env {
+func NewOnPool(t testing.TB, pool *pgxpool.Pool, cfg auth.Config, clock *Clock, opts ...Option) *Env {
 	t.Helper()
 	if cfg.Argon2 == (auth.Argon2Params{}) {
 		cfg.Argon2 = FastArgon2
 	}
 	e := &Env{Pool: pool, Audit: coretest.NewAuditLog(), Repos: coretest.NewRepositories(), Clock: clock}
-	svc, err := auth.New(pool, auth.Options{Config: cfg, Audit: e.Audit, Repos: e.Repos, Now: clock.Now})
+	o := auth.Options{Config: cfg, Audit: e.Audit, Repos: e.Repos, Now: clock.Now}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	svc, err := auth.New(pool, o)
 	if err != nil {
 		t.Fatal(err)
 	}

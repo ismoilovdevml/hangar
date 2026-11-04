@@ -11,6 +11,7 @@ an operator must configure, and how to report a vulnerability
 | Private packages | Read or overwrite by a caller without rights | Every API operation and package endpoint authorizes the principal (`repo:<name>:read/write/delete/admin`, `system:*`); token scopes narrow a user's roles. Enforced twice: at the HTTP boundary and in the services that mutate. Checked end to end by `test/security` (below). |
 | Accounts | Password guessing, credential stuffing, token guessing | argon2id hashes, per-account lockout, per-IP login rate limit, per-IP limit on failed authentications on the API and package endpoints, tokens with 238 bits of entropy and a checksum, stored as SHA-256. |
 | Browser sessions | CSRF, XSS, clickjacking, session theft through uploaded content | `HttpOnly`/`Secure`/`SameSite` session cookie, CSRF token on mutations, origin check, CORS deny-by-default, CSP for the UI, sandboxed CSP for everything served from package endpoints, `X-Frame-Options: DENY`, `frame-ancestors 'none'`, `nosniff`. |
+| Single sign-on | Login CSRF, code interception, token substitution, account takeover by name | OIDC authorization code flow with PKCE (S256); state, nonce and verifier in a short-lived AES-GCM encrypted `HttpOnly` cookie (key derived from `security.secret_key`); ID token signature, issuer, audience, expiry and nonce verified; same-origin post-login redirects only. External identities are linked by issuer and subject and never take over a local, service or other external account. LDAP: filter values escaped, exactly one entry required, empty passwords refused (no anonymous bind). |
 | Upstream credentials and S3 keys | Disclosure through a database dump, backup, read-only SQL access or the API | Envelope encryption at rest (below); never returned by the API; opened only when the outbound client or the storage driver is built; never sent to redirect targets. |
 | Internal network | Server-side request forgery through proxy repositories | Outbound address policy: loopback, private, link-local (cloud metadata), CGNAT, multicast, reserved and IPv4-embedding IPv6 ranges are refused when a proxy is saved, on every redirect hop and when a connection is dialled. Only `http.allow_private_networks` opens exceptions. |
 | Availability | Slow-header, slow-body and oversized requests, API floods | `server.read_header_timeout`, body idle timeout, header and API body limits, per-IP API rate limit; uploads are streamed, never buffered. |
@@ -72,6 +73,13 @@ A lost key cannot be recovered: re-enter the affected credentials.
 - [ ] Set `HANGAR_SECRET_KEY` (and keep a copy in your secret manager) before
       adding proxy credentials or S3 blob stores. Same value on every node.
 - [ ] Set `HANGAR_DOCKER_TOKEN_KEY` (32+ random bytes), same on every node.
+- [ ] Single sign-on ([guide](guides/sso.md)): keep `auth.oidc.client_secret`
+      and `auth.ldap.bind_password` in the environment, use `ldaps://` or
+      `start_tls` (plain `ldap://` sends passwords in clear text), never
+      `insecure_skip_verify` (use `ca_file`), give the LDAP service account
+      read-only rights, and restrict sign-in with `allowed_groups` when the
+      provider serves more people than should use Hangar. External sign-ins
+      never take over a local account with the same username.
 - [ ] Keep secrets in the environment or a secret store, never in
       `hangar.yaml` (`storage.s3.secret_access_key`, `http.proxy_password`,
       `bootstrap.admin_password`).

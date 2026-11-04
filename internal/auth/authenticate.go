@@ -63,7 +63,7 @@ func (s *Service) Authenticate(ctx context.Context, c core.Credentials) (*core.P
 		if err != nil {
 			return nil, err
 		}
-		return u.principal(SourceLocal), nil
+		return u.principal(u.Source), nil
 	}
 }
 
@@ -81,7 +81,8 @@ func (s *Service) Login(ctx context.Context, username, password string) (*core.P
 	return p, nil
 }
 
-// checkPassword is verifyPassword with the Basic-auth cache in front.
+// checkPassword is verifyPassword, or verifyLDAP for directory users, with
+// the Basic-auth cache in front.
 func (s *Service) checkPassword(ctx context.Context, username, password, method string) (*User, error) {
 	key := s.basicKeyFor(username, password)
 	if id, ok := s.basic.get(key); ok {
@@ -92,7 +93,16 @@ func (s *Service) checkPassword(ctx context.Context, username, password, method 
 		}
 		s.basic.del(key) // stale; fall through to a full check
 	}
-	u, err := s.verifyPassword(ctx, username, password, method)
+	ldap, err := s.useLDAP(ctx, username)
+	if err != nil {
+		return nil, err
+	}
+	var u *User
+	if ldap {
+		u, err = s.verifyLDAP(ctx, username, password, method)
+	} else {
+		u, err = s.verifyPassword(ctx, username, password, method)
+	}
 	if err != nil {
 		return nil, err
 	}

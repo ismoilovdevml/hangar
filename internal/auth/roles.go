@@ -272,7 +272,8 @@ func (s *Service) RolesForGroups(ctx context.Context, provider string, groups []
 }
 
 // BindRole grants the named role (built-in or custom) to a user
-// (system:users:write). Binding a role the user already has is a no-op.
+// (system:users:write). Binding a role the user already has is a no-op,
+// except that a role granted by group mapping becomes a manual binding.
 func (s *Service) BindRole(ctx context.Context, role, userID string) error {
 	return s.changeBinding(ctx, role, userID, true)
 }
@@ -303,9 +304,12 @@ func (s *Service) changeBinding(ctx context.Context, role, userID string, bind b
 			return dbErr(err, fmt.Sprintf("role %q", role))
 		}
 		if bind {
+			// Binding a role the group mapping granted makes it a manual
+			// binding, which later sign-ins keep.
 			tag, err := tx.Exec(ctx, `
 				INSERT INTO role_bindings (role_id, subject_kind, user_id) VALUES ($1, 'user', $2)
-				ON CONFLICT DO NOTHING`, roleID, userID)
+				ON CONFLICT (role_id, user_id) WHERE subject_kind = 'user'
+				DO UPDATE SET mapped_from = NULL WHERE role_bindings.mapped_from IS NOT NULL`, roleID, userID)
 			changed = err == nil && tag.RowsAffected() > 0
 			return dbErr(err, "bind role")
 		}
