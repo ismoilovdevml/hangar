@@ -7,7 +7,7 @@ import { Panel } from '../../components/Panel';
 import { PackageDetail } from './PackageDetail';
 import { PackageTree } from './PackageTree';
 import { RepositorySummary } from './RepositorySummary';
-import '../../styles/facts.css';
+import '../../styles/catalog.css';
 import './browse.css';
 
 const route = getRouteApi('/app/browse');

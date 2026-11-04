@@ -19,7 +19,8 @@ import { CopyButton } from '../../components/CopyButton';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
 import { FormatBadge } from '../../components/FormatBadge';
-import { IconDownload, IconTrash } from '../../components/icons';
+import { IconTrash } from '../../components/icons';
+import { IconDownload } from '../../components/opsIcons';
 import { NotAvailable } from '../../components/NotAvailable';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
@@ -193,7 +194,8 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
         <ConfirmDialog
           title={`Delete ${label}${hasVersion(toDelete.version) ? ` ${toDelete.version}` : ''}?`}
           confirmLabel="Delete version"
-          pending={remove.isPending}
+          tone="danger"
+          busy={remove.isPending}
           error={remove.isError ? apiMessage(remove.error) : null}
           onCancel={() => setToDelete(null)}
           onConfirm={confirmDelete}

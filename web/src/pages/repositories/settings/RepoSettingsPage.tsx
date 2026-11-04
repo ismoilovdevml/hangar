@@ -29,6 +29,7 @@ import {
 } from '../../../lib/repositories';
 import { RepoSettingsFields } from '../RepoFormFields';
 import { focusFirstError } from '../repoFormHelpers';
+import '../../../styles/catalog.css';
 import './settings.css';
 
 const route = getRouteApi('/app/repositories/$name/settings');
@@ -297,7 +298,8 @@ function SettingsForm({ repo }: { repo: Repository }) {
           title={`Delete ${repo.name}?`}
           confirmLabel="Delete repository"
           typeToConfirm={repo.name}
-          pending={remove.isPending}
+          tone="danger"
+          busy={remove.isPending}
           error={remove.isError ? apiMessage(remove.error, 'delete') : null}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() =>

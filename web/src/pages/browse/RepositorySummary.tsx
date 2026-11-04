@@ -5,7 +5,7 @@ import { CodeBlock } from '../../components/CodeBlock';
 import { CopyButton } from '../../components/CopyButton';
 import { ErrorNote } from '../../components/ErrorNote';
 import { FormatBadge } from '../../components/FormatBadge';
-import { IconSettings } from '../../components/icons';
+import { IconSettings } from '../../components/opsIcons';
 import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
 import { FORMAT_META, formatBytes } from '../../lib/format';

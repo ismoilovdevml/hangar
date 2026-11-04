@@ -12,7 +12,8 @@ import { Pill, StatusDot } from '../../components/Pill';
 import { dedupShare, quotaRatio, storeBadge } from '../../lib/blobStores';
 import { formatBytes, formatCompact } from '../../lib/format';
 import { isFormat, STATUS_META, TYPE_META } from '../../lib/repositories';
-import '../../styles/facts.css';
+import { BlobStoreManage } from './BlobStoreManage';
+import '../../styles/catalog.css';
 import './blobstores.css';
 
 const route = getRouteApi('/app/blob-stores/$name');
@@ -59,6 +60,7 @@ export function BlobStoreDetailPage() {
         <Configuration s={s} />
       </div>
       <UsedBy s={s} />
+      <BlobStoreManage key={s.id} s={s} />
     </div>
   );
 }

@@ -274,6 +274,34 @@ export function useBlobStore(name: string | undefined) {
   });
 }
 
+/**
+ * PUT /blob-stores/{name}. Sections left out keep their stored values; a
+ * missing soft_quota_bytes removes the quota.
+ */
+export function useUpdateBlobStore(name: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: BlobStoreInput) =>
+      apiFetch<BlobStore>(`/blob-stores/${encodeURIComponent(name)}`, { method: 'PUT', body }),
+    onSuccess: (store) => {
+      qc.setQueryData(catalogKeys.blobStore(name), store);
+      void qc.invalidateQueries({ queryKey: queryKeys.blobStores, predicate: (q) => q.queryKey[2] !== name });
+    },
+  });
+}
+
+/** DELETE /blob-stores/{name}; the server refuses (409) while repositories or blobs remain. */
+export function useDeleteBlobStore(name: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<void>(`/blob-stores/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      qc.removeQueries({ queryKey: catalogKeys.blobStore(name) });
+      void qc.invalidateQueries({ queryKey: queryKeys.blobStores });
+    },
+  });
+}
+
 export function useCreateBlobStore() {
   const qc = useQueryClient();
   return useMutation({

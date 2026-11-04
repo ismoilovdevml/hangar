@@ -370,6 +370,38 @@ export function catalogHandlers(guard: Guard, readableRepos: () => string[]) {
       }),
     ),
 
+    http.put(
+      api('/blob-stores/:name'),
+      withGuard(async ({ request, params }) => {
+        const old = state.blobStores.find((b) => b.name === params.name);
+        if (!old) return error(404, { code: 'not_found', message: `blob store "${String(params.name)}" not found` });
+        const body = (await request.json()) as BlobStoreInput;
+        if ((body.name && body.name !== old.name) || (body.kind && body.kind !== old.kind)) {
+          return error(400, { code: 'invalid_argument', message: 'blob store name and kind cannot be changed' });
+        }
+        if (body.soft_quota_bytes != null && body.soft_quota_bytes <= 0) {
+          return error(400, { code: 'invalid_argument', message: 'soft_quota_bytes must be positive' });
+        }
+        // Left-out sections keep their values; a missing quota removes it (as the server does).
+        const next: BlobStore = { ...old, soft_quota_bytes: body.soft_quota_bytes ?? null, capacity_bytes: body.soft_quota_bytes ?? null };
+        state.blobStores = state.blobStores.map((b) => (b.name === old.name ? next : b));
+        return HttpResponse.json(next);
+      }, true),
+    ),
+
+    http.delete(
+      api('/blob-stores/:name'),
+      withGuard(({ params }) => {
+        const s = state.blobStores.find((b) => b.name === params.name);
+        if (!s) return error(404, { code: 'not_found', message: `blob store "${String(params.name)}" not found` });
+        if (s.repository_count > 0 || s.blob_count > 0) {
+          return error(409, { code: 'in_use', message: `blob store "${s.name}" is used by ${s.repository_count} repositories; move or delete them first` });
+        }
+        state.blobStores = state.blobStores.filter((b) => b.name !== s.name);
+        return new HttpResponse(null, { status: 204 });
+      }, true),
+    ),
+
     http.post(
       api('/blob-stores'),
       withGuard(async ({ request }) => {

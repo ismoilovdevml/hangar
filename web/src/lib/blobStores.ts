@@ -113,6 +113,20 @@ export function validateBlobStoreForm(f: BlobStoreForm): BlobStoreErrors {
   return e;
 }
 
+/** A typed quota in bytes: null for empty (no quota), NaN when it is not a positive number. */
+export function quotaBytes(value: string, unit: QuotaUnit): number | null {
+  if (!value.trim()) return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * UNIT[unit]) : NaN;
+}
+
+/** The largest unit that shows a quota without a long fraction (for pre-filling the editor). */
+export function quotaToForm(bytes: number | null | undefined): { quota: string; quotaUnit: QuotaUnit } {
+  if (!bytes) return { quota: '', quotaUnit: 'TB' };
+  const unit: QuotaUnit = bytes >= 1e12 ? 'TB' : 'GB';
+  return { quota: String(Number((bytes / UNIT[unit]).toFixed(3))), quotaUnit: unit };
+}
+
 /** The request body for POST /blob-stores. Includes the secret; never log it. */
 export function toBlobStoreInput(f: BlobStoreForm): BlobStoreInput {
   const input: BlobStoreInput = { name: f.name, kind: f.kind };

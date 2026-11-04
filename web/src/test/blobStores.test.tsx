@@ -97,6 +97,39 @@ describe('blob stores', () => {
     expect(within(table).queryByRole('link', { name: 'docker-prod' })).not.toBeInTheDocument();
   });
 
+  it('changes the soft quota and refuses to delete a store in use', async () => {
+    const user = userEvent.setup();
+    renderApp('/blob-stores/fs-local');
+    const manage = await screen.findByRole('region', { name: 'Manage' });
+    const quota = within(manage).getByLabelText('Soft quota');
+    expect(quota).toHaveValue('');
+    await user.type(quota, '500');
+    await user.selectOptions(within(manage).getByLabelText('Quota unit'), 'GB');
+    await user.click(within(manage).getByRole('button', { name: 'Save quota' }));
+    expect(await within(manage).findByRole('button', { name: 'Saved' })).toBeDisabled();
+    expect(catalogState.blobStores.find((b) => b.name === 'fs-local')?.soft_quota_bytes).toBe(500e9);
+    expect(within(manage).getByRole('button', { name: 'Delete fs-local' })).toBeDisabled();
+    expect(within(manage).getByText(/Deleting needs an empty store/)).toBeInTheDocument();
+  });
+
+  it('deletes an empty store after its name is typed', async () => {
+    const user = userEvent.setup();
+    const { history } = renderApp('/blob-stores?add=true');
+    const form = await screen.findByRole('form', { name: 'Add a blob store' });
+    await user.type(within(form).getByLabelText('Name'), 'scratch');
+    await user.type(within(form).getByLabelText('Directory on the server'), '/srv/scratch');
+    await user.click(within(form).getByRole('button', { name: 'Add blob store' }));
+    const manage = await screen.findByRole('region', { name: 'Manage' });
+    await user.click(within(manage).getByRole('button', { name: 'Delete scratch' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Delete scratch?' });
+    expect(within(dialog).getByLabelText(/to confirm/)).toHaveFocus();
+    expect(within(dialog).getByRole('button', { name: 'Delete blob store' })).toBeDisabled();
+    await user.keyboard('scratch');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete blob store' }));
+    await waitFor(() => expect(history.location.pathname).toBe('/blob-stores'));
+    expect(catalogState.blobStores.some((b) => b.name === 'scratch')).toBe(false);
+  });
+
   it('says when a store does not exist', async () => {
     renderApp('/blob-stores/nope');
     expect(await screen.findByText('This blob store does not exist.')).toBeInTheDocument();

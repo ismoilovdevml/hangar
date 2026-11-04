@@ -27,3 +27,10 @@
 .store-detail__note { padding: 12px 22px 16px; border-top: 1px solid var(--hairline); }
 .store-repo { display: inline-flex; align-items: center; gap: 10px; }
 .contents { display: contents; }
+.store-manage { gap: 20px; }
+.store-manage__quota { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+.store-manage__quota .field { flex: 1 1 280px; max-width: 420px; }
+.store-manage__quota > .button { margin-top: 24px; }
+.store-manage__quota .form-error { flex-basis: 100%; }
+.store-manage__delete { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; border-top: 1px solid var(--hairline); }
+.store-manage .danger-zone__text { font-size: 14px; color: var(--ink-2); line-height: 1.55; }
