@@ -75,21 +75,6 @@ export function BlobStoresPage() {
   );
 }
 
-export function CleanupPage() {
-  return (
-    <ScreenSkeleton
-      title="Cleanup policies"
-      description="Rules that quietly remove what nobody uses. Always preview before they run."
-      planned={[
-        'The list of policies and an editor written as readable sentences.',
-        'The repositories each policy applies to.',
-        'A mandatory dry-run preview with counts, bytes, sample rows and CSV export.',
-        'The schedule as cron and in plain words.',
-      ]}
-    />
-  );
-}
-
 export function VulnerabilitiesPage() {
   return (
     <ScreenSkeleton
@@ -114,19 +99,6 @@ export function AccessPage() {
         'Tabs for members, roles, access tokens and service accounts.',
         'Sign-in provider status (OIDC, LDAP, SAML, local).',
         'The audit log stream with CSV and JSON export.',
-      ]}
-    />
-  );
-}
-
-export function TasksPage() {
-  return (
-    <ScreenSkeleton
-      title="Scheduled tasks"
-      description="Maintenance the registry does on its own, mostly at night."
-      planned={[
-        'A banner for the task running now, with progress and Stop.',
-        'Every task with its schedule, last result, next run and a Run now button.',
       ]}
     />
   );

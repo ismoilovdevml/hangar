@@ -21,13 +21,18 @@ import {
   AccessPage,
   BlobStoresPage,
   BrowsePage,
-  CleanupPage,
   ClusterPage,
   NotFoundPage,
   SearchPage,
-  TasksPage,
   VulnerabilitiesPage,
 } from './pages/screens';
+import { AuditPage } from './pages/audit/AuditPage';
+import { CleanupPage, type CleanupSearch } from './pages/cleanup/CleanupPage';
+import { SystemPage } from './pages/settings/SystemPage';
+import { TaskDetailPage, type TaskDetailSearch } from './pages/tasks/TaskDetailPage';
+import { TasksPage, type TasksSearch } from './pages/tasks/TasksPage';
+import { validateAuditSearch, type AuditSearch } from './lib/audit';
+import { isTaskStatusFilter, isTaskType } from './lib/tasks';
 
 declare module '@tanstack/react-router' {
   interface StaticDataRouteOption {
@@ -140,6 +145,45 @@ const searchRoute = createRoute({
   component: SearchPage,
 });
 
+const cleanupRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/cleanup',
+  staticData: { title: 'Cleanup policies' },
+  validateSearch: (s: Record<string, unknown>): CleanupSearch => ({
+    policy: str(s.policy),
+    create: s.create === true || s.create === 'true' ? true : undefined,
+  }),
+  component: CleanupPage,
+});
+
+const tasksRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/tasks',
+  staticData: { title: 'Scheduled tasks' },
+  validateSearch: (s: Record<string, unknown>): TasksSearch => ({
+    type: isTaskType(s.type) ? s.type : undefined,
+    status: isTaskStatusFilter(s.status) ? s.status : undefined,
+    q: str(s.q),
+  }),
+  component: TasksPage,
+});
+
+const taskDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/tasks/$taskId',
+  staticData: { title: 'Task' },
+  validateSearch: (s: Record<string, unknown>): TaskDetailSearch => ({ run: str(s.run), cursor: str(s.cursor) }),
+  component: TaskDetailPage,
+});
+
+const auditRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/audit',
+  staticData: { title: 'Audit log' },
+  validateSearch: (s: Record<string, unknown>): AuditSearch => validateAuditSearch(s),
+  component: AuditPage,
+});
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   appRoute.addChildren([
@@ -149,11 +193,14 @@ const routeTree = rootRoute.addChildren([
     repositoriesRoute,
     repoCreateRoute,
     page('/blob-stores', 'Blob stores', BlobStoresPage),
-    page('/cleanup', 'Cleanup policies', CleanupPage),
+    cleanupRoute,
     page('/vulnerabilities', 'Vulnerabilities', VulnerabilitiesPage),
     page('/access', 'Access & audit', AccessPage),
-    page('/tasks', 'Scheduled tasks', TasksPage),
+    tasksRoute,
+    taskDetailRoute,
     page('/cluster', 'Cluster & replication', ClusterPage),
+    auditRoute,
+    page('/settings', 'System', SystemPage),
   ]),
 ]);
 

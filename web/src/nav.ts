@@ -11,6 +11,7 @@ import {
   IconTrash,
   IconUsers,
 } from './components/icons';
+import { IconAudit, IconSettings } from './components/opsIcons';
 
 export type AppPath =
   | '/'
@@ -22,8 +23,10 @@ export type AppPath =
   | '/cleanup'
   | '/vulnerabilities'
   | '/access'
+  | '/audit'
   | '/tasks'
-  | '/cluster';
+  | '/cluster'
+  | '/settings';
 
 export interface NavItem {
   to: AppPath;
@@ -59,6 +62,7 @@ export const NAV: NavSection[] = [
     items: [
       { to: '/vulnerabilities', label: 'Vulnerabilities', icon: IconShield, keywords: 'cve scanning findings quarantine' },
       { to: '/access', label: 'Access & audit', icon: IconUsers, keywords: 'users roles tokens audit log' },
+      { to: '/audit', label: 'Audit log', icon: IconAudit, keywords: 'events history who did export compliance' },
     ],
   },
   {
@@ -66,6 +70,7 @@ export const NAV: NavSection[] = [
     items: [
       { to: '/tasks', label: 'Scheduled tasks', icon: IconClock, keywords: 'jobs cron' },
       { to: '/cluster', label: 'Cluster & replication', icon: IconCluster, keywords: 'nodes edge ha' },
+      { to: '/settings', label: 'System', icon: IconSettings, keywords: 'settings status version health configuration' },
     ],
   },
 ];
