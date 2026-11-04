@@ -45,6 +45,8 @@ const (
 var apiPolicy = map[string]policy{
 	"GET /auth/providers":                        public,
 	"POST /auth/login":                           public,
+	"GET /auth/oidc/start":                       public,
+	"GET /auth/oidc/callback":                    public,
 	"GET /system/status":                         public,
 	"GET /system/version":                        public,
 	"POST /auth/logout":                          self,
