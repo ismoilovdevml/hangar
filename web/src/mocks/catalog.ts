@@ -7,6 +7,10 @@ import { http, HttpResponse, type HttpResponseResolver } from 'msw';
 import type {
   ApiError,
   Asset,
+  AssetDetail,
+  BrowseEntry,
+  ComponentInfo,
+  Repository,
   BlobStore,
   BlobStoreInput,
   ComponentDetail,
@@ -66,6 +70,7 @@ const SEEDS: Seed[] = [
   { id: 'c_ledger', repo: 'maven-releases', format: 'maven', ns: 'com.acme', name: 'ledger-core', version: '7.0.0', daysAgo: 3, size: 2.4e6, downloads: 9000, by: { kind: 'user', display_name: 'Jasur Karimov' } },
   { id: 'c_log4j', repo: 'maven-central', format: 'maven', ns: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.24.1', daysAgo: 30, size: 1.9e6, downloads: 84_000, by: { kind: 'service_account', display_name: 'proxy' } },
   { id: 'c_1207', repo: 'pypi-internal', format: 'pypi', name: 'acme-ml-utils', version: '0.9.4', daysAgo: 1, size: 88_000, downloads: 310, by: ci(1207) },
+  { id: 'c_nuget', repo: 'nuget-internal', format: 'nuget', name: 'acme.core', version: '1.2.0', daysAgo: 6, size: 240_000, downloads: 75, by: ci(1501), scan: pending },
   { id: 'c_raw', repo: 'raw-artifacts', format: 'raw', ns: 'releases/1.4.0', name: 'app-linux-amd64.tar.gz', version: '', daysAgo: 4, size: 48e6, downloads: 52, by: ci(1400) },
 ];
 
@@ -83,6 +88,8 @@ function installCommand(s: Seed): string {
       return `pip install ${s.name}==${s.version} --index-url ${url}simple/`;
     case 'docker':
       return `docker pull ${url}/${full}:${s.version}`;
+    case 'nuget':
+      return `dotnet add package ${s.name} --version ${s.version} --source ${url}index.json`;
     default:
       return `curl -fLO ${url}${full}`;
   }
@@ -135,7 +142,9 @@ function assetsFor(c: ComponentDetail): Asset[] {
         ? `${(c.namespace ?? '').replace(/\./g, '/')}/${c.name}/${c.version}/${c.name}-${c.version}.jar`
         : c.format === 'pypi'
           ? `packages/${c.name}/${c.name.replace(/-/g, '_')}-${c.version}-py3-none-any.whl`
-          : full;
+          : c.format === 'nuget'
+            ? `v3-flatcontainer/${c.name}/${c.version}/${c.name}.${c.version}.nupkg`
+            : full;
   const sha = c.checksums.sha256 ?? hex(c.id);
   return [
     {
@@ -158,6 +167,7 @@ function initialState() {
   return {
     components: SEEDS.map((s) => toDetail(s, now)),
     blobStores: blobStores.map((b) => ({ ...b })),
+    deletedAssets: new Set<string>(),
   };
 }
 
@@ -173,6 +183,9 @@ export const catalogState = {
   },
   get blobStores(): readonly BlobStore[] {
     return state.blobStores;
+  },
+  get deletedAssets(): ReadonlySet<string> {
+    return state.deletedAssets;
   },
 };
 
@@ -272,10 +285,225 @@ function runSearch(q: string, sort: string, readable: Set<string>) {
   };
 }
 
+
+/* ---------------------------------------------------------------- browse */
+
+interface StoredAsset extends Asset {
+  repository: string;
+  component?: ComponentDetail;
+}
+
+/** Every file of a component as the browser sees it, with the metadata files a real server keeps next to them. */
+function browseAssets(c: ComponentDetail): StoredAsset[] {
+  const own: StoredAsset[] = assetsFor(c).map((a) => ({ ...a, repository: c.repository, component: c }));
+  const meta = (path: string, ct = 'application/json'): StoredAsset => ({
+    id: `${c.id}_m_${hex(path, 8)}`,
+    path,
+    kind: 'metadata',
+    blob_digest: `sha256:${hex(path)}`,
+    content_type: ct,
+    size_bytes: 900,
+    created_at: c.published_at,
+    last_downloaded_at: null,
+    download_url: `${BASE_URL}/repository/${c.repository}/${path}`,
+    repository: c.repository,
+  });
+  const full = c.namespace ? `${c.namespace}/${c.name}` : c.name;
+  switch (c.format) {
+    case 'npm':
+      return [...own, { ...meta(`${full}/-/meta/${c.version}.json`), component: c }, meta(`${full}/-/package.json`)];
+    case 'maven':
+      return [...own, meta(`${(c.namespace ?? '').replace(/\./g, '/')}/${c.name}/maven-metadata.xml`, 'application/xml')];
+    case 'docker': {
+      const manifest: StoredAsset = { ...meta(`${c.name}/manifests/${c.version}`, 'application/vnd.oci.image.manifest.v1+json'), kind: 'content', component: c };
+      return [...own, manifest].map((a) => ({ ...a, download_url: undefined }));
+    }
+    case 'nuget': {
+      const spec: StoredAsset = { ...meta(`v3-flatcontainer/${c.name}/${c.version}/${c.name}.nuspec`, 'application/xml'), kind: 'content', component: c };
+      return [...own, spec];
+    }
+    default:
+      return own;
+  }
+}
+
+function storedAssets(repo: string): StoredAsset[] {
+  const seen = new Map<string, StoredAsset>();
+  for (const c of state.components) {
+    if (c.repository !== repo) continue;
+    for (const a of browseAssets(c)) if (!state.deletedAssets.has(a.id)) seen.set(a.path, a);
+  }
+  return [...seen.values()];
+}
+
+const BROWSE_ROOT: Partial<Record<string, string>> = { nuget: 'v3-flatcontainer/', pypi: 'packages/' };
+
+/** The server's mapping from a browse tree folder to a storage folder. */
+function storageDir(format: string, tree: string): string {
+  const root = BROWSE_ROOT[format] ?? '';
+  if (format !== 'npm' || !tree) return root + tree;
+  const segs = tree.replace(/\/$/, '').split('/');
+  const n = segs[0]!.startsWith('@') ? 2 : 1;
+  if (segs.length < n) return tree;
+  return `${segs.slice(0, n).join('/')}/-/${segs.length > n ? `${segs.slice(n).join('/')}/` : ''}`;
+}
+
+function folderKind(format: string, tree: string, c: ComponentDetail | undefined): BrowseEntry['kind'] {
+  if (!c) return 'folder';
+  const full = c.namespace ? `${c.namespace}/${c.name}` : c.name;
+  const pkg =
+    format === 'maven' ? `${(c.namespace ?? '').replace(/\./g, '/')}/${c.name}/` : format === 'npm' || format === 'docker' || format === 'nuget' || format === 'pypi' ? `${full}/` : '';
+  if (pkg && tree.toLowerCase() === pkg.toLowerCase()) return 'package';
+  if ((format === 'maven' || format === 'nuget') && tree.toLowerCase() === `${pkg}${c.version}/`.toLowerCase()) return 'version';
+  return 'folder';
+}
+
+function browse(repos: readonly Repository[], name: string, tree: string, params: URLSearchParams) {
+  const repo = repos.find((r) => r.name === name)!;
+  const sources = repo.type === 'group' ? (repo.config.group?.members ?? []).filter((m) => repos.some((r) => r.name === m)) : [repo.name];
+  const dir = storageDir(repo.format, tree);
+  const byKey = new Map<string, { entry: BrowseEntry; first?: ComponentDetail }>();
+  for (const src of sources) {
+    const files = storedAssets(src)
+      .filter((a) => a.path.startsWith(dir))
+      .sort((a, b) => (a.path < b.path ? -1 : 1));
+    for (const a of files) {
+      const rest = a.path.slice(dir.length);
+      const slash = rest.indexOf('/');
+      const folder = slash >= 0;
+      const childName = folder ? rest.slice(0, slash) : rest;
+      const key = folder ? `${childName}/` : childName;
+      const hit = byKey.get(key);
+      if (hit) {
+        if (hit.entry.repositories && !hit.entry.repositories.includes(src)) hit.entry.repositories.push(src);
+        if (folder && !hit.first && a.component) hit.first = a.component;
+        continue;
+      }
+      const entry: BrowseEntry = {
+        name: childName,
+        path: tree + key,
+        kind: folder ? 'folder' : 'asset',
+        repository: src,
+        ...(repo.type === 'group' ? { repositories: [src] } : {}),
+      };
+      if (!folder) {
+        entry.asset = {
+          id: a.id,
+          path: a.path,
+          kind: a.kind,
+          content_type: a.content_type,
+          size_bytes: a.size_bytes,
+          created_at: a.created_at,
+          updated_at: a.created_at,
+          last_downloaded_at: a.last_downloaded_at ?? null,
+          download_count: 0,
+        };
+        if (a.component) entry.component = { id: a.component.id, namespace: a.component.namespace ?? '', name: a.component.name, version: a.component.version };
+      }
+      byKey.set(key, { entry, first: folder ? a.component : undefined });
+    }
+  }
+  const rows = [...byKey.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([, { entry, first }]) => {
+      if (entry.kind !== 'folder') return entry;
+      const kind = folderKind(repo.format, entry.path, first);
+      return kind === 'folder' || !first ? entry : { ...entry, kind, component: { id: first.id, namespace: first.namespace ?? '', name: first.name, version: first.version } };
+    });
+  return { repository: repo.name, format: repo.format, path: tree, ...page(rows, params, 50) };
+}
+
+function findAsset(id: string, readable: string[]): StoredAsset | undefined {
+  for (const c of state.components) {
+    if (!readable.includes(c.repository)) continue;
+    const a = browseAssets(c).find((x) => x.id === id && !state.deletedAssets.has(x.id));
+    if (a) return a;
+  }
+  return undefined;
+}
+
+function assetDetail(a: StoredAsset, repos: readonly Repository[]): AssetDetail {
+  const repo = repos.find((r) => r.name === a.repository);
+  const sha = a.blob_digest.replace(/^sha256:/, '');
+  return {
+    id: a.id,
+    path: a.path,
+    repository: a.repository,
+    repository_type: repo?.type ?? 'hosted',
+    format: repo?.format ?? 'raw',
+    kind: a.kind,
+    content_type: a.content_type,
+    size_bytes: a.size_bytes,
+    blob_digest: a.blob_digest,
+    checksums: { sha256: sha, ...(a.kind === 'content' ? { sha1: hex(`${a.id}sha1`, 40) } : {}) },
+    created_at: a.created_at,
+    updated_at: a.created_at,
+    blob_created_at: a.created_at,
+    last_downloaded_at: a.last_downloaded_at ?? null,
+    download_count: a.component?.download_count ?? 0,
+    cached_from_remote: repo?.type === 'proxy',
+    ...(repo?.type === 'proxy' && repo.config.proxy?.remote_url ? { remote_url: repo.config.proxy.remote_url } : {}),
+    ...(a.component ? { component: { id: a.component.id, namespace: a.component.namespace ?? '', name: a.component.name, version: a.component.version } } : {}),
+    ...(a.download_url ? { download_url: a.download_url } : {}),
+  };
+}
+
+const UI_KIT_README = `# Acme UI kit
+
+React components for **Acme** products. See [the design system](https://design.example.com) for guidelines.
+
+## Install
+
+\`\`\`sh
+npm install @acme/ui-kit
+\`\`\`
+
+| Component | Status |
+| --- | --- |
+| Button | stable |
+| Table | beta |
+
+<script>alert('never runs')</script>
+<img src="javascript:alert(1)" alt="blocked image">
+[Unsafe link](javascript:alert(1))
+`;
+
+function componentInfo(c: ComponentDetail): ComponentInfo {
+  switch (c.id) {
+    case 'c_311':
+    case 'c_309':
+      return {
+        description: 'Acme UI components',
+        licenses: ['MIT'],
+        keywords: ['react', 'ui', 'components'],
+        homepage: 'https://ui.example.com',
+        readme: { format: 'markdown', content: UI_KIT_README, source: 'README in the version manifest', truncated: false },
+      };
+    case 'c_ledger':
+      return { description: 'Double-entry ledger engine', licenses: ['Apache License 2.0'], keywords: [] };
+    case 'c_1207':
+      return {
+        description: 'ML helpers',
+        licenses: ['BSD-3-Clause'],
+        keywords: ['ml'],
+        readme: { format: 'text', content: 'acme-ml-utils\n=============\n\nHelpers for model training.', source: 'the long description in the upload metadata', truncated: false },
+      };
+    case 'c_nuget':
+      return {
+        description: 'Shared .NET primitives',
+        licenses: ['Apache-2.0'],
+        keywords: ['acme', 'core'],
+        readme: { format: 'markdown', content: '## Acme.Core\n\nShared primitives.', source: 'docs/README.md in the .nupkg', truncated: false },
+      };
+    default:
+      return { licenses: [], keywords: [] };
+  }
+}
+
 const STORE_NAME = /^[a-z0-9][a-z0-9-]{1,62}$/;
 
 /** Handlers; `guard` is the session/CSRF check shared with the other mock handlers. */
-export function catalogHandlers(guard: Guard, readableRepos: () => string[]) {
+export function catalogHandlers(guard: Guard, readableRepos: () => string[], repositories: () => readonly Repository[] = () => []) {
   const withGuard =
     (resolver: HttpResponseResolver, mutating = false): HttpResponseResolver =>
     (info) =>
@@ -324,7 +552,10 @@ export function catalogHandlers(guard: Guard, readableRepos: () => string[]) {
       withGuard(({ params, request }) => {
         const c = find(String(params.id));
         if (!c) return error(404, { code: 'not_found', message: 'component not found' });
-        const rows = state.components.filter((x) => pkgKey(x) === pkgKey(c)).sort(byNewest).map(toPublished);
+        const rows = state.components
+          .filter((x) => pkgKey(x) === pkgKey(c))
+          .sort(byNewest)
+          .map((x) => ({ ...toPublished(x), size_bytes: x.size_bytes }));
         return HttpResponse.json(page(rows, new URL(request.url).searchParams));
       }),
     ),
@@ -336,6 +567,50 @@ export function catalogHandlers(guard: Guard, readableRepos: () => string[]) {
         if (!c) return error(404, { code: 'not_found', message: 'component not found' });
         return HttpResponse.json(page(assetsFor(c), new URL(request.url).searchParams));
       }),
+    ),
+
+    http.get(
+      api('/components/:id/info'),
+      withGuard(({ params }) => {
+        const c = find(String(params.id));
+        return c ? HttpResponse.json(componentInfo(c)) : error(404, { code: 'not_found', message: 'component not found' });
+      }),
+    ),
+
+    http.get(
+      api('/repositories/:name/browse'),
+      withGuard(({ params, request }) => {
+        const name = String(params.name);
+        if (!readableRepos().includes(name)) return error(404, { code: 'not_found', message: `repository "${name}" not found` });
+        const p = new URL(request.url).searchParams;
+        let tree = (p.get('path') ?? '').replace(/^\/+/, '');
+        if (tree && !tree.endsWith('/')) tree += '/';
+        const repos = repositories().filter((r) => readableRepos().includes(r.name));
+        return HttpResponse.json(browse(repos, name, tree, p));
+      }),
+    ),
+
+    http.get(
+      api('/assets/:id'),
+      withGuard(({ params }) => {
+        const a = findAsset(String(params.id), readableRepos());
+        return a ? HttpResponse.json(assetDetail(a, repositories())) : error(404, { code: 'not_found', message: 'asset not found' });
+      }),
+    ),
+
+    http.delete(
+      api('/assets/:id'),
+      withGuard(({ params }) => {
+        const a = findAsset(String(params.id), readableRepos());
+        if (!a) return error(404, { code: 'not_found', message: 'asset not found' });
+        state.deletedAssets.add(a.id);
+        // The last file of a version takes the version with it.
+        const c = a.component;
+        if (c && browseAssets(c).filter((x) => x.component).every((x) => state.deletedAssets.has(x.id))) {
+          state.components = state.components.filter((x) => x.id !== c.id);
+        }
+        return new HttpResponse(null, { status: 204 });
+      }, true),
     ),
 
     http.get(api('/components/:id/dependents'), withGuard(() => notImplemented('endpoint GET dependents'))),

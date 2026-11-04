@@ -141,7 +141,7 @@ export function installOptions(c: ComponentDetail, repoUrl: string | undefined):
 
 /* ---------------------------------------------------------------- browse tabs */
 
-export const BROWSE_TABS = ['overview', 'versions', 'files', 'dependents', 'security'] as const;
+export const BROWSE_TABS = ['readme', 'versions', 'files', 'repositories', 'dependents', 'security'] as const;
 export type BrowseTab = (typeof BROWSE_TABS)[number];
 export const isBrowseTab = (v: unknown): v is BrowseTab => BROWSE_TABS.includes(v as BrowseTab);
 

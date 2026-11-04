@@ -120,7 +120,11 @@ function validateRepository(body: RepositoryInput): string | null {
 }
 
 export const handlers = [
-  ...catalogHandlers(guard, () => state.repositories.map((r) => r.name)),
+  ...catalogHandlers(
+    guard,
+    () => state.repositories.map((r) => r.name),
+    () => state.repositories,
+  ),
 
   http.get(api('/system/status'), () => HttpResponse.json(data.systemStatus)),
   http.get(api('/auth/providers'), () => HttpResponse.json(data.authProviders)),
