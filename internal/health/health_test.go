@@ -44,3 +44,22 @@ func TestReadiness(t *testing.T) {
 		t.Fatalf("liveness = %d", rec.Code)
 	}
 }
+
+func TestRunOne(t *testing.T) {
+	c := New(20 * time.Millisecond)
+	c.Add("db", func(context.Context) error { return nil })
+	c.Add("nats", func(context.Context) error { return errors.New("not connected") })
+	c.Add("slow", func(ctx context.Context) error { <-ctx.Done(); return nil })
+	if r, ok := c.RunOne(context.Background(), "db"); !ok || r.Status != StatusOK {
+		t.Fatalf("db = %+v %v", r, ok)
+	}
+	if r, _ := c.RunOne(context.Background(), "nats"); r.Status != StatusFail || r.Error != "not connected" {
+		t.Fatalf("nats = %+v", r)
+	}
+	if r, _ := c.RunOne(context.Background(), "slow"); r.Status != StatusFail || r.LatencyMS < 20 {
+		t.Fatalf("slow = %+v", r)
+	}
+	if _, ok := c.RunOne(context.Background(), "missing"); ok {
+		t.Fatal("missing check reported ok")
+	}
+}
