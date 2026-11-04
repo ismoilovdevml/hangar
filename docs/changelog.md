@@ -21,6 +21,28 @@
 - Run, stop, save and delete actions are hidden from users without the matching
   `system:<area>` privilege; screens say plainly when a server does not support
   an endpoint yet.
+- **Observability**: Prometheus metrics for package traffic per format and
+  repository type (requests, latency, upload and download bytes), blob store
+  operations per driver, store usage, quotas and filesystem free space, proxy
+  remote fetches and circuit breaker state, database statements and pool,
+  job queue depth and job outcomes, NATS connection, authentication failures
+  and lockouts, the audit queue and readiness. Labels are bounded: route
+  patterns, standard methods and capped value sets, never raw paths.
+- **Tracing**: OpenTelemetry traces over OTLP/HTTP
+  (`observability.tracing.{enabled,endpoint,sample_ratio,service_name}`) with
+  spans for HTTP requests, database statements, blob store operations, proxy
+  fetches and jobs; incoming W3C `traceparent` headers are honoured.
+- **Logs**: every request log record carries `request_id`, `trace_id`,
+  `principal`, `repository` and `format`; credentials are scrubbed from all
+  log output; `observability.access_log.sample_ratio` samples the access log
+  (server errors are always logged). The access log fields `bytes` became
+  `bytes_in` and `bytes_out`.
+- **Deploy**: Grafana dashboards (overview, formats, storage, upstreams, jobs,
+  auth) and Prometheus alert rules with unit tests in `deploy/observability/`;
+  metric reference in `docs/operations/monitoring.md` and a runbook per alert
+  in `docs/operations/runbooks.md`.
+- **Fix**: request metrics (and the Overview screen numbers) are recorded when
+  `metrics.enabled` is false; only the `/metrics` endpoint is turned off.
 
 ## M0 — Skeleton (2026-11-03)
 
