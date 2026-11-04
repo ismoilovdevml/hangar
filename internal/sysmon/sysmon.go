@@ -353,7 +353,7 @@ func (m *Monitor) Nodes(ctx context.Context) ([]Node, error) {
 	out = append(out, others...)
 	up := 0
 	for _, n := range out {
-		if n.Status != StatusDown {
+		if !n.Stale {
 			up++
 		}
 	}
@@ -363,8 +363,9 @@ func (m *Monitor) Nodes(ctx context.Context) ([]Node, error) {
 	return out, nil
 }
 
-// Summary returns the nodes up and known at the last heartbeat or node
-// listing, without touching the database (the public status endpoint).
+// Summary returns the nodes up (publishing heartbeats) and known at the
+// last heartbeat or node listing, without touching the database (the
+// public status endpoint).
 func (m *Monitor) Summary() (up, total int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

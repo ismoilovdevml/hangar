@@ -160,7 +160,8 @@ type clusterStatus struct {
 }
 
 // listNodes serves GET /nodes from the same heartbeats as /system/nodes.
-// Quorum means more than half of the known nodes are up.
+// Quorum means more than half of the known nodes publish heartbeats; a
+// node is healthy when it does and none of its subsystems is down.
 func (a *API) listNodes(w http.ResponseWriter, r *http.Request) {
 	if !a.authorizeCluster(w, r, core.ActionRead) {
 		return
@@ -174,11 +175,14 @@ func (a *API) listNodes(w http.ResponseWriter, r *http.Request) {
 		a.logger().WarnContext(r.Context(), "nodes: other nodes unavailable", "error", err)
 	}
 	out := clusterStatus{Nodes: make([]clusterNode, 0, len(nodes)), Dependencies: []dependency{}}
-	up := 0
+	up, healthyNodes := 0, 0
 	for _, n := range nodes {
-		healthy := n.Status != sysmon.StatusDown
-		if healthy {
+		if !n.Stale {
 			up++
+		}
+		healthy := !n.Stale && n.Status != sysmon.StatusDown
+		if healthy {
+			healthyNodes++
 		}
 		name := n.Hostname
 		if name == "" {
@@ -189,9 +193,9 @@ func (a *API) listNodes(w http.ResponseWriter, r *http.Request) {
 	}
 	out.Quorum = up*2 > len(nodes)
 	switch {
-	case up == len(nodes):
+	case healthyNodes == len(nodes):
 		out.State = "ok"
-	case up == 0:
+	case healthyNodes == 0:
 		out.State = "down"
 	default:
 		out.State = "degraded"
