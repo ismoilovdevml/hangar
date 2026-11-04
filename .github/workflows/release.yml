@@ -1,0 +1,325 @@
+name: Release
+
+# Publishes a release from a version tag:
+#   - container image ghcr.io/<owner>/hangar (linux/amd64 + linux/arm64, built
+#     natively per architecture, web UI embedded), smoke-tested per architecture
+#     against PostgreSQL before it is tagged <version>, <major>.<minor> and latest
+#   - hangar binaries for linux and darwin (amd64, arm64) with SHA256SUMS
+#   - a GitHub Release with the binaries, the compose stack and deploy/install.sh
+#
+# Tags: vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-PRERELEASE. Pre-releases get
+# only the <version> image tag and are not marked as the latest release.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing tag to release, e.g. v0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    name: Version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      semver: ${{ steps.v.outputs.semver }}
+      minor: ${{ steps.v.outputs.minor }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+      image: ${{ steps.v.outputs.image }}
+      commit: ${{ steps.v.outputs.commit }}
+      epoch: ${{ steps.v.outputs.epoch }}
+      date: ${{ steps.v.outputs.date }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.version || github.ref }}
+          fetch-depth: 1
+      - id: v
+        env:
+          VERSION: ${{ inputs.version || github.ref_name }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$VERSION" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::$VERSION is not a version tag (vMAJOR.MINOR.PATCH[-PRERELEASE])"
+            exit 1
+          fi
+          semver=${VERSION#v}
+          prerelease=false
+          [[ -n "${BASH_REMATCH[4]}" ]] && prerelease=true
+          epoch=$(git log -1 --format=%ct)
+          {
+            echo "version=$VERSION"
+            echo "semver=$semver"
+            echo "minor=${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+            echo "prerelease=$prerelease"
+            echo "image=ghcr.io/${OWNER,,}/hangar"
+            echo "commit=$(git rev-parse --short=12 HEAD)"
+            echo "epoch=$epoch"
+            echo "date=$(date -u -d "@$epoch" +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
+
+  image:
+    name: Image (${{ matrix.arch }})
+    needs: meta
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hangar
+          POSTGRES_PASSWORD: hangar
+          POSTGRES_DB: hangar
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hangar -d hangar"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      IMAGE: ${{ needs.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.version }}
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Pushed by digest only; tags are added after both architectures pass
+      # the smoke test.
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          build-args: |
+            VERSION=${{ needs.meta.outputs.version }}
+            COMMIT=${{ needs.meta.outputs.commit }}
+            SOURCE_DATE_EPOCH=${{ needs.meta.outputs.epoch }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.meta.outputs.commit }}
+            org.opencontainers.image.created=${{ needs.meta.outputs.date }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=release-${{ matrix.arch }}
+          cache-to: type=gha,scope=release-${{ matrix.arch }},mode=max
+      - name: Smoke test
+        env:
+          REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          docker pull "$REF"
+          arch=$(docker image inspect --format '{{.Architecture}}' "$REF")
+          [[ "$arch" == "$ARCH" ]] || { echo "::error::image architecture $arch, want $ARCH"; exit 1; }
+          docker run --rm "$REF" version | tee /tmp/version.txt
+          grep -q "hangar $VERSION " /tmp/version.txt
+          docker run -d --name smoke --network host \
+            -e HANGAR_SERVER_ADDR=127.0.0.1:8080 \
+            -e HANGAR_SERVER_BASE_URL=http://127.0.0.1:8080 \
+            -e HANGAR_DATABASE_URL='postgres://hangar:hangar@127.0.0.1:5432/hangar?sslmode=disable' \
+            -e HANGAR_DATABASE_MIGRATE_ON_START=true \
+            -e HANGAR_SECRET_KEY="$(openssl rand -base64 32)" \
+            -e HANGAR_DOCKER_TOKEN_KEY="$(openssl rand -base64 48)" \
+            "$REF"
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/readyz; then break; fi
+            sleep 2
+          done
+          echo
+          curl -fsS http://127.0.0.1:8080/readyz
+          curl -fsS http://127.0.0.1:8080/ | grep -q '<div id="root">'
+          curl -fsS http://127.0.0.1:8080/api/v1/system/status | grep -q '"web_ui":true'
+          docker exec smoke /usr/local/bin/hangar-healthcheck -url http://127.0.0.1:8080/readyz
+      - name: Container logs
+        if: always()
+        run: docker logs smoke 2>&1 | tail -n 100 || true
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  manifest:
+    name: Image manifest and tags
+    needs: [meta, image]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create the multi-arch image
+        working-directory: /tmp/digests
+        env:
+          IMAGE: ${{ needs.meta.outputs.image }}
+          SEMVER: ${{ needs.meta.outputs.semver }}
+          MINOR: ${{ needs.meta.outputs.minor }}
+          PRERELEASE: ${{ needs.meta.outputs.prerelease }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          COMMIT: ${{ needs.meta.outputs.commit }}
+          SOURCE: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tags=(-t "$IMAGE:$SEMVER")
+          if [[ "$PRERELEASE" == false ]]; then
+            tags+=(-t "$IMAGE:$MINOR" -t "$IMAGE:latest")
+          fi
+          sources=()
+          for d in *; do sources+=("$IMAGE@sha256:$d"); done
+          [[ ${#sources[@]} -eq 2 ]] || { echo "::error::expected 2 digests, got ${#sources[@]}"; exit 1; }
+          docker buildx imagetools create "${tags[@]}" \
+            --annotation "index:org.opencontainers.image.source=$SOURCE" \
+            --annotation "index:org.opencontainers.image.version=$VERSION" \
+            --annotation "index:org.opencontainers.image.revision=$COMMIT" \
+            --annotation "index:org.opencontainers.image.description=Self-hosted package registry" \
+            "${sources[@]}"
+          docker buildx imagetools inspect "$IMAGE:$SEMVER"
+
+  binaries:
+    name: Binaries
+    needs: meta
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.version }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - name: Build the web UI
+        run: |
+          npm --prefix web ci --no-audit --no-fund
+          npm --prefix web run build
+          find internal/webui/dist -mindepth 1 ! -name .gitkeep -delete
+          cp -R web/dist/. internal/webui/dist/
+      - name: Build
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          COMMIT: ${{ needs.meta.outputs.commit }}
+          DATE: ${{ needs.meta.outputs.date }}
+        run: |
+          set -euo pipefail
+          pkg=github.com/ismoilovdevml/hangar/internal/version
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            os=${target%/*} arch=${target#*/}
+            CGO_ENABLED=0 GOOS=$os GOARCH=$arch GOFLAGS=-buildvcs=false go build -trimpath -tags webui \
+              -ldflags "-s -w -buildid= -X $pkg.Version=$VERSION -X $pkg.Commit=$COMMIT -X $pkg.Date=$DATE" \
+              -o "dist/hangar-$os-$arch" ./cmd/hangar
+          done
+          ./dist/hangar-linux-amd64 version | tee /tmp/version.txt
+          grep -q "hangar $VERSION " /tmp/version.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: binaries
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    name: GitHub Release
+    needs: [meta, manifest, binaries]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.version }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: binaries
+          path: assets
+      - name: Collect assets
+        run: |
+          set -euo pipefail
+          cp deploy/compose/compose.yaml deploy/compose/hangar.yaml deploy/compose/Caddyfile \
+            deploy/compose/compose.connectors.example.yaml assets/
+          cp deploy/compose/.env.example assets/env.example
+          cp deploy/compose/sites/registry.caddy assets/registry.caddy
+          cp deploy/install.sh assets/install.sh
+          chmod +x assets/hangar-* assets/install.sh
+          (cd assets && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          SEMVER: ${{ needs.meta.outputs.semver }}
+          IMAGE: ${{ needs.meta.outputs.image }}
+          PRERELEASE: ${{ needs.meta.outputs.prerelease }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cat > notes.md <<EOF
+          ## Install
+
+          \`\`\`bash
+          curl -fsSL https://github.com/$REPO/releases/download/$VERSION/install.sh |
+            sudo bash -s -- --domain hangar.example.com --version $VERSION
+          \`\`\`
+
+          Container image: \`$IMAGE:$SEMVER\` (linux/amd64, linux/arm64).
+          Upgrade an installation: re-run the installer with \`--version $VERSION\`.
+          Deployment guides: [docs/deploy](https://github.com/$REPO/tree/$VERSION/docs/deploy).
+          Verify downloads with \`sha256sum -c SHA256SUMS\`.
+
+          EOF
+          flags=()
+          if [[ "$PRERELEASE" == true ]]; then flags+=(--prerelease --latest=false); fi
+          if gh release view "$VERSION" --repo "$REPO" >/dev/null 2>&1; then
+            gh release upload "$VERSION" assets/* --repo "$REPO" --clobber
+          else
+            gh release create "$VERSION" assets/* --repo "$REPO" --verify-tag \
+              --title "Hangar $VERSION" --notes-file notes.md --generate-notes "${flags[@]}"
+          fi

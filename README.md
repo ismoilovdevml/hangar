@@ -31,28 +31,31 @@ A self-hosted package registry for Docker, npm, Maven, PyPI, NuGet and raw files
 
 ## Quick start
 
-The bundled Docker Compose stack runs PostgreSQL, NATS, MinIO, a Trivy scanner and Hangar.
+On a Linux host with Docker and the Compose plugin, install the latest release
+(published image, nothing is built on the server):
 
 ```bash
-docker compose -f deploy/docker-compose.yml up -d --build
-curl http://localhost:8080/readyz
+curl -fsSL https://raw.githubusercontent.com/ismoilovdevml/hangar/main/deploy/install.sh |
+  sudo bash -s -- --domain hangar.example.com
 ```
 
-Create the first administrator (password: 12 characters or more):
+The installer writes `/opt/hangar` (compose files and `.env` with generated
+secrets), starts PostgreSQL and Hangar, waits until `/readyz` is ready and
+prints the URL. The first administrator is `admin`; its password is in the
+`.env` file (`sudo grep HANGAR_BOOTSTRAP_ADMIN_PASSWORD /opt/hangar/.env`).
+Useful options:
 
-```bash
-echo '<admin-password>' | docker compose -f deploy/docker-compose.yml exec -T hangar \
-  hangar admin bootstrap --username admin --password-stdin
-```
+- `--tls caddy --acme-email ops@example.com`: automatic HTTPS on ports 80/443.
+- `--tls none --bind 0.0.0.0 --trusted-proxies 10.0.0.5/32`: behind your own
+  reverse proxy (for example a company nginx that terminates TLS).
+- `--version v0.1.0`: pin a release; re-run with a newer `--version` to upgrade.
+- `--storage s3`: blobs in a bundled MinIO, or `--s3-endpoint` for external S3.
 
-Open <http://localhost:8080> and sign in as `admin`.
-
-Before real use, set two keys and keep them in your secret manager:
-
-- `HANGAR_SECRET_KEY` (`openssl rand -base64 32`) encrypts stored upstream credentials and S3 keys.
-- `HANGAR_DOCKER_TOKEN_KEY` (`openssl rand -base64 48`) keeps `docker login` sessions valid across restarts.
-
-For production installs see [docs/deploy](docs/deploy/README.md). To run from source instead (`go run ./cmd/hangar serve --migrate`), and for tokens and a first upload, see the [getting started guide](docs/guides/getting-started.md).
+Back up `/opt/hangar/.env`: `HANGAR_SECRET_KEY` decrypts credentials stored in
+the database. Other ways to install (Helm, systemd, manual compose), backups and
+upgrades: [docs/deploy](docs/deploy/README.md). To run from source
+(`go run ./cmd/hangar serve --migrate`) and for tokens and a first upload, see
+the [getting started guide](docs/guides/getting-started.md).
 
 ## Use it from your tools
 
