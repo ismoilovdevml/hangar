@@ -27,7 +27,7 @@ import { NotAvailable } from '../../components/NotAvailable';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
 import { formatBytes, formatCompact, relativeTime } from '../../lib/format';
-import { componentName } from '../../lib/overview';
+import { componentName, unsupportedText } from '../../lib/overview';
 import { downloadHref, hasVersion, securityPill, type BrowseTab } from '../../lib/packages';
 import { repoClientTarget } from '../../lib/repoSettings';
 import { TYPE_META } from '../../lib/repositories';
@@ -309,6 +309,10 @@ function vulnerabilities(c: ComponentDetail, findings: Finding[] | undefined): s
       return 'Quarantined';
     case 'findings':
       return `${s.critical} critical · ${s.high} high · ${s.medium} medium · ${s.low} low`;
+    case 'failed':
+      return s.scan_error ? `Scan failed: ${s.scan_error}` : 'Scan failed';
+    case 'unsupported':
+      return unsupportedText(s.scan_error, c.format);
   }
 }
 

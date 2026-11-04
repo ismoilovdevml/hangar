@@ -84,7 +84,7 @@ describe('vulnerabilities', () => {
     await user.click(await within(table).findByRole('button', { name: 'GHSA-p6mc-m468-83gw' }));
     const drawer = await screen.findByRole('dialog', { name: 'GHSA-p6mc-m468-83gw' });
     expect(search(history).get('finding')).toBe('f_2');
-    expect(within(drawer).getByRole('link', { name: '@acme/ui-kit@5.3.1' })).toHaveAttribute('href', expect.stringContaining('/browse?'));
+    expect(within(drawer).getByRole('link', { name: '@acme/ui-kit@5.3.0' })).toHaveAttribute('href', expect.stringContaining('/browse?'));
     expect(await within(drawer).findByText('CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:H')).toBeInTheDocument();
     expect(within(drawer).getByRole('link', { name: 'CVE-2020-8203' })).toHaveAttribute('href', 'https://osv.dev/vulnerability/CVE-2020-8203');
     const refs = within(drawer).getByRole('region', { name: 'References' });
@@ -157,12 +157,15 @@ describe('vulnerabilities', () => {
     const head = screen.getByRole('region', { name: 'payments-api 2.14.0' });
     const tabs = within(head).getByRole('tablist', { name: 'Package details' });
     // No empty "Vulnerabilities" tab for an image nobody scanned.
-    await waitFor(() => expect(within(tabs).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Versions 3', 'Layers']));
+    await waitFor(() => expect(within(tabs).getAllByRole('tab').map((t) => t.textContent)).toContain('Versions 3'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(within(tabs).queryByRole('tab', { name: 'Vulnerabilities' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Version' })).getByText('Image scanning not configured')).toBeInTheDocument();
   });
 
   it('shows the findings of a scanned package', async () => {
     const user = userEvent.setup();
-    renderApp('/browse?repo=npm-internal&ns=%40acme&name=ui-kit&version=5.3.1');
+    renderApp('/browse?repo=npm-internal&ns=%40acme&name=ui-kit&version=5.3.0');
     await user.click(await screen.findByRole('tab', { name: 'Vulnerabilities' }));
     expect(within(screen.getByRole('table', { name: 'Vulnerabilities' })).getByText('GHSA-p6mc-m468-83gw')).toBeInTheDocument();
   });

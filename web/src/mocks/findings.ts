@@ -31,7 +31,7 @@ interface Seed {
 
 const log4j = { id: 'c_log4j', repository: 'maven-central', format: 'maven' as const, namespace: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.24.1' };
 const ledger = { id: 'c_ledger', repository: 'maven-releases', format: 'maven' as const, namespace: 'com.acme', name: 'ledger-core', version: '7.0.0' };
-const uikit = { id: 'c_311', repository: 'npm-internal', format: 'npm' as const, namespace: '@acme', name: 'ui-kit', version: '5.3.1' };
+const uikit = { id: 'c_309', repository: 'npm-internal', format: 'npm' as const, namespace: '@acme', name: 'ui-kit', version: '5.3.0' };
 const mlutils = { id: 'c_1207', repository: 'pypi-internal', format: 'pypi' as const, namespace: '', name: 'acme-ml-utils', version: '0.9.4' };
 
 const SEEDS: Seed[] = [
