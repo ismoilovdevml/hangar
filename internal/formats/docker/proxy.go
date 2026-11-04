@@ -90,42 +90,52 @@ func (h *handler) proxyManifest(ctx context.Context, hdr http.Header, repo *core
 	if err != nil && !errors.Is(err, core.ErrNotFound) {
 		return nil, err
 	}
-	if local != nil && (isDigest(ref) || h.fresh(repo, local.asset)) {
+	// fromCache answers with the cached manifest (fresh, confirmed by the
+	// remote, or stale while the remote fails).
+	fromCache := func() (*manifestHit, error) {
+		proxy.NoteCacheHit(ctx, local.asset.Size)
 		return local, nil
+	}
+	if local != nil && (isDigest(ref) || h.fresh(repo, local.asset)) {
+		return fromCache()
 	}
 	path := "v2/" + upstreamName(repo, image) + "/manifests/" + ref
 	if local != nil {
 		resp, err := h.fetch(ctx, repo, http.MethodHead, path, acceptManifests)
 		if err != nil {
-			return local, nil // remote down: serve stale
+			return fromCache() // remote down: serve stale
 		}
 		closeBody(resp)
 		copyRateLimit(hdr, resp.Header)
 		switch {
 		case resp.StatusCode == http.StatusNotFound:
+			proxy.NoteCacheMiss(ctx)
 			return nil, fmt.Errorf("manifest %s:%s gone upstream: %w", image, ref, core.ErrNotFound)
 		case resp.StatusCode != http.StatusOK:
-			return local, nil
+			return fromCache()
 		case resp.Header.Get("Docker-Content-Digest") == string(local.digest):
 			h.touchTag(ctx, repo, image, ref, local)
-			return local, nil
+			return fromCache()
 		}
 	}
 	resp, err := h.fetch(ctx, repo, http.MethodGet, path, acceptManifests)
 	if err != nil {
 		if local != nil {
-			return local, nil
+			return fromCache()
 		}
+		proxy.NoteCacheMiss(ctx)
 		return nil, err
 	}
 	defer closeBody(resp)
 	copyRateLimit(hdr, resp.Header)
 	if resp.StatusCode != http.StatusOK {
 		if local != nil && resp.StatusCode != http.StatusNotFound {
-			return local, nil
+			return fromCache()
 		}
+		proxy.NoteCacheMiss(ctx)
 		return nil, upstreamStatusErr("manifest "+image+":"+ref, resp.StatusCode)
 	}
+	proxy.NoteCacheMiss(ctx)
 	body, err := readManifestBody(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("manifest %s:%s from remote: %w: %w", image, ref, err, core.ErrUpstream)
@@ -190,11 +200,13 @@ func (h *handler) proxyBlob(w http.ResponseWriter, r *http.Request, repo *core.R
 	}
 	if d.Algorithm() == core.AlgorithmSHA256 {
 		if info, err := bs.Stat(ctx, d); err == nil {
+			proxy.NoteCacheHit(ctx, info.Size)
 			a := h.cacheFill(ctx, repo, core.PublishRequest{Assets: []*core.Asset{blobAsset(image, d, d, info.Size)}})[0]
 			h.serveAsset(w, r, repo, a, d, a.ContentType)
 			return true, nil
 		}
 	}
+	proxy.NoteCacheMiss(ctx)
 	path := "v2/" + upstreamName(repo, image) + "/blobs/" + string(d)
 	if r.Method == http.MethodHead {
 		resp, err := h.fetch(ctx, repo, http.MethodHead, path, "")

@@ -158,7 +158,7 @@ func TestNPM(t *testing.T) {
 			"dependencies": map[string]string{scoped: "^1.0.0", "is-odd": "3.0.1"}})
 		return dir
 	}
-	check := func(dir string) {
+	check := func(t *testing.T, dir string) {
 		t.Helper()
 		b, err := os.ReadFile(filepath.Join(dir, "node_modules", scoped, "index.js"))
 		if err != nil || !strings.Contains(string(b), "v1.1.0") {
@@ -172,7 +172,7 @@ func TestNPM(t *testing.T) {
 	t.Run("npm install", func(t *testing.T) {
 		dir := project()
 		npmE2EMust(t, dir, env, npm, "install", "--registry", reg(group), "--cache", t.TempDir())
-		check(dir)
+		check(t, dir)
 		lock, _ := os.ReadFile(filepath.Join(dir, "package-lock.json"))
 		if !strings.Contains(string(lock), reg(group)+"is-odd/-/is-odd-3.0.1.tgz") {
 			t.Fatal("package-lock does not resolve proxied tarballs through Hangar")
@@ -186,8 +186,11 @@ func TestNPM(t *testing.T) {
 			t.Skip("pnpm not installed")
 		}
 		dir := project()
-		npmE2EMust(t, dir, env, pnpm, "install", "--registry", reg(group), "--store-dir", filepath.Join(home, "pnpm-store"))
-		check(dir)
+		// pnpm 11+ holds back versions younger than minimum-release-age; the
+		// test publishes them seconds before installing.
+		npmE2EMust(t, dir, env, pnpm, "install", "--config.minimum-release-age=0", "--registry", reg(group),
+			"--store-dir", filepath.Join(home, "pnpm-store"))
+		check(t, dir)
 	})
 
 	t.Run("yarn install", func(t *testing.T) {
@@ -207,7 +210,7 @@ func TestNPM(t *testing.T) {
 			_ = os.WriteFile(filepath.Join(dir, "yarn.lock"), nil, 0o600)
 			npmE2EMust(t, dir, append(env, "YARN_ENABLE_IMMUTABLE_INSTALLS=false"), yarn, "install")
 		}
-		check(dir)
+		check(t, dir)
 	})
 
 	t.Run("unpublish", func(t *testing.T) {

@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
 // Simple API media types (PEP 691).
@@ -187,6 +188,8 @@ func (h *handler) serveProject(w http.ResponseWriter, r *http.Request) {
 		notAcceptable(w)
 		return
 	}
+	ctx, tally := proxy.WithCacheTally(ctx)
+	defer tally.Record(Name, r.Method)
 	p, err := h.projectFiles(ctx, repo, name, 0)
 	if err != nil {
 		h.writeError(w, r, err)

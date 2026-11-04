@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
 // Manifest media types.
@@ -215,6 +216,8 @@ func (h *handler) getManifest(w http.ResponseWriter, r *http.Request, rq *reques
 			return
 		}
 	}
+	ctx, tally := proxy.WithCacheTally(ctx)
+	defer tally.Record(Name, r.Method)
 	hit, err := h.findManifest(ctx, w.Header(), rq.repo, rq.image, rq.ref)
 	if err != nil {
 		h.fail(w, r, rq, err, codeManifestUnknown)

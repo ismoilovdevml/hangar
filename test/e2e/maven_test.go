@@ -111,11 +111,11 @@ func TestMaven(t *testing.T) {
 	if token == "" {
 		t.Skip("HANGAR_E2E_TOKEN not set")
 	}
-	mvn, err := exec.LookPath("mvn")
-	if err != nil {
-		t.Skip("mvn not installed")
-	}
+	mvn, _ := exec.LookPath("mvn")
 	gradle, _ := exec.LookPath("gradle")
+	if mvn == "" && gradle == "" {
+		t.Skip("neither mvn nor gradle installed")
+	}
 	store := os.Getenv("HANGAR_E2E_BLOB_STORE")
 	if store == "" {
 		store = "default"
@@ -156,7 +156,7 @@ func TestMaven(t *testing.T) {
 	lib := filepath.Join(e.work, "lib")
 	t.Run("mvn deploy release", func(t *testing.T) {
 		e.libProject(lib, "1.0", "hi")
-		e.mustMvn(lib, "-B", "deploy")
+		e.mustMvn(t, lib, "-B", "deploy")
 		m := e.metadata(e.releases, gpath+"maven-metadata.xml")
 		if m.Versioning.Release != "1.0" || !mavenE2EContains(m.Versioning.Versions, "1.0") {
 			t.Fatalf("release metadata %+v", m.Versioning)
@@ -166,8 +166,8 @@ func TestMaven(t *testing.T) {
 	})
 	t.Run("mvn deploy snapshot twice", func(t *testing.T) {
 		e.libProject(lib, "1.1-SNAPSHOT", "snap")
-		e.mustMvn(lib, "-B", "deploy")
-		e.mustMvn(lib, "-B", "deploy")
+		e.mustMvn(t, lib, "-B", "deploy")
+		e.mustMvn(t, lib, "-B", "deploy")
 		m := e.metadata(e.snaps, gpath+"1.1-SNAPSHOT/maven-metadata.xml")
 		if m.Versioning.Snapshot.BuildNumber != 2 || len(m.Versioning.SnapshotVersions) == 0 {
 			t.Fatalf("snapshot metadata %+v", m.Versioning)
@@ -177,7 +177,7 @@ func TestMaven(t *testing.T) {
 	})
 	t.Run("release redeploy rejected", func(t *testing.T) {
 		e.libProject(lib, "1.0", "changed")
-		if out, err := e.runMvn(lib, "-B", "deploy"); err == nil {
+		if out, err := e.runMvn(t, lib, "-B", "deploy"); err == nil {
 			t.Fatalf("redeploy of 1.0 succeeded:\n%s", out)
 		} else if !strings.Contains(out, "409") {
 			t.Fatalf("redeploy failed without 409:\n%s", out)
@@ -188,15 +188,18 @@ func TestMaven(t *testing.T) {
 		e.write(filepath.Join(app, "pom.xml"), strings.ReplaceAll(mavenE2EAppPOM, "{{GROUP}}", e.groupID))
 		e.write(filepath.Join(app, "src/main/java/app/Main.java"), "package app;\npublic class Main { public static void main(String[] a) {"+
 			" System.out.println(org.apache.commons.lang3.StringUtils.capitalize(com.acme.Greeter.hi())); } }\n")
-		e.mustMvn(app, "-B", "install")
+		e.mustMvn(t, app, "-B", "install")
 		// commons-lang3 came through the proxy and is now cached there.
 		e.verifyChecksum(e.proxy, "org/apache/commons/commons-lang3/3.17.0/commons-lang3-3.17.0.jar")
 	})
 	t.Run("mvn dependency:get via group", func(t *testing.T) {
-		e.mustMvn(e.work, "-B", "dependency:get", "-Dartifact="+e.groupID+":greeter:1.1-SNAPSHOT", "-Dtransitive=false")
-		e.mustMvn(e.work, "-B", "dependency:get", "-Dartifact=junit:junit:4.13.2")
+		e.mustMvn(t, e.work, "-B", "dependency:get", "-Dartifact="+e.groupID+":greeter:1.1-SNAPSHOT", "-Dtransitive=false")
+		e.mustMvn(t, e.work, "-B", "dependency:get", "-Dartifact=junit:junit:4.13.2")
 	})
 	t.Run("group metadata merged", func(t *testing.T) {
+		if e.mvn == "" {
+			t.Skip("mvn not installed (the versions are deployed with mvn)")
+		}
 		m := e.metadata(e.group, gpath+"maven-metadata.xml")
 		if !mavenE2EContains(m.Versioning.Versions, "1.0") || !mavenE2EContains(m.Versioning.Versions, "1.1-SNAPSHOT") {
 			t.Fatalf("group metadata %+v", m.Versioning)
@@ -293,8 +296,11 @@ func (e *mavenE2E) libProject(dir, version, greeting string) {
 
 // runMvn runs mvn with the e2e settings and a fresh local repository, so
 // every dependency is resolved from Hangar.
-func (e *mavenE2E) runMvn(dir string, args ...string) (string, error) {
-	e.t.Helper()
+func (e *mavenE2E) runMvn(t *testing.T, dir string, args ...string) (string, error) {
+	t.Helper()
+	if e.mvn == "" {
+		t.Skip("mvn not installed")
+	}
 	e.localRepoCounter++
 	local := filepath.Join(e.work, "m2", strings.Repeat("r", e.localRepoCounter))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
@@ -306,10 +312,10 @@ func (e *mavenE2E) runMvn(dir string, args ...string) (string, error) {
 	return string(out), err
 }
 
-func (e *mavenE2E) mustMvn(dir string, args ...string) {
-	e.t.Helper()
-	if out, err := e.runMvn(dir, args...); err != nil {
-		e.t.Fatalf("mvn %v: %v\n%s", args, err, out)
+func (e *mavenE2E) mustMvn(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	if out, err := e.runMvn(t, dir, args...); err != nil {
+		t.Fatalf("mvn %v: %v\n%s", args, err, out)
 	}
 }
 

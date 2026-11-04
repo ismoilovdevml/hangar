@@ -43,7 +43,9 @@ Specs: [repository layout](https://maven.apache.org/repository/layout.html),
   `If-None-Match`/`If-Modified-Since`; artifacts immutable); remote checksum
   verified from `X-Checksum-SHA1`/`-MD5` headers or the remote `.sha1` file,
   mismatches answered 502 and not cached; stale copy served when the remote is
-  down. Remote 404s are negative-cached by the core upstream.
+  down. Remote 404s are negative-cached by the core upstream. Cache fills are
+  published as the reader; a read through a group fills a proxy member's cache
+  on the group's `repo:<group>:read`.
 - **Auth**: `401` with `WWW-Authenticate: Basic realm="Hangar"`, which Maven and
   Gradle need before they send configured credentials. Tokens work as the
   Basic password or as `Authorization: Bearer`.

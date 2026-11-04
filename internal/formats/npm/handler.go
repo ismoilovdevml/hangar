@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
 type handler struct {
@@ -89,6 +90,13 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	ctx, tally := proxy.WithCacheTally(r.Context())
+	defer tally.Record(Name, r.Method)
+	if repo.Type == core.RepoGroup && isRead(r.Method) {
+		// Reads authorize repo:<group>:read; proxy members fill their cache on it.
+		ctx = core.WithAccessVia(ctx, repo.Name)
+	}
+	r = r.WithContext(ctx)
 	if err := h.route(w, r, repo); err != nil {
 		if code := status(err); code >= 500 && code != http.StatusNotImplemented {
 			h.deps.Logger.ErrorContext(r.Context(), "npm request failed", "repository", repo.Name,

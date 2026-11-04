@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
 // maxGroupDepth bounds nested group expansion.
@@ -61,7 +62,8 @@ func (h *handler) leaves(ctx context.Context, repo *core.Repository) ([]*core.Re
 }
 
 func (h *handler) get(w http.ResponseWriter, r *http.Request, repo *core.Repository, clean string) {
-	ctx := r.Context()
+	ctx, tally := proxy.WithCacheTally(r.Context())
+	defer tally.Record(Name, r.Method)
 	leaves, err := h.leaves(ctx, repo)
 	if err != nil {
 		h.fail(w, r, err)

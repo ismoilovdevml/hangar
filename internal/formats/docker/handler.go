@@ -91,6 +91,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, codeUnavailable, "repository "+repo.Name+" is offline")
 		return
 	}
+	if action == core.ActionRead && repo.Type == core.RepoGroup {
+		// Proxy members fill their cache on the group's read privilege.
+		r = r.WithContext(core.WithAccessVia(ctx, repo.Name))
+	}
 	rq := &request{route: rt, auth: auth, repo: repo}
 
 	switch rt.kind {

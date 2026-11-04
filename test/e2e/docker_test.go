@@ -117,8 +117,15 @@ func TestDocker(t *testing.T) {
 	}
 
 	// docker login (token flow) and push/pull to hosted.
-	out := dockerE2EMust(t, dir, pass, dockerBin, "login", host, "-u", user, "--password-stdin")
-	if !strings.Contains(out, "Login Succeeded") {
+	if out, err := dockerE2ERun(t, dir, "", dockerBin, "info"); err != nil {
+		t.Skipf("docker daemon not available: %v\n%s", err, out)
+	}
+	out, err := dockerE2ERun(t, dir, pass, dockerBin, "login", host, "-u", user, "--password-stdin")
+	if err != nil && strings.Contains(out, "connection refused") {
+		// The daemon runs elsewhere (a VM or remote host) and cannot reach this address.
+		t.Skipf("docker daemon cannot reach %s: %s", host, out)
+	}
+	if err != nil || !strings.Contains(out, "Login Succeeded") {
 		t.Fatalf("login: %s", out)
 	}
 	img := host + "/" + hosted + "/e2e/hello:1"

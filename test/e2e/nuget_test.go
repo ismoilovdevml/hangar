@@ -145,7 +145,8 @@ func TestNuGet(t *testing.T) {
 			t.Errorf("not restored: %v", err)
 		}
 	}
-	if o := run(app, "package", "search", pkgID, "--source", source(group), "--configfile", appCfg); !strings.Contains(o, pkgID) {
+	// JSON output: the table format wraps long ids at the terminal width.
+	if o := run(app, "package", "search", pkgID, "--source", source(group), "--configfile", appCfg, "--format", "json"); !strings.Contains(o, `"`+pkgID+`"`) {
 		t.Errorf("search:\n%s", o)
 	}
 

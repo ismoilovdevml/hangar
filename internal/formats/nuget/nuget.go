@@ -244,7 +244,9 @@ func (h *handler) authenticate(r *http.Request) (*core.Principal, error) {
 }
 
 // authorize authenticates r and checks action on repo. On success it returns
-// a request whose context carries the principal.
+// a request whose context carries the principal and, for a read of a group,
+// the group (core.WithAccessVia): proxy members fill their cache on the
+// group's read privilege.
 func (h *handler) authorize(w http.ResponseWriter, r *http.Request, action core.Action, repo *core.Repository) (*http.Request, bool) {
 	p, err := h.authenticate(r)
 	if err == nil {
@@ -254,7 +256,11 @@ func (h *handler) authorize(w http.ResponseWriter, r *http.Request, action core.
 		h.fail(w, r, err)
 		return r, false
 	}
-	return r.WithContext(core.WithPrincipal(r.Context(), p)), true
+	ctx := core.WithPrincipal(r.Context(), p)
+	if action == core.ActionRead && repo.Type == core.RepoGroup {
+		ctx = core.WithAccessVia(ctx, repo.Name)
+	}
+	return r.WithContext(ctx), true
 }
 
 // fail answers with the status for err; 401 carries a Basic challenge, which

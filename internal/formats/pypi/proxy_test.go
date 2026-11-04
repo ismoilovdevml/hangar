@@ -284,3 +284,38 @@ func TestGroup(t *testing.T) {
 		t.Errorf("unknown project in group = %d", rec.Code)
 	}
 }
+
+// A reader holding only the outer group's read privilege installs through
+// nested groups whose proxy member has never seen the project: the proxy
+// caches the page and the file on the outer group's read.
+func TestGroupReadFillsProxyWithGroupPrivilegeOnly(t *testing.T) {
+	f, rm, proxy := newProxyFixture(t, time.Hour)
+	f.env.AddRepo(t, &core.Repository{Name: "pypi-group", Format: "pypi", Type: core.RepoGroup, Config: core.RepoConfig{
+		Group: &core.GroupConfig{Members: []string{"pypi-hosted", "pypi-proxy"}},
+	}})
+	f.env.AddRepo(t, &core.Repository{Name: "pypi-outer", Format: "pypi", Type: core.RepoGroup, Config: core.RepoConfig{
+		Group: &core.GroupConfig{Members: []string{"pypi-group"}},
+	}})
+	f.env.Auth.AddUser("carol", "secret")
+	f.env.AuthZ.Grant("carol", "repo:pypi-outer:read")
+
+	if p := decodePage(t, f.get(t, "/repository/pypi-outer/simple/foo/", pipAccept, "carol", "secret")); len(p.Files) != 4 {
+		t.Fatalf("project page through group = %+v", p.Files)
+	}
+	rec := f.get(t, "/repository/pypi-outer/packages/foo/"+rm.wheel.filename, "", "carol", "secret")
+	if rec.Code != http.StatusOK || rec.Body.String() != string(rm.wheel.data) {
+		t.Fatalf("wheel through group = %d", rec.Code)
+	}
+	c, err := f.env.Components.GetComponent(t.Context(), proxy.ID, "", "foo", "1.0")
+	if err != nil || c.PublishedBy != "carol" {
+		t.Fatalf("proxy cache fill = %+v, %v", c, err)
+	}
+	pages := rm.pages.Load()
+	f.get(t, "/repository/pypi-outer/simple/foo/", pipAccept, "carol", "secret")
+	if rm.pages.Load() != pages {
+		t.Error("project page was not cached")
+	}
+	if rec := f.get(t, "/repository/pypi-proxy/simple/foo/", "", "carol", "secret"); rec.Code != http.StatusForbidden {
+		t.Errorf("direct read of the member = %d, want 403", rec.Code)
+	}
+}

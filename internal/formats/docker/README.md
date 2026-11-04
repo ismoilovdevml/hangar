@@ -93,7 +93,9 @@ session is started.
   `library/` prefix; the token dance is done by the core upstream. Rate-limit
   headers (`RateLimit-Limit`, `RateLimit-Remaining`, `Docker-RateLimit-Source`)
   are passed through. Tag lists and referrers merge the remote's answer with
-  the cache. Proxies are read-only (`405`).
+  the cache. Cache fills are published as the reader; a pull through a group
+  fills a proxy member's cache on the group's `repo:<group>:read`. Proxies are
+  read-only (`405`).
 - **Group**: reads walk the members in order (nested groups flattened); tag
   lists, referrers and the catalog merge members. Writes go to
   `group.write_member` (a hosted docker repository); without one the group is

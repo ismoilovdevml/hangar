@@ -104,3 +104,24 @@ func TestNestedGroup(t *testing.T) {
 	f.getVerified("loop/com/acme/lib/1.0/lib-1.0.jar", "reader:r")
 	f.want(f.do(http.MethodGet, "loop/com/acme/lib/7.0/lib-7.0.jar", "reader:r", ""), http.StatusNotFound, "self-member loop")
 }
+
+// A reader holding only the group's read privilege resolves an artifact that
+// only the group's proxy member has: the proxy caches it on the group's read.
+func TestGroupReadFillsProxyWithGroupPrivilegeOnly(t *testing.T) {
+	f, _ := groupFixture(t)
+	f.env.Auth.AddUser("carol", "c")
+	f.env.AuthZ.Grant("carol", "repo:public:read")
+
+	r := f.want(f.do(http.MethodGet, "public/com/acme/lib/2.0/lib-2.0.jar", "carol:c", ""), http.StatusOK, "jar through group")
+	if r.body != "central-2.0" {
+		t.Fatalf("jar through group = %q", r.body)
+	}
+	a, err := f.env.Components.GetAsset(t.Context(), f.repo["central"].ID, "com/acme/lib/2.0/lib-2.0.jar")
+	if err != nil {
+		t.Fatalf("proxy cache not filled: %v", err)
+	}
+	if c, err := f.env.Components.GetComponentByID(t.Context(), a.ComponentID); err != nil || c.PublishedBy != "carol" {
+		t.Fatalf("cached component = %+v, %v", c, err)
+	}
+	f.want(f.do(http.MethodGet, "central/com/acme/lib/2.0/lib-2.0.jar", "carol:c", ""), http.StatusForbidden, "direct read of the member")
+}

@@ -13,10 +13,18 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/formats/raw"
 )
 
-// Formats returns a new instance of every built-in format.
-func Formats() []core.Format {
+// Options carries server configuration for the formats that take any.
+type Options struct {
+	Docker docker.Options
+}
+
+// Formats returns a new instance of every built-in format with default options.
+func Formats() []core.Format { return FormatsWith(Options{}) }
+
+// FormatsWith returns a new instance of every built-in format configured by o.
+func FormatsWith(o Options) []core.Format {
 	return []core.Format{
-		docker.New(),
+		docker.NewWithOptions(o.Docker),
 		maven.New(),
 		npm.New(),
 		nuget.New(),
@@ -26,6 +34,9 @@ func Formats() []core.Format {
 }
 
 // Registry returns a registry with every built-in format.
-func Registry() (*formats.Registry, error) {
-	return formats.NewRegistry(Formats()...)
+func Registry() (*formats.Registry, error) { return RegistryWith(Options{}) }
+
+// RegistryWith returns a registry with every built-in format configured by o.
+func RegistryWith(o Options) (*formats.Registry, error) {
+	return formats.NewRegistry(FormatsWith(o)...)
 }

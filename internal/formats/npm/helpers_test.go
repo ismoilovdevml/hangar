@@ -52,7 +52,6 @@ func newServer(t *testing.T) *testServer {
 	env.AuthZ.Grant("bob", "repo:*:read")
 	env.Auth.AddUser("root", "secret")
 	env.AuthZ.Grant("root", "repo:*:admin")
-	env.AuthZ.Grant("system", "repo:*:admin")
 
 	for _, r := range []*core.Repository{
 		{Name: "npm-upstream", Format: npm.Name, Type: core.RepoHosted, Config: core.RepoConfig{AnonymousRead: true}},

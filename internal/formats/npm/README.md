@@ -37,7 +37,10 @@ username/password login.
   revalidated with a conditional request; a stale copy is served when the
   remote fails. Tarball URLs are rewritten to Hangar (`server.base_url`).
   Tarballs are fetched once, verified against the packument's
-  shasum/integrity, and cached as components.
+  shasum/integrity, and cached as components. Cache fills are published as
+  the requesting principal (a proxy publish is authorized as a read); a read
+  through a group fills a proxy member's cache on the group's
+  `repo:<group>:read`.
 - **group** — packuments of the members are merged in member order: the first
   member that has a version or dist-tag wins. Tarballs resolve in member order.
   Writes (publish, dist-tag, deprecate, unpublish) go to `group.write_member`;
@@ -47,7 +50,7 @@ username/password login.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `unpublish_window` | `72h` | how long after publishing a principal with `repo:<name>:delete` may unpublish; `0s` = admins only. `repo:<name>:admin` may always unpublish. |
+| `unpublish_window` | `72h` | how long after publishing a principal with `repo:<name>:delete` may unpublish; `0s` = admins only. `repo:<name>:admin` may always unpublish. Removing one version while others remain also rewrites the package's dist-tags, which needs `repo:<name>:write`. |
 | `login_token_ttl` | `720h` | lifetime of tokens issued by `npm login` |
 
 ## Storage layout

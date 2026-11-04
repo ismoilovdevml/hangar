@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
 // Registration hives served under v3/.
@@ -83,7 +84,9 @@ func (h *handler) flatIndex(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	vs, err := h.versions(r.Context(), repo, lowerID(chi.URLParam(r, "id")), 0)
+	ctx, tally := proxy.WithCacheTally(r.Context())
+	defer tally.Record(Name, r.Method)
+	vs, err := h.versions(ctx, repo, lowerID(chi.URLParam(r, "id")), 0)
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -101,7 +104,8 @@ func (h *handler) flatFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ctx := r.Context()
+	ctx, tally := proxy.WithCacheTally(r.Context())
+	defer tally.Record(Name, r.Method)
 	lid := lowerID(chi.URLParam(r, "id"))
 	v, err := ParseVersion(chi.URLParam(r, "version"))
 	file := strings.ToLower(chi.URLParam(r, "file"))
@@ -175,8 +179,10 @@ func (h *handler) registration(w http.ResponseWriter, r *http.Request) (*core.Re
 	if !ok {
 		return nil, nil, false
 	}
+	ctx, tally := proxy.WithCacheTally(r.Context())
+	defer tally.Record(Name, r.Method)
 	lid := lowerID(chi.URLParam(r, "id"))
-	es, err := h.entries(r.Context(), repo, lid, 0)
+	es, err := h.entries(ctx, repo, lid, 0)
 	if err != nil {
 		h.fail(w, r, err)
 		return nil, nil, false

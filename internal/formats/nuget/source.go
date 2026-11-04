@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
 // maxGroupDepth bounds group nesting (and breaks accidental cycles).
@@ -128,9 +129,13 @@ func (h *handler) locate(ctx context.Context, repo *core.Repository, lid, lver, 
 		return repo, a, err
 	case core.RepoProxy:
 		a, err := h.deps.Components.GetAsset(ctx, repo.ID, path)
+		if err == nil {
+			proxy.NoteCacheHit(ctx, a.Size)
+		}
 		if err == nil || !errors.Is(err, core.ErrNotFound) {
 			return repo, a, err
 		}
+		proxy.NoteCacheMiss(ctx)
 		uncached, err := h.cachePackage(ctx, repo, lid, lver)
 		if err != nil {
 			return nil, nil, err

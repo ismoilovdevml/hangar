@@ -19,6 +19,7 @@ import (
 	"golang.org/x/net/html"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
 const maxIndexBytes = 64 << 20 // a remote project page (large projects list thousands of files)
@@ -140,6 +141,7 @@ func (h *handler) index(ctx context.Context, repo *core.Repository, name string)
 		}
 		h.mu.Unlock()
 		if time.Since(fetched) < h.metadataTTL(repo) {
+			proxy.NoteCacheHit(ctx, cachedAsset.Size)
 			return cached, nil
 		}
 	} else {
@@ -151,12 +153,27 @@ func (h *handler) index(ctx context.Context, repo *core.Repository, name string)
 		}
 	}
 	v, err, _ := h.flight.Do("index:"+key, func() (any, error) {
-		return h.refreshIndex(context.WithoutCancel(ctx), repo, name, cached, cachedAsset)
+		idx, err := h.refreshIndex(context.WithoutCancel(ctx), repo, name, cached, cachedAsset)
+		// refreshIndex answers with the cached page after a 304 or while the remote fails.
+		return refreshed{idx: idx, fromCache: idx != nil && idx == cached}, err
 	})
+	res, _ := v.(refreshed)
+	if err != nil || !res.fromCache {
+		proxy.NoteCacheMiss(ctx)
+	} else if cachedAsset != nil {
+		proxy.NoteCacheHit(ctx, cachedAsset.Size)
+	}
 	if err != nil {
 		return nil, err
 	}
-	return v.(*upstreamIndex), nil
+	return res.idx, nil
+}
+
+// refreshed is the outcome of one remote revalidation, shared by the
+// requests collapsed into it.
+type refreshed struct {
+	idx       *upstreamIndex
+	fromCache bool
 }
 
 func (h *handler) cachedIndex(ctx context.Context, repo *core.Repository, name string) (*upstreamIndex, *core.Asset) {

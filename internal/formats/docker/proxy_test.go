@@ -11,8 +11,11 @@ import (
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/registry"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/docker"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
 // fakeHub is an in-memory OCI registry standing in for Docker Hub.
@@ -153,4 +156,97 @@ func TestProxyBlobDedupAcrossRepos(t *testing.T) {
 	if tr.env.Upstreams.Calls("ghcr-proxy") != 0 {
 		t.Fatal("blob present in the store was fetched from the remote")
 	}
+}
+
+// A reader holding only the group's read privilege pulls an image through a
+// group whose proxy member has never seen it: the proxy cache is filled.
+func TestGroupPullFillsProxyWithGroupPrivilegeOnly(t *testing.T) {
+	tr := newTestReg(t)
+	hub := &fakeHub{reg: registry.New(registry.Logger(log.New(io.Discard, "", 0)))}
+	upSrv := httptest.NewServer(hub)
+	t.Cleanup(upSrv.Close)
+	up := &testReg{t: t, srv: upSrv}
+	img := newImage("redis")
+	up.pushImage("library/redis", "7", img)
+
+	tr.env.AddRepo(t, &core.Repository{Name: "hub-proxy", Format: "docker", Type: core.RepoProxy,
+		Config: core.RepoConfig{Proxy: &core.ProxyConfig{RemoteURL: "https://registry-1.docker.io", MetadataTTL: core.Duration(time.Hour)}}})
+	tr.env.Upstreams.Set("hub-proxy", hub)
+	tr.env.AddRepo(t, &core.Repository{Name: "docker-group", Format: "docker", Type: core.RepoGroup,
+		Config: core.RepoConfig{Group: &core.GroupConfig{Members: []string{"docker-hosted", "hub-proxy"}}}})
+	tr.env.Auth.AddUser("carol", "secret")
+	tr.env.AuthZ.Grant("carol", "repo:docker-group:read")
+	carol := basic("carol", "secret")
+	proxyRepo := mustRepo(t, tr, "hub-proxy")
+
+	h0, m0, _ := cacheCounters(t)
+	resp, body := tr.do(http.MethodGet, "/v2/docker-group/redis/manifests/7", nil, carol)
+	tr.expect(resp, body, http.StatusOK)
+	if string(body) != string(img.manifest) {
+		t.Fatalf("manifest through group = %s", body)
+	}
+	if _, err := tr.env.Components.GetComponent(t.Context(), proxyRepo.ID, "", "redis", "7"); err != nil {
+		t.Fatalf("group pull did not fill the proxy cache: %v", err)
+	}
+	layer := core.SHA256Of(img.layer)
+	tok := tr.token("repository:docker-group/redis:pull", carol)
+	resp, body = tr.do(http.MethodGet, "/v2/docker-group/redis/blobs/"+string(layer), nil, bearer(tok))
+	tr.expect(resp, body, http.StatusOK)
+	if string(body) != string(img.layer) {
+		t.Fatalf("layer through group = %q", body)
+	}
+	if _, err := tr.env.Components.GetAsset(t.Context(), proxyRepo.ID, "redis/blobs/"+string(layer)); err != nil {
+		t.Fatalf("group blob pull did not fill the proxy cache: %v", err)
+	}
+	// Direct access to the member is still refused.
+	resp, body = tr.do(http.MethodGet, "/v2/hub-proxy/redis/manifests/7", nil, carol)
+	tr.expect(resp, body, http.StatusForbidden)
+
+	// Cache metrics: two misses so far; cached pulls are hits.
+	h1, m1, _ := cacheCounters(t)
+	if h1-h0 != 0 || m1-m0 != 2 {
+		t.Errorf("after first pulls: hits +%v misses +%v, want +0 +2", h1-h0, m1-m0)
+	}
+	resp, body = tr.do(http.MethodGet, "/v2/docker-group/redis/manifests/7", nil, carol)
+	tr.expect(resp, body, http.StatusOK)
+	resp, body = tr.do(http.MethodGet, "/v2/docker-group/redis/blobs/"+string(layer), nil, carol)
+	tr.expect(resp, body, http.StatusOK)
+	h2, m2, _ := cacheCounters(t)
+	if h2-h1 != 2 || m2-m1 != 0 {
+		t.Errorf("cached pulls: hits +%v misses +%v, want +2 +0", h2-h1, m2-m1)
+	}
+}
+
+// cacheCounters reads the docker proxy cache request counters.
+func cacheCounters(t *testing.T) (hits, misses, hitBytes float64) {
+	t.Helper()
+	reg := prometheus.NewRegistry()
+	if err := proxy.RegisterMetrics(reg); err != nil {
+		t.Fatal(err)
+	}
+	fams, err := reg.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fams {
+		for _, m := range f.GetMetric() {
+			l := map[string]string{}
+			for _, lp := range m.GetLabel() {
+				l[lp.GetName()] = lp.GetValue()
+			}
+			if l["format"] != docker.Name {
+				continue
+			}
+			v := m.GetCounter().GetValue()
+			switch {
+			case f.GetName() == proxy.MetricCacheHitBytes:
+				hitBytes = v
+			case l["result"] == proxy.CacheResultHit:
+				hits = v
+			case l["result"] == proxy.CacheResultMiss:
+				misses = v
+			}
+		}
+	}
+	return hits, misses, hitBytes
 }

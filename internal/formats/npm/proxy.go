@@ -71,7 +71,7 @@ func (h *handler) storeProxyDoc(ctx context.Context, repo *core.Repository, path
 	if !lastMod.IsZero() {
 		attrs[attrLastModified] = lastMod.UTC().Format(http.TimeFormat)
 	}
-	_, assets, err := h.deps.Components.Publish(systemContext(ctx), repo, core.PublishRequest{Assets: []*core.Asset{{
+	_, assets, err := h.deps.Components.Publish(ctx, repo, core.PublishRequest{Assets: []*core.Asset{{
 		Path: path, Kind: core.AssetMetadata, BlobDigest: d, Size: size,
 		ContentType: mediaJSON, Attributes: attrs,
 	}}})
@@ -98,14 +98,17 @@ func (h *handler) proxyDoc(ctx context.Context, repo *core.Repository, name pkgN
 		return nil, err
 	}
 	if cached != nil && h.fresh(repo, cached) {
+		proxy.NoteCacheHit(ctx, cached.Size)
 		return h.readProxyDoc(ctx, repo, bs, cached, name)
 	}
 	stale := func(cause error) (*packument, error) {
 		if cached == nil {
+			proxy.NoteCacheMiss(ctx)
 			return nil, cause
 		}
 		h.deps.Logger.WarnContext(ctx, "npm proxy serving stale packument", "repository", repo.Name,
 			"package", name.Full, "error", cause)
+		proxy.NoteCacheHit(ctx, cached.Size)
 		return h.readProxyDoc(ctx, repo, bs, cached, name)
 	}
 	up, err := h.deps.Upstreams.ForRepository(ctx, repo)
@@ -138,8 +141,10 @@ func (h *handler) proxyDoc(ctx context.Context, repo *core.Repository, name pkgN
 		if _, err := h.storeProxyDoc(ctx, repo, path, cached.BlobDigest, cached.Size, etag, lm); err != nil {
 			h.deps.Logger.WarnContext(ctx, "npm proxy cache refresh failed", "repository", repo.Name, "error", err)
 		}
+		proxy.NoteCacheHit(ctx, cached.Size)
 		return h.readProxyDoc(ctx, repo, bs, cached, name)
 	case resp.StatusCode == http.StatusOK:
+		proxy.NoteCacheMiss(ctx)
 		d, n, err := bs.Put(ctx, io.LimitReader(resp.Body, maxDocumentSize))
 		if err != nil {
 			return stale(fmt.Errorf("store upstream packument: %w", err))
@@ -154,6 +159,7 @@ func (h *handler) proxyDoc(ctx context.Context, repo *core.Repository, name pkgN
 		}
 		return doc, err
 	case resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone:
+		proxy.NoteCacheMiss(ctx)
 		return nil, fmt.Errorf("package %s not found upstream: %w", name.Full, core.ErrNotFound)
 	default:
 		return stale(fmt.Errorf("upstream answered %d for %s: %w", resp.StatusCode, name.Full, core.ErrUpstream))
@@ -197,6 +203,7 @@ func (h *handler) proxyTarball(ctx context.Context, repo *core.Repository, rel s
 		if err := h.checkQuarantine(ctx, a); err != nil {
 			return nil, nil, err
 		}
+		proxy.NoteCacheHit(ctx, a.Size)
 		return a, bs, nil
 	}
 	if err != nil && !errors.Is(err, core.ErrNotFound) {
@@ -215,6 +222,7 @@ func (h *handler) proxyTarball(ctx context.Context, repo *core.Repository, rel s
 	if err != nil {
 		return nil, nil, err
 	}
+	proxy.NoteCacheMiss(ctx)
 	resp, err := up.Fetch(ctx, core.UpstreamRequest{Path: rel})
 	if err != nil {
 		return nil, nil, err
@@ -247,7 +255,7 @@ func (h *handler) proxyTarball(ctx context.Context, repo *core.Repository, rel s
 			comp.Attributes = componentAttributes(exp)
 		}
 	}
-	_, assets, err := h.deps.Components.Publish(systemContext(ctx), repo, core.PublishRequest{
+	_, assets, err := h.deps.Components.Publish(ctx, repo, core.PublishRequest{
 		Component: comp,
 		Assets: []*core.Asset{{
 			Path: rel, Kind: core.AssetContent, BlobDigest: d, Size: n, ContentType: "application/octet-stream",

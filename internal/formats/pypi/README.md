@@ -67,7 +67,8 @@ link hashes, `data-requires-python`, `data-yanked`, and
   hosts are fetched with the shared outbound client only if the host is in
   `config.format.file_hosts` (default `["files.pythonhosted.org"]`), without
   the remote's credentials. Cache fills are published as the reading principal
-  (the component service authorizes `repo:<proxy>:read` for proxy publishes).
+  (the component service authorizes `repo:<proxy>:read` for proxy publishes,
+  or `repo:<group>:read` when the read came through a group).
 - **Group**: project pages merge members in order, first member wins per
   filename; links point at the group; downloads resolve members in order.
   Uploads to a group go to `group.write_member` (hosted pypi) if set, else `405`.
