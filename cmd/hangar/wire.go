@@ -279,6 +279,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Search:         search.New(pool),
 		Audit:          auditLog,
 		Upstreams:      healthReporter,
+		UpstreamCache:  upstreams,
 		AuthMiddleware: chainMiddleware(httpapi.Middleware(authSvc, authOpts), observability.TagPrincipal),
 		RequestStats:   stats,
 		AuthRoutes:     api.RouteFunc(func(r chi.Router) { httpapi.Register(r, authSvc, authOpts) }),
