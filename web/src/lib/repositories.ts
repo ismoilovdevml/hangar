@@ -1,3 +1,4 @@
+import type { ListRepositoriesQuery } from '../api/types';
 import type {
   BlobStore,
   Format,
@@ -16,6 +17,12 @@ export const REPO_TYPES: RepositoryType[] = ['hosted', 'proxy', 'group'];
 
 export const isFormat = (v: unknown): v is Format => ALL_FORMATS.includes(v as Format);
 export const isRepoType = (v: unknown): v is RepositoryType => REPO_TYPES.includes(v as RepositoryType);
+
+/** Orders the repository list supports; a leading "-" reverses. */
+export type RepoSort = NonNullable<ListRepositoriesQuery['sort']>;
+export type RepoSortKey = 'name' | 'type' | 'format' | 'last_activity';
+const REPO_SORTS: RepoSort[] = ['name', '-name', 'type', '-type', 'format', '-format', 'last_activity', '-last_activity'];
+export const isRepoSort = (v: unknown): v is RepoSort => REPO_SORTS.includes(v as RepoSort);
 
 /** One-line hint under each format in the picker. */
 export const FORMAT_HINT: Record<Format, string> = {

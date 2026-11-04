@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { Select } from '../../components/Select';
 import { DAY_NAMES, describeCron, nextRuns, parseCron, scheduleToCron, type ScheduleDraft, type ScheduleMode } from '../../lib/cron';
 import { formatUtc } from '../../lib/tasks';
 import { useNow } from '../../lib/useNow';
@@ -36,22 +37,17 @@ export function ScheduleField({ value, onChange, error, disabled }: ScheduleFiel
         <label className="visually-hidden" htmlFor={`${id}-mode`}>
           How often
         </label>
-        <select
+        <Select<ScheduleMode>
           id={`${id}-mode`}
-          className="input schedule-field__mode"
+          className="schedule-field__mode"
           value={value.mode}
-          onChange={(e) => {
-            const mode = e.target.value as ScheduleMode;
+          options={MODES.map((m) => ({ value: m.id, label: m.label }))}
+          disabled={disabled}
+          onChange={(mode) => {
             // Switching to custom starts from the cron the preset stood for.
             set(mode === 'custom' && cron ? { mode, cron } : { mode });
           }}
-        >
-          {MODES.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
+        />
 
         {value.mode === 'hourly' && (
           <label className="schedule-field__inline">
@@ -71,13 +67,14 @@ export function ScheduleField({ value, onChange, error, disabled }: ScheduleFiel
         {value.mode === 'weekly' && (
           <label className="schedule-field__inline">
             on
-            <select className="input" value={value.weekday} onChange={(e) => set({ weekday: Number(e.target.value) })}>
-              {DAY_NAMES.map((d, i) => (
-                <option key={d} value={i}>
-                  {d}
-                </option>
-              ))}
-            </select>
+            <Select
+              aria-label="Day of the week"
+              size="sm"
+              value={String(value.weekday)}
+              options={DAY_NAMES.map((d, i) => ({ value: String(i), label: d }))}
+              disabled={disabled}
+              onChange={(v) => set({ weekday: Number(v) })}
+            />
           </label>
         )}
 

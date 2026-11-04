@@ -1,3 +1,4 @@
+import { choose } from './choose';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
@@ -37,7 +38,7 @@ describe('search', () => {
 
     await user.click(within(filters).getByRole('radio', { name: /Has findings/ }));
     await waitFor(() => expect(q(history)).toBe('a format:docker security:findings'));
-    await user.selectOptions(within(filters).getByLabelText('Repository'), 'docker-prod');
+    await choose(user, within(filters).getByLabelText('Repository'), 'docker-prod');
     await waitFor(() => expect(q(history)).toBe('a format:docker security:findings repo:docker-prod'));
     await user.click(within(filters).getByRole('radio', { name: 'Any' }));
     await waitFor(() => expect(q(history)).toBe('a format:docker repo:docker-prod'));
@@ -85,7 +86,7 @@ describe('search', () => {
     const user = userEvent.setup();
     const { history } = renderApp('/search?q=a');
     await screen.findByRole('list', { name: 'Search results' });
-    await user.selectOptions(screen.getByLabelText('Sort'), '-downloads');
+    await choose(user, screen.getByLabelText('Sort'), '-downloads');
     await waitFor(() => expect(new URLSearchParams(history.location.search).get('sort')).toBe('-downloads'));
     await waitFor(() =>
       expect(within(screen.getByRole('list', { name: 'Search results' })).getAllByRole('listitem')[0]).toHaveTextContent('log4j-core'),

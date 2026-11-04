@@ -1,68 +1,139 @@
-import type { ClientEndpoint } from '../api/types';
+import type { Format, RepositoryType } from '../api/types';
 
 export interface CodeLine {
   text: string;
   comment?: boolean;
 }
 
-/** Comment heading per format: the client tool people recognise. */
-const TOOL: Record<ClientEndpoint['format'], string> = {
-  docker: 'Docker',
-  npm: 'npm',
-  pypi: 'pip',
-  maven: 'Maven',
-  go: 'Go',
-  helm: 'Helm',
-  nuget: 'dotnet',
-  cargo: 'Cargo',
-  apt: 'APT',
-  raw: 'curl',
-};
-
-function trimSlash(url: string): string {
-  return url.endsWith('/') ? url : `${url}/`;
+/**
+ * One repository a client should be pointed at. Everything comes from the
+ * server (`repository.url` or `/me/client-endpoints`); no host is hard-coded.
+ */
+export interface ClientTarget {
+  format: Format;
+  repository: string;
+  /** The repository URL clients use: `https://host/repository/<repo>/`, or `host/<repo>` for docker. */
+  url?: string;
+  /** Docker only: the registry host to log in to when no image URL is known. */
+  host?: string;
+  type?: RepositoryType;
+  /** Hosted repositories, and groups with a write member, also accept uploads. */
+  publishes?: boolean;
+  /** Who is signed in; a placeholder is shown when unknown. */
+  username?: string;
 }
 
-/** Turns the server-provided endpoints into copyable client configuration lines. */
-export function clientSnippet(endpoints: ClientEndpoint[], max = 3): CodeLine[] {
-  const lines: CodeLine[] = [];
-  for (const e of endpoints.slice(0, max)) {
-    lines.push({ text: `# ${TOOL[e.format]}`, comment: true });
-    switch (e.format) {
-      case 'docker':
-        lines.push({ text: `docker login ${e.endpoint}` });
-        break;
-      case 'npm':
-        lines.push({ text: `npm config set registry ${trimSlash(e.endpoint)}` });
-        break;
-      case 'pypi':
-        lines.push({ text: `pip config set global.index-url \\` });
-        lines.push({ text: e.endpoint });
-        break;
-      case 'maven':
-        lines.push({ text: `# add to ~/.m2/settings.xml <mirror><url>`, comment: true });
-        lines.push({ text: e.endpoint });
-        break;
-      case 'go':
-        lines.push({ text: `go env -w GOPROXY=${e.endpoint},direct` });
-        break;
-      case 'helm':
-        lines.push({ text: `helm repo add ${e.repository} ${e.endpoint}` });
-        break;
-      case 'nuget':
-        lines.push({ text: `dotnet nuget add source ${e.endpoint} -n ${e.repository}` });
-        break;
-      case 'cargo':
-        lines.push({ text: `# ~/.cargo/config.toml: [registries.${e.repository}]`, comment: true });
-        lines.push({ text: `index = "sparse+${trimSlash(e.endpoint)}"` });
-        break;
-      case 'apt':
-        lines.push({ text: `echo "deb ${e.endpoint} stable main" | sudo tee /etc/apt/sources.list.d/${e.repository}.list` });
-        break;
-      case 'raw':
-        lines.push({ text: `curl -fLO ${trimSlash(e.endpoint)}<path>` });
-        break;
+export interface ClientSetup {
+  /** Read access: configure the client with the repository and a token. */
+  setup: CodeLine[];
+  /** Upload commands; empty when the repository does not accept uploads. */
+  publish: CodeLine[];
+}
+
+const TOKEN = '<token>';
+const slash = (u: string) => (u.endsWith('/') ? u : `${u}/`);
+const noScheme = (u: string) => u.replace(/^https?:/, '');
+/** The registry host docker clients log in to: the image URL up to the first slash. */
+const dockerHost = (url: string) => url.replace(/^https?:\/\//, '').split('/')[0] ?? url;
+/** `https://host/path` with `user:token@` inserted after the scheme. */
+const withCredentials = (url: string, user: string) => url.replace(/^(https?:\/\/)/, `$1${user}:${TOKEN}@`);
+const c = (text: string): CodeLine => ({ text, comment: true });
+const l = (text: string): CodeLine => ({ text });
+
+/**
+ * Copyable client configuration for one repository, matching the format
+ * guides in docs/guides. Credentials are placeholders: a personal access token
+ * goes where `<token>` is.
+ */
+export function clientSetup(t: ClientTarget): ClientSetup {
+  const user = t.username || '<username>';
+  const repo = t.repository;
+  const url = t.url ? slash(t.url) : '';
+  switch (t.format) {
+    case 'nuget': {
+      const index = `${url}index.json`;
+      return {
+        setup: [
+          c('# The service index is public; restoring packages needs the token'),
+          l(`dotnet nuget add source ${index} -n ${repo} -u ${user} -p ${TOKEN} --store-password-in-clear-text`),
+        ],
+        publish: t.publishes ? [l(`dotnet nuget push <package>.nupkg -s ${index} -k ${TOKEN}`)] : [],
+      };
     }
+    case 'npm':
+      return {
+        setup: [c('# .npmrc in the project or your home directory'), l(`registry=${url}`), l(`${noScheme(url)}:_authToken=${TOKEN}`)],
+        publish: t.publishes ? [l(`npm publish --registry ${url}`)] : [],
+      };
+    case 'pypi':
+      return {
+        setup: [l(`pip config set global.index-url ${withCredentials(`${url}simple/`, '__token__')}`)],
+        publish: t.publishes ? [l(`twine upload --repository-url ${url} -u __token__ -p ${TOKEN} dist/*`)] : [],
+      };
+    case 'maven': {
+      const server = `    <server><id>${repo}</id><username>${user}</username><password>\${env.HANGAR_TOKEN}</password></server>`;
+      // A hosted repository holds only your own artifacts, so it is not a mirror for everything.
+      const mirror = t.type !== 'hosted';
+      return {
+        setup: [
+          c(`# export HANGAR_TOKEN=${TOKEN}`),
+          c('<!-- ~/.m2/settings.xml -->'),
+          l('<settings>'),
+          l('  <servers>'),
+          l(server),
+          l('  </servers>'),
+          ...(mirror
+            ? [l('  <mirrors>'), l(`    <mirror><id>${repo}</id><mirrorOf>*</mirrorOf><url>${url}</url></mirror>`), l('  </mirrors>')]
+            : []),
+          l('</settings>'),
+        ],
+        publish: t.publishes
+          ? [
+              c('<!-- pom.xml -->'),
+              l('<distributionManagement>'),
+              l(`  <repository><id>${repo}</id><url>${url}</url></repository>`),
+              l('</distributionManagement>'),
+              l('mvn deploy'),
+            ]
+          : [],
+      };
+    }
+    case 'docker': {
+      const image = t.url?.replace(/\/+$/, '');
+      const host = t.host ?? (image ? dockerHost(image) : '');
+      return {
+        setup: [
+          l(`echo '${TOKEN}' | docker login ${host} -u ${user} --password-stdin`),
+          ...(image ? [l(`docker pull ${image}/<image>:<tag>`)] : []),
+        ],
+        publish:
+          t.publishes && image ? [l(`docker tag <image>:<tag> ${image}/<image>:<tag>`), l(`docker push ${image}/<image>:<tag>`)] : [],
+      };
+    }
+    case 'raw':
+      return {
+        setup: [l(`curl -u ${user}:${TOKEN} -fLO ${url}<path>`)],
+        publish: t.publishes ? [l(`curl -u ${user}:${TOKEN} --upload-file ./<file> ${url}<path>/<file>`)] : [],
+      };
+    case 'helm':
+      return { setup: [l(`helm repo add ${repo} ${url} --username ${user} --password ${TOKEN}`)], publish: [] };
+    case 'go':
+      return {
+        setup: [l(`go env -w GOPROXY=${url},direct`), c(`# ~/.netrc: machine ${dockerHost(url)} login ${user} password ${TOKEN}`)],
+        publish: [],
+      };
+    case 'cargo':
+      return {
+        setup: [c(`# ~/.cargo/config.toml: [registries.${repo}]`), l(`index = "sparse+${url}"`)],
+        publish: [],
+      };
+    case 'apt':
+      return { setup: [l(`echo "deb ${url} stable main" | sudo tee /etc/apt/sources.list.d/${repo}.list`)], publish: [] };
   }
-  return lines;
+}
+
+/** Set-up and publish lines in one block, the publish part under its own heading. */
+export function clientLines(t: ClientTarget): CodeLine[] {
+  const { setup, publish } = clientSetup(t);
+  return publish.length ? [...setup, c('# Publish'), ...publish] : setup;
 }

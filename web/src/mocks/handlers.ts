@@ -210,7 +210,12 @@ export const handlers = [
     const matching = state.repositories.filter((r) => (!format || r.format === format) && (!q || r.name.includes(q)));
     const counts = { all: matching.length, hosted: 0, proxy: 0, group: 0 };
     for (const r of matching) counts[r.type]++;
-    const rows = matching.filter((r) => !type || r.type === type);
+    const sort = p.get('sort');
+    if (sort && !/^-?(name|type|format|last_activity)$/.test(sort)) return error(400, { code: 'invalid_argument', message: `sort "${sort}"` });
+    const rows = data.sortRepositories(
+      matching.filter((r) => !type || r.type === type),
+      sort,
+    );
     const items = rows.slice(offset, offset + limit);
     const next = offset + limit < rows.length ? `o${offset + limit}` : null;
     return HttpResponse.json({ items, next_cursor: next, counts });
@@ -238,6 +243,7 @@ export const handlers = [
       component_count: 0,
       created_at: now,
       updated_at: now,
+      last_activity_at: null,
     };
     if (repo.config.proxy?.auth) repo.config.proxy.auth = { ...repo.config.proxy.auth, password: undefined, token: undefined };
     state.repositories = [...state.repositories, repo];

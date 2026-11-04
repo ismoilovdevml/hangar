@@ -46,6 +46,11 @@ export function humanDays(days: number): string {
 export type StoreKind = BlobStoreInput['kind'];
 export type QuotaUnit = 'GB' | 'TB';
 
+export const QUOTA_UNITS: { value: QuotaUnit; label: string }[] = [
+  { value: 'GB', label: 'GB' },
+  { value: 'TB', label: 'TB' },
+];
+
 export interface BlobStoreForm {
   name: string;
   kind: StoreKind;

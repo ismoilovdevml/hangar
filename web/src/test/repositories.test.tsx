@@ -1,3 +1,4 @@
+import { choose, valueOf } from './choose';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
@@ -43,6 +44,39 @@ describe('repositories list', () => {
     expect(screen.getByText(`Showing 20 of ${all.length}`)).toBeInTheDocument();
   });
 
+  it('shows last activity, with the exact time on hover, and never-used repositories', async () => {
+    renderApp('/repositories?q=npm');
+    const table = await screen.findByRole('table', { name: 'Repositories' });
+    const proxyRow = (await within(table).findByText('npmjs-proxy')).closest('tr')!;
+    const when = within(proxyRow).getByText('2 min ago');
+    expect(when.tagName).toBe('TIME');
+    expect(when).toHaveAttribute('title', expect.stringMatching(/ UTC$/));
+    expect(within(within(table).getByText('npm-sandbox').closest('tr')!).getByText('No activity yet')).toBeInTheDocument();
+    // A group is as recent as its busiest member.
+    expect(within(within(table).getByText('npm-all').closest('tr')!).getByText('2 min ago')).toBeInTheDocument();
+  });
+
+  it('sorts by a column header through the URL, before paging', async () => {
+    const user = userEvent.setup();
+    const { history } = renderApp('/repositories');
+    const table = await screen.findByRole('table', { name: 'Repositories' });
+    await within(table).findByText('docker-all');
+    expect(within(table).getByRole('columnheader', { name: /Name/ })).toHaveAttribute('aria-sort', 'ascending');
+
+    await user.click(within(table).getByRole('button', { name: 'Last activity' }));
+    await waitFor(() => expect(search(history).get('sort')).toBe('-last_activity'));
+    expect(within(table).getByRole('columnheader', { name: /Last activity/ })).toHaveAttribute('aria-sort', 'descending');
+    // Most recent first; the group ties with its busiest member and the name breaks the tie.
+    await waitFor(() => expect(within(table).getAllByRole('row')[2]).toHaveTextContent('dockerhub-proxy'));
+    expect(within(table).getAllByRole('row')[1]).toHaveTextContent('docker-all');
+
+    await user.click(within(table).getByRole('button', { name: 'Name' }));
+    await waitFor(() => expect(search(history).get('sort')).toBeNull());
+    await user.click(within(table).getByRole('button', { name: 'Name' }));
+    await waitFor(() => expect(search(history).get('sort')).toBe('-name'));
+    await waitFor(() => expect(within(table).getAllByRole('row')[1]).toHaveTextContent('raw-legacy'));
+  });
+
   it('keeps the type tab, format and name filters in the URL', async () => {
     const user = userEvent.setup();
     const { history } = renderApp('/repositories');
@@ -55,7 +89,7 @@ describe('repositories list', () => {
     expect(within(table).getByText('dockerhub-proxy')).toBeInTheDocument();
     expect(within(tabs).getByRole('link', { name: /^Proxy/ })).toHaveAttribute('aria-current', 'page');
 
-    await user.selectOptions(screen.getByLabelText('Format'), 'npm');
+    await choose(user, screen.getByLabelText('Format'), 'npm');
     await waitFor(() => expect(search(history).get('format')).toBe('npm'));
     expect(search(history).get('type')).toBe('proxy');
     await waitFor(() => expect(within(table).queryByText('dockerhub-proxy')).not.toBeInTheDocument());
@@ -76,7 +110,7 @@ describe('repositories list', () => {
     const table = await screen.findByRole('table', { name: 'Repositories' });
     expect(await within(table).findByText('docker-all')).toBeInTheDocument();
     expect(within(table).getAllByRole('row')).toHaveLength(2); // header + one group
-    expect(screen.getByLabelText('Format')).toHaveValue('docker');
+    expect(valueOf(screen.getByLabelText('Format'))).toBe('docker');
     expect(within(screen.getByRole('navigation', { name: 'Repository type' })).getByRole('link', { name: /^Group/ })).toHaveAttribute(
       'aria-current',
       'page',

@@ -4,6 +4,7 @@ import { ErrorNote } from '../../components/ErrorNote';
 import { IconClose, IconPlus } from '../../components/icons';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
+import { Select } from '../../components/Select';
 import {
   useAddRoleMember,
   useCreateRole,
@@ -18,6 +19,12 @@ import {
 import { ACTIONS, describePrivilege, formatPrivilege, parsePrivilege, repoPatternError, ROLE_NAME_RE, roleTone, SYSTEM_AREAS, type Privilege } from './model';
 import { ScopeList } from './tokens';
 import { ConfirmDialog, Dialog, Field, FormError } from './ui';
+
+const DOMAIN_OPTIONS = [
+  { value: 'repo', label: 'Repositories' },
+  { value: 'system', label: 'Administration' },
+] as const;
+const AREA_OPTIONS = [{ value: '*', label: 'Every area' }, ...SYSTEM_AREAS.map((a) => ({ value: a.id as string, label: a.label }))];
 
 /* ---------------------------------------------------------------- privilege editor */
 
@@ -54,17 +61,13 @@ export function PrivilegeEditor({ value, onChange, readOnly, showErrors }: Privi
         const id = `${baseId}-${i}`;
         return (
           <div key={i} className="privilege-row" role="group" aria-label={`Privilege ${i + 1}`}>
-            <select
-              className="input input--sm"
+            <Select
+              size="sm"
               aria-label="Applies to"
               value={p.domain}
-              onChange={(e) =>
-                set(i, e.target.value === 'repo' ? { domain: 'repo', pattern: '*', action: 'read' } : { domain: 'system', pattern: 'audit', action: 'read' })
-              }
-            >
-              <option value="repo">Repositories</option>
-              <option value="system">Administration</option>
-            </select>
+              options={DOMAIN_OPTIONS}
+              onChange={(v) => set(i, v === 'repo' ? { domain: 'repo', pattern: '*', action: 'read' } : { domain: 'system', pattern: 'audit', action: 'read' })}
+            />
             {p.domain === 'repo' ? (
               <input
                 id={id}
@@ -77,27 +80,15 @@ export function PrivilegeEditor({ value, onChange, readOnly, showErrors }: Privi
                 spellCheck={false}
               />
             ) : (
-              <select className="input input--sm" aria-label="Area" value={p.pattern} onChange={(e) => set(i, { ...p, pattern: e.target.value })}>
-                <option value="*">Every area</option>
-                {SYSTEM_AREAS.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.label}
-                  </option>
-                ))}
-              </select>
+              <Select size="sm" aria-label="Area" value={p.pattern} options={AREA_OPTIONS} onChange={(v) => set(i, { ...p, pattern: v })} />
             )}
-            <select
-              className="input input--sm"
+            <Select<Privilege['action']>
+              size="sm"
               aria-label="Action"
               value={p.action === '*' ? 'admin' : p.action}
-              onChange={(e) => set(i, { ...p, action: e.target.value as Privilege['action'] })}
-            >
-              {ACTIONS.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.label}
-                </option>
-              ))}
-            </select>
+              options={ACTIONS.map((a) => ({ value: a.id, label: a.label }))}
+              onChange={(v) => set(i, { ...p, action: v })}
+            />
             <button type="button" className="icon-button icon-button--sm" aria-label={`Remove privilege ${i + 1}`} onClick={() => remove(i)}>
               <IconClose size={16} />
             </button>
@@ -330,14 +321,13 @@ function RoleMembers({ role, canWrite }: { role: string; canWrite: boolean }) {
           <label className="visually-hidden" htmlFor={pickId}>
             Add a member
           </label>
-          <select id={pickId} className="input" value={pick} onChange={(e) => setPick(e.target.value)}>
-            <option value="">Add a member…</option>
-            {candidates.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.display_name ? `${m.display_name} (${m.username})` : m.username}
-              </option>
-            ))}
-          </select>
+          <Select
+            id={pickId}
+            value={pick}
+            placeholder="Add a member…"
+            options={candidates.map((m) => ({ value: m.id, label: m.display_name || m.username, hint: m.display_name ? m.username : undefined }))}
+            onChange={setPick}
+          />
           <button
             type="button"
             className="button button--secondary"

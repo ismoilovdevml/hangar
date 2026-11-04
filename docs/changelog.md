@@ -24,6 +24,27 @@
 - "Published since yesterday" and the uploads in the traffic chart count
   hosted repositories only; proxy cache fills are no longer counted as
   publications.
+- **UI shell**: menus and popovers sit on their own stacking layer (z-index
+  scale in the design tokens), so page content such as the overview range
+  switch no longer covers the account menu or notifications. The sidebar
+  shows a static instance badge instead of an organisation switcher that did
+  nothing; an unnamed instance reads "Hangar" and empty environment or region
+  leave no stray separator.
+- **Select fields**: one accessible listbox (keyboard, type-ahead, optional
+  filter for long lists, form submission) replaces the native selects outside
+  the package browser.
+- **Connect a client**: per-format set-up commands that match the format
+  guides (NuGet `index.json` with credentials, `.npmrc` with a token, pip,
+  Maven `settings.xml`, Docker login, raw curl), publish commands for hosted
+  repositories, the signed-in username filled in, and a link to create an
+  access token. Everything is built from server-provided URLs.
+- **Format marks**: Docker, npm, Maven, NuGet, PyPI, Helm and Go logos (Simple
+  Icons, CC0; Maven under Apache 2.0, see `web/THIRD_PARTY_NOTICES.md`) in
+  badges, tables, pickers and search facets, with a neutral icon for raw and
+  any other format.
+- **Repositories list**: a "Last activity" column (`last_activity_at`, from
+  existing upload and download timestamps, no extra writes), type icons, and
+  sorting by name, type, format or last activity (`GET /repositories?sort=`).
 
 - **Single sign-on (OIDC)**: "Continue with SSO" through any OpenID Connect
   provider (`auth.oidc`): authorization code flow with PKCE (S256),

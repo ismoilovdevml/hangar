@@ -1,6 +1,7 @@
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { useOverview, useSession } from '../../api/hooks';
 import type { OverviewMetrics, OverviewRange } from '../../api/types';
+import { FormatName } from '../../components/FormatIcon';
 import { KpiCard, KpiCardSkeleton } from '../../components/KpiCard';
 import { Panel } from '../../components/Panel';
 import { Segmented } from '../../components/Segmented';
@@ -159,7 +160,9 @@ function StorageByFormat({ m }: { m: OverviewMetrics }) {
         const meta = FORMAT_META[f.format];
         return (
           <li key={f.format} className="formats__row">
-            <span className="formats__name">{meta.label}</span>
+            <span className="formats__name">
+              <FormatName format={f.format} size={15} />
+            </span>
             <span className="formats__track" aria-hidden="true">
               <span className="formats__fill" style={{ width: `${(f.bytes / max) * 100}%`, background: meta.bar }} />
             </span>

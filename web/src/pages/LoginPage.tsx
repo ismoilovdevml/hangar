@@ -3,6 +3,7 @@ import { getRouteApi, useRouter } from '@tanstack/react-router';
 import { ApiRequestError } from '../api/client';
 import { useAuthProviders, useLogin, useSystemStatus } from '../api/hooks';
 import { IconLogo } from '../components/icons';
+import { instanceName } from '../lib/format';
 import { useNow } from '../lib/useNow';
 
 const route = getRouteApi('/login');
@@ -70,7 +71,7 @@ export function LoginPage() {
 
   const p = providers.data;
   const sys = status.data;
-  const instance = sys?.instance_name && sys.instance_name.toLowerCase() !== 'hangar' ? sys.instance_name : 'Hangar';
+  const instance = instanceName(sys?.instance_name);
   const external = Boolean(p?.oidc || p?.ldap.enabled || (p?.saml.enabled && p.saml.start_url));
 
   const [missing, setMissing] = useState(false);

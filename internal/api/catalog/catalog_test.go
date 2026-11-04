@@ -60,7 +60,7 @@ func TestCatalogIntegration(t *testing.T) {
 	store := s.Store("default", "fs", &quota)
 	npm := s.Repo("npm-hosted", "npm", "hosted", store)
 	mvn := s.Repo("maven-releases", "maven", "hosted", store)
-	s.Repo("npm-all", "npm", "group", "")
+	group := s.Repo("npm-all", "npm", "group", "")
 	apitest.Exec(t, pool, `INSERT INTO users (username, kind) VALUES ('ci-bot', 'service_account'), ('alice', 'user')`)
 
 	now := time.Now().UTC().Truncate(time.Second)
@@ -85,8 +85,29 @@ func TestCatalogIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stats[npm] != (RepoStats{SizeBytes: 5000, ComponentCount: 2}) || stats[mvn].ComponentCount != 1 {
+	if st := stats[npm]; st.SizeBytes != 5000 || st.ComponentCount != 2 || stats[mvn].ComponentCount != 1 {
 		t.Errorf("stats = %+v", stats)
+	}
+
+	// Last activity: the newest upload or download, and a group follows its members.
+	if !stats[group].LastActivityAt.IsZero() {
+		t.Errorf("group without members has activity %v", stats[group].LastActivityAt)
+	}
+	downloaded := now.Add(-10 * time.Minute)
+	apitest.Exec(t, pool, `UPDATE assets SET created_at = $2, updated_at = $2 WHERE repo_id = $1`, npm, old)
+	apitest.Exec(t, pool, `UPDATE assets SET last_downloaded_at = $2 WHERE repo_id = $1 AND path LIKE '%1.1.0.tgz'`, npm, downloaded)
+	apitest.Exec(t, pool, `INSERT INTO group_members (group_id, member_id, position) VALUES ($1, $2, 0)`, group, npm)
+	if stats, err = c.RepositoryStats(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := stats[npm].LastActivityAt; !got.Equal(downloaded) {
+		t.Errorf("npm last activity = %v, want the download at %v", got, downloaded)
+	}
+	if got := stats[group].LastActivityAt; !got.Equal(downloaded) {
+		t.Errorf("group last activity = %v, want its member's %v", got, downloaded)
+	}
+	if stats[mvn].LastActivityAt.IsZero() {
+		t.Error("an upload counts as activity")
 	}
 
 	// Newest first, paged.

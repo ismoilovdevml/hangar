@@ -5,6 +5,7 @@ import { ErrorNote } from '../../components/ErrorNote';
 import { IconSearch } from '../../components/icons';
 import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
+import { Select } from '../../components/Select';
 import { relativeTime } from '../../lib/format';
 import { useNow } from '../../lib/useNow';
 import {
@@ -43,6 +44,13 @@ import {
 } from './model';
 import { CreateTokenDialog, TokenTable } from './tokens';
 import { Avatar, ConfirmDialog, Dialog, Field, FormError, Notice } from './ui';
+
+const STATUS_OPTIONS: { value: UserStatus | ''; label: string }[] = [
+  { value: '', label: 'Any' },
+  { value: 'active', label: 'Active' },
+  { value: 'locked', label: 'Locked' },
+  { value: 'disabled', label: 'Disabled' },
+];
 
 export const MEMBER_PAGE_SIZE = 50;
 
@@ -136,30 +144,26 @@ export function MembersTab({ kind, filters, onFilters, onOpen }: MembersTabProps
             <label htmlFor={roleId} className="filter-select__label">
               Role
             </label>
-            <select id={roleId} className="filter-select__input" value={filters.role ?? ''} onChange={(e) => onFilters({ ...filters, role: e.target.value || undefined })}>
-              <option value="">Any</option>
-              {(roles.data?.items ?? []).map((r) => (
-                <option key={r.id} value={r.name}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
+            <Select
+              id={roleId}
+              variant="inline"
+              value={filters.role ?? ''}
+              placeholder={filters.role ?? 'Any'}
+              options={[{ value: '', label: 'Any' }, ...(roles.data?.items ?? []).map((r) => ({ value: r.name, label: r.name }))]}
+              onChange={(v) => onFilters({ ...filters, role: v || undefined })}
+            />
           </div>
           <div className="filter-select">
             <label htmlFor={statusId} className="filter-select__label">
               Status
             </label>
-            <select
+            <Select<UserStatus | ''>
               id={statusId}
-              className="filter-select__input"
+              variant="inline"
               value={filters.status ?? ''}
-              onChange={(e) => onFilters({ ...filters, status: (e.target.value || undefined) as UserStatus | undefined })}
-            >
-              <option value="">Any</option>
-              <option value="active">Active</option>
-              <option value="locked">Locked</option>
-              <option value="disabled">Disabled</option>
-            </select>
+              options={STATUS_OPTIONS}
+              onChange={(v) => onFilters({ ...filters, status: v || undefined })}
+            />
           </div>
         </div>
       </div>

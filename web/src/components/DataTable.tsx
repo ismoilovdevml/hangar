@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { IconArrowDown, IconArrowUp } from './icons';
 
 export interface Column<T> {
   key: string;
@@ -6,6 +7,14 @@ export interface Column<T> {
   cell: (row: T) => ReactNode;
   align?: 'left' | 'right';
   className?: string;
+  /** The column can order the table: its header becomes a button. */
+  sortable?: boolean;
+}
+
+/** The column the table is ordered by. */
+export interface TableSort {
+  key: string;
+  desc: boolean;
 }
 
 interface DataTableProps<T> {
@@ -16,21 +25,41 @@ interface DataTableProps<T> {
   minWidth?: number;
   empty?: ReactNode;
   busy?: boolean;
+  sort?: TableSort;
+  /** Called with the key of a sortable column whose header was activated. */
+  onSort?: (key: string) => void;
 }
 
 /** A table that lives inside a Panel and scrolls horizontally on narrow screens. */
-export function DataTable<T>({ caption, columns, rows, rowKey, minWidth = 640, empty, busy }: DataTableProps<T>) {
+export function DataTable<T>({ caption, columns, rows, rowKey, minWidth = 640, empty, busy, sort, onSort }: DataTableProps<T>) {
   return (
     <div className="table-scroll" tabIndex={0} role="region" aria-label={caption}>
       <table className="data-table" style={{ minWidth }} aria-busy={busy || undefined}>
         <caption className="visually-hidden">{caption}</caption>
         <thead>
           <tr>
-            {columns.map((c) => (
-              <th key={c.key} scope="col" className={[c.align === 'right' ? 'is-right' : '', c.className ?? ''].join(' ')}>
-                {c.header}
-              </th>
-            ))}
+            {columns.map((c) => {
+              const active = sort?.key === c.key;
+              return (
+                <th
+                  key={c.key}
+                  scope="col"
+                  className={[c.align === 'right' ? 'is-right' : '', c.className ?? ''].join(' ')}
+                  aria-sort={c.sortable && onSort ? (active ? (sort.desc ? 'descending' : 'ascending') : 'none') : undefined}
+                >
+                  {c.sortable && onSort ? (
+                    <button type="button" className={active ? 'th-sort is-active' : 'th-sort'} onClick={() => onSort(c.key)}>
+                      {c.header}
+                      <span className="th-sort__mark" aria-hidden="true">
+                        {active && (sort.desc ? <IconArrowDown size={13} /> : <IconArrowUp size={13} />)}
+                      </span>
+                    </button>
+                  ) : (
+                    c.header
+                  )}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>

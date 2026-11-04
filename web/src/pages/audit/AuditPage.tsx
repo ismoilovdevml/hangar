@@ -8,6 +8,7 @@ import { IconChevronRight, IconDownload } from '../../components/opsIcons';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
+import { Select } from '../../components/Select';
 import {
   ACTION_SUGGESTIONS,
   AUDIT_OUTCOMES,
@@ -242,41 +243,28 @@ export function AuditPage() {
           </div>
           <div className="field">
             <label htmlFor={ids.outcome}>Outcome</label>
-            <select
+            <Select
               id={ids.outcome}
-              className="input"
               value={search.outcome ?? ''}
-              onChange={(e) => setFilter({ outcome: isAuditOutcome(e.target.value) ? e.target.value : undefined })}
-            >
-              <option value="">Any outcome</option>
-              {AUDIT_OUTCOMES.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              options={[{ value: '', label: 'Any outcome' }, ...AUDIT_OUTCOMES.map((o) => ({ value: o.id, label: o.label }))]}
+              onChange={(v) => setFilter({ outcome: isAuditOutcome(v) ? v : undefined })}
+            />
           </div>
           <div className="field">
             <label htmlFor={ids.range}>Time range</label>
-            <select
+            <Select
               id={ids.range}
-              className="input"
               value={range}
-              onChange={(e) => {
-                const r = isAuditRange(e.target.value) ? e.target.value : undefined;
+              options={AUDIT_RANGES.map((r) => ({ value: r.id, label: r.label }))}
+              onChange={(v) => {
+                const r = isAuditRange(v) ? v : undefined;
                 setFilter(
                   r === 'custom'
                     ? { range: r, from: search.from ?? new Date(Date.now() - 86_400_000).toISOString(), to: search.to }
                     : { range: r === DEFAULT_AUDIT_RANGE ? undefined : r, from: undefined, to: undefined },
                 );
               }}
-            >
-              {AUDIT_RANGES.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
+            />
           </div>
           {range === 'custom' && (
             <>

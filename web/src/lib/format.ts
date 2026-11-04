@@ -66,6 +66,12 @@ export function firstName(displayName: string): string {
   return displayName.trim().split(/\s+/)[0] ?? displayName;
 }
 
+/** How the instance is named in the shell: the unconfigured default reads as the product name. */
+export function instanceName(name: string | undefined | null): string {
+  const n = name?.trim() ?? '';
+  return n === '' || n.toLowerCase() === 'hangar' ? 'Hangar' : n;
+}
+
 export function initials(displayName: string): string {
   const parts = displayName.trim().split(/\s+/).filter(Boolean);
   const letters = parts.length > 1 ? `${parts[0]![0]}${parts[parts.length - 1]![0]}` : (parts[0] ?? '?').slice(0, 2);

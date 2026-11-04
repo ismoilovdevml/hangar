@@ -1,3 +1,4 @@
+import { choose } from './choose';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -104,7 +105,7 @@ describe('blob stores', () => {
     const quota = within(manage).getByLabelText('Soft quota');
     expect(quota).toHaveValue('');
     await user.type(quota, '500');
-    await user.selectOptions(within(manage).getByLabelText('Quota unit'), 'GB');
+    await choose(user, within(manage).getByLabelText('Quota unit'), 'GB');
     await user.click(within(manage).getByRole('button', { name: 'Save quota' }));
     expect(await within(manage).findByRole('button', { name: 'Saved' })).toBeDisabled();
     expect(catalogState.blobStores.find((b) => b.name === 'fs-local')?.soft_quota_bytes).toBe(500e9);

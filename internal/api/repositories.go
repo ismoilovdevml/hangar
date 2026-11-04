@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -47,6 +48,8 @@ type repositoryJSON struct {
 	ComponentCount int64           `json:"component_count"`
 	CreatedAt      time.Time       `json:"created_at"`
 	UpdatedAt      time.Time       `json:"updated_at"`
+	// LastActivityAt is the latest upload, cache fill or download; null when none.
+	LastActivityAt *time.Time `json:"last_activity_at"`
 }
 
 type repoCounts struct {
@@ -145,11 +148,56 @@ func repoStatus(r *core.Repository, up map[string]proxy.HealthItem) string {
 
 func (a *API) toRepositoryJSON(r *core.Repository, stats map[string]catalog.RepoStats, up map[string]proxy.HealthItem) repositoryJSON {
 	st := stats[r.ID]
-	return repositoryJSON{
+	j := repositoryJSON{
 		ID: r.ID, Name: r.Name, Format: r.Format, Type: r.Type, Description: r.Description, BlobStore: r.BlobStore,
 		Online: r.Online, Config: redactConfig(r.Config), URL: a.repoURL(r), Status: repoStatus(r, up),
 		SizeBytes: st.SizeBytes, ComponentCount: st.ComponentCount, CreatedAt: r.CreatedAt.UTC(), UpdatedAt: r.UpdatedAt.UTC(),
 	}
+	if !st.LastActivityAt.IsZero() {
+		last := st.LastActivityAt
+		j.LastActivityAt = &last
+	}
+	return j
+}
+
+// repoSorts are the orders listRepositories accepts; a leading "-" reverses.
+var repoSorts = map[string]func(a, b *core.Repository, stats map[string]catalog.RepoStats) int{
+	"name": func(_, _ *core.Repository, _ map[string]catalog.RepoStats) int { return 0 }, // decided by the tie-break
+	"type": func(a, b *core.Repository, _ map[string]catalog.RepoStats) int { return cmp.Compare(a.Type, b.Type) },
+	"format": func(a, b *core.Repository, _ map[string]catalog.RepoStats) int {
+		return cmp.Compare(a.Format, b.Format)
+	},
+	"last_activity": func(a, b *core.Repository, stats map[string]catalog.RepoStats) int {
+		return stats[a.ID].LastActivityAt.Compare(stats[b.ID].LastActivityAt)
+	},
+}
+
+// sortRepos orders repos by sort ("name" when empty). The name breaks ties,
+// always ascending, so pages stay stable.
+func sortRepos(repos []*core.Repository, sort string, stats map[string]catalog.RepoStats) error {
+	key, desc := strings.CutPrefix(sort, "-")
+	if key == "" {
+		key = "name"
+	}
+	by, ok := repoSorts[key]
+	if !ok {
+		return fmt.Errorf("sort %q: want name, type, format or last_activity, optionally with a leading -: %w", sort, core.ErrInvalid)
+	}
+	slices.SortStableFunc(repos, func(a, b *core.Repository) int {
+		c := by(a, b, stats)
+		if desc {
+			c = -c
+		}
+		if c != 0 {
+			return c
+		}
+		n := cmp.Compare(a.Name, b.Name)
+		if key == "name" && desc {
+			n = -n
+		}
+		return n
+	})
+	return nil
 }
 
 func (a *API) repoStats(ctx context.Context) (map[string]catalog.RepoStats, error) {
@@ -197,12 +245,16 @@ func (a *API) listRepositories(w http.ResponseWriter, r *http.Request) {
 			matched = append(matched, repo)
 		}
 	}
-	items, next, err := paginate(matched, q.Get("cursor"), limit)
+	stats, err := a.repoStats(ctx)
 	if err != nil {
 		a.writeErr(w, r, err)
 		return
 	}
-	stats, err := a.repoStats(ctx)
+	if err := sortRepos(matched, q.Get("sort"), stats); err != nil {
+		a.writeErr(w, r, err)
+		return
+	}
+	items, next, err := paginate(matched, q.Get("cursor"), limit)
 	if err != nil {
 		a.writeErr(w, r, err)
 		return

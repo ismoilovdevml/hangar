@@ -1,9 +1,8 @@
 import { Link } from '@tanstack/react-router';
 import { useClientEndpoints, useUpstreamHealth } from '../../api/hooks';
 import type { OverviewRange, UpstreamHealth, UpstreamState } from '../../api/types';
-import { CodeBlock } from '../../components/CodeBlock';
+import { ClientSetup } from '../../components/ClientSetup';
 import { Panel } from '../../components/Panel';
-import { clientSnippet } from '../../lib/clientSnippets';
 import { ErrorNote } from '../../components/ErrorNote';
 import { NotAvailable } from '../../components/NotAvailable';
 import { formatCompact } from '../../lib/format';
@@ -92,7 +91,11 @@ export function ConnectClient() {
           No repositories you can read yet. <Link to="/repositories/new">Create one</Link> to get client settings.
         </p>
       ) : (
-        <CodeBlock label="client setup commands" lines={clientSnippet(q.data.items)} />
+        <ClientSetup
+          targets={q.data.items.map((e) =>
+            e.format === 'docker' ? { format: e.format, repository: e.repository, host: e.endpoint } : { format: e.format, repository: e.repository, url: e.endpoint },
+          )}
+        />
       )}
     </Panel>
   );

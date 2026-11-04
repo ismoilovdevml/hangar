@@ -4,8 +4,10 @@ import { ApiRequestError } from '../../api/client';
 import { useCreateBlobStore } from '../../api/catalog';
 import { Panel } from '../../components/Panel';
 import { Segmented } from '../../components/Segmented';
+import { Select } from '../../components/Select';
 import {
   initialBlobStoreForm,
+  QUOTA_UNITS,
   toBlobStoreInput,
   validateBlobStoreForm,
   type BlobStoreErrors,
@@ -124,10 +126,7 @@ export function BlobStoreCreate({ onClose }: { onClose: () => void }) {
               <label htmlFor="store-quota-unit" className="visually-hidden">
                 Quota unit
               </label>
-              <select id="store-quota-unit" className="input" value={form.quotaUnit} onChange={(e) => set('quotaUnit', e.target.value as QuotaUnit)}>
-                <option value="GB">GB</option>
-                <option value="TB">TB</option>
-              </select>
+              <Select<QuotaUnit> id="store-quota-unit" value={form.quotaUnit} options={QUOTA_UNITS} onChange={(v) => set('quotaUnit', v)} />
             </div>,
             'A warning threshold, not a hard limit.',
           )}

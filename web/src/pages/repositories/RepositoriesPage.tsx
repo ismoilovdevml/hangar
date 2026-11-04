@@ -3,15 +3,20 @@ import { getRouteApi, Link, useRouterState } from '@tanstack/react-router';
 import { useRepositories } from '../../api/hooks';
 import type { Repository, RepositoryCounts, RepositoryType } from '../../api/types';
 import { CopyButton } from '../../components/CopyButton';
-import { DataTable, type Column } from '../../components/DataTable';
+import { DataTable, type Column, type TableSort } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
 import { IconDatabase, IconGlobe, IconGroup, IconPackage, IconPlus, IconSearch } from '../../components/icons';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
-import { Pill, StatusDot } from '../../components/Pill';
-import { FORMAT_META, formatBytes } from '../../lib/format';
+import { FormatName } from '../../components/FormatIcon';
+import { formatOptions } from '../../components/formatOptions';
+import { Select } from '../../components/Select';
+import { StatusDot } from '../../components/Pill';
+import { formatBytes, relativeTime } from '../../lib/format';
 import { plural } from '../../lib/overview';
-import { ALL_FORMATS, displayUrl, isFormat, repoSubtitle, STATUS_META, TYPE_META } from '../../lib/repositories';
+import { formatUtc } from '../../lib/tasks';
+import { useNow } from '../../lib/useNow';
+import { ALL_FORMATS, displayUrl, isFormat, isRepoSort, repoSubtitle, STATUS_META, TYPE_META } from '../../lib/repositories';
 
 const route = getRouteApi('/app/repositories');
 
@@ -114,8 +119,16 @@ export function RepositoriesPage() {
   const search = route.useSearch();
   const navigate = route.useNavigate();
   const pageCursors = useRouterState({ select: (s) => s.location.state.pageCursors });
-  const { type, format, q, cursor } = search;
-  const list = useRepositories({ type, format, q, cursor, limit: PAGE_SIZE });
+  const { type, format, q, sort, cursor } = search;
+  const list = useRepositories({ type, format, q, sort, cursor, limit: PAGE_SIZE });
+  const now = useNow(60_000);
+  const order: TableSort = { key: (sort ?? 'name').replace(/^-/, ''), desc: !!sort?.startsWith('-') };
+  const onSort = (key: string) => {
+    // A new column starts ascending, except activity, which starts with the most recent.
+    const desc = key === order.key ? !order.desc : key === 'last_activity';
+    const next = `${desc ? '-' : ''}${key}`;
+    setFilter({ sort: isRepoSort(next) && next !== 'name' ? next : undefined });
+  };
   const data = list.data;
   const formatId = useId();
 
@@ -146,6 +159,7 @@ export function RepositoriesPage() {
     {
       key: 'name',
       header: 'Name',
+      sortable: true,
       className: 'col-first',
       cell: (r) => (
         <div className="repo-name">
@@ -156,8 +170,21 @@ export function RepositoriesPage() {
         </div>
       ),
     },
-    { key: 'type', header: 'Type', cell: (r) => <Pill tone={TYPE_META[r.type].tone}>{TYPE_META[r.type].label}</Pill> },
-    { key: 'format', header: 'Format', className: 'muted', cell: (r) => (isFormat(r.format) ? FORMAT_META[r.format].label : r.format) },
+    {
+      key: 'type',
+      header: 'Type',
+      sortable: true,
+      cell: (r) => {
+        const Icon = CARD_ICON[r.type];
+        return (
+          <span className={`pill pill--icon tone-${TYPE_META[r.type].tone}`}>
+            <Icon size={13} aria-hidden="true" />
+            {TYPE_META[r.type].label}
+          </span>
+        );
+      },
+    },
+    { key: 'format', header: 'Format', sortable: true, className: 'muted', cell: (r) => <FormatName format={r.format} /> },
     {
       key: 'url',
       header: 'URL',
@@ -173,6 +200,20 @@ export function RepositoriesPage() {
       align: 'right',
       className: 'muted nowrap',
       cell: (r) => <RepoSize r={r} />,
+    },
+    {
+      key: 'last_activity',
+      header: 'Last activity',
+      sortable: true,
+      className: 'meta nowrap',
+      cell: (r) =>
+        r.last_activity_at ? (
+          <time dateTime={r.last_activity_at} title={formatUtc(r.last_activity_at)}>
+            {relativeTime(r.last_activity_at, now)}
+          </time>
+        ) : (
+          'No activity yet'
+        ),
     },
     {
       key: 'status',
@@ -237,7 +278,7 @@ export function RepositoriesPage() {
                 <Link
                   key={t.label}
                   to="/repositories"
-                  search={(s) => ({ ...s, type: t.id, cursor: undefined })}
+                  search={{ type: t.id, format, q, sort }}
                   className={active ? 'tabs__item is-active' : 'tabs__item'}
                   aria-current={active ? 'page' : undefined}
                   activeOptions={{ includeSearch: false }}
@@ -253,19 +294,13 @@ export function RepositoriesPage() {
               <label htmlFor={formatId} className="filter-select__label">
                 Format
               </label>
-              <select
+              <Select
                 id={formatId}
-                className="filter-select__input"
+                variant="inline"
                 value={format ?? ''}
-                onChange={(e) => setFilter({ format: isFormat(e.target.value) ? e.target.value : undefined })}
-              >
-                <option value="">All formats</option>
-                {ALL_FORMATS.map((f) => (
-                  <option key={f} value={f}>
-                    {FORMAT_META[f].label}
-                  </option>
-                ))}
-              </select>
+                options={formatOptions(ALL_FORMATS, 'All formats')}
+                onChange={(v) => setFilter({ format: isFormat(v) ? v : undefined })}
+              />
             </div>
             <NameFilter value={q ?? ''} onChange={(v) => setFilter({ q: v })} />
           </div>
@@ -280,8 +315,10 @@ export function RepositoriesPage() {
             rows={data?.items ?? []}
             rowKey={(r) => r.id}
             busy={list.isFetching}
-            minWidth={860}
+            minWidth={980}
             empty={empty}
+            sort={order}
+            onSort={onSort}
           />
         )}
 

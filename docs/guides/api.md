@@ -247,7 +247,10 @@ done
 ```
 
 `GET /repositories` also returns `counts` (`all`, `hosted`, `proxy`, `group`) for
-the current filters.
+the current filters. `sort` orders the list before paging: `name` (default),
+`type`, `format` or `last_activity`, with a leading `-` to reverse. Each
+repository carries `last_activity_at`, the latest upload, cache fill or download
+(for a group, in its direct members), or `null`.
 
 ## Errors
 

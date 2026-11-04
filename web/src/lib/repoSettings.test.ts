@@ -32,6 +32,7 @@ const proxy: Repository = {
   size_bytes: 1,
   component_count: 1,
   created_at: '2026-01-01T00:00:00Z',
+  last_activity_at: null,
   updated_at: '2026-01-01T00:00:00Z',
 };
 
@@ -71,13 +72,19 @@ describe('repository settings round-trip', () => {
   });
 
   it('writes client configuration, with publish steps for hosted repositories', () => {
-    expect(repoClientConfig(proxy).map((l) => l.text)).toContain('npm config set registry https://pkg.example.com/repository/npmjs-proxy/');
+    expect(repoClientConfig(proxy).map((l) => l.text)).toContain('registry=https://pkg.example.com/repository/npmjs-proxy/');
+    expect(repoClientConfig(proxy).map((l) => l.text)).not.toContain('# Publish');
     const hosted: Repository = { ...proxy, name: 'npm-hosted', type: 'hosted', url: 'https://pkg.example.com/repository/npm-hosted/', config: { hosted: { write_policy: 'allow_once' } } };
     const text = repoClientConfig(hosted).map((l) => l.text);
     expect(text).toContain('npm publish --registry https://pkg.example.com/repository/npm-hosted/');
     expect(text.join('\n')).not.toMatch(/hgr_/);
     const docker: Repository = { ...hosted, format: 'docker', url: 'cr.example.com/docker-hosted' };
-    expect(repoClientConfig(docker).map((l) => l.text)).toEqual(expect.arrayContaining(['docker login cr.example.com', 'docker push cr.example.com/docker-hosted/app:1.0']));
+    expect(repoClientConfig(docker, 'dilshod').map((l) => l.text)).toEqual(
+      expect.arrayContaining([
+        "echo '<token>' | docker login cr.example.com -u dilshod --password-stdin",
+        'docker push cr.example.com/docker-hosted/<image>:<tag>',
+      ]),
+    );
   });
 });
 

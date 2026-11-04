@@ -1,6 +1,6 @@
 import { Link, useMatches } from '@tanstack/react-router';
 import { useSession } from '../api/hooks';
-import { initials } from '../lib/format';
+import { initials, instanceName } from '../lib/format';
 import { isMac, useCommandPalette } from './commandPaletteContext';
 import { Disclosure } from './Disclosure';
 import { IconBell, IconKey, IconLogout, IconSearch } from './icons';
@@ -19,7 +19,7 @@ export function TopBar({ onSignOut }: { onSignOut: () => void }) {
     <header className="topbar glass">
       <nav aria-label="Breadcrumb" className="breadcrumb">
         <ol>
-          <li>{org?.name ?? 'Hangar'}</li>
+          <li>{instanceName(org?.name)}</li>
           {title && (
             <li aria-current="page" className="breadcrumb__current">
               {title}
