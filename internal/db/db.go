@@ -1,7 +1,8 @@
 // Package db owns the PostgreSQL connection pool and the schema migrations.
 //
 // Migrations live in migrations/ as goose SQL files, are embedded in the
-// binary, and are numbered sequentially (00007_xxx.sql next). Never edit a
+// binary, and are numbered with unique, ascending five-digit prefixes (gaps
+// allowed). Never edit a
 // migration that has been released; add a new one. Every migration has a
 // working Down section, verified by TestMigrationsUpDown.
 package db

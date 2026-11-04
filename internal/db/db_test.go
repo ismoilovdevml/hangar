@@ -4,10 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"io/fs"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -26,11 +26,20 @@ func TestMigrationFilesAreSequential(t *testing.T) {
 	if len(entries) == 0 {
 		t.Fatal("no migrations embedded")
 	}
-	for i, e := range entries {
-		want := fmt.Sprintf("%05d_", i+1)
-		if !strings.HasPrefix(e.Name(), want) {
-			t.Errorf("migration %d is %s, want prefix %s", i+1, e.Name(), want)
+	// Numbers are unique and ascending; gaps are allowed so parallel work can
+	// reserve ranges. goose applies files in numeric order.
+	prev := 0
+	for _, e := range entries {
+		prefix, _, ok := strings.Cut(e.Name(), "_")
+		n, err := strconv.Atoi(prefix)
+		if !ok || err != nil || len(prefix) != 5 {
+			t.Errorf("%s: want an NNNNN_ prefix", e.Name())
+			continue
 		}
+		if n <= prev {
+			t.Errorf("%s: number %d is not greater than %d", e.Name(), n, prev)
+		}
+		prev = n
 		b, _ := fs.ReadFile(Migrations(), e.Name())
 		if !strings.Contains(string(b), "-- +goose Down") {
 			t.Errorf("%s has no Down section", e.Name())

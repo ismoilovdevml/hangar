@@ -103,7 +103,7 @@ func TestRouter(t *testing.T) {
 		{"/api/v1/system/status", 200, `"dependencies"`},
 		{"/api/v1/formats", 200, `"docker"`},
 		{"/api/v1/repositories", 501, `"not_implemented"`},
-		{"/repository/raw-hosted/file.txt", 501, "raw format"},
+		{"/repository/raw-hosted/file.txt", 401, "authentication required"},
 		{"/repository/absent/file.txt", 404, "not found"},
 		{"/v2/", 501, "docker format"},
 		{"/repositories", 200, "<html"},
