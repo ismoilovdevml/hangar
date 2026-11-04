@@ -15,7 +15,7 @@ import { downloadHref } from '../../lib/packages';
 import { isFormat } from '../../lib/repositories';
 import { useNow } from '../../lib/useNow';
 import { dateTime, deleteMessage } from './detailUtil';
-import { FormatIcon } from './formatIcon';
+import { FormatIcon } from '../../components/FormatIcon';
 
 interface AssetDetailProps {
   id: string;
@@ -63,7 +63,7 @@ export function AssetDetail({ id, treeRepo, onDeleted }: AssetDetailProps) {
     <>
       <Panel className="pkg-head" aria-label={`File ${name}`}>
         <div className="pkg-head__row">
-          <FormatIcon format={a.format} size={48} />
+          <span className="pkg-head__mark"><FormatIcon format={a.format} size={32} /></span>
           <div className="pkg-head__text">
             <div className="pkg-head__titles">
               <h1 className="pkg-head__title">{name}</h1>

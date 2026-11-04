@@ -22,7 +22,7 @@ describe('package browser: tree', () => {
     expect(npm).toHaveTextContent('Hosted');
     expect(npm).toHaveAttribute('aria-expanded', 'false');
     expect(npm).toHaveAttribute('aria-level', '1');
-    expect(within(npm).getByText('npm')).toBeInTheDocument(); // the format icon's label
+    expect(npm.querySelector('svg.format-icon')).not.toBeNull();
 
     await user.click(npm);
     await waitFor(() => expect(search(history).get('repo')).toBe('npm-internal'));

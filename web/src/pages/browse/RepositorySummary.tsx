@@ -1,16 +1,16 @@
 import { Link } from '@tanstack/react-router';
 import { ApiRequestError } from '../../api/client';
 import { useAllRepositories, useRepository } from '../../api/catalog';
-import { CodeBlock } from '../../components/CodeBlock';
+import { ClientSetup } from '../../components/ClientSetup';
 import { CopyButton } from '../../components/CopyButton';
 import { ErrorNote } from '../../components/ErrorNote';
 import { IconSettings } from '../../components/opsIcons';
 import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
 import { FORMAT_META, formatBytes } from '../../lib/format';
-import { repoClientConfig } from '../../lib/repoSettings';
+import { repoClientTarget } from '../../lib/repoSettings';
 import { isFormat, STATUS_META, TYPE_META } from '../../lib/repositories';
-import { FormatIcon } from './formatIcon';
+import { FormatIcon } from '../../components/FormatIcon';
 
 /** Right column when a repository is chosen but no package yet. */
 export function RepositorySummary({ repo }: { repo: string }) {
@@ -36,7 +36,7 @@ export function RepositorySummary({ repo }: { repo: string }) {
     <>
       <Panel className="pkg-head">
         <div className="pkg-head__row">
-          <FormatIcon format={r.format} size={48} />
+          <span className="pkg-head__mark"><FormatIcon format={r.format} size={32} /></span>
           <div className="pkg-head__text">
             <h1 className="pkg-head__title">{r.name}</h1>
             <p className="pkg-head__meta">
@@ -66,23 +66,19 @@ export function RepositorySummary({ repo }: { repo: string }) {
               <StatusDot tone={status.tone} label={status.label} />
             </dd>
           </div>
-          {r.type !== 'group' && (
-            <>
-              <div>
-                <dt>Stored</dt>
-                <dd>{formatBytes(r.size_bytes)}</dd>
-              </div>
-              <div>
-                <dt>Versions</dt>
-                <dd>{r.component_count}</dd>
-              </div>
-              {r.blob_store && (
-                <div>
-                  <dt>Blob store</dt>
-                  <dd>{r.blob_store}</dd>
-                </div>
-              )}
-            </>
+          <div>
+            <dt>{r.type === 'group' ? 'Served' : 'Stored'}</dt>
+            <dd>{formatBytes(r.size_bytes)}</dd>
+          </div>
+          <div>
+            <dt>Versions</dt>
+            <dd>{r.component_count}</dd>
+          </div>
+          {r.blob_store && (
+            <div>
+              <dt>Blob store</dt>
+              <dd>{r.blob_store}</dd>
+            </div>
           )}
           {r.type === 'proxy' && r.config.proxy?.remote_url && (
             <div className="facts__wide">
@@ -104,7 +100,7 @@ export function RepositorySummary({ repo }: { repo: string }) {
       </Panel>
       {r.type === 'group' && <GroupMembers members={r.config.group?.members ?? []} writeMember={r.config.group?.write_member} />}
       <Panel title="Use this repository" titleId="use-repo-title">
-        <CodeBlock label="client configuration" lines={repoClientConfig(r)} />
+        <ClientSetup targets={[repoClientTarget(r)]} />
         <p className="meta">
           {r.type === 'group'
             ? 'Expand the group on the left to browse the content of all its members.'
@@ -132,7 +128,7 @@ function GroupMembers({ members, writeMember }: { members: string[]; writeMember
             const r = byName.get(m);
             return (
               <li key={m} className="member-list__item">
-                {r && <FormatIcon format={r.format} size={24} />}
+                {r && <FormatIcon format={r.format} size={20} label={null} />}
                 <Link to="/browse" search={{ repo: m }} className="link-strong">
                   {m}
                 </Link>

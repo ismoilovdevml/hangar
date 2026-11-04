@@ -6,7 +6,7 @@ import type { BrowseEntry, BrowsePage, Repository } from '../../api/types';
 import { ErrorNote } from '../../components/ErrorNote';
 import { formatBytes } from '../../lib/format';
 import { TYPE_META } from '../../lib/repositories';
-import { FormatIcon } from './formatIcon';
+import { FormatIcon } from '../../components/FormatIcon';
 import { ancestorKeys, flattenTree, isFocusable, move, nodeKey, rowId, splitKey, type FolderState, type Row } from './treeModel';
 
 /** Row height in pixels; rows are fixed-height so the list can be virtualised. */
@@ -356,9 +356,7 @@ function TreeRow({ row, id, top, active, selected, onActivate, onToggle }: TreeR
         <span className="tree-row__chevron" aria-hidden="true" />
       )}
       {row.type === 'repo' ? (
-        <span className="tree-row__format" aria-hidden="true" title={row.repo.format}>
-          <FormatIcon format={row.repo.format} size={24} />
-        </span>
+        <FormatIcon format={row.repo.format} size={18} label={null} className="tree-row__format" />
       ) : (
         <EntryIcon kind={row.entry.kind} />
       )}

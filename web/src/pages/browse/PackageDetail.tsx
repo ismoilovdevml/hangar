@@ -15,6 +15,7 @@ import {
 } from '../../api/catalog';
 import { usePermissions } from '../../api/permissions';
 import type { Asset, ComponentDetail, ComponentInfo, Finding, PublishedComponent } from '../../api/types';
+import { ClientSetup } from '../../components/ClientSetup';
 import { CodeBlock } from '../../components/CodeBlock';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { CopyButton } from '../../components/CopyButton';
@@ -25,15 +26,15 @@ import { IconDownload } from '../../components/opsIcons';
 import { NotAvailable } from '../../components/NotAvailable';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
-import { Segmented } from '../../components/Segmented';
 import { formatBytes, formatCompact, relativeTime } from '../../lib/format';
 import { componentName } from '../../lib/overview';
-import { downloadHref, hasVersion, installOptions, securityPill, type BrowseTab } from '../../lib/packages';
+import { downloadHref, hasVersion, securityPill, type BrowseTab } from '../../lib/packages';
+import { repoClientTarget } from '../../lib/repoSettings';
 import { TYPE_META } from '../../lib/repositories';
 import { useNow } from '../../lib/useNow';
 import { Fact } from './AssetDetail';
 import { dateTime, deleteMessage, shortDigest } from './detailUtil';
-import { FormatIcon } from './formatIcon';
+import { FormatIcon } from '../../components/FormatIcon';
 import { Markdown } from './Markdown';
 import { safeHref } from './urlPolicy';
 
@@ -137,7 +138,7 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
     <div className="pkg-layout">
       <Panel className="pkg-head pkg-layout__main" aria-label={`${label} ${c.version}`}>
         <div className="pkg-head__row">
-          <FormatIcon format={c.format} size={48} />
+          <span className="pkg-head__mark"><FormatIcon format={c.format} size={32} /></span>
           <div className="pkg-head__text">
             <div className="pkg-head__titles">
               <h1 className="pkg-head__title">{label}</h1>
@@ -195,7 +196,13 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
       <div className="pkg-layout__side">
         <VersionCard c={c} newest={newest} cached={cached} totalDownloads={totalDownloads} info={info.data} infoPending={info.isPending && !info.isError} findings={findings.data?.items} now={now} />
         <Panel title="Set me up" titleId="setup-title" className="pkg-setup">
-          <InstallSnippet c={c} repoUrl={repo.data?.url} />
+          {repo.data ? (
+            <ClientSetup targets={[{ ...repoClientTarget(repo.data), publishes: false }]} install={{ namespace: c.namespace, name: c.name, version: c.version }} />
+          ) : repo.isError ? (
+            <CodeBlock label="install command" lines={[{ text: c.install_command }]} />
+          ) : (
+            <p className="meta">Loading…</p>
+          )}
         </Panel>
       </div>
 
@@ -275,20 +282,6 @@ function Tabs({
           {counts[t] !== undefined && <span className="pkg-tabs__count"> {counts[t]}</span>}
         </button>
       ))}
-    </div>
-  );
-}
-
-function InstallSnippet({ c, repoUrl }: { c: ComponentDetail; repoUrl: string | undefined }) {
-  const options = installOptions(c, repoUrl);
-  const [choice, setChoice] = useState(options[0]!.id);
-  const current = options.find((o) => o.id === choice) ?? options[0]!;
-  return (
-    <div className="install">
-      {options.length > 1 && (
-        <Segmented label="Client" options={options.map((o) => ({ value: o.id, label: o.label }))} value={current.id} onChange={setChoice} className="install__clients" />
-      )}
-      <CodeBlock label={`${current.label} install command`} lines={current.lines} />
     </div>
   );
 }
