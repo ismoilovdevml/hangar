@@ -38,6 +38,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/oidc/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Start single sign-on with the OIDC provider
+         * @description Redirects the browser to the provider (authorization code flow with PKCE).
+         *     The state, nonce and code verifier travel in a short-lived, encrypted,
+         *     HttpOnly cookie scoped to `/api/v1/auth/oidc`. On failure the browser is
+         *     sent to `/login?error=sso_unavailable`.
+         */
+        get: operations["startOidcLogin"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/oidc/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Redirect URI registered at the OIDC provider
+         * @description Verifies the state, exchanges the code, verifies the ID token (signature,
+         *     issuer, audience, expiry, nonce), provisions or updates the user, re-syncs
+         *     roles granted by group mapping and starts a session. Success redirects to
+         *     the path given to `/auth/oidc/start`; failure redirects to
+         *     `/login?error=<code>` with code `sso_state`, `sso_failed`, `sso_unavailable`,
+         *     `access_denied`, `group_denied`, `account_conflict`, `account_disabled`,
+         *     `not_provisioned`, `invalid_profile` or `rate_limited`.
+         */
+        get: operations["finishOidcLogin"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/logout": {
         parameters: {
             query?: never;
@@ -1100,7 +1149,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Sign-in providers and their status */
+        /**
+         * Sign-in providers and their status
+         * @description The OIDC and LDAP providers (`system:users:read`). `oidc` is in `error`
+         *     while discovery fails; `ldap` reports the outcome of the most recent
+         *     directory request in `last_sync_at` and `error`.
+         */
         get: operations["listIdentityProviders"];
         put?: never;
         post?: never;
@@ -1305,7 +1359,11 @@ export interface components {
             go_version: string;
         };
         AuthProviders: {
-            /** @description OIDC provider for "Continue with ..."; null when not configured */
+            /**
+             * @description OIDC provider for "Continue with ..."; null when not configured.
+             *     `start_url` is `/api/v1/auth/oidc/start`; append `?redirect=<path>` to
+             *     return to a page after sign-in.
+             */
             oidc: null | {
                 display_name: string;
                 start_url: string;
@@ -2465,6 +2523,30 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            /**
+             * @description Realm `ldap`: the directory account may not sign in (`allowed_groups`,
+             *     or `auto_create` is off and the user never signed in before).
+             */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /**
+             * @description Realm `ldap`: the username already belongs to a local user, a service
+             *     account or another external identity, which is never taken over.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Account locked after repeated failures; `retry_after` says when to retry. */
             423: {
                 headers: {
@@ -2475,6 +2557,62 @@ export interface operations {
                 };
             };
             429: components["responses"]["TooManyRequests"];
+            /** @description Realm `ldap`, the directory cannot be reached. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    startOidcLogin: {
+        parameters: {
+            query?: {
+                /** @description In-app path to open after sign-in (same origin only; anything else becomes `/`) */
+                redirect?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the provider's authorization endpoint */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    finishOidcLogin: {
+        parameters: {
+            query?: {
+                code?: string;
+                state?: string;
+                /** @description Set by the provider when it refused */
+                error?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed in (`Set-Cookie` carries the session), or sent back to the login page */
+            302: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     logout: {
