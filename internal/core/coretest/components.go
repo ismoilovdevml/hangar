@@ -170,6 +170,15 @@ func (s *Components) Publish(ctx context.Context, repo *core.Repository, req cor
 		_ = s.Events.Publish(ctx, core.Event{Type: core.EventComponentPublished, Actor: principal,
 			Repository: repo.Name, Subject: target, Data: data})
 	}
+	if s.Events != nil && compOut == nil && len(out) > 0 {
+		paths := make([]string, len(out))
+		for i, a := range out {
+			paths[i] = a.Path
+		}
+		data, _ := json.Marshal(map[string][]string{"paths": paths})
+		_ = s.Events.Publish(ctx, core.Event{Type: core.EventAssetPublished, Actor: principal,
+			Repository: repo.Name, Subject: paths[0], Data: data})
+	}
 	return compOut, out, nil
 }
 
@@ -313,6 +322,10 @@ func (s *Components) DeleteAsset(ctx context.Context, repo *core.Repository, pat
 	s.mu.Unlock()
 	if s.Audit != nil {
 		_ = s.Audit.Record(ctx, core.AuditEvent{Action: "asset.delete", Target: "asset:" + repo.Name + "/" + core.CleanPath(path)})
+	}
+	if s.Events != nil {
+		_ = s.Events.Publish(ctx, core.Event{Type: core.EventAssetDeleted, Repository: repo.Name,
+			Subject: core.CleanPath(path), Actor: core.PrincipalFrom(ctx).Name})
 	}
 	return nil
 }

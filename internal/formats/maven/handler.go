@@ -38,6 +38,7 @@ const maxPOMCapture = 1 << 20
 type handler struct {
 	deps core.Deps
 	log  *slog.Logger
+	meta *metaCache
 }
 
 func newHandler(deps core.Deps) *handler {
@@ -45,7 +46,14 @@ func newHandler(deps core.Deps) *handler {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &handler{deps: deps, log: log.With("format", Name)}
+	h := &handler{deps: deps, log: log.With("format", Name), meta: newMetaCache()}
+	if err := h.meta.watch(deps.Events); err != nil {
+		// Without invalidation events a cached document could outlive a
+		// deploy on another node: do not cache at all.
+		h.log.Error("metadata cache disabled: cannot subscribe to events", "err", err)
+		h.meta.disable()
+	}
+	return h
 }
 
 // entity is what a path resolves to: a stored asset (content, cached remote
@@ -260,11 +268,25 @@ func (h *handler) open(ctx context.Context, e *entity) (io.ReadSeekCloser, error
 	return bs.Get(ctx, e.asset.BlobDigest)
 }
 
-// hostedMetadata generates maven-metadata.xml from what the repository holds,
+// hostedMetadata returns the generated maven-metadata.xml for mp, from the
+// metadata cache when it holds a current copy.
+func (h *handler) hostedMetadata(ctx context.Context, repo *core.Repository, mp *mavenPath) (*entity, error) {
+	if e, ok := h.meta.get(repo, mp.path); ok {
+		return e, nil
+	}
+	gen := h.meta.generation(repo.Name)
+	e, err := h.generateMetadata(ctx, repo, mp)
+	if err == nil && e.asset == nil {
+		h.meta.put(gen, repo, mp.path, e)
+	}
+	return e, err
+}
+
+// generateMetadata generates maven-metadata.xml from what the repository holds,
 // so it reflects every deploy and delete (including deletes made through the
 // REST API or cleanup) without a regeneration step. Output is deterministic
 // for a given content state, so a document and its checksum files always agree.
-func (h *handler) hostedMetadata(ctx context.Context, repo *core.Repository, mp *mavenPath) (*entity, error) {
+func (h *handler) generateMetadata(ctx context.Context, repo *core.Repository, mp *mavenPath) (*entity, error) {
 	var doc *Metadata
 	switch {
 	case mp.version != "":
@@ -429,6 +451,9 @@ func (h *handler) put(w http.ResponseWriter, r *http.Request) {
 			err = h.putFile(r, repo, mp)
 		}
 	}
+	// Drop generated metadata before answering, so the client's next request
+	// sees its deploy; events carry the change to other nodes.
+	h.meta.invalidate(repo.Name)
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -666,7 +691,9 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	if err := h.deletePath(ctx, repo, mp); err != nil {
+	err = h.deletePath(ctx, repo, mp)
+	h.meta.invalidate(repo.Name)
+	if err != nil {
 		h.fail(w, r, err)
 		return
 	}
