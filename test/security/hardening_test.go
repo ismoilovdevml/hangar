@@ -29,7 +29,8 @@ func TestSecretsAtRest(t *testing.T) {
 	cdnPort := cdn.URL[strings.LastIndex(cdn.URL, ":")+1:]
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		u, p, ok := r.BasicAuth()
-		if !ok || !((u == user && p == pass) || (u == "urluser" && p == urlPass)) {
+		valid := (u == user && p == pass) || (u == "urluser" && p == urlPass)
+		if !ok || !valid {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

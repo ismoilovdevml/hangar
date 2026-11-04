@@ -57,8 +57,9 @@ func Sweep(ctx context.Context, pool *pgxpool.Pool, k *Keyring, opts SweepOption
 				return k.SealString(v)
 			}
 			if err := k.Check(v); err != nil {
+				// Reported, left as it is, and the sweep goes on.
 				rep.Unreadable = append(rep.Unreadable, where+" "+field+": "+err.Error())
-				return v, nil
+				return v, nil //nolint:nilerr // an unreadable value is a finding, not a failure of the sweep
 			}
 			switch {
 			case !k.NeedsRewrap(v):
