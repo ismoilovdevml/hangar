@@ -87,17 +87,22 @@ func netDialer(cfg auth.LDAPConfig) (Dialer, error) {
 		return nil, fmt.Errorf("auth.ldap.url: %w", err)
 	}
 	tc := &tls.Config{ServerName: u.Hostname(), MinVersion: tls.VersionTLS12, InsecureSkipVerify: cfg.InsecureSkipVerify} //nolint:gosec // G402: opt-in for test directories, documented as unsafe
-	if cfg.CAFile != "" {
-		pem, err := os.ReadFile(cfg.CAFile)
-		if err != nil {
-			return nil, fmt.Errorf("auth.ldap.ca_file: %w", err)
-		}
+	if cfg.CAFile != "" || cfg.CAPEM != "" {
 		pool, err := x509.SystemCertPool()
 		if err != nil || pool == nil {
 			pool = x509.NewCertPool()
 		}
-		if !pool.AppendCertsFromPEM(pem) {
-			return nil, fmt.Errorf("auth.ldap.ca_file %s: no PEM certificates found", cfg.CAFile)
+		if cfg.CAFile != "" {
+			pem, err := os.ReadFile(cfg.CAFile)
+			if err != nil {
+				return nil, fmt.Errorf("auth.ldap.ca_file: %w", err)
+			}
+			if !pool.AppendCertsFromPEM(pem) {
+				return nil, fmt.Errorf("auth.ldap.ca_file %s: no PEM certificates found", cfg.CAFile)
+			}
+		}
+		if cfg.CAPEM != "" && !pool.AppendCertsFromPEM([]byte(cfg.CAPEM)) {
+			return nil, errors.New("ldap: the CA bundle has no PEM certificates")
 		}
 		tc.RootCAs = pool
 	}
@@ -151,6 +156,24 @@ func (d *Directory) authenticate(ctx context.Context, username, password string)
 	if err := d.serviceBind(c); err != nil {
 		return nil, err
 	}
+	entry, err := d.findUser(ctx, c, username)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.Bind(entry.DN, password); err != nil {
+		if goldap.IsErrorWithCode(err, goldap.LDAPResultInvalidCredentials) {
+			return nil, errBadCredentials
+		}
+		return nil, fmt.Errorf("bind as user: %w", err)
+	}
+	// The connection is bound as the user now; groups are searched as the
+	// service account, which is what directories grant read access to.
+	return d.identity(c, entry, username, true)
+}
+
+// findUser searches the one entry user_filter matches for username. No
+// match, or more than one, is errBadCredentials.
+func (d *Directory) findUser(ctx context.Context, c Conn, username string) (*goldap.Entry, error) {
 	attrs := []string{"dn", d.cfg.UsernameAttribute, d.cfg.EmailAttribute, d.cfg.NameAttribute}
 	if d.cfg.GroupBaseDN == "" {
 		attrs = append(attrs, d.cfg.GroupAttribute)
@@ -169,18 +192,19 @@ func (d *Directory) authenticate(ctx context.Context, username, password string)
 	}
 	if len(res.Entries) > 1 {
 		d.log.WarnContext(ctx, "auth.ldap: user_filter matches more than one entry; refusing sign-in", "username", username)
+		return nil, errAmbiguous
+	}
+	if res.Entries[0].DN == "" {
 		return nil, errBadCredentials
 	}
-	entry := res.Entries[0]
-	if entry.DN == "" {
-		return nil, errBadCredentials
-	}
-	if err := c.Bind(entry.DN, password); err != nil {
-		if goldap.IsErrorWithCode(err, goldap.LDAPResultInvalidCredentials) {
-			return nil, errBadCredentials
-		}
-		return nil, fmt.Errorf("bind as user: %w", err)
-	}
+	return res.Entries[0], nil
+}
+
+var errAmbiguous = fmt.Errorf("user_filter matches more than one entry: %w", errBadCredentials)
+
+// identity maps entry to an identity with its groups. rebind binds as the
+// service account again before a group search.
+func (d *Directory) identity(c Conn, entry *goldap.Entry, username string, rebind bool) (*auth.ExternalIdentity, error) {
 	id := &auth.ExternalIdentity{
 		Source:      auth.SourceLDAP,
 		Username:    entry.GetAttributeValue(d.cfg.UsernameAttribute),
@@ -194,10 +218,10 @@ func (d *Directory) authenticate(ctx context.Context, username, password string)
 		id.Groups = groupNames(entry.GetAttributeValues(d.cfg.GroupAttribute))
 		return id, nil
 	}
-	// The connection is bound as the user now; search groups as the
-	// service account, which is what directories grant read access to.
-	if err := d.serviceBind(c); err != nil {
-		return nil, err
+	if rebind {
+		if err := d.serviceBind(c); err != nil {
+			return nil, err
+		}
 	}
 	gf := strings.NewReplacer("{dn}", goldap.EscapeFilter(entry.DN), "{username}", goldap.EscapeFilter(id.Username)).Replace(d.cfg.GroupFilter)
 	gres, err := c.Search(goldap.NewSearchRequest(d.cfg.GroupBaseDN, goldap.ScopeWholeSubtree, goldap.NeverDerefAliases,
@@ -215,6 +239,64 @@ func (d *Directory) authenticate(ctx context.Context, username, password string)
 	}
 	id.Groups = compact(id.Groups)
 	return id, nil
+}
+
+// Probe stages, in the order Probe runs them.
+const (
+	StageConnect = "connect"
+	StageBind    = "bind"
+	StageLookup  = "lookup"
+)
+
+// ProbeResult is what Probe found.
+type ProbeResult struct {
+	// Stage is the last stage reached: the failing one when Probe returns an
+	// error, else StageBind (no username) or StageLookup.
+	Stage string
+	// Anonymous is true when no bind DN is configured.
+	Anonymous bool
+	// DN and User describe the entry found for the username (nil when no
+	// entry matched or no username was given).
+	DN   string
+	User *auth.ExternalIdentity
+}
+
+// Probe checks the directory settings without signing anybody in: it
+// connects (with StartTLS when configured), binds as the service account
+// and, when username is not empty, looks the user and their groups up. The
+// user's password is never needed or sent.
+func (d *Directory) Probe(ctx context.Context, username string) (ProbeResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*d.cfg.Timeout)
+	defer cancel()
+	res := ProbeResult{Stage: StageConnect, Anonymous: d.cfg.BindDN == ""}
+	c, err := d.dial(ctx)
+	if err != nil {
+		return res, fmt.Errorf("connect to %s: %w", d.cfg.URL, err)
+	}
+	defer func() { _ = c.Close() }()
+	res.Stage = StageBind
+	if err := d.serviceBind(c); err != nil {
+		return res, err
+	}
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return res, nil
+	}
+	res.Stage = StageLookup
+	entry, err := d.findUser(ctx, c, username)
+	switch {
+	case errors.Is(err, errAmbiguous):
+		return res, fmt.Errorf("user_filter matches more than one entry for %q", username)
+	case errors.Is(err, errBadCredentials):
+		return res, nil
+	case err != nil:
+		return res, err
+	}
+	res.DN = entry.DN
+	if res.User, err = d.identity(c, entry, username, false); err != nil {
+		return res, err
+	}
+	return res, nil
 }
 
 func (d *Directory) serviceBind(c Conn) error {

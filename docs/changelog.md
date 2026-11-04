@@ -20,6 +20,26 @@
 - **Log redaction** also covers headers and query values logged as maps
   (`Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key`, ...).
 
+- **Settings → Authentication**: administrators configure OIDC and LDAP
+  sign-in in the web UI or with `GET/PUT /identity-providers/oidc` and
+  `/identity-providers/ldap`, without a restart: changes apply on every node
+  (event bus plus a revision poll). Group → role mapping table with role
+  pickers, the redirect URI to copy, and **Test** buttons (OIDC discovery,
+  issuer, keys and a client-credentials check; LDAP connect, service bind
+  and user lookup). Providers enabled in the configuration file win and are
+  shown read-only. The login page follows the saved settings at once.
+- **Named outbound proxies** (Settings → Proxies, `/proxies`): several
+  proxies with credentials, no-proxy hosts, redirect target hosts and a CA
+  bundle; one is the platform default. Proxy repositories pick *Platform
+  default*, a named proxy (`config.proxy.http.proxy_name`) or *No proxy*.
+  A proxy in use cannot be deleted (`409 in_use`). `http.proxy` from the
+  configuration file is listed read-only as `config` and stays the default.
+  **Test** fetches a URL through the proxy and reports status and latency.
+- Secrets of these settings (OIDC client secret, LDAP bind password, proxy
+  passwords) are sealed with `HANGAR_SECRET_KEY`, write-only in the API, and
+  re-wrapped by `hangar admin rotate-secrets`. Changes are audited without
+  secret values. Migration `00090` adds `settings`, `outbound_proxies` and
+  `settings_revision`.
 - **Overview traffic survives restarts and covers the cluster**: requests,
   downloads, response time, proxy cache hits and misses and proxy remote
   latency are added every 15 seconds by each node to per-minute rows in

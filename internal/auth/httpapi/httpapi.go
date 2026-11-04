@@ -42,8 +42,11 @@ type Options struct {
 	BaseURL string
 	// OIDC, when set, serves single sign-on at /auth/oidc/start and
 	// /auth/oidc/callback.
-	OIDC   *oidc.Provider
-	Logger *slog.Logger
+	OIDC *oidc.Provider
+	// OIDCSource, when set, replaces OIDC: it returns the provider in effect
+	// (nil when single sign-on is off) for settings that change at run time.
+	OIDCSource func() *oidc.Provider
+	Logger     *slog.Logger
 }
 
 type handler struct {
@@ -51,6 +54,14 @@ type handler struct {
 	cfg  auth.Config
 	opts Options
 	log  *slog.Logger
+}
+
+// oidc returns the single sign-on provider in effect, or nil.
+func (h *handler) oidc() *oidc.Provider {
+	if h.opts.OIDCSource != nil {
+		return h.opts.OIDCSource()
+	}
+	return h.opts.OIDC
 }
 
 func newHandler(svc *auth.Service, opts Options) *handler {

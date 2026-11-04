@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from '@tanstack/react-router';
+import { useSession } from '../api/hooks';
+import { allows } from '../lib/can';
 import { NAV } from '../nav';
 import { CommandPaletteContext } from './commandPaletteContext';
 import { IconArrowRight, IconLogout, IconPlus, IconSearch } from './icons';
@@ -46,6 +48,7 @@ export function CommandPaletteProvider({ children, onSignOut }: ProviderProps) {
 
 function CommandPaletteDialog({ onClose, onSignOut }: { onClose: () => void; onSignOut?: () => void }) {
   const navigate = useNavigate();
+  const privileges = useSession().data?.privileges;
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -59,7 +62,9 @@ function CommandPaletteDialog({ onClose, onSignOut }: { onClose: () => void; onS
   }, []);
 
   const commands = useMemo<Command[]>(() => {
-    const go: Command[] = NAV.flatMap((section) =>
+    const go: Command[] = NAV.filter(
+      (section) => !section.requires || allows(privileges, 'system', section.requires.area, section.requires.action),
+    ).flatMap((section) =>
       section.items.map((item) => ({
         id: `nav:${item.to}`,
         group: 'Go to' as const,
@@ -83,7 +88,7 @@ function CommandPaletteDialog({ onClose, onSignOut }: { onClose: () => void; onS
       actions.push({ id: 'action:sign-out', group: 'Actions', label: 'Sign out', keywords: 'logout log out', icon: <IconLogout size={16} />, run: onSignOut });
     }
     return [...go, ...actions];
-  }, [navigate, onSignOut]);
+  }, [navigate, onSignOut, privileges]);
 
   const results = useMemo<Command[]>(() => {
     const q = query.trim().toLowerCase();

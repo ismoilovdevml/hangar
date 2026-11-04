@@ -93,11 +93,12 @@ func (s *Service) RecordLoginFailure(ctx context.Context, username, method, reas
 }
 
 func (s *Service) mappingFor(source string) (RoleMapping, error) {
+	ext := s.ext.Load()
 	switch {
-	case source == SourceOIDC && s.cfg.OIDC.Enabled:
-		return s.cfg.OIDC.Mapping(), nil
-	case source == SourceLDAP && s.cfg.LDAP.Enabled:
-		return s.cfg.LDAP.Mapping(), nil
+	case source == SourceOIDC && ext.oidc.Enabled:
+		return ext.oidc.Mapping(), nil
+	case source == SourceLDAP && ext.ldap.Enabled:
+		return ext.ldap.Mapping(), nil
 	}
 	return RoleMapping{}, fmt.Errorf("sign-in with %q is not enabled: %w", source, core.ErrInvalid)
 }
@@ -388,7 +389,8 @@ func (s *Service) LoginLDAP(ctx context.Context, username, password string) (*co
 
 // verifyLDAP authenticates against the directory and admits the identity.
 func (s *Service) verifyLDAP(ctx context.Context, username, password, method string) (*User, error) {
-	if s.dir == nil || !s.cfg.LDAP.Enabled {
+	dir := s.Directory()
+	if dir == nil {
 		return nil, fmt.Errorf("LDAP sign-in is not enabled: %w", core.ErrInvalid)
 	}
 	fail := func(reason string, details map[string]any) {
@@ -426,7 +428,7 @@ func (s *Service) verifyLDAP(ctx context.Context, username, password, method str
 			return nil, &LockedError{Until: *known.LockedUntil}
 		}
 	}
-	id, err := s.dir.Authenticate(ctx, username, password)
+	id, err := dir.Authenticate(ctx, username, password)
 	if err != nil {
 		if !errors.Is(err, core.ErrUnauthenticated) {
 			s.log.WarnContext(ctx, "auth: LDAP directory error", "error", err)
@@ -470,7 +472,7 @@ func (s *Service) verifyLDAP(ctx context.Context, username, password, method str
 // useLDAP reports whether Basic credentials for username go to the
 // directory: LDAP is on and the name is not a local or other account.
 func (s *Service) useLDAP(ctx context.Context, username string) (bool, error) {
-	if s.dir == nil || !s.cfg.LDAP.Enabled {
+	if s.Directory() == nil {
 		return false, nil
 	}
 	var source string
@@ -484,10 +486,19 @@ func (s *Service) useLDAP(ctx context.Context, username string) (bool, error) {
 	return source == SourceLDAP, nil
 }
 
+// external is a set of sign-in providers in effect.
+type external struct {
+	oidc OIDCConfig
+	ldap LDAPConfig
+	dir  Directory // nil when LDAP is off
+}
+
 // prepareExternal checks that every role named by an enabled provider's
 // mapping exists and registers the providers as identity_providers rows, so
-// roles can also map their groups (RoleInput.GroupMappings).
-func (s *Service) prepareExternal(ctx context.Context) error {
+// roles can also map their groups (RoleInput.GroupMappings). A missing role
+// is an error when strict (start-up configuration); otherwise it is logged
+// and sign-ins skip it.
+func (s *Service) prepareExternal(ctx context.Context, ext *external, strict bool) error {
 	type provider struct {
 		name    string
 		enabled bool
@@ -495,25 +506,18 @@ func (s *Service) prepareExternal(ctx context.Context) error {
 	}
 	var errs []error
 	for _, p := range []provider{
-		{SourceOIDC, s.cfg.OIDC.Enabled, s.cfg.OIDC.Mapping()},
-		{SourceLDAP, s.cfg.LDAP.Enabled, s.cfg.LDAP.Mapping()},
+		{SourceOIDC, ext.oidc.Enabled, ext.oidc.Mapping()},
+		{SourceLDAP, ext.ldap.Enabled, ext.ldap.Mapping()},
 	} {
 		if !p.enabled {
 			continue
 		}
-		names := p.mapping.RoleNames()
-		rows, err := s.pool.Query(ctx, `SELECT name FROM roles WHERE name = ANY($1)`, names)
+		missing, err := s.MissingRoles(ctx, p.mapping.RoleNames())
 		if err != nil {
-			return dbErr(err, "load roles")
+			return err
 		}
-		found, err := pgx.CollectRows(rows, pgx.RowTo[string])
-		if err != nil {
-			return dbErr(err, "load roles")
-		}
-		for _, n := range names {
-			if !slices.Contains(found, n) {
-				errs = append(errs, fmt.Errorf("auth.%s: role %q does not exist (create it first or fix group_roles/default_roles)", p.name, n))
-			}
+		for _, n := range missing {
+			errs = append(errs, fmt.Errorf("auth.%s: role %q does not exist (create it first or fix group_roles/default_roles)", p.name, n))
 		}
 		if _, err := s.pool.Exec(ctx, `
 			INSERT INTO identity_providers (name, kind) VALUES ($1, $1)
@@ -522,11 +526,76 @@ func (s *Service) prepareExternal(ctx context.Context) error {
 			return dbErr(err, "register identity provider")
 		}
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("%w: %w", errors.Join(errs...), core.ErrInvalid)
+	if len(errs) == 0 {
+		return nil
 	}
+	if !strict {
+		s.log.WarnContext(ctx, "auth: sign-in role mapping names roles that do not exist; they are skipped", "error", errors.Join(errs...))
+		return nil
+	}
+	return fmt.Errorf("%w: %w", errors.Join(errs...), core.ErrInvalid)
+}
+
+// MissingRoles returns the names among names that are not roles.
+func (s *Service) MissingRoles(ctx context.Context, names []string) ([]string, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+	rows, err := s.pool.Query(ctx, `SELECT name FROM roles WHERE name = ANY($1)`, names)
+	if err != nil {
+		return nil, dbErr(err, "load roles")
+	}
+	found, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, dbErr(err, "load roles")
+	}
+	var missing []string
+	for _, n := range names {
+		if !slices.Contains(found, n) && !slices.Contains(missing, n) {
+			missing = append(missing, n)
+		}
+	}
+	return missing, nil
+}
+
+// SetExternal replaces the sign-in providers in effect, for settings changed
+// while the server runs. Defaults are applied to both configurations; dir
+// is required when ldap is enabled and ignored otherwise. Roles the mappings
+// name that do not exist are logged and skipped at sign-in. Cached Basic
+// credentials are dropped, so a directory that was turned off stops
+// admitting users at once.
+func (s *Service) SetExternal(ctx context.Context, oidcCfg OIDCConfig, ldapCfg LDAPConfig, dir Directory) error {
+	oidcCfg, ldapCfg = oidcCfg.WithDefaults(), ldapCfg.WithDefaults()
+	if errs := append(oidcCfg.validate(), ldapCfg.validate()...); len(errs) > 0 {
+		return fmt.Errorf("auth: %w: %w", errors.Join(errs...), core.ErrInvalid)
+	}
+	if !ldapCfg.Enabled {
+		dir = nil
+	} else if dir == nil {
+		return fmt.Errorf("auth: LDAP is enabled but no directory is configured: %w", core.ErrInvalid)
+	}
+	ext := &external{oidc: oidcCfg, ldap: ldapCfg, dir: dir}
+	s.extMu.Lock()
+	defer s.extMu.Unlock()
+	if err := s.prepareExternal(ctx, ext, false); err != nil {
+		return err
+	}
+	s.ext.Store(ext)
+	s.credentialsChanged()
 	return nil
 }
 
-// Directory returns the LDAP directory (nil when LDAP is off).
-func (s *Service) Directory() Directory { return s.dir }
+// External returns the OIDC and LDAP settings in effect.
+func (s *Service) External() (OIDCConfig, LDAPConfig) {
+	ext := s.ext.Load()
+	return ext.oidc, ext.ldap
+}
+
+// Directory returns the LDAP directory in effect (nil when LDAP is off).
+func (s *Service) Directory() Directory {
+	ext := s.ext.Load()
+	if !ext.ldap.Enabled {
+		return nil
+	}
+	return ext.dir
+}

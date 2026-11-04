@@ -9,6 +9,74 @@ Examples use `https://hangar.example.com` for `server.base_url`,
 `https://sso.example.com` for the identity provider and `dc=example,dc=com`
 for the directory. Replace them with your own.
 
+## Configure from the web UI or the API
+
+Administrators (`system:settings:admin`, e.g. the built-in `Admin` role)
+configure both providers in **Settings → Authentication** without editing
+files or restarting:
+
+- **OIDC card**: issuer URL, client ID and secret, client authentication,
+  button label, scopes, claims, the group → role mapping table, default
+  roles, allowed groups, auto-create and an optional CA bundle. The card
+  shows the redirect URI to register at the provider
+  (`<server.base_url>/api/v1/auth/oidc/callback`) with a copy button.
+- **LDAP card**: URL, StartTLS, CA bundle, bind DN and password, user base
+  DN and filter, attributes, group options and the same mapping fields.
+- **Test** checks the values in the form before you save them. OIDC: the
+  discovery document, that its `issuer` matches exactly, the signing keys,
+  and a `client_credentials` request that verifies the client secret. Many
+  providers do not allow that grant for a sign-in client; the test then
+  reports *Discovery ok, credentials are verified at first sign-in*. LDAP:
+  connect (with StartTLS), service bind and, with a username, a lookup of
+  that user, their groups and the roles the mapping grants. No user
+  password is needed.
+- **Save** validates every field (unknown roles, bad URLs, filters without
+  `{username}`, …), stores the settings in the database and applies them on
+  every node within seconds: the node you saved on at once, the others
+  through the event bus, with a 30-second poll as a safety net. The login
+  page shows or hides the SSO button and the directory toggle accordingly.
+
+Secrets (client secret, bind password) are sealed with
+`HANGAR_SECRET_KEY` and are write-only: the UI and the API only say whether
+one is stored. Leave the field empty to keep it; **Remove** clears it.
+Storing a secret needs `HANGAR_SECRET_KEY`; `hangar admin rotate-secrets`
+re-wraps these values too. Every change is audited
+(`settings.oidc.update`, `settings.ldap.update`) with the names of the
+changed fields, never the secret values; tests are audited as
+`settings.oidc.test` and `settings.ldap.test`.
+
+**The configuration file wins.** A provider enabled in `hangar.yaml` or the
+`HANGAR_AUTH_OIDC_*` / `HANGAR_AUTH_LDAP_*` environment is shown read-only,
+labelled *set in configuration file*, and cannot be saved from the UI;
+change it in the file and restart. The other provider can still be managed
+in the UI. To move a provider from the file to the UI, set
+`enabled: false` there (or remove it), restart, and enter it in the UI.
+
+The REST API behind the page (`api/openapi.yaml`):
+
+| Method and path | Purpose |
+|---|---|
+| `GET /api/v1/identity-providers` | Status of both providers |
+| `GET`, `PUT /api/v1/identity-providers/oidc` | Read or replace the OIDC settings |
+| `POST /api/v1/identity-providers/oidc:test` | Test (body `{"settings": {...}}` optional) |
+| `GET`, `PUT /api/v1/identity-providers/ldap` | Read or replace the LDAP settings |
+| `POST /api/v1/identity-providers/ldap:test` | Test (`{"settings": {...}, "username": "jdoe"}`) |
+
+```sh
+curl -u admin -X PUT https://hangar.example.com/api/v1/identity-providers/oidc \
+  -H 'Content-Type: application/json' -d '{
+    "enabled": true, "issuer_url": "https://sso.example.com/realms/acme",
+    "client_id": "hangar", "client_secret": "…", "client_auth": "basic",
+    "display_name": "Company SSO", "scopes": ["openid", "profile", "email"],
+    "username_claim": "preferred_username", "email_claim": "email",
+    "name_claim": "name", "groups_claim": "groups", "ca_pem": "",
+    "group_roles": [{"group": "/devops", "roles": ["Publisher"]}],
+    "default_roles": ["Reader"], "allowed_groups": [], "auto_create": true}'
+```
+
+A `400` answer lists problems by field in `details.fields`
+(`"group_roles[0].roles": "role \"Nope\" does not exist"`).
+
 ## How external users work
 
 - **Created at first sign-in** (`auto_create: true`, the default) with source
@@ -28,7 +96,8 @@ for the directory. Replace them with your own.
   sign-in. Roles an administrator binds by hand are kept; binding a mapped
   role by hand turns it into a manual one. Roles in *Access & audit → Roles*
   can also map groups with provider `oidc` or `ldap`. Every role named in
-  the configuration must exist, or Hangar refuses to start.
+  the configuration file must exist, or Hangar refuses to start; the UI
+  refuses to save a mapping with unknown roles.
 - **Admission.** `allowed_groups` (optional) admits only members of those
   groups. With `auto_create: false` only users who signed in before are
   admitted.

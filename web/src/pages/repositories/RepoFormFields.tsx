@@ -14,11 +14,11 @@ import {
   TYPE_META,
   WRITE_POLICY_LABEL,
   type AuthKind,
-  type ProxyMode,
   type RepoForm,
   type RepoFormErrors,
   type RepoFormField,
 } from '../../lib/repositories';
+import { ProxyChoice } from '../settings/ProxyChoice';
 import { errorId, fieldId, invalidProps } from './repoFormHelpers';
 import './repoForm.css';
 
@@ -350,19 +350,26 @@ function ProxySettings({
           )}
         </div>
 
-        <fieldset className="radio-row">
-          <legend className="field__label">Outbound proxy</legend>
-          {([
-            ['inherit', 'Server setting'],
-            ['none', 'Direct connection'],
-            ['url', 'Through this proxy'],
-          ] as [ProxyMode, string][]).map(([v, label]) => (
-            <label key={v} className="checkbox">
-              <input type="radio" name="proxyMode" value={v} checked={form.proxyMode === v} onChange={() => set('proxyMode', v)} />
-              {label}
-            </label>
-          ))}
-        </fieldset>
+        <div className="field">
+          <label htmlFor={fieldId('proxyName')} className="field__label">Outbound proxy</label>
+          <ProxyChoice
+            id={fieldId('proxyName')}
+            mode={form.proxyMode}
+            proxyName={form.proxyName}
+            onChange={(mode, name) => {
+              set('proxyMode', mode);
+              set('proxyName', name);
+            }}
+            invalid={!!errors.proxyName}
+            describedBy={errors.proxyName ? errorId('proxyName') : 'repo-proxy-hint'}
+          />
+          {!errors.proxyName && (
+            <span id="repo-proxy-hint" className="field__hint">
+              Proxies are managed under Settings → Proxies
+            </span>
+          )}
+          <FieldError field="proxyName" errors={errors} />
+        </div>
         {form.proxyMode === 'url' && (
           <div className="field">
             <label htmlFor={fieldId('proxyUrl')} className="field__label">Proxy URL</label>

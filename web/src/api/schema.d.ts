@@ -1307,6 +1307,194 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/identity-providers/oidc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * OIDC sign-in settings
+         * @description `system:settings:read`. When `auth.oidc` is enabled in the configuration
+         *     file, the file's settings are returned with `source: file` and every
+         *     field in `file_fields` (read-only). The client secret is never returned.
+         */
+        get: operations["getOidcSettings"];
+        /**
+         * Save the OIDC sign-in settings
+         * @description `system:settings:admin`. Replaces every field and applies the result on
+         *     every node without a restart. An empty `client_secret` keeps the stored
+         *     secret; `clear_client_secret: true` removes it. Field problems answer 400
+         *     with `details.fields` (e.g. `issuer_url`, `group_roles[1].roles`). A
+         *     provider set in the configuration file answers 400. Audited as
+         *     `settings.oidc.update` with the names of the changed fields.
+         */
+        put: operations["putOidcSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/identity-providers/oidc:test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test OIDC settings
+         * @description `system:settings:admin`. Fetches the discovery document, checks the
+         *     issuer and the signing keys, and tries a `client_credentials` grant to
+         *     check the client secret. Providers that do not allow that grant report
+         *     "Discovery ok, credentials are verified at first sign-in". Without
+         *     `settings` the settings in effect are tested; with them, the form values
+         *     (an empty secret uses the stored one).
+         */
+        post: operations["testOidcSettings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/identity-providers/ldap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * LDAP sign-in settings
+         * @description Like `GET /identity-providers/oidc`; the bind password is never returned.
+         */
+        get: operations["getLdapSettings"];
+        /**
+         * Save the LDAP sign-in settings
+         * @description Like `PUT /identity-providers/oidc`. An empty `bind_password` keeps the
+         *     stored one; `clear_bind_password: true` removes it.
+         */
+        put: operations["putLdapSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/identity-providers/ldap:test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test LDAP settings
+         * @description `system:settings:admin`. Connects (with StartTLS when set), binds as the
+         *     service account and, with `username`, looks that user and their groups
+         *     up and shows the roles the mapping grants. No user password is needed.
+         */
+        post: operations["testLdapSettings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/proxies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Outbound proxies
+         * @description Every signed-in user may list proxies (the repository proxy picker);
+         *     without `system:settings:read` items carry only `name`, `source` and
+         *     `default`, and `limited` is true. The proxy `http.proxy` defines in the
+         *     configuration file is listed as `config` with `source: file`; it is then
+         *     the platform default.
+         */
+        get: operations["listProxies"];
+        put?: never;
+        /**
+         * Create an outbound proxy
+         * @description `system:settings:admin`. `default: true` makes it the platform default
+         *     and clears the flag elsewhere. Audited as `proxy.create` (without the
+         *     password).
+         */
+        post: operations["createProxy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/proxies/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["ProxyName"];
+            };
+            cookie?: never;
+        };
+        /** One outbound proxy */
+        get: operations["getProxy"];
+        /**
+         * Change an outbound proxy
+         * @description `system:settings:admin`. The name cannot change. An empty `password`
+         *     keeps the stored one; `clear_password: true` removes it. Proxies set in
+         *     the configuration file answer 400.
+         */
+        put: operations["updateProxy"];
+        post?: never;
+        /**
+         * Delete an outbound proxy
+         * @description `system:settings:admin`. Refused with 409 `in_use` while proxy
+         *     repositories select it by name (`details.repositories`, `details.total`).
+         */
+        delete: operations["deleteProxy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/proxies/{name}:test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["ProxyName"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fetch a URL through a proxy
+         * @description `system:settings:admin`. GETs `url` (default
+         *     `https://api.nuget.org/v3/index.json`) through the proxy and reports the
+         *     HTTP status and latency. With `settings`, unsaved form values are tested
+         *     (the proxy need not exist yet; an empty password uses the stored one).
+         */
+        post: operations["testProxy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tokens": {
         parameters: {
             query?: never;
@@ -1816,8 +2004,10 @@ export interface components {
         };
         /** @description Outbound HTTP for one remote; omitted fields inherit the server-wide `http` config. */
         UpstreamHTTP: {
-            /** @description `inherit` (default), `none`, or an http://, https:// or socks5:// proxy URL (password write-only) */
+            /** @description `inherit` (default: the platform default proxy), `none` (direct), or an http://, https:// or socks5:// proxy URL (password write-only) */
             proxy?: string;
+            /** @description Name of an outbound proxy (`GET /proxies`) to use instead; `proxy` must then be empty or `inherit`. */
+            proxy_name?: string;
             /** @description PEM certificates trusted for this remote in addition to the system roots */
             ca_bundle?: string;
             /** @description Disable TLS verification for this remote (audited) */
@@ -2534,6 +2724,177 @@ export interface components {
             last_sync_at?: string | null;
             error?: string;
         };
+        SettingsMeta: {
+            /**
+             * @description `file`: hangar.yaml or HANGAR_* (read-only); `database`: saved here; `default`: never saved
+             * @enum {string}
+             */
+            source: "file" | "database" | "default";
+            /** @description Fields the configuration file sets; shown read-only */
+            file_fields: string[];
+            /** Format: date-time */
+            updated_at: string | null;
+            updated_by?: string;
+        };
+        GroupRole: {
+            /** @description Group name (case-insensitive, a leading "/" optional); for LDAP also a group DN */
+            group: string;
+            roles: string[];
+        };
+        RoleMappingSettings: {
+            group_roles: components["schemas"]["GroupRole"][];
+            /** @description Granted to every user of the provider */
+            default_roles: string[];
+            /** @description When not empty, only members of these groups may sign in */
+            allowed_groups: string[];
+            /** @description Create users on their first sign-in */
+            auto_create: boolean;
+        };
+        OIDCSettings: components["schemas"]["RoleMappingSettings"] & {
+            enabled: boolean;
+            /** @description Issuer identifier; https (http for localhost only) */
+            issuer_url: string;
+            client_id: string;
+            /** @enum {string} */
+            client_auth: "basic" | "post";
+            /** @description Label of the sign-in button */
+            display_name: string;
+            /** @description Must include openid */
+            scopes: string[];
+            username_claim: string;
+            email_claim: string;
+            name_claim: string;
+            /** @description A dotted path reaches nested claims ("realm_access.roles") */
+            groups_claim: string;
+            /** @description PEM certificates trusted for the provider */
+            ca_pem: string;
+        };
+        OIDCSettingsInput: components["schemas"]["OIDCSettings"] & {
+            /** @description New secret; empty keeps the stored one */
+            client_secret?: string;
+            clear_client_secret?: boolean;
+        };
+        OIDCProviderSettings: components["schemas"]["OIDCSettings"] & components["schemas"]["SettingsMeta"] & {
+            client_secret_configured: boolean;
+            /** @description auth.oidc.ca_file of a provider set in the file */
+            ca_file?: string;
+            /** @description Callback URL to register at the provider (`<base_url>/api/v1/auth/oidc/callback`) */
+            redirect_uri: string;
+        };
+        LDAPSettings: components["schemas"]["RoleMappingSettings"] & {
+            enabled: boolean;
+            /** @description ldap://host[:port] or ldaps://host[:port] */
+            url: string;
+            start_tls: boolean;
+            ca_pem: string;
+            /** @description Service account; empty for anonymous search */
+            bind_dn: string;
+            user_base_dn: string;
+            /** @description Must contain {username} */
+            user_filter: string;
+            username_attribute: string;
+            email_attribute: string;
+            name_attribute: string;
+            /** @description Read from the user entry unless group_base_dn is set */
+            group_attribute: string;
+            group_base_dn: string;
+            /** @description {dn} is the user's DN, {username} the login name */
+            group_filter: string;
+            group_name_attribute: string;
+            /** @description Active Directory nested groups; needs group_base_dn */
+            nested_groups: boolean;
+        };
+        LDAPSettingsInput: components["schemas"]["LDAPSettings"] & {
+            /** @description New password; empty keeps the stored one */
+            bind_password?: string;
+            clear_bind_password?: boolean;
+        };
+        LDAPProviderSettings: components["schemas"]["LDAPSettings"] & components["schemas"]["SettingsMeta"] & {
+            bind_password_configured: boolean;
+            ca_file?: string;
+        };
+        SettingsTestStep: {
+            /** @description e.g. discovery, issuer, keys, client_credentials, connect, bind, lookup, request */
+            name: string;
+            /** @enum {string} */
+            status: "ok" | "failed" | "skipped";
+            message: string;
+            latency_ms: number;
+        };
+        SettingsTestResult: {
+            ok: boolean;
+            message: string;
+            steps: components["schemas"]["SettingsTestStep"][];
+            /** @description HTTP status of the proxy test request */
+            status_code?: number;
+            latency_ms: number;
+            /** @description The entry an LDAP test found */
+            user?: {
+                dn: string;
+                username: string;
+                email: string;
+                display_name: string;
+                groups: string[];
+                /** @description Roles the provider's mapping grants */
+                roles: string[];
+            };
+        };
+        OutboundProxySettings: {
+            /**
+             * @description How Hangar talks to the proxy
+             * @enum {string}
+             */
+            scheme: "http" | "https";
+            host: string;
+            port: number;
+            username: string;
+            /** @description Hosts, domain suffixes (.corp.example), IPs and CIDRs reached directly */
+            no_proxy: string[];
+            /**
+             * @description Hosts upstream redirects may lead to and still use this proxy (a
+             *     registry's CDN). When not empty, only the repository's remote host and
+             *     these hosts go through the proxy. Empty: every host does.
+             */
+            redirect_hosts: string[];
+            /** @description PEM certificates trusted for requests through this proxy */
+            ca_pem: string;
+            /** @description The platform default; at most one proxy */
+            default: boolean;
+        };
+        OutboundProxyInput: components["schemas"]["OutboundProxySettings"] & {
+            /** @description Required on create; cannot change */
+            name?: string;
+            /** @description New password; empty keeps the stored one */
+            password?: string;
+            clear_password?: boolean;
+        };
+        OutboundProxy: components["schemas"]["OutboundProxySettings"] & {
+            name: string;
+            password_configured: boolean;
+            /** @enum {string} */
+            source: "file" | "database";
+            file_fields: string[];
+            /** @description Proxy repositories that select this proxy by name */
+            repositories: number;
+            /** @description Proxy repositories that use the platform default (default proxy only) */
+            inheriting: number;
+            /** Format: date-time */
+            created_at: string | null;
+            /** Format: date-time */
+            updated_at: string | null;
+            updated_by?: string;
+        };
+        OutboundProxyList: {
+            items: components["schemas"]["OutboundProxy"][];
+            /** @description Name of the platform default proxy; empty when none */
+            default: string;
+            /** @description HTTPS_PROXY of the server (password masked), used when there is no default */
+            environment_proxy?: string;
+            /** @description http.ca_file */
+            ca_file?: string;
+            /** @description Items carry names only (caller cannot read settings) */
+            limited: boolean;
+        };
         TokenInput: {
             name: string;
             /** @description Service account name; default the caller */
@@ -2839,6 +3200,7 @@ export interface components {
         /** @description Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded) */
         TaskRef: string;
         RunId: string;
+        ProxyName: string;
     };
     requestBodies: never;
     headers: never;
@@ -5218,6 +5580,326 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    getOidcSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OIDCProviderSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putOidcSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OIDCSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description Saved and applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OIDCProviderSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    testOidcSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    settings?: components["schemas"]["OIDCSettingsInput"];
+                };
+            };
+        };
+        responses: {
+            /** @description Outcome (also when the test failed) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsTestResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getLdapSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LDAPProviderSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putLdapSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LDAPSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description Saved and applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LDAPProviderSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    testLdapSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    settings?: components["schemas"]["LDAPSettingsInput"];
+                    username?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Outcome (also when the test failed) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsTestResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listProxies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Proxies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboundProxyList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createProxy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutboundProxyInput"];
+            };
+        };
+        responses: {
+            /** @description Created and applied */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboundProxy"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getProxy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["ProxyName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Proxy */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboundProxy"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateProxy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["ProxyName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutboundProxyInput"];
+            };
+        };
+        responses: {
+            /** @description Saved and applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboundProxy"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteProxy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["ProxyName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    testProxy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["ProxyName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** Format: uri */
+                    url?: string;
+                    settings?: components["schemas"]["OutboundProxyInput"];
+                };
+            };
+        };
+        responses: {
+            /** @description Outcome (also when the request failed) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsTestResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listTokens: {

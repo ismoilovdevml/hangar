@@ -289,3 +289,115 @@ func TestDialGuard(t *testing.T) {
 		t.Errorf("per-remote proxy %s not registered: %v", u.Host, f.proxyAddrs)
 	}
 }
+
+// forwardProxy records the absolute-form requests it receives and answers them.
+func forwardProxy(t *testing.T, name string, hits *[]string, mu *sync.Mutex) *httptest.Server {
+	t.Helper()
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		*hits = append(*hits, name+" "+r.URL.String())
+		mu.Unlock()
+		_, _ = io.WriteString(w, name)
+	}))
+	t.Cleanup(s.Close)
+	return s
+}
+
+func TestNamedProxiesAndLiveSwitch(t *testing.T) {
+	var (
+		mu   sync.Mutex
+		hits []string
+	)
+	corp := forwardProxy(t, "corp", &hits, &mu)
+	dmz := forwardProxy(t, "dmz", &hits, &mu)
+	f, err := New(Options{environ: env(nil)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inherit, err := f.ForUpstream("http://repo.example/", core.UpstreamHTTP{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.ForUpstream("http://repo.example/", core.UpstreamHTTP{ProxyName: "dmz"}, nil); !errors.Is(err, core.ErrInvalid) {
+		t.Fatalf("unknown proxy name = %v", err)
+	}
+	if err := f.SetOutbound(Outbound{Default: "corp", Proxies: []Proxy{
+		{Name: "corp", URL: corp.URL, NoProxy: []string{"internal.example"}},
+		{Name: "dmz", URL: dmz.URL, RedirectHosts: []string{".cdn.example"}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	named, err := f.ForUpstream("http://repo.example/", core.UpstreamHTTP{ProxyName: "dmz"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	get := func(c *http.Client, u string) string {
+		t.Helper()
+		resp, err := c.Get(u)
+		if err != nil {
+			return "error"
+		}
+		defer func() { _ = resp.Body.Close() }()
+		b, _ := io.ReadAll(resp.Body)
+		return string(b)
+	}
+	// A client handed out before the switch follows the new default.
+	if got := get(inherit, "http://repo.example/a"); got != "corp" {
+		t.Errorf("inherit after switch went through %q", got)
+	}
+	if got := get(named, "http://repo.example/a"); got != "dmz" {
+		t.Errorf("named proxy: %q", got)
+	}
+	if got := get(named, "http://files.cdn.example/blob"); got != "dmz" {
+		t.Errorf("redirect host: %q", got)
+	}
+	if p, _ := f.ProxyFor("http://elsewhere.example/x", core.UpstreamHTTP{ProxyName: "dmz"}); p == nil {
+		// ProxyFor treats the target as the remote itself.
+		t.Error("remote host must use its proxy")
+	}
+	f.mu.Lock()
+	route, _, _ := f.route(core.UpstreamHTTP{ProxyName: "dmz"}, "repo.example")
+	f.mu.Unlock()
+	if p, _ := route(&http.Request{URL: &url.URL{Scheme: "http", Host: "other.example"}}); p != nil {
+		t.Errorf("host outside redirect_hosts used the proxy %v", p)
+	}
+	if p, _ := f.ProxyFor("http://internal.example/", core.UpstreamHTTP{}); p != nil {
+		t.Errorf("no_proxy host proxied via %v", p)
+	}
+	if p, _ := f.ProxyFor("http://repo.example/", core.UpstreamHTTP{Proxy: core.ProxyNone}); p != nil {
+		t.Errorf("none proxied via %v", p)
+	}
+
+	// Removing the default sends inheriting clients direct (or to the environment).
+	if err := f.SetOutbound(Outbound{Proxies: []Proxy{{Name: "dmz", URL: dmz.URL}}}); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := f.ProxyFor("http://repo.example/", core.UpstreamHTTP{}); p != nil {
+		t.Errorf("no default but proxied via %v", p)
+	}
+	if !f.HasProxy("dmz") || f.HasProxy("corp") {
+		t.Error("HasProxy out of date")
+	}
+	// Invalid settings change nothing.
+	if err := f.SetOutbound(Outbound{Default: "missing"}); err == nil || !f.HasProxy("dmz") {
+		t.Errorf("bad default accepted: %v", err)
+	}
+}
+
+func TestFileProxyIsDefault(t *testing.T) {
+	f, err := New(Options{Proxy: "http://proxy.example.com:3128", ProxyUsername: "svc", ProxyPassword: "pw", environ: env(nil)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := f.Outbound()
+	if o.Default != FileProxyName || len(o.Proxies) != 1 || o.Proxies[0].Username != "svc" {
+		t.Fatalf("outbound = %+v", o)
+	}
+	if p, _ := f.ProxyFor("https://api.nuget.org/v3/index.json", core.UpstreamHTTP{ProxyName: FileProxyName}); p == nil || p.Host != "proxy.example.com:3128" {
+		t.Fatalf("by name = %v", p)
+	}
+	g, _ := New(Options{UseEnvironment: true, environ: env(map[string]string{"HTTPS_PROXY": "http://u:secret@env.example:8080"})})
+	if got := g.EnvironmentProxy(); got != "http://u:REDACTED@env.example:8080" {
+		t.Errorf("EnvironmentProxy = %q", got)
+	}
+}

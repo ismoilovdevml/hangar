@@ -12,6 +12,10 @@
 // http, https and socks5 proxies are supported; credentials go in the URL or in
 // http.proxy_username / http.proxy_password. Trusted roots are the system pool
 // plus http.ca_file plus the remote's own CABundle.
+//
+// The server-wide proxy and trust settings (Outbound) can be replaced while
+// the server runs (SetOutbound): clients already handed out pick the new
+// settings up with their next request.
 package httpclient
 
 import (
@@ -20,6 +24,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -27,6 +32,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -53,7 +59,9 @@ type Options struct {
 	NoProxy        []string
 	UseEnvironment bool
 	// CAFile is a PEM bundle added to the system roots for every remote.
-	CAFile                string
+	CAFile string
+	// CAPEM is a PEM bundle added like CAFile.
+	CAPEM                 string
 	ConnectTimeout        time.Duration
 	ReadTimeout           time.Duration // response header timeout
 	IdleConnTimeout       time.Duration
@@ -80,22 +88,69 @@ type Options struct {
 	environ func(string) string
 }
 
+// FileProxyName names the proxy http.proxy configures (hangar.yaml or
+// HANGAR_HTTP_PROXY). It is the platform default.
+const FileProxyName = "config"
+
+// Proxy is a named outbound proxy.
+type Proxy struct {
+	Name string
+	// URL is http://, https:// or socks5:// host:port, without credentials.
+	URL      string
+	Username string
+	Password string
+	// NoProxy lists hosts, domain suffixes (.corp.example) and CIDRs reached
+	// directly.
+	NoProxy []string
+	// RedirectHosts, when not empty, limits the proxy to the repository's
+	// remote host and these host patterns ("cdn.example.com",
+	// ".cloudfront.net"); requests to other hosts, such as redirects
+	// elsewhere, go direct. Empty: every host uses the proxy.
+	RedirectHosts []string
+	// CAPEM is a PEM bundle trusted for requests through this proxy (a
+	// TLS-inspecting proxy's CA) in addition to the system roots.
+	CAPEM string
+}
+
+// Outbound are the server-wide proxy and trust settings.
+type Outbound struct {
+	// Proxies are the named proxies repositories can choose.
+	Proxies []Proxy
+	// Default names the platform default proxy, used by repositories that
+	// inherit. Empty: HTTPS_PROXY / HTTP_PROXY / NO_PROXY when
+	// Options.UseEnvironment is set, else direct.
+	Default string
+	// CAFile is a PEM bundle added to the system roots for every request.
+	CAFile string
+}
+
+// namedProxy is a validated Proxy.
+type namedProxy struct {
+	Proxy
+	url   *url.URL                         // with credentials
+	route func(*url.URL) (*url.URL, error) // honours NoProxy
+}
+
 // Factory implements core.HTTPClientFactory. It is safe for concurrent use.
 type Factory struct {
-	opts      Options
-	baseRoots *x509.CertPool
-	global    func(*url.URL) (*url.URL, error) // nil = direct
+	opts Options
 
-	mu      sync.Mutex
-	clients map[string]*http.Client
+	mu         sync.Mutex
+	out        Outbound
+	baseRoots  *x509.CertPool
+	proxies    map[string]*namedProxy
+	envProxy   func(*url.URL) (*url.URL, error) // nil = no environment proxy
+	clients    map[string]*http.Client
+	transports map[string]*http.Transport
 	// proxyAddrs are the host:port of every configured outbound proxy;
-	// connections to them skip DialGuard. Guarded by mu after New.
+	// connections to them skip DialGuard.
 	proxyAddrs map[string]bool
 }
 
 var _ core.HTTPClientFactory = (*Factory)(nil)
 
-// New validates opts and returns a factory.
+// New validates opts and returns a factory. A non-empty opts.Proxy becomes
+// the proxy FileProxyName and the platform default.
 func New(opts Options) (*Factory, error) {
 	if opts.ConnectTimeout <= 0 {
 		opts.ConnectTimeout = 10 * time.Second
@@ -124,50 +179,148 @@ func New(opts Options) (*Factory, error) {
 	if opts.environ == nil {
 		opts.environ = os.Getenv
 	}
+	f := &Factory{opts: opts, clients: map[string]*http.Client{}, transports: map[string]*http.Transport{}}
+	if err := f.SetOutbound(FileOutbound(opts)); err != nil {
+		return nil, err
+	}
+	return f, nil
+}
 
+// FileOutbound returns the outbound settings opts configure: the proxy
+// FileProxyName as the default when opts.Proxy is set.
+func FileOutbound(opts Options) Outbound {
+	o := Outbound{CAFile: opts.CAFile}
+	if opts.Proxy != "" {
+		o.Proxies = []Proxy{{Name: FileProxyName, URL: opts.Proxy, Username: opts.ProxyUsername, Password: opts.ProxyPassword,
+			NoProxy: opts.NoProxy, CAPEM: opts.CAPEM}}
+		o.Default = FileProxyName
+	}
+	return o
+}
+
+// SetOutbound replaces the proxies and trust settings. Clients returned by
+// ForUpstream before keep working and use o from their next request on;
+// idle connections made with the old settings are closed. On error nothing
+// changes.
+func (f *Factory) SetOutbound(o Outbound) error {
+	o = cloneOutbound(o)
+	roots, err := rootsFor(o.CAFile)
+	if err != nil {
+		return err
+	}
+	addrs := map[string]bool{}
+	proxies := make(map[string]*namedProxy, len(o.Proxies))
+	for _, p := range o.Proxies {
+		np, err := compileProxy(p)
+		if err != nil {
+			return err
+		}
+		if _, dup := proxies[p.Name]; dup {
+			return fmt.Errorf("proxy %q is defined twice: %w", p.Name, core.ErrInvalid)
+		}
+		proxies[p.Name] = np
+		addProxyAddr(addrs, np.url)
+	}
+	if o.Default != "" && proxies[o.Default] == nil {
+		return fmt.Errorf("default proxy %q is not defined: %w", o.Default, core.ErrInvalid)
+	}
+	env := f.environmentProxy(addrs)
+	f.mu.Lock()
+	old := f.transports
+	f.out, f.baseRoots, f.proxies, f.envProxy, f.proxyAddrs = o, roots, proxies, env, addrs
+	f.transports = map[string]*http.Transport{}
+	f.mu.Unlock()
+	for _, t := range old {
+		t.CloseIdleConnections()
+	}
+	return nil
+}
+
+// Outbound returns the settings in effect.
+func (f *Factory) Outbound() Outbound {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return cloneOutbound(f.out)
+}
+
+// HasProxy reports whether a proxy called name is defined.
+func (f *Factory) HasProxy(name string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.proxies[name] != nil
+}
+
+func cloneOutbound(o Outbound) Outbound {
+	o.Proxies = slices.Clone(o.Proxies)
+	for i := range o.Proxies {
+		o.Proxies[i].NoProxy = slices.Clone(o.Proxies[i].NoProxy)
+		o.Proxies[i].RedirectHosts = slices.Clone(o.Proxies[i].RedirectHosts)
+	}
+	return o
+}
+
+func compileProxy(p Proxy) (*namedProxy, error) {
+	pu, err := proxyURL(p.URL, p.Username, p.Password)
+	if err != nil {
+		return nil, fmt.Errorf("proxy %q: %w", p.Name, err)
+	}
+	if p.CAPEM != "" && !x509.NewCertPool().AppendCertsFromPEM([]byte(p.CAPEM)) {
+		return nil, fmt.Errorf("proxy %q: CA bundle has no PEM certificates: %w", p.Name, core.ErrInvalid)
+	}
+	cfg := httpproxy.Config{HTTPProxy: pu.String(), HTTPSProxy: pu.String(), NoProxy: strings.Join(p.NoProxy, ",")}
+	return &namedProxy{Proxy: p, url: pu, route: cfg.ProxyFunc()}, nil
+}
+
+// environmentProxy returns the HTTPS_PROXY / HTTP_PROXY / NO_PROXY proxy
+// function (nil when unset or not used) and adds its addresses to addrs.
+func (f *Factory) environmentProxy(addrs map[string]bool) func(*url.URL) (*url.URL, error) {
+	if !f.opts.UseEnvironment {
+		return nil
+	}
+	cfg := httpproxy.Config{
+		HTTPProxy:  firstEnv(f.opts.environ, "HTTP_PROXY", "http_proxy"),
+		HTTPSProxy: firstEnv(f.opts.environ, "HTTPS_PROXY", "https_proxy"),
+		NoProxy:    firstEnv(f.opts.environ, "NO_PROXY", "no_proxy"),
+	}
+	if len(f.opts.NoProxy) > 0 {
+		cfg.NoProxy = strings.Trim(cfg.NoProxy+","+strings.Join(f.opts.NoProxy, ","), ",")
+	}
+	if cfg.HTTPProxy == "" && cfg.HTTPSProxy == "" {
+		return nil
+	}
+	for _, raw := range []string{cfg.HTTPProxy, cfg.HTTPSProxy} {
+		if u, err := parseLooseProxy(raw); err == nil {
+			addProxyAddr(addrs, u)
+		}
+	}
+	return cfg.ProxyFunc()
+}
+
+// EnvironmentProxy is the proxy HTTPS_PROXY (else HTTP_PROXY) names, with
+// any password masked; empty when unset or when the environment is not
+// used.
+func (f *Factory) EnvironmentProxy() string {
+	if !f.opts.UseEnvironment {
+		return ""
+	}
+	return core.RedactURL(firstEnv(f.opts.environ, "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"))
+}
+
+func rootsFor(caFile string) (*x509.CertPool, error) {
 	roots, err := x509.SystemCertPool()
 	if err != nil || roots == nil {
 		roots = x509.NewCertPool()
 	}
-	if opts.CAFile != "" {
-		pem, err := os.ReadFile(opts.CAFile)
+	if caFile != "" {
+		pem, err := os.ReadFile(caFile) //nolint:gosec // operator-configured CA bundle path
 		if err != nil {
 			return nil, fmt.Errorf("http.ca_file: %w", err)
 		}
 		if !roots.AppendCertsFromPEM(pem) {
-			return nil, fmt.Errorf("http.ca_file %s: no PEM certificates found", opts.CAFile)
+			return nil, fmt.Errorf("http.ca_file %s: no PEM certificates found", caFile)
 		}
 	}
-
-	f := &Factory{opts: opts, baseRoots: roots, clients: map[string]*http.Client{}, proxyAddrs: map[string]bool{}}
-	switch {
-	case opts.Proxy != "":
-		pu, err := proxyURL(opts.Proxy, opts.ProxyUsername, opts.ProxyPassword)
-		if err != nil {
-			return nil, fmt.Errorf("http.proxy: %w", err)
-		}
-		f.addProxyAddr(pu)
-		cfg := httpproxy.Config{HTTPProxy: pu.String(), HTTPSProxy: pu.String(), NoProxy: strings.Join(opts.NoProxy, ",")}
-		f.global = cfg.ProxyFunc()
-	case opts.UseEnvironment:
-		cfg := httpproxy.Config{
-			HTTPProxy:  firstEnv(opts.environ, "HTTP_PROXY", "http_proxy"),
-			HTTPSProxy: firstEnv(opts.environ, "HTTPS_PROXY", "https_proxy"),
-			NoProxy:    firstEnv(opts.environ, "NO_PROXY", "no_proxy"),
-		}
-		if len(opts.NoProxy) > 0 {
-			cfg.NoProxy = strings.Trim(cfg.NoProxy+","+strings.Join(opts.NoProxy, ","), ",")
-		}
-		if cfg.HTTPProxy != "" || cfg.HTTPSProxy != "" {
-			f.global = cfg.ProxyFunc()
-			for _, raw := range []string{cfg.HTTPProxy, cfg.HTTPSProxy} {
-				if u, err := parseLooseProxy(raw); err == nil {
-					f.addProxyAddr(u)
-				}
-			}
-		}
-	}
-	return f, nil
+	return roots, nil
 }
 
 func firstEnv(env func(string) string, names ...string) string {
@@ -190,37 +343,61 @@ func proxyURL(raw, user, pass string) (*url.URL, error) {
 	return u, nil
 }
 
-// ProxyFor reports which proxy a request to target would use (nil = direct).
-// Exposed for diagnostics ("why can't Hangar reach Maven Central?") and tests.
+// ProxyFor reports which proxy a request to target would use (nil = direct)
+// for a remote whose own host is target's. Exposed for diagnostics ("why
+// can't Hangar reach Maven Central?") and tests.
 func (f *Factory) ProxyFor(target string, cfg core.UpstreamHTTP) (*url.URL, error) {
 	u, err := url.Parse(target)
 	if err != nil {
 		return nil, fmt.Errorf("target %q: %w", target, core.ErrInvalid)
 	}
-	fn, err := f.proxyFunc(cfg)
+	f.mu.Lock()
+	fn, _, err := f.route(cfg, u.Host)
+	f.mu.Unlock()
 	if err != nil || fn == nil {
 		return nil, err
 	}
 	return fn(&http.Request{URL: u})
 }
 
-func (f *Factory) proxyFunc(cfg core.UpstreamHTTP) (func(*http.Request) (*url.URL, error), error) {
-	switch cfg.Proxy {
-	case core.ProxyNone:
-		return nil, nil
-	case "", core.ProxyInherit:
-		if f.global == nil {
-			return nil, nil
+// route returns the proxy function for requests of a remote at remoteHost
+// with cfg (nil = direct) and the named proxy it uses, if any. f.mu must be
+// held.
+func (f *Factory) route(cfg core.UpstreamHTTP, remoteHost string) (func(*http.Request) (*url.URL, error), *namedProxy, error) {
+	if err := cfg.ValidateProxy(); err != nil {
+		return nil, nil, err
+	}
+	var np *namedProxy
+	switch {
+	case cfg.ProxyName != "":
+		if np = f.proxies[cfg.ProxyName]; np == nil {
+			return nil, nil, fmt.Errorf("proxy %q does not exist: %w", cfg.ProxyName, core.ErrInvalid)
 		}
-		g := f.global
-		return func(r *http.Request) (*url.URL, error) { return g(r.URL) }, nil
+	case cfg.Proxy == core.ProxyNone:
+		return nil, nil, nil
+	case cfg.Proxy == "" || cfg.Proxy == core.ProxyInherit:
+		if f.out.Default == "" {
+			if env := f.envProxy; env != nil {
+				return func(r *http.Request) (*url.URL, error) { return env(r.URL) }, nil, nil
+			}
+			return nil, nil, nil
+		}
+		np = f.proxies[f.out.Default]
 	default:
 		pu, err := proxyURL(cfg.Proxy, "", "")
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return http.ProxyURL(pu), nil
+		addProxyAddr(f.proxyAddrs, pu)
+		return http.ProxyURL(pu), nil, nil
 	}
+	remote := strings.ToLower(remoteHost)
+	return func(r *http.Request) (*url.URL, error) {
+		if len(np.RedirectHosts) > 0 && !strings.EqualFold(r.URL.Host, remote) && !core.MatchHost(np.RedirectHosts, r.URL.Host) {
+			return nil, nil
+		}
+		return np.route(r.URL)
+	}, np, nil
 }
 
 // ForUpstream implements core.HTTPClientFactory.
@@ -240,12 +417,14 @@ func (f *Factory) ForUpstream(remoteURL string, cfg core.UpstreamHTTP, auth *cor
 	if c, ok := f.clients[key]; ok {
 		return c, nil
 	}
-	tr, err := f.transport(cfg)
-	if err != nil {
+	// Built now so that invalid settings fail here rather than on the first
+	// request.
+	if _, err := f.transportLocked(cfg, remote.Host); err != nil {
 		return nil, err
 	}
 	c := &http.Client{
-		Transport: &decorate{base: tr, scheme: remote.Scheme, host: remote.Host, auth: auth, userAgent: f.opts.UserAgent},
+		Transport: &decorate{base: &liveTransport{f: f, cfg: cfg, remoteHost: remote.Host}, scheme: remote.Scheme, host: remote.Host,
+			auth: auth, userAgent: f.opts.UserAgent},
 		// No overall Timeout: large artifacts stream for minutes. Callers bound
 		// requests with their context; headers are bounded by ReadTimeout.
 		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
@@ -259,8 +438,63 @@ func (f *Factory) ForUpstream(remoteURL string, cfg core.UpstreamHTTP, auth *cor
 	return c, nil
 }
 
-func (f *Factory) transport(cfg core.UpstreamHTTP) (*http.Transport, error) {
-	proxy, err := f.proxyFunc(cfg)
+// transportLocked returns the transport for a remote at remoteHost with cfg
+// under the settings in effect, building it on first use. f.mu must be held.
+func (f *Factory) transportLocked(cfg core.UpstreamHTTP, remoteHost string) (*http.Transport, error) {
+	key := transportKey(cfg, remoteHost)
+	if t, ok := f.transports[key]; ok {
+		return t, nil
+	}
+	t, err := f.transport(cfg, remoteHost)
+	if err != nil {
+		return nil, err
+	}
+	f.transports[key] = t
+	return t, nil
+}
+
+// liveTransport sends each request with the transport of the settings in
+// effect, so SetOutbound reaches clients already handed out.
+type liveTransport struct {
+	f          *Factory
+	cfg        core.UpstreamHTTP
+	remoteHost string
+}
+
+func (l *liveTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	l.f.mu.Lock()
+	t, err := l.f.transportLocked(l.cfg, l.remoteHost)
+	l.f.mu.Unlock()
+	if err != nil {
+		if r.Body != nil {
+			_ = r.Body.Close()
+		}
+		return nil, err
+	}
+	return t.RoundTrip(r)
+}
+
+// CloseIdleConnections closes the idle connections of the current transport.
+func (l *liveTransport) CloseIdleConnections() {
+	l.f.mu.Lock()
+	t := l.f.transports[transportKey(l.cfg, l.remoteHost)]
+	l.f.mu.Unlock()
+	if t != nil {
+		t.CloseIdleConnections()
+	}
+}
+
+func transportKey(cfg core.UpstreamHTTP, remoteHost string) string {
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		return fmt.Sprintf("%#v\x00%s", cfg, remoteHost)
+	}
+	return string(b) + "\x00" + strings.ToLower(remoteHost)
+}
+
+// transport builds a transport for cfg. f.mu must be held.
+func (f *Factory) transport(cfg core.UpstreamHTTP, remoteHost string) (*http.Transport, error) {
+	proxy, np, err := f.route(cfg, remoteHost)
 	if err != nil {
 		return nil, err
 	}
@@ -273,15 +507,13 @@ func (f *Factory) transport(cfg core.UpstreamHTTP) (*http.Transport, error) {
 		read = cfg.ReadTimeout.D()
 	}
 	roots := f.baseRoots
-	if cfg.CABundle != "" {
+	if cfg.CABundle != "" || (np != nil && np.CAPEM != "") {
 		roots = f.baseRoots.Clone()
-		if !roots.AppendCertsFromPEM([]byte(cfg.CABundle)) {
+		if cfg.CABundle != "" && !roots.AppendCertsFromPEM([]byte(cfg.CABundle)) {
 			return nil, fmt.Errorf("caBundle: no PEM certificates found: %w", core.ErrInvalid)
 		}
-	}
-	if cfg.Proxy != "" && cfg.Proxy != core.ProxyNone && cfg.Proxy != core.ProxyInherit {
-		if pu, err := proxyURL(cfg.Proxy, "", ""); err == nil {
-			f.addProxyAddr(pu) // f.mu is held by ForUpstream
+		if np != nil && np.CAPEM != "" {
+			roots.AppendCertsFromPEM([]byte(np.CAPEM))
 		}
 	}
 	idlePerHost := f.opts.MaxIdleConnsPerHost
@@ -349,8 +581,8 @@ func (f *Factory) dialContext(timeout time.Duration) func(ctx context.Context, n
 	}
 }
 
-// addProxyAddr remembers u's host:port (default port by scheme) as a proxy.
-func (f *Factory) addProxyAddr(u *url.URL) {
+// addProxyAddr adds u's host:port (default port by scheme) to addrs.
+func addProxyAddr(addrs map[string]bool, u *url.URL) {
 	if u == nil || u.Hostname() == "" {
 		return
 	}
@@ -365,7 +597,7 @@ func (f *Factory) addProxyAddr(u *url.URL) {
 			port = "80"
 		}
 	}
-	f.proxyAddrs[strings.ToLower(net.JoinHostPort(u.Hostname(), port))] = true
+	addrs[strings.ToLower(net.JoinHostPort(u.Hostname(), port))] = true
 }
 
 // parseLooseProxy parses a proxy environment value, which may omit the scheme.
@@ -378,7 +610,7 @@ func parseLooseProxy(raw string) (*url.URL, error) {
 
 func cacheKey(remote *url.URL, cfg core.UpstreamHTTP, auth *core.UpstreamAuth) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%t\x00%d\x00%d\x00%d\x00%d\x00%t", remote.Scheme, remote.Host, cfg.Proxy, cfg.CABundle,
+	fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%t\x00%d\x00%d\x00%d\x00%d\x00%t", remote.Scheme, remote.Host, cfg.Proxy, cfg.ProxyName, cfg.CABundle,
 		cfg.InsecureSkipVerify, cfg.ConnectTimeout, cfg.ReadTimeout, cfg.MaxConnsPerHost, cfg.MaxIdleConnsPerHost, cfg.DisableHTTP2)
 	if auth != nil {
 		fmt.Fprintf(h, "\x00%s\x00%s\x00%s\x00%s\x00%s", auth.Kind, auth.Username, auth.Password, auth.Token, auth.HeaderName)

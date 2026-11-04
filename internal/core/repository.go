@@ -266,6 +266,9 @@ type UpstreamHTTP struct {
 	// "none" (direct), or a proxy URL: http://, https:// or socks5://, with
 	// optional user:password@ (stored encrypted, never returned by the API).
 	Proxy string `json:"proxy,omitempty" yaml:"proxy,omitempty"`
+	// ProxyName selects a named outbound proxy (GET /proxies) instead; Proxy
+	// must then be empty or "inherit".
+	ProxyName string `json:"proxy_name,omitempty" yaml:"proxy_name,omitempty"`
 	// CABundle is PEM certificates trusted for this remote in addition to the
 	// system roots and http.ca_file (corporate TLS-inspecting proxies, private CAs).
 	CABundle string `json:"ca_bundle,omitempty" yaml:"ca_bundle,omitempty"`
@@ -289,8 +292,17 @@ type UpstreamHTTP struct {
 	DisableHTTP2 bool `json:"disable_http2,omitempty" yaml:"disable_http2,omitempty"`
 }
 
-// ValidateProxy checks the Proxy field syntax.
+// ValidateProxy checks the Proxy and ProxyName field syntax.
 func (h UpstreamHTTP) ValidateProxy() error {
+	if h.ProxyName != "" {
+		if !ValidProxyName(h.ProxyName) {
+			return fmt.Errorf("proxy_name %q: want lower-case letters, digits, '.', '_' or '-': %w", h.ProxyName, ErrInvalid)
+		}
+		if h.Proxy != "" && h.Proxy != ProxyInherit {
+			return fmt.Errorf("proxy and proxy_name cannot both be set: %w", ErrInvalid)
+		}
+		return nil
+	}
 	switch h.Proxy {
 	case "", ProxyInherit, ProxyNone:
 		return nil
@@ -304,6 +316,24 @@ func (h UpstreamHTTP) ValidateProxy() error {
 		return nil
 	}
 	return fmt.Errorf("proxy scheme %q: want http, https or socks5: %w", u.Scheme, ErrInvalid)
+}
+
+// ValidProxyName reports whether name may name an outbound proxy: 1 to 63
+// lower-case letters, digits, '.', '_' or '-', starting with a letter or
+// digit.
+func ValidProxyName(name string) bool {
+	if name == "" || len(name) > 63 {
+		return false
+	}
+	for i, c := range name {
+		switch {
+		case c >= 'a' && c <= 'z', c >= '0' && c <= '9':
+		case i > 0 && (c == '.' || c == '_' || c == '-'):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // RedactURL replaces the password in a URL with "REDACTED", for logs and API responses.

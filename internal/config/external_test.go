@@ -52,7 +52,7 @@ func TestExternalAuthSettings(t *testing.T) {
 	t.Setenv("HANGAR_AUTH_LDAP_URL", "https://dc1.example.com")
 	t.Setenv("HANGAR_AUTH_LDAP_BIND_PASSWORD", "")
 	_, err = Load("")
-	for _, want := range []string{"auth.oidc.issuer_url", "auth.oidc.client_auth", "auth.ldap.url", "auth.ldap.bind_dn"} {
+	for _, want := range []string{"auth.oidc.issuer_url", "auth.oidc.client_auth", "auth.ldap.url", "auth.ldap.bind_password"} {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("validation error %v does not mention %s", err, want)
 		}

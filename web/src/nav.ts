@@ -14,6 +14,7 @@ import {
 } from './components/icons';
 import { IconAudit, IconSettings } from './components/opsIcons';
 import { IconLogs, IconPulse } from './pages/system/icons';
+import { IconLock, IconRoute } from './pages/settings/icons';
 
 export type AppPath =
   | '/'
@@ -31,7 +32,9 @@ export type AppPath =
   | '/cluster'
   | '/system/status'
   | '/system/logs'
-  | '/settings';
+  | '/settings'
+  | '/settings/authentication'
+  | '/settings/proxies';
 
 export interface NavItem {
   to: AppPath;
@@ -43,6 +46,8 @@ export interface NavItem {
 export interface NavSection {
   title: string;
   items: NavItem[];
+  /** Shown only to users holding system:<area>:<action> (the server still authorizes every call). */
+  requires?: { area: string; action: 'read' | 'admin' };
 }
 
 export const NAV: NavSection[] = [
@@ -79,6 +84,14 @@ export const NAV: NavSection[] = [
       { to: '/system/status', label: 'System status', icon: IconPulse, keywords: 'health nodes heartbeat database nats subsystems uptime' },
       { to: '/system/logs', label: 'System logs', icon: IconLogs, keywords: 'log records errors warnings debug server output' },
       { to: '/settings', label: 'System', icon: IconSettings, keywords: 'settings status version health configuration' },
+    ],
+  },
+  {
+    title: 'Settings',
+    requires: { area: 'settings', action: 'read' },
+    items: [
+      { to: '/settings/authentication', label: 'Authentication', icon: IconLock, keywords: 'sso oidc ldap active directory keycloak sign-in login groups roles' },
+      { to: '/settings/proxies', label: 'Proxies', icon: IconRoute, keywords: 'http proxy outbound corporate no_proxy ca certificate' },
     ],
   },
 ];

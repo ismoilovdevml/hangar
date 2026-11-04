@@ -32,6 +32,8 @@ import { ClusterPage, NotFoundPage, VulnerabilitiesPage } from './pages/screens'
 import { AuditPage } from './pages/audit/AuditPage';
 import { CleanupPage, type CleanupSearch } from './pages/cleanup/CleanupPage';
 import { SystemPage } from './pages/settings/SystemPage';
+import { AuthenticationPage } from './pages/settings/AuthenticationPage';
+import { ProxiesPage } from './pages/settings/ProxiesPage';
 import { TaskDetailPage, type TaskDetailSearch } from './pages/tasks/TaskDetailPage';
 import { TasksPage, type TasksSearch } from './pages/tasks/TasksPage';
 import { validateAuditSearch, type AuditSearch } from './lib/audit';
@@ -306,6 +308,8 @@ const routeTree = rootRoute.addChildren([
     systemLogsRoute,
     auditRoute,
     page('/settings', 'System', SystemPage),
+    page('/settings/authentication', 'Authentication', AuthenticationPage),
+    page('/settings/proxies', 'Proxies', ProxiesPage),
   ]),
 ]);
 

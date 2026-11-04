@@ -37,6 +37,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/service/component"
 	"github.com/ismoilovdevml/hangar/internal/service/lock"
 	"github.com/ismoilovdevml/hangar/internal/service/repository"
+	"github.com/ismoilovdevml/hangar/internal/settings"
 	"github.com/ismoilovdevml/hangar/internal/storage"
 	"github.com/ismoilovdevml/hangar/internal/storage/fs"
 	"github.com/ismoilovdevml/hangar/internal/storage/registry"
@@ -109,28 +110,34 @@ func openAuth(cfg config.Config, pool *pgxpool.Pool, bus core.EventBus, metrics 
 	return auditLog, authSvc, nil
 }
 
-// openOIDC builds the OIDC provider when auth.oidc is enabled and starts its
-// discovery in the background. The state cookie key is derived from
-// security.secret_key so every node can finish a sign-in another started.
-func openOIDC(ctx context.Context, cfg config.Config, log *slog.Logger) (*oidc.Provider, error) {
+// oidcOptions are the options of every OIDC provider: the redirect URI and
+// the state cookie key, derived from security.secret_key so every node can
+// finish a sign-in another started.
+func oidcOptions(cfg config.Config, log *slog.Logger) (oidc.Options, error) {
+	opts := oidc.Options{RedirectURL: cfg.Server.BaseURL + oidc.CallbackPath, Logger: log}
+	if cfg.Security.SecretKey == "" {
+		return opts, nil
+	}
+	secret, err := secrets.ParseKey(cfg.Security.SecretKey)
+	if err != nil {
+		return opts, fmt.Errorf("security.secret_key: %w", err)
+	}
+	if opts.StateKey, err = oidc.DeriveStateKey(secret); err != nil {
+		return opts, err
+	}
+	return opts, nil
+}
+
+// openOIDC builds the OIDC provider when auth.oidc is enabled in the
+// configuration and starts its discovery in the background.
+func openOIDC(ctx context.Context, cfg config.Config, opts oidc.Options, log *slog.Logger) (*oidc.Provider, error) {
 	if !cfg.Auth.OIDC.Enabled {
 		return nil, nil
 	}
-	var stateKey []byte
-	if cfg.Security.SecretKey != "" {
-		secret, err := secrets.ParseKey(cfg.Security.SecretKey)
-		if err != nil {
-			return nil, fmt.Errorf("security.secret_key: %w", err)
-		}
-		if stateKey, err = oidc.DeriveStateKey(secret); err != nil {
-			return nil, err
-		}
-	} else {
+	if opts.StateKey == nil {
 		log.Warn("auth.oidc: security.secret_key is not set; a sign-in must finish on the node that started it")
 	}
-	p, err := oidc.New(cfg.Auth.WithDefaults().OIDC, oidc.Options{
-		RedirectURL: cfg.Server.BaseURL + oidc.CallbackPath, StateKey: stateKey, Logger: log,
-	})
+	p, err := oidc.New(cfg.Auth.WithDefaults().OIDC, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -250,11 +257,19 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	}
 
 	// Repositories and components. The authorizer needs the repositories for
-	// anonymous read, and the repository service needs the authorizer.
+	// anonymous read, and the repository service needs the authorizer. The
+	// settings service (named proxies) is built further down.
+	var settingsSvc *settings.Service
 	repos := repository.New(pool, repository.Options{Formats: reg.Get, AuthZ: authz, Audit: auditLog, Events: bus, Logger: log,
 		Secrets: repoSealer(keyring),
 		RemoteCheck: func(ctx context.Context, remoteURL string) error {
 			return guard.ValidateRemote(ctx, remoteURL, false)
+		},
+		ProxyCheck: func(ctx context.Context, name string) error {
+			if settingsSvc == nil {
+				return nil
+			}
+			return settingsSvc.CheckProxyName(ctx, name)
 		}})
 	authz.SetRepositories(repos)
 	repoWatch, err := repos.Watch(ctx, bus)
@@ -273,14 +288,15 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	if userAgent == "" {
 		userAgent = version.UserAgent()
 	}
-	clients, err := httpclient.New(httpclient.Options{
+	httpOpts := httpclient.Options{
 		Proxy: cfg.HTTP.Proxy, ProxyUsername: cfg.HTTP.ProxyUsername, ProxyPassword: cfg.HTTP.ProxyPassword,
 		NoProxy: cfg.HTTP.NoProxy, UseEnvironment: cfg.HTTP.UseEnvironment, CAFile: cfg.HTTP.CAFile,
 		ConnectTimeout: cfg.HTTP.ConnectTimeout, ReadTimeout: cfg.HTTP.ReadTimeout,
 		IdleConnTimeout: cfg.HTTP.IdleConnTimeout, MaxIdleConns: cfg.HTTP.MaxIdleConns,
 		MaxIdleConnsPerHost: cfg.HTTP.MaxIdleConnsPerHost, UserAgent: userAgent,
 		DialGuard: guard.CheckAddr, DialAllowHost: guard.AllowsHost,
-	})
+	}
+	clients, err := httpclient.New(httpOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -363,10 +379,31 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		return nil, err
 	}
 
-	sso, err := openOIDC(ctx, cfg, log)
+	// Sign-in providers and outbound proxies: the configuration file's, then
+	// those administrators save from the UI, applied live on every node.
+	ssoOpts, err := oidcOptions(cfg, log)
 	if err != nil {
 		return nil, err
 	}
+	sso, err := openOIDC(ctx, cfg, ssoOpts, log)
+	if err != nil {
+		return nil, err
+	}
+	signIn := settings.NewAuthRuntime(authSvc, sso, ssoOpts, ldap.Options{Logger: log})
+	settingsSvc, err = settings.New(pool, settings.Options{
+		File:    settings.FileConfig{OIDC: cfg.Auth.OIDC, LDAP: cfg.Auth.LDAP, HTTP: httpOpts},
+		BaseURL: cfg.Server.BaseURL, Keyring: keyring, AuthZ: authz, Audit: auditLog, Roles: authSvc, Events: bus,
+		ApplyAuth: signIn.Apply, ApplyOutbound: clients.SetOutbound, EnvironmentProxy: clients.EnvironmentProxy,
+		UserAgent: userAgent, DialGuard: guard.CheckAddr, DialAllowHost: guard.AllowsHost, Logger: log,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := settingsSvc.Start(ctx); err != nil {
+		return nil, err
+	}
+	a.onClose(settingsSvc.Close)
+
 	// System status and System logs: this node's checks, its heartbeat and
 	// its log buffer, served to the other nodes over NATS.
 	mon := newMonitor(monitorDeps{cfg: cfg, pool: pool, health: hc, nats: rt, blobStore: blobs.ByName,
@@ -384,7 +421,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	authOpts := httpapi.Options{
 		Organization: httpapi.Organization{Slug: cfg.Server.InstanceName, Name: cfg.Server.InstanceName},
 		BaseURL:      cfg.Server.BaseURL,
-		OIDC:         sso,
+		OIDCSource:   signIn.Provider,
 		Logger:       log,
 	}
 	restAPI := &api.API{
@@ -404,6 +441,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Monitor:        mon,
 		Logs:           sysLogs,
 		AuthRoutes:     api.RouteFunc(func(r chi.Router) { httpapi.Register(r, authSvc, authOpts) }),
+		ExtraRoutes:    []api.RouteRegistrar{settingsSvc},
 	}
 	a.onClose(restAPI.Close)
 
