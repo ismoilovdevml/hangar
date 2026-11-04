@@ -57,8 +57,9 @@ services:
         target: /etc/hangar
         read_only: true
         bind: { create_host_path: false, selinux: Z }
-      # Read-write: the server removes initial-admin-password after the
-      # first password change. Shared label: postgres reads one file here.
+      # Read-write: the server writes initial-admin-password on the first
+      # start and removes it after the first password change. Shared label:
+      # postgres reads one file here.
       - type: bind
         source: ./secrets
         target: /run/secrets/hangar
@@ -94,10 +95,10 @@ services:
       HANGAR_DATABASE_MIGRATE_ON_START: "true"
       HANGAR_STORAGE_FS_PATH: /var/lib/hangar/blobs
       HANGAR_NATS_DATA_DIR: /var/lib/hangar/nats
-      # First administrator: install.sh writes the password file; it is
-      # removed after the first password change (bootstrap is off then).
-      HANGAR_BOOTSTRAP_ADMIN_USER: admin
-      HANGAR_BOOTSTRAP_ADMIN_PASSWORD_FILE: /run/secrets/hangar/initial-admin-password
+      # First start of an empty database: the server creates "admin" with a
+      # one-time password, writes it here (secrets/initial-admin-password on
+      # the host) and deletes the file after the first password change.
+      HANGAR_BOOTSTRAP_INITIAL_PASSWORD_FILE: /run/secrets/hangar/initial-admin-password
     healthcheck:
       test: ["CMD", "/usr/local/bin/hangar-healthcheck"]
       interval: 15s

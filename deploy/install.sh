@@ -176,15 +176,6 @@ env_set() {
 rand_hex() { od -An -N"$1" -tx1 /dev/urandom | tr -d ' \n'; }
 rand_b64() { head -c "$1" /dev/urandom | base64 | tr -d '\n'; }
 
-# A readable password: 4 groups of 5 from an alphabet without look-alikes
-# (and without i/I, so it never contains the user name "admin").
-rand_password() {
-	local raw
-	raw=$(head -c 2048 /dev/urandom | LC_ALL=C tr -dc 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789')
-	((${#raw} >= 20)) || die "not enough random data"
-	printf '%s-%s-%s-%s' "${raw:0:5}" "${raw:5:5}" "${raw:10:5}" "${raw:15:5}"
-}
-
 # urlencode STRING: percent-encodes everything but unreserved characters.
 urlencode() {
 	local s=$1 out="" c i
@@ -562,12 +553,6 @@ fi
 write_secret postgres-password "$pg_password" "$POSTGRES_UID"
 pg_password=$(<"$data/secrets/postgres-password")
 write_secret database.url "postgres://$(urlencode "$pg_user"):$(urlencode "$pg_password")@postgres:5432/$(urlencode "$pg_db")?sslmode=disable" "$HANGAR_UID"
-if ((!installed)) && [[ -z "$legacy" ]]; then
-	# The server creates "admin" with this password on first start; the file
-	# is removed after the first password change.
-	write_secret initial-admin-password "$(rand_password)" "$HANGAR_UID"
-fi
-
 # Release-owned files are replaced on every run; config/hangar.yaml is yours.
 install -m 0644 "$stage/compose.yaml" "$data/compose.yaml"
 install -m 0644 "$stage/compose.connectors.example.yaml" "$data/compose.connectors.example.yaml"
@@ -724,6 +709,17 @@ if [[ -n "$legacy" ]]; then
 fi
 [[ -n "$(env_get "$env_file" HANGAR_INSTALLED)" ]] || env_set "$env_file" HANGAR_INSTALLED "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
+# On the first start of an empty database the server creates "admin" with a
+# one-time password and writes it to secrets/initial-admin-password (mode
+# 600); it deletes the file after the first password change.
+pw_file=$data/secrets/initial-admin-password
+if ((fresh)); then
+	for _ in 1 2 3 4 5 6 7 8 9 10; do
+		[[ -s "$pw_file" ]] && break
+		sleep 1
+	done
+fi
+
 # ---- Summary ----------------------------------------------------------------------
 self="curl -fsSL https://github.com/$REPO/releases/latest/download/install.sh | sudo bash -s --"
 echo
@@ -738,18 +734,22 @@ cat <<EOF
 
   URL:        $base_url
 EOF
-if ((fresh)); then
-	pw_file=$data/secrets/initial-admin-password
-	if [[ -f "$pw_file" ]]; then
-		pw=$(<"$pw_file")
-	else
-		pw="(already changed: the file was removed)"
-	fi
+if ((fresh)) && [[ -s "$pw_file" ]]; then
+	pw=$(<"$pw_file")
+	pw=${pw//[[:space:]]/}
 	cat <<EOF
   Username:   admin
   Password:   $pw
               Shown once. Sign in and choose your own password.
 EOF
+elif ((fresh)); then
+	cat <<EOF
+  Username:   admin (no one-time password: the database already had an
+              administrator, or the password was changed. Set a new one with
+              cd $data && docker compose exec hangar hangar admin reset-password --user admin)
+EOF
+elif [[ -n "$legacy" ]]; then
+	echo "  Admin:      existing administrator kept (sign in as before)"
 fi
 cat <<EOF
   Data:       $data

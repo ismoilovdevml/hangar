@@ -43,6 +43,15 @@ compose)
 		cat >/dev/null
 		echo "PGDMP fake dump" ;;
 	pull*) [[ -z "${FAKE_OFFLINE:-}" ]] ;;
+	"up -d --remove-orphans")
+		# The server's first start on an empty database: it creates "admin"
+		# and writes a one-time password (bootstrap.initial_password_file).
+		pw=secrets/initial-admin-password
+		[[ ! -e "$pw" ]] || echo "password file existed before the first start" >>"$FAKE_LOG/docker.log"
+		if [[ -z "$(ls -A postgres 2>/dev/null)" && -z "${FAKE_NO_PASSWORD:-}" ]]; then
+			mkdir -p postgres/base && : >postgres/PG_VERSION
+			(umask 077 && echo "Srv0Generated0Password24" >"$pw")
+		fi ;;
 	*) : ;;
 	esac ;;
 info) : ;;
@@ -99,7 +108,7 @@ EOF
 	export PATH="$T/bin:$PATH" FAKE_LOG=$T/log FAKE_RELEASES=$T/releases FAKE_VOLUMES=$T/volumes
 	export FAKE_MIRROR=http://mirror.example.com/hangar
 	export HANGAR_INSTALL_TTY=$T/no-terminal HANGAR_INSTALL_READY_TIMEOUT=2
-	unset FAKE_RUNNING_DIR FAKE_PG_RUNNING FAKE_OFFLINE FAKE_NOT_READY FAKE_NO_LOCAL_IMAGES FAKE_LATEST
+	unset FAKE_RUNNING_DIR FAKE_PG_RUNNING FAKE_OFFLINE FAKE_NOT_READY FAKE_NO_LOCAL_IMAGES FAKE_LATEST FAKE_NO_PASSWORD
 }
 
 teardown() { rm -rf "$T"; }
@@ -227,7 +236,7 @@ test_fresh_install_unattended() {
 	check "postgres/ is 700" mode_is "$D/postgres" 700
 	check "blobs/ is 750" mode_is "$D/blobs" 750
 	check "no caddy/ without TLS" test ! -e "$D/caddy"
-	for f in security.secret_key docker.token_key database.url postgres-password initial-admin-password; do
+	for f in security.secret_key docker.token_key database.url postgres-password; do
 		check "secrets/$f is 600" mode_is "$D/secrets/$f" 600
 	done
 	check "secrets/ owned by the hangar user" contains "$T/log/chown.log" "65532:65532 $D/secrets"
@@ -241,7 +250,8 @@ test_fresh_install_unattended() {
 	pg=$(<"$D/secrets/postgres-password")
 	pw=$(<"$D/secrets/initial-admin-password")
 	check "database.url carries the postgres password" test "$(<"$D/secrets/database.url")" = "postgres://hangar:$pg@postgres:5432/hangar?sslmode=disable"
-	check "admin password format" matches "$pw" '^[A-Za-z2-9]{5}(-[A-Za-z2-9]{5}){3}$'
+	check "password file left to the server" absent "$T/log/docker.log" "password file existed"
+	check "server-generated password read" test "$pw" = Srv0Generated0Password24
 	check "admin password printed once" count_is "$OUT" "$pw" 1
 	check "summary names the user" contains "$OUT" "Username:   admin"
 	check "summary has the URL" contains "$OUT" "URL:        http://10.0.0.5:8080"
@@ -252,7 +262,7 @@ test_fresh_install_unattended() {
 	check "release image" env_is "$D" HANGAR_IMAGE ghcr.io/ismoilovdevml/hangar:9.9.9
 	check "no compose profiles" env_is "$D" COMPOSE_PROFILES ""
 	check "install recorded" grep -q '^HANGAR_INSTALLED=20' "$D/.env"
-	for f in security.secret_key docker.token_key postgres-password initial-admin-password; do
+	for f in security.secret_key docker.token_key postgres-password; do
 		check ".env has no secret ($f)" absent "$D/.env" "$(<"$D/secrets/$f")"
 	done
 	check "compose.yaml is the release file" cmp -s "$D/compose.yaml" "$COMPOSE_SRC/compose.yaml"
@@ -491,6 +501,7 @@ test_migration_from_old_layout() {
 	check "postgres password" test "$(<"$D/secrets/postgres-password")" = "legacy0pg0password0hex000"
 	check "database url" test "$(<"$D/secrets/database.url")" = "postgres://hangar:legacy0pg0password0hex000@postgres:5432/hangar?sslmode=disable"
 	check "no initial password: the admin exists" test ! -e "$D/secrets/initial-admin-password"
+	check "existing administrator kept" contains "$OUT" "existing administrator kept"
 	check "no password printed" absent "$OUT" "Password:"
 	for f in "$D"/secrets/*; do check "${f##*/} is 600" mode_is "$f" 600; done
 	# Settings carried over.
@@ -626,6 +637,16 @@ test_password_after_failed_first_run() {
 	run_install --data-dir "$D" --version v9.9.9 --yes
 	check "third run" ok
 	check "not again" absent "$OUT" "Password:"
+}
+
+# The database already had an administrator: no one-time password, and the
+# summary says how to set one.
+test_no_password_generated() {
+	export FAKE_NO_PASSWORD=1
+	run_install --data-dir "$T/d" --version v9.9.9 --yes
+	check "exit 0" ok
+	check "no password line" absent "$OUT" "Password:"
+	check "reset hint" contains "$OUT" "hangar admin reset-password --user admin"
 }
 
 # ---- Runner -------------------------------------------------------------------------

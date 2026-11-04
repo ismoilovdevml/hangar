@@ -51,7 +51,8 @@
   | sudo bash` asks for a data directory (default `/srv/hangar`) and an
   optional domain (Caddy with automatic TLS, or behind your reverse proxy),
   generates every secret, starts Hangar and PostgreSQL and prints the URL,
-  the user `admin` and a one-time password. Every question has a flag
+  the user `admin` and the one-time password the server generated
+  (`bootstrap.initial_password_file`, `<data>/secrets/initial-admin-password`). Every question has a flag
   (`--data-dir`, `--domain`, `--tls caddy|proxy`, `--port`, `--yes`).
   Re-running it upgrades in place after dumping the database to
   `<data>/backups/`; `--uninstall` keeps the data, `--purge` deletes it after
@@ -65,9 +66,7 @@
 - **Secrets from files**: new setting `secrets_dir` (`HANGAR_SECRETS_DIR`):
   a file named after a setting's path (`security.secret_key`,
   `database.url`, `auth.oidc.client_secret`) holds its value; the
-  environment still wins. Works with Kubernetes secret volumes. New setting
-  `bootstrap.admin_password_file`: the first administrator's password from a
-  file; while the file is missing, bootstrap is off.
+  environment still wins. Works with Kubernetes secret volumes.
 - **Moving `/opt/hangar` installations**: `install.sh --migrate-from
   /opt/hangar --data-dir /srv/hangar` (offered automatically when found)
   converts the `.env` secrets into files, keeps `hangar.yaml`, the URL, port,

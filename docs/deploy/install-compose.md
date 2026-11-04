@@ -80,7 +80,8 @@ credentials stored in the database.
 The server reads `secrets/` through `secrets_dir`: a file named after a
 setting's path holds its value. The installer writes
 `security.secret_key`, `docker.token_key` and `database.url`, plus
-`postgres-password` for PostgreSQL. To add one, for example an SSO client
+`postgres-password` for PostgreSQL; the server adds
+`initial-admin-password` on its first start. To add one, for example an SSO client
 secret, create the file and restart:
 
 ```bash
@@ -96,12 +97,14 @@ Details: `secrets_dir` in [hangar.example.yaml](../../hangar.example.yaml).
 
 ### First administrator
 
-On the first install the installer writes a random password to
-`secrets/initial-admin-password` (mode 600) and prints it once. On its first
-start the server creates `admin` with it
-(`bootstrap.admin_password_file`). After the first password change the file
-is removed; while it is missing, bootstrap is off. Other ways to get an
-administrator: [first-admin.md](first-admin.md).
+On its first start with an empty database the server creates `admin` with a
+one-time password and writes it to `secrets/initial-admin-password` (mode 600,
+`bootstrap.initial_password_file`). The installer prints it once; at the first
+sign-in you choose your own password, and the file is deleted. A moved
+installation keeps its administrators and gets no such password. Lost it
+before signing in:
+`cd /srv/hangar && sudo docker compose exec hangar hangar admin reset-password --user admin`.
+More: [first-admin.md](first-admin.md).
 
 ## Settings
 

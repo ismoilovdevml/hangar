@@ -250,8 +250,10 @@ func TestServerConfigLoads(t *testing.T) {
 	if cfg.Security.SecretKey == "" || cfg.Docker.TokenKey == "" {
 		t.Error("secret key or token key not read from secrets/")
 	}
-	if cfg.Bootstrap.AdminUser != "admin" || cfg.Bootstrap.AdminPassword != "abcde-fghjk-mnpqr-stuvw" {
-		t.Errorf("bootstrap = %+v", cfg.Redacted().Bootstrap)
+	// The first administrator comes from the server's one-time password
+	// file, never from environment bootstrap.
+	if cfg.Bootstrap.AdminUser != "" || cfg.Bootstrap.AdminPassword != "" {
+		t.Errorf("bootstrap = %+v; use the initial password file", cfg.Redacted().Bootstrap)
 	}
 	if cfg.Auth.Session.Insecure {
 		t.Error("cookies must stay secure for an https base URL")
@@ -259,13 +261,25 @@ func TestServerConfigLoads(t *testing.T) {
 	if cfg.Storage.Kind != "fs" || cfg.Storage.FS.Path != "/var/lib/hangar/blobs" || cfg.NATS.DataDir != "/var/lib/hangar/nats" {
 		t.Errorf("storage %+v nats %+v", cfg.Storage.FS, cfg.NATS)
 	}
+}
 
-	// After the first password change the file is gone; the server starts
-	// without bootstrap.
-	if err := os.Remove(filepath.Join(secrets, "initial-admin-password")); err != nil {
-		t.Fatal(err)
+// Every HANGAR_* variable the hangar service sets is a server setting, so a
+// renamed setting cannot silently stop working; the one-time password lands
+// in secrets/initial-admin-password, where install.sh reads it.
+func TestEnvironmentIsKnown(t *testing.T) {
+	c, _ := load(t)
+	h := c.Services["hangar"]
+	known := config.EnvVars()
+	for k := range h.Environment {
+		if k != config.EnvConfigFile && !slices.Contains(known, k) {
+			t.Errorf("compose.yaml sets %s, which is not a server setting", k)
+		}
 	}
-	if cfg, err = config.Load(""); err != nil || cfg.Bootstrap.AdminUser != "" {
-		t.Fatalf("without the password file: %v %+v", err, cfg.Redacted().Bootstrap)
+	const want = "/run/secrets/hangar/initial-admin-password"
+	if got := h.Environment["HANGAR_BOOTSTRAP_INITIAL_PASSWORD_FILE"]; got != want {
+		t.Errorf("HANGAR_BOOTSTRAP_INITIAL_PASSWORD_FILE = %q, want %q", got, want)
+	}
+	if !strings.Contains(installer(t), "pw_file=$data/secrets/initial-admin-password") {
+		t.Error("install.sh does not read secrets/initial-admin-password")
 	}
 }
