@@ -60,8 +60,12 @@ curl -X POST https://hangar.example.com/api/v1/repositories \
   `negative_cache_ttl` (default `5m`).
 - Files are verified against the page's sha256 and cached forever.
 - `config.format.file_hosts` lists other hosts files may be downloaded from
-  (default `["files.pythonhosted.org"]`). Change it for mirrors that serve files
-  from another host.
+  (default `["files.pythonhosted.org"]`; `.domain` suffixes allowed). Change it,
+  or use `proxy.related_hosts`, for mirrors that serve files from another host.
+  The remote's credentials are never sent to those hosts.
+- A remote answering `429` for an uncached page or file is passed on as `429`
+  with its `Retry-After`. With `"offline": true` in `config.proxy`, only cached
+  pages and files are served.
 
 ### Group
 

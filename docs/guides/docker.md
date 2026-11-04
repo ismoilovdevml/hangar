@@ -26,11 +26,11 @@ docker push hangar.example.com/docker-hosted/team/app:1.0
 - The repository name must also be valid in an OCI name (lower case letters, digits
   and single dashes; no trailing dash).
 - `/repository/<repo>/` URLs do not serve Docker content; use `/v2/`.
-- A dedicated host name or port per repository (`config.connector`) is not
-  supported yet. All Docker repositories share the `server.base_url` host.
+- To drop the repository prefix from image names, give the repository a
+  [connector](#connectors-own-host-or-port).
 
-The token realm sent to clients is `<server.base_url>/v2/token`, so clients must be
-able to reach `server.base_url` itself.
+On the main host the token realm sent to clients is `<server.base_url>/v2/token`,
+so clients must be able to reach `server.base_url` itself.
 
 ## Server setting for Docker
 
@@ -94,9 +94,15 @@ docker pull hangar.example.com/docker-hub/library/alpine:3.20
 
 - Blobs and manifests by digest are cached forever; tags are revalidated after
   `metadata_ttl`. When the remote is down, the cached tag is served.
-- Docker Hub rate-limit headers are passed through. To pull with a Docker Hub
-  account, add `"auth": {"kind": "basic", "username": "<hub-user>", "password": "<hub-token>"}`
-  to `config.proxy`.
+- Docker Hub rate-limit headers are passed through. While the remote rate limits,
+  cached content is still served and uncached content answers
+  `429 TOOMANYREQUESTS` with the remote's `Retry-After`.
+- To pull with a Docker Hub account, add
+  `"auth": {"kind": "basic", "username": "<hub-user>", "password": "<hub-token>"}`
+  to `config.proxy`. Credentials need `HANGAR_SECRET_KEY` on the server (see
+  [README.md](README.md#things-that-apply-to-every-proxy-repository)).
+- Names the remote does not serve answer `404`, and are remembered for
+  `negative_cache_ttl` (30 s when unset).
 - Proxy repositories are read-only (`405` on push).
 
 ## Group repository
@@ -119,7 +125,48 @@ docker push hangar.example.com/docker-group/team/app:1.1         # stored in doc
 ```
 
 Reads try the members in order. Pushes go to `write_member`; without one the group
-is read-only. Groups take no `blob_store`.
+is read-only. Groups take no `blob_store`. An unreachable or rate-limiting proxy
+member counts as a miss, so pushes through the group keep working while Docker Hub
+is down.
+
+## Connectors: own host or port
+
+A connector gives one Docker repository an entry point of its own, where image
+names carry no repository prefix. Set it in `config.connector` when creating or
+updating the repository:
+
+| Setting | Effect |
+|---|---|
+| `"host": "cr.example.com"` | requests whose `Host` is that name are served by this repository (route the name to Hangar with DNS and your reverse proxy; `X-Forwarded-Host` is honoured only from `server.trusted_proxies`) |
+| `"http_port": 5001` | Hangar opens an extra plain-HTTP listener on that port serving only this repository's `/v2/` API |
+
+```bash
+curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H "Authorization: Bearer $HANGAR_TOKEN" -H 'Content-Type: application/json' \
+  -d '{
+        "name": "docker-team",
+        "format": "docker",
+        "type": "hosted",
+        "blob_store": "default",
+        "config": { "connector": { "host": "cr.example.com" } }
+      }'
+```
+
+```bash
+echo '<token>' | docker login cr.example.com -u <user> --password-stdin
+docker push cr.example.com/team/app:1.0          # stored in docker-team as team/app
+docker pull hangar.example.com/docker-team/team/app:1.0   # the main host still works
+```
+
+- A host or port belongs to one repository only, and the host cannot be the
+  `server.base_url` host.
+- The token realm follows the entry point (`https://cr.example.com/v2/token` for a
+  host connector, `http://<host>:<port>/v2/token` for a port connector), so clients
+  that only reach the connector get their tokens there.
+- The repository's `url` in the REST API shows the connector address.
+- Reverse proxy examples (nginx, Caddy) for a host connector are in
+  `internal/formats/docker/README.md`. The proxy must pass the original `Host` or
+  `X-Forwarded-Host`, and should not buffer request bodies (layers can be many GiB).
 
 ## Multi-arch builds with buildx
 

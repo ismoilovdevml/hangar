@@ -51,7 +51,9 @@ curl -X POST https://hangar.example.com/api/v1/repositories \
 - `content_ttl`: `0` trusts cached files forever; otherwise a cached file older than
   this is revalidated with the remote.
 - `negative_cache_ttl`: how long a remote 404 is remembered.
-- When the remote fails, a cached copy is still served.
+- When the remote fails, a cached copy is still served. With `"offline": true` in
+  `config.proxy`, the remote is never contacted: cached files are served and
+  anything else is `404`.
 
 ### Group
 

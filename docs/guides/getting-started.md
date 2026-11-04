@@ -59,14 +59,25 @@ file. Settings you will want early:
 | `database.url` | `HANGAR_DATABASE_URL` | (required) |
 | `storage.fs.path` | `HANGAR_STORAGE_FS_PATH` | `./data/blobs` |
 | `nats.data_dir` | `HANGAR_NATS_DATA_DIR` | `./data/nats` |
+| `security.secret_key` | `HANGAR_SECRET_KEY` | (none) |
 | `docker.token_key` | `HANGAR_DOCKER_TOKEN_KEY` | random per process |
 | `bootstrap.admin_user` | `HANGAR_BOOTSTRAP_ADMIN_USER` | (none) |
 | `bootstrap.admin_password` | `HANGAR_BOOTSTRAP_ADMIN_PASSWORD` | (none) |
 
-Set `HANGAR_DOCKER_TOKEN_KEY` (32+ random bytes, e.g. `openssl rand -base64 48`)
-before using Docker repositories, so registry logins survive restarts.
+Two keys to set before real use, the same value on every node, kept in your
+secret manager:
 
-Check that the server is up:
+- `HANGAR_SECRET_KEY` (`openssl rand -base64 32`): encrypts proxy upstream
+  credentials and S3 keys in the database. Without it, repositories that carry
+  credentials are refused. A lost key cannot be recovered.
+- `HANGAR_DOCKER_TOKEN_KEY` (32+ random bytes, e.g. `openssl rand -base64 48`):
+  signs registry tokens, so Docker logins and uploads survive restarts.
+
+Before exposing the server, go through the hardening checklist in
+[docs/security.md](../security.md).
+
+Check that the server is up (these two need no sign-in; every other API route
+does):
 
 ```bash
 curl http://localhost:8080/readyz
@@ -78,8 +89,9 @@ curl http://localhost:8080/api/v1/system/status
 Option A: environment variables (used above). When `HANGAR_BOOTSTRAP_ADMIN_USER`
 and `HANGAR_BOOTSTRAP_ADMIN_PASSWORD` are both set and no enabled administrator
 exists, `hangar serve` creates that local user with the built-in `Admin` role.
-Once an administrator exists, these variables change nothing. You can remove them
-after the first start.
+Once an administrator exists, these variables change nothing. Remove
+`HANGAR_BOOTSTRAP_ADMIN_PASSWORD` after the first start and change the password
+(web UI: My account, or `PUT /api/v1/me/password`).
 
 Option B: the CLI, which talks to the database directly (no running server
 needed; it reads the same configuration):
@@ -93,7 +105,11 @@ echo '<admin-password>' | docker compose -f deploy/docker-compose.yml exec -T ha
 ```
 
 Password rules (defaults): 12 to 256 characters, must not contain the username.
-Five failed sign-ins within 15 minutes lock the account for 15 minutes.
+Five failed password checks within 15 minutes, including HTTP Basic requests with
+a wrong password, lock the account for 15 minutes (`423`). A client address with
+too many failed authentications is also throttled (`429`, see [api.md](api.md#rate-limits)).
+`hangar admin bootstrap` restores access if every administrator is locked out or
+disabled.
 
 ## 3. Sign in and create a personal access token
 
@@ -116,8 +132,10 @@ The response contains the secret once, in `secret`:
 ```json
 {"id":"1bf1dce4-...","name":"laptop","owner":"admin","prefix":"hgr_1Hzo",
  "scopes":["repo:*:admin","system:repos:admin"],"expires_at":"2027-06-30T00:00:00Z",
- "created_at":"...","secret":"hgr_1HzoFiZr..."}
+ "created_at":"...","owner_kind":"user","last_used_ip":null,"secret":"hgr_1HzoFiZr..."}
 ```
+
+The web UI offers the same under My account, Personal access tokens.
 
 - `scopes` narrow what the token may do; the token never gets more than its owner's
   roles. `repo:*:admin` plus `system:repos:admin` lets this token create and manage

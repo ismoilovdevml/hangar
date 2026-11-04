@@ -13,7 +13,11 @@ Practical, copy-paste guides for running Hangar and connecting package clients t
 | [Raw](raw.md) | Arbitrary files with curl and wget, directory listings |
 | [CI integration](ci.md) | GitLab CI, GitHub Actions, Jenkins and Gitea Actions with tokens |
 | [REST API](api.md) | Authentication, common calls, pagination, errors |
-| [Access control](access.md) | Users, roles, privileges and token scopes |
+| [Access management](access.md) | Members, service accounts, roles, privileges and token scopes |
+
+Operators also need [docs/security.md](../security.md) (secret key, hardening,
+rate limits) and [docs/operations/monitoring.md](../operations/monitoring.md)
+(metrics, logs, tracing).
 
 Formats compiled into the server today: `docker`, `maven`, `npm`, `nuget`, `pypi` and `raw`
 (`GET /api/v1/formats` lists them). Other formats are not supported yet.
@@ -30,7 +34,9 @@ Formats compiled into the server today: `docker`, `maven`, `npm`, `nuget`, `pypi
     writes to one hosted member (`write_member`). Maven and raw groups are read-only.
 - **URLs**: every format except Docker is served at
   `<base_url>/repository/<repo>/...`. Docker/OCI is served at `<base_url>/v2/`,
-  and the first path segment of the image name selects the repository.
+  and the first path segment of the image name selects the repository; a Docker
+  repository can also get its own host name or port (a connector, see
+  [docker.md](docker.md#connectors-own-host-or-port)).
 - **Credentials**: every client authenticates with HTTP Basic (any username plus a
   personal access token as the password) or `Authorization: Bearer <token>`.
   Tokens start with `hgr_`.
@@ -46,13 +52,28 @@ Formats compiled into the server today: `docker`, `maven`, `npm`, `nuget`, `pypi
   CIDRs, IPs, host names or `.domain` suffixes).
 - A corporate outbound proxy is configured once in `http.proxy` (`HANGAR_HTTP_PROXY`)
   and inherited by every proxy repository; see `hangar.example.yaml`.
-- Common proxy settings in `config.proxy`: `remote_url` (required),
-  `metadata_ttl`, `content_ttl`, `negative_cache_ttl` (Go durations such as `30m`,
-  `24h`), and `auth` for upstream credentials
-  (`{"kind": "basic", "username": "...", "password": "..."}`,
-  `{"kind": "bearer", "token": "..."}` or
-  `{"kind": "header", "header_name": "...", "token": "..."}`). Upstream secrets are
-  stored encrypted and never returned by the API.
+- Common proxy settings in `config.proxy`:
+
+  | Key | Meaning |
+  |---|---|
+  | `remote_url` | upstream base URL (required) |
+  | `metadata_ttl`, `content_ttl`, `negative_cache_ttl` | cache lifetimes, Go durations such as `30m`, `24h` |
+  | `auth` | upstream credentials: `{"kind": "basic", "username": "...", "password": "..."}`, `{"kind": "bearer", "token": "..."}` or `{"kind": "header", "header_name": "...", "token": "..."}` |
+  | `related_hosts` | other hosts the remote links to (file CDNs, API hosts) that may be fetched on its behalf: host names, `host:port` or `.domain` suffixes; the remote's credentials are never sent there |
+  | `offline` | `true`: never contact the remote, serve only cached content (stale included), answer 404 for the rest |
+  | `max_concurrent_requests` | cap on requests in flight to the remote (`0` = unlimited) |
+  | `http` | per-remote outbound settings: `proxy`, `ca_bundle`, timeouts, connection limits |
+
+- Upstream credentials (`auth`, or a password inside `remote_url`) are encrypted
+  with the server's secret key and never returned by the API. Set
+  `HANGAR_SECRET_KEY` (`openssl rand -base64 32`, same value on every node) before
+  adding them: without it, saving a repository that carries a credential answers
+  `501`. See [docs/security.md](../security.md).
+- When a remote answers `429`, Hangar passes it on (with `Retry-After`) for content
+  it has not cached and keeps serving what it has.
+- `POST /api/v1/repositories/<name>/cache:invalidate` makes a proxy forget
+  remembered 404s and rate limits so the next request asks the remote again;
+  cached content is kept.
 - Group members are merged. If a proxy member serves a public package with the
   same name as one of your internal packages, clients may resolve the public one
   (for example a higher version). Use scoped or prefixed names for internal
@@ -62,8 +83,9 @@ Formats compiled into the server today: `docker`, `maven`, `npm`, `nuget`, `pypi
 
 Hangar's listener speaks plain HTTP; terminate TLS in a reverse proxy or load
 balancer and set `server.base_url` to the `https://` URL. List the proxy in
-`server.trusted_proxies` so `X-Forwarded-*` headers are honoured. Every guide
-notes the extra client flag needed when you test against an `http://` URL.
+`server.trusted_proxies` so `X-Forwarded-*` headers are honoured (HSTS is then
+sent on HTTPS requests). Every guide notes the extra client flag needed when you
+test against an `http://` URL.
 
 See also: [docs/FORMATS.md](../FORMATS.md) (protocol details per format) and
 [api/openapi.yaml](../../api/openapi.yaml) (full REST reference).

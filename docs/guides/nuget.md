@@ -53,7 +53,11 @@ curl -X POST https://hangar.example.com/api/v1/repositories \
 `remote_url` is the feed base, not the service index. The service index path
 defaults to `v3/index.json`; for another feed layout set
 `config.format.service_index` (a path relative to `remote_url`). Metadata is cached
-for `metadata_ttl` (`0` means 1h); packages are cached forever.
+for `metadata_ttl` (`0` means 1h); packages are cached forever. Hosts the
+service index points to outside `remote_url` (nuget.org's search service) are
+fetched as related hosts, without the remote's credentials. When search there
+fails, is rate limited or the proxy is `offline`, search answers from the cached
+packages.
 
 ### Group
 

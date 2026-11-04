@@ -46,7 +46,14 @@ Recommendations:
   Patterns work: `repo:npm-*:write`.
 - Always set an expiry (at most 366 days) and rotate before it.
 - Publish to the hosted repository URL; resolve through the group.
-- See [access.md](access.md) for roles and privileges.
+- Remove expired or revoked tokens from CI promptly. Failed authentications are
+  rate limited per client address: after about 30 failures in a minute, every
+  request from that runner address that carries credentials gets `429` until the
+  budget refills, including jobs with valid tokens (see
+  [api.md](api.md#rate-limits)). Runners behind one NAT address share that budget.
+- The same steps are available in the web UI (Access & audit, Service accounts),
+  which also warns about tokens close to expiry. See [access.md](access.md) for
+  roles and privileges.
 
 The examples below publish a Docker image, an npm package and a Maven artifact.
 Each assumes the matching repositories exist (see the client guides) and that
