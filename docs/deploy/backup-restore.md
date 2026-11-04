@@ -46,13 +46,17 @@ backups cost only the new bytes.
 
 ### Compose stack
 
+For an installation made with `install.sh` (data directory `/srv/hangar`):
+
 ```bash
-cd /path/to/hangar
-set -a; . deploy/compose/.env; set +a
-HANGAR_COMPOSE_FILE=deploy/compose/compose.yaml BLOB_SOURCE=compose-minio \
+HANGAR_COMPOSE_FILE=/srv/hangar/compose.yaml BLOB_SOURCE=fs:/srv/hangar/blobs \
 BACKUP_DIR=/srv/backups/hangar BACKUP_KEEP=14 HANGAR_URL=http://127.0.0.1:8080 \
   deploy/scripts/backup.sh
 ```
+
+Also keep a copy of `/srv/hangar/secrets/` (it does not change after the
+install): `security.secret_key` decrypts credentials stored in the database.
+A stopped stack can simply be backed up as the whole data directory.
 
 ### Kubernetes / external services
 
@@ -99,8 +103,7 @@ Copy finished backups off the host, and test a restore regularly.
    target:
 
    ```bash
-   set -a; . deploy/compose/.env; set +a
-   HANGAR_COMPOSE_FILE=deploy/compose/compose.yaml BLOB_SOURCE=compose-minio \
+   HANGAR_COMPOSE_FILE=/srv/hangar/compose.yaml BLOB_SOURCE=fs:/srv/hangar/blobs \
      deploy/scripts/restore.sh /srv/backups/hangar/hangar-20261104T023000Z
    ```
 

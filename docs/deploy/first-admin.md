@@ -62,7 +62,7 @@ is `false`, for automated setups that keep using the configured password.
 
 | Install | Where |
 |---|---|
-| Compose (`deploy/compose`) | `HANGAR_BOOTSTRAP_ADMIN_USER` / `HANGAR_BOOTSTRAP_ADMIN_PASSWORD` in `.env` |
+| Compose (`install.sh`) | Generated: `admin` with the password in `<data>/secrets/initial-admin-password` (`bootstrap.admin_password_file`), printed once by the installer; the file is removed after the first password change |
 | Helm | `bootstrapAdmin.username` / `password`, or `bootstrapAdmin.existingSecret` (keys `admin-username`, `admin-password`) |
 | systemd | `/etc/hangar/hangar.env` |
 

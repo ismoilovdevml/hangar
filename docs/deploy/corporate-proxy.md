@@ -126,10 +126,11 @@ http:
 
 Where to set them:
 
-- Compose: `HANGAR_HTTP_PROXY`, `HANGAR_HTTP_PROXY_USERNAME`,
-  `HANGAR_HTTP_PROXY_PASSWORD`, `HANGAR_HTTP_NO_PROXY` in `.env`. For a CA
-  file, mount it into the container (an extra `volumes:` entry in a compose
-  override) and set `http.ca_file` in `deploy/compose/hangar.yaml`.
+- Compose (`install.sh`): `http.proxy` and `http.no_proxy` in
+  `<data>/config/hangar.yaml`, the password in the file
+  `<data>/secrets/http.proxy_password` (mode 600, owner 65532). For a CA
+  file, mount it into the container (an extra `volumes:` entry in
+  `<data>/compose.override.yaml`) and set `http.ca_file` in `hangar.yaml`.
 - Helm: `config.http.*`, the password in `httpProxyPassword`, the CA via
   `extraVolumes`/`extraVolumeMounts` ([install-helm.md](install-helm.md#private-ca-and-corporate-proxy)).
   Add the cluster's internal domains (`.svc`, `.cluster.local`) to `no_proxy`.
