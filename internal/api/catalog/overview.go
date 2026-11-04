@@ -44,6 +44,10 @@ type Overview struct {
 	CriticalFindings int64 // open or assigned critical findings
 	PackagesAffected int64 // components with an open critical finding
 	Quarantined      int64
+	// ScannedComponents have a successful vulnerability scan; LastScanAt is
+	// the newest one (nil before the first).
+	ScannedComponents int64
+	LastScanAt        *time.Time
 
 	// StorageByFormat sums each distinct blob once per format.
 	StorageByFormat []FormatBytes
@@ -72,7 +76,9 @@ func (c *Catalog) Overview(ctx context.Context, q OverviewQuery) (*Overview, err
 			(SELECT count(*) FROM findings WHERE status IN ('open', 'assigned')),
 			(SELECT count(*) FROM findings WHERE status IN ('open', 'assigned') AND severity = 'critical'),
 			(SELECT count(DISTINCT component_id) FROM findings WHERE status IN ('open', 'assigned') AND severity = 'critical'),
-			(SELECT count(*) FROM components WHERE quarantined)`, since)
+			(SELECT count(*) FROM components WHERE quarantined),
+			(SELECT count(*) FROM component_scans WHERE status = 'ok'),
+			(SELECT max(ok_at) FROM component_scans)`, since)
 	b.Queue(`SELECT x.format, COALESCE(sum(bl.size), 0)::bigint
 		FROM (SELECT DISTINCT r.format, r.blob_store_id, a.blob_digest
 			FROM assets a JOIN repositories r ON r.id = a.repo_id WHERE r.blob_store_id IS NOT NULL) x
@@ -93,7 +99,7 @@ func (c *Catalog) Overview(ctx context.Context, q OverviewQuery) (*Overview, err
 		return nil, fmt.Errorf("overview capacity: %w", err)
 	}
 	if err := br.QueryRow().Scan(&o.PublishedLast24h, &o.FailedPushes24h, &o.OpenFindings, &o.CriticalFindings,
-		&o.PackagesAffected, &o.Quarantined); err != nil {
+		&o.PackagesAffected, &o.Quarantined, &o.ScannedComponents, &o.LastScanAt); err != nil {
 		return nil, fmt.Errorf("overview counts: %w", err)
 	}
 	rows, err := br.Query()

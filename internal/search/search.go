@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/scanning"
 )
 
 // Sort orders.
@@ -82,14 +83,18 @@ func New(pool *pgxpool.Pool) *Service {
 	return &Service{pool: pool, now: time.Now}
 }
 
-// ScanStateSQL is the SQL expression for a component's scan state
-// (pending, clean, findings, quarantined) given the components alias c:
-// quarantined wins, then any open or assigned finding, then the
-// "scan_state" attribute the scanner sets to "clean", else pending.
+// ScanStateSQL is the SQL expression for a component's scan state given
+// the components alias c: quarantined wins, then any open or assigned
+// finding; components of formats without an advisory source are
+// unsupported; otherwise the last scan decides (clean or failed), and a
+// component never scanned is pending.
 func ScanStateSQL(c string) string {
 	return `CASE WHEN ` + c + `.quarantined THEN 'quarantined'
 		WHEN EXISTS (SELECT 1 FROM findings sf WHERE sf.component_id = ` + c + `.id AND sf.status IN ('open', 'assigned')) THEN 'findings'
-		WHEN ` + c + `.attributes->>'scan_state' = 'clean' THEN 'clean'
+		WHEN (SELECT sr.format FROM repositories sr WHERE sr.id = ` + c + `.repo_id) <> ALL ('{` +
+		strings.Join(scanning.SupportedFormats(), ",") + `}'::text[]) THEN 'unsupported'
+		WHEN (SELECT ss.status FROM component_scans ss WHERE ss.component_id = ` + c + `.id) = 'ok' THEN 'clean'
+		WHEN (SELECT ss.status FROM component_scans ss WHERE ss.component_id = ` + c + `.id) = 'failed' THEN 'failed'
 		ELSE 'pending' END`
 }
 
@@ -147,7 +152,9 @@ func (s *Service) matchCTE(b *builder, p Parsed, q Query, skip string) string {
 		where = append(where, "EXISTS (SELECT 1 FROM assets a WHERE a.component_id = c.id AND a.blob_digest LIKE ANY("+b.arg(pats)+"::text[]))")
 	}
 	if len(p.CVEs) > 0 {
-		where = append(where, "EXISTS (SELECT 1 FROM findings f WHERE f.component_id = c.id AND upper(f.advisory_id) = ANY("+b.arg(p.CVEs)+"::text[]))")
+		cves := b.arg(p.CVEs)
+		where = append(where, "EXISTS (SELECT 1 FROM findings f WHERE f.component_id = c.id AND f.status <> 'fixed' AND (upper(f.advisory_id) = ANY("+
+			cves+"::text[]) OR EXISTS (SELECT 1 FROM unnest(f.aliases) fa WHERE upper(fa) = ANY("+cves+"::text[]))))")
 	}
 	if len(p.Licenses) > 0 {
 		pats := make([]string, len(p.Licenses))

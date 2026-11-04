@@ -32,7 +32,7 @@ type Parsed struct {
 	SHA256      []string // sha256: hex prefix (4-64 chars)
 	CVEs        []string // cve:
 	Licenses    []string // license:
-	Security    []string // security: pending|clean|findings|quarantined
+	Security    []string // security: pending|clean|findings|quarantined|failed|unsupported
 	UnusedFor   time.Duration
 	PublishedLT time.Time // published:<date
 	PublishedGE time.Time // published:>date (or the day of published:date)
@@ -41,7 +41,7 @@ type Parsed struct {
 var (
 	hexRE      = regexp.MustCompile(`^[0-9a-f]{4,64}$`)
 	durationRE = regexp.MustCompile(`^(\d+)([hdw])$`)
-	scanStates = map[string]bool{"pending": true, "clean": true, "findings": true, "quarantined": true}
+	scanStates = map[string]bool{"pending": true, "clean": true, "findings": true, "quarantined": true, "failed": true, "unsupported": true}
 )
 
 // Qualifiers lists the qualifier keys Parse understands.
@@ -81,7 +81,7 @@ func Parse(q string) (Parsed, error) {
 		case "security":
 			v := strings.ToLower(val)
 			if !scanStates[v] {
-				return p, fmt.Errorf("security:%s: want pending, clean, findings or quarantined: %w", val, core.ErrInvalid)
+				return p, fmt.Errorf("security:%s: want pending, clean, findings, quarantined, failed or unsupported: %w", val, core.ErrInvalid)
 			}
 			p.Security = append(p.Security, v)
 		case "unused":

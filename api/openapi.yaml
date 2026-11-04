@@ -564,6 +564,35 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /repositories/{name}:scan:
+    parameters:
+      - $ref: "#/components/parameters/RepositoryName"
+    post:
+      tags: [repositories, security]
+      operationId: scanRepository
+      description: >-
+        Queues a vulnerability scan of every component of the repository
+        (npm, Maven, PyPI, NuGet and Go repositories). Requires
+        `system:security:write` or write access to the repository; audited as
+        `repository.scan`. Repeated requests within the same minute are one scan.
+      responses:
+        "202":
+          description: Scan queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RepositoryScanQueued" }
+        "400":
+          description: The format has no advisory source (e.g. Docker images)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "501":
+          description: Scanning is turned off (`scanning.enabled`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /repositories/{name}/browse:
     parameters:
@@ -851,6 +880,7 @@ paths:
     get:
       tags: [components, security]
       operationId: listComponentFindings
+      description: Unresolved findings of the component (open, assigned, waived) and its scan state.
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
@@ -859,7 +889,32 @@ paths:
           description: Findings
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/FindingPage" }
+              schema: { $ref: "#/components/schemas/ComponentFindings" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /components/{id}:scan:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [components, security]
+      operationId: scanComponent
+      description: >-
+        Scans the component against the advisory database now and answers
+        when done. Components of formats without an advisory source (Docker
+        images) are not scanned; the result says `unsupported`. Requires
+        `system:security:write` or write access to the repository.
+      responses:
+        "200":
+          description: Scan finished (also when it failed; see `scan.status`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScanResult" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "501":
+          description: Scanning is turned off (`scanning.enabled`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /components/{id}/dependents:
     parameters:
       - $ref: "#/components/parameters/Id"
@@ -900,7 +955,7 @@ paths:
           description: |
             Free text plus qualifiers: `format:npm`, `repo:npm-hosted`, `sha256:ab12`,
             `cve:CVE-2026-1234`, `unused:>90d`, `license:GPL-3.0`, `published:<2026-01-01`,
-            `security:findings` (pending, clean, findings, quarantined). Each free-text word is
+            `security:findings` (pending, clean, findings, quarantined, failed, unsupported); `cve:` also matches aliases. Each free-text word is
             a prefix match on the package coordinates.
           schema: { type: string }
         - name: sort
@@ -924,20 +979,35 @@ paths:
     get:
       tags: [security]
       operationId: listFindings
+      description: >-
+        Findings of the components in repositories the caller can read, most
+        severe first. Without `status`, fixed findings are left out. `totals`,
+        `fixable`, `waived` and `components` count open findings (open or
+        assigned) of the same repositories and ignore the other filters.
       parameters:
         - name: severity
           in: query
-          schema: { $ref: "#/components/schemas/Severity" }
+          description: One or more severities, comma-separated
+          schema: { type: string, examples: ["critical,high"] }
         - name: status
           in: query
-          schema: { $ref: "#/components/schemas/FindingStatus" }
+          description: One or more of open, assigned, waived, fixed, comma-separated
+          schema: { type: string, examples: ["waived"] }
         - name: fix_available
           in: query
           schema: { type: boolean }
         - name: in_production_days
           in: query
           description: Only components pulled in the last N days
-          schema: { type: integer, minimum: 1 }
+          schema: { type: integer, minimum: 1, maximum: 3650 }
+        - name: repository
+          in: query
+          description: Exact repository name
+          schema: { type: string }
+        - name: q
+          in: query
+          description: Matches the advisory id, an alias (CVE), the package or the title
+          schema: { type: string }
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
       responses:
@@ -946,12 +1016,55 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/FindingList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+  /findings/trend:
+    get:
+      tags: [security]
+      operationId: getFindingTrend
+      description: >-
+        One point per day (UTC), oldest first, built from the stored
+        findings: active findings (first seen and not yet fixed) by severity
+        at the end of the day, plus findings first seen and fixed that day.
+        Findings of deleted components are not counted.
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 365, default: 30 }
+        - name: repository
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Daily points
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FindingTrend" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+  /findings/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [security]
+      operationId: getFinding
+      responses:
+        "200":
+          description: The finding with the advisory text and references
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Finding" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /findings/{id}/waiver:
     parameters:
       - $ref: "#/components/parameters/Id"
     post:
       tags: [security]
       operationId: waiveFinding
+      description: >-
+        Accepts the risk of a finding until a date. Requires
+        `system:security:write`; audited as `finding.waive`. A waived finding
+        no longer counts as open and no longer quarantines its component. At
+        the expiry the finding is re-opened (audited as
+        `finding.waiver_expired`) and the quarantine policy applies again.
       requestBody:
         required: true
         content:
@@ -964,15 +1077,31 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Finding" }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
     delete:
       tags: [security]
       operationId: revokeWaiver
+      description: Re-opens a waived finding. Requires `system:security:write`; audited as `finding.waiver_revoke`.
       responses:
         "200":
-          description: Waiver removed
+          description: Waiver removed (or there was none)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Finding" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /scanning/status:
+    get:
+      tags: [security]
+      operationId: getScanningStatus
+      summary: Scanner configuration and scan coverage of the readable repositories
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScanningStatus" }
 
   # ---------------------------------------------------------------- cleanup
   /cleanup-policies:
@@ -2646,6 +2775,14 @@ components:
             packages_affected: { type: integer }
             quarantined: { type: integer }
             open_findings: { type: integer }
+            scanning:
+              type: [object, "null"]
+              description: Whether the numbers rest on scans; null on servers without a scanner
+              required: [enabled, scanned_components, last_scan_at]
+              properties:
+                enabled: { type: boolean }
+                scanned_components: { type: integer }
+                last_scan_at: { type: [string, "null"], format: date-time }
         traffic:
           type: array
           items: { $ref: "#/components/schemas/TrafficBucket" }
@@ -2968,7 +3105,12 @@ components:
     # ------------------------------------------------------------ components
     ScanState:
       type: string
-      enum: [pending, clean, findings, quarantined]
+      description: >-
+        pending: never scanned; clean: scanned, no open finding; findings: open
+        or assigned findings; quarantined: blocked from download; failed: the
+        last scan failed; unsupported: the format has no advisory source
+        (Docker images: image scanning not configured).
+      enum: [pending, clean, findings, quarantined, failed, unsupported]
     ScanSummary:
       type: object
       required: [state, critical, high, medium, low]
@@ -2978,6 +3120,13 @@ components:
         high: { type: integer }
         medium: { type: integer }
         low: { type: integer }
+        scanned_at:
+          type: [string, "null"]
+          format: date-time
+          description: Last scan attempt
+        scan_error:
+          type: string
+          description: Why the last scan failed
     Publisher:
       type: object
       required: [kind, display_name]
@@ -3253,19 +3402,156 @@ components:
         id: { type: string }
         kind: { type: string, enum: [vulnerability, license] }
         advisory_id: { type: string, examples: ["CVE-2026-1234", "GHSA-xxxx-xxxx-xxxx"] }
-        title: { type: string }
+        aliases:
+          type: array
+          description: Other ids of the same advisory (CVE, GHSA)
+          items: { type: string }
+        title: { type: string, description: One-line summary of the advisory }
+        details:
+          type: string
+          description: Advisory text (Markdown); only in GET /findings/{id}
         severity: { $ref: "#/components/schemas/Severity" }
-        cvss: { type: [number, "null"] }
-        package: { type: string }
+        cvss: { type: [number, "null"], description: CVSS base score }
+        cvss_vector: { type: [string, "null"], description: CVSS v4.0 or v3.x vector the score comes from }
+        package: { type: string, description: Package name as the advisory names it }
         installed: { type: string }
-        fixed_in: { type: [string, "null"] }
+        fixed_in:
+          type: [string, "null"]
+          description: Lowest version that fixes the installed one; null when no fix is known
+        fixed_versions:
+          type: array
+          items: { type: string }
+        affected_versions:
+          type: string
+          examples: [">=4.0.0, <4.5.1; >=4.6.0, <4.7.2"]
+        references:
+          type: array
+          items:
+            type: object
+            required: [type, url]
+            properties:
+              type: { type: string, examples: ["ADVISORY", "WEB", "FIX", "PACKAGE"] }
+              url: { type: string }
         status: { $ref: "#/components/schemas/FindingStatus" }
-        quarantined: { type: boolean }
-        affected_components: { type: integer }
-        waiver_reason: { type: [string, "null"] }
+        quarantined: { type: boolean, description: The component is quarantined }
+        affected_components:
+          type: integer
+          description: Readable components with an unresolved finding for the same advisory
+        waiver_reason:
+          type: [string, "null"]
+          description: Reason of the current waiver, or of the last one when it expired
         waiver_until: { type: [string, "null"], format: date-time }
+        waived_by: { type: [string, "null"] }
+        waived_at: { type: [string, "null"], format: date-time }
         assignee: { type: [string, "null"] }
+        source: { type: string, examples: ["osv"] }
         first_seen_at: { $ref: "#/components/schemas/Timestamp" }
+        last_seen_at: { $ref: "#/components/schemas/Timestamp" }
+        resolved_at:
+          type: [string, "null"]
+          format: date-time
+          description: When a rescan stopped reporting the advisory (status fixed)
+        advisory_published_at: { type: [string, "null"], format: date-time }
+        advisory_modified_at: { type: [string, "null"], format: date-time }
+        component:
+          type: object
+          required: [id, repository, format, namespace, name, version]
+          properties:
+            id: { type: string }
+            repository: { type: string }
+            format: { $ref: "#/components/schemas/Format" }
+            namespace: { type: string }
+            name: { type: string }
+            version: { type: string }
+    ComponentScan:
+      type: object
+      required: [status, scanned_at]
+      properties:
+        status:
+          type: string
+          enum: [never, ok, failed, unsupported]
+        error:
+          type: string
+          description: Why the last scan failed, or why the format is not scanned
+        scanned_at: { type: [string, "null"], format: date-time }
+    ComponentFindings:
+      allOf:
+        - $ref: "#/components/schemas/FindingPage"
+        - type: object
+          required: [scan]
+          properties:
+            scan: { $ref: "#/components/schemas/ComponentScan" }
+    ScanCounts:
+      type: object
+      required: [scanned, failed, findings, new_findings, quarantined, released]
+      properties:
+        scanned: { type: integer }
+        failed: { type: integer }
+        findings: { type: integer }
+        new_findings: { type: integer }
+        quarantined: { type: integer }
+        released: { type: integer }
+    ScanResult:
+      type: object
+      required: [component_id, scan, summary]
+      properties:
+        component_id: { type: string }
+        scan: { $ref: "#/components/schemas/ComponentScan" }
+        summary: { $ref: "#/components/schemas/ScanCounts" }
+    RepositoryScanQueued:
+      type: object
+      required: [repository, components]
+      properties:
+        repository: { type: string }
+        components: { type: integer }
+    SeverityCounts:
+      type: object
+      required: [critical, high, medium, low]
+      properties:
+        critical: { type: integer }
+        high: { type: integer }
+        medium: { type: integer }
+        low: { type: integer }
+        unknown: { type: integer }
+    FindingTrendPoint:
+      type: object
+      required: [date, critical, high, medium, low, new, resolved]
+      properties:
+        date: { type: string, format: date }
+        critical: { type: integer }
+        high: { type: integer }
+        medium: { type: integer }
+        low: { type: integer, description: Low and unknown }
+        new: { type: integer }
+        resolved: { type: integer }
+    FindingTrend:
+      type: object
+      required: [days, items]
+      properties:
+        days: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FindingTrendPoint" }
+    ScanningStatus:
+      type: object
+      required: [enabled, source, source_url, rescan_interval, supported_formats, coverage]
+      properties:
+        enabled: { type: boolean }
+        source: { type: string, examples: ["osv"] }
+        source_url: { type: string, examples: ["https://api.osv.dev"] }
+        rescan_interval: { $ref: "#/components/schemas/Duration" }
+        supported_formats:
+          type: array
+          items: { type: string }
+        coverage:
+          type: object
+          required: [scanned, failed, never, unsupported, last_scan_at]
+          properties:
+            scanned: { type: integer }
+            failed: { type: integer }
+            never: { type: integer }
+            unsupported: { type: integer }
+            last_scan_at: { type: [string, "null"], format: date-time }
     FindingPage:
       type: object
       required: [items]
@@ -3278,22 +3564,25 @@ components:
       allOf:
         - $ref: "#/components/schemas/FindingPage"
         - type: object
-          required: [totals]
+          required: [totals, total, fixable, waived, components]
           properties:
+            total: { type: integer, description: Findings matching the filters }
             totals:
-              type: object
-              required: [critical, high, medium, low]
-              properties:
-                critical: { type: integer }
-                high: { type: integer }
-                medium: { type: integer }
-                low: { type: integer }
+              allOf: [{ $ref: "#/components/schemas/SeverityCounts" }]
+              description: Open findings by severity
+            fixable:
+              allOf: [{ $ref: "#/components/schemas/SeverityCounts" }]
+              description: Open findings with a known fix, by severity
+            waived: { type: integer, description: Findings under an active waiver }
+            components: { type: integer, description: Components with an open finding }
     WaiverInput:
       type: object
       required: [reason, until]
       properties:
-        reason: { type: string, minLength: 3 }
-        until: { $ref: "#/components/schemas/Timestamp" }
+        reason: { type: string, minLength: 3, maxLength: 2000 }
+        until:
+          allOf: [{ $ref: "#/components/schemas/Timestamp" }]
+          description: In the future, at most a year ahead
 
     # ------------------------------------------------------------ cleanup
     CleanupCriteria:
@@ -3478,7 +3767,8 @@ components:
       type: string
       description: |
         Types this server runs: cleanup (cleanup policies), blob_compaction,
-        docker_gc, auth_purge, audit_partitions. The others are reserved.
+        docker_gc, auth_purge, audit_partitions, rescan (vulnerability
+        rescan against new advisories). The others are reserved.
       enum: [cleanup, blob_compaction, docker_gc, auth_purge, audit_partitions, rescan, reindex, directory_sync, db_backup,
         replication, proxy_metadata_refresh, blob_store_move]
     TaskRunStatus:
