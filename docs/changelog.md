@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Fewer release files**: the compose stack ships as one `hangar-compose.tar.gz`
+  and only Linux binaries are published (`hangar-linux-amd64`,
+  `hangar-linux-arm64`), next to `install.sh` and `SHA256SUMS`. The installer
+  still reads releases that publish each compose file separately.
 - **System status** (Operations → System status, `system:cluster:read`): every
   node with its URL, version and commit, uptime, last heartbeat and scheduler
   role, and the health of PostgreSQL, blob stores, NATS / JetStream, the task

@@ -272,6 +272,19 @@ fetch_files() {
 	local base=https://github.com/$REPO/releases/download/$version
 	[[ -n "$opt_mirror" ]] && base=$opt_mirror/$version
 	if download "$base/SHA256SUMS" "$stage/SHA256SUMS" 2>/dev/null; then
+		want=$(awk '$2 == "hangar-compose.tar.gz" || $2 == "*hangar-compose.tar.gz" { print $1 }' "$stage/SHA256SUMS")
+		if [[ -n "$want" ]]; then
+			download "$base/hangar-compose.tar.gz" "$stage/hangar-compose.tar.gz" ||
+				die "cannot download hangar-compose.tar.gz from release $version"
+			[[ "$want" == "$(sha256_of "$stage/hangar-compose.tar.gz")" ]] ||
+				die "checksum mismatch for hangar-compose.tar.gz in release $version"
+			# Extract only the known members.
+			# shellcheck disable=SC2086
+			tar -xzf "$stage/hangar-compose.tar.gz" -C "$stage" $COMPOSE_FILES registry.caddy ||
+				die "cannot unpack hangar-compose.tar.gz from release $version"
+			return
+		fi
+		# Releases up to v0.1.3 publish each compose file separately.
 		for f in $COMPOSE_FILES registry.caddy; do
 			download "$base/$f" "$stage/$f" || die "cannot download $f from release $version"
 			want=$(awk -v f="$f" '$2 == f || $2 == "*" f { print $1 }' "$stage/SHA256SUMS")
