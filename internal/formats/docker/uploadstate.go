@@ -81,7 +81,7 @@ func (h *handler) saveState(ctx context.Context, bs core.BlobStore, st *uploadSt
 	if err != nil {
 		return "", fmt.Errorf("encode upload state: %w", err)
 	}
-	if ts, ok := bs.(core.TempStore); ok {
+	if ts, ok := core.TempStoreOf(bs); ok {
 		if err := ts.PutTemp(ctx, uploadsPrefix+st.UUID, bytes.NewReader(b)); err != nil {
 			return "", fmt.Errorf("store upload state: %w", err)
 		}
@@ -97,7 +97,7 @@ func (h *handler) saveState(ctx context.Context, bs core.BlobStore, st *uploadSt
 // loadState loads session uuid with the URL token tok.
 func (h *handler) loadState(ctx context.Context, bs core.BlobStore, uuid, tok string) (*uploadState, error) {
 	if mac, ok := strings.CutPrefix(tok, "s."); ok {
-		ts, ok := bs.(core.TempStore)
+		ts, ok := core.TempStoreOf(bs)
 		if !ok || !uuidRE.MatchString(uuid) {
 			return nil, errUploadUnknown
 		}
@@ -161,7 +161,7 @@ type garbageJournal struct {
 // Failures are logged: the client's request already succeeded or was
 // cancelled, and abandoned records expire.
 func (h *handler) finishUpload(ctx context.Context, bs core.BlobStore, st *uploadState, kept core.Digest) {
-	ts, ok := bs.(core.TempStore)
+	ts, ok := core.TempStoreOf(bs)
 	if !ok || st == nil || st.UUID == "" {
 		return
 	}
@@ -257,7 +257,7 @@ func (h *handler) cleanupUploads(ctx context.Context, o UploadCleanup) (UploadCl
 	}
 	var errs []error
 	for name, bs := range stores {
-		ts, ok := bs.(core.TempStore)
+		ts, ok := core.TempStoreOf(bs)
 		if !ok {
 			continue
 		}

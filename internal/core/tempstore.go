@@ -15,7 +15,7 @@ import (
 // cleanup job), never by blob GC. Every node of a cluster sees the same
 // objects as long as it uses the same store.
 //
-// Callers type-assert: if ts, ok := store.(core.TempStore); ok { ... }.
+// Callers find it with TempStoreOf, which also looks through wrappers.
 type TempStore interface {
 	// PutTemp creates or atomically replaces the object key with r's content.
 	PutTemp(ctx context.Context, key string, r io.Reader) error
@@ -26,6 +26,26 @@ type TempStore interface {
 	// ListTemp calls fn for every object whose key starts with prefix, in
 	// unspecified order. An error from fn stops the walk and is returned.
 	ListTemp(ctx context.Context, prefix string, fn func(TempObject) error) error
+}
+
+// TempStoreOf returns the temp area of bs, looking through wrappers (metrics,
+// tracing) that expose the wrapped store with Unwrap() BlobStore. Callers
+// use it instead of a plain type assertion.
+func TempStoreOf(bs BlobStore) (TempStore, bool) {
+	for range 8 {
+		if bs == nil {
+			return nil, false
+		}
+		if ts, ok := bs.(TempStore); ok {
+			return ts, true
+		}
+		u, ok := bs.(interface{ Unwrap() BlobStore })
+		if !ok {
+			return nil, false
+		}
+		bs = u.Unwrap()
+	}
+	return nil, false
 }
 
 // TempObject describes one object of a TempStore.
