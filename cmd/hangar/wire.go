@@ -27,13 +27,16 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 	"github.com/ismoilovdevml/hangar/internal/search"
 	"github.com/ismoilovdevml/hangar/internal/server"
+	"github.com/ismoilovdevml/hangar/internal/service/cleanup"
 	"github.com/ismoilovdevml/hangar/internal/service/component"
 	"github.com/ismoilovdevml/hangar/internal/service/repository"
 	"github.com/ismoilovdevml/hangar/internal/storage"
 	"github.com/ismoilovdevml/hangar/internal/storage/fs"
 	"github.com/ismoilovdevml/hangar/internal/storage/registry"
 	"github.com/ismoilovdevml/hangar/internal/storage/s3"
+	"github.com/ismoilovdevml/hangar/internal/tasks"
 	"github.com/ismoilovdevml/hangar/internal/tasks/blobgc"
+	"github.com/ismoilovdevml/hangar/internal/tasks/dockergc"
 	"github.com/ismoilovdevml/hangar/internal/tasks/scheduler"
 	"github.com/ismoilovdevml/hangar/internal/version"
 )
@@ -295,7 +298,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Health:         hc,
 		Formats:        reg.Names(),
 		Started:        started,
-		Catalog:        catalog.New(pool, catalog.Options{Sealer: storeSealer(keyring)}),
+		Catalog:        catalog.New(pool, catalog.Options{Sealer: storeSealer(keyring), ConfiguredStores: []string{DefaultBlobStore}}),
 		Search:         search.New(pool),
 		Audit:          auditLog,
 		Upstreams:      healthReporter,
@@ -358,11 +361,21 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	// Stop executing jobs before the services they use are closed.
 	a.onClose(queue.Close)
 
-	sched, err := scheduler.New(pool, queue, scheduler.Options{Logger: log, Entries: []scheduler.Entry{
-		{Name: "audit-partitions", Every: 24 * time.Hour, Delay: time.Minute, Job: core.Job{Type: jobAuditPartitions}},
-		{Name: "auth-purge", Every: time.Hour, Delay: 5 * time.Minute, Job: core.Job{Type: jobAuthPurge}},
-		{Name: "blob-gc", Every: 24 * time.Hour, Delay: 10 * time.Minute, Job: core.Job{Type: blobgc.JobType}},
-	}})
+	// Tasks: scheduled maintenance, cleanup policies and docker GC, executed
+	// as task runs on any node. Close hands running runs back to the queue
+	// before the queue stops.
+	taskSvc, cleanupSvc, err := buildTasks(ctx, cfg, pool, queue, deps, collector, authSvc, log)
+	if err != nil {
+		return nil, err
+	}
+	a.onClose(func() {
+		cctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		taskSvc.Close(cctx)
+	})
+	restAPI.Tasks, restAPI.Cleanup = taskSvc, cleanupSvc
+
+	sched, err := scheduler.New(pool, queue, scheduler.Options{Logger: log, Tickers: []scheduler.Ticker{taskSvc}})
 	if err != nil {
 		return nil, err
 	}
@@ -372,6 +385,58 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	a.onClose(func() { stopSched(); <-schedDone })
 
 	return a, nil
+}
+
+// builtinTasks are the maintenance tasks every server has. Docker GC runs
+// before blob compaction so the bytes it releases are freed once their
+// grace period has passed.
+var builtinTasks = []tasks.Builtin{
+	{Name: "docker-gc", Type: tasks.TypeDockerGC, Schedule: "0 2 * * *", Config: dockergc.Config{OlderThanDays: dockergc.DefaultOlderThanDays},
+		Description: "Delete untagged Docker manifests and unreferenced layers older than the age limit"},
+	{Name: "blob-compaction", Type: tasks.TypeBlobCompaction, Schedule: "30 3 * * *",
+		Description: "Delete blob bytes no asset references any more, after the grace period"},
+	{Name: "auth-purge", Type: tasks.TypeAuthPurge, Schedule: "5 * * * *",
+		Description: "Purge expired sessions, tokens and cleanup preview tokens"},
+	{Name: "audit-partitions", Type: tasks.TypeAuditPartitions, Schedule: "15 0 * * *",
+		Description: "Create the audit log partitions for the coming months"},
+}
+
+// buildTasks wires the task service with every executor and the cleanup
+// policy service, and makes sure the built-in tasks exist.
+func buildTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, queue core.JobQueue, deps core.Deps,
+	collector *blobgc.Collector, authSvc *auth.Service, log *slog.Logger,
+) (*tasks.Service, *cleanup.Service, error) {
+	if g := cfg.Storage.GC.GracePeriod; g > 0 && g <= docker.DefaultUploadTTL {
+		log.Warn("storage.gc.grace_period should exceed the docker upload session lifetime, or blobs of uploads "+
+			"still in progress can be collected", "grace_period", g, "docker_upload_ttl", docker.DefaultUploadTTL)
+	}
+	taskSvc := tasks.New(pool, tasks.Options{Jobs: queue, Events: deps.Events, Audit: deps.Audit, Logger: log})
+	cleanupSvc := cleanup.New(pool, cleanup.Options{Repos: deps.Repos, Components: deps.Components, Tasks: taskSvc,
+		Audit: deps.Audit, Logger: log})
+	dockerGC := dockergc.New(deps.Repos, deps.Components, deps.Blobs, log)
+	taskSvc.Register(tasks.TypeCleanup, cleanupSvc.Executor(), tasks.TypeOptions{})
+	taskSvc.Register(tasks.TypeBlobCompaction, collector.Executor(), tasks.TypeOptions{Creatable: true})
+	taskSvc.Register(tasks.TypeDockerGC, dockerGC.Executor(), tasks.TypeOptions{Creatable: true})
+	taskSvc.Register(tasks.TypeAuthPurge, tasks.Func(func(ctx context.Context, x *tasks.Exec) error {
+		if err := authSvc.PurgeExpired(ctx); err != nil {
+			return err
+		}
+		n, err := cleanupSvc.PurgePreviews(ctx)
+		x.Progress(1, fmt.Sprintf("Purged expired sessions and tokens, %d cleanup previews", n))
+		return err
+	}), tasks.TypeOptions{})
+	taskSvc.Register(tasks.TypeAuditPartitions, tasks.Func(func(ctx context.Context, x *tasks.Exec) error {
+		created, err := audit.EnsurePartitions(ctx, pool, 2)
+		x.Progress(1, fmt.Sprintf("Audit partitions ensured (%v created)", created))
+		return err
+	}), tasks.TypeOptions{})
+	if err := taskSvc.EnsureBuiltins(ctx, builtinTasks); err != nil {
+		return nil, nil, err
+	}
+	if err := taskSvc.Handle(); err != nil {
+		return nil, nil, err
+	}
+	return taskSvc, cleanupSvc, nil
 }
 
 // blobDriver names a blob store's driver for metrics.

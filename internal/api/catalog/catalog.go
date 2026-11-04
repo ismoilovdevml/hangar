@@ -34,6 +34,10 @@ type Options struct {
 	// Sealer encrypts blob store credentials. Without it, creating a store
 	// with a secret is refused (use environment credentials instead).
 	Sealer SecretSealer
+	// ConfiguredStores names blob stores defined by the server configuration
+	// (the "default" store). Their connection settings cannot be changed
+	// through the API and they cannot be deleted; the soft quota can be set.
+	ConfiguredStores []string
 }
 
 // Catalog runs the queries.

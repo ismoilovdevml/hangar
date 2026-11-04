@@ -94,6 +94,11 @@ var apiPolicy = map[string]policy{
 	"POST /tasks/{id}/run":                       privileged,
 	"POST /tasks/{id}/stop":                      privileged,
 	"GET /tasks/{id}/runs":                       privileged,
+	"GET /tasks/{id}/runs/{run_id}":              privileged,
+	"GET /tasks/{id}/runs/{run_id}/log":          privileged,
+	"GET /cleanup-policies/{name}/runs":          privileged,
+	"POST /cleanup-policies/{name}/run":          privileged,
+	"POST /cleanup-policies/{name}/stop":         privileged,
 	"GET /users":                                 privileged,
 	"POST /users":                                privileged,
 	"GET /users/{id}":                            readerOwned,
@@ -164,9 +169,25 @@ func apiTargets(t *testing.T, h *harness) map[string]string {
 		Items []struct{ ID string } `json:"items"`
 	}
 	_ = json.Unmarshal(h.must(admin, http.MethodGet, "/api/v1/components?repository=maven-victim", nil, http.StatusOK), &comps)
+	// A deletable blob store and a cleanup policy with its task, so that a
+	// missing check would really change something.
+	h.must(admin, http.MethodPost, "/api/v1/blob-stores",
+		map[string]any{"name": "sweep-empty", "kind": "fs", "fs": map[string]any{"path": "/var/empty/hangar-sweep"}}, http.StatusCreated)
+	policy := map[string]any{"name": "nightly", "criteria": map[string]any{"older_than_days": 36500},
+		"repositories": []string{"raw-other"}, "schedule": nil}
+	var prev struct {
+		PreviewToken string `json:"preview_token"`
+	}
+	_ = json.Unmarshal(h.must(admin, http.MethodPost, "/api/v1/cleanup-policies/preview", policy, http.StatusOK), &prev)
+	policy["preview_token"] = prev.PreviewToken
+	var pol struct {
+		TaskID string `json:"task_id"`
+	}
+	_ = json.Unmarshal(h.must(admin, http.MethodPost, "/api/v1/cleanup-policies", policy, http.StatusCreated), &pol)
 	out := map[string]string{
+		"/tasks/{id}":                 pol.TaskID,
 		"/repositories/{name}":        "raw-victim",
-		"/blob-stores/{name}":         "default",
+		"/blob-stores/{name}":         "sweep-empty",
 		"/roles/{name}":               "Admin",
 		"/cleanup-policies/{name}":    "nightly",
 		"/replication/targets/{name}": "edge",
@@ -194,7 +215,10 @@ func fillAPIPath(p string, ids map[string]string) string {
 			}
 		}
 	}
-	return strings.ReplaceAll(strings.ReplaceAll(p, "{id}", ids["{id}"]), "{name}", "x")
+	for _, param := range []string{"{id}", "{run_id}"} {
+		p = strings.ReplaceAll(p, param, ids["{id}"])
+	}
+	return strings.ReplaceAll(p, "{name}", "x")
 }
 
 // TestAPIAuthorizationSweep calls every operation of api/openapi.yaml as an

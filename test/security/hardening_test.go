@@ -117,6 +117,17 @@ func TestSecretsAtRest(t *testing.T) {
 	if strings.Contains(stored, "S3-Secret-Key-77") || !strings.Contains(stored, `"secret_access_key_sealed": "hgs1.`) {
 		t.Errorf("stored blob store config: %s", stored)
 	}
+	// Replacing the credentials seals the new secret as well.
+	sealedBefore := stored
+	h.must(admin, http.MethodPut, "/api/v1/blob-stores/sec-s3", map[string]any{"name": "sec-s3", "kind": "s3",
+		"s3": map[string]any{"bucket": "b", "endpoint": "https://s3.example.com", "access_key_id": "AKIANEW", "secret_access_key": "S3-Rotated-Key-88"}},
+		http.StatusOK)
+	if err := h.pool.QueryRow(context.Background(), `SELECT config::text FROM blob_stores WHERE name = 'sec-s3'`).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(stored, "S3-Rotated-Key-88") || !strings.Contains(stored, `"secret_access_key_sealed": "hgs1.`) || stored == sealedBefore {
+		t.Errorf("stored blob store config after update: %s", stored)
+	}
 	for _, p := range []string{"/api/v1/blob-stores", "/api/v1/blob-stores/sec-s3"} {
 		b := h.must(admin, http.MethodGet, p, nil, http.StatusOK)
 		if strings.Contains(string(b), "S3-Secret-Key-77") || strings.Contains(string(b), "hgs1.") {
