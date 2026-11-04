@@ -1,0 +1,14 @@
+# Docker / OCI clients only: docker login {$HANGAR_REGISTRY_DOMAIN}.
+# Registry tokens are issued by the UI host (server.base_url), which Docker
+# reaches through the realm in the 401 challenge.
+{$HANGAR_REGISTRY_DOMAIN} {
+	import security_headers
+	@registry path /v2 /v2/*
+	handle @registry {
+		import hangar_upstream
+	}
+	handle {
+		respond "This host serves the container registry API only (/v2/)." 404
+	}
+	log
+}

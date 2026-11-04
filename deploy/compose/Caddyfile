@@ -42,17 +42,8 @@
 	log
 }
 
-# Docker / OCI clients only: docker login {$HANGAR_REGISTRY_DOMAIN}.
-# Registry tokens are issued by the UI host (server.base_url), which Docker
-# reaches through the realm in the 401 challenge.
-{$HANGAR_REGISTRY_DOMAIN} {
-	import security_headers
-	@registry path /v2 /v2/*
-	handle @registry {
-		import hangar_upstream
-	}
-	handle {
-		respond "This host serves the container registry API only (/v2/)." 404
-	}
-	log
-}
+# More sites: every sites/*.caddy file (mounted at /etc/caddy/sites) is
+# loaded here and may use the snippets above. sites/registry.caddy adds the
+# separate Docker registry host; remove it if you do not want one. Docker
+# host connectors (connector.host) are added the same way.
+import /etc/caddy/sites/*.caddy
