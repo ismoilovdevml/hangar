@@ -75,6 +75,8 @@ services:
     stop_grace_period: 60s
     environment:
       HANGAR_CONFIG: /etc/hangar/hangar.yaml
+      # Stable node identity across redeploys (System status page).
+      HANGAR_SERVER_NODE_ID: ${HANGAR_SERVER_NODE_ID:-hangar-1}
       HANGAR_SERVER_BASE_URL: ${HANGAR_BASE_URL:?set HANGAR_BASE_URL in .env (e.g. https://hangar.example.com)}
       HANGAR_SERVER_TRUSTED_PROXIES: ${HANGAR_TRUSTED_PROXIES:-172.30.80.0/24}
       HANGAR_DATABASE_URL: ${HANGAR_DATABASE_URL:-postgres://${POSTGRES_USER:-hangar}:${POSTGRES_PASSWORD:-}@postgres:5432/${POSTGRES_DB:-hangar}?sslmode=disable}
