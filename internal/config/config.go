@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/ismoilovdevml/hangar/internal/auth"
 )
 
 // EnvPrefix prefixes every environment variable.
@@ -38,8 +40,32 @@ type Config struct {
 	Storage  Storage  `yaml:"storage"`
 	NATS     NATS     `yaml:"nats"`
 	HTTP     HTTP     `yaml:"http"`
-	Scanner  Scanner  `yaml:"scanner"`
-	Metrics  Metrics  `yaml:"metrics"`
+	// Auth tunes local authentication: password hashing, lockout, sessions,
+	// token lifetimes and caches.
+	Auth      auth.Config `yaml:"auth"`
+	Docker    Docker      `yaml:"docker"`
+	Bootstrap Bootstrap   `yaml:"bootstrap"`
+	Scanner   Scanner     `yaml:"scanner"`
+	Metrics   Metrics     `yaml:"metrics"`
+}
+
+// Docker configures the Docker / OCI format.
+type Docker struct {
+	// TokenKey signs registry bearer tokens and upload session URLs
+	// (HANGAR_DOCKER_TOKEN_KEY). Every node of a cluster must use the same
+	// value; use at least 32 random bytes. Empty: a random per-process key,
+	// so registry tokens and unfinished uploads do not survive a restart.
+	TokenKey string `yaml:"token_key"` // from env; masked by Redacted
+}
+
+// Bootstrap creates the first administrator when none exists.
+type Bootstrap struct {
+	// AdminUser and AdminPassword (HANGAR_BOOTSTRAP_ADMIN_USER /
+	// HANGAR_BOOTSTRAP_ADMIN_PASSWORD): when both are set and no enabled
+	// administrator exists, `hangar serve` creates this local admin on start.
+	// Nothing changes once an administrator exists.
+	AdminUser     string `yaml:"admin_user"`
+	AdminPassword string `yaml:"admin_password"` // from env; masked by Redacted
 }
 
 // Server configures the HTTP listener.
@@ -82,6 +108,24 @@ type Storage struct {
 	Kind string    `yaml:"kind"` // fs or s3
 	FS   FSStorage `yaml:"fs"`
 	S3   S3Storage `yaml:"s3"`
+	GC   GC        `yaml:"gc"`
+}
+
+// MinGCGracePeriod is the shortest accepted storage.gc.grace_period. It must
+// exceed the Docker upload session lifetime (24h), or blobs of an upload that
+// is still allowed to finish could be collected before its manifest commits.
+const MinGCGracePeriod = 24 * time.Hour
+
+// GC configures blob garbage collection (job blob.gc, run daily by the leader).
+type GC struct {
+	// GracePeriod is how long an unreferenced blob is kept before its bytes
+	// are deleted. Must be longer than MinGCGracePeriod.
+	GracePeriod time.Duration `yaml:"grace_period"`
+	// BatchSize is the number of blobs deleted per transaction.
+	BatchSize int `yaml:"batch_size"`
+	// TempMaxAge is the age after which abandoned temporary uploads are
+	// removed; negative disables temp cleanup.
+	TempMaxAge time.Duration `yaml:"temp_max_age"`
 }
 
 // FSStorage is the filesystem driver.
@@ -97,7 +141,12 @@ type S3Storage struct {
 	Prefix          string `yaml:"prefix"`
 	AccessKeyID     string `yaml:"access_key_id"`
 	SecretAccessKey string `yaml:"secret_access_key"` // from env; masked by Redacted
+	SessionToken    string `yaml:"session_token"`     // temporary credentials; masked by Redacted
 	UsePathStyle    bool   `yaml:"use_path_style"`
+	// CAFile is a PEM bundle trusted for the endpoint (private CA).
+	CAFile string `yaml:"ca_file"`
+	// PartSize is the multipart part size in bytes (5 MiB to 5 GiB, default 16 MiB).
+	PartSize int64 `yaml:"part_size"`
 }
 
 // NATS configures the event bus and job queue.
@@ -132,6 +181,11 @@ type HTTP struct {
 	MaxIdleConnsPerHost int           `yaml:"max_idle_conns_per_host"`
 	// UserAgent sent upstream; default "Hangar/<version>".
 	UserAgent string `yaml:"user_agent"`
+	// AllowPrivateNetworks lets proxy repositories reach internal addresses,
+	// which the outbound address policy blocks by default (loopback, private,
+	// link-local and cloud metadata ranges): CIDRs, IPs, host names or domain
+	// suffixes starting with "." (e.g. an internal mirror).
+	AllowPrivateNetworks []string `yaml:"allow_private_networks"`
 }
 
 // Scanner configures vulnerability scanning.
@@ -160,8 +214,10 @@ func Default() Config {
 		},
 		Log:      Log{Level: "info", Format: "json"},
 		Database: Database{MaxConns: 20, MinConns: 2, ConnLifetime: time.Hour},
-		Storage:  Storage{Kind: "fs", FS: FSStorage{Path: "./data/blobs"}},
-		NATS:     NATS{Embedded: true, DataDir: "./data/nats"},
+		Storage: Storage{Kind: "fs", FS: FSStorage{Path: "./data/blobs"},
+			GC: GC{GracePeriod: 48 * time.Hour, BatchSize: 100, TempMaxAge: 24 * time.Hour}},
+		Auth: auth.DefaultConfig(),
+		NATS: NATS{Embedded: true, DataDir: "./data/nats"},
 		HTTP: HTTP{
 			UseEnvironment:      true,
 			ConnectTimeout:      10 * time.Second,
@@ -230,6 +286,22 @@ func (c *Config) Validate() error {
 		}
 	default:
 		errs = append(errs, fmt.Errorf("storage.kind %q: want fs or s3", c.Storage.Kind))
+	}
+	if c.Storage.S3.PartSize != 0 && (c.Storage.S3.PartSize < 5<<20 || c.Storage.S3.PartSize > 5<<30) {
+		errs = append(errs, fmt.Errorf("storage.s3.part_size %d: want between 5 MiB and 5 GiB", c.Storage.S3.PartSize))
+	}
+	if c.Storage.GC.GracePeriod <= MinGCGracePeriod {
+		errs = append(errs, fmt.Errorf("storage.gc.grace_period %s must be longer than %s (the docker upload lifetime)",
+			c.Storage.GC.GracePeriod, MinGCGracePeriod))
+	}
+	if c.Storage.GC.BatchSize <= 0 {
+		errs = append(errs, errors.New("storage.gc.batch_size must be positive"))
+	}
+	if err := c.Auth.WithDefaults().Validate(); err != nil {
+		errs = append(errs, err)
+	}
+	if (c.Bootstrap.AdminUser == "") != (c.Bootstrap.AdminPassword == "") {
+		errs = append(errs, errors.New("bootstrap.admin_user and bootstrap.admin_password must be set together"))
 	}
 	if c.NATS.Embedded {
 		if c.NATS.DataDir == "" {
@@ -326,12 +398,24 @@ func setValue(v reflect.Value, raw string) error {
 			return err
 		}
 		v.SetBool(b)
-	case reflect.Int, reflect.Int32, reflect.Int64:
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		n, err := strconv.ParseInt(raw, 10, v.Type().Bits())
 		if err != nil {
 			return err
 		}
 		v.SetInt(n)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		n, err := strconv.ParseUint(raw, 10, v.Type().Bits())
+		if err != nil {
+			return err
+		}
+		v.SetUint(n)
+	case reflect.Float32, reflect.Float64:
+		n, err := strconv.ParseFloat(raw, v.Type().Bits())
+		if err != nil {
+			return err
+		}
+		v.SetFloat(n)
 	case reflect.Slice:
 		if v.Type().Elem().Kind() != reflect.String {
 			return fmt.Errorf("unsupported slice type %s", v.Type())
@@ -351,8 +435,10 @@ func setValue(v reflect.Value, raw string) error {
 
 // Redacted returns a copy safe to log: secrets and URL passwords masked.
 func (c Config) Redacted() Config {
-	if c.Storage.S3.SecretAccessKey != "" {
-		c.Storage.S3.SecretAccessKey = "REDACTED"
+	for _, p := range []*string{&c.Storage.S3.SecretAccessKey, &c.Storage.S3.SessionToken, &c.Docker.TokenKey, &c.Bootstrap.AdminPassword} {
+		if *p != "" {
+			*p = "REDACTED"
+		}
 	}
 	if c.HTTP.ProxyPassword != "" {
 		c.HTTP.ProxyPassword = "REDACTED"

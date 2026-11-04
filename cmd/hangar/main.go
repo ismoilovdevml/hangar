@@ -2,6 +2,7 @@
 //
 //	hangar serve   [--config hangar.yaml] [--migrate]
 //	hangar migrate [--config hangar.yaml] up|down|status|version
+//	hangar admin   bootstrap | token create ...
 //	hangar version [--json]
 package main
 
@@ -22,6 +23,10 @@ Usage:
   hangar serve   [--config FILE] [--migrate]       run the server
   hangar migrate [--config FILE] up|down|status|version
                                                     manage the database schema
+  hangar admin   bootstrap --username NAME --password-stdin
+                                                    create the first administrator
+  hangar admin   token create --user NAME --name LABEL --scopes LIST [--expires 90d]
+                                                    create a personal access token
   hangar version [--json]                           print build information
 
 Configuration is read from --config (or $HANGAR_CONFIG) and HANGAR_* environment
@@ -29,10 +34,10 @@ variables; see hangar.example.yaml.
 `
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
-func run(args []string, stdout, stderr io.Writer) int {
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		_, _ = fmt.Fprint(stderr, usage)
 		return 2
@@ -41,6 +46,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "serve":
 		err = serveCmd(args[1:], stderr)
+	case "admin":
+		err = adminCmd(args[1:], stdin, stdout, stderr)
 	case "migrate":
 		err = migrateCmd(args[1:], stdout, stderr)
 	case "version", "--version", "-v":
