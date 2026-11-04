@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/service/lock"
 	"github.com/ismoilovdevml/hangar/internal/service/repository/pgtest"
@@ -49,6 +51,16 @@ func exclusive(t *testing.T, lockers []core.Locker) {
 	}
 }
 
+func newLocker(t *testing.T, pool *pgxpool.Pool, maxHeld int) *lock.Locker {
+	t.Helper()
+	l, err := lock.New(context.Background(), pool, lock.Options{MaxHeld: maxHeld})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(l.Close)
+	return l
+}
+
 func TestLocalExclusive(t *testing.T) {
 	exclusive(t, []core.Locker{lock.NewLocal()})
 }
@@ -56,12 +68,12 @@ func TestLocalExclusive(t *testing.T) {
 func TestAdvisoryExclusiveAcrossNodes(t *testing.T) {
 	pool := pgtest.Pool(t)
 	// Two Lockers model two nodes: only PostgreSQL can make them agree.
-	exclusive(t, []core.Locker{lock.New(pool, lock.Options{}), lock.New(pool, lock.Options{MaxHeld: 2})})
+	exclusive(t, []core.Locker{newLocker(t, pool, 0), newLocker(t, pool, 2)})
 }
 
 func TestAdvisoryCancelWhileWaiting(t *testing.T) {
 	pool := pgtest.Pool(t)
-	a, b := lock.New(pool, lock.Options{}), lock.New(pool, lock.Options{})
+	a, b := newLocker(t, pool, 0), newLocker(t, pool, 0)
 	unlock, err := a.Lock(context.Background(), "k")
 	if err != nil {
 		t.Fatal(err)

@@ -1,12 +1,12 @@
 // Package lock implements core.Locker with PostgreSQL session advisory locks,
 // so a named lock excludes holders on every node that shares the database.
 //
-// Each held lock pins one pooled connection (advisory locks belong to a
-// session). To keep lock traffic from starving the pool, a node first takes
-// an in-process mutex for the key, so at most one connection per key and
-// node ever waits in PostgreSQL, and at most MaxHeld connections are used
-// for locks at a time. A holder never needs a second lock connection, so
-// lock waiters cannot deadlock against holders on pool capacity.
+// Each held lock pins one connection (advisory locks belong to a session).
+// Lock connections come from a small pool of their own (MaxHeld), so lock
+// traffic never takes connections from the queries the lock holders run, and
+// a node first takes an in-process mutex for the key, so at most one
+// connection per key and node ever waits in PostgreSQL. A holder never needs
+// a second lock connection, so waiters cannot deadlock against holders.
 package lock
 
 import (
@@ -23,8 +23,9 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/core"
 )
 
-// DefaultMaxHeld is the default number of connections used for locks at once.
-const DefaultMaxHeld = 4
+// DefaultMaxHeld is the default size of the lock connection pool: the
+// number of distinct keys a node can hold (or wait for) at once.
+const DefaultMaxHeld = 16
 
 // namespace separates Hangar's advisory lock ids from other users of the
 // database: the 64-bit lock id is namespace<<32 | fnv32a(key).
@@ -32,33 +33,45 @@ const namespace = 0x68676c6b // "hglk"
 
 // Options configures a Locker.
 type Options struct {
-	// MaxHeld bounds the pool connections held for locks (default 4). Keep it
-	// well below the pool size.
+	// MaxHeld is the size of the lock connection pool (default 16). These
+	// connections are in addition to the main pool's.
 	MaxHeld int
 	Logger  *slog.Logger
 }
 
 // Locker is a PostgreSQL-backed core.Locker.
 type Locker struct {
-	pool  *pgxpool.Pool
-	slots chan struct{}
+	pool  *pgxpool.Pool // dedicated to locks
 	log   *slog.Logger
 	local *Local
 }
 
 var _ core.Locker = (*Locker)(nil)
 
-// New returns a Locker on pool.
-func New(pool *pgxpool.Pool, opts Options) *Locker {
-	if opts.MaxHeld <= 0 {
+// New returns a Locker on the database of pool. It opens its own pool of up
+// to MaxHeld connections (lazily, with the same settings); Close it on
+// shutdown.
+func New(ctx context.Context, pool *pgxpool.Pool, opts Options) (*Locker, error) {
+	if opts.MaxHeld <= 0 || opts.MaxHeld > 1024 {
 		opts.MaxHeld = DefaultMaxHeld
 	}
 	log := opts.Logger
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Locker{pool: pool, slots: make(chan struct{}, opts.MaxHeld), log: log, local: NewLocal()}
+	cfg := pool.Config().Copy()
+	cfg.MaxConns = int32(opts.MaxHeld) //nolint:gosec // bounded above
+	cfg.MinConns = 0
+	cfg.MaxConnIdleTime = time.Minute
+	lp, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("lock pool: %w", err)
+	}
+	return &Locker{pool: lp, log: log, local: NewLocal()}, nil
 }
+
+// Close closes the lock connection pool, releasing any lock still held.
+func (l *Locker) Close() { l.pool.Close() }
 
 // ID returns the advisory lock id for key.
 func ID(key string) int64 {
@@ -73,14 +86,7 @@ func (l *Locker) Lock(ctx context.Context, key string) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	select {
-	case l.slots <- struct{}{}:
-	case <-ctx.Done():
-		unlockLocal()
-		return nil, fmt.Errorf("lock %q: %w", key, ctx.Err())
-	}
 	fail := func(err error) (func(), error) {
-		<-l.slots
 		unlockLocal()
 		return nil, fmt.Errorf("lock %q: %w", key, err)
 	}
@@ -112,7 +118,6 @@ func (l *Locker) Lock(ctx context.Context, key string) (func(), error) {
 				_ = conn.Conn().Close(context.Background())
 			}
 			conn.Release()
-			<-l.slots
 			unlockLocal()
 		})
 	}, nil

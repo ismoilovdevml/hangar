@@ -250,6 +250,13 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	}
 	a.onClose(func() { _ = watch.Unsubscribe() })
 
+	// Cluster-wide named locks (npm package state) on their own small pool.
+	locks, err := lock.New(ctx, pool, lock.Options{Logger: log})
+	if err != nil {
+		return nil, err
+	}
+	a.onClose(locks.Close)
+
 	deps := core.Deps{
 		Repos:       repos,
 		Components:  comps,
@@ -264,7 +271,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Events:  bus,
 		Jobs:    queue,
 		Audit:   auditLog,
-		Locks:   lock.New(pool, lock.Options{Logger: log}),
+		Locks:   locks,
 		Logger:  log,
 		BaseURL: cfg.Server.BaseURL,
 	}
