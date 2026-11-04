@@ -3,6 +3,8 @@ package core
 import (
 	"errors"
 	"net/http"
+	"strconv"
+	"time"
 )
 
 // Sentinel errors shared by all services and drivers. Wrap them with context
@@ -30,6 +32,10 @@ var (
 	ErrDigestMismatch = errors.New("digest mismatch")
 	// ErrUpstream: a proxy repository could not reach or use its remote.
 	ErrUpstream = errors.New("upstream unavailable")
+	// ErrRateLimited: the request is refused for now by a rate limit, such as
+	// a proxy remote answering 429 Too Many Requests. RetryAfter extracts the
+	// advised wait when one is known.
+	ErrRateLimited = errors.New("rate limited")
 	// ErrNotImplemented: the feature exists in the contract but not yet in this build.
 	ErrNotImplemented = errors.New("not implemented")
 )
@@ -52,11 +58,41 @@ func HTTPStatus(err error) int {
 		return http.StatusForbidden
 	case errors.Is(err, ErrOffline):
 		return http.StatusServiceUnavailable
+	case errors.Is(err, ErrRateLimited):
+		return http.StatusTooManyRequests
 	case errors.Is(err, ErrUpstream):
 		return http.StatusBadGateway
 	case errors.Is(err, ErrNotImplemented):
 		return http.StatusNotImplemented
 	default:
 		return http.StatusInternalServerError
+	}
+}
+
+// RetryAfterError carries the wait advised by a rate limit (a remote's
+// Retry-After header). Err should wrap ErrRateLimited.
+type RetryAfterError struct {
+	After time.Duration
+	Err   error
+}
+
+func (e *RetryAfterError) Error() string { return e.Err.Error() }
+
+func (e *RetryAfterError) Unwrap() error { return e.Err }
+
+// RetryAfter returns the advised wait carried by err (see RetryAfterError).
+func RetryAfter(err error) (time.Duration, bool) {
+	var ra *RetryAfterError
+	if errors.As(err, &ra) && ra.After > 0 {
+		return ra.After, true
+	}
+	return 0, false
+}
+
+// SetRetryAfter sets the Retry-After header, in whole seconds rounded up,
+// when err carries an advised wait. Error writers call it for 429 answers.
+func SetRetryAfter(h http.Header, err error) {
+	if d, ok := RetryAfter(err); ok {
+		h.Set("Retry-After", strconv.FormatInt(int64((d+time.Second-1)/time.Second), 10))
 	}
 }
