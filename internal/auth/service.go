@@ -19,6 +19,7 @@ import (
 	"net/netip"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -81,7 +82,10 @@ type Service struct {
 	log    *slog.Logger
 	now    func() time.Time
 
-	dir Directory
+	// ext holds the sign-in providers in effect; SetExternal replaces them
+	// while the server runs.
+	ext   atomic.Pointer[external]
+	extMu sync.Mutex // serializes SetExternal
 
 	hasher    *Hasher
 	dummyHash string
@@ -121,7 +125,6 @@ func New(pool *pgxpool.Pool, opts Options) (*Service, error) {
 		cfg:        cfg,
 		audit:      opts.Audit,
 		events:     opts.Events,
-		dir:        opts.Directory,
 		log:        opts.Logger,
 		now:        opts.Now,
 		hasher:     NewHasher(cfg.Argon2, cfg.MaxConcurrentHashes),
@@ -136,17 +139,19 @@ func New(pool *pgxpool.Pool, opts Options) (*Service, error) {
 	if s.now == nil {
 		s.now = time.Now
 	}
-	if cfg.LDAP.Enabled && s.dir == nil {
+	if cfg.LDAP.Enabled && opts.Directory == nil {
 		return nil, fmt.Errorf("auth: auth.ldap is enabled but no directory is configured: %w", core.ErrInvalid)
 	}
+	ext := &external{oidc: cfg.OIDC, ldap: cfg.LDAP, dir: opts.Directory}
 	if cfg.ExternalEnabled() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		err := s.prepareExternal(ctx)
+		err := s.prepareExternal(ctx, ext, true)
 		cancel()
 		if err != nil {
 			return nil, fmt.Errorf("auth: %w", err)
 		}
 	}
+	s.ext.Store(ext)
 	s.basicKey = make([]byte, 32)
 	if _, err := rand.Read(s.basicKey); err != nil {
 		return nil, fmt.Errorf("auth: random key: %w", err)
@@ -163,7 +168,8 @@ func New(pool *pgxpool.Pool, opts Options) (*Service, error) {
 	return s, nil
 }
 
-// Config returns the effective configuration.
+// Config returns the configuration the service was created with. The
+// sign-in providers in effect may differ; see External.
 func (s *Service) Config() Config { return s.cfg }
 
 // Now is the service clock.

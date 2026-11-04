@@ -150,33 +150,48 @@ func New(cfg auth.OIDCConfig, opts Options) (*Provider, error) {
 		return nil, err
 	}
 	if p.client == nil {
-		if p.client, err = newHTTPClient(cfg); err != nil {
+		if p.client, err = NewHTTPClient(cfg); err != nil {
 			return nil, err
 		}
 	}
 	return p, nil
 }
 
-func newHTTPClient(cfg auth.OIDCConfig) (*http.Client, error) {
+// NewHTTPClient returns a client for requests to the provider: TLS 1.2 or
+// newer, the system roots plus ca_file and the CA bundle of cfg, and the
+// configured timeout.
+func NewHTTPClient(cfg auth.OIDCConfig) (*http.Client, error) {
 	tc := &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: cfg.InsecureSkipVerify} //nolint:gosec // G402: opt-in for test providers, documented as unsafe
-	if cfg.CAFile != "" {
-		pem, err := os.ReadFile(cfg.CAFile)
-		if err != nil {
-			return nil, fmt.Errorf("auth.oidc.ca_file: %w", err)
-		}
+	if cfg.CAFile != "" || cfg.CAPEM != "" {
 		pool, err := x509.SystemCertPool()
 		if err != nil || pool == nil {
 			pool = x509.NewCertPool()
 		}
-		if !pool.AppendCertsFromPEM(pem) {
-			return nil, fmt.Errorf("auth.oidc.ca_file %s: no PEM certificates found", cfg.CAFile)
+		if cfg.CAFile != "" {
+			pem, err := os.ReadFile(cfg.CAFile)
+			if err != nil {
+				return nil, fmt.Errorf("auth.oidc.ca_file: %w", err)
+			}
+			if !pool.AppendCertsFromPEM(pem) {
+				return nil, fmt.Errorf("auth.oidc.ca_file %s: no PEM certificates found", cfg.CAFile)
+			}
+		}
+		if cfg.CAPEM != "" && !pool.AppendCertsFromPEM([]byte(cfg.CAPEM)) {
+			return nil, errors.New("oidc: the CA bundle has no PEM certificates")
 		}
 		tc.RootCAs = pool
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.TLSClientConfig = tc
-	return &http.Client{Transport: tr, Timeout: cfg.Timeout}, nil
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	return &http.Client{Transport: tr, Timeout: timeout}, nil
 }
+
+// Config returns the settings the provider was built from.
+func (p *Provider) Config() auth.OIDCConfig { return p.cfg }
 
 // DisplayName labels the sign-in button.
 func (p *Provider) DisplayName() string { return p.cfg.DisplayName }

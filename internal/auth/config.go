@@ -200,8 +200,8 @@ func (c Config) WithDefaults() Config {
 	if c.UsageFlushInterval <= 0 {
 		c.UsageFlushInterval = d.UsageFlushInterval
 	}
-	c.OIDC = c.OIDC.withDefaults()
-	c.LDAP = c.LDAP.withDefaults()
+	c.OIDC = c.OIDC.WithDefaults()
+	c.LDAP = c.LDAP.WithDefaults()
 	return c
 }
 

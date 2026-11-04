@@ -282,3 +282,34 @@ func TestIntegration(t *testing.T) {
 		t.Fatalf("wrong password: err = %v", err)
 	}
 }
+
+func TestProbe(t *testing.T) {
+	ctx := context.Background()
+	d, fd := newDir(t, nil)
+	res, err := d.Probe(ctx, "jdoe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Stage != ldap.StageLookup || res.DN != "CN=Jane Doe,OU=People,DC=example,DC=com" || res.User == nil || len(res.User.Groups) != 4 {
+		t.Fatalf("probe = %+v", res)
+	}
+	if !slices.Equal(fd.binds, []string{serviceDN}) {
+		t.Fatalf("binds = %q: the probe must not bind as the user", fd.binds)
+	}
+
+	if res, err = d.Probe(ctx, "nobody"); err != nil || res.User != nil || res.Stage != ldap.StageLookup {
+		t.Fatalf("unknown user: %+v, %v", res, err)
+	}
+	if res, err = d.Probe(ctx, ""); err != nil || res.Stage != ldap.StageBind {
+		t.Fatalf("no username: %+v, %v", res, err)
+	}
+
+	bad, _ := newDir(t, func(c *auth.LDAPConfig) { c.BindPassword = "wrong" })
+	if res, err = bad.Probe(ctx, "jdoe"); err == nil || res.Stage != ldap.StageBind {
+		t.Fatalf("wrong bind password: %+v, %v", res, err)
+	}
+	fd.down = true
+	if res, err = d.Probe(ctx, "jdoe"); err == nil || res.Stage != ldap.StageConnect {
+		t.Fatalf("down: %+v, %v", res, err)
+	}
+}

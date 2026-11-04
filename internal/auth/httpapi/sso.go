@@ -16,11 +16,12 @@ import (
 // oidcStart sends the browser to the identity provider. The optional
 // redirect query parameter is the in-app path to return to.
 func (h *handler) oidcStart(w http.ResponseWriter, r *http.Request) {
-	if h.opts.OIDC == nil {
+	provider := h.oidc()
+	if provider == nil {
 		writeErrorBody(w, http.StatusNotFound, "not_found", "single sign-on is not enabled", 0)
 		return
 	}
-	authURL, cookie, err := h.opts.OIDC.Begin(r.Context(), r.URL.Query().Get("redirect"))
+	authURL, cookie, err := provider.Begin(r.Context(), r.URL.Query().Get("redirect"))
 	if err != nil {
 		h.log.WarnContext(r.Context(), "auth: oidc sign-in cannot start", "error", err)
 		h.loginFailed(w, r, oidc.CodeUnavailable)
@@ -35,7 +36,8 @@ func (h *handler) oidcStart(w http.ResponseWriter, r *http.Request) {
 // starts a session. Every failure lands on the login page with ?error=code.
 func (h *handler) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	if h.opts.OIDC == nil {
+	provider := h.oidc()
+	if provider == nil {
 		writeErrorBody(w, http.StatusNotFound, "not_found", "single sign-on is not enabled", 0)
 		return
 	}
@@ -58,7 +60,7 @@ func (h *handler) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(oidc.CookieName); err == nil {
 		cookie = c.Value
 	}
-	id, redirect, err := h.opts.OIDC.Complete(ctx, cookie, q.Get("state"), q.Get("code"))
+	id, redirect, err := provider.Complete(ctx, cookie, q.Get("state"), q.Get("code"))
 	if err != nil {
 		code, reason := oidc.CodeFailed, "internal"
 		var oe *oidc.Error
@@ -137,16 +139,16 @@ func (h *handler) identityProviders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o := identityProvider{Name: auth.SourceOIDC, Kind: auth.SourceOIDC, State: providerDisabled}
-	if h.opts.OIDC != nil {
+	if provider := h.oidc(); provider != nil {
 		o.Enabled, o.State = true, providerOK
-		if ok, err := h.opts.OIDC.Status(); !ok && err != nil {
+		if ok, err := provider.Status(); !ok && err != nil {
 			o.State, o.Error = providerError, err.Error()
 		}
 	}
 	l := identityProvider{Name: auth.SourceLDAP, Kind: auth.SourceLDAP, State: providerDisabled}
-	if h.cfg.LDAP.Enabled {
+	if dir := h.svc.Directory(); dir != nil {
 		l.Enabled, l.State = true, providerOK
-		if sr, ok := h.svc.Directory().(interface{ Status() (time.Time, error) }); ok {
+		if sr, ok := dir.(interface{ Status() (time.Time, error) }); ok {
 			at, err := sr.Status()
 			if !at.IsZero() {
 				l.LastSyncAt = &at

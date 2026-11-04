@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"crypto/x509"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"strings"
@@ -47,6 +49,9 @@ type OIDCConfig struct {
 	// production; use CAFile for a private CA instead.
 	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`
 	CAFile             string `yaml:"ca_file"`
+	// CAPEM is a PEM bundle trusted in addition to the system roots and
+	// CAFile. It is set from the settings stored in the database only.
+	CAPEM string `yaml:"-"`
 	// Timeout bounds each request to the provider.
 	Timeout time.Duration `yaml:"timeout"`
 }
@@ -61,6 +66,9 @@ type LDAPConfig struct {
 	StartTLS           bool   `yaml:"start_tls"`
 	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`
 	CAFile             string `yaml:"ca_file"`
+	// CAPEM is a PEM bundle trusted in addition to the system roots and
+	// CAFile. It is set from the settings stored in the database only.
+	CAPEM string `yaml:"-"`
 	// BindDN and BindPassword (HANGAR_AUTH_LDAP_BIND_PASSWORD) are the service
 	// account that searches for users and groups. Both empty: anonymous search.
 	BindDN       string `yaml:"bind_dn"`
@@ -186,33 +194,47 @@ func (m RoleMapping) RoleNames() []string {
 	return slices.Compact(slices.Sorted(slices.Values(out)))
 }
 
-func (m RoleMapping) validate(prefix string) []error {
-	var errs []error
+// FieldError is a problem with one setting of a provider. Field is the
+// setting's YAML name within the provider ("issuer_url", "bind_dn").
+type FieldError struct {
+	Field   string
+	Message string
+}
+
+func (e FieldError) Error() string { return e.Field + " " + e.Message }
+
+// Problems lists what is wrong with the mapping.
+func (m RoleMapping) Problems() []FieldError {
+	var out []FieldError
 	if len(m.GroupRoles) > maxGroupRoleEntries {
-		errs = append(errs, fmt.Errorf("%s.group_roles has more than %d entries", prefix, maxGroupRoleEntries))
+		out = append(out, FieldError{"group_roles", fmt.Sprintf("has more than %d entries", maxGroupRoleEntries)})
 	}
-	for group, roles := range m.GroupRoles {
+	for _, group := range slices.Sorted(maps.Keys(m.GroupRoles)) {
 		if strings.TrimSpace(group) == "" {
-			errs = append(errs, fmt.Errorf("%s.group_roles: empty group name", prefix))
+			out = append(out, FieldError{"group_roles", "has an empty group name"})
 		}
-		if len(roles) == 0 {
-			errs = append(errs, fmt.Errorf("%s.group_roles[%q]: no roles listed", prefix, group))
+		if len(m.GroupRoles[group]) == 0 {
+			out = append(out, FieldError{"group_roles", fmt.Sprintf("lists no roles for group %q", group)})
 		}
 	}
 	for _, r := range m.RoleNames() {
-		if !roleNameRE.MatchString(r) {
-			errs = append(errs, fmt.Errorf("%s: role name %q is not valid", prefix, r))
+		if !ValidRoleName(r) {
+			out = append(out, FieldError{"group_roles", fmt.Sprintf("names role %q, which is not a valid role name", r)})
 		}
 	}
 	for _, g := range m.AllowedGroups {
 		if strings.TrimSpace(g) == "" {
-			errs = append(errs, fmt.Errorf("%s.allowed_groups: empty group name", prefix))
+			out = append(out, FieldError{"allowed_groups", "has an empty group name"})
 		}
 	}
-	return errs
+	return out
 }
 
-func (c OIDCConfig) withDefaults() OIDCConfig {
+// ValidRoleName reports whether name may name a role.
+func ValidRoleName(name string) bool { return roleNameRE.MatchString(name) }
+
+// WithDefaults fills empty settings with their defaults.
+func (c OIDCConfig) WithDefaults() OIDCConfig {
 	if c.DisplayName == "" {
 		c.DisplayName = "SSO"
 	}
@@ -240,7 +262,8 @@ func (c OIDCConfig) withDefaults() OIDCConfig {
 	return c
 }
 
-func (c LDAPConfig) withDefaults() LDAPConfig {
+// WithDefaults fills empty settings with their defaults.
+func (c LDAPConfig) WithDefaults() LDAPConfig {
 	if c.UserFilter == "" {
 		c.UserFilter = DefaultLDAPUserFilter
 	}
@@ -271,65 +294,105 @@ func (c LDAPConfig) withDefaults() LDAPConfig {
 	return c
 }
 
+// Problems lists what is wrong with the provider settings (defaults
+// applied). Required settings are only checked while the provider is
+// enabled; values that are set are always checked.
+func (c OIDCConfig) Problems() []FieldError {
+	var out []FieldError
+	add := func(field, msg string) { out = append(out, FieldError{field, msg}) }
+	u, err := url.Parse(c.IssuerURL)
+	switch {
+	case c.IssuerURL == "":
+		if c.Enabled {
+			add("issuer_url", "is required")
+		}
+	case err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http"):
+		add("issuer_url", fmt.Sprintf("%q must be an absolute https:// URL", c.IssuerURL))
+	case u.Scheme == "http" && !isLoopbackHost(u.Hostname()):
+		add("issuer_url", fmt.Sprintf("%q must use https (http is accepted for localhost only)", c.IssuerURL))
+	}
+	if c.ClientID == "" && c.Enabled {
+		add("client_id", "is required")
+	}
+	if c.ClientAuth != "basic" && c.ClientAuth != "post" {
+		add("client_auth", fmt.Sprintf("%q: want basic or post", c.ClientAuth))
+	}
+	if !slices.Contains(c.Scopes, "openid") {
+		add("scopes", "must include openid")
+	}
+	if len(c.DisplayName) > 64 {
+		add("display_name", "is longer than 64 characters")
+	}
+	if c.CAPEM != "" && !validPEM(c.CAPEM) {
+		add("ca_pem", "contains no PEM certificate")
+	}
+	return append(out, c.Mapping().Problems()...)
+}
+
+// Problems lists what is wrong with the directory settings (defaults
+// applied), like OIDCConfig.Problems.
+func (c LDAPConfig) Problems() []FieldError {
+	var out []FieldError
+	add := func(field, msg string) { out = append(out, FieldError{field, msg}) }
+	u, err := url.Parse(c.URL)
+	switch {
+	case c.URL == "":
+		if c.Enabled {
+			add("url", "is required")
+		}
+	case err != nil || u.Host == "" || (u.Scheme != "ldap" && u.Scheme != "ldaps"):
+		add("url", fmt.Sprintf("%q must be ldap://host[:port] or ldaps://host[:port]", c.URL))
+	case u.Scheme == "ldaps" && c.StartTLS:
+		add("start_tls", "cannot be combined with an ldaps:// url")
+	}
+	switch {
+	case c.BindDN != "" && c.BindPassword == "":
+		add("bind_password", "is required when bind_dn is set (HANGAR_AUTH_LDAP_BIND_PASSWORD)")
+	case c.BindDN == "" && c.BindPassword != "":
+		add("bind_dn", "is required when a bind password is set")
+	}
+	if c.UserBaseDN == "" && c.Enabled {
+		add("user_base_dn", "is required")
+	}
+	if !strings.Contains(c.UserFilter, "{username}") {
+		add("user_filter", fmt.Sprintf("%q must contain {username}", c.UserFilter))
+	} else if !strings.HasPrefix(c.UserFilter, "(") {
+		add("user_filter", "must be an LDAP filter in parentheses")
+	}
+	if !strings.HasPrefix(c.GroupFilter, "(") {
+		add("group_filter", "must be an LDAP filter in parentheses")
+	}
+	if c.NestedGroups && c.GroupBaseDN == "" {
+		add("group_base_dn", "is required for nested groups")
+	}
+	if c.CAPEM != "" && !validPEM(c.CAPEM) {
+		add("ca_pem", "contains no PEM certificate")
+	}
+	return append(out, c.Mapping().Problems()...)
+}
+
+func validPEM(s string) bool { return x509.NewCertPool().AppendCertsFromPEM([]byte(s)) }
+
 func (c OIDCConfig) validate() []error {
 	if !c.Enabled {
 		return nil
 	}
-	var errs []error
-	u, err := url.Parse(c.IssuerURL)
-	switch {
-	case c.IssuerURL == "":
-		errs = append(errs, errors.New("auth.oidc.issuer_url is required when auth.oidc.enabled is true"))
-	case err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http"):
-		errs = append(errs, fmt.Errorf("auth.oidc.issuer_url %q must be an absolute https:// URL", c.IssuerURL))
-	case u.Scheme == "http" && !isLoopbackHost(u.Hostname()):
-		errs = append(errs, fmt.Errorf("auth.oidc.issuer_url %q must use https (http is accepted for localhost only)", c.IssuerURL))
-	}
-	if c.ClientID == "" {
-		errs = append(errs, errors.New("auth.oidc.client_id is required when auth.oidc.enabled is true"))
-	}
-	if c.ClientAuth != "basic" && c.ClientAuth != "post" {
-		errs = append(errs, fmt.Errorf("auth.oidc.client_auth %q: want basic or post", c.ClientAuth))
-	}
-	if !slices.Contains(c.Scopes, "openid") {
-		errs = append(errs, errors.New("auth.oidc.scopes must include openid"))
-	}
-	if len(c.DisplayName) > 64 {
-		errs = append(errs, errors.New("auth.oidc.display_name is longer than 64 characters"))
-	}
-	return append(errs, c.Mapping().validate("auth.oidc")...)
+	return prefixed("auth.oidc", c.Problems())
 }
 
 func (c LDAPConfig) validate() []error {
 	if !c.Enabled {
 		return nil
 	}
-	var errs []error
-	u, err := url.Parse(c.URL)
-	switch {
-	case c.URL == "":
-		errs = append(errs, errors.New("auth.ldap.url is required when auth.ldap.enabled is true"))
-	case err != nil || u.Host == "" || (u.Scheme != "ldap" && u.Scheme != "ldaps"):
-		errs = append(errs, fmt.Errorf("auth.ldap.url %q must be ldap://host[:port] or ldaps://host[:port]", c.URL))
-	case u.Scheme == "ldaps" && c.StartTLS:
-		errs = append(errs, errors.New("auth.ldap.start_tls cannot be combined with an ldaps:// url"))
+	return prefixed("auth.ldap", c.Problems())
+}
+
+func prefixed(prefix string, ps []FieldError) []error {
+	errs := make([]error, 0, len(ps))
+	for _, p := range ps {
+		errs = append(errs, fmt.Errorf("%s.%s %s", prefix, p.Field, p.Message))
 	}
-	if (c.BindDN == "") != (c.BindPassword == "") {
-		errs = append(errs, errors.New("auth.ldap.bind_dn and auth.ldap.bind_password (HANGAR_AUTH_LDAP_BIND_PASSWORD) must be set together"))
-	}
-	if c.UserBaseDN == "" {
-		errs = append(errs, errors.New("auth.ldap.user_base_dn is required when auth.ldap.enabled is true"))
-	}
-	if !strings.Contains(c.UserFilter, "{username}") {
-		errs = append(errs, fmt.Errorf("auth.ldap.user_filter %q must contain {username}", c.UserFilter))
-	}
-	if !strings.HasPrefix(c.UserFilter, "(") || !strings.HasPrefix(c.GroupFilter, "(") {
-		errs = append(errs, errors.New("auth.ldap.user_filter and group_filter must be LDAP filters in parentheses"))
-	}
-	if c.NestedGroups && c.GroupBaseDN == "" {
-		errs = append(errs, errors.New("auth.ldap.nested_groups needs auth.ldap.group_base_dn"))
-	}
-	return append(errs, c.Mapping().validate("auth.ldap")...)
+	return errs
 }
 
 // ExternalEnabled reports whether any external sign-in method is on.

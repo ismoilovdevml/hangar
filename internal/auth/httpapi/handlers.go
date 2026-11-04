@@ -37,9 +37,9 @@ type authProviders struct {
 }
 
 func (h *handler) providers(w http.ResponseWriter, _ *http.Request) {
-	out := authProviders{Local: providerToggle{Enabled: true}, LDAP: providerToggle{Enabled: h.cfg.LDAP.Enabled}}
-	if h.opts.OIDC != nil {
-		out.OIDC = &oidcProvider{DisplayName: h.opts.OIDC.DisplayName(), StartURL: oidc.StartPath}
+	out := authProviders{Local: providerToggle{Enabled: true}, LDAP: providerToggle{Enabled: h.svc.Directory() != nil}}
+	if provider := h.oidc(); provider != nil {
+		out.OIDC = &oidcProvider{DisplayName: provider.DisplayName(), StartURL: oidc.StartPath}
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -76,7 +76,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 	switch req.Realm {
 	case "", "local":
 	case "ldap":
-		if !h.cfg.LDAP.Enabled {
+		if h.svc.Directory() == nil {
 			writeErrorBody(w, http.StatusBadRequest, "invalid_argument", "LDAP sign-in is not enabled", 0)
 			return
 		}
