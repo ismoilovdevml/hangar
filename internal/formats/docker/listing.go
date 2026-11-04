@@ -83,9 +83,12 @@ func (h *handler) serveTags(w http.ResponseWriter, r *http.Request, rq *request)
 	var tags []string
 	exists := false
 	for _, m := range repos {
-		var t []string
+		var (
+			t     []string
+			known bool
+		)
 		if m.Type == core.RepoProxy {
-			t, err = h.proxyTags(ctx, w.Header(), m, rq.image)
+			t, known, err = h.proxyTags(ctx, w.Header(), m, rq.image)
 		} else {
 			t, err = h.localTags(ctx, m, rq.image)
 		}
@@ -94,7 +97,7 @@ func (h *handler) serveTags(w http.ResponseWriter, r *http.Request, rq *request)
 			return
 		}
 		tags = append(tags, t...)
-		if !exists && (len(t) > 0 || m.Type == core.RepoProxy || h.imageExists(ctx, m, rq.image)) {
+		if !exists && (len(t) > 0 || known || (m.Type != core.RepoProxy && h.imageExists(ctx, m, rq.image))) {
 			exists = true
 		}
 	}
@@ -159,6 +162,7 @@ func (h *handler) serveCatalog(w http.ResponseWriter, r *http.Request) {
 		p = a.claims.original()
 	}
 	ctx := core.WithPrincipal(r.Context(), p)
+	n, _ := namingFrom(ctx)
 	var names []string
 	q := core.RepositoryQuery{Format: Name, Limit: listPage}
 	for {
@@ -168,7 +172,7 @@ func (h *handler) serveCatalog(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, repo := range page.Items {
-			if repo.Format != Name || !repo.Online || h.deps.AuthZ.Authorize(ctx, p, core.ActionRead, core.RepoResource(repo.Name)) != nil {
+			if repo.Format != Name || !repo.Online || (n.repo != "" && repo.Name != n.repo) || h.deps.AuthZ.Authorize(ctx, p, core.ActionRead, core.RepoResource(repo.Name)) != nil {
 				continue
 			}
 			members, err := h.contentRepos(ctx, repo)
@@ -182,7 +186,9 @@ func (h *handler) serveCatalog(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				for _, img := range imgs {
-					names = append(names, repo.Name+"/"+img)
+					if pub, ok := n.public(repo.Name, img); ok {
+						names = append(names, pub)
+					}
 				}
 			}
 		}

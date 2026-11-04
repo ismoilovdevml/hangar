@@ -39,9 +39,15 @@ func (h *handler) getBlob(w http.ResponseWriter, r *http.Request, rq *request) {
 		h.internal(w, r, "resolve group", err)
 		return
 	}
-	var firstErr error
+	var miss memberMisses
 	for _, m := range repos {
 		a, err := h.localBlob(ctx, m, rq.image, d)
+		if err == nil || (errors.Is(err, core.ErrNotFound) && m.Type == core.RepoProxy) {
+			// The first member that holds (or proxies) the content decides.
+			if !h.allowContent(w, r, rq, m, d) {
+				return
+			}
+		}
 		if err == nil {
 			if m.Type == core.RepoProxy {
 				proxy.NoteCacheHit(ctx, a.Size)
@@ -49,33 +55,19 @@ func (h *handler) getBlob(w http.ResponseWriter, r *http.Request, rq *request) {
 			h.serveAsset(w, r, m, a, d, a.ContentType)
 			return
 		}
-		if !errors.Is(err, core.ErrNotFound) {
-			firstErr = cmpErr(firstErr, err)
-			continue
-		}
-		if m.Type != core.RepoProxy {
+		if !errors.Is(err, core.ErrNotFound) || m.Type != core.RepoProxy {
+			miss.note(ctx, h.log, rq.repo, m, err)
 			continue
 		}
 		served, err := h.proxyBlob(w, r, m, rq.image, d)
 		if served {
 			return
 		}
-		if err != nil && !errors.Is(err, core.ErrNotFound) {
-			firstErr = cmpErr(firstErr, err)
+		if err != nil {
+			miss.note(ctx, h.log, rq.repo, m, err)
 		}
 	}
-	if firstErr != nil {
-		h.fail(w, r, rq, firstErr, codeBlobUnknown)
-		return
-	}
-	writeError(w, http.StatusNotFound, codeBlobUnknown, fmt.Sprintf("blob %s not found in %s", d, rq.name))
-}
-
-func cmpErr(first, err error) error {
-	if first != nil {
-		return first
-	}
-	return err
+	h.fail(w, r, rq, miss.result(fmt.Sprintf("blob %s in %s", d, rq.name)), codeBlobUnknown)
 }
 
 // deleteBlob unlinks a blob from an image. The bytes stay in the blob store

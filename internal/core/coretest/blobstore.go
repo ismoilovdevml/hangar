@@ -19,6 +19,7 @@ type MemBlobStore struct {
 	mu    sync.RWMutex
 	blobs map[core.Digest]memBlob
 	puts  int
+	temps map[string]memBlob // TempStore objects (temp.go)
 }
 
 type memBlob struct {

@@ -121,6 +121,29 @@
     the secret once.
   - Migration `00040`: `tokens.last_used_ip`, `users.description`, token
     indexes.
+- **Docker / OCI — push through a group fixed**: a group with a Docker Hub
+  proxy member answered `502` to the existence probe of a new tag
+  (`HEAD /v2/<group>/<image>/manifests/<tag>`), because Docker Hub answers
+  `401` for unknown repositories. Remote `401/403/404/400 NAME_INVALID` now
+  mean `MANIFEST_UNKNOWN` / `BLOB_UNKNOWN`, `429` is passed on as
+  `TOOMANYREQUESTS`, and a group treats an unreachable remote as a miss.
+- **Docker / OCI — proxy blob dedup is confirmed with the remote**: a blob
+  already in the shared store is linked into a proxy only after a `HEAD`
+  confirms the remote serves it under that name (no more serving stored
+  bytes by digest alone).
+- **Docker / OCI — quarantine by digest**: manifests pulled by digest,
+  platform manifests of a quarantined index, blobs that belong only to
+  quarantined images and cross-repository mounts are refused (`403 DENIED`).
+- **Docker / OCI — connectors**: `connector.host` (e.g. `cr.example.com`)
+  and `connector.http_port` route a host name or a dedicated port to one
+  docker repository, with image names without the repository prefix and
+  tokens bound to that entry point. nginx and Caddy examples in
+  `internal/formats/docker/README.md`.
+- **Docker / OCI — upload sessions**: session records live in the blob
+  store temp area (new optional `core.TempStore`, implemented by the fs and
+  S3 drivers) instead of leaking a blob per request; sessions resume on any
+  node and across restarts; the hourly built-in task `docker-upload-cleanup`
+  ends abandoned sessions and releases leftover chunks to blob compaction.
 
 ## M0 — Skeleton (2026-11-03)
 

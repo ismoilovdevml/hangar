@@ -44,6 +44,15 @@ func (h *handler) serveToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A token request for a connector may reach the main endpoint (port
+	// connectors advertise the main realm): the service names the connector.
+	if n, ok := namingFrom(ctx); ok && n.repo == "" {
+		if cn, ok := h.namingForService(r, r.FormValue("service")); ok {
+			ctx = withNaming(ctx, cn)
+			r = r.WithContext(ctx)
+		}
+	}
+
 	var p *core.Principal
 	if creds.Token != "" && looksLikeJWT(creds.Token) {
 		c, err := h.sign.verify(creds.Token, h.service(r), h.now())
@@ -139,7 +148,8 @@ func (h *handler) grant(ctx context.Context, p *core.Principal, scope string, c 
 	default:
 		return
 	}
-	repoName, _, ok := splitName(name)
+	n, _ := namingFrom(ctx)
+	repoName, _, ok := n.split(name)
 	if !ok {
 		return
 	}
