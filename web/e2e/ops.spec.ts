@@ -56,7 +56,8 @@ test('cleanup policy editor previews before saving at desktop and phone width', 
 test('new cleanup policy shows the schedule in plain words', async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await page.goto('/cleanup?create=true');
-  await page.getByLabel('How often').selectOption('weekly');
+  await page.getByLabel('How often').click();
+  await page.getByRole('option', { name: 'Every week' }).click();
   await page.getByLabel('Name').fill('weekly-prune');
   await expect(page.getByText(/Every Sunday at 03:00 UTC/).first()).toBeVisible();
 });
@@ -102,7 +103,8 @@ test('audit log filters through the URL at desktop and phone width', async ({ pa
     await checkFrame(page, `audit-${w}`);
   }
   await page.setViewportSize(DESKTOP);
-  await page.getByLabel('Outcome').selectOption('denied');
+  await page.getByLabel('Outcome').click();
+  await page.getByRole('option', { name: 'Denied' }).click();
   await expect(page).toHaveURL(/outcome=denied/);
   await expect(page.getByRole('cell', { name: 'Success' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Export CSV' })).toHaveAttribute('href', /outcome=denied/);

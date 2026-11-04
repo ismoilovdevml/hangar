@@ -66,7 +66,8 @@ test('repositories list filters through the URL at desktop and phone width', asy
   }
   await page.setViewportSize(DESKTOP);
   await page.getByRole('navigation', { name: 'Repository type' }).getByRole('link', { name: /^Proxy/ }).click();
-  await page.getByLabel('Format').selectOption('npm');
+  await page.getByLabel('Format').click();
+  await page.getByRole('option', { name: 'npm', exact: true }).click();
   await expect(page).toHaveURL(/type=proxy/);
   await expect(page).toHaveURL(/format=npm/);
   await expect(page.getByRole('link', { name: 'npmjs-proxy', exact: true })).toBeVisible();
