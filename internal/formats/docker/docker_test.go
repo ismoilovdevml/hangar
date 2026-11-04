@@ -186,9 +186,17 @@ func TestChunkedUpload(t *testing.T) {
 	// Session upload by another image path is unknown.
 	resp, body = tr.do(http.MethodPut, strings.Replace(loc3, "/app/", "/other/", 1)+"&digest="+string(d), nil, alice)
 	tr.expect(resp, body, http.StatusNotFound)
-	// Cancel.
+	// A completed session is gone.
 	resp, body = tr.do(http.MethodDelete, loc3, nil, alice)
+	tr.expect(resp, body, http.StatusNotFound)
+	// Cancel: the session is gone afterwards.
+	resp, body = tr.do(http.MethodPost, "/v2/docker-hosted/app/blobs/uploads/", nil, alice)
+	tr.expect(resp, body, http.StatusAccepted)
+	loc = resp.Header.Get("Location")
+	resp, body = tr.do(http.MethodDelete, loc, nil, alice)
 	tr.expect(resp, body, http.StatusNoContent)
+	resp, body = tr.do(http.MethodGet, loc, nil, alice)
+	tr.expect(resp, body, http.StatusNotFound)
 }
 
 func TestMonolithicUploadDigestMismatch(t *testing.T) {
