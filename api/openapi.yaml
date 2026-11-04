@@ -465,6 +465,39 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /repositories/{name}/browse:
+    parameters:
+      - $ref: "#/components/parameters/RepositoryName"
+    get:
+      tags: [repositories]
+      operationId: browseRepository
+      summary: Direct children of one folder of the repository's browse tree
+      description: >-
+        The tree follows what clients see: npm scopes, packages, files;
+        Maven groupId segments, artifactId, version, files; NuGet id,
+        version, files; PyPI project, files; Docker image path, then
+        `manifests` (tags and digests) and `blobs`; raw directories.
+        Folders that hold one package or one version are marked as such.
+        Children sort in byte order of their storage path (a folder as its
+        name followed by "/"). A group merges its members, in resolution
+        order, limited to the members the caller may read; each entry names
+        the member that holds it.
+      parameters:
+        - name: path
+          in: query
+          description: Folder in the browse tree, e.g. "@acme/" or "com/acme/ledger-core/"; empty for the root
+          schema: { type: string }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: One page of children
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BrowsePage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   # ---------------------------------------------------------------- blob stores
   /blob-stores:
     get:
@@ -667,6 +700,51 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PublishedComponentPage" }
+  /components/{id}/info:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [components]
+      operationId: getComponentInfo
+      summary: README, licences, keywords and home page of a version
+      description: >-
+        Extracted from the version's stored files on first request and
+        cached: npm manifests, packument or tarball; the .nuspec and the
+        README it references inside the .nupkg; PyPI core metadata; the
+        Maven POM. Facts that are not found are empty.
+      responses:
+        "200":
+          description: Package facts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComponentInfo" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /assets/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [components]
+      operationId: getAsset
+      summary: One file of a repository
+      responses:
+        "200":
+          description: Asset detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [components]
+      operationId: deleteAsset
+      description: >-
+        Deletes the file. Requires `repo:<name>:delete`; audited as
+        `asset.delete` (refusals with outcome "denied"). The blob reference
+        is released, so a blob no other asset uses becomes eligible for
+        compaction. Deleting the last file of a version deletes the version.
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /components/{id}/findings:
     parameters:
       - $ref: "#/components/parameters/Id"
@@ -2455,6 +2533,9 @@ components:
         scan: { $ref: "#/components/schemas/ScanSummary" }
         download_count: { type: integer }
         last_downloaded_at: { type: [string, "null"], format: date-time }
+        size_bytes:
+          $ref: "#/components/schemas/Bytes"
+          description: Content size; reported by the versions listing
     PublishedComponentPage:
       type: object
       required: [items]
@@ -2520,6 +2601,127 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Asset" }
         next_cursor: { $ref: "#/components/schemas/NextCursor" }
+
+    BrowseComponent:
+      type: object
+      required: [id, namespace, name, version]
+      properties:
+        id: { type: string }
+        namespace: { type: string }
+        name: { type: string }
+        version: { type: string }
+    BrowseAsset:
+      type: object
+      required: [id, path, kind, content_type, size_bytes, created_at, updated_at, download_count]
+      properties:
+        id: { type: string }
+        path:
+          type: string
+          description: Storage path inside the repository (download path)
+        kind: { type: string, enum: [content, metadata] }
+        content_type: { type: string }
+        size_bytes: { $ref: "#/components/schemas/Bytes" }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+        last_downloaded_at: { type: [string, "null"], format: date-time }
+        download_count: { type: integer }
+    BrowseEntry:
+      type: object
+      required: [name, path, kind, repository]
+      properties:
+        name: { type: string }
+        path:
+          type: string
+          description: Path in the browse tree; folders end in "/"
+        kind:
+          type: string
+          enum: [folder, package, version, asset]
+          description: A package or version folder holds one package or one version
+        repository:
+          type: string
+          description: Repository that holds the entry (for a group, the first member that has it)
+        repositories:
+          type: array
+          items: { type: string }
+          description: Groups only; every member that has the entry, in resolution order
+        component:
+          $ref: "#/components/schemas/BrowseComponent"
+          description: Package and version folders, and files that belong to a version
+        asset: { $ref: "#/components/schemas/BrowseAsset" }
+    BrowsePage:
+      type: object
+      required: [repository, format, path, items]
+      properties:
+        repository: { type: string }
+        format: { $ref: "#/components/schemas/Format" }
+        path: { type: string }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/BrowseEntry" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+    AssetDetail:
+      type: object
+      required: [id, path, repository, repository_type, format, kind, content_type, size_bytes, blob_digest, checksums,
+        created_at, updated_at, blob_created_at, last_downloaded_at, download_count, cached_from_remote]
+      properties:
+        id: { type: string }
+        path: { type: string }
+        repository: { type: string }
+        repository_type: { $ref: "#/components/schemas/RepositoryType" }
+        format: { $ref: "#/components/schemas/Format" }
+        kind: { type: string, enum: [content, metadata] }
+        content_type: { type: string }
+        size_bytes: { $ref: "#/components/schemas/Bytes" }
+        blob_digest: { type: string }
+        checksums:
+          type: object
+          description: Hex digests by algorithm; sha256 is always present
+          additionalProperties: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+        blob_created_at:
+          type: [string, "null"]
+          format: date-time
+          description: When the blob store first received these bytes
+        last_downloaded_at: { type: [string, "null"], format: date-time }
+        download_count: { type: integer }
+        cached_from_remote:
+          type: boolean
+          description: The file is a proxy repository's cached copy of remote content
+        remote_url: { type: string }
+        component: { $ref: "#/components/schemas/BrowseComponent" }
+        download_url:
+          type: string
+          description: Absent for Docker, whose files are fetched with the registry protocol
+    Readme:
+      type: object
+      required: [format, content, source, truncated]
+      properties:
+        format:
+          type: string
+          enum: [markdown, text]
+          description: Markdown, or plain text (other markups are shown as text)
+        content: { type: string }
+        source:
+          type: string
+          description: Where the README was found, e.g. "README.md in the package tarball"
+        truncated:
+          type: boolean
+          description: The README was longer than 512 KiB and was cut
+    ComponentInfo:
+      type: object
+      required: [licenses, keywords]
+      properties:
+        description: { type: string }
+        licenses:
+          type: array
+          items: { type: string }
+          description: SPDX expressions, licence names or licence URLs as the package declares them
+        keywords:
+          type: array
+          items: { type: string }
+        homepage: { type: string }
+        readme: { $ref: "#/components/schemas/Readme" }
 
     # ------------------------------------------------------------ search
     FacetValue:

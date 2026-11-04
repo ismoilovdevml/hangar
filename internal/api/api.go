@@ -23,6 +23,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/api/catalog"
+	"github.com/ismoilovdevml/hangar/internal/api/pkginfo"
 	"github.com/ismoilovdevml/hangar/internal/audit"
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/health"
@@ -47,6 +48,15 @@ type Catalog interface {
 	DeleteBlobStore(ctx context.Context, name string) error
 	Overview(ctx context.Context, q catalog.OverviewQuery) (*catalog.Overview, error)
 	FormatDownloads(ctx context.Context) (map[string]int64, error)
+	Browse(ctx context.Context, q catalog.BrowseQuery) ([]catalog.BrowseNode, error)
+	Asset(ctx context.Context, id string) (*catalog.AssetDetail, error)
+	ComponentSizes(ctx context.Context, ids []string) (map[string]int64, error)
+}
+
+// PackageInfo extracts a version's README, licences and keywords from its
+// stored files (implemented by pkginfo.Service).
+type PackageInfo interface {
+	Info(ctx context.Context, repo *core.Repository, c *core.Component) (*pkginfo.Info, error)
 }
 
 // Searcher runs global searches (implemented by search.Service).
@@ -103,6 +113,7 @@ type API struct {
 	Started      time.Time
 
 	Catalog        Catalog
+	PackageInfo    PackageInfo
 	Search         Searcher
 	Audit          AuditReader
 	Upstreams      UpstreamHealth
@@ -160,6 +171,7 @@ func (a *API) Mount(r chi.Router) {
 		r.Put("/repositories/{name}", a.updateRepository)
 		r.Delete("/repositories/{name}", a.deleteRepository)
 		r.Post("/repositories/{name}/cache:invalidate", a.invalidateRepositoryCache)
+		r.Get("/repositories/{name}/browse", a.browseRepository)
 
 		r.Get("/blob-stores", a.listBlobStores)
 		r.Post("/blob-stores", a.createBlobStore)
@@ -193,6 +205,9 @@ func (a *API) Mount(r chi.Router) {
 		r.Delete("/components/{id}", a.deleteComponent)
 		r.Get("/components/{id}/assets", a.listComponentAssets)
 		r.Get("/components/{id}/versions", a.listComponentVersions)
+		r.Get("/components/{id}/info", a.getComponentInfo)
+		r.Get("/assets/{id}", a.getAsset)
+		r.Delete("/assets/{id}", a.deleteAsset)
 
 		r.Get("/search", a.search)
 		r.Get("/audit", a.listAudit)
