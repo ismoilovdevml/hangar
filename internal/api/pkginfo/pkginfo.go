@@ -24,7 +24,7 @@ import (
 
 // Extractor versions the extraction logic. Cached rows written by another
 // version are extracted again.
-const Extractor = 1
+const Extractor = 2
 
 // Size bounds: a README is cut at MaxReadme bytes; any single document or
 // archive member read during extraction at maxMember bytes; tar archives are
@@ -51,6 +51,9 @@ type Readme struct {
 	// Source names where the README was found, e.g. "README.md in the tarball".
 	Source    string `json:"source"`
 	Truncated bool   `json:"truncated"`
+	// Images maps each image source of a Markdown README, as written, to
+	// where it loads from. Sources that cannot be resolved are absent.
+	Images map[string]Image `json:"images,omitempty"`
 }
 
 // Info is what the extraction found; every field may be empty.
@@ -60,6 +63,8 @@ type Info struct {
 	Keywords    []string `json:"keywords"`
 	Homepage    string   `json:"homepage,omitempty"`
 	Readme      *Readme  `json:"readme,omitempty"`
+	// Icon is the package's own icon (NuGet <icon> or <iconUrl>).
+	Icon *Image `json:"icon,omitempty"`
 }
 
 // Service extracts and caches Info. A nil pool disables the cache.
@@ -132,6 +137,15 @@ type extraction struct {
 	transient bool
 	assets    []*core.Asset
 	listed    bool
+
+	// For README images: the package archive's files (lower-case lookups
+	// fall back to a scan), its root directory ("package/" in npm
+	// tarballs), the README's directory in it, and the source repository.
+	members       map[string]struct{}
+	membersListed bool
+	archiveRoot   string
+	readmeDir     string
+	source        sourceRepo
 }
 
 func (x *extraction) run(ctx context.Context) {
@@ -145,6 +159,7 @@ func (x *extraction) run(ctx context.Context) {
 	case "maven":
 		x.maven(ctx)
 	}
+	x.resolveImages(ctx)
 }
 
 // componentAssets lists the component's own files (bounded).
@@ -329,4 +344,73 @@ func baseName(p string) string {
 		return p[i+1:]
 	}
 	return p
+}
+
+// Member returns the file called name inside the package archive of
+// component c (the .nupkg of a NuGet version, the tarball of an npm
+// version), at most limit bytes. It fails with core.ErrNotFound when there is
+// no such file and with core.ErrInvalid when it is larger than limit.
+func (s *Service) Member(ctx context.Context, repo *core.Repository, c *core.Component, name string, limit int64) ([]byte, error) {
+	x := &extraction{s: s, repo: repo, c: c, info: &Info{}}
+	notFound := fmt.Errorf("%q in the package: %w", name, core.ErrNotFound)
+	tooLarge := fmt.Errorf("%q in the package is larger than %d bytes: %w", name, limit, core.ErrInvalid)
+	var (
+		out   []byte
+		found bool
+	)
+	switch repo.Format {
+	case "nuget":
+		pkg := x.assetBySuffix(ctx, ".nupkg")
+		if pkg == nil {
+			return nil, notFound
+		}
+		zr, closer, ok := x.openZip(ctx, pkg)
+		if !ok {
+			return nil, x.memberErr(notFound)
+		}
+		defer closer.Close()
+		for _, f := range zr.File {
+			if f.Name == name {
+				b, ok := readZipFile(f, limit+1)
+				if !ok {
+					return nil, fmt.Errorf("read %q in the package: %w", name, core.ErrInvalid)
+				}
+				out, found = b, true
+				break
+			}
+		}
+	case "npm":
+		tgz := x.assetBySuffix(ctx, ".tgz")
+		if tgz == nil {
+			return nil, notFound
+		}
+		rc, ok := x.open(ctx, tgz)
+		if !ok {
+			return nil, x.memberErr(notFound)
+		}
+		defer rc.Close()
+		x.scanTarGz(ctx, rc, func(n string, r io.Reader) bool {
+			if n != name {
+				return false
+			}
+			out, _ = io.ReadAll(io.LimitReader(r, limit+1))
+			found = true
+			return true
+		})
+	}
+	if !found {
+		return nil, x.memberErr(notFound)
+	}
+	if int64(len(out)) > limit {
+		return nil, tooLarge
+	}
+	return out, nil
+}
+
+// memberErr reports a blob store failure as such, else fallback.
+func (x *extraction) memberErr(fallback error) error {
+	if x.transient {
+		return errors.New("read package archive: the blob store failed")
+	}
+	return fallback
 }
