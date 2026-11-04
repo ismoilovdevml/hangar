@@ -70,6 +70,7 @@ func serveCmd(args []string, stderr io.Writer) error {
 		ReadHeaderTimeout: cfg.Server.ReadHeaderTimeout,
 		IdleTimeout:       cfg.Server.IdleTimeout,
 		ShutdownTimeout:   cfg.Server.ShutdownTimeout,
+		MaxHeaderBytes:    cfg.Security.Limits.MaxHeaderBytes,
 	}, a.router, a.health, log, nil)
 	if err != nil {
 		return err

@@ -47,6 +47,8 @@ type Config struct {
 	Bootstrap Bootstrap   `yaml:"bootstrap"`
 	Scanner   Scanner     `yaml:"scanner"`
 	Metrics   Metrics     `yaml:"metrics"`
+	// Security: encryption of stored secrets and HTTP hardening (security.go).
+	Security Security `yaml:"security"`
 }
 
 // Docker configures the Docker / OCI format.
@@ -226,7 +228,8 @@ func Default() Config {
 			MaxIdleConns:        200,
 			MaxIdleConnsPerHost: 32,
 		},
-		Metrics: Metrics{Enabled: true, Path: "/metrics"},
+		Metrics:  Metrics{Enabled: true, Path: "/metrics"},
+		Security: DefaultSecurity(),
 	}
 }
 
@@ -334,6 +337,7 @@ func (c *Config) Validate() error {
 	if c.Metrics.Path == "" || !strings.HasPrefix(c.Metrics.Path, "/") {
 		errs = append(errs, fmt.Errorf("metrics.path %q must start with /", c.Metrics.Path))
 	}
+	errs = append(errs, c.Security.validate()...)
 	return errors.Join(errs...)
 }
 
@@ -349,6 +353,7 @@ func ApplyEnv(cfg *Config, lookup func(string) (string, bool)) error {
 			errs = append(errs, fmt.Errorf("%s: %w", name, err))
 		}
 	})
+	applySecretKeyAlias(cfg, lookup)
 	return errors.Join(errs...)
 }
 
@@ -446,6 +451,7 @@ func (c Config) Redacted() Config {
 	c.HTTP.Proxy = redactURL(c.HTTP.Proxy)
 	c.Database.URL = redactURL(c.Database.URL)
 	c.NATS.URL = redactURL(c.NATS.URL)
+	c.Security = c.Security.redacted()
 	return c
 }
 

@@ -63,7 +63,12 @@ type Options struct {
 	Guard *Guard
 	// Events receives upstream.status events when a remote's state changes (optional).
 	Events core.EventBus
-	Logger *slog.Logger
+	// Secrets opens the sealed credentials of a proxy configuration (upstream
+	// auth, passwords in remote and outbound proxy URLs) just before the
+	// outbound client is built; nothing else sees them in plaintext. Nil uses
+	// the configuration as is.
+	Secrets SecretOpener
+	Logger  *slog.Logger
 	// Retries is how many times a GET/HEAD is retried on connection errors
 	// and 5xx. 0 selects DefaultRetries; negative disables retries.
 	Retries      int
@@ -219,7 +224,20 @@ type proxySelector interface {
 	ProxyFor(target string, cfg core.UpstreamHTTP) (*url.URL, error)
 }
 
+// SecretOpener reveals the sealed secrets of a proxy configuration
+// (implemented by *secrets.Keyring). It returns a copy; cfg is not modified.
+type SecretOpener interface {
+	OpenProxyConfig(cfg *core.ProxyConfig) (*core.ProxyConfig, error)
+}
+
 func (m *Manager) build(name string, cfg *core.ProxyConfig, fp string) (*upstream, error) {
+	if m.opts.Secrets != nil {
+		opened, err := m.opts.Secrets.OpenProxyConfig(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("repository %q: upstream credentials: %w", name, err)
+		}
+		cfg = opened
+	}
 	base, err := url.Parse(cfg.RemoteURL)
 	if err != nil || base.Host == "" || (base.Scheme != "http" && base.Scheme != "https") {
 		return nil, fmt.Errorf("repository %q: remote url must be an absolute http(s) URL: %w", name, core.ErrInvalid)
