@@ -44,6 +44,39 @@ describe('repositories list', () => {
     expect(screen.getByText(`Showing 20 of ${all.length}`)).toBeInTheDocument();
   });
 
+  it('shows last activity, with the exact time on hover, and never-used repositories', async () => {
+    renderApp('/repositories?q=npm');
+    const table = await screen.findByRole('table', { name: 'Repositories' });
+    const proxyRow = (await within(table).findByText('npmjs-proxy')).closest('tr')!;
+    const when = within(proxyRow).getByText('2 min ago');
+    expect(when.tagName).toBe('TIME');
+    expect(when).toHaveAttribute('title', expect.stringMatching(/ UTC$/));
+    expect(within(within(table).getByText('npm-sandbox').closest('tr')!).getByText('No activity yet')).toBeInTheDocument();
+    // A group is as recent as its busiest member.
+    expect(within(within(table).getByText('npm-all').closest('tr')!).getByText('2 min ago')).toBeInTheDocument();
+  });
+
+  it('sorts by a column header through the URL, before paging', async () => {
+    const user = userEvent.setup();
+    const { history } = renderApp('/repositories');
+    const table = await screen.findByRole('table', { name: 'Repositories' });
+    await within(table).findByText('docker-all');
+    expect(within(table).getByRole('columnheader', { name: /Name/ })).toHaveAttribute('aria-sort', 'ascending');
+
+    await user.click(within(table).getByRole('button', { name: 'Last activity' }));
+    await waitFor(() => expect(search(history).get('sort')).toBe('-last_activity'));
+    expect(within(table).getByRole('columnheader', { name: /Last activity/ })).toHaveAttribute('aria-sort', 'descending');
+    // Most recent first; the group ties with its busiest member and the name breaks the tie.
+    await waitFor(() => expect(within(table).getAllByRole('row')[2]).toHaveTextContent('dockerhub-proxy'));
+    expect(within(table).getAllByRole('row')[1]).toHaveTextContent('docker-all');
+
+    await user.click(within(table).getByRole('button', { name: 'Name' }));
+    await waitFor(() => expect(search(history).get('sort')).toBeNull());
+    await user.click(within(table).getByRole('button', { name: 'Name' }));
+    await waitFor(() => expect(search(history).get('sort')).toBe('-name'));
+    await waitFor(() => expect(within(table).getAllByRole('row')[1]).toHaveTextContent('raw-legacy'));
+  });
+
   it('keeps the type tab, format and name filters in the URL', async () => {
     const user = userEvent.setup();
     const { history } = renderApp('/repositories');

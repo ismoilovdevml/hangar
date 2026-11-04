@@ -60,6 +60,7 @@
   display: inline-block; padding: 3px 8px; border-radius: var(--r-pill);
   font-size: 12px; font-weight: 600; line-height: 1.35; white-space: nowrap;
 }
+.pill--icon { display: inline-flex; align-items: center; gap: 5px; }
 .tone-ok { background: var(--ok-bg); color: var(--ok-ink); }
 .tone-warn { background: var(--warn-bg); color: var(--warn-ink); }
 .tone-bad { background: var(--bad-bg); color: var(--bad-ink); }
@@ -121,6 +122,13 @@
   padding: 8px 12px; text-align: left;
   font-size: 12px; font-weight: 600; color: var(--ink-3);
 }
+.th-sort {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 28px; margin: -4px -6px; padding: 0 6px;
+  border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer;
+}
+.th-sort:hover { color: var(--ink); background: rgba(255, 255, 255, .5); }
+.th-sort.is-active { color: var(--ink); }
+.th-sort__mark { display: inline-grid; place-items: center; width: 13px; color: var(--lake-ink); }
 .data-table td { padding: 13px 12px; border-top: 1px solid var(--hairline); vertical-align: middle; }
 .data-table .is-right { text-align: right; }
 .data-table .col-first { padding-left: 22px; }
@@ -153,8 +161,9 @@
 .popover-anchor { position: relative; }
 .popover {
   position: absolute; right: 0; top: calc(100% + 8px); z-index: var(--z-raised);
-  width: 280px; padding: 14px; border-radius: 14px;
-  background: rgba(255, 255, 255, .95);
+  width: 280px; max-width: calc(100vw - 32px); padding: 14px; border-radius: 14px;
+  /* opaque: a menu must stay readable over whatever it covers */
+  background: var(--surface-solid); box-shadow: var(--shadow-modal);
   display: flex; flex-direction: column; gap: 8px;
 }
 .popover__title { font-size: 14px; font-weight: 700; }

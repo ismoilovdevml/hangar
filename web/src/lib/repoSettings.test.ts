@@ -32,6 +32,7 @@ const proxy: Repository = {
   size_bytes: 1,
   component_count: 1,
   created_at: '2026-01-01T00:00:00Z',
+  last_activity_at: null,
   updated_at: '2026-01-01T00:00:00Z',
 };
 

@@ -23,7 +23,7 @@ import { isSearchSort } from './lib/searchQuery';
 import { BlobStoresPage } from './pages/blobstores/BlobStoresPage';
 import { BlobStoreDetailPage } from './pages/blobstores/BlobStoreDetailPage';
 import type { SearchSort } from './api/types';
-import { isFormat, isRepoType } from './lib/repositories';
+import { isFormat, isRepoSort, isRepoType, type RepoSort } from './lib/repositories';
 import type { Format, RepositoryType } from './api/types';
 import { AccessPage } from './pages/access/AccessPage';
 import { isAccessTab, type AccessSearch } from './pages/access/model';
@@ -127,6 +127,7 @@ export interface RepositoriesSearch {
   type?: RepositoryType;
   format?: Format;
   q?: string;
+  sort?: RepoSort;
   cursor?: string;
 }
 
@@ -138,6 +139,7 @@ const repositoriesRoute = createRoute({
     type: isRepoType(s.type) ? s.type : undefined,
     format: isFormat(s.format) ? s.format : undefined,
     q: str(s.q),
+    sort: isRepoSort(s.sort) && s.sort !== 'name' ? s.sort : undefined,
     cursor: str(s.cursor),
   }),
   component: RepositoriesPage,

@@ -244,8 +244,23 @@ const REPO_SEEDS: RepoSeed[] = [
   ['pypi-all', 'pypi', 'group', '', 0, 'online', { group: { members: ['pypi-internal', 'pypi-ml', 'pypi-proxy'] } }],
 ];
 
+/** Minutes since the last upload or download per repository; absent = no activity yet. */
+const ACTIVITY_MINUTES: Record<string, number> = {
+  'docker-prod': 3, 'dockerhub-proxy': 1, 'npm-internal': 12, 'npmjs-proxy': 2, 'maven-releases': 95, 'maven-snapshots': 240,
+  'pypi-internal': 9, 'ghcr-proxy': 3 * 1440, 'maven-central': 30, 'pypi-proxy': 55, 'nuget-internal': 2 * 1440,
+  'raw-artifacts': 600, 'raw-legacy': 200 * 1440, 'docker-dev': 45, 'docker-staging': 26 * 60, 'maven-thirdparty': 40 * 1440,
+  'pypi-ml': 7 * 1440, 'helm-charts': 9 * 1440, 'nuget-proxy': 18,
+};
+
 export function repositories(): Repository[] {
   const created = '2026-06-01T09:00:00Z';
+  const now = Date.now();
+  const activity = (name: string) => (name in ACTIVITY_MINUTES ? now - ACTIVITY_MINUTES[name]! * 60_000 : null);
+  // A group is as recent as its most recently used member.
+  const seen = (name: string, extra: Partial<Repository['config']>) => {
+    const times = [activity(name), ...(extra.group?.members ?? []).map(activity)].filter((t): t is number => t !== null);
+    return times.length ? new Date(Math.max(...times)).toISOString() : null;
+  };
   const repos: Repository[] = REPO_SEEDS.map(([name, format, type, description, bytes, status = 'online', extra = {}], i) => ({
     id: `r_${String(i + 1).padStart(3, '0')}`,
     name,
@@ -267,6 +282,7 @@ export function repositories(): Repository[] {
     component_count: Math.round(bytes / (40 * 1e6)),
     created_at: created,
     updated_at: created,
+    last_activity_at: seen(name, extra),
   }));
   // A group serves its members' content: the mock sums them (the server
   // counts blobs shared by members once).
@@ -277,6 +293,25 @@ export function repositories(): Repository[] {
     g.component_count = members.reduce((n, m) => n + m.component_count, 0);
   }
   return repos;
+}
+
+/** Server-side repository order: `name`, `type`, `format` or `last_activity`, `-` reverses, name breaks ties. */
+export function sortRepositories(list: Repository[], sort: string | null): Repository[] {
+  const desc = !!sort?.startsWith('-');
+  const key = sort?.replace(/^-/, '') || 'name';
+  const by: Record<string, (r: Repository) => string> = {
+    name: () => '',
+    type: (r) => r.type,
+    format: (r) => r.format,
+    last_activity: (r) => r.last_activity_at ?? '',
+  };
+  const pick = by[key];
+  if (!pick) return list;
+  return [...list].sort((a, b) => {
+    const c = pick(a).localeCompare(pick(b)) * (desc ? -1 : 1);
+    if (c) return c;
+    return a.name.localeCompare(b.name) * (key === 'name' && desc ? -1 : 1);
+  });
 }
 
 export const blobStores: BlobStore[] = [
