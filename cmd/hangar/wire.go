@@ -14,6 +14,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/api"
 	"github.com/ismoilovdevml/hangar/internal/api/catalog"
+	"github.com/ismoilovdevml/hangar/internal/api/pkginfo"
 	"github.com/ismoilovdevml/hangar/internal/audit"
 	"github.com/ismoilovdevml/hangar/internal/auth"
 	"github.com/ismoilovdevml/hangar/internal/auth/httpapi"
@@ -376,6 +377,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Formats:        reg.Names(),
 		Started:        started,
 		Catalog:        catalog.New(pool, catalog.Options{Sealer: storeSealer(keyring), ConfiguredStores: []string{DefaultBlobStore}}),
+		PackageInfo:    pkginfo.New(pool, deps.Components, deps.Blobs, log),
 		Search:         search.New(pool),
 		Audit:          auditLog,
 		Upstreams:      healthReporter,

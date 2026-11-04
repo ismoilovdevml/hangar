@@ -137,3 +137,87 @@ export function clientLines(t: ClientTarget): CodeLine[] {
   const { setup, publish } = clientSetup(t);
   return publish.length ? [...setup, c('# Publish'), ...publish] : setup;
 }
+
+/** One package version to install. */
+export interface PackageVersion {
+  /** Scope, groupId or image path prefix; empty when the format has none. */
+  namespace?: string;
+  name: string;
+  version: string;
+}
+
+/** Install commands for one exact version with one client. */
+export interface InstallCommand {
+  id: string;
+  label: string;
+  lines: CodeLine[];
+}
+
+/**
+ * Commands that install `p` from the repository `t`, one per common client
+ * of the format (npm, pnpm and Yarn; dotnet and PackageReference; Maven and
+ * Gradle; pip and uv; docker and Podman; curl). Empty without a repository URL.
+ */
+export function installCommands(t: Pick<ClientTarget, 'format' | 'url'>, p: PackageVersion): InstallCommand[] {
+  if (!t.url) return [];
+  const url = slash(t.url);
+  const v = p.version;
+  const full = p.namespace ? `${p.namespace}/${p.name}` : p.name;
+  switch (t.format) {
+    case 'npm':
+      return [
+        { id: 'npm', label: 'npm', lines: [l(`npm install ${full}@${v} --registry ${url}`)] },
+        { id: 'pnpm', label: 'pnpm', lines: [l(`pnpm add ${full}@${v} --registry ${url}`)] },
+        { id: 'yarn', label: 'Yarn', lines: [l(`yarn config set npmRegistryServer ${url}`), l(`yarn add ${full}@${v}`)] },
+      ];
+    case 'nuget':
+      return [
+        { id: 'dotnet', label: 'dotnet CLI', lines: [l(`dotnet add package ${p.name} --version ${v} --source ${url}index.json`)] },
+        { id: 'csproj', label: 'PackageReference', lines: [c('<!-- in the project file -->'), l(`<PackageReference Include="${p.name}" Version="${v}" />`)] },
+      ];
+    case 'maven':
+      return [
+        {
+          id: 'maven',
+          label: 'Maven',
+          lines: [
+            c('<!-- pom.xml -->'),
+            l('<dependency>'),
+            l(`  <groupId>${p.namespace ?? ''}</groupId>`),
+            l(`  <artifactId>${p.name}</artifactId>`),
+            l(`  <version>${v}</version>`),
+            l('</dependency>'),
+          ],
+        },
+        {
+          id: 'gradle',
+          label: 'Gradle',
+          lines: [
+            c('// build.gradle.kts'),
+            l('repositories {'),
+            l(`    maven { url = uri("${url}") }`),
+            l('}'),
+            l('dependencies {'),
+            l(`    implementation("${p.namespace ?? ''}:${p.name}:${v}")`),
+            l('}'),
+          ],
+        },
+      ];
+    case 'pypi':
+      return [
+        { id: 'pip', label: 'pip', lines: [l(`pip install ${p.name}==${v} --index-url ${url}simple/`)] },
+        { id: 'uv', label: 'uv', lines: [l(`uv pip install ${p.name}==${v} --index-url ${url}simple/`)] },
+      ];
+    case 'docker': {
+      const image = `${t.url.replace(/\/+$/, '')}/${full}:${v}`;
+      return [
+        { id: 'docker', label: 'Docker', lines: [l(`docker pull ${image}`)] },
+        { id: 'podman', label: 'Podman', lines: [l(`podman pull ${image}`)] },
+      ];
+    }
+    case 'raw':
+      return [{ id: 'curl', label: 'curl', lines: [l(`curl -u <username>:${TOKEN} -fLO ${url}${full.replace(/^\/+/, '')}`)] }];
+    default:
+      return [];
+  }
+}

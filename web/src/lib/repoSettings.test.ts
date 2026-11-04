@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ComponentDetail, Repository } from '../api/types';
-import { downloadHref, installOptions, securityPill } from './packages';
+import { installCommands } from './clientSnippets';
+import { downloadHref, securityPill } from './packages';
 import { isDirty, repoClientConfig, repoToForm, storedInput, toRepositoryUpdate } from './repoSettings';
 import { validateRepoForm } from './repositories';
 
@@ -96,14 +97,23 @@ const detail = (over: Partial<ComponentDetail>): ComponentDetail => ({
 });
 
 describe('package helpers', () => {
-  it('offers the server command first, then other clients of the format', () => {
-    const npm = installOptions(detail({}), 'https://pkg/repository/npm-hosted/');
+  it('installs one exact version with every common client of the format', () => {
+    const d = detail({});
+    const npm = installCommands({ format: 'npm', url: 'https://pkg/repository/npm-hosted/' }, d);
     expect(npm.map((o) => o.label)).toEqual(['npm', 'pnpm', 'Yarn']);
     expect(npm[1]!.lines[0]!.text).toBe('pnpm add @acme/ui@1.2.3 --registry https://pkg/repository/npm-hosted/');
-    const mvn = installOptions(detail({ format: 'maven', namespace: 'com.acme', name: 'core', install_command: 'mvn x' }), 'https://pkg/repository/m/');
+    const mvn = installCommands({ format: 'maven', url: 'https://pkg/repository/m/' }, { namespace: 'com.acme', name: 'core', version: '1.2.3' });
     expect(mvn.find((o) => o.id === 'gradle')!.lines.map((l) => l.text)).toContain('    implementation("com.acme:core:1.2.3")');
-    expect(installOptions(detail({ format: 'go', install_command: 'go get x' }), 'u').map((o) => o.id)).toEqual(['default']);
-    expect(installOptions(detail({}), undefined)).toHaveLength(1);
+    expect(mvn.find((o) => o.id === 'maven')!.lines.map((l) => l.text)).toContain('  <artifactId>core</artifactId>');
+    const nuget = installCommands({ format: 'nuget', url: 'https://pkg/repository/n' }, { name: 'Acme.Core', version: '2.1.0' });
+    expect(nuget.map((o) => o.label)).toEqual(['dotnet CLI', 'PackageReference']);
+    expect(nuget[0]!.lines[0]!.text).toBe('dotnet add package Acme.Core --version 2.1.0 --source https://pkg/repository/n/index.json');
+    expect(installCommands({ format: 'pypi', url: 'https://pkg/repository/p/' }, { name: 'six', version: '1.16.0' }).map((o) => o.label)).toEqual(['pip', 'uv']);
+    expect(installCommands({ format: 'docker', url: 'cr.example.com/docker-hosted' }, { name: 'app', version: '1.0' })[0]!.lines[0]!.text).toBe(
+      'docker pull cr.example.com/docker-hosted/app:1.0',
+    );
+    expect(installCommands({ format: 'go', url: 'u' }, d)).toEqual([]);
+    expect(installCommands({ format: 'npm' }, d)).toEqual([]);
   });
 
   it('downloads through this origin so the session cookie applies', () => {

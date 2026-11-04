@@ -84,3 +84,12 @@ export type ComponentSort = NonNullable<NonNullable<operations['listComponents']
 
 export type LiveEvent = Schemas['LiveEvent'];
 export type LiveEventType = LiveEvent['type'];
+
+/* Repository browse tree, asset detail and package facts. */
+export type BrowseEntry = Schemas['BrowseEntry'];
+export type BrowseEntryKind = BrowseEntry['kind'];
+export type BrowsePage = Schemas['BrowsePage'];
+export type BrowseComponent = Schemas['BrowseComponent'];
+export type AssetDetail = Schemas['AssetDetail'];
+export type ComponentInfo = Schemas['ComponentInfo'];
+export type Readme = Schemas['Readme'];

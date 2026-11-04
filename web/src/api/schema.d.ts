@@ -358,6 +358,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repositories/{name}/browse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Direct children of one folder of the repository's browse tree
+         * @description The tree follows what clients see: npm scopes, packages, files; Maven groupId segments, artifactId, version, files; NuGet id, version, files; PyPI project, files; Docker image path, then `manifests` (tags and digests) and `blobs`; raw directories. Folders that hold one package or one version are marked as such. Children sort in byte order of their storage path (a folder as its name followed by "/"). A group merges its members, in resolution order, limited to the members the caller may read; each entry names the member that holds it.
+         */
+        get: operations["browseRepository"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/blob-stores": {
         parameters: {
             query?: never;
@@ -495,6 +517,48 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{id}/info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * README, licences, keywords and home page of a version
+         * @description Extracted from the version's stored files on first request and cached: npm manifests, packument or tarball; the .nuspec and the README it references inside the .nupkg; PyPI core metadata; the Maven POM. Facts that are not found are empty.
+         */
+        get: operations["getComponentInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One file of a repository */
+        get: operations["getAsset"];
+        put?: never;
+        post?: never;
+        /** @description Deletes the file. Requires `repo:<name>:delete`; audited as `asset.delete` (refusals with outcome "denied"). The blob reference is released, so a blob no other asset uses becomes eligible for compaction. Deleting the last file of a version deletes the version. */
+        delete: operations["deleteAsset"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1793,6 +1857,8 @@ export interface components {
             download_count?: number;
             /** Format: date-time */
             last_downloaded_at?: string | null;
+            /** @description Content size; reported by the versions listing */
+            size_bytes?: components["schemas"]["Bytes"];
         };
         PublishedComponentPage: {
             items: components["schemas"]["PublishedComponent"][];
@@ -1846,6 +1912,102 @@ export interface components {
         AssetPage: {
             items: components["schemas"]["Asset"][];
             next_cursor?: components["schemas"]["NextCursor"];
+        };
+        BrowseComponent: {
+            id: string;
+            namespace: string;
+            name: string;
+            version: string;
+        };
+        BrowseAsset: {
+            id: string;
+            /** @description Storage path inside the repository (download path) */
+            path: string;
+            /** @enum {string} */
+            kind: "content" | "metadata";
+            content_type: string;
+            size_bytes: components["schemas"]["Bytes"];
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+            /** Format: date-time */
+            last_downloaded_at?: string | null;
+            download_count: number;
+        };
+        BrowseEntry: {
+            name: string;
+            /** @description Path in the browse tree; folders end in "/" */
+            path: string;
+            /**
+             * @description A package or version folder holds one package or one version
+             * @enum {string}
+             */
+            kind: "folder" | "package" | "version" | "asset";
+            /** @description Repository that holds the entry (for a group, the first member that has it) */
+            repository: string;
+            /** @description Groups only; every member that has the entry, in resolution order */
+            repositories?: string[];
+            /** @description Package and version folders, and files that belong to a version */
+            component?: components["schemas"]["BrowseComponent"];
+            asset?: components["schemas"]["BrowseAsset"];
+        };
+        BrowsePage: {
+            repository: string;
+            format: components["schemas"]["Format"];
+            path: string;
+            items: components["schemas"]["BrowseEntry"][];
+            next_cursor?: components["schemas"]["NextCursor"];
+        };
+        AssetDetail: {
+            id: string;
+            path: string;
+            repository: string;
+            repository_type: components["schemas"]["RepositoryType"];
+            format: components["schemas"]["Format"];
+            /** @enum {string} */
+            kind: "content" | "metadata";
+            content_type: string;
+            size_bytes: components["schemas"]["Bytes"];
+            blob_digest: string;
+            /** @description Hex digests by algorithm; sha256 is always present */
+            checksums: {
+                [key: string]: string;
+            };
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+            /**
+             * Format: date-time
+             * @description When the blob store first received these bytes
+             */
+            blob_created_at: string | null;
+            /** Format: date-time */
+            last_downloaded_at: string | null;
+            download_count: number;
+            /** @description The file is a proxy repository's cached copy of remote content */
+            cached_from_remote: boolean;
+            remote_url?: string;
+            component?: components["schemas"]["BrowseComponent"];
+            /** @description Absent for Docker, whose files are fetched with the registry protocol */
+            download_url?: string;
+        };
+        Readme: {
+            /**
+             * @description Markdown, or plain text (other markups are shown as text)
+             * @enum {string}
+             */
+            format: "markdown" | "text";
+            content: string;
+            /** @description Where the README was found, e.g. "README.md in the package tarball" */
+            source: string;
+            /** @description The README was longer than 512 KiB and was cut */
+            truncated: boolean;
+        };
+        ComponentInfo: {
+            description?: string;
+            /** @description SPDX expressions, licence names or licence URLs as the package declares them */
+            licenses: string[];
+            keywords: string[];
+            homepage?: string;
+            readme?: components["schemas"]["Readme"];
         };
         FacetValue: {
             value: string;
@@ -3137,6 +3299,36 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    browseRepository: {
+        parameters: {
+            query?: {
+                /** @description Folder in the browse tree, e.g. "@acme/" or "com/acme/ledger-core/"; empty for the root */
+                path?: string;
+                /** @description Opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of children */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowsePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     listBlobStores: {
         parameters: {
             query?: never;
@@ -3427,6 +3619,74 @@ export interface operations {
                     "application/json": components["schemas"]["PublishedComponentPage"];
                 };
             };
+        };
+    };
+    getComponentInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Package facts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentInfo"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Asset detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listComponentFindings: {

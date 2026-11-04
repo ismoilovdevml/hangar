@@ -1,8 +1,10 @@
-import { useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
+import { useComponentInfo, useInvalidateBrowse, usePackageHolders } from '../../api/browse';
 import { ApiRequestError } from '../../api/client';
 import {
   flatItems,
+  useAllRepositories,
   useComponent,
   useComponentAssets,
   useComponentDependents,
@@ -12,50 +14,41 @@ import {
   useRepository,
 } from '../../api/catalog';
 import { usePermissions } from '../../api/permissions';
-import type { Asset, ComponentDetail, Finding, PublishedComponent } from '../../api/types';
+import type { Asset, ComponentDetail, ComponentInfo, Finding, PublishedComponent } from '../../api/types';
+import { ClientSetup } from '../../components/ClientSetup';
 import { CodeBlock } from '../../components/CodeBlock';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { CopyButton } from '../../components/CopyButton';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
-import { FormatBadge } from '../../components/FormatBadge';
 import { IconTrash } from '../../components/icons';
 import { IconDownload } from '../../components/opsIcons';
 import { NotAvailable } from '../../components/NotAvailable';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
-import { Segmented } from '../../components/Segmented';
 import { formatBytes, formatCompact, relativeTime } from '../../lib/format';
 import { componentName } from '../../lib/overview';
-import { downloadHref, hasVersion, installOptions, securityPill, type BrowseTab } from '../../lib/packages';
+import { downloadHref, hasVersion, securityPill, type BrowseTab } from '../../lib/packages';
+import { repoClientTarget } from '../../lib/repoSettings';
+import { TYPE_META } from '../../lib/repositories';
 import { useNow } from '../../lib/useNow';
+import { Fact } from './AssetDetail';
+import { dateTime, deleteMessage, shortDigest } from './detailUtil';
+import { FormatIcon } from '../../components/FormatIcon';
+import { Markdown } from './Markdown';
+import { safeHref } from './urlPolicy';
 
 const route = getRouteApi('/app/browse');
-
-const shortDigest = (d: string) => {
-  const [algo, hex] = d.includes(':') ? d.split(':', 2) : ['', d];
-  const h = hex ?? '';
-  return `${algo ? `${algo}:` : ''}${h.length > 16 ? `${h.slice(0, 8)}…${h.slice(-4)}` : h}`;
-};
-
-const dateTime = (iso: string) =>
-  new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }).format(
-    new Date(iso),
-  ) + ' UTC';
-
-function apiMessage(err: unknown): string {
-  if (err instanceof ApiRequestError) {
-    if (err.status === 403) return 'You do not have permission to delete versions in this repository.';
-    return err.body?.message ?? 'The server could not delete this version.';
-  }
-  return 'Cannot reach the server. Check your connection and try again.';
-}
 
 interface PackageDetailProps {
   id: string;
   /** Versions of this package found by the lookup, newest first. */
   versions: PublishedComponent[];
 }
+
+/** The largest downloadable content file: the package itself. */
+const mainAsset = (assets: Asset[]) =>
+  assets.filter((a) => a.kind === 'content' && a.download_url).sort((a, b) => b.size_bytes - a.size_bytes)[0];
 
 export function PackageDetail({ id, versions }: PackageDetailProps) {
   const search = route.useSearch();
@@ -65,11 +58,13 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
   const repo = useRepository(c?.repository);
   const dependents = useComponentDependents(c?.id);
   const findings = useComponentFindings(c?.id);
+  const info = useComponentInfo(c?.id);
+  const assets = useComponentAssets(c?.id);
   const perms = usePermissions();
   const remove = useDeleteComponent();
+  const invalidateBrowse = useInvalidateBrowse();
   const [toDelete, setToDelete] = useState<PublishedComponent | null>(null);
   const now = useNow();
-  const versionSelectId = useId();
 
   if (detail.isError) {
     return (
@@ -89,13 +84,28 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
   const label = componentName(c);
   const canDelete = perms.can('delete', 'repo', c.repository);
   const pill = securityPill(c.scan);
-  const base = { repo: c.repository, ns: c.namespace || undefined, name: c.name };
+  const newest = versions[0]?.id === c.id;
+  const cached = repo.data?.type === 'proxy';
+  const base = { repo: search.repo ?? c.repository, path: search.path, member: search.member, ns: c.namespace || undefined, name: c.name };
   const hasDependents = !!dependents.data;
   const hasFindings = !!findings.data;
-  const available: BrowseTab[] = ['overview', 'versions', 'files', ...(hasDependents ? (['dependents'] as const) : []), ...(hasFindings ? (['security'] as const) : [])];
-  const tab: BrowseTab = search.tab && available.includes(search.tab) ? search.tab : 'overview';
-  const setTab = (t: BrowseTab) =>
-    void navigate({ to: '/browse', search: (s) => ({ ...s, tab: t === 'overview' ? undefined : t }), replace: true });
+  const available: BrowseTab[] = [
+    'readme',
+    'versions',
+    'files',
+    'repositories',
+    ...(hasDependents ? (['dependents'] as const) : []),
+    ...(hasFindings ? (['security'] as const) : []),
+  ];
+  const tab: BrowseTab = search.tab && available.includes(search.tab) ? search.tab : 'readme';
+  const setTab = (t: BrowseTab) => void navigate({ to: '/browse', search: (s) => ({ ...s, tab: t === 'readme' ? undefined : t }), replace: true });
+
+  /** The search of another version; a version folder selected in the tree follows along. */
+  const versionSearch = (v: string) => {
+    const suffix = `/${c.version}/`;
+    const path = search.path && c.version && search.path.toLowerCase().endsWith(suffix.toLowerCase()) ? `${search.path.slice(0, -suffix.length)}/${v}/` : search.path;
+    return { ...base, path, version: v, tab: search.tab };
+  };
 
   const askDelete = (v: PublishedComponent) => {
     remove.reset();
@@ -107,63 +117,57 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
     remove.mutate(deleted.id, {
       onSuccess: () => {
         setToDelete(null);
-        const remaining = versions.filter((v) => v.id !== deleted.id);
-        // Stay on the package (its newest remaining version) unless the deleted one was the last.
+        invalidateBrowse();
         if (deleted.id !== c.id) return;
+        const remaining = versions.filter((v) => v.id !== deleted.id);
         void navigate({
           to: '/browse',
-          search: remaining.length ? { ...base, tab: search.tab } : { repo: c.repository },
+          // Stay on the package (its newest remaining version) unless the deleted one was the last.
+          search: remaining.length ? { ...base, path: search.path?.endsWith(`/${c.version}/`) ? undefined : search.path, tab: search.tab } : { repo: base.repo },
           replace: true,
         });
       },
     });
   };
 
-  const description = typeof c.attributes?.description === 'string' ? c.attributes.description : '';
-  const metaBits = [
-    description,
-    c.platforms?.length ? c.platforms.join(', ') : '',
-    `published by ${c.publisher.display_name}`,
-  ].filter(Boolean);
+  const description = info.data?.description || (typeof c.attributes?.description === 'string' ? c.attributes.description : '');
+  const download = mainAsset(flatItems(assets.data));
+  const totalDownloads = versions.reduce((n, v) => n + (v.download_count ?? 0), 0);
 
   return (
-    <>
-      <Panel className="pkg-head" aria-label={`${label} ${c.version}`}>
+    <div className="pkg-layout">
+      <Panel className="pkg-head pkg-layout__main" aria-label={`${label} ${c.version}`}>
         <div className="pkg-head__row">
-          <FormatBadge format={c.format} size={48} />
+          <span className="pkg-head__mark"><FormatIcon format={c.format} size={32} /></span>
           <div className="pkg-head__text">
             <div className="pkg-head__titles">
               <h1 className="pkg-head__title">{label}</h1>
               {hasVersion(c.version) && <Pill tone="info">{c.version}</Pill>}
+              {newest && versions.length > 1 && <Pill tone="ok">Newest</Pill>}
               {c.signed && <Pill tone="ok">Signed</Pill>}
               {c.quarantined && <Pill tone="bad">Quarantined</Pill>}
               <Pill tone={pill.tone}>{pill.label}</Pill>
             </div>
             <p className="pkg-head__meta">
-              {metaBits.join(' · ')} · <time dateTime={c.published_at} title={dateTime(c.published_at)}>{relativeTime(c.published_at, now).toLowerCase()}</time>
+              {[description, c.platforms?.length ? c.platforms.join(', ') : ''].filter(Boolean).join(' · ')}
+              {description || c.platforms?.length ? ' · ' : ''}
+              {cached ? 'cached ' : `published by ${c.publisher.display_name} `}
+              <time dateTime={c.published_at} title={dateTime(c.published_at)}>
+                {relativeTime(c.published_at, now).toLowerCase()}
+              </time>
             </p>
             {c.quarantined && c.quarantine_reason && <p className="form-error">Quarantined: {c.quarantine_reason}</p>}
           </div>
           <div className="pkg-head__actions">
+            {download?.download_url && (
+              <a href={downloadHref(download.download_url)} className="button button--primary" download title={download.path}>
+                <IconDownload size={16} /> Download
+              </a>
+            )}
             {versions.length > 1 && (
-              <div className="field pkg-head__version">
-                <label htmlFor={versionSelectId} className="visually-hidden">
-                  Version
-                </label>
-                <select
-                  id={versionSelectId}
-                  className="input"
-                  value={c.version}
-                  onChange={(e) => void navigate({ to: '/browse', search: { ...base, version: e.target.value, tab: search.tab } })}
-                >
-                  {versions.map((v, i) => (
-                    <option key={v.id} value={v.version}>
-                      {v.version}
-                      {i === 0 ? ' (newest)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <button type="button" className="button button--secondary" onClick={() => setTab('versions')}>
+                {versions.length} versions
+              </button>
             )}
             <button
               type="button"
@@ -172,23 +176,35 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
               title={canDelete ? undefined : 'Needs delete rights on this repository'}
               onClick={() => askDelete(c)}
             >
-              Delete
+              Delete version
             </button>
           </div>
         </div>
 
-        <InstallSnippet c={c} repoUrl={repo.data?.url} />
-
         <Tabs tabs={available} active={tab} onChange={setTab} counts={{ versions: versions.length }} format={c.format} />
 
         <div role="tabpanel" id={`pkg-panel-${tab}`} aria-labelledby={`pkg-tab-${tab}`} className="pkg-panel">
-          {tab === 'overview' && <Overview c={c} now={now} />}
-          {tab === 'versions' && <VersionsTable c={c} canDelete={canDelete} onDelete={askDelete} now={now} />}
+          {tab === 'readme' && <ReadmeTab c={c} q={info} />}
+          {tab === 'versions' && <VersionsTable c={c} newestId={versions[0]?.id} cached={cached} canDelete={canDelete} onDelete={askDelete} versionSearch={versionSearch} now={now} />}
           {tab === 'files' && <FilesTable c={c} now={now} />}
+          {tab === 'repositories' && <RepositoriesTab c={c} now={now} />}
           {tab === 'dependents' && dependents.data && <DependentsTable items={dependents.data.items} />}
           {tab === 'security' && findings.data && <FindingsTable items={findings.data.items} />}
         </div>
       </Panel>
+
+      <div className="pkg-layout__side">
+        <VersionCard c={c} newest={newest} cached={cached} totalDownloads={totalDownloads} info={info.data} infoPending={info.isPending && !info.isError} findings={findings.data?.items} now={now} />
+        <Panel title="Set me up" titleId="setup-title" className="pkg-setup">
+          {repo.data ? (
+            <ClientSetup targets={[{ ...repoClientTarget(repo.data), publishes: false }]} install={{ namespace: c.namespace, name: c.name, version: c.version }} />
+          ) : repo.isError ? (
+            <CodeBlock label="install command" lines={[{ text: c.install_command }]} />
+          ) : (
+            <p className="meta">Loading…</p>
+          )}
+        </Panel>
+      </div>
 
       {toDelete && (
         <ConfirmDialog
@@ -196,7 +212,7 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
           confirmLabel="Delete version"
           tone="danger"
           busy={remove.isPending}
-          error={remove.isError ? apiMessage(remove.error) : null}
+          error={remove.isError ? deleteMessage(remove.error, 'versions') : null}
           onCancel={() => setToDelete(null)}
           onConfirm={confirmDelete}
         >
@@ -206,14 +222,15 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
           </p>
         </ConfirmDialog>
       )}
-    </>
+    </div>
   );
 }
 
 const TAB_LABEL: Record<BrowseTab, string> = {
-  overview: 'Overview',
+  readme: 'Readme',
   versions: 'Versions',
   files: 'Files',
+  repositories: 'Repositories',
   dependents: 'Dependents',
   security: 'Vulnerabilities',
 };
@@ -269,41 +286,103 @@ function Tabs({
   );
 }
 
-function InstallSnippet({ c, repoUrl }: { c: ComponentDetail; repoUrl: string | undefined }) {
-  const options = installOptions(c, repoUrl);
-  const [choice, setChoice] = useState(options[0]!.id);
-  const current = options.find((o) => o.id === choice) ?? options[0]!;
-  return (
-    <div className="install">
-      {options.length > 1 && (
-        <Segmented
-          label="Client"
-          options={options.map((o) => ({ value: o.id, label: o.label }))}
-          value={current.id}
-          onChange={setChoice}
-          className="install__clients"
-        />
-      )}
-      <CodeBlock label={`${current.label} install command`} lines={current.lines} />
-    </div>
+/* ---------------------------------------------------------------- version card */
+
+function vulnerabilities(c: ComponentDetail, findings: Finding[] | undefined): string {
+  if (findings) {
+    const open = findings.filter((f) => f.status === 'open' || f.status === 'assigned');
+    if (!open.length) return 'No known vulnerabilities';
+    const by = (s: string) => open.filter((f) => f.severity === s).length;
+    return (['critical', 'high', 'medium', 'low'] as const)
+      .map((s) => [s, by(s)] as const)
+      .filter(([, n]) => n > 0)
+      .map(([s, n]) => `${n} ${s}`)
+      .join(' · ');
+  }
+  const s = c.scan;
+  switch (s.state) {
+    case 'pending':
+      return 'Not scanned';
+    case 'clean':
+      return 'No known vulnerabilities';
+    case 'quarantined':
+      return 'Quarantined';
+    case 'findings':
+      return `${s.critical} critical · ${s.high} high · ${s.medium} medium · ${s.low} low`;
+  }
+}
+
+function LicenseValue({ value }: { value: string }) {
+  const href = /^https?:\/\//.test(value) ? safeHref(value) : null;
+  return href ? (
+    <a href={href} target="_blank" rel="noopener noreferrer nofollow">
+      {value.replace(/^https?:\/\//, '')}
+    </a>
+  ) : (
+    <>{value}</>
   );
 }
 
-function Fact({ label, children, wide }: { label: string; children: React.ReactNode; wide?: boolean }) {
-  return (
-    <div className={wide ? 'facts__wide' : undefined}>
-      <dt>{label}</dt>
-      <dd>{children}</dd>
-    </div>
-  );
+interface VersionCardProps {
+  c: ComponentDetail;
+  newest: boolean;
+  cached: boolean;
+  totalDownloads: number;
+  info: ComponentInfo | undefined;
+  infoPending: boolean;
+  findings: Finding[] | undefined;
+  now: Date;
 }
 
-function Overview({ c, now }: { c: ComponentDetail; now: Date }) {
-  const checksums = Object.entries(c.checksums ?? {}).sort(([a], [b]) => a.localeCompare(b));
-  const scan = c.scan;
+function VersionCard({ c, newest, cached, totalDownloads, info, infoPending, findings, now }: VersionCardProps) {
+  const pending = <span className="meta">Reading the package…</span>;
   return (
-    <>
-      <dl className="facts">
+    <Panel title="Version" titleId="version-card-title" className="version-card">
+      <dl className="facts facts--stack">
+        <Fact label="Version">
+          {hasVersion(c.version) ? <span className="facts__mono">{c.version}</span> : <NotAvailable reason="no version" />}
+          {newest && <span className="meta"> · newest</span>}
+        </Fact>
+        <Fact label={cached ? 'Cached' : 'Published'}>
+          <time dateTime={c.published_at} title={dateTime(c.published_at)}>
+            {relativeTime(c.published_at, now)}
+          </time>
+          {!cached && <span className="meta"> · {c.publisher.display_name}</span>}
+        </Fact>
+        <Fact label="Downloads">
+          {formatCompact(c.download_count ?? 0)} this version
+          <span className="meta"> · {formatCompact(Math.max(totalDownloads, c.download_count ?? 0))} in total</span>
+        </Fact>
+        <Fact label="Last downloaded">
+          {c.last_downloaded_at ? (
+            <time dateTime={c.last_downloaded_at} title={dateTime(c.last_downloaded_at)}>
+              {relativeTime(c.last_downloaded_at, now)}
+            </time>
+          ) : (
+            'Never'
+          )}
+        </Fact>
+        <Fact label="Size">{formatBytes(c.size_bytes)}</Fact>
+        <Fact label="Vulnerabilities">{vulnerabilities(c, findings)}</Fact>
+        <Fact label="Licence">
+          {infoPending
+            ? pending
+            : (info?.licenses.length ?? 0) > 0
+              ? info!.licenses.map((l, i) => (
+                  <span key={l}>
+                    {i > 0 && ', '}
+                    <LicenseValue value={l} />
+                  </span>
+                ))
+              : c.license || 'Not declared'}
+        </Fact>
+        {info?.homepage && safeHref(info.homepage) && (
+          <Fact label="Home page">
+            <a href={safeHref(info.homepage)!} target="_blank" rel="noopener noreferrer nofollow" className="facts__break">
+              {info.homepage.replace(/^https?:\/\//, '')}
+            </a>
+          </Fact>
+        )}
         {c.digest && (
           <Fact label="Digest">
             <span className="facts__mono facts__copy">
@@ -312,31 +391,11 @@ function Overview({ c, now }: { c: ComponentDetail; now: Date }) {
             </span>
           </Fact>
         )}
-        <Fact label="Size">{formatBytes(c.size_bytes)}</Fact>
-        <Fact label="Downloads">
-          {formatCompact(c.download_count ?? 0)}
-          {c.downloads_30d !== undefined && <span className="meta"> · {formatCompact(c.downloads_30d)} in 30 days</span>}
-        </Fact>
-        <Fact label="Last downloaded">
-          {c.last_downloaded_at ? (
-            <time dateTime={c.last_downloaded_at} title={dateTime(c.last_downloaded_at)}>
-              {relativeTime(c.last_downloaded_at, now)}
-              {c.last_downloaded_by ? ` · ${c.last_downloaded_by}` : ''}
-            </time>
-          ) : (
-            'Never'
-          )}
-        </Fact>
-        <Fact label="Published">
-          <time dateTime={c.published_at}>{dateTime(c.published_at)}</time>
-          <span className="meta"> · {c.publisher.display_name}</span>
-        </Fact>
-        {c.license && <Fact label="Licence">{c.license}</Fact>}
         {c.base_image && <Fact label="Base image">{c.base_image}</Fact>}
         {c.source_url && (
           <Fact label="Source">
-            {/^https?:\/\//.test(c.source_url) ? (
-              <a href={c.source_url} target="_blank" rel="noreferrer noopener">
+            {safeHref(c.source_url) ? (
+              <a href={safeHref(c.source_url)!} target="_blank" rel="noreferrer noopener" className="facts__break">
                 {c.source_url.replace(/^https?:\/\//, '')}
               </a>
             ) : (
@@ -344,32 +403,54 @@ function Overview({ c, now }: { c: ComponentDetail; now: Date }) {
             )}
           </Fact>
         )}
-        {c.platforms && c.platforms.length > 0 && <Fact label="Platforms">{c.platforms.join(', ')}</Fact>}
-        {(scan.state === 'findings' || scan.state === 'quarantined') && (
-          <Fact label="Security">
-            {scan.critical} critical · {scan.high} high · {scan.medium} medium · {scan.low} low
-          </Fact>
-        )}
       </dl>
-      {checksums.length > 0 && (
-        <div className="checksums">
-          <h3 className="checksums__title">Checksums</h3>
-          <dl className="checksums__list">
-            {checksums.map(([algo, value]) => (
-              <div key={algo} className="checksums__row">
-                <dt>{algo}</dt>
-                <dd className="facts__mono">
-                  <span className="checksums__value">{value}</span>
-                  <CopyButton text={value} label={`Copy ${algo}`} />
-                </dd>
-              </div>
-            ))}
-          </dl>
+      {info && info.keywords.length > 0 && (
+        <div className="keywords" aria-label="Keywords">
+          {info.keywords.map((k) => (
+            <Pill key={k} tone="neutral">
+              {k}
+            </Pill>
+          ))}
         </div>
       )}
-    </>
+    </Panel>
   );
 }
+
+/* ---------------------------------------------------------------- readme */
+
+function ReadmeTab({ c, q }: { c: ComponentDetail; q: ReturnType<typeof useComponentInfo> }) {
+  if (q.isError) {
+    if (q.error instanceof ApiRequestError && q.error.status === 501) return <p className="meta">This server does not read package READMEs.</p>;
+    return <ErrorNote what="the README" onRetry={() => void q.refetch()} />;
+  }
+  if (!q.data) return <p className="meta" aria-busy="true">Reading the README…</p>;
+  const r = q.data.readme;
+  if (!r) {
+    return (
+      <div className="readme-empty">
+        <p>No README was published with this version.</p>
+        {q.data.description && (
+          <p className="meta">
+            {c.format === 'maven' ? 'The POM describes it as: ' : 'Its description: '}
+            {q.data.description}
+          </p>
+        )}
+      </div>
+    );
+  }
+  return (
+    <article className="readme" aria-label="README">
+      {r.format === 'markdown' ? <Markdown source={r.content} /> : <pre className="readme__text">{r.content}</pre>}
+      <p className="meta readme__source">
+        From {r.source}
+        {r.truncated ? '; cut at 512 KiB' : ''}.
+      </p>
+    </article>
+  );
+}
+
+/* ---------------------------------------------------------------- tables */
 
 function LoadMore({ q }: { q: { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown } }) {
   if (!q.hasNextPage) return null;
@@ -382,40 +463,45 @@ function LoadMore({ q }: { q: { hasNextPage: boolean; isFetchingNextPage: boolea
   );
 }
 
-function VersionsTable({
-  c,
-  canDelete,
-  onDelete,
-  now,
-}: {
+interface VersionsTableProps {
   c: ComponentDetail;
+  newestId: string | undefined;
+  cached: boolean;
   canDelete: boolean;
   onDelete: (v: PublishedComponent) => void;
+  versionSearch: (v: string) => Record<string, string | undefined>;
   now: Date;
-}) {
+}
+
+function VersionsTable({ c, newestId, cached, canDelete, onDelete, versionSearch, now }: VersionsTableProps) {
   const q = useComponentVersions(c.id);
   const rows = flatItems(q.data);
-  const base = { repo: c.repository, ns: c.namespace || undefined, name: c.name };
   const columns: Column<PublishedComponent>[] = [
     {
       key: 'version',
       header: 'Version',
       className: 'col-first',
       cell: (v) => (
-        <Link to="/browse" search={{ ...base, version: v.version }} className="link-strong" aria-current={v.id === c.id ? 'page' : undefined}>
-          {hasVersion(v.version) ? v.version : <NotAvailable reason="no version" />}
-        </Link>
+        <span className="version-cell">
+          <Link to="/browse" search={versionSearch(v.version)} className="link-strong" aria-current={v.id === c.id ? 'page' : undefined}>
+            {hasVersion(v.version) ? v.version : <NotAvailable reason="no version" />}
+          </Link>
+          {v.id === newestId && <Pill tone="ok">Newest</Pill>}
+        </span>
       ),
     },
-    { key: 'when', header: 'Published', className: 'meta', cell: (v) => <time dateTime={v.published_at} title={dateTime(v.published_at)}>{relativeTime(v.published_at, now)}</time> },
-    { key: 'by', header: 'Published by', className: 'muted', cell: (v) => v.publisher.display_name },
-    { key: 'dl', header: 'Downloads', align: 'right', className: 'muted', cell: (v) => formatCompact(v.download_count ?? 0) },
     {
-      key: 'last',
-      header: 'Last downloaded',
+      key: 'when',
+      header: cached ? 'Cached' : 'Published',
       className: 'meta',
-      cell: (v) => (v.last_downloaded_at ? relativeTime(v.last_downloaded_at, now) : 'Never'),
+      cell: (v) => (
+        <time dateTime={v.published_at} title={dateTime(v.published_at)}>
+          {relativeTime(v.published_at, now)}
+        </time>
+      ),
     },
+    { key: 'size', header: 'Size', align: 'right', className: 'muted nowrap', cell: (v) => (v.size_bytes !== undefined ? formatBytes(v.size_bytes) : '') },
+    { key: 'dl', header: 'Downloads', align: 'right', className: 'muted', cell: (v) => formatCompact(v.download_count ?? 0) },
     {
       key: 'sec',
       header: 'Security',
@@ -446,7 +532,7 @@ function VersionsTable({
   if (q.isError) return <ErrorNote what="versions" onRetry={() => void q.refetch()} />;
   return (
     <div className="pkg-table">
-      <DataTable caption="Versions" columns={columns} rows={rows} rowKey={(v) => v.id} busy={q.isFetching} minWidth={760} empty={q.isPending ? 'Loading…' : 'No versions.'} />
+      <DataTable caption="Versions" columns={columns} rows={rows} rowKey={(v) => v.id} busy={q.isFetching} minWidth={640} empty={q.isPending ? 'Loading…' : 'No versions.'} />
       <LoadMore q={q} />
     </div>
   );
@@ -522,6 +608,64 @@ function FilesTable({ c, now }: { c: ComponentDetail; now: Date }) {
       <DataTable caption={layers ? 'Layers' : 'Files'} columns={columns} rows={rows} rowKey={(a) => a.id} busy={q.isFetching} minWidth={760} empty={q.isPending ? 'Loading…' : 'No files.'} />
       <LoadMore q={q} />
     </div>
+  );
+}
+
+/** Which repositories hold this exact version, and which groups serve it. */
+function RepositoriesTab({ c, now }: { c: ComponentDetail; now: Date }) {
+  const q = usePackageHolders(c.name);
+  const all = useAllRepositories();
+  if (q.isError) return <ErrorNote what="the repositories" onRetry={() => void q.refetch()} />;
+  if (!q.data) return <p className="meta">Loading…</p>;
+  const holders = q.data.items.filter((v) => v.format === c.format && (v.namespace ?? '') === (c.namespace ?? '') && v.version === c.version);
+  const byName = new Map((all.data ?? []).map((r) => [r.name, r]));
+  const names = new Set(holders.map((h) => h.repository));
+  const groups = (all.data ?? []).filter((r) => r.type === 'group' && (r.config.group?.members ?? []).some((m) => names.has(m)));
+  const columns: Column<PublishedComponent>[] = [
+    {
+      key: 'repo',
+      header: 'Repository',
+      className: 'col-first',
+      cell: (h) => (
+        <Link to="/browse" search={{ repo: h.repository, ns: h.namespace || undefined, name: h.name, version: h.version }} className="link-strong" aria-current={h.id === c.id ? 'page' : undefined}>
+          {h.repository}
+        </Link>
+      ),
+    },
+    {
+      key: 'type',
+      header: 'Type',
+      cell: (h) => {
+        const r = byName.get(h.repository);
+        return r ? <Pill tone={TYPE_META[r.type].tone}>{TYPE_META[r.type].label}</Pill> : null;
+      },
+    },
+    {
+      key: 'when',
+      header: 'Published or cached',
+      className: 'meta',
+      cell: (h) => <time dateTime={h.published_at}>{relativeTime(h.published_at, now)}</time>,
+    },
+    { key: 'dl', header: 'Downloads', align: 'right', className: 'col-last muted', cell: (h) => formatCompact(h.download_count ?? 0) },
+  ];
+  return (
+    <>
+      <DataTable caption="Repositories with this version" columns={columns} rows={holders} rowKey={(h) => h.id} minWidth={520} empty="Only this repository has it." />
+      {groups.length > 0 && (
+        <p className="meta">
+          Also served through {groups.length === 1 ? 'the group' : 'the groups'}{' '}
+          {groups.map((g, i) => (
+            <span key={g.name}>
+              {i > 0 && ', '}
+              <Link to="/browse" search={{ repo: g.name }}>
+                {g.name}
+              </Link>
+            </span>
+          ))}
+          .
+        </p>
+      )}
+    </>
   );
 }
 

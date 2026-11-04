@@ -107,6 +107,12 @@ export interface BrowseSearch {
   name?: string;
   version?: string;
   tab?: BrowseTab;
+  /** Selected node of the browse tree: a folder ("dir/") or a file path. */
+  path?: string;
+  /** Asset id of the selected file. */
+  asset?: string;
+  /** Group member that holds the selected package (browsing a group). */
+  member?: string;
 }
 
 const browseRoute = createRoute({
@@ -119,6 +125,9 @@ const browseRoute = createRoute({
     name: str(s.name),
     version: str(s.version),
     tab: isBrowseTab(s.tab) ? s.tab : undefined,
+    path: str(s.path),
+    asset: str(s.asset),
+    member: str(s.member),
   }),
   component: BrowsePage,
 });
