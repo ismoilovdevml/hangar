@@ -1,21 +1,22 @@
-# Hangar production stack for a single host.
+# Hangar on one host: Hangar, PostgreSQL 16 and, optionally, Caddy for
+# automatic TLS. install.sh installs this file into the data directory and
+# manages everything around it; see docs/deploy/install-compose.md.
 #
-#   cd deploy/compose
-#   cp .env.example .env && chmod 600 .env    # then fill in every secret
-#   docker compose up -d
-#   docker compose ps                         # all services healthy
+# Layout of the data directory (this file's directory):
 #
-# Services (enable with COMPOSE_PROFILES in .env):
-#   hangar      always   the registry (UI, API and every package format)
-#   postgres    profile  PostgreSQL 16, tuned, data in the "postgres" volume
-#   minio       profile  S3-compatible blob storage + one-shot bucket/user setup
-#   caddy       profile  reverse proxy with automatic TLS for the UI host and a
-#                        separate Docker registry host
+#   compose.yaml        this file (replaced on upgrade)
+#   .env                installer settings: image, port, URL (no secrets;
+#                       written by install.sh, do not edit)
+#   config/hangar.yaml  server settings (yours; kept on upgrade)
+#   secrets/            one file per secret, mode 600 (generated once)
+#   postgres/           PostgreSQL data
+#   blobs/              package files
+#   nats/               job queue state
+#   caddy/              certificates and Caddyfile (with --tls caddy)
 #
-# Leave a profile out to use an external service instead: set
-# HANGAR_DATABASE_URL for an external PostgreSQL, HANGAR_STORAGE_S3_* for
-# AWS S3 or another S3 endpoint, and put your own proxy in front of
-# HANGAR_BIND_ADDR:HANGAR_HTTP_PORT. See docs/deploy/install-compose.md.
+# Everything is a bind mount of a sub-directory: back up the directory and
+# you have backed up Hangar. :Z / :z relabel the directories for SELinux
+# (ignored on hosts without it).
 
 name: hangar
 
@@ -34,38 +35,42 @@ networks:
   hangar:
     ipam:
       config:
-        # Fixed so that Hangar can trust X-Forwarded-* from the proxy (and the
+        # Fixed so that Hangar can trust X-Forwarded-* from Caddy (and the
         # Docker gateway) in this range and nowhere else.
         - subnet: ${HANGAR_NETWORK_SUBNET:-172.30.80.0/24}
-
-volumes:
-  hangar-data:
-  postgres-data:
-  minio-data:
-  caddy-data:
-  caddy-config:
 
 services:
   hangar:
     container_name: hangar
     <<: *hardening
-    image: ${HANGAR_IMAGE:-ghcr.io/ismoilovdevml/hangar:latest}
+    image: ${HANGAR_IMAGE:?run install.sh, which writes .env}
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
-        required: false
-      minio-init:
-        condition: service_completed_successfully
-        required: false
     networks: [hangar]
     ports:
-      # Loopback only by default: Caddy (or your own proxy) is the public entry.
       - "${HANGAR_BIND_ADDR:-127.0.0.1}:${HANGAR_HTTP_PORT:-8080}:8080"
     volumes:
-      - ./hangar.yaml:/etc/hangar/hangar.yaml:ro
-      # Embedded NATS JetStream state, and blobs when HANGAR_STORAGE_KIND=fs.
-      - hangar-data:/var/lib/hangar
+      - type: bind
+        source: ./config
+        target: /etc/hangar
+        read_only: true
+        bind: { create_host_path: false, selinux: Z }
+      # Read-write: the server removes initial-admin-password after the
+      # first password change. Shared label: postgres reads one file here.
+      - type: bind
+        source: ./secrets
+        target: /run/secrets/hangar
+        bind: { create_host_path: false, selinux: z }
+      - type: bind
+        source: ./blobs
+        target: /var/lib/hangar/blobs
+        bind: { create_host_path: false, selinux: Z }
+      - type: bind
+        source: ./nats
+        target: /var/lib/hangar/nats
+        bind: { create_host_path: false, selinux: Z }
     tmpfs:
       - /tmp:size=256m,mode=1777
     read_only: true
@@ -73,40 +78,26 @@ services:
     ulimits:
       nofile: { soft: 65536, hard: 65536 }
     stop_grace_period: 60s
+    # Settings tied to this layout. Everything else lives in
+    # config/hangar.yaml; secrets are files in secrets/ named after their
+    # setting (security.secret_key, database.url, auth.oidc.client_secret).
     environment:
       HANGAR_CONFIG: /etc/hangar/hangar.yaml
+      HANGAR_SECRETS_DIR: /run/secrets/hangar
       # Stable node identity across redeploys (System status page).
-      HANGAR_SERVER_NODE_ID: ${HANGAR_SERVER_NODE_ID:-hangar-1}
-      HANGAR_SERVER_BASE_URL: ${HANGAR_BASE_URL:?set HANGAR_BASE_URL in .env (e.g. https://hangar.example.com)}
+      HANGAR_SERVER_NODE_ID: hangar-1
+      HANGAR_SERVER_BASE_URL: ${HANGAR_BASE_URL:?run install.sh, which writes .env}
       HANGAR_SERVER_TRUSTED_PROXIES: ${HANGAR_TRUSTED_PROXIES:-172.30.80.0/24}
-      HANGAR_DATABASE_URL: ${HANGAR_DATABASE_URL:-postgres://${POSTGRES_USER:-hangar}:${POSTGRES_PASSWORD:-}@postgres:5432/${POSTGRES_DB:-hangar}?sslmode=disable}
-      # A single hangar process applies migrations on start (see hangar.yaml).
+      # Secure cookies need HTTPS; true only for a plain http:// base URL.
+      HANGAR_AUTH_SESSION_INSECURE: ${HANGAR_SESSION_INSECURE:-false}
+      # A single hangar process applies migrations on start.
       HANGAR_DATABASE_MIGRATE_ON_START: "true"
-      HANGAR_STORAGE_KIND: ${HANGAR_STORAGE_KIND:-s3}
       HANGAR_STORAGE_FS_PATH: /var/lib/hangar/blobs
-      HANGAR_STORAGE_S3_ENDPOINT: ${HANGAR_STORAGE_S3_ENDPOINT-http://minio:9000}
-      HANGAR_STORAGE_S3_REGION: ${HANGAR_STORAGE_S3_REGION:-us-east-1}
-      HANGAR_STORAGE_S3_BUCKET: ${HANGAR_STORAGE_S3_BUCKET:-hangar}
-      HANGAR_STORAGE_S3_PREFIX: ${HANGAR_STORAGE_S3_PREFIX:-}
-      HANGAR_STORAGE_S3_USE_PATH_STYLE: ${HANGAR_STORAGE_S3_USE_PATH_STYLE:-true}
-      HANGAR_STORAGE_S3_ACCESS_KEY_ID: ${HANGAR_STORAGE_S3_ACCESS_KEY_ID:-}
-      HANGAR_STORAGE_S3_SECRET_ACCESS_KEY: ${HANGAR_STORAGE_S3_SECRET_ACCESS_KEY:-}
-      HANGAR_NATS_EMBEDDED: "true"
       HANGAR_NATS_DATA_DIR: /var/lib/hangar/nats
-      HANGAR_DOCKER_TOKEN_KEY: ${HANGAR_DOCKER_TOKEN_KEY:?set HANGAR_DOCKER_TOKEN_KEY in .env (openssl rand -base64 48)}
-      # Encrypts credentials stored in the database (upstream passwords, S3 keys).
-      HANGAR_SECRET_KEY: ${HANGAR_SECRET_KEY:?set HANGAR_SECRET_KEY in .env (openssl rand -base64 32)}
-      HANGAR_SECURITY_PREVIOUS_SECRET_KEYS: ${HANGAR_SECURITY_PREVIOUS_SECRET_KEYS:-}
-      HANGAR_BOOTSTRAP_ADMIN_USER: ${HANGAR_BOOTSTRAP_ADMIN_USER:-}
-      HANGAR_BOOTSTRAP_ADMIN_PASSWORD: ${HANGAR_BOOTSTRAP_ADMIN_PASSWORD:-}
-      # Single sign-on secrets (docs/guides/sso.md); empty when unused.
-      HANGAR_AUTH_OIDC_CLIENT_SECRET: ${HANGAR_AUTH_OIDC_CLIENT_SECRET:-}
-      HANGAR_AUTH_LDAP_BIND_PASSWORD: ${HANGAR_AUTH_LDAP_BIND_PASSWORD:-}
-      # Corporate outbound proxy for proxy repositories (Maven Central, npmjs, Docker Hub).
-      HANGAR_HTTP_PROXY: ${HANGAR_HTTP_PROXY:-}
-      HANGAR_HTTP_PROXY_USERNAME: ${HANGAR_HTTP_PROXY_USERNAME:-}
-      HANGAR_HTTP_PROXY_PASSWORD: ${HANGAR_HTTP_PROXY_PASSWORD:-}
-      HANGAR_HTTP_NO_PROXY: ${HANGAR_HTTP_NO_PROXY:-}
+      # First administrator: install.sh writes the password file; it is
+      # removed after the first password change (bootstrap is off then).
+      HANGAR_BOOTSTRAP_ADMIN_USER: admin
+      HANGAR_BOOTSTRAP_ADMIN_PASSWORD_FILE: /run/secrets/hangar/initial-admin-password
     healthcheck:
       test: ["CMD", "/usr/local/bin/hangar-healthcheck"]
       interval: 15s
@@ -124,7 +115,6 @@ services:
   postgres:
     container_name: hangar-postgres
     <<: *hardening
-    profiles: [postgres]
     image: ${POSTGRES_IMAGE:-postgres:16.15-alpine}
     restart: unless-stopped
     networks: [hangar]
@@ -132,8 +122,9 @@ services:
     stop_grace_period: 120s
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-hangar}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_DB: ${POSTGRES_DB:-hangar}
+      # Read by the entrypoint when it initialises an empty data directory.
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
       POSTGRES_INITDB_ARGS: --data-checksums
     # Sized for a host with about 8 GB RAM shared with Hangar; scale
     # shared_buffers (~25% of the memory given to PostgreSQL) and
@@ -169,7 +160,16 @@ services:
       - -c
       - log_checkpoints=on
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      # Owned by the image's postgres user (uid 70 in the alpine image).
+      - type: bind
+        source: ./postgres
+        target: /var/lib/postgresql/data
+        bind: { create_host_path: false, selinux: Z }
+      - type: bind
+        source: ./secrets/postgres-password
+        target: /run/secrets/postgres-password
+        read_only: true
+        bind: { create_host_path: false, selinux: z }
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
@@ -181,96 +181,6 @@ services:
         limits:
           cpus: "${POSTGRES_CPUS:-2}"
           memory: ${POSTGRES_MEMORY:-3g}
-
-  # S3-compatible object storage. Upstream MinIO no longer publishes container
-  # images; this is a community build of the same server.
-  minio:
-    container_name: hangar-minio
-    <<: *hardening
-    profiles: [minio]
-    image: ${MINIO_IMAGE:-pgsty/minio:RELEASE.2026-08-04T00-00-00Z}
-    restart: unless-stopped
-    networks: [hangar]
-    # Refuse to start without root credentials (MinIO would otherwise fall
-    # back to its well-known defaults).
-    entrypoint:
-      - /bin/sh
-      - -ec
-      - |
-        : "$${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}"
-        : "$${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}"
-        exec /usr/bin/docker-entrypoint.sh minio server /data --console-address :9001
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
-      MINIO_BROWSER_REDIRECT: "false"
-    ports:
-      # Console on loopback only; reach it through an SSH tunnel.
-      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
-    volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:9000/minio/health/live"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      start_period: 20s
-    deploy:
-      resources:
-        limits:
-          cpus: "${MINIO_CPUS:-2}"
-          memory: ${MINIO_MEMORY:-2g}
-
-  # One-shot: creates the bucket and a least-privilege user for Hangar, so the
-  # MinIO root credentials never reach the Hangar container. Idempotent.
-  minio-init:
-    container_name: hangar-minio-init
-    <<: *hardening
-    profiles: [minio]
-    image: ${MINIO_MC_IMAGE:-pgsty/mc:RELEASE.2026-10-26T00-00-00Z}
-    restart: "no"
-    networks: [hangar]
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
-      BUCKET: ${HANGAR_STORAGE_S3_BUCKET:-hangar}
-      HANGAR_KEY: ${HANGAR_STORAGE_S3_ACCESS_KEY_ID:-}
-      HANGAR_SECRET: ${HANGAR_STORAGE_S3_SECRET_ACCESS_KEY:-}
-    entrypoint:
-      - /bin/sh
-      - -ec
-      - |
-        : "$${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}"
-        : "$${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}"
-        : "$${HANGAR_KEY:?set HANGAR_STORAGE_S3_ACCESS_KEY_ID in .env}"
-        : "$${HANGAR_SECRET:?set HANGAR_STORAGE_S3_SECRET_ACCESS_KEY in .env}"
-        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null
-        mc mb --ignore-existing "local/$$BUCKET"
-        cat > /tmp/hangar-policy.json <<EOF
-        {
-          "Version": "2012-10-17",
-          "Statement": [
-            {"Effect": "Allow", "Action": ["s3:GetBucketLocation", "s3:ListBucket", "s3:ListBucketMultipartUploads"],
-             "Resource": ["arn:aws:s3:::$$BUCKET"]},
-            {"Effect": "Allow", "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject",
-                                           "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"],
-             "Resource": ["arn:aws:s3:::$$BUCKET/*"]}
-          ]
-        }
-        EOF
-        mc admin policy create local hangar-blobs /tmp/hangar-policy.json
-        mc admin user add local "$$HANGAR_KEY" "$$HANGAR_SECRET"
-        mc admin policy attach local hangar-blobs --user "$$HANGAR_KEY" >/dev/null 2>&1 || true
-        # The image has no grep: match the attached policy with case.
-        info=$$(mc admin user info local "$$HANGAR_KEY")
-        case "$$info" in
-          *hangar-blobs*) ;;
-          *) echo "minio-init: policy hangar-blobs is not attached to $$HANGAR_KEY" >&2; exit 1 ;;
-        esac
-        echo "minio-init: bucket $$BUCKET and user $$HANGAR_KEY ready"
 
   caddy:
     container_name: hangar-caddy
@@ -293,11 +203,25 @@ services:
       HANGAR_REGISTRY_DOMAIN: ${HANGAR_REGISTRY_DOMAIN:-}
       ACME_EMAIL: ${ACME_EMAIL:-}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      # Extra sites (registry host, host connectors): sites/*.caddy.
-      - ./sites:/etc/caddy/sites:ro
-      - caddy-data:/data
-      - caddy-config:/config
+      - type: bind
+        source: ./caddy/Caddyfile
+        target: /etc/caddy/Caddyfile
+        read_only: true
+        bind: { create_host_path: false, selinux: Z }
+      # Extra sites (registry host, host connectors): caddy/sites/*.caddy.
+      - type: bind
+        source: ./caddy/sites
+        target: /etc/caddy/sites
+        read_only: true
+        bind: { create_host_path: false, selinux: Z }
+      - type: bind
+        source: ./caddy/data
+        target: /data
+        bind: { create_host_path: false, selinux: Z }
+      - type: bind
+        source: ./caddy/config
+        target: /config
+        bind: { create_host_path: false, selinux: Z }
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
       interval: 15s

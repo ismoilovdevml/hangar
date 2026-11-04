@@ -107,17 +107,17 @@ helm-template: ## Render the chart with every CI value set (kubeconform validate
 	done
 
 .PHONY: compose-config
-compose-config: ## Validate deploy/compose with the example environment and dummy secrets
+compose-config: ## Validate deploy/compose with the settings install.sh writes
 	@tmp=$$(mktemp); trap 'rm -f $$tmp' EXIT; \
-	sed -E 's/^(HANGAR_DOCKER_TOKEN_KEY|HANGAR_SECRET_KEY|POSTGRES_PASSWORD|HANGAR_STORAGE_S3_SECRET_ACCESS_KEY|MINIO_ROOT_PASSWORD|HANGAR_BOOTSTRAP_ADMIN_PASSWORD)=$$/\1=check-only-value/' \
-		deploy/compose/.env.example > $$tmp; \
+	printf 'HANGAR_IMAGE=ghcr.io/ismoilovdevml/hangar:check\nHANGAR_BASE_URL=https://hangar.example.com\nCOMPOSE_PROFILES=caddy\n' > $$tmp; \
 	docker compose -f deploy/compose/compose.yaml --env-file $$tmp config --quiet && \
 	docker compose -f deploy/compose/compose.yaml -f deploy/compose/compose.connectors.example.yaml --env-file $$tmp config --quiet && \
 	echo "deploy/compose: ok"
 
 .PHONY: deploy-scripts-check
-deploy-scripts-check: ## shellcheck deploy/scripts
-	shellcheck -x deploy/scripts/*.sh
+deploy-scripts-check: ## shellcheck the deploy scripts and run the installer tests
+	shellcheck -x deploy/scripts/*.sh deploy/install.sh deploy/tests/*.sh
+	bash deploy/tests/install_test.sh
 
 ## ---- Quality -----------------------------------------------------------
 

@@ -288,11 +288,10 @@ jobs:
           stack=$(mktemp -d)
           cp deploy/compose/compose.yaml deploy/compose/hangar.yaml deploy/compose/Caddyfile \
             deploy/compose/compose.connectors.example.yaml "$stack/"
-          cp deploy/compose/.env.example "$stack/env.example"
           cp deploy/compose/sites/registry.caddy "$stack/registry.caddy"
           tar -C "$stack" --sort=name --owner=0 --group=0 --numeric-owner --mtime='@0' \
             -czf assets/hangar-compose.tar.gz compose.yaml hangar.yaml Caddyfile \
-            compose.connectors.example.yaml env.example registry.caddy
+            compose.connectors.example.yaml registry.caddy
           cp deploy/install.sh assets/install.sh
           chmod +x assets/hangar-* assets/install.sh
           (cd assets && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
@@ -311,11 +310,11 @@ jobs:
 
           \`\`\`bash
           curl -fsSL https://github.com/$REPO/releases/download/$VERSION/install.sh |
-            sudo bash -s -- --domain hangar.example.com --version $VERSION
+            sudo bash -s -- --version $VERSION
           \`\`\`
 
           Container image: \`$IMAGE:$SEMVER\` (linux/amd64, linux/arm64).
-          Upgrade an installation: re-run the installer with \`--version $VERSION\`.
+          Upgrade an installation: re-run the installer with \`--data-dir <dir> --version $VERSION\`.
           Deployment guides: [docs/deploy](https://github.com/$REPO/tree/$VERSION/docs/deploy).
           Verify downloads with \`sha256sum -c SHA256SUMS\`.
 
