@@ -47,7 +47,7 @@ func (s *Service) HandleJob(ctx context.Context, j core.Job) error {
 	if err := json.Unmarshal(j.Payload, &p); err != nil || !isUUID(p.RunID) {
 		// Retrying cannot fix the payload: acknowledge and drop it.
 		s.log.Error("tasks: dropping malformed run job", "job_id", j.ID, "payload", string(j.Payload), "error", err)
-		return nil //nolint:nilerr // see above
+		return nil
 	}
 	select {
 	case s.sem <- struct{}{}:
