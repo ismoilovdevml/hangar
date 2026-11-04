@@ -108,10 +108,13 @@ function traffic(range: OverviewRange, now: number) {
     const weekdayDip = range === '7d' || range === '30d' ? (i % 7 === 5 || i % 7 === 6 ? 0.45 : 1) : 1;
     const d = (DAY_DOWNLOADS[idx] ?? 50) * (range === '7d' || range === '30d' ? 1.2 : 1);
     const u = DAY_UPLOADS[idx] ?? 5;
+    const downloads = Math.round(d * scale * weekdayDip);
     return {
       start: new Date(now - (buckets - i) * stepMs).toISOString(),
-      downloads: Math.round(d * scale * weekdayDip),
+      downloads,
       uploads: Math.round(u * scale * 0.04 * weekdayDip),
+      // Metadata and API calls on top of the content downloads.
+      requests: Math.round(downloads * 1.03),
     };
   });
 }
@@ -125,14 +128,31 @@ function cacheNumbers(range: OverviewRange): OverviewMetrics['cache'] {
   return { hit_ratio: Math.round((hits / total) * 10_000) / 10_000, bytes_saved: Math.round(hits * 1.21 * 1e6), hits, misses: total - hits };
 }
 
+/** Catalog activity per range: publications, proxy cache fills and rejected pushes. */
+const ACTIVITY: Record<OverviewRange, OverviewMetrics['activity']> = {
+  '1h': { published: 12, cached: 64, pushes_rejected: 0 },
+  today: { published: 186, cached: 1_120, pushes_rejected: 4 },
+  '7d': { published: 1_310, cached: 7_400, pushes_rejected: 9 },
+  '30d': { published: 5_420, cached: 29_800, pushes_rejected: 31 },
+};
+
 export function overview(range: OverviewRange, now = Date.now()): OverviewMetrics {
   const r = REQUESTS[range];
   return {
     range,
     generated_at: new Date(now).toISOString(),
-    summary: { published_since_yesterday: 214, failed_pushes: 0 },
+    summary: { published_since_yesterday: 214, failed_pushes: 4 },
+    activity: ACTIVITY[range],
     storage: { used_bytes: 4.82 * TB, capacity_bytes: 12 * TB, added_bytes_24h: 38 * GB },
-    requests: { total: r.total, trend_pct: r.trend, peak_total: r.peak, p95_ms: 41, coverage_start: null },
+    requests: {
+      total: r.total,
+      trend_pct: r.trend,
+      peak_total: r.peak,
+      p95_ms: 41,
+      coverage_start: null,
+      server_errors: Math.round(r.total * 0.0021),
+      denied: Math.round(r.total * 0.0094),
+    },
     cache: cacheNumbers(range),
     issues: {
       critical: 7,

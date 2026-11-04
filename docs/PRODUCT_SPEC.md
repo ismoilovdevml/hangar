@@ -25,14 +25,17 @@ Every number shown in the UI comes from the API.
 - Lockout after N failed attempts (configurable), audit event on every attempt.
 
 ## 02 · Overview (`Main`)
-- Greeting with date and one-line summary (packages published since yesterday, failed pushes).
-- Range switch: 1h / Today / 7 days / 30 days — drives every widget below.
-- KPI cards: storage used vs capacity, requests (+trend %, p95 latency), proxy cache hit ratio (+bytes saved), critical issues (+quarantined count).
-- Traffic chart: downloads vs uploads per bucket.
-- Storage by format: bar per format.
+- Header without a bar: breadcrumb, system state pill (links to System status), notifications, account menu.
+- Hero: "What do you need today?" search box (submits to Search), qualifier examples, quick actions
+  (connect a client — set-up snippets in a dialog —, create a token, new repository, browse packages).
+- Range switch: 1h / Today / 7 days / 30 days — drives the activity card, request outcomes, the upstream card and rejected pushes.
+- Activity: one sentence (requests, packages cached by proxies, published, pushes rejected) and requests per interval.
+- Request outcomes: ring with the share of requests answered without a 5xx or a 401/403, p95 latency, denied and server-error counts.
+- To do: what needs attention, built from real signals only — system not ok, unreachable upstreams, rejected pushes,
+  critical findings, expiring tokens, a missing or failed database backup, scanning turned off, no storage quota.
+- Storage (used, share per format, quota), Security (critical findings or clean, scanned count), Upstream (worst proxy remote, latency, cache hit ratio).
+- Most downloaded: top packages by downloads, all time.
 - Recently published: live list (SSE/WebSocket) with format badge, repo, publisher (user or CI identity), scan status, relative time. Row → package page.
-- Upstream sources: health of each proxy remote (latency, healthy/slow/blocked).
-- Connect a client: copyable snippets for the user's most-used formats, using the real base URL.
 
 ## 03 · Repositories
 - Count cards for hosted / proxy / group.

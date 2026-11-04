@@ -32,7 +32,7 @@ test('login renders and signs in', async ({ page }) => {
     await page.screenshot({ path: shot(name) });
   }
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('heading', { level: 1, name: /Good morning, Dilshod/ })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'What do you need today?' })).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -48,7 +48,15 @@ test('menus and listboxes sit on a layer above the glass panels', async ({ page 
   expect(Number(await z('.topbar'))).toBeGreaterThan(0);
   expect(await z('.segmented')).toBe('auto');
   await page.getByRole('button', { name: /^Account/ }).click();
-  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  const signOut = page.getByRole('menuitem', { name: 'Sign out' });
+  await expect(signOut).toBeVisible();
+  // The menu covers the hero search box: what is hit there must be the menu, not the panel underneath.
+  const box = (await signOut.boundingBox())!;
+  const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x!, y!)?.closest('[role="menu"]') !== null, [
+    box.x + box.width / 2,
+    box.y + box.height / 2,
+  ]);
+  expect(hit).toBe(true);
 
   await page.goto('/repositories');
   await page.getByLabel('Format').click();
@@ -61,13 +69,39 @@ test('overview renders live data at desktop and phone width', async ({ page }) =
   for (const [name, size] of [['overview-1440', DESKTOP], ['overview-390', PHONE]] as const) {
     await page.setViewportSize(size);
     await page.goto('/');
-    await expect(page.getByText('4.82', { exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: /payments-api/ })).toBeVisible();
-    await expect(page.getByText('docker login cr.acme.io')).toBeVisible();
+    await expect(page.getByText('4.82 TB', { exact: true })).toBeVisible();
+    await expect(page.getByText('98.8%', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Review 7 critical vulnerabilities/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /log4j-core/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /payments-api/ }).first()).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({ path: shot(name), fullPage: true });
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, `horizontal overflow at ${size.width}px`).toBeLessThanOrEqual(0);
+  }
+  expect(errors).toEqual([]);
+});
+
+test('account menu opens from the avatar at desktop and phone width', async ({ page }) => {
+  const errors = await collectErrors(page);
+  for (const [name, size] of [['account-menu-1440', DESKTOP], ['account-menu-390', PHONE]] as const) {
+    await page.setViewportSize(size);
+    await page.goto('/repositories');
+    const avatar = page.getByRole('button', { name: /^Account/ });
+    await avatar.focus();
+    await page.keyboard.press('ArrowDown');
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'My account' })).toBeFocused();
+    await page.evaluate(() => document.fonts.ready);
+    await page.screenshot({ path: shot(name) });
+    // Fully on screen, even on a phone.
+    const box = (await menu.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(size.width);
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(avatar).toBeFocused();
   }
   expect(errors).toEqual([]);
 });

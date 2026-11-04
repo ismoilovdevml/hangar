@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatBytes, formatCompact, formatSignedPercent, greeting, initials, relativeTime, splitBytes } from './format';
+import { formatBytes, formatCompact, formatSignedPercent, initials, relativeTime, splitBytes } from './format';
 import { clientSetup } from './clientSnippets';
 
 describe('format helpers', () => {
@@ -18,7 +18,6 @@ describe('format helpers', () => {
     expect(formatSignedPercent(-2.4)).toBe('−2%');
     expect(initials('Dilshod Ismoilov')).toBe('DI');
     const now = new Date('2026-11-03T09:00:00');
-    expect(greeting(now)).toBe('Good morning');
     expect(relativeTime('2026-11-03T08:59:30', now)).toBe('Just now');
     expect(relativeTime('2026-11-03T08:56:00', now)).toBe('4 min ago');
   });
