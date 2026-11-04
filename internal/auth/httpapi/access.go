@@ -50,6 +50,15 @@ func (h *handler) resetPassword(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *handler) requirePasswordChange(w http.ResponseWriter, r *http.Request) {
+	u, err := h.svc.RequirePasswordChange(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toMember(u, h.svc.Now()))
+}
+
 func (h *handler) userPermissions(w http.ResponseWriter, r *http.Request) {
 	ep, err := h.svc.EffectivePermissions(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
@@ -151,6 +160,14 @@ func (h *handler) changePassword(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.ChangePassword(r.Context(), in.CurrentPassword, in.NewPassword, currentSessionID(r)); err != nil {
 		h.writeError(w, r, err)
 		return
+	}
+	// A new credential gets a new session id (session fixation); for a user
+	// who had to change their password, the new session is unrestricted.
+	if ra := authFrom(r.Context()); ra != nil && ra.session != nil {
+		if err := h.startSession(w, r, core.PrincipalFrom(r.Context()), ra.session.Remember); err != nil {
+			h.writeError(w, r, err)
+			return
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

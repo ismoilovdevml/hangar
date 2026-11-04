@@ -68,6 +68,7 @@ var apiPolicy = map[string]policy{
 	"POST /users/{id}/enable":                    privileged,
 	"POST /users/{id}/unlock":                    privileged,
 	"PUT /users/{id}/password":                   privileged,
+	"POST /users/{id}/require-password-change":   privileged,
 	"GET /tokens":                                self,
 	"POST /tokens":                               self,
 	"GET /formats":                               filtered,

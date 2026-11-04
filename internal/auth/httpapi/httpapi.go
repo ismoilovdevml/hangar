@@ -107,6 +107,7 @@ func Register(r chi.Router, svc *auth.Service, opts Options) {
 	r.Post("/users/{id}/disable", h.disableUser)
 	r.Post("/users/{id}/enable", h.enableUser)
 	r.Put("/users/{id}/password", h.resetPassword)
+	r.Post("/users/{id}/require-password-change", h.requirePasswordChange)
 	r.Get("/users/{id}/permissions", h.userPermissions)
 	r.Get("/users/{id}/sessions", h.userSessions)
 	r.Delete("/users/{id}/sessions", h.revokeUserSessions)
@@ -148,7 +149,9 @@ func authFrom(ctx context.Context) *requestAuth {
 // anonymous principal. Invalid header credentials answer 401 (423 while the
 // account is locked). Mutating requests authenticated by the session cookie
 // must carry the CSRF token header and, if the browser sent an Origin, come
-// from this server's origin. Running it twice is harmless.
+// from this server's origin. A user who must change their password reaches
+// only the routes of passwordChangeRoutes; everything else answers 403
+// password_change_required. Running it twice is harmless.
 func Middleware(svc *auth.Service, opts Options) func(http.Handler) http.Handler {
 	h := newHandler(svc, opts)
 	return func(next http.Handler) http.Handler {
@@ -162,7 +165,7 @@ func Middleware(svc *auth.Service, opts Options) func(http.Handler) http.Handler
 			p := core.Anonymous()
 			if creds := core.CredentialsFromRequest(r); !creds.Empty() {
 				var err error
-				if p, err = svc.Authenticate(ctx, creds); err != nil {
+				if p, err = svc.AuthenticateRequest(ctx, creds); err != nil {
 					h.writeError(w, r, err)
 					return
 				}
@@ -189,11 +192,64 @@ func Middleware(svc *auth.Service, opts Options) func(http.Handler) http.Handler
 					return
 				}
 			}
+			if p.PasswordChangeRequired {
+				switch passwordChangeRoute(r) {
+				case routeBlocked:
+					writeErrorBody(w, http.StatusForbidden, codePasswordChangeRequired,
+						"set a new password before doing anything else (PUT /api/v1/me/password)", 0)
+					return
+				case routePublic:
+					// Open to everyone anyway: answer as for a visitor.
+					p = core.Anonymous()
+				case routeOwn:
+				}
+			}
 			ctx = context.WithValue(core.WithPrincipal(ctx, p), ctxKey{}, ra)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
+
+// codePasswordChangeRequired is the Error code for requests of a user who
+// must change their password first.
+const codePasswordChangeRequired = "password_change_required"
+
+type routeKind int
+
+const (
+	// routeBlocked: answered with 403 password_change_required.
+	routeBlocked routeKind = iota
+	// routeOwn: served with the restricted principal.
+	routeOwn
+	// routePublic: needs no sign-in; served as anonymous.
+	routePublic
+)
+
+// passwordChangeRoutes are the API routes a user who must change their
+// password may call, relative to /api/v1.
+var passwordChangeRoutes = map[string]routeKind{
+	"GET /auth/session":       routeOwn,
+	"PUT /me/password":        routeOwn,
+	"POST /auth/logout":       routeOwn,
+	"GET /auth/providers":     routePublic,
+	"POST /auth/login":        routePublic,
+	"GET /auth/oidc/start":    routePublic,
+	"GET /auth/oidc/callback": routePublic,
+	"GET /system/status":      routePublic,
+	"GET /system/version":     routePublic,
+}
+
+func passwordChangeRoute(r *http.Request) routeKind {
+	path := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, apiPrefix), "/")
+	method := r.Method
+	if method == http.MethodHead {
+		method = http.MethodGet
+	}
+	return passwordChangeRoutes[method+" "+path]
+}
+
+// apiPrefix is where the REST API is mounted.
+const apiPrefix = "/api/v1"
 
 func safeMethod(m string) bool {
 	return m == http.MethodGet || m == http.MethodHead || m == http.MethodOptions || m == http.MethodTrace
@@ -298,6 +354,8 @@ func (h *handler) writeError(w http.ResponseWriter, r *http.Request, err error) 
 	var limited *rateLimitedError
 	var external *auth.ExternalError
 	switch {
+	case errors.Is(err, auth.ErrPasswordChangeRequired):
+		writeErrorBody(w, http.StatusForbidden, codePasswordChangeRequired, err.Error(), 0)
 	case errors.As(err, &external) && external.Code == auth.CodeAccountDisabled:
 		writeErrorBody(w, http.StatusUnauthorized, "unauthenticated", "invalid username or password", 0)
 	case errors.As(err, &external) && external.Code == auth.CodeAccountConflict:
