@@ -51,6 +51,10 @@ type Issuer struct {
 	ClientAuth string
 	// Scopes are the scopes of the last authorization request.
 	Scopes string
+	// NoClientCredentials refuses the client_credentials grant the way some
+	// providers do for clients without a service account: 401
+	// unauthorized_client after the client authenticated.
+	NoClientCredentials bool
 
 	codes map[string]grant
 }
@@ -156,6 +160,14 @@ func (is *Issuer) token(w http.ResponseWriter, r *http.Request) {
 	if id != ClientID || secret != ClientSecret {
 		w.WriteHeader(http.StatusUnauthorized)
 		writeJSON(w, map[string]any{"error": "invalid_client"})
+		return
+	}
+	is.mu.Lock()
+	noCC := is.NoClientCredentials
+	is.mu.Unlock()
+	if noCC && r.PostForm.Get("grant_type") == "client_credentials" {
+		w.WriteHeader(http.StatusUnauthorized)
+		writeJSON(w, map[string]any{"error": "unauthorized_client", "error_description": "Client not enabled to retrieve service account"})
 		return
 	}
 	is.mu.Lock()
