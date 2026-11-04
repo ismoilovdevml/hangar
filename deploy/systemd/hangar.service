@@ -1,0 +1,68 @@
+# Hangar as a systemd service. Install (see docs/deploy/install-binary.md):
+#
+#   install -m 0755 hangar /usr/local/bin/hangar
+#   useradd --system --home-dir /var/lib/hangar --shell /usr/sbin/nologin hangar
+#   install -d -m 0750 -o root -g hangar /etc/hangar
+#   install -m 0640 -o root -g hangar hangar.yaml /etc/hangar/hangar.yaml
+#   install -m 0640 -o root -g hangar hangar.env /etc/hangar/hangar.env
+#   install -m 0644 hangar.service /etc/systemd/system/hangar.service
+#   systemctl daemon-reload && systemctl enable --now hangar
+#
+# /etc/hangar/hangar.env holds the secrets (HANGAR_DATABASE_URL,
+# HANGAR_SECRET_KEY, HANGAR_DOCKER_TOKEN_KEY, ...), one VAR=value per line.
+
+[Unit]
+Description=Hangar package registry
+Documentation=https://github.com/ismoilovdevml/hangar/tree/main/docs/deploy
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hangar
+Group=hangar
+EnvironmentFile=/etc/hangar/hangar.env
+Environment=HANGAR_CONFIG=/etc/hangar/hangar.yaml
+ExecStart=/usr/local/bin/hangar serve
+WorkingDirectory=/var/lib/hangar
+# /var/lib/hangar: blobs (storage.fs.path) and embedded NATS (nats.data_dir).
+StateDirectory=hangar
+StateDirectoryMode=0750
+
+Restart=on-failure
+RestartSec=5s
+# Readiness fails first, then in-flight uploads get server.shutdown_timeout.
+KillSignal=SIGTERM
+TimeoutStopSec=60s
+LimitNOFILE=65536
+
+# Hardening: Hangar needs only its state directory and the network.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallFilter=~@privileged
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

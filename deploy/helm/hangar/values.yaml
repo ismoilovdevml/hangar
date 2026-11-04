@@ -55,7 +55,8 @@ config:
     level: info
     format: json
   database:
-    # Per replica; size PostgreSQL max_connections for replicas x max_conns.
+    # Per replica. Each replica also opens up to 16 advisory-lock connections:
+    # size PostgreSQL max_connections for replicas x (max_conns + 16).
     max_conns: 20
     min_conns: 2
     conn_lifetime: 1h
