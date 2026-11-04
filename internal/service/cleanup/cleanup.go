@@ -358,8 +358,8 @@ func (s *Service) checkPreview(ctx context.Context, q querier, in *Input) error 
 		return ErrPreviewRequired
 	}
 	var fp string
-	err := q.QueryRow(ctx, `SELECT fingerprint FROM cleanup_previews WHERE token_hash = $1 AND expires_at > now()`,
-		hashToken(in.PreviewToken)).Scan(&fp)
+	err := q.QueryRow(ctx, `SELECT fingerprint FROM cleanup_previews WHERE token_hash = $1 AND expires_at > $2`,
+		hashToken(in.PreviewToken), s.opts.Now().UTC()).Scan(&fp)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("preview_token is unknown or expired; preview again: %w", core.ErrInvalid)
 	}
@@ -525,7 +525,7 @@ func (s *Service) Runs(ctx context.Context, ref, cursor string, limit int) (core
 
 // PurgePreviews deletes expired preview tokens.
 func (s *Service) PurgePreviews(ctx context.Context) (int64, error) {
-	tag, err := s.pool.Exec(ctx, `DELETE FROM cleanup_previews WHERE expires_at <= now()`)
+	tag, err := s.pool.Exec(ctx, `DELETE FROM cleanup_previews WHERE expires_at <= $1`, s.opts.Now().UTC())
 	if err != nil {
 		return 0, fmt.Errorf("purge cleanup previews: %w", err)
 	}
