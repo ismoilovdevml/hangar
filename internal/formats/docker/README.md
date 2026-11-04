@@ -37,9 +37,11 @@ Configure it on the repository (`config.connector`):
   of a host connector is
   `Bearer realm="<base_url scheme>://cr.example.com/v2/token",service="cr.example.com"`,
   so clients that can only reach `cr.example.com` get their tokens there.
-  A port connector advertises the main realm (`<base_url>/v2/token`) with
-  `service="<base_url host>:<port>"`; the token endpoint recognises the
-  connector by that service. Scopes name images without the prefix
+  A port connector advertises the token endpoint on the address the client
+  used for the port (`http://<host>:<port>/v2/token`, or `https` when a
+  trusted proxy sends `X-Forwarded-Proto`) with
+  `service="<base_url host>:<port>"`; the main token endpoint also accepts
+  that service. Scopes name images without the prefix
   (`repository:team/app:pull,push`), and a token is accepted only on the
   entry point it was issued for.
 - `docker login cr.example.com`, `helm registry login cr.example.com` and

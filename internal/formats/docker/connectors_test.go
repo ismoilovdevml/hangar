@@ -137,7 +137,7 @@ func TestConnectorPort(t *testing.T) {
 	resp, body := tr.do(http.MethodGet, portSrv.URL+"/v2/", nil)
 	tr.expect(resp, body, http.StatusUnauthorized)
 	realm, service := challenge(t, resp)
-	if realm != tr.srv.URL+"/v2/token" || !strings.HasSuffix(service, ":"+p) {
+	if realm != portSrv.URL+"/v2/token" || !strings.HasSuffix(service, ":"+p) {
 		t.Fatalf("port challenge realm=%q service=%q", realm, service)
 	}
 	// Token from the main endpoint, for the connector's service.

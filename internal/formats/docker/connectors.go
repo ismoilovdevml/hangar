@@ -37,9 +37,11 @@ import (
 // "<base_url host>:<port>"), the scopes name images without the repository
 // prefix, and a token is only accepted on the entry point it was issued for.
 // The token realm of a host connector is <base_url scheme>://<host>/v2/token,
-// so clients that can only reach cr.example.com get their tokens there; port
-// connectors use the main realm (<base_url>/v2/token), which recognises the
-// connector by the service parameter.
+// so clients that can only reach cr.example.com get their tokens there. A
+// port connector advertises the token endpoint on the address the client used
+// for the port (<scheme>://<host:port>/v2/token, scheme from
+// X-Forwarded-Proto of a trusted proxy, else http); the main token endpoint
+// also recognises a connector by its service parameter.
 
 // connectorRefresh bounds how long a loaded connector table is trusted;
 // repository events invalidate it earlier.
@@ -241,16 +243,28 @@ func (h *handler) namingFor(r *http.Request) (naming, error) {
 		return def, nil
 	}
 	scheme, baseHost := h.baseHostScheme(r)
-	if p := localPort(r); p > 0 {
-		if repo, ok := t.ports[p]; ok {
-			return naming{repo: repo, service: portService(baseHost, p), realm: def.realm}, nil
-		}
-	}
-	host := core.RequestInfoFrom(r.Context()).Host
+	info := core.RequestInfoFrom(r.Context())
+	host := info.Host
 	if host == "" {
 		host = r.Host
 	}
 	host = normalizeHost(host)
+	if p := localPort(r); p > 0 {
+		if repo, ok := t.ports[p]; ok {
+			// The realm is the address the client used for this listener:
+			// clients must be able to reach it, and some (go-containerregistry)
+			// refuse a realm on another private host.
+			realm := def.realm
+			if hostRE.MatchString(host) || isIPHost(host) {
+				s := info.Scheme
+				if s == "" {
+					s = "http"
+				}
+				realm = s + "://" + host + "/v2/token"
+			}
+			return naming{repo: repo, service: portService(baseHost, p), realm: realm}, nil
+		}
+	}
 	repo, ok := t.hosts[host]
 	if !ok {
 		if hn, _, err := net.SplitHostPort(host); err == nil {
@@ -262,6 +276,15 @@ func (h *handler) namingFor(r *http.Request) (naming, error) {
 		return naming{repo: repo, service: host, realm: scheme + "://" + host + "/v2/token"}, nil
 	}
 	return def, nil
+}
+
+// isIPHost reports whether h is an IP literal with an optional port
+// ("10.0.0.5:5001", "[fd00::1]:5001").
+func isIPHost(h string) bool {
+	if hn, _, err := net.SplitHostPort(h); err == nil {
+		h = hn
+	}
+	return net.ParseIP(strings.Trim(h, "[]")) != nil
 }
 
 // namingForService finds the connector whose token service is service (for
