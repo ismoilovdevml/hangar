@@ -12,6 +12,8 @@ import { sessionQuery } from './api/hooks';
 import { AppShell } from './components/AppShell';
 import { isRange } from './lib/format';
 import { LoginPage } from './pages/LoginPage';
+import { ChangePasswordPage } from './pages/ChangePasswordPage';
+import { safeRedirect } from './lib/redirect';
 import { OverviewPage } from './pages/overview/OverviewPage';
 import { RepoCreatePage } from './pages/repositories/RepoCreatePage';
 import { RepositoriesPage } from './pages/repositories/RepositoriesPage';
@@ -80,18 +82,44 @@ const loginRoute = createRoute({
   component: LoginPage,
 });
 
+/** A user who must replace their password sees only this page until they have. */
+const changePasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/change-password',
+  staticData: { title: 'Set a new password' },
+  validateSearch: (s: Record<string, unknown>): { redirect?: string } => ({ redirect: str(s.redirect) }),
+  beforeLoad: async ({ context, location, search }) => {
+    let session;
+    try {
+      // Fetched again when stale: the flag may have been set or cleared meanwhile.
+      session = await context.queryClient.fetchQuery(sessionQuery);
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 401) {
+        throw redirect({ to: '/login', search: { redirect: search.redirect ?? location.href } });
+      }
+      throw err;
+    }
+    if (!session.password_change_required) throw redirect({ href: safeRedirect(search.redirect), replace: true });
+  },
+  component: ChangePasswordPage,
+});
+
 /** Everything behind sign-in shares the shell and the session check. */
 const appRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'app',
   beforeLoad: async ({ context, location }) => {
+    let session;
     try {
-      await context.queryClient.ensureQueryData(sessionQuery);
+      session = await context.queryClient.ensureQueryData(sessionQuery);
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 401) {
         throw redirect({ to: '/login', search: { redirect: location.href } });
       }
       throw err;
+    }
+    if (session.password_change_required) {
+      throw redirect({ to: '/change-password', search: { redirect: location.href } });
     }
   },
   component: AppShell,
@@ -301,6 +329,7 @@ const systemLogsRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
+  changePasswordRoute,
   appRoute.addChildren([
     overviewRoute,
     browseRoute,

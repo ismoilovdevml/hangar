@@ -42,6 +42,8 @@ export const session: Session = {
   privileges: ['repo:*:admin', 'system:*'],
   auth_method: 'session',
   token_policy: { max_lifetime: '8784h0m0s', max_lifetime_days: 366, expiry_warning: '336h0m0s' },
+  password_change_required: false,
+  password_policy: { min_length: 12, max_length: 256, min_classes: 0, allow_username: false },
   token_warnings: [
     {
       id: 't_0001',

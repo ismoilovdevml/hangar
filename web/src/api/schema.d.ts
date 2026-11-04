@@ -111,7 +111,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Current user and organization */
+        /**
+         * Current user and organization
+         * @description With `password_change_required` the session is limited to this call,
+         *     `PUT /me/password` and `POST /auth/logout` until the password is changed.
+         */
         get: operations["getSession"];
         put?: never;
         post?: never;
@@ -168,7 +172,14 @@ export interface paths {
          * @description Needs the current password; wrong guesses count towards the account
          *     lockout. Not available to token-authenticated requests. Every other
          *     session of yours ends and short-lived session tokens are revoked;
-         *     personal access tokens keep working.
+         *     personal access tokens keep working. The session making the request is
+         *     replaced by a new one (new cookie and CSRF token).
+         *
+         *     When a password change was required (`password_change_required`), it
+         *     clears that state, the new password must differ from the one given,
+         *     the change is audited as `user.password.changed` with reason
+         *     `first_login`, and the initial administrator password file is
+         *     deleted if it held the old password.
          */
         put: operations["changeMyPassword"];
         post?: never;
@@ -1389,6 +1400,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/users/{id}/require-password-change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make a local user set a new password before anything else
+         * @description Needs `system:users:write`. From the user's next request on, their
+         *     sessions and password sign-ins are limited to changing the password
+         *     (see `password_change_required`); their access tokens keep working.
+         *     Local users with a password only; not yourself. Audited as
+         *     `user.password.require_change`. Repeating it changes nothing.
+         */
+        post: operations["requireUserPasswordChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users/{id}/permissions": {
         parameters: {
             query?: never;
@@ -1905,7 +1942,7 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         Error: {
-            /** @description Machine-readable code, e.g. `not_found`, `forbidden`, `invalid_argument`, `locked` */
+            /** @description Machine-readable code, e.g. `not_found`, `forbidden`, `invalid_argument`, `locked`, `password_change_required` */
             code: string;
             message: string;
             /** @description Seconds until the action may be retried (lockout, rate limit) */
@@ -2008,6 +2045,25 @@ export interface components {
              *     the caller's own and, with `system:tokens:read`, service accounts' tokens.
              */
             token_warnings?: components["schemas"]["Token"][];
+            /**
+             * @description The user signed in with a password they must replace (first sign-in,
+             *     one-time password, administrator request). Until `PUT /me/password`
+             *     succeeds only `GET /auth/session`, `PUT /me/password` and
+             *     `POST /auth/logout` answer; `privileges` is empty.
+             */
+            password_change_required?: boolean;
+            password_policy?: components["schemas"]["PasswordPolicy"];
+        };
+        /** @description Rules new local passwords must meet (`auth.password`) */
+        PasswordPolicy: {
+            /** @description Minimum length in characters */
+            min_length: number;
+            /** @description Maximum length in characters */
+            max_length: number;
+            /** @description How many of lower case, upper case, digits and symbols must appear (0 = no rule) */
+            min_classes: number;
+            /** @description Whether the password may contain the username */
+            allow_username: boolean;
         };
         TokenPolicy: {
             max_lifetime: components["schemas"]["Duration"];
@@ -3283,6 +3339,8 @@ export interface components {
             description?: string;
             /** @description Whether the user has a local password */
             password_set?: boolean;
+            /** @description The user has to set a new password before doing anything else */
+            must_change_password?: boolean;
             created_at?: components["schemas"]["Timestamp"];
         };
         MemberInput: {
@@ -3761,7 +3819,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description Missing privilege */
+        /** @description Missing privilege, or (code `password_change_required`) the password must be changed first */
         Forbidden: {
             headers: {
                 [name: string]: unknown;
@@ -4061,9 +4119,10 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Changed */
+            /** @description Changed; `Set-Cookie` carries the new session */
             204: {
                 headers: {
+                    "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -6352,6 +6411,32 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    requireUserPasswordChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The user, with `must_change_password` set */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
