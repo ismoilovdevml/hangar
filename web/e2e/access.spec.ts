@@ -61,8 +61,7 @@ test('member drawer and create-token dialog work on a phone', async ({ page }) =
   await page.getByRole('region', { name: 'Personal access tokens' }).getByRole('button', { name: 'New token' }).click();
   const dialog = page.getByRole('dialog', { name: 'New personal access token' });
   await dialog.getByLabel('Name').fill('phone test');
-  await dialog.getByText('Matching a pattern').click();
-  await dialog.getByRole('textbox', { name: 'Pattern' }).fill('docker-*');
+  // Default preset (read only) is enough here; the presets have unit tests.
   await page.screenshot({ path: shot('token-create-390') });
   await dialog.getByRole('button', { name: 'Create token' }).click();
   const secret = page.getByRole('dialog', { name: 'Copy your token now' });
