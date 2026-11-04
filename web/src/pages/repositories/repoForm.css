@@ -1,0 +1,8 @@
+.settings-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+.settings-fieldset:disabled .input, .settings-fieldset:disabled .checkbox { opacity: .7; cursor: not-allowed; }
+.readonly-value {
+  min-height: 46px; display: flex; align-items: center; gap: 8px; padding: 0 14px;
+  border: 1px dashed var(--hairline-strong); border-radius: var(--r-control);
+  font-family: var(--font-mono); font-size: 14px; color: var(--ink);
+  overflow-wrap: anywhere;
+}
