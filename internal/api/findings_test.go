@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -23,6 +24,12 @@ type fakeScanner struct {
 	scanned   []string
 	queued    []string
 	trendRepo string
+
+	planQuery   scanning.FixPlanQuery
+	assigned    map[string]string // finding id -> assignee
+	pkgAssigned []string          // "key=assignee"
+	pkgWaived   []string
+	rescans     int
 }
 
 func (s *fakeScanner) Enabled() bool { return true }
@@ -83,6 +90,61 @@ func (s *fakeScanner) Trend(_ context.Context, _ []string, repository string, da
 
 func (s *fakeScanner) Status(context.Context, []string) (*scanning.Status, error) {
 	return &scanning.Status{Enabled: true, Source: "osv", Coverage: &scanning.Coverage{}}, nil
+}
+
+func (s *fakeScanner) FixPlan(_ context.Context, q scanning.FixPlanQuery) (*scanning.FixPlan, error) {
+	s.planQuery = q
+	if q.Tab != "" && q.Tab != scanning.TabInUse && q.Tab != scanning.TabAll && q.Tab != scanning.TabWaived {
+		return nil, fmt.Errorf("tab: %w", core.ErrInvalid)
+	}
+	to, cmd := "13.0.1", "dotnet add package Newtonsoft.Json --version 13.0.1"
+	return &scanning.FixPlan{Tab: cmp.Or(q.Tab, scanning.TabInUse), WindowDays: q.WindowDays, InUseDays: 30,
+		Items: []*scanning.PackagePlan{{Key: "nuget:Newtonsoft.Json", Format: "nuget", Package: "Newtonsoft.Json",
+			Advisories: []scanning.Advisory{{ID: "GHSA-5crp-9r3c-p9vr", Aliases: []string{"CVE-2024-21907"}, Severity: "high"}},
+			Versions:   []string{"11.0.1"}, Findings: 1, MaxSeverity: "high",
+			Upgrades: []scanning.UpgradeLine{{Line: "11", From: []string{"11.0.1"}, To: &to, Command: &cmd, Fixes: 1}},
+			Pulls:    3, Clients: 1, InUse: true}}}, nil
+}
+
+func (s *fakeScanner) Pullers(_ context.Context, f *scanning.Finding, days int) (*scanning.Pullers, error) {
+	return &scanning.Pullers{ComponentID: f.Component.ID, WindowDays: days, Items: []scanning.Puller{}}, nil
+}
+
+func (s *fakeScanner) Assign(_ context.Context, f *scanning.Finding, assignee string) error {
+	if assignee == "nobody" {
+		return fmt.Errorf("assignee: %w", core.ErrInvalid)
+	}
+	if s.assigned == nil {
+		s.assigned = map[string]string{}
+	}
+	s.assigned[f.ID] = assignee
+	return nil
+}
+
+func (s *fakeScanner) AssignPackage(_ context.Context, _ []string, key, assignee string) (*scanning.PackageChange, error) {
+	s.pkgAssigned = append(s.pkgAssigned, key+"="+assignee)
+	return &scanning.PackageChange{Key: key, Findings: []string{}}, nil
+}
+
+func (s *fakeScanner) WaivePackage(_ context.Context, _ []string, key string, _ []string, _ string, _ time.Time) (*scanning.PackageChange, error) {
+	s.pkgWaived = append(s.pkgWaived, key)
+	return &scanning.PackageChange{Key: key, Findings: []string{}}, nil
+}
+
+func (s *fakeScanner) Assignees(context.Context, string, int) ([]scanning.Assignee, error) {
+	return []scanning.Assignee{{Username: "alice"}}, nil
+}
+
+func (s *fakeScanner) RescanAll(context.Context) (*scanning.Rescan, bool, error) {
+	s.rescans++
+	return &scanning.Rescan{ID: "r1", State: scanning.RescanRunning}, s.rescans == 1, nil
+}
+
+func (s *fakeScanner) LatestRescan(context.Context) (*scanning.Rescan, error) {
+	if s.rescans == 0 {
+		return nil, nil
+	}
+	return &scanning.Rescan{ID: "r1", State: scanning.RescanRunning}, nil
 }
 
 func TestFindingsAPI(t *testing.T) {

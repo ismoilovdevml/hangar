@@ -29,6 +29,15 @@ type Scanner interface {
 	QueueRepositoryScan(ctx context.Context, repo *core.Repository) (int, error)
 	Trend(ctx context.Context, repoIDs []string, repository string, days int) ([]scanning.TrendPoint, error)
 	Status(ctx context.Context, repoIDs []string) (*scanning.Status, error)
+
+	FixPlan(ctx context.Context, q scanning.FixPlanQuery) (*scanning.FixPlan, error)
+	Pullers(ctx context.Context, f *scanning.Finding, windowDays int) (*scanning.Pullers, error)
+	Assign(ctx context.Context, f *scanning.Finding, assignee string) error
+	AssignPackage(ctx context.Context, repoIDs []string, key, assignee string) (*scanning.PackageChange, error)
+	WaivePackage(ctx context.Context, repoIDs []string, key string, ids []string, reason string, until time.Time) (*scanning.PackageChange, error)
+	Assignees(ctx context.Context, q string, limit int) ([]scanning.Assignee, error)
+	RescanAll(ctx context.Context) (*scanning.Rescan, bool, error)
+	LatestRescan(ctx context.Context) (*scanning.Rescan, error)
 }
 
 var _ Scanner = (*scanning.Service)(nil)

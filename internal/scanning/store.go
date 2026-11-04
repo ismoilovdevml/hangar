@@ -177,9 +177,18 @@ func (s *store) saveResult(ctx context.Context, t *Target, found []detected) (in
 			ids = append(ids, f.AdvisoryID)
 			refs, _ := json.Marshal(nonNil(f.References))
 			b.Queue(`
+WITH owner AS (
+	-- A new finding of a package someone is assigned to goes to them too.
+	SELECT f2.assignee, f2.assigned_by FROM findings f2
+	JOIN components c2 ON c2.id = f2.component_id JOIN repositories r2 ON r2.id = c2.repo_id
+	WHERE f2.package = $9 AND r2.format = $17 AND f2.assignee IS NOT NULL AND f2.status <> 'fixed'
+	ORDER BY f2.assigned_at DESC NULLS LAST LIMIT 1)
 INSERT INTO findings (component_id, kind, advisory_id, aliases, title, details, severity, cvss, cvss_vector, package,
-	installed, fixed_in, fixed_versions, affected, refs, source, advisory_published_at, advisory_modified_at)
-VALUES ($1, 'vulnerability', $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9, $10, NULLIF($11, ''), $12, $13, $14, 'osv', $15, $16)
+	installed, fixed_in, fixed_versions, affected, refs, source, advisory_published_at, advisory_modified_at,
+	assignee, assigned_by, assigned_at)
+SELECT $1, 'vulnerability', $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9, $10, NULLIF($11, ''), $12, $13, $14, 'osv', $15, $16,
+	o.assignee, o.assigned_by, CASE WHEN o.assignee IS NOT NULL THEN now() END
+FROM (SELECT 1) one LEFT JOIN owner o ON true
 ON CONFLICT (component_id, advisory_id, package) DO UPDATE SET
 	aliases = EXCLUDED.aliases, title = EXCLUDED.title, details = EXCLUDED.details, severity = EXCLUDED.severity,
 	cvss = EXCLUDED.cvss, cvss_vector = EXCLUDED.cvss_vector, installed = EXCLUDED.installed,
@@ -192,7 +201,7 @@ ON CONFLICT (component_id, advisory_id, package) DO UPDATE SET
 		ELSE 'open' END
 RETURNING (xmax = 0)`,
 				t.ComponentID, f.AdvisoryID, nonNil(f.Aliases), f.Title, f.Details, f.Severity, f.CVSS, f.CVSSVector,
-				f.Package, f.Installed, f.FixedIn, nonNil(f.FixedVersions), f.Affected, refs, f.Published, f.Modified)
+				f.Package, f.Installed, f.FixedIn, nonNil(f.FixedVersions), f.Affected, refs, f.Published, f.Modified, t.Format)
 		}
 		b.Queue(`UPDATE findings SET status = 'fixed', resolved_at = now()
 			WHERE component_id = $1 AND source = 'osv' AND kind = 'vulnerability' AND status <> 'fixed'
@@ -399,6 +408,8 @@ type Finding struct {
 	WaivedBy            *string          `json:"waived_by"`
 	WaivedAt            *time.Time       `json:"waived_at"`
 	Assignee            *string          `json:"assignee"`
+	AssignedBy          *string          `json:"assigned_by"`
+	AssignedAt          *time.Time       `json:"assigned_at"`
 	Source              string           `json:"source"`
 	FirstSeenAt         time.Time        `json:"first_seen_at"`
 	LastSeenAt          time.Time        `json:"last_seen_at"`
@@ -468,7 +479,7 @@ type FindingList struct {
 
 const findingCols = `f.id::text, f.kind, f.advisory_id, f.aliases, f.title, %s, f.severity, f.cvss::float8, f.cvss_vector,
 	f.package, f.installed, f.fixed_in, f.fixed_versions, f.affected, f.refs, f.status, c.quarantined, %s,
-	f.waiver_reason, f.waiver_until, f.waived_by, f.waived_at, f.assignee, f.source, f.first_seen_at, f.last_seen_at,
+	f.waiver_reason, f.waiver_until, f.waived_by, f.waived_at, f.assignee, f.assigned_by, f.assigned_at, f.source, f.first_seen_at, f.last_seen_at,
 	f.resolved_at, f.advisory_published_at, f.advisory_modified_at,
 	c.id::text, r.id::text, r.name, r.format, c.namespace, c.name, c.version`
 
@@ -479,7 +490,7 @@ func scanFinding(row pgx.Row) (*Finding, error) {
 	var refs []byte
 	err := row.Scan(&f.ID, &f.Kind, &f.AdvisoryID, &f.Aliases, &f.Title, &f.Details, &f.Severity, &f.CVSS, &f.CVSSVector,
 		&f.Package, &f.Installed, &f.FixedIn, &f.FixedVersions, &f.AffectedVersions, &refs, &f.Status, &f.Quarantined,
-		&f.AffectedComponents, &f.WaiverReason, &f.WaiverUntil, &f.WaivedBy, &f.WaivedAt, &f.Assignee, &f.Source,
+		&f.AffectedComponents, &f.WaiverReason, &f.WaiverUntil, &f.WaivedBy, &f.WaivedAt, &f.Assignee, &f.AssignedBy, &f.AssignedAt, &f.Source,
 		&f.FirstSeenAt, &f.LastSeenAt, &f.ResolvedAt, &f.AdvisoryPublishedAt, &f.AdvisoryModifiedAt,
 		&f.Component.ID, &f.RepositoryID, &f.Component.Repository, &f.Component.Format, &f.Component.Namespace,
 		&f.Component.Name, &f.Component.Version)
@@ -491,7 +502,7 @@ func scanFinding(row pgx.Row) (*Finding, error) {
 	for _, t := range []*time.Time{&f.FirstSeenAt, &f.LastSeenAt} {
 		*t = t.UTC()
 	}
-	for _, p := range []**time.Time{&f.WaiverUntil, &f.WaivedAt, &f.ResolvedAt, &f.AdvisoryPublishedAt, &f.AdvisoryModifiedAt} {
+	for _, p := range []**time.Time{&f.WaiverUntil, &f.WaivedAt, &f.AssignedAt, &f.ResolvedAt, &f.AdvisoryPublishedAt, &f.AdvisoryModifiedAt} {
 		if *p != nil {
 			v := (*p).UTC()
 			*p = &v
