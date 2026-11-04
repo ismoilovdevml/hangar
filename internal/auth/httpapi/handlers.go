@@ -97,7 +97,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setCookies(w, secret, sess)
-	h.writeSession(w, r, p)
+	h.writeSession(w, r, p, authMethodSession)
 }
 
 func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
@@ -115,18 +115,38 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 
 // sessionUser is schema User.
 type sessionUser struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"display_name"`
-	Email       string `json:"email"`
+	ID          string   `json:"id"`
+	Username    string   `json:"username"`
+	DisplayName string   `json:"display_name"`
+	Email       string   `json:"email"`
+	Kind        string   `json:"kind"`
+	Source      string   `json:"source"`
+	Roles       []string `json:"roles"`
+}
+
+// tokenPolicy is schema TokenPolicy.
+type tokenPolicy struct {
+	MaxLifetime     string `json:"max_lifetime"`
+	MaxLifetimeDays int    `json:"max_lifetime_days"`
+	ExpiryWarning   string `json:"expiry_warning"`
 }
 
 // sessionBody is schema Session.
 type sessionBody struct {
-	User         sessionUser      `json:"user"`
-	Organization Organization     `json:"organization"`
-	Privileges   []core.Privilege `json:"privileges"`
+	User          sessionUser       `json:"user"`
+	Organization  Organization      `json:"organization"`
+	Privileges    []core.Privilege  `json:"privileges"`
+	AuthMethod    string            `json:"auth_method"`
+	TokenPolicy   tokenPolicy       `json:"token_policy"`
+	TokenWarnings []*auth.TokenInfo `json:"token_warnings"`
 }
+
+// Values of Session.auth_method.
+const (
+	authMethodSession = "session"
+	authMethodToken   = "token"
+	authMethodBasic   = "basic"
+)
 
 func (h *handler) session(w http.ResponseWriter, r *http.Request) {
 	p := core.PrincipalFrom(r.Context())
@@ -134,14 +154,25 @@ func (h *handler) session(w http.ResponseWriter, r *http.Request) {
 		writeErrorBody(w, http.StatusUnauthorized, "unauthenticated", "not signed in", 0)
 		return
 	}
-	if ra := authFrom(r.Context()); ra != nil && ra.session != nil {
+	method := authMethodBasic
+	switch ra := authFrom(r.Context()); {
+	case ra != nil && ra.session != nil:
 		w.Header().Set(h.cfg.Session.CSRFHeader, ra.session.CSRFToken)
+		method = authMethodSession
+	case p.TokenID != "":
+		method = authMethodToken
 	}
-	h.writeSession(w, r, p)
+	h.writeSession(w, r, p, method)
 }
 
-func (h *handler) writeSession(w http.ResponseWriter, r *http.Request, p *core.Principal) {
-	privs, err := h.svc.Authorizer().Privileges(r.Context(), p)
+func (h *handler) writeSession(w http.ResponseWriter, r *http.Request, p *core.Principal, method string) {
+	ctx := core.WithPrincipal(r.Context(), p)
+	privs, err := h.svc.Authorizer().Privileges(ctx, p)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	warnings, err := h.svc.TokenWarnings(ctx)
 	if err != nil {
 		h.writeError(w, r, err)
 		return
@@ -150,10 +181,28 @@ func (h *handler) writeSession(w http.ResponseWriter, r *http.Request, p *core.P
 	if display == "" {
 		display = p.Name
 	}
+	kind := auth.KindUser
+	if p.Kind == core.PrincipalServiceAccount {
+		kind = auth.KindServiceAccount
+	}
+	source := p.Source
+	if u, err := h.svc.GetUserByName(ctx, p.Name); err == nil {
+		source = u.Source
+	}
 	writeJSON(w, http.StatusOK, sessionBody{
-		User:         sessionUser{ID: p.ID, Username: p.Name, DisplayName: display, Email: p.Email},
+		User: sessionUser{
+			ID: p.ID, Username: p.Name, DisplayName: display, Email: p.Email,
+			Kind: kind, Source: source, Roles: nonNil(p.Roles),
+		},
 		Organization: h.opts.Organization,
 		Privileges:   nonNil(privs),
+		AuthMethod:   method,
+		TokenPolicy: tokenPolicy{
+			MaxLifetime:     h.cfg.MaxTokenLifetime.String(),
+			MaxLifetimeDays: int(h.cfg.MaxTokenLifetime / (24 * time.Hour)),
+			ExpiryWarning:   h.cfg.TokenExpiryWarning.String(),
+		},
+		TokenWarnings: warnings,
 	})
 }
 
@@ -161,7 +210,7 @@ func (h *handler) writeSession(w http.ResponseWriter, r *http.Request, p *core.P
 
 // tokenCreated is schema TokenCreated.
 type tokenCreated struct {
-	*core.Token
+	*auth.TokenInfo
 	Secret string `json:"secret"`
 }
 
@@ -172,7 +221,15 @@ func (h *handler) listTokens(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	pg, err := h.svc.ListTokens(r.Context(), auth.TokenQuery{Owner: q.Get("owner"), Limit: limit, Cursor: q.Get("cursor")})
+	all, err := queryBool(r, "all")
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	pg, err := h.svc.ListTokens(r.Context(), auth.TokenQuery{
+		Owner: q.Get("owner"), All: all, OwnerKind: q.Get("owner_kind"), Status: q.Get("status"), Q: q.Get("q"),
+		Limit: limit, Cursor: q.Get("cursor"),
+	})
 	if err != nil {
 		h.writeError(w, r, err)
 		return
@@ -191,7 +248,7 @@ func (h *handler) createToken(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, tokenCreated{Token: t, Secret: secret})
+	writeJSON(w, http.StatusCreated, tokenCreated{TokenInfo: t, Secret: secret})
 }
 
 func (h *handler) revokeToken(w http.ResponseWriter, r *http.Request) {
@@ -211,6 +268,7 @@ type member struct {
 	Kind         string     `json:"kind"`
 	DisplayName  string     `json:"display_name"`
 	Email        *string    `json:"email"`
+	Description  string     `json:"description"`
 	AvatarURL    *string    `json:"avatar_url"`
 	Source       string     `json:"source"`
 	Roles        []string   `json:"roles"`
@@ -218,12 +276,15 @@ type member struct {
 	Disabled     bool       `json:"disabled"`
 	LockedUntil  *time.Time `json:"locked_until"`
 	LastActiveAt *time.Time `json:"last_active_at"`
+	PasswordSet  bool       `json:"password_set"`
+	CreatedAt    time.Time  `json:"created_at"`
 }
 
 func toMember(u *auth.User, now time.Time) member {
 	m := member{
-		ID: u.ID, Username: u.Username, Kind: u.Kind, DisplayName: u.DisplayName, Source: u.Source,
-		Roles: nonNil(u.Roles), TokenCount: u.TokenCount, Disabled: u.Disabled, LastActiveAt: u.LastActiveAt,
+		ID: u.ID, Username: u.Username, Kind: u.Kind, DisplayName: u.DisplayName, Description: u.Description,
+		Source: u.Source, Roles: nonNil(u.Roles), TokenCount: u.TokenCount, Disabled: u.Disabled,
+		LastActiveAt: u.LastActiveAt, PasswordSet: u.PasswordSet, CreatedAt: u.CreatedAt,
 	}
 	if u.Email != "" {
 		m.Email = &u.Email
@@ -241,7 +302,10 @@ func (h *handler) listUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	pg, err := h.svc.ListUsers(r.Context(), auth.UserQuery{Q: q.Get("q"), Kind: q.Get("kind"), Limit: limit, Cursor: q.Get("cursor")})
+	pg, err := h.svc.ListUsers(r.Context(), auth.UserQuery{
+		Q: q.Get("q"), Kind: q.Get("kind"), Role: q.Get("role"), Status: q.Get("status"), Source: q.Get("source"),
+		Limit: limit, Cursor: q.Get("cursor"),
+	})
 	if err != nil {
 		h.writeError(w, r, err)
 		return

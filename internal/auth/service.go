@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"net/netip"
 	"slices"
 	"sync"
 	"time"
@@ -38,6 +39,12 @@ const (
 	AuditUserDelete      = "user.delete"
 	AuditUserPassword    = "user.password"
 	AuditUserUnlock      = "user.unlock"
+	AuditUserDisable     = "user.disable"
+	AuditUserEnable      = "user.enable"
+	AuditSessionRevoke   = "session.revoke"
+	AuditSessionsRevoke  = "session.revoke_all"
+	AuditRoleBind        = "role.bind"
+	AuditRoleUnbind      = "role.unbind"
 	AuditUserBootstrap   = "user.bootstrap"
 	AuditTokenCreate     = "token.create"
 	AuditTokenRevoke     = "token.revoke"
@@ -82,7 +89,7 @@ type Service struct {
 	loginLimiter *RateLimiter
 
 	usageMu    sync.Mutex
-	tokenUsage map[string]time.Time
+	tokenUsage map[string]tokenUse
 	userUsage  map[string]time.Time
 
 	stop     chan struct{}
@@ -113,7 +120,7 @@ func New(pool *pgxpool.Pool, opts Options) (*Service, error) {
 		log:        opts.Logger,
 		now:        opts.Now,
 		hasher:     NewHasher(cfg.Argon2, cfg.MaxConcurrentHashes),
-		tokenUsage: map[string]time.Time{},
+		tokenUsage: map[string]tokenUse{},
 		userUsage:  map[string]time.Time{},
 		stop:       make(chan struct{}),
 		done:       make(chan struct{}),
@@ -189,11 +196,24 @@ func (s *Service) background() {
 	}
 }
 
-// noteTokenUse records that token id was used; written back asynchronously.
-func (s *Service) noteTokenUse(tokenID, userID string) {
+// tokenUse is the latest use of a token: when, and from which client address
+// ("" when unknown).
+type tokenUse struct {
+	at time.Time
+	ip string
+}
+
+// noteTokenUse records that token id was used from ip; written back
+// asynchronously.
+func (s *Service) noteTokenUse(tokenID, userID, ip string) {
 	now := s.now().UTC()
+	if a, err := netip.ParseAddr(ip); err == nil {
+		ip = a.Unmap().String()
+	} else {
+		ip = ""
+	}
 	s.usageMu.Lock()
-	s.tokenUsage[tokenID] = now
+	s.tokenUsage[tokenID] = tokenUse{at: now, ip: ip}
 	s.userUsage[userID] = now
 	s.usageMu.Unlock()
 }
@@ -211,14 +231,20 @@ func (s *Service) FlushUsage(ctx context.Context) { s.flushUsage(ctx) }
 func (s *Service) flushUsage(ctx context.Context) {
 	s.usageMu.Lock()
 	tokens, users := s.tokenUsage, s.userUsage
-	s.tokenUsage, s.userUsage = map[string]time.Time{}, map[string]time.Time{}
+	s.tokenUsage, s.userUsage = map[string]tokenUse{}, map[string]time.Time{}
 	s.usageMu.Unlock()
 	if len(tokens) > 0 {
-		ids, ats := split(tokens)
+		ids := slices.Sorted(maps.Keys(tokens))
+		ats := make([]time.Time, 0, len(ids))
+		ips := make([]string, 0, len(ids))
+		for _, id := range ids {
+			ats = append(ats, tokens[id].at)
+			ips = append(ips, tokens[id].ip)
+		}
 		if _, err := s.pool.Exec(ctx, `
-			UPDATE tokens t SET last_used_at = v.at
-			FROM unnest($1::uuid[], $2::timestamptz[]) AS v(id, at)
-			WHERE t.id = v.id AND (t.last_used_at IS NULL OR t.last_used_at < v.at)`, ids, ats); err != nil {
+			UPDATE tokens t SET last_used_at = v.at, last_used_ip = coalesce(nullif(v.ip, '')::inet, t.last_used_ip)
+			FROM unnest($1::uuid[], $2::timestamptz[], $3::text[]) AS v(id, at, ip)
+			WHERE t.id = v.id AND (t.last_used_at IS NULL OR t.last_used_at < v.at)`, ids, ats, ips); err != nil {
 			s.log.Warn("auth: record token usage", "error", err)
 		}
 	}

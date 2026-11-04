@@ -89,6 +89,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change your own display name and email (local accounts) */
+        put: operations["updateMyProfile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change your own password
+         * @description Needs the current password; wrong guesses count towards the account
+         *     lockout. Not available to token-authenticated requests. Every other
+         *     session of yours ends and short-lived session tokens are revoked;
+         *     personal access tokens keep working.
+         */
+        put: operations["changeMyPassword"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your active browser sessions, most recently used first */
+        get: operations["listMySessions"];
+        put?: never;
+        post?: never;
+        /** Sign out everywhere else (every session except the current one) */
+        delete: operations["revokeMyOtherSessions"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/sessions/{sid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sid: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** End one of your sessions (ending the current one signs you out) */
+        delete: operations["revokeMySession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/status": {
         parameters: {
             query?: never;
@@ -253,8 +330,24 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getBlobStore"];
+        /**
+         * @description Name and kind cannot change. `soft_quota_bytes` (null or absent removes
+         *     the quota), S3 credentials, region and path style can always change.
+         *     The location (`fs.path`, S3 bucket, prefix, endpoint) can change only
+         *     while the store holds no repositories and no blobs. A config section
+         *     left out keeps the current one; an S3 secret left out keeps the stored
+         *     secret unless `access_key_id` changes. Stores defined by the server
+         *     configuration only accept a new soft quota. Requires
+         *     `system:blobstores:admin`; audited.
+         */
         put: operations["updateBlobStore"];
         post?: never;
+        /**
+         * @description Deletes an empty store: no repository uses it and no blob (live or
+         *     awaiting compaction) is recorded in it. Bytes in the backend are not
+         *     touched. Stores defined by the server configuration cannot be deleted.
+         *     Requires `system:blobstores:admin`; audited.
+         */
         delete: operations["deleteBlobStore"];
         options?: never;
         head?: never;
@@ -464,9 +557,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Requires `system:cleanup:read`. Every endpoint that changes something, and preview, requires `system:cleanup:write`. */
         get: operations["listCleanupPolicies"];
         put?: never;
-        /** @description Rejected unless the same criteria were previewed (`preview_token`). */
+        /**
+         * @description Rejected with 400 `preview_required` unless the same name, format,
+         *     criteria and repositories were previewed within the last hour
+         *     (`preview_token`). Audited.
+         */
         post: operations["createCleanupPolicy"];
         delete?: never;
         options?: never;
@@ -483,7 +581,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Dry run of (possibly unsaved) criteria */
+        /**
+         * Dry run of (possibly unsaved) criteria
+         * @description Lists exactly what a run would delete now, with sizes, and issues a
+         *     `preview_token` for saving these rules. With `Accept: text/csv` or
+         *     `?format=csv` every candidate is streamed as CSV instead (columns
+         *     repository, format, namespace, name, version, size_bytes, created_at,
+         *     last_downloaded_at, download_count, id).
+         */
         post: operations["previewCleanupPolicy"];
         delete?: never;
         options?: never;
@@ -496,14 +601,80 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description Policy name or id */
+                name: components["parameters"]["CleanupPolicyRef"];
             };
             cookie?: never;
         };
         get: operations["getCleanupPolicy"];
+        /**
+         * @description Replaces the policy. The name cannot change. A new `preview_token` is
+         *     required when the format, criteria or repositories change; schedule,
+         *     description and `enabled` can change without one. Audited.
+         */
         put: operations["updateCleanupPolicy"];
         post?: never;
+        /** @description Deletes the policy with its task and run history. A running policy must be stopped first. */
         delete: operations["deleteCleanupPolicy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cleanup-policies/{name}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Policy name or id */
+                name: components["parameters"]["CleanupPolicyRef"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run the policy now (also when disabled; disabling only stops the schedule) */
+        post: operations["runCleanupPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cleanup-policies/{name}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Policy name or id */
+                name: components["parameters"]["CleanupPolicyRef"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["stopCleanupPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cleanup-policies/{name}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Policy name or id */
+                name: components["parameters"]["CleanupPolicyRef"];
+            };
+            cookie?: never;
+        };
+        /** Run history, newest first (`result` holds a CleanupRunResult) */
+        get: operations["listCleanupPolicyRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -516,8 +687,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * @description Built-in maintenance tasks, the tasks of cleanup policies and tasks
+         *     added by administrators, with their last run, plus the active runs.
+         *     Requires `system:tasks:read`; every task endpoint that changes
+         *     something requires `system:tasks:write` and is audited.
+         */
         get: operations["listTasks"];
         put?: never;
+        /** @description Adds a task of a creatable type (`blob_compaction`, `docker_gc`). Cleanup tasks belong to cleanup policies. */
         post: operations["createTask"];
         delete?: never;
         options?: never;
@@ -530,11 +708,17 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                id: components["parameters"]["Id"];
+                /** @description Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded) */
+                id: components["parameters"]["TaskRef"];
             };
             cookie?: never;
         };
         get: operations["getTask"];
+        /**
+         * @description Changes description, schedule, config and `enabled`; name and type are
+         *     fixed. Built-in tasks can be edited (not deleted). Tasks of cleanup
+         *     policies answer 409 `managed`: edit the policy.
+         */
         put: operations["updateTask"];
         post?: never;
         delete: operations["deleteTask"];
@@ -548,7 +732,8 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                id: components["parameters"]["Id"];
+                /** @description Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded) */
+                id: components["parameters"]["TaskRef"];
             };
             cookie?: never;
         };
@@ -566,12 +751,14 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                id: components["parameters"]["Id"];
+                /** @description Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded) */
+                id: components["parameters"]["TaskRef"];
             };
             cookie?: never;
         };
         get?: never;
         put?: never;
+        /** @description A queued run is cancelled at once; a running one stops within a few seconds and ends as `cancelled`. */
         post: operations["stopTask"];
         delete?: never;
         options?: never;
@@ -584,11 +771,59 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                id: components["parameters"]["Id"];
+                /** @description Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded) */
+                id: components["parameters"]["TaskRef"];
             };
             cookie?: never;
         };
         get: operations["listTaskRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{id}/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded) */
+                id: components["parameters"]["TaskRef"];
+                run_id: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        /** One run with its result */
+        get: operations["getTaskRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{id}/runs/{run_id}/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded) */
+                id: components["parameters"]["TaskRef"];
+                run_id: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Log lines of a run, oldest first
+         * @description Poll with `after` set to the last `seq` seen to follow a running run.
+         *     The server keeps the newest 256 KiB of a run's log; `truncated` is set
+         *     when older lines were dropped.
+         */
+        get: operations["getTaskRunLog"];
         put?: never;
         post?: never;
         delete?: never;
@@ -625,7 +860,158 @@ export interface paths {
         get: operations["getUser"];
         put: operations["updateUser"];
         post?: never;
+        /** @description Deletes the user with their tokens, sessions and role bindings. You cannot delete yourself or the last enabled administrator. */
         delete: operations["deleteUser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clear a lockout after failed sign-ins */
+        post: operations["unlockUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable an account
+         * @description Ends the account's sessions; its tokens stop working until it is enabled again. You cannot disable yourself or the last enabled administrator.
+         */
+        post: operations["disableUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable a disabled account */
+        post: operations["enableUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set another local user's password
+         * @description Clears any lockout and ends all of the user's sessions. Change your own password with `PUT /me/password`.
+         */
+        put: operations["resetUserPassword"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Effective permissions of a user, and why
+         * @description For every repository and system area the user can act on: the allowed
+         *     actions and each grant behind them (role and privilege, or the
+         *     repository's anonymous read). Needs `system:users:read`, or the user
+         *     themself.
+         */
+        get: operations["getUserPermissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A user's active browser sessions */
+        get: operations["listUserSessions"];
+        put?: never;
+        post?: never;
+        /**
+         * End every session of a user
+         * @description Also revokes the user's short-lived session tokens. When the user is the caller, the current session is kept.
+         */
+        delete: operations["revokeUserSessions"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/sessions/{sid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+                sid: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** End one session of a user */
+        delete: operations["revokeUserSession"];
         options?: never;
         head?: never;
         patch?: never;
@@ -656,10 +1042,52 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        get: operations["getRole"];
         put: operations["updateRole"];
         post?: never;
         delete: operations["deleteRole"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/roles/{name}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Grant the role to a user (no-op if they have it) */
+        post: operations["addRoleMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/roles/{name}/members/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Take the role away from a user
+         * @description The last enabled administrator keeps the Admin role.
+         */
+        delete: operations["removeRoleMember"];
         options?: never;
         head?: never;
         patch?: never;
@@ -689,9 +1117,19 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The caller's tokens; with `system:tokens:admin`, `owner` selects another principal. */
+        /**
+         * @description The caller's live (not revoked) tokens, newest first, expired ones included.
+         *     With `system:tokens:read`, `owner` selects another principal and `all=true`
+         *     lists everyone's.
+         */
         get: operations["listTokens"];
         put?: never;
+        /**
+         * @description A personal access token for the caller, or (with `system:tokens:write`)
+         *     a token for the service account named in `owner`. A token never grants
+         *     more than its owner's roles: requests need both a role privilege and a
+         *     matching scope.
+         */
         post: operations["createToken"];
         delete?: never;
         options?: never;
@@ -711,6 +1149,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** @description Your own tokens, or anyone's with `system:tokens:delete`. Tokens minted from it stop working too. */
         delete: operations["revokeToken"];
         options?: never;
         head?: never;
@@ -895,6 +1334,15 @@ export interface components {
             username: string;
             display_name: string;
             email: string;
+            /** @enum {string} */
+            kind?: "user" | "service_account";
+            /**
+             * @description Where the identity lives; only `local` users have a password to change here
+             * @enum {string}
+             */
+            source?: "local" | "oidc" | "ldap" | "saml";
+            /** @description Roles bound directly to the user */
+            roles?: string[];
         };
         Organization: {
             slug: string;
@@ -907,6 +1355,23 @@ export interface components {
             organization: components["schemas"]["Organization"];
             /** @description Effective privileges, so the UI can hide actions the user cannot take */
             privileges?: components["schemas"]["Privilege"][];
+            /**
+             * @description How this request authenticated
+             * @enum {string}
+             */
+            auth_method?: "session" | "token" | "basic";
+            token_policy?: components["schemas"]["TokenPolicy"];
+            /**
+             * @description Live tokens expiring within `token_policy.expiry_warning`, soonest first:
+             *     the caller's own and, with `system:tokens:read`, service accounts' tokens.
+             */
+            token_warnings?: components["schemas"]["Token"][];
+        };
+        TokenPolicy: {
+            max_lifetime: components["schemas"]["Duration"];
+            /** @description `max_lifetime` in whole days, for expiry pickers */
+            max_lifetime_days: number;
+            expiry_warning: components["schemas"]["Duration"];
         };
         ClientEndpoint: {
             format: components["schemas"]["Format"];
@@ -936,6 +1401,10 @@ export interface components {
             message: string;
             version: string;
             instance_name: string;
+            /** @description server.base_url, the externally visible URL clients are configured with (empty if unset) */
+            base_url?: string;
+            /** @description host[:port] docker clients use, from server.base_url (repositories with a connector use their own) */
+            registry_host?: string;
             nodes_up: number;
             nodes_total: number;
             build?: components["schemas"]["BuildInfo"];
@@ -1113,8 +1582,8 @@ export interface components {
             description?: string;
             /** @description Required for hosted and proxy repositories */
             blob_store?: string;
-            /** @default true */
-            online: boolean;
+            /** @description Optional; true when omitted */
+            online?: boolean;
             config: components["schemas"]["RepositoryConfig"];
         };
         /** @enum {string} */
@@ -1144,7 +1613,11 @@ export interface components {
             name: string;
             /** @enum {string} */
             kind: "fs" | "s3";
-            soft_quota_bytes?: components["schemas"]["Bytes"];
+            /**
+             * Format: int64
+             * @description Soft quota; null or absent = none
+             */
+            soft_quota_bytes?: number | null;
             fs?: {
                 path?: string;
             };
@@ -1345,88 +1818,220 @@ export interface components {
             reason: string;
             until: components["schemas"]["Timestamp"];
         };
-        /** @description All set conditions must hold (AND); keep rules always win. */
+        /**
+         * @description Scope: `version_include` (if set) must match and, with
+         *     `prerelease_only`, only pre-release / snapshot versions count. Versions
+         *     matching `version_exclude` or a `keep_matching` glob, quarantined
+         *     versions and versions under legal hold (component attribute
+         *     `legal_hold: true`) are never deleted and do not use `keep_newest`
+         *     slots. Of the rest, the `keep_newest` most recently published versions
+         *     per package are kept; the others are deleted when every set condition
+         *     holds (AND). At least one of `older_than_days`, `not_downloaded_days`,
+         *     `prerelease_only` or `keep_newest >= 1` is required.
+         */
         CleanupCriteria: {
+            /** @description Published more than N days ago */
             older_than_days?: number;
+            /** @description Not downloaded for N days (never-downloaded versions count from publication) */
             not_downloaded_days?: number;
+            /** @description Versions kept per package */
             keep_newest?: number;
             /** @description Version/tag globs never deleted (e.g. `release-*`, `latest`) */
             keep_matching?: string[];
-            /** @description Only pre-release / snapshot versions */
+            /** @description RE2 regular expression; only matching versions are in scope */
+            version_include?: string;
+            /** @description RE2 regular expression; matching versions are never deleted */
+            version_exclude?: string;
+            /**
+             * @description Only pre-release / snapshot versions: Maven `-SNAPSHOT` and unstable
+             *     qualifiers, PEP 440 pre/dev releases for PyPI, SemVer pre-release
+             *     identifiers otherwise
+             */
             prerelease_only?: boolean;
+            /**
+             * Format: int64
+             * @description Only versions at least this large (sum of their assets)
+             */
+            min_size_bytes?: number;
         };
         CleanupPolicyInput: {
-            name: string;
+            name: components["schemas"]["RepositoryName"];
             description?: string;
             format?: components["schemas"]["Format"] | null;
             criteria: components["schemas"]["CleanupCriteria"];
-            repositories: string[];
-            /** @description 5-field cron in UTC; null = manual only */
+            /**
+             * @description Hosted or proxy repositories attached by the policy. The policy
+             *     also applies to repositories whose `config.cleanup_policies` names it.
+             */
+            repositories?: string[];
+            /** @description 5-field cron in UTC (or @daily, @hourly, ...); null = manual only */
             schedule?: string | null;
-            /** @default true */
-            enabled: boolean;
-            /** @description From a preview of identical criteria; required to save */
+            /** @description Optional; true when omitted. A disabled policy does not run on its schedule. */
+            enabled?: boolean;
+            /** @description From a preview of identical name, format, criteria and repositories; required to save them */
             preview_token?: string;
         };
-        CleanupPolicy: components["schemas"]["CleanupPolicyInput"] & {
+        CleanupPolicy: {
             id: string;
+            name: string;
+            description: string;
+            format: components["schemas"]["Format"] | null;
+            criteria: components["schemas"]["CleanupCriteria"];
+            repositories: string[];
+            /** @description Repositories the policy cleans (attached plus those naming it in their config) */
+            effective_repositories: string[];
+            schedule: string | null;
             /** @description Human form of the schedule, e.g. "Every day at 02:00 UTC" */
             schedule_text: string;
+            enabled: boolean;
+            /** @description The policy's task (`cleanup/<name>`) in /tasks */
+            task_id: string;
             /** Format: date-time */
-            next_run_at?: string | null;
+            next_run_at: string | null;
+            last_run: components["schemas"]["TaskRun"] | null;
             created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
         };
         CleanupPolicyPage: {
             items: components["schemas"]["CleanupPolicy"][];
             next_cursor?: components["schemas"]["NextCursor"];
         };
-        CleanupPreview: {
+        CleanupCandidate: {
+            id: string;
+            repository: string;
+            format: string;
+            namespace: string;
+            name: string;
+            version: string;
+            size_bytes: components["schemas"]["Bytes"];
+            created_at: components["schemas"]["Timestamp"];
+            /** @description Same as created_at (the name PublishedComponent uses) */
+            published_at: components["schemas"]["Timestamp"];
+            /** Format: date-time */
+            last_downloaded_at: string | null;
+            download_count: number;
+        };
+        CleanupRepositorySummary: {
+            repository: string;
             component_count: number;
             bytes: components["schemas"]["Bytes"];
-            sample: components["schemas"]["PublishedComponent"][];
-            preview_token: string;
         };
-        /** @enum {string} */
-        TaskType: "cleanup" | "blob_compaction" | "docker_gc" | "rescan" | "reindex" | "directory_sync" | "db_backup" | "replication" | "proxy_metadata_refresh" | "blob_store_move";
+        CleanupPreview: {
+            component_count: number;
+            /** @description Sum of the candidates' asset sizes (shared blobs are freed only when no other asset uses them) */
+            bytes: components["schemas"]["Bytes"];
+            /** @description Versions that match but are kept for quarantine or legal hold */
+            held_count: number;
+            repositories: components["schemas"]["CleanupRepositorySummary"][];
+            /** @description The first candidates by repository and package; the CSV export lists all */
+            sample: components["schemas"]["CleanupCandidate"][];
+            truncated: boolean;
+            evaluated_at: components["schemas"]["Timestamp"];
+            preview_token: string;
+            expires_at: components["schemas"]["Timestamp"];
+        };
+        /** @description TaskRun.result of a cleanup run */
+        CleanupRunResult: {
+            policy?: string;
+            evaluated_at?: components["schemas"]["Timestamp"];
+            deleted?: number;
+            bytes?: components["schemas"]["Bytes"];
+            failed?: number;
+            /** @description Candidates deleted by someone else during the run */
+            gone?: number;
+            held?: number;
+            repositories?: components["schemas"]["CleanupRepositorySummary"][];
+        };
+        /**
+         * @description Types this server runs: cleanup (cleanup policies), blob_compaction,
+         *     docker_gc, auth_purge, audit_partitions. The others are reserved.
+         * @enum {string}
+         */
+        TaskType: "cleanup" | "blob_compaction" | "docker_gc" | "auth_purge" | "audit_partitions" | "rescan" | "reindex" | "directory_sync" | "db_backup" | "replication" | "proxy_metadata_refresh" | "blob_store_move";
         /** @enum {string} */
         TaskRunStatus: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         TaskInput: {
-            name: string;
+            name: components["schemas"]["RepositoryName"];
             type: components["schemas"]["TaskType"];
             description?: string;
-            /** @description 5-field cron in UTC */
+            /** @description 5-field cron in UTC (or @daily */
             schedule?: string | null;
+            /**
+             * @description Per type. blob_compaction: `blob_store` (name; default all),
+             *     `orphan_scan` (bool). docker_gc: `older_than_days` (default 7),
+             *     `repositories` (default all hosted and proxy docker repositories),
+             *     `dry_run`. Others take none.
+             */
             config?: {
                 [key: string]: unknown;
             };
-            /** @default true */
-            enabled: boolean;
+            /** @description Optional; true when omitted */
+            enabled?: boolean;
         };
         TaskRun: {
             id: string;
             task_id: string;
-            task_name?: string;
+            task_name: string;
+            task_type: components["schemas"]["TaskType"];
             status: components["schemas"]["TaskRunStatus"];
             progress: number;
-            message?: string;
-            triggered_by?: string;
-            node?: string;
+            message: string;
+            /** @description Principal name, or `schedule` */
+            triggered_by: string;
+            /** @description Host name of the node executing (or that last executed) the run */
+            node: string;
+            cancel_requested: boolean;
             created_at: components["schemas"]["Timestamp"];
             /** Format: date-time */
-            started_at?: string | null;
+            started_at: string | null;
             /** Format: date-time */
-            finished_at?: string | null;
+            finished_at: string | null;
+            /** @description Cleanup runs - components deleted so far (from the result) */
+            components_deleted?: number;
+            /** @description Cleanup, docker GC and blob compaction runs - bytes released (from the result) */
+            bytes_freed?: components["schemas"]["Bytes"];
+            /** @description Summary of a finished run, per type (cleanup runs - CleanupRunResult) */
+            result?: {
+                [key: string]: unknown;
+            };
         };
-        Task: components["schemas"]["TaskInput"] & {
+        TaskRunLogLine: {
+            /** @description Line number within the stored log */
+            seq: number;
+            at: components["schemas"]["Timestamp"];
+            /** @enum {string} */
+            level: "debug" | "info" | "warn" | "error";
+            message: string;
+        };
+        TaskRunLog: {
+            items: components["schemas"]["TaskRunLogLine"][];
+            /** @description Older lines were dropped (the log keeps its newest 256 KiB) */
+            truncated: boolean;
+        };
+        Task: {
             id: string;
+            name: string;
+            type: components["schemas"]["TaskType"];
+            description: string;
+            schedule: string | null;
             schedule_text: string;
-            last_run?: components["schemas"]["TaskRun"] | null;
+            config: {
+                [key: string]: unknown;
+            };
+            enabled: boolean;
+            /** @description Provided by the server; can be edited and disabled, not deleted */
+            builtin: boolean;
+            /** @description Set for the task of a cleanup policy */
+            policy_id?: string;
+            last_run: components["schemas"]["TaskRun"] | null;
             /** Format: date-time */
-            next_run_at?: string | null;
+            next_run_at: string | null;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
         };
         TaskList: {
             items: components["schemas"]["Task"][];
-            /** @description Runs in progress ("Running now" banner) */
+            /** @description Queued and running runs ("Running now" banner) */
             running: components["schemas"]["TaskRun"][];
         };
         TaskRunPage: {
@@ -1451,12 +2056,18 @@ export interface components {
             /** @enum {string} */
             source: "local" | "oidc" | "ldap" | "saml";
             roles: string[];
+            /** @description Live (unrevoked, unexpired) personal or service-account tokens */
             token_count: number;
             disabled?: boolean;
             /** Format: date-time */
             locked_until?: string | null;
             /** Format: date-time */
             last_active_at?: string | null;
+            /** @description Free-text note, mostly for service accounts */
+            description?: string;
+            /** @description Whether the user has a local password */
+            password_set?: boolean;
+            created_at?: components["schemas"]["Timestamp"];
         };
         MemberInput: {
             username: string;
@@ -1464,7 +2075,11 @@ export interface components {
             kind: "user" | "service_account";
             display_name?: string;
             email?: string;
-            /** @description Local users only */
+            description?: string;
+            /**
+             * @description Local users only. To change your own password use `PUT /me/password`,
+             *     for others prefer `PUT /users/{id}/password`.
+             */
             password?: string;
             roles?: string[];
             disabled?: boolean;
@@ -1512,6 +2127,10 @@ export interface components {
             id: string;
             name: string;
             owner: string;
+            /** @enum {string} */
+            owner_kind?: "user" | "service_account";
+            /** @description Client address of the latest use */
+            last_used_ip?: string | null;
             /** @description First characters of the secret, for recognition (`hgr_1a2b`) */
             prefix: string;
             scopes: components["schemas"]["Privilege"][];
@@ -1527,6 +2146,89 @@ export interface components {
         TokenPage: {
             items: components["schemas"]["Token"][];
             next_cursor?: components["schemas"]["NextCursor"];
+        };
+        ProfileInput: {
+            display_name?: string;
+            /** @description Empty clears it */
+            email?: string;
+        };
+        PasswordChange: {
+            /** Format: password */
+            current_password: string;
+            /** Format: password */
+            new_password: string;
+        };
+        PasswordReset: {
+            /** Format: password */
+            password: string;
+        };
+        SessionInfo: {
+            id: string;
+            created_at: components["schemas"]["Timestamp"];
+            /** @description Updated at most once a minute */
+            last_seen_at: components["schemas"]["Timestamp"];
+            expires_at: components["schemas"]["Timestamp"];
+            ip: string | null;
+            user_agent: string;
+            remember: boolean;
+            /** @description The session making this request */
+            current: boolean;
+        };
+        SessionInfoList: {
+            items: components["schemas"]["SessionInfo"][];
+        };
+        SessionsEnded: {
+            ended: number;
+        };
+        RoleMemberInput: {
+            user_id: string;
+        };
+        /** @enum {string} */
+        Action: "read" | "write" | "delete" | "admin";
+        PermissionGrant: {
+            action: components["schemas"]["Action"];
+            /**
+             * @description `role`: a privilege of one of the user's roles; `anonymous`: the repository allows anonymous read
+             * @enum {string}
+             */
+            source: "role" | "anonymous";
+            role?: string;
+            privilege?: components["schemas"]["Privilege"];
+        };
+        ResourcePermissions: {
+            /**
+             * @example repo:npm-hosted
+             * @example system:audit
+             */
+            resource: string;
+            name: string;
+            /** @description Repositories only */
+            format?: string;
+            /** @description Repositories only */
+            type?: string;
+            anonymous_read?: boolean;
+            actions: components["schemas"]["Action"][];
+            grants: components["schemas"]["PermissionGrant"][];
+        };
+        RoleGrant: {
+            name: string;
+            builtin: boolean;
+            privileges: components["schemas"]["Privilege"][];
+        };
+        EffectivePermissions: {
+            user_id: string;
+            username: string;
+            /** @enum {string} */
+            kind: "user" | "service_account";
+            /** @description A disabled account can do nothing now; the lists show what applies once enabled */
+            disabled: boolean;
+            locked: boolean;
+            roles: components["schemas"]["RoleGrant"][];
+            /** @description Repositories with at least one allowed action, by name */
+            repositories: components["schemas"]["ResourcePermissions"][];
+            system: components["schemas"]["ResourcePermissions"][];
+            /** @description What the report cannot show (group-mapped roles, token scopes) */
+            notes: string[];
         };
         AuditEvent: {
             /** Format: int64 */
@@ -1626,7 +2328,9 @@ export interface components {
             type: "task.progress";
             data: {
                 task_id: string;
-                run_id?: string;
+                run_id: string;
+                task_name?: string;
+                status?: components["schemas"]["TaskRunStatus"];
                 progress: number;
                 message?: string;
             };
@@ -1702,7 +2406,13 @@ export interface components {
         Cursor: string;
         Limit: number;
         Id: string;
+        SessionId: string;
         RepositoryName: components["schemas"]["RepositoryName"];
+        /** @description Policy name or id */
+        CleanupPolicyRef: string;
+        /** @description Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded) */
+        TaskRef: string;
+        RunId: string;
     };
     requestBodies: never;
     headers: never;
@@ -1827,6 +2537,132 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateMyProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileInput"];
+            };
+        };
+        responses: {
+            /** @description Updated profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    changeMyPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChange"];
+            };
+        };
+        responses: {
+            /** @description Changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description Account locked after repeated wrong passwords */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listMySessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions; `current` marks the one making the request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionInfoList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    revokeMyOtherSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions ended */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionsEnded"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    revokeMySession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sid: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ended */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     getSystemStatus: {
@@ -2198,7 +3034,18 @@ export interface operations {
                     "application/json": components["schemas"]["BlobStore"];
                 };
             };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /** @description `in_use`: the location of a store that holds content cannot change */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     deleteBlobStore: {
@@ -2219,7 +3066,9 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Repositories still use the store */
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description `in_use`: repositories or blobs still use the store, or it comes from the server configuration */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2572,14 +3421,18 @@ export interface operations {
     };
     listCleanupPolicies: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Policies */
+            /** @description Policies by name */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2588,6 +3441,7 @@ export interface operations {
                     "application/json": components["schemas"]["CleanupPolicyPage"];
                 };
             };
+            403: components["responses"]["Forbidden"];
         };
     };
     createCleanupPolicy: {
@@ -2613,11 +3467,17 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
         };
     };
     previewCleanupPolicy: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Number of candidates in `sample` (default 100) */
+                sample?: number;
+                format?: "csv";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2638,6 +3498,8 @@ export interface operations {
                     "text/csv": string;
                 };
             };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getCleanupPolicy: {
@@ -2645,7 +3507,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description Policy name or id */
+                name: components["parameters"]["CleanupPolicyRef"];
             };
             cookie?: never;
         };
@@ -2668,7 +3531,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description Policy name or id */
+                name: components["parameters"]["CleanupPolicyRef"];
             };
             cookie?: never;
         };
@@ -2687,6 +3551,8 @@ export interface operations {
                     "application/json": components["schemas"]["CleanupPolicy"];
                 };
             };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
         };
     };
     deleteCleanupPolicy: {
@@ -2694,7 +3560,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description Policy name or id */
+                name: components["parameters"]["CleanupPolicyRef"];
             };
             cookie?: never;
         };
@@ -2707,6 +3574,109 @@ export interface operations {
                 };
                 content?: never;
             };
+            404: components["responses"]["NotFound"];
+            /** @description `already_running`: stop the run first */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    runCleanupPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Policy name or id */
+                name: components["parameters"]["CleanupPolicyRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskRun"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description `already_running` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    stopCleanupPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Policy name or id */
+                name: components["parameters"]["CleanupPolicyRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancellation requested (a queued run is cancelled at once) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskRun"];
+                };
+            };
+            /** @description `not_running` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listCleanupPolicyRuns: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                /** @description Policy name or id */
+                name: components["parameters"]["CleanupPolicyRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskRunPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     listTasks: {
@@ -2727,6 +3697,7 @@ export interface operations {
                     "application/json": components["schemas"]["TaskList"];
                 };
             };
+            403: components["responses"]["Forbidden"];
         };
     };
     createTask: {
@@ -2751,6 +3722,8 @@ export interface operations {
                     "application/json": components["schemas"]["Task"];
                 };
             };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
         };
     };
     getTask: {
@@ -2758,7 +3731,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: components["parameters"]["Id"];
+                /** @description Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded) */
+                id: components["parameters"]["TaskRef"];
             };
             cookie?: never;
         };
@@ -2781,7 +3755,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: components["parameters"]["Id"];
+                /** @description Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded) */
+                id: components["parameters"]["TaskRef"];
             };
             cookie?: never;
         };
@@ -2800,6 +3775,17 @@ export interface operations {
                     "application/json": components["schemas"]["Task"];
                 };
             };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            /** @description `managed` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     deleteTask: {
@@ -2807,7 +3793,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: components["parameters"]["Id"];
+                /** @description Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded) */
+                id: components["parameters"]["TaskRef"];
             };
             cookie?: never;
         };
@@ -2820,6 +3807,16 @@ export interface operations {
                 };
                 content?: never;
             };
+            404: components["responses"]["NotFound"];
+            /** @description `managed` (built in or a cleanup policy's task) or `already_running` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     runTask: {
@@ -2827,7 +3824,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: components["parameters"]["Id"];
+                /** @description Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded) */
+                id: components["parameters"]["TaskRef"];
             };
             cookie?: never;
         };
@@ -2842,7 +3840,8 @@ export interface operations {
                     "application/json": components["schemas"]["TaskRun"];
                 };
             };
-            /** @description Already running */
+            404: components["responses"]["NotFound"];
+            /** @description `already_running` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2858,7 +3857,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: components["parameters"]["Id"];
+                /** @description Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded) */
+                id: components["parameters"]["TaskRef"];
             };
             cookie?: never;
         };
@@ -2873,6 +3873,16 @@ export interface operations {
                     "application/json": components["schemas"]["TaskRun"];
                 };
             };
+            404: components["responses"]["NotFound"];
+            /** @description `not_running` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     listTaskRuns: {
@@ -2884,7 +3894,8 @@ export interface operations {
             };
             header?: never;
             path: {
-                id: components["parameters"]["Id"];
+                /** @description Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded) */
+                id: components["parameters"]["TaskRef"];
             };
             cookie?: never;
         };
@@ -2899,6 +3910,61 @@ export interface operations {
                     "application/json": components["schemas"]["TaskRunPage"];
                 };
             };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTaskRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded) */
+                id: components["parameters"]["TaskRef"];
+                run_id: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskRun"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTaskRunLog: {
+        parameters: {
+            query?: {
+                /** @description Only lines with a greater `seq` */
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Task id or name (tasks of cleanup policies are named `cleanup/<policy>`, URL-encoded) */
+                id: components["parameters"]["TaskRef"];
+                run_id: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Log lines */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskRunLog"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     listUsers: {
@@ -2906,6 +3972,11 @@ export interface operations {
             query?: {
                 q?: string;
                 kind?: "user" | "service_account";
+                /** @description Only users holding this role directly */
+                role?: string;
+                /** @description `active` = enabled and not locked */
+                status?: "active" | "disabled" | "locked";
+                source?: "local" | "oidc" | "ldap" | "saml";
                 /** @description Opaque cursor from the previous page's `next_cursor` */
                 cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];
@@ -3019,6 +4090,212 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    unlockUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unlocked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    disableUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    enableUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Enabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    resetUserPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordReset"];
+            };
+        };
+        responses: {
+            /** @description Password set */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getUserPermissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Effective permissions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectivePermissions"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listUserSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionInfoList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    revokeUserSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions ended */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionsEnded"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    revokeUserSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+                sid: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ended */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listRoles: {
@@ -3065,6 +4342,30 @@ export interface operations {
                     "application/json": components["schemas"]["Role"];
                 };
             };
+        };
+    };
+    getRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Role */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Role"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     updateRole: {
@@ -3120,6 +4421,69 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Built-in roles cannot be deleted */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    addRoleMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleMemberInput"];
+            };
+        };
+        responses: {
+            /** @description Granted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    removeRoleMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listIdentityProviders: {
@@ -3148,6 +4512,12 @@ export interface operations {
         parameters: {
             query?: {
                 owner?: string;
+                /** @description Every owner's tokens (needs `system:tokens:read`) */
+                all?: boolean;
+                owner_kind?: "user" | "service_account";
+                status?: "active" | "expired";
+                /** @description Substring of the token name */
+                q?: string;
                 /** @description Opaque cursor from the previous page's `next_cursor` */
                 cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];
@@ -3167,6 +4537,9 @@ export interface operations {
                     "application/json": components["schemas"]["TokenPage"];
                 };
             };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     createToken: {
@@ -3192,6 +4565,8 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     revokeToken: {

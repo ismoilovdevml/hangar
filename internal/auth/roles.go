@@ -49,6 +49,15 @@ func (in *RoleInput) validate() error {
 	if len(in.Description) > 1000 {
 		return fmt.Errorf("role description is too long: %w", core.ErrInvalid)
 	}
+	if len(in.Privileges) > maxPrivileges {
+		return fmt.Errorf("role has more than %d privileges: %w", maxPrivileges, core.ErrInvalid)
+	}
+	if err := ValidatePrivileges(in.Privileges); err != nil {
+		return err
+	}
+	if len(in.GroupMappings) > maxPrivileges {
+		return fmt.Errorf("role has more than %d group mappings: %w", maxPrivileges, core.ErrInvalid)
+	}
 	for _, g := range in.GroupMappings {
 		if g.Provider == "" || g.Group == "" || len(g.Group) > 512 {
 			return fmt.Errorf("group mapping needs a provider and a group: %w", core.ErrInvalid)
@@ -260,4 +269,64 @@ func (s *Service) RolesForGroups(ctx context.Context, provider string, groups []
 	}
 	names, err := pgx.CollectRows(rows, pgx.RowTo[string])
 	return names, dbErr(err, "roles for groups")
+}
+
+// BindRole grants the named role (built-in or custom) to a user
+// (system:users:write). Binding a role the user already has is a no-op.
+func (s *Service) BindRole(ctx context.Context, role, userID string) error {
+	return s.changeBinding(ctx, role, userID, true)
+}
+
+// UnbindRole removes the named role from a user (system:users:write). The
+// last enabled administrator keeps the Admin role.
+func (s *Service) UnbindRole(ctx context.Context, role, userID string) error {
+	return s.changeBinding(ctx, role, userID, false)
+}
+
+func (s *Service) changeBinding(ctx context.Context, role, userID string, bind bool) error {
+	action := AuditRoleUnbind
+	if bind {
+		action = AuditRoleBind
+	}
+	if err := s.require(ctx, action, core.ActionWrite, core.SystemResource(core.SystemUsers)); err != nil {
+		return err
+	}
+	var u *User
+	changed := false
+	err := s.inTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		if u, err = s.lockUser(ctx, tx, userID); err != nil {
+			return err
+		}
+		var roleID string
+		if err := tx.QueryRow(ctx, `SELECT id::text FROM roles WHERE name = $1`, role).Scan(&roleID); err != nil {
+			return dbErr(err, fmt.Sprintf("role %q", role))
+		}
+		if bind {
+			tag, err := tx.Exec(ctx, `
+				INSERT INTO role_bindings (role_id, subject_kind, user_id) VALUES ($1, 'user', $2)
+				ON CONFLICT DO NOTHING`, roleID, userID)
+			changed = err == nil && tag.RowsAffected() > 0
+			return dbErr(err, "bind role")
+		}
+		if role == AdminRole && !u.Disabled && slices.Contains(u.Roles, AdminRole) {
+			if err := ensureOtherAdmin(ctx, tx, userID); err != nil {
+				return err
+			}
+		}
+		tag, err := tx.Exec(ctx, `DELETE FROM role_bindings WHERE role_id = $1 AND user_id = $2 AND subject_kind = 'user'`, roleID, userID)
+		changed = err == nil && tag.RowsAffected() > 0
+		return dbErr(err, "unbind role")
+	})
+	if err != nil {
+		return err
+	}
+	if changed {
+		s.credentialsChanged()
+		s.record(ctx, core.AuditEvent{
+			Action: action, Target: "role:" + role,
+			Details: map[string]any{"user": u.Username, "user_id": u.ID},
+		})
+	}
+	return nil
 }

@@ -17,8 +17,10 @@ import { RepoCreatePage } from './pages/repositories/RepoCreatePage';
 import { RepositoriesPage } from './pages/repositories/RepositoriesPage';
 import { isFormat, isRepoType } from './lib/repositories';
 import type { Format, RepositoryType } from './api/types';
+import { AccessPage } from './pages/access/AccessPage';
+import { isAccessTab, type AccessSearch } from './pages/access/model';
+import { AccountPage } from './pages/access/AccountPage';
 import {
-  AccessPage,
   BlobStoresPage,
   BrowsePage,
   ClusterPage,
@@ -184,6 +186,34 @@ const auditRoute = createRoute({
   component: AuditPage,
 });
 
+const userStatuses = ['active', 'disabled', 'locked'] as const;
+const pick = <T extends string>(v: unknown, allowed: readonly T[]): T | undefined =>
+  allowed.includes(v as T) ? (v as T) : undefined;
+
+const accessRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/access',
+  staticData: { title: 'Access & audit' },
+  validateSearch: (s: Record<string, unknown>): AccessSearch => ({
+    tab: isAccessTab(s.tab) ? s.tab : undefined,
+    q: str(s.q),
+    role: str(s.role),
+    status: pick(s.status, userStatuses),
+    user: str(s.user),
+    events: str(s.events),
+    owner_kind: pick(s.owner_kind, ['user', 'service_account'] as const),
+    token_status: pick(s.token_status, ['active', 'expired'] as const),
+  }),
+  component: AccessPage,
+});
+
+const accountRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/account',
+  staticData: { title: 'My account' },
+  component: AccountPage,
+});
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   appRoute.addChildren([
@@ -195,7 +225,8 @@ const routeTree = rootRoute.addChildren([
     page('/blob-stores', 'Blob stores', BlobStoresPage),
     cleanupRoute,
     page('/vulnerabilities', 'Vulnerabilities', VulnerabilitiesPage),
-    page('/access', 'Access & audit', AccessPage),
+    accessRoute,
+    accountRoute,
     tasksRoute,
     taskDetailRoute,
     page('/cluster', 'Cluster & replication', ClusterPage),

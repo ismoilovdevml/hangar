@@ -1,9 +1,10 @@
-import { useMatches } from '@tanstack/react-router';
+import { Link, useMatches } from '@tanstack/react-router';
 import { useSession } from '../api/hooks';
 import { initials } from '../lib/format';
 import { isMac, useCommandPalette } from './commandPaletteContext';
 import { Disclosure } from './Disclosure';
-import { IconBell, IconLogout, IconSearch } from './icons';
+import { IconBell, IconKey, IconLogout, IconSearch } from './icons';
+import { TokenWarnings } from '../pages/access/AccountPage';
 
 export function TopBar({ onSignOut }: { onSignOut: () => void }) {
   const palette = useCommandPalette();
@@ -40,9 +41,13 @@ export function TopBar({ onSignOut }: { onSignOut: () => void }) {
         buttonContent={<IconBell size={18} />}
       >
         <p className="popover__title">Notifications</p>
-        <p className="popover__text">
-          Quarantines, failed tasks and quota warnings will appear here. Nothing needs your attention.
-        </p>
+        {session.data?.token_warnings?.length ? (
+          <TokenWarnings />
+        ) : (
+          <p className="popover__text">
+            Quarantines, failed tasks and quota warnings will appear here. Nothing needs your attention.
+          </p>
+        )}
       </Disclosure>
 
       <Disclosure
@@ -58,6 +63,9 @@ export function TopBar({ onSignOut }: { onSignOut: () => void }) {
             {user.email}
           </p>
         )}
+        <Link to="/account" className="menu-item">
+          <IconKey size={16} /> My account
+        </Link>
         <button type="button" className="menu-item" onClick={onSignOut}>
           <IconLogout size={16} /> Sign out
         </button>

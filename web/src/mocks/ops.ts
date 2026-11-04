@@ -102,7 +102,7 @@ export function selectForCleanup(input: CleanupPolicyInput, now = Date.now()) {
   const c = input.criteria ?? {};
   const byPackage = new Map<string, Candidate[]>();
   for (const cand of candidates(now)) {
-    if (!input.repositories.includes(cand.component.repository)) continue;
+    if (!(input.repositories ?? []).includes(cand.component.repository)) continue;
     if (input.format && cand.component.format !== input.format) continue;
     const key = `${cand.component.repository}/${cand.component.name}`;
     byPackage.set(key, [...(byPackage.get(key) ?? []), cand]);
@@ -126,7 +126,9 @@ export function selectForCleanup(input: CleanupPolicyInput, now = Date.now()) {
 }
 
 const SEED_POLICIES: CleanupPolicyInput[] = [
-  ...data.cleanupPolicies.map(({ id: _id, schedule_text: _t, created_at: _c, next_run_at: _n, ...p }) => p),
+  ...data.cleanupPolicies.map(
+    ({ id: _id, schedule_text: _t, created_at: _c, next_run_at: _n, updated_at: _u, effective_repositories: _e, task_id: _k, last_run: _l, ...p }) => p,
+  ),
   {
     name: 'docker-lean', description: 'Docker images · keep it lean', format: 'docker',
     criteria: { older_than_days: 90, not_downloaded_days: 60, keep_newest: 2, keep_matching: ['release-*', 'latest', 'v*.*.*'] },
@@ -157,6 +159,13 @@ function policyFrom(input: CleanupPolicyInput, id: string, createdAt: string, no
     enabled,
     id,
     created_at: createdAt,
+    updated_at: createdAt,
+    description: input.description ?? '',
+    format: input.format ?? null,
+    repositories: input.repositories ?? [],
+    effective_repositories: input.repositories ?? [],
+    task_id: `cleanup/${input.name}`,
+    last_run: null,
     schedule_text: schedule ? (describeCron(schedule) ?? schedule) : 'Manual only',
     next_run_at: schedule && enabled ? (nextRuns(schedule, new Date(now), 1)[0]?.toISOString() ?? null) : null,
   };
@@ -229,6 +238,8 @@ function initialState(now = Date.now()) {
           id: `${s.id}_r${count - k}`,
           task_id: s.id,
           task_name: s.name,
+          task_type: s.type,
+          cancel_requested: false,
           status,
           progress: status === 'succeeded' ? 1 : 0.62,
           message: k === 0 ? s.last.message : status === 'failed' ? 'Upstream timed out after 30 s' : s.last.message,
@@ -260,6 +271,9 @@ function initialState(now = Date.now()) {
       schedule_text: s.schedule ? (describeCron(s.schedule) ?? s.schedule) : 'Manual',
       next_run_at: s.schedule ? (nextRuns(s.schedule, new Date(now), 1)[0]?.toISOString() ?? null) : null,
       last_run: history[0] ?? null,
+      builtin: true,
+      created_at: '2026-01-15T09:00:00Z',
+      updated_at: '2026-01-15T09:00:00Z',
     };
   });
 
@@ -268,6 +282,8 @@ function initialState(now = Date.now()) {
     id: 't_reindex_r1',
     task_id: 't_reindex',
     task_name: 'Rebuild search index · maven-all',
+    task_type: 'reindex',
+    cancel_requested: false,
     status: 'running',
     progress: 0.64,
     message: 'Indexed 412,880 of 645,000 components',
@@ -288,9 +304,9 @@ function initialState(now = Date.now()) {
 
   const cleanupRuns = new Map<string, CleanupRun[]>();
   cleanupRuns.set('docker-lean', [
-    { id: 'cr_3', task_id: 't_cleanup_docker', task_name: 'Cleanup · docker-lean', status: 'succeeded', progress: 1, message: 'Deleted 1,204 versions', triggered_by: 'schedule', node: 'hangar-1', created_at: new Date(now - 7 * 3_600_000).toISOString(), started_at: new Date(now - 7 * 3_600_000).toISOString(), finished_at: new Date(now - 7 * 3_600_000 + 240_000).toISOString(), components_deleted: 1204, bytes_freed: 31 * GB },
-    { id: 'cr_2', task_id: 't_cleanup_docker', task_name: 'Cleanup · docker-lean', status: 'failed', progress: 0.4, message: 'Blob store s3-eu-primary unavailable', triggered_by: 'schedule', node: 'hangar-2', created_at: new Date(now - 31 * 3_600_000).toISOString(), started_at: new Date(now - 31 * 3_600_000).toISOString(), finished_at: new Date(now - 31 * 3_600_000 + 95_000).toISOString(), components_deleted: 410, bytes_freed: 9 * GB },
-    { id: 'cr_1', task_id: 't_cleanup_docker', task_name: 'Cleanup · docker-lean', status: 'succeeded', progress: 1, message: 'Deleted 980 versions', triggered_by: 'd.ismoilov', node: 'hangar-1', created_at: new Date(now - 55 * 3_600_000).toISOString(), started_at: new Date(now - 55 * 3_600_000).toISOString(), finished_at: new Date(now - 55 * 3_600_000 + 200_000).toISOString(), components_deleted: 980, bytes_freed: 26 * GB },
+    { id: 'cr_3', task_id: 't_cleanup_docker', task_name: 'Cleanup · docker-lean', task_type: 'cleanup', cancel_requested: false, status: 'succeeded', progress: 1, message: 'Deleted 1,204 versions', triggered_by: 'schedule', node: 'hangar-1', created_at: new Date(now - 7 * 3_600_000).toISOString(), started_at: new Date(now - 7 * 3_600_000).toISOString(), finished_at: new Date(now - 7 * 3_600_000 + 240_000).toISOString(), components_deleted: 1204, bytes_freed: 31 * GB },
+    { id: 'cr_2', task_id: 't_cleanup_docker', task_name: 'Cleanup · docker-lean', task_type: 'cleanup', cancel_requested: false, status: 'failed', progress: 0.4, message: 'Blob store s3-eu-primary unavailable', triggered_by: 'schedule', node: 'hangar-2', created_at: new Date(now - 31 * 3_600_000).toISOString(), started_at: new Date(now - 31 * 3_600_000).toISOString(), finished_at: new Date(now - 31 * 3_600_000 + 95_000).toISOString(), components_deleted: 410, bytes_freed: 9 * GB },
+    { id: 'cr_1', task_id: 't_cleanup_docker', task_name: 'Cleanup · docker-lean', task_type: 'cleanup', cancel_requested: false, status: 'succeeded', progress: 1, message: 'Deleted 980 versions', triggered_by: 'd.ismoilov', node: 'hangar-1', created_at: new Date(now - 55 * 3_600_000).toISOString(), started_at: new Date(now - 55 * 3_600_000).toISOString(), finished_at: new Date(now - 55 * 3_600_000 + 200_000).toISOString(), components_deleted: 980, bytes_freed: 26 * GB },
   ]);
 
   return {
@@ -314,6 +330,12 @@ let state = initialState();
 export function resetOpsMockState(): void {
   for (const a of state.active.values()) clearInterval(a.timer);
   state = initialState();
+}
+
+/** Appends an audit event recorded by another mock area (newest first), so GET /audit sees it. */
+export function recordMockAudit(e: Omit<AuditEvent, 'id'>): void {
+  const id = state.audit.reduce((m, x) => Math.max(m, x.id), 0) + 1;
+  state.audit.unshift({ ...e, id });
 }
 
 /** Test helpers. */
@@ -388,6 +410,8 @@ function startRun(task: Task, triggeredBy: string): TaskRun {
     id: `${task.id}_r${history.length + 1}_${Date.now().toString(36)}`,
     task_id: task.id,
     task_name: task.name,
+    task_type: task.type,
+    cancel_requested: false,
     status: 'running',
     progress: 0,
     message: 'Starting',
@@ -446,11 +470,33 @@ export function opsHandlers(guard: Guard) {
         ];
         return new HttpResponse(`${rows.join('\n')}\n`, { headers: { 'Content-Type': 'text/csv; charset=utf-8' } });
       }
-      const body: CleanupPreview & { sample: (PublishedComponent & { size_bytes?: number })[] } = {
+      const byRepo = new Map<string, { component_count: number; bytes: number }>();
+      for (const { component: c } of picked) {
+        const r = byRepo.get(c.repository) ?? { component_count: 0, bytes: 0 };
+        byRepo.set(c.repository, { component_count: r.component_count + 1, bytes: r.bytes + c.size_bytes });
+      }
+      const body: CleanupPreview = {
         component_count: picked.length,
         bytes: picked.reduce((s, c) => s + c.component.size_bytes, 0),
-        sample: picked.slice(0, 20).map((c) => c.component),
+        held_count: 0,
+        repositories: [...byRepo].map(([repository, r]) => ({ repository, ...r })),
+        sample: picked.slice(0, 20).map(({ component: c }) => ({
+          id: c.id,
+          repository: c.repository,
+          format: c.format,
+          namespace: c.namespace ?? '',
+          name: c.name,
+          version: c.version,
+          size_bytes: c.size_bytes,
+          created_at: c.published_at,
+          published_at: c.published_at,
+          last_downloaded_at: c.last_downloaded_at ?? null,
+          download_count: c.download_count ?? 0,
+        })),
+        truncated: picked.length > 20,
+        evaluated_at: new Date().toISOString(),
         preview_token: token,
+        expires_at: new Date(Date.now() + 15 * 60_000).toISOString(),
       };
       return HttpResponse.json(body);
     }),
@@ -522,6 +568,9 @@ export function opsHandlers(guard: Guard) {
         id: `cr_${Date.now().toString(36)}`,
         task_id: `cleanup:${p.name}`,
         task_name: `Cleanup · ${p.name}`,
+        task_type: 'cleanup',
+        cancel_requested: false,
+        node: '',
         status: 'queued',
         progress: 0,
         message: 'Queued',
