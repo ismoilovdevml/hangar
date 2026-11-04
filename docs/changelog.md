@@ -51,6 +51,17 @@
   responding. New endpoints `GET /system/nodes` and `GET /system/health`;
   `GET /nodes` is implemented from the same heartbeats and
   `/system/status` reports real `nodes_up` / `nodes_total`.
+- **System status redesign**: the page leads with one headline ("Everything
+  is working", "1 check needs attention") and the share of checks passing,
+  then a checklist per node: one row per subsystem with its summary and a
+  headline value (ping, free space, scheduler role, probe time, slowest proxy
+  latency). Rows with a problem open by themselves; an open row shows the
+  details, what the check probes, since when the status holds, the last
+  incident and a link to the matching page. Live refresh pauses from the
+  "Live · every 15 s" toggle. `SystemSubsystem` gains `metric`, `target`,
+  `since` and `last_incident`; subsystem labels are now Database, Blob
+  storage, Event bus, Task scheduler, Search index, Sign-in (with the enabled
+  providers) and Upstream proxies.
 - **System logs** (Operations → System logs, `system:cluster:admin`): each
   node keeps its newest `log.buffer_size` records (default 5000) in memory,
   scrubbed like stderr. Filter by node, level and text, follow with pause and
