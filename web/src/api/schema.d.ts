@@ -248,6 +248,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/system/nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every Hangar node with its role and subsystem health (System status screen)
+         * @description This node is listed first with checks run now (reused for 5 s); other
+         *     nodes come from the heartbeat each node writes every 15 s. A node
+         *     silent for 45 s is `stale` and `down`; after an hour it is no longer
+         *     listed. Requires `system:cluster:read`. When the database cannot be
+         *     read only this node is returned, with `partial` set.
+         */
+        get: operations["listSystemNodes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Subsystem health of the node that answers, checked now
+         * @description Database, blob stores, NATS / JetStream, task scheduler, search index,
+         *     external sign-in and proxy upstreams, each `healthy`, `degraded` or
+         *     `down` with a detail sentence and the time it was checked. Always
+         *     200; read `status`. Requires `system:cluster:read`.
+         */
+        get: operations["getSystemHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent log records of a node from its in-memory buffer
+         * @description Each node keeps its newest `log.buffer_size` records (default 5000)
+         *     in memory, scrubbed of credentials like the records written to
+         *     stderr. Without `cursor` the newest `limit` matching records are
+         *     returned (oldest first); pass the returned `cursor` to get only newer
+         *     records, and `wait` to hold the request until one arrives (long poll).
+         *     `cursor=0` reads the buffer from its oldest record (downloads). Other
+         *     nodes are asked over NATS. Full logs stay in the container or journal
+         *     output. Requires `system:cluster:admin`.
+         */
+        get: operations["listSystemLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/formats": {
         parameters: {
             query?: never;
@@ -1318,6 +1392,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * @description Nodes from the heartbeats behind /system/nodes, in the cluster summary
+         *     shape. `quorum` means more than half of the known nodes are up.
+         *     Requires `system:cluster:read`.
+         */
         get: operations["listNodes"];
         put?: never;
         post?: never;
@@ -1539,6 +1618,83 @@ export interface components {
             /** @description Whether the web UI is embedded in this binary */
             web_ui?: boolean;
             dependencies?: components["schemas"]["DependencyStatus"][];
+        };
+        /** @enum {string} */
+        SystemStatusLevel: "healthy" | "degraded" | "down";
+        SystemSubsystem: {
+            /** @description database, blobstores, eventbus, scheduler, search, auth, upstreams */
+            name: string;
+            /** @description Display name, e.g. PostgreSQL */
+            label: string;
+            status: components["schemas"]["SystemStatusLevel"];
+            /** @description One sentence explaining the status */
+            detail: string;
+            checked_at: components["schemas"]["Timestamp"];
+            latency_ms?: number;
+            /** @description Labelled values in display order (pool usage, free space, ...) */
+            facts?: {
+                label: string;
+                value: string;
+            }[];
+        };
+        SystemNode: {
+            /** @description server.node_id, default the host name */
+            id: string;
+            hostname: string;
+            /** @description Address of this node itself (not the load balancer) */
+            url: string;
+            version: string;
+            commit: string;
+            started_at: components["schemas"]["Timestamp"];
+            uptime_seconds: number;
+            last_heartbeat: components["schemas"]["Timestamp"];
+            /**
+             * @description Scheduler role; the leader schedules tasks, every node executes them
+             * @enum {string}
+             */
+            role: "leader" | "follower";
+            status: components["schemas"]["SystemStatusLevel"];
+            /** @description No heartbeat for three intervals; status is down */
+            stale: boolean;
+            /** @description The node that answered this request */
+            current: boolean;
+            subsystems: components["schemas"]["SystemSubsystem"][];
+        };
+        SystemNodeList: {
+            /** @description Id of the node that answered */
+            current: string;
+            generated_at: components["schemas"]["Timestamp"];
+            items: components["schemas"]["SystemNode"][];
+            /** @description Only this node is listed because the database cannot be read */
+            partial: boolean;
+            message?: string;
+        };
+        SystemLogRecord: {
+            /** @description Sequence number within the node's process */
+            seq: number;
+            time: components["schemas"]["Timestamp"];
+            /** @enum {string} */
+            level: "debug" | "info" | "warn" | "error";
+            msg: string;
+            /** @description Structured attributes (request_id, trace_id, principal, repository, error, ...); credentials are replaced by REDACTED */
+            attrs?: {
+                [key: string]: unknown;
+            };
+        };
+        SystemLogPage: {
+            node: string;
+            items: components["schemas"]["SystemLogRecord"][];
+            /** @description Pass back to get only newer records */
+            cursor: string;
+            /** @description The limit cut this page short; ask again at once with `cursor` */
+            more: boolean;
+            /** @description Records after the cursor were overwritten before they were read, or the node restarted */
+            gap: boolean;
+            buffer: {
+                size: number;
+                capacity: number;
+                oldest_seq: number;
+            };
         };
         /**
          * @default today
@@ -3051,6 +3207,106 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BuildInfo"];
+                };
+            };
+        };
+    };
+    listSystemNodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Nodes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemNodeList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getSystemHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description This node */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemNode"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listSystemLogs: {
+        parameters: {
+            query?: {
+                /** @description Node id from /system/nodes; default the node that answers */
+                node?: string;
+                /** @description Minimum level; default every level the buffer holds */
+                level?: "debug" | "info" | "warn" | "error";
+                /** @description Case-insensitive text in the message or attributes (at most 200 characters) */
+                q?: string;
+                /** @description RFC 3339 time, or a duration back from now such as `15m` */
+                since?: string;
+                limit?: number;
+                /** @description `cursor` of an earlier page: return only records after it */
+                cursor?: string;
+                /** @description With `cursor`, seconds to wait for a matching record (long poll) */
+                wait?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Records */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemLogPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description The node is not running or does not answer */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+            /** @description The node did not answer in time */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };

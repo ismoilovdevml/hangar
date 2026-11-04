@@ -36,6 +36,9 @@ import { TaskDetailPage, type TaskDetailSearch } from './pages/tasks/TaskDetailP
 import { TasksPage, type TasksSearch } from './pages/tasks/TasksPage';
 import { validateAuditSearch, type AuditSearch } from './lib/audit';
 import { isTaskStatusFilter, isTaskType } from './lib/tasks';
+import { SystemStatusPage } from './pages/system/SystemStatusPage';
+import { SystemLogsPage } from './pages/system/SystemLogsPage';
+import { validateLogsSearch, type SystemLogsSearch } from './pages/system/model';
 
 declare module '@tanstack/react-router' {
   interface StaticDataRouteOption {
@@ -266,6 +269,21 @@ const blobStoreRoute = createRoute({
   component: BlobStoreDetailPage,
 });
 
+const systemStatusRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/system/status',
+  staticData: { title: 'System status' },
+  component: SystemStatusPage,
+});
+
+const systemLogsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/system/logs',
+  staticData: { title: 'System logs' },
+  validateSearch: (s: Record<string, unknown>): SystemLogsSearch => validateLogsSearch(s),
+  component: SystemLogsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   appRoute.addChildren([
@@ -284,6 +302,8 @@ const routeTree = rootRoute.addChildren([
     tasksRoute,
     taskDetailRoute,
     page('/cluster', 'Cluster & replication', ClusterPage),
+    systemStatusRoute,
+    systemLogsRoute,
     auditRoute,
     page('/settings', 'System', SystemPage),
   ]),
