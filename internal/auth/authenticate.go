@@ -47,8 +47,22 @@ var errBadCredentials = fmt.Errorf("invalid credentials: %w", core.ErrUnauthenti
 // anonymous principal; a token (Bearer, or as the Basic password) or a local
 // username/password give the owner's principal with roles filled in. Wrong,
 // expired or revoked credentials return ErrUnauthenticated and are audited;
-// a locked account returns *LockedError.
+// a locked account returns *LockedError. A correct password of a user who
+// must change it returns ErrPasswordChangeRequired: package clients cannot
+// use it until it is replaced.
 func (s *Service) Authenticate(ctx context.Context, c core.Credentials) (*core.Principal, error) {
+	p, err := s.AuthenticateRequest(ctx, c)
+	if err == nil && p.PasswordChangeRequired {
+		return nil, ErrPasswordChangeRequired
+	}
+	return p, err
+}
+
+// AuthenticateRequest is Authenticate for the REST API: a user who must
+// change their password gets a principal with PasswordChangeRequired set
+// instead of an error, so the API can let it reach the password change and
+// nothing else.
+func (s *Service) AuthenticateRequest(ctx context.Context, c core.Credentials) (*core.Principal, error) {
 	switch {
 	case c.Empty():
 		return core.Anonymous(), nil
