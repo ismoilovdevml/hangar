@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -35,15 +37,15 @@ const Redacted = "REDACTED"
 // (password, token, authorization, cookie, ...), Hangar tokens (hgr_...),
 // JWTs, Basic/Bearer credentials, URL passwords and secret query parameters.
 func NewLogger(w io.Writer, level, format string) *slog.Logger {
-	var lv slog.Level
-	switch strings.ToLower(level) {
-	case "debug":
-		lv = slog.LevelDebug
-	case "warn":
-		lv = slog.LevelWarn
-	case "error":
-		lv = slog.LevelError
-	default:
+	return NewLoggerWithRing(w, level, format, nil)
+}
+
+// NewLoggerWithRing is NewLogger that also keeps every record it writes in
+// ring (nil: none), with the same correlation attributes and scrubbing, for
+// the System logs screen.
+func NewLoggerWithRing(w io.Writer, level, format string, ring *LogRing) *slog.Logger {
+	lv, ok := ParseLogLevel(level)
+	if !ok {
 		lv = slog.LevelInfo
 	}
 	opts := &slog.HandlerOptions{Level: lv, ReplaceAttr: redactAttr}
@@ -52,6 +54,9 @@ func NewLogger(w io.Writer, level, format string) *slog.Logger {
 		h = slog.NewTextHandler(w, opts)
 	} else {
 		h = slog.NewJSONHandler(w, opts)
+	}
+	if ring != nil {
+		h = teeHandler{h, &ringHandler{ring: ring, level: lv}}
 	}
 	return slog.New(contextHandler{h})
 }
@@ -134,21 +139,17 @@ func redactAttr(_ []string, a slog.Attr) slog.Attr {
 		case map[string]any:
 			return slog.Any(a.Key, redactMap(v))
 		case map[string]string:
-			out := make(map[string]string, len(v))
-			for k, s := range v {
-				if sensitiveKey(k) {
-					out[k] = Redacted
-				} else {
-					out[k] = Scrub(s)
-				}
-			}
-			return slog.Any(a.Key, out)
+			return slog.Any(a.Key, redactStringMap(v))
+		case http.Header:
+			return slog.Any(a.Key, redactMultiMap(v))
+		case url.Values:
+			return slog.Any(a.Key, redactMultiMap(v))
+		case map[string][]string:
+			return slog.Any(a.Key, redactMultiMap(v))
 		case []string:
-			out := make([]string, len(v))
-			for i, s := range v {
-				out[i] = Scrub(s)
-			}
-			return slog.Any(a.Key, out)
+			return slog.Any(a.Key, scrubAll(v))
+		case []any:
+			return slog.Any(a.Key, redactSlice(v))
 		case fmt.Stringer:
 			return slog.String(a.Key, Scrub(v.String()))
 		}
@@ -163,16 +164,74 @@ func redactMap(m map[string]any) map[string]any {
 			out[k] = Redacted
 			continue
 		}
-		switch t := v.(type) {
-		case string:
-			out[k] = Scrub(t)
-		case map[string]any:
-			out[k] = redactMap(t)
-		case error:
-			out[k] = Scrub(t.Error())
-		default:
-			out[k] = v
+		out[k] = redactValue(v)
+	}
+	return out
+}
+
+// redactValue scrubs a value nested in a map or slice.
+func redactValue(v any) any {
+	switch t := v.(type) {
+	case string:
+		return Scrub(t)
+	case map[string]any:
+		return redactMap(t)
+	case map[string]string:
+		return redactStringMap(t)
+	case http.Header:
+		return redactMultiMap(t)
+	case url.Values:
+		return redactMultiMap(t)
+	case map[string][]string:
+		return redactMultiMap(t)
+	case []string:
+		return scrubAll(t)
+	case []any:
+		return redactSlice(t)
+	case error:
+		return Scrub(t.Error())
+	}
+	return v
+}
+
+func redactSlice(s []any) []any {
+	out := make([]any, len(s))
+	for i, v := range s {
+		out[i] = redactValue(v)
+	}
+	return out
+}
+
+func redactStringMap(m map[string]string) map[string]string {
+	out := make(map[string]string, len(m))
+	for k, s := range m {
+		if sensitiveKey(k) {
+			out[k] = Redacted
+		} else {
+			out[k] = Scrub(s)
 		}
+	}
+	return out
+}
+
+// redactMultiMap masks headers and query parameters: Authorization,
+// Cookie, X-Api-Key, password=... are replaced, other values scrubbed.
+func redactMultiMap[M ~map[string][]string](m M) map[string][]string {
+	out := make(map[string][]string, len(m))
+	for k, vs := range m {
+		if sensitiveKey(k) {
+			out[k] = []string{Redacted}
+		} else {
+			out[k] = scrubAll(vs)
+		}
+	}
+	return out
+}
+
+func scrubAll(s []string) []string {
+	out := make([]string, len(s))
+	for i, v := range s {
+		out[i] = Scrub(v)
 	}
 	return out
 }
@@ -186,6 +245,7 @@ var sensitiveKeys = map[string]bool{
 	"client_secret": true, "secret_access_key": true, "access_token": true, "refresh_token": true,
 	"session_token": true, "session": true, "session_id": true, "signature": true,
 	"bearer": true, "csrf": true, "csrf_token": true,
+	"x_registry_auth": true, "passphrase": true,
 }
 
 // sensitiveSuffixes mask keys such as admin_password, session_token,

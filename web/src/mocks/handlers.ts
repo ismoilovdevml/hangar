@@ -9,6 +9,7 @@ import { accessHandlers, resetAccessState } from './access';
 import { catalogHandlers, resetCatalogState } from './catalog';
 import * as data from './data';
 import { onMockLiveEvent, opsHandlers, resetOpsMockState } from './ops';
+import { resetSystemMockState, systemHandlers } from './system';
 
 const api = (path: string) => `*/api/v1${path}`;
 
@@ -33,6 +34,7 @@ export function resetMockState(): void {
   resetOpsMockState();
   resetAccessState();
   resetCatalogState();
+  resetSystemMockState();
 }
 
 /** Test helpers: inspect or change the mock server's state. */
@@ -304,6 +306,7 @@ export const handlers = [
   }),
 
   ...opsHandlers(guard),
+  ...systemHandlers(guard),
 
   ...accessHandlers(guard),
 

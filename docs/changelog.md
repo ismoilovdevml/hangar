@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **System status** (Operations → System status, `system:cluster:read`): every
+  node with its URL, version and commit, uptime, last heartbeat and scheduler
+  role, and the health of PostgreSQL, blob stores, NATS / JetStream, the task
+  scheduler, the search index, external sign-in and upstream proxies, each
+  healthy, degraded or down with details. Nodes publish their checks every
+  15 s into `system_nodes` (migration `00140`); a silent node shows as not
+  responding. New endpoints `GET /system/nodes` and `GET /system/health`;
+  `GET /nodes` is implemented from the same heartbeats and
+  `/system/status` reports real `nodes_up` / `nodes_total`.
+- **System logs** (Operations → System logs, `system:cluster:admin`): each
+  node keeps its newest `log.buffer_size` records (default 5000) in memory,
+  scrubbed like stderr. Filter by node, level and text, follow with pause and
+  refresh, open a line as JSON and download JSON lines.
+  `GET /system/logs` supports cursors and long polling; other nodes answer
+  over NATS. New setting `server.node_id`.
+- **Log redaction** also covers headers and query values logged as maps
+  (`Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key`, ...).
+
 - **Overview traffic survives restarts and covers the cluster**: requests,
   downloads, response time, proxy cache hits and misses and proxy remote
   latency are added every 15 seconds by each node to per-minute rows in

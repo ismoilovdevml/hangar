@@ -13,6 +13,7 @@ import {
   IconUsers,
 } from './components/icons';
 import { IconAudit, IconSettings } from './components/opsIcons';
+import { IconLogs, IconPulse } from './pages/system/icons';
 
 export type AppPath =
   | '/'
@@ -28,6 +29,8 @@ export type AppPath =
   | '/account'
   | '/tasks'
   | '/cluster'
+  | '/system/status'
+  | '/system/logs'
   | '/settings';
 
 export interface NavItem {
@@ -73,6 +76,8 @@ export const NAV: NavSection[] = [
     items: [
       { to: '/tasks', label: 'Scheduled tasks', icon: IconClock, keywords: 'jobs cron' },
       { to: '/cluster', label: 'Cluster & replication', icon: IconCluster, keywords: 'nodes edge ha' },
+      { to: '/system/status', label: 'System status', icon: IconPulse, keywords: 'health nodes heartbeat database nats subsystems uptime' },
+      { to: '/system/logs', label: 'System logs', icon: IconLogs, keywords: 'log records errors warnings debug server output' },
       { to: '/settings', label: 'System', icon: IconSettings, keywords: 'settings status version health configuration' },
     ],
   },

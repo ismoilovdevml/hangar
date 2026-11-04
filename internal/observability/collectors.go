@@ -288,3 +288,7 @@ func (s *StorageUsage) Collect(ch chan<- prometheus.Metric) {
 		}
 	}
 }
+
+// DiskUsage returns the size of the filesystem holding path and the bytes
+// available to unprivileged users on it; ok is false where unsupported.
+func DiskUsage(path string) (size, free uint64, ok bool) { return diskUsage(path) }

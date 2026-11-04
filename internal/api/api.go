@@ -122,6 +122,9 @@ type API struct {
 	// Cleanup manages cleanup policies; Tasks manages scheduled tasks and runs.
 	Cleanup CleanupPolicies
 	Tasks   TaskManager
+	// Monitor and Logs serve the System status and System logs screens.
+	Monitor SystemMonitor
+	Logs    SystemLogs
 	// AuthMiddleware authenticates every /api/v1 request (session cookie,
 	// CSRF, Bearer/Basic) and stores the principal with core.WithPrincipal.
 	// When nil, only Basic/Bearer credentials are accepted, via Deps.Auth.
@@ -159,6 +162,9 @@ func (a *API) Mount(r chi.Router) {
 		r.Get("/system/version", func(w http.ResponseWriter, _ *http.Request) {
 			WriteJSON(w, http.StatusOK, version.Get())
 		})
+		r.Get("/system/nodes", a.systemNodes)
+		r.Get("/system/health", a.systemHealth)
+		r.Get("/system/logs", a.systemLogs)
 		r.Get("/formats", a.listFormats)
 
 		r.Get("/metrics/overview", a.overview)
@@ -213,6 +219,7 @@ func (a *API) Mount(r chi.Router) {
 		r.Get("/audit", a.listAudit)
 		r.Get("/audit/export", a.exportAudit)
 		r.Get("/events", a.events)
+		r.Get("/nodes", a.listNodes)
 
 		if a.AuthRoutes != nil {
 			a.AuthRoutes.RegisterRoutes(r)
@@ -272,6 +279,7 @@ type systemStatus struct {
 
 func (a *API) systemStatus(w http.ResponseWriter, r *http.Request) {
 	build := version.Get()
+	up, total := a.nodeCounts()
 	st := systemStatus{
 		State:         "ok",
 		Message:       "All systems normal",
@@ -279,8 +287,8 @@ func (a *API) systemStatus(w http.ResponseWriter, r *http.Request) {
 		InstanceName:  a.InstanceName,
 		BaseURL:       a.baseURL(),
 		RegistryHost:  a.defaultRegistryHost(),
-		NodesUp:       1, // single node until cluster membership lands
-		NodesTotal:    1,
+		NodesUp:       up,
+		NodesTotal:    total,
 		Build:         build,
 		UptimeSeconds: int64(time.Since(a.Started).Seconds()),
 		WebUI:         webui.Embedded(),

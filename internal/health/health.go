@@ -84,15 +84,7 @@ func (c *Checker) Run(ctx context.Context) Report {
 	var wg sync.WaitGroup
 	for i := range names {
 		wg.Go(func() {
-			cctx, cancel := context.WithTimeout(ctx, c.timeout)
-			defer cancel()
-			start := time.Now()
-			err := runCheck(cctx, fns[i])
-			r := CheckResult{Status: StatusOK, LatencyMS: time.Since(start).Milliseconds()}
-			if err != nil {
-				r.Status, r.Error = StatusFail, err.Error()
-			}
-			results[i] = r
+			results[i] = c.timed(ctx, fns[i])
 		})
 	}
 	wg.Wait()
@@ -108,6 +100,31 @@ func (c *Checker) Run(ctx context.Context) Report {
 		rep.Status = StatusDraining
 	}
 	return rep
+}
+
+// RunOne executes the named check alone, with the same timeout as Run. The
+// System status screen builds on it. ok is false if no such check exists.
+func (c *Checker) RunOne(ctx context.Context, name string) (r CheckResult, ok bool) {
+	c.mu.RLock()
+	fn, ok := c.checks[name]
+	c.mu.RUnlock()
+	if !ok {
+		return CheckResult{}, false
+	}
+	return c.timed(ctx, fn), true
+}
+
+// timed runs fn with the check timeout and measures it.
+func (c *Checker) timed(ctx context.Context, fn CheckFunc) CheckResult {
+	cctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	start := time.Now()
+	err := runCheck(cctx, fn)
+	r := CheckResult{Status: StatusOK, LatencyMS: time.Since(start).Milliseconds()}
+	if err != nil {
+		r.Status, r.Error = StatusFail, err.Error()
+	}
+	return r
 }
 
 func runCheck(ctx context.Context, fn CheckFunc) error {

@@ -33,6 +33,8 @@ dashboards and alerts shipped in `deploy/observability/`. Alert runbooks are in
 | `metrics.path` | `HANGAR_METRICS_PATH` | `/metrics` | Endpoint path. |
 | `log.level` | `HANGAR_LOG_LEVEL` | `info` | `debug` also logs probe and scrape requests. |
 | `log.format` | `HANGAR_LOG_FORMAT` | `json` | `json` or `text`. |
+| `log.buffer_size` | `HANGAR_LOG_BUFFER_SIZE` | `5000` | Recent records each node keeps in memory for the System logs screen, 100 to 100000 (about 1 KiB each). |
+| `server.node_id` | `HANGAR_SERVER_NODE_ID` | host name | Name of the node on the System status and System logs screens. Must be unique per node; set it when host names change on every deploy (containers). |
 | `observability.access_log.sample_ratio` | `HANGAR_OBSERVABILITY_ACCESS_LOG_SAMPLE_RATIO` | `1` | Share of requests written to the access log, 0 to 1. Server errors (5xx) are always logged. Metrics and traces are not sampled by it. |
 | `observability.tracing.enabled` | `HANGAR_OBSERVABILITY_TRACING_ENABLED` | `false` | Export traces. |
 | `observability.tracing.endpoint` | `HANGAR_OBSERVABILITY_TRACING_ENDPOINT` | | OTLP/HTTP collector URL, e.g. `http://otel-collector:4318`. Without a path `/v1/traces` is used; `https://` uses TLS with the system roots. |
@@ -196,9 +198,82 @@ whose name denotes a secret (`password`, `token`, `secret`, `authorization`,
 `cookie`, `*_password`, `*_token`, `*_secret`, …) are replaced with
 `REDACTED`, and every message and string value is scrubbed of Hangar tokens
 (`hgr_…`), JWTs, `Basic`/`Bearer` credentials, passwords in URLs and secret
-query parameters (`token=`, `password=`, `X-Amz-Signature=`, `_state=`, …). A
-test feeds credentials through every logging path and fails if any of them
-reaches the output.
+query parameters (`token=`, `password=`, `X-Amz-Signature=`, `_state=`, …).
+HTTP headers and query values logged as maps (`http.Header`, `url.Values`)
+have `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`,
+`X-Api-Key` and similar entries replaced. A test feeds credentials through
+every logging path, including the in-memory buffer below, and fails if any of
+them reaches the output.
+
+### System logs screen
+
+Each node also keeps its newest `log.buffer_size` records in memory, after the
+same scrubbing, so administrators can read them under **Operations → System
+logs** without access to the host. The buffer is a fixed ring: appending is
+constant time and never waits for readers, and the oldest records are
+overwritten. It is lost on restart; full logs stay on stderr, so keep shipping
+them (`docker compose logs hangar`, `journalctl -u hangar`, `kubectl logs`).
+
+The screen filters by node, minimum level and text, follows new records
+(refreshing every 5 s, with Pause and Refresh now), opens any line as JSON and
+downloads the node's buffer, with the current filters, as JSON lines.
+
+The API is `GET /api/v1/system/logs` (privilege `system:cluster:admin`):
+
+| Parameter | Meaning |
+|---|---|
+| `node` | Node id from `/system/nodes`; default the node that answers. Other nodes are asked over NATS. |
+| `level` | Minimum level: `debug`, `info`, `warn`, `error`. |
+| `q` | Case-insensitive text in the message or attributes. |
+| `since` | RFC 3339 time or a duration back from now (`15m`). |
+| `limit` | 1 to 5000, default 500. |
+| `cursor` | The `cursor` of an earlier answer: return only newer records. `0` reads from the oldest record. |
+| `wait` | With `cursor`, hold the request up to this many seconds until a matching record arrives (long poll, at most 30). |
+
+```sh
+# Follow errors of node hangar-2 from a shell.
+c=$(curl -s -H "Authorization: Bearer $TOKEN" "$HANGAR/api/v1/system/logs?node=hangar-2&level=error&limit=1" | jq -r .cursor)
+while :; do
+  r=$(curl -s -H "Authorization: Bearer $TOKEN" "$HANGAR/api/v1/system/logs?node=hangar-2&level=error&cursor=$c&wait=25")
+  echo "$r" | jq -c '.items[]'; c=$(echo "$r" | jq -r .cursor)
+done
+```
+
+`gap: true` in an answer means records after the cursor were overwritten
+before they were read, or the node restarted. Always pass `node` when a load
+balancer spreads requests: a cursor only means something to the node that
+issued it.
+
+## System status screen
+
+**Operations → System status** (privilege `system:cluster:read`) shows every
+node: id, host name, its own URL, version and commit, uptime, last heartbeat
+and scheduler role (the leader schedules tasks; every node executes them). For
+each node it shows these subsystems, each `healthy`, `degraded` or `down`
+with a sentence, the time it was checked and details:
+
+| Subsystem | Healthy when | Degraded when | Down when |
+|---|---|---|---|
+| PostgreSQL | The readiness ping answers | Every pooled connection is in use, or the ping takes over 500 ms | The ping fails |
+| Blob stores | Every store answers its ping | A filesystem store has under 10 % and under 5 GiB free | A store cannot be opened or reached |
+| NATS / JetStream | Connected and JetStream answers | | Disconnected or JetStream unavailable |
+| Task scheduler | Task runs can be read | A scheduled task is more than an hour late, or runs cannot be read | |
+| Search index | The full-text index is valid and a probe search is fast | The index is missing or invalid, or the probe takes over 500 ms | The probe fails |
+| External sign-in | OIDC and LDAP worked at their last use (or are not configured) | A provider failed; local accounts still sign in | |
+| Upstream proxies | No proxy remote is offline or blocked | A remote is offline or blocked | |
+
+Each node runs its checks every 15 s (each bounded to 3 s) and writes them to
+the `system_nodes` table, so any node can show all of them. A node without a
+heartbeat for 45 s is shown as **not responding** (`stale`, `down`) with its
+last report; one silent for an hour is no longer listed, and a node that stops
+cleanly removes itself at once. The screen refreshes every 15 s and can be
+paused. If the database cannot be read, the answering node is shown alone.
+
+The same data is available as JSON: `GET /api/v1/system/nodes` (every node),
+`GET /api/v1/system/health` (the answering node, checked now) and
+`GET /api/v1/nodes` (the cluster summary with quorum). The public
+`GET /api/v1/system/status` reports `nodes_up` and `nodes_total` from the last
+heartbeat.
 
 ## Traces
 
