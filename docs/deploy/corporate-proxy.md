@@ -12,10 +12,10 @@ directly.
 Nothing else in Hangar makes outbound requests (PostgreSQL, S3 and NATS
 connections do not use the HTTP proxy settings).
 
-## Named proxies (Settings → Proxies)
+## Named proxies (Settings → Internet access)
 
 Administrators (`system:settings:admin`) manage outbound proxies in
-**Settings → Proxies** or through the API, without a restart. Users with
+**Settings → Internet access** (`/settings/proxies`) or through the API, without a restart. Users with
 `system:settings:read` see the page read-only.
 
 With no proxy yet, the page says how remotes are reached today:

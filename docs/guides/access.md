@@ -148,6 +148,8 @@ report; token scopes narrow it further. Viewing someone else's report needs
 
 ## My account
 
+Open it from the avatar menu or from **Settings → My account** (`/account`).
+
 - **Profile** — display name and email of local accounts (`PUT /me/profile`).
 - **Password** — `PUT /me/password` with the current and the new password.
   Wrong current passwords count towards the account lockout. Every *other*
