@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- **Overview traffic survives restarts and covers the cluster**: requests,
+  downloads, response time, proxy cache hits and misses and proxy remote
+  latency are added every 15 seconds by each node to per-minute rows in
+  PostgreSQL (migration `00120`, kept 62 days) instead of living in process
+  memory. The 1h / Today / 7 days / 30 days ranges read exactly those
+  windows; `coverage_start` says when recording began.
+- **Served from cache** counts every format and requests that reach a proxy
+  through a group, once per client request; the card shows hits of total
+  proxy requests and bytes saved, and says so when no proxy served content in
+  the range. `cache.hits` and `cache.misses` are new in the overview API.
+- **Upstream latency**: `GET /upstreams/health?range=` reports the median
+  remote latency (`latency_ms`) and the number of remote requests
+  (`requests`) recorded over the range; the Overview card follows the
+  selected range. `upstream.status` events now name the repository, so the
+  card updates the right row.
+- **Group size**: groups report what they serve: `size_bytes` is their
+  members' content with shared blobs counted once (nested groups resolved),
+  `component_count` the distinct versions. The Repositories list shows
+  "5.2 MB via 2 members" and the version count.
+- "Published since yesterday" and the uploads in the traffic chart count
+  hosted repositories only; proxy cache fills are no longer counted as
+  publications.
+
 - **Single sign-on (OIDC)**: "Continue with SSO" through any OpenID Connect
   provider (`auth.oidc`): authorization code flow with PKCE (S256),
   `client_secret_basic` or `client_secret_post`, encrypted state cookie,

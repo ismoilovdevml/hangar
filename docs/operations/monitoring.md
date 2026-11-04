@@ -29,7 +29,7 @@ dashboards and alerts shipped in `deploy/observability/`. Alert runbooks are in
 
 | Setting | Env | Default | Meaning |
 |---|---|---|---|
-| `metrics.enabled` | `HANGAR_METRICS_ENABLED` | `true` | Serve the Prometheus endpoint. Metrics are recorded either way (the Overview screen reads them). |
+| `metrics.enabled` | `HANGAR_METRICS_ENABLED` | `true` | Serve the Prometheus endpoint. Metrics are recorded either way: every node adds its request, proxy cache and remote latency counters to per-minute rows in PostgreSQL (`traffic_minutes`, `upstream_minutes`, kept 62 days), which the Overview screen reads. |
 | `metrics.path` | `HANGAR_METRICS_PATH` | `/metrics` | Endpoint path. |
 | `log.level` | `HANGAR_LOG_LEVEL` | `info` | `debug` also logs probe and scrape requests. |
 | `log.format` | `HANGAR_LOG_FORMAT` | `json` | `json` or `text`. |
