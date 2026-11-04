@@ -44,15 +44,15 @@ var errSignIn = fmt.Errorf("sign in required: %w", core.ErrUnauthenticated)
 // documented with `security: []` in api/openapi.yaml (a test keeps the two
 // in sync). Keys are "METHOD /path" relative to Prefix.
 var PublicRoutes = map[string]bool{
-	"GET /system/status":      true,
-	"GET /system/version":     true,
-	"GET /auth/providers":     true,
-	"POST /auth/login":        true,
-	"GET /auth/oidc/start":    true,
-	"GET /auth/oidc/callback": true,
-	"GET /openapi.yaml":       true,
-	"GET /openapi.json":       true,
-	"GET /automation-guide.md":     true,
+	"GET /system/status":       true,
+	"GET /system/version":      true,
+	"GET /auth/providers":      true,
+	"POST /auth/login":         true,
+	"GET /auth/oidc/start":     true,
+	"GET /auth/oidc/callback":  true,
+	"GET /openapi.yaml":        true,
+	"GET /openapi.json":        true,
+	"GET /automation-guide.md": true,
 }
 
 // requireSignIn answers 401 to anonymous callers of every route that is not

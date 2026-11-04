@@ -230,19 +230,19 @@ const (
 // passwordChangeRoutes are the API routes a user who must change their
 // password may call, relative to /api/v1.
 var passwordChangeRoutes = map[string]routeKind{
-	"GET /auth/session":       routeOwn,
-	"GET /me":                 routeOwn,
-	"PUT /me/password":        routeOwn,
-	"POST /auth/logout":       routeOwn,
-	"GET /auth/providers":     routePublic,
-	"POST /auth/login":        routePublic,
-	"GET /auth/oidc/start":    routePublic,
-	"GET /auth/oidc/callback": routePublic,
-	"GET /system/status":      routePublic,
-	"GET /system/version":     routePublic,
-	"GET /openapi.yaml":       routePublic,
-	"GET /openapi.json":       routePublic,
-	"GET /automation-guide.md":     routePublic,
+	"GET /auth/session":        routeOwn,
+	"GET /me":                  routeOwn,
+	"PUT /me/password":         routeOwn,
+	"POST /auth/logout":        routeOwn,
+	"GET /auth/providers":      routePublic,
+	"POST /auth/login":         routePublic,
+	"GET /auth/oidc/start":     routePublic,
+	"GET /auth/oidc/callback":  routePublic,
+	"GET /system/status":       routePublic,
+	"GET /system/version":      routePublic,
+	"GET /openapi.yaml":        routePublic,
+	"GET /openapi.json":        routePublic,
+	"GET /automation-guide.md": routePublic,
 }
 
 func passwordChangeRoute(r *http.Request) routeKind {

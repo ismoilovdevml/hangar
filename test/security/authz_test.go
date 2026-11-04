@@ -51,7 +51,7 @@ var apiPolicy = map[string]policy{
 	"GET /system/version":                        public,
 	"GET /openapi.yaml":                          public,
 	"GET /openapi.json":                          public,
-	"GET /automation-guide.md":                        public,
+	"GET /automation-guide.md":                   public,
 	"POST /auth/logout":                          self,
 	"GET /auth/session":                          self,
 	"GET /me":                                    self,
