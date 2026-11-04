@@ -36,6 +36,26 @@ test('login renders and signs in', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('menus and listboxes sit on a layer above the glass panels', async ({ page }) => {
+  // Every glass panel is its own stacking context (backdrop-filter), and browsers
+  // hit-test those differently from how they paint them, so this checks the layers
+  // themselves: the top bar (with its menus) and portalled listboxes need a z-index
+  // above the page's panels, which have none.
+  await page.setViewportSize(DESKTOP);
+  await page.goto('/');
+  await expect(page.getByRole('radiogroup', { name: 'Time range' })).toBeVisible();
+  const z = (selector: string) => page.locator(selector).first().evaluate((el) => getComputedStyle(el).zIndex);
+  expect(Number(await z('.topbar'))).toBeGreaterThan(0);
+  expect(await z('.segmented')).toBe('auto');
+  await page.getByRole('button', { name: /^Account/ }).click();
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+
+  await page.goto('/repositories');
+  await page.getByLabel('Format').click();
+  await expect(page.getByRole('listbox')).toBeVisible();
+  expect(Number(await z('.select-popup'))).toBeGreaterThan(Number(await z('.topbar')));
+});
+
 test('overview renders live data at desktop and phone width', async ({ page }) => {
   const errors = await collectErrors(page);
   for (const [name, size] of [['overview-1440', DESKTOP], ['overview-390', PHONE]] as const) {
