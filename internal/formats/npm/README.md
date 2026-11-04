@@ -50,7 +50,8 @@ username/password login.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `unpublish_window` | `72h` | how long after publishing a principal with `repo:<name>:delete` may unpublish; `0s` = admins only. `repo:<name>:admin` may always unpublish. Removing one version while others remain also rewrites the package's dist-tags, which needs `repo:<name>:write`. |
+| `unpublish_window` | `72h` | how long after publishing a principal with `repo:<name>:delete` may unpublish; `0s` = admins only. `repo:<name>:admin` may always unpublish. Unpublishing rewrites the package state (dist-tags, tombstones), which needs `repo:<name>:write`. |
+| `reuse_unpublished_versions` | `false` | By default an unpublished version leaves a tombstone in the package state and the version number cannot be published again (403, as on the public registry). `true` allows reuse. |
 | `login_token_ttl` | `720h` | lifetime of tokens issued by `npm login` |
 
 ## Storage layout
@@ -84,3 +85,13 @@ assets are served on the tarball route.
   server (skipped when a binary is missing or with `-short`).
 - `test/e2e/npm_test.go` (build tag `e2e`) — the same flows against a running
   Hangar with a registry.npmjs.org proxy, including yarn berry when installed.
+
+## Concurrency and caching
+
+- Package state changes (publish, dist-tags, deprecate, unpublish) take a
+  per-package lock from `Deps.Locks`: a PostgreSQL advisory lock in production,
+  so two nodes of a cluster cannot lose each other's dist-tag updates.
+- Version manifests and package state documents are cached in memory by blob
+  digest (64 MiB LRU). Blobs are immutable, so the cache needs no invalidation;
+  a packument read costs two queries (versions and manifest listing) plus the
+  state lookup, and no blob reads once warm.

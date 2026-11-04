@@ -4,10 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -23,18 +21,6 @@ const timeFormat = "2006-01-02T15:04:05.000Z"
 
 func wantsAbbreviated(r *http.Request) bool {
 	return strings.Contains(r.Header.Get("Accept"), mediaAbbreviated) && r.URL.Query().Get("write") != "true"
-}
-
-func readBlobJSON(ctx context.Context, bs core.BlobStore, d core.Digest, v any) error {
-	rc, err := bs.Get(ctx, d)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = rc.Close() }()
-	if err := json.NewDecoder(io.LimitReader(rc, maxDocumentSize)).Decode(v); err != nil {
-		return fmt.Errorf("decode stored document %s: %w", d, err)
-	}
-	return nil
 }
 
 // listVersions returns every component (version) of a package in repo.
@@ -124,6 +110,10 @@ func (h *handler) groupDoc(ctx context.Context, group *core.Repository, name pkg
 type pkgState struct {
 	DistTags map[string]string `json:"dist-tags"`
 	Time     map[string]string `json:"time"`
+	// Unpublished holds tombstones: versions that were unpublished and may
+	// not be published again (version -> unpublish time). The state document
+	// outlives the package's last version to keep them.
+	Unpublished map[string]string `json:"unpublished,omitempty"`
 }
 
 func (h *handler) loadState(ctx context.Context, repo *core.Repository, bs core.BlobStore, name pkgName) (*pkgState, error) {
@@ -135,7 +125,7 @@ func (h *handler) loadState(ctx context.Context, repo *core.Repository, bs core.
 	if err != nil {
 		return nil, err
 	}
-	if err := readBlobJSON(ctx, bs, a.BlobDigest, st); err != nil {
+	if err := h.f.readDoc(ctx, bs, a.BlobDigest, st); err != nil {
 		return nil, err
 	}
 	if st.DistTags == nil {
@@ -153,10 +143,30 @@ func (h *handler) readManifest(ctx context.Context, repo *core.Repository, bs co
 		return nil, err
 	}
 	var m manifest
-	if err := readBlobJSON(ctx, bs, a.BlobDigest, &m); err != nil {
+	if err := h.f.readDoc(ctx, bs, a.BlobDigest, &m); err != nil {
 		return nil, err
 	}
 	return m, nil
+}
+
+// manifestAssets returns the stored version manifests of a package by path,
+// in one listing instead of one lookup per version.
+func (h *handler) manifestAssets(ctx context.Context, repo *core.Repository, name pkgName) (map[string]*core.Asset, error) {
+	out := map[string]*core.Asset{}
+	q := core.AssetQuery{RepositoryID: repo.ID, PathPrefix: name.Full + "/-/meta/", Limit: core.MaxPageSize}
+	for {
+		page, err := h.deps.Components.ListAssets(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		for _, a := range page.Items {
+			out[a.Path] = a
+		}
+		if page.NextCursor == "" {
+			return out, nil
+		}
+		q.Cursor = page.NextCursor
+	}
 }
 
 // hostedDoc renders a hosted repository's packument from its components,
@@ -177,6 +187,10 @@ func (h *handler) hostedDoc(ctx context.Context, repo *core.Repository, name pkg
 	if err != nil {
 		return nil, err
 	}
+	metas, err := h.manifestAssets(ctx, repo, name)
+	if err != nil {
+		return nil, err
+	}
 	doc := newPackument(name.Full)
 	for k, v := range st.Time {
 		doc.Time[k] = v
@@ -185,7 +199,13 @@ func (h *handler) hostedDoc(ctx context.Context, repo *core.Repository, name pkg
 		if c.Quarantined {
 			continue
 		}
-		m, err := h.readManifest(ctx, repo, bs, name, c.Version)
+		var m manifest
+		a, ok := metas[manifestPath(name, c.Version)]
+		if !ok {
+			err = fmt.Errorf("manifest of %s@%s: %w", name.Full, c.Version, core.ErrNotFound)
+		} else {
+			err = h.f.readDoc(ctx, bs, a.BlobDigest, &m)
+		}
 		if err != nil {
 			h.deps.Logger.WarnContext(ctx, "npm version manifest unreadable", "repository", repo.Name,
 				"package", name.Full, "version", c.Version, "error", err)

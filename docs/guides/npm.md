@@ -37,6 +37,7 @@ curl -X POST https://hangar.example.com/api/v1/repositories \
 |---|---|---|
 | `unpublish_window` | `72h` | how long after publishing a user with `repo:<name>:delete` may unpublish; `0s` = only `repo:<name>:admin` |
 | `login_token_ttl` | `720h` | lifetime of tokens issued by `npm login` |
+| `reuse_unpublished_versions` | `false` | allow publishing a version number again after it was unpublished |
 
 Published versions are always immutable (`403`, as on the public registry), whatever
 the write policy. `write_policy: deny` refuses publishing.
@@ -135,9 +136,14 @@ npm unpublish @acme/greeting --force --registry https://hangar.example.com/repos
 ```
 
 - Needs `repo:<name>:delete` within `unpublish_window` of the publish, or
-  `repo:<name>:admin` at any time. Removing one version while others remain also
-  rewrites dist-tags, which needs `repo:<name>:write`.
-- An unpublished version number can be published again (no tombstones).
+  `repo:<name>:admin` at any time. Unpublishing also rewrites the package state
+  (dist-tags and tombstones), which needs `repo:<name>:write`.
+- An unpublished version leaves a tombstone: publishing the same version number
+  again is refused with 403, so a version always means the same bytes for every
+  lockfile. Publish a new version instead, or set
+  `config.format.reuse_unpublished_versions: true` on the repository to allow
+  reuse. Tombstones are written by the npm unpublish protocol; components
+  deleted through the REST API or cleanup do not leave one.
 
 ### `npm login`
 
