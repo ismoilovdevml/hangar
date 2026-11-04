@@ -62,7 +62,7 @@ func TestSearchComponents(t *testing.T) {
 		{"json", 0, []string{"newtonsoft.json@13.0.1", "newtonsoft.json@13.0.3"}, false}, // every version of a match
 		{"Newtonsoft.Js", 0, []string{"newtonsoft.json@13.0.1", "newtonsoft.json@13.0.3"}, false},
 		{"serial", 0, []string{"newtonsoft.json@13.0.1", "newtonsoft.json@13.0.3"}, false}, // attribute text
-		{"acme", 0, []string{"acme.core@1.0.0", "acme.web@2.0.0"}, false},                 // not the other repository
+		{"acme", 0, []string{"acme.core@1.0.0", "acme.web@2.0.0"}, false},                  // not the other repository
 		{"acme helpers", 0, []string{"acme.web@2.0.0"}, false},                             // all words must match
 		{"acme", 1, []string{"acme.core@1.0.0"}, true},
 		{"", 0, []string{"acme.core@1.0.0", "acme.web@2.0.0", "newtonsoft.json@13.0.1", "newtonsoft.json@13.0.3"}, false},
