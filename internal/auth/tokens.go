@@ -101,91 +101,276 @@ type TokenInput struct {
 	Owner     string           `json:"owner"`
 	Scopes    []core.Privilege `json:"scopes"`
 	ExpiresAt time.Time        `json:"expires_at"`
+	// AllowedCIDRs, when not empty, limits the token to requests from these
+	// client networks (addresses or CIDR prefixes).
+	AllowedCIDRs []string `json:"allowed_cidrs"`
+	// ReadOnly limits the token to reading, whatever its scopes say.
+	ReadOnly bool `json:"read_only"`
+}
+
+// AuditTokenRotate is recorded when a token is replaced by a new one.
+const AuditTokenRotate = "token.rotate"
+
+// tokenPlan is a validated, authorized TokenInput with its owner resolved.
+type tokenPlan struct {
+	in                            TokenInput
+	ownerID, ownerName, ownerKind string
 }
 
 // CreateToken creates a token for the caller, or for a service account
 // (needs system:tokens:write). The secret is returned once.
 func (s *Service) CreateToken(ctx context.Context, in TokenInput) (*TokenInfo, string, error) {
+	plan, err := s.planToken(ctx, in)
+	if err != nil {
+		return nil, "", err
+	}
+	t, secret, err := s.insertToken(ctx, s.pool, plan)
+	if err != nil {
+		return nil, "", err
+	}
+	s.record(ctx, core.AuditEvent{
+		Action: AuditTokenCreate, Target: "token:" + t.ID, Details: tokenAuditDetails(t),
+	})
+	return t, secret, nil
+}
+
+// planToken validates in and checks that the caller may create it.
+func (s *Service) planToken(ctx context.Context, in TokenInput) (*tokenPlan, error) {
 	p := core.PrincipalFrom(ctx)
 	if p.IsAnonymous() || !validUUID(p.ID) {
-		return nil, "", fmt.Errorf("create token: %w", core.ErrUnauthenticated)
+		return nil, fmt.Errorf("create token: %w", core.ErrUnauthenticated)
 	}
 	// Checked against the account, not the principal: a token or the CLI
 	// acting for a user who must change their password may not mint one.
 	if err := s.checkPasswordCurrent(ctx, p); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	now := s.now()
 	switch {
 	case in.Name == "" || utf8.RuneCountInString(in.Name) > 100:
-		return nil, "", fmt.Errorf("token name must be 1 to 100 characters: %w", core.ErrInvalid)
+		return nil, fmt.Errorf("token name must be 1 to 100 characters: %w", core.ErrInvalid)
 	case len(in.Scopes) == 0:
-		return nil, "", fmt.Errorf("token needs at least one scope: %w", core.ErrInvalid)
+		return nil, fmt.Errorf("token needs at least one scope: %w", core.ErrInvalid)
 	case len(in.Scopes) > maxPrivileges:
-		return nil, "", fmt.Errorf("token has more than %d scopes: %w", maxPrivileges, core.ErrInvalid)
+		return nil, fmt.Errorf("token has more than %d scopes: %w", maxPrivileges, core.ErrInvalid)
 	case in.ExpiresAt.IsZero():
-		return nil, "", fmt.Errorf("token expires_at is required: %w", core.ErrInvalid)
+		return nil, fmt.Errorf("token expires_at is required: %w", core.ErrInvalid)
 	case !in.ExpiresAt.After(now):
-		return nil, "", fmt.Errorf("token expires_at must be in the future: %w", core.ErrInvalid)
+		return nil, fmt.Errorf("token expires_at must be in the future: %w", core.ErrInvalid)
 	case in.ExpiresAt.After(now.Add(s.cfg.MaxTokenLifetime)):
-		return nil, "", fmt.Errorf("token expires_at must be within %s: %w", s.cfg.MaxTokenLifetime, core.ErrInvalid)
+		return nil, fmt.Errorf("token expires_at must be within %s: %w", s.cfg.MaxTokenLifetime, core.ErrInvalid)
 	}
 	if err := ValidatePrivileges(in.Scopes); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	in.Scopes = compactPrivileges(in.Scopes)
+	cidrs, err := normalizeCIDRs(in.AllowedCIDRs)
+	if err != nil {
+		return nil, err
+	}
+	in.AllowedCIDRs = cidrs
 	if p.Scopes != nil {
 		// A scoped token may only mint tokens within its own scopes.
 		for _, want := range in.Scopes {
 			if !slices.ContainsFunc(p.Scopes, func(have core.Privilege) bool { return covers(have, want) }) {
-				return nil, "", fmt.Errorf("scope %s exceeds the calling token's scopes: %w", want, core.ErrForbidden)
+				return nil, fmt.Errorf("scope %s exceeds the calling token's scopes: %w", want, core.ErrForbidden)
 			}
 		}
 	}
-	ownerID, ownerName, ownerKind := p.ID, p.Name, KindUser
+	if p.ReadOnly && !in.ReadOnly {
+		return nil, fmt.Errorf("a read-only token may only create read-only tokens: %w", core.ErrForbidden)
+	}
+	plan := &tokenPlan{in: in, ownerID: p.ID, ownerName: p.Name, ownerKind: KindUser}
 	if p.Kind == core.PrincipalServiceAccount {
-		ownerKind = KindServiceAccount
+		plan.ownerKind = KindServiceAccount
 	}
 	if in.Owner != "" && in.Owner != p.Name {
 		if err := s.require(ctx, AuditTokenCreate, core.ActionWrite, core.SystemResource(core.SystemTokens)); err != nil {
-			return nil, "", err
+			return nil, err
 		}
 		owner, err := s.userByName(ctx, s.pool, in.Owner)
 		if err != nil {
 			if errors.Is(err, core.ErrNotFound) {
-				return nil, "", fmt.Errorf("owner %q: no such service account: %w", in.Owner, core.ErrInvalid)
+				return nil, fmt.Errorf("owner %q: no such service account: %w", in.Owner, core.ErrInvalid)
 			}
-			return nil, "", err
+			return nil, err
 		}
 		if owner.Kind != KindServiceAccount {
-			return nil, "", fmt.Errorf("owner %q must be a service account: %w", in.Owner, core.ErrInvalid)
+			return nil, fmt.Errorf("owner %q must be a service account: %w", in.Owner, core.ErrInvalid)
 		}
 		if owner.Disabled {
-			return nil, "", fmt.Errorf("service account %q is disabled: %w", in.Owner, core.ErrInvalid)
+			return nil, fmt.Errorf("service account %q is disabled: %w", in.Owner, core.ErrInvalid)
 		}
-		ownerID, ownerName, ownerKind = owner.ID, owner.Username, owner.Kind
+		plan.ownerID, plan.ownerName, plan.ownerKind = owner.ID, owner.Username, owner.Kind
 	}
+	return plan, nil
+}
+
+// insertToken stores a planned token with a new secret.
+func (s *Service) insertToken(ctx context.Context, q querier, plan *tokenPlan) (*TokenInfo, string, error) {
 	secret, err := newTokenSecret()
 	if err != nil {
 		return nil, "", fmt.Errorf("create token: %w", err)
 	}
+	in := plan.in
 	t := &TokenInfo{Token: core.Token{
-		Name: in.Name, Owner: ownerName, Prefix: secret[:tokenDisplayLen],
+		Name: in.Name, Owner: plan.ownerName, Prefix: secret[:tokenDisplayLen],
 		Scopes: slices.Clone(in.Scopes), ExpiresAt: in.ExpiresAt.UTC().Truncate(time.Microsecond),
-	}, OwnerKind: ownerKind}
-	err = s.pool.QueryRow(ctx, `
-		INSERT INTO tokens (user_id, name, kind, hash, prefix, scopes, expires_at)
-		VALUES ($1, $2, 'personal', $3, $4, $5, $6) RETURNING id::text, created_at`,
-		ownerID, t.Name, hashSecret(secret), t.Prefix, privilegeStrings(t.Scopes), t.ExpiresAt).Scan(&t.ID, &t.CreatedAt)
+	}, OwnerKind: plan.ownerKind, AllowedCIDRs: nonNilStrings(in.AllowedCIDRs), ReadOnly: in.ReadOnly}
+	err = q.QueryRow(ctx, `
+		INSERT INTO tokens (user_id, name, kind, hash, prefix, scopes, expires_at, allowed_cidrs, read_only)
+		VALUES ($1, $2, 'personal', $3, $4, $5, $6, $7::cidr[], $8) RETURNING id::text, created_at`,
+		plan.ownerID, t.Name, hashSecret(secret), t.Prefix, privilegeStrings(t.Scopes), t.ExpiresAt,
+		in.AllowedCIDRs, in.ReadOnly).Scan(&t.ID, &t.CreatedAt)
 	if err != nil {
 		return nil, "", dbErr(err, "create token")
 	}
-	s.record(ctx, core.AuditEvent{
-		Action: AuditTokenCreate, Target: "token:" + t.ID,
-		Details: map[string]any{"name": t.Name, "owner": ownerName, "owner_kind": ownerKind, "scopes": privilegeStrings(t.Scopes), "expires_at": t.ExpiresAt},
-	})
 	return t, secret, nil
+}
+
+func tokenAuditDetails(t *TokenInfo) map[string]any {
+	d := map[string]any{
+		"name": t.Name, "owner": t.Owner, "owner_kind": t.OwnerKind,
+		"scopes": privilegeStrings(t.Scopes), "expires_at": t.ExpiresAt,
+	}
+	if len(t.AllowedCIDRs) > 0 {
+		d["allowed_cidrs"] = t.AllowedCIDRs
+	}
+	if t.ReadOnly {
+		d["read_only"] = true
+	}
+	return d
+}
+
+func nonNilStrings(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}
+
+// RotateInput replaces a token by a new one.
+type RotateInput struct {
+	// RevokeOldAfter, when set, ends the old token: at once for 0, or that
+	// long from now (never later than it would have expired anyway). When
+	// nil the old token keeps working until it is revoked or expires.
+	RevokeOldAfter *time.Duration
+}
+
+// RotateResult is a rotated token: the replacement with its secret, and what
+// became of the old one.
+type RotateResult struct {
+	Token  *TokenInfo
+	Secret string
+	// Old is the replaced token as it is now: ExpiresAt moved earlier when
+	// it ends later, RevokedNow when it was revoked at once.
+	Old        *TokenInfo
+	RevokedNow bool
+}
+
+// RotateToken creates a replacement for a token with the same name, owner,
+// scopes, restrictions and lifetime (capped at the server maximum), and
+// optionally ends the old one. The caller needs what CreateToken needs for
+// the owner (another principal's token: system:tokens:write, and only
+// service accounts), and system:tokens:delete to end someone else's token.
+func (s *Service) RotateToken(ctx context.Context, id string, in RotateInput) (*RotateResult, error) {
+	p := core.PrincipalFrom(ctx)
+	if p.IsAnonymous() {
+		return nil, fmt.Errorf("rotate token: %w", core.ErrUnauthenticated)
+	}
+	notFound := fmt.Errorf("token %q: %w", id, core.ErrNotFound)
+	if !validUUID(id) {
+		return nil, notFound
+	}
+	if in.RevokeOldAfter != nil && *in.RevokeOldAfter < 0 {
+		return nil, fmt.Errorf("revoke_old_after must not be negative: %w", core.ErrInvalid)
+	}
+	old, err := s.tokenInfo(ctx, s.pool, id)
+	if err != nil {
+		return nil, err
+	}
+	if old.Owner != p.Name {
+		// Hide other people's tokens from callers who may not manage them.
+		if s.authz.Authorize(ctx, p, core.ActionWrite, core.SystemResource(core.SystemTokens)) != nil {
+			s.record(ctx, core.AuditEvent{Action: AuditTokenRotate, Target: "token:" + id, Outcome: core.OutcomeDenied})
+			return nil, notFound
+		}
+		if old.OwnerKind != KindServiceAccount {
+			return nil, fmt.Errorf("only %s can rotate their own token: %w", old.Owner, core.ErrForbidden)
+		}
+		if in.RevokeOldAfter != nil {
+			if err := s.require(ctx, AuditTokenRotate, core.ActionDelete, core.SystemResource(core.SystemTokens)); err != nil {
+				return nil, err
+			}
+		}
+	}
+	now := s.now()
+	lifetime := min(max(old.ExpiresAt.Sub(old.CreatedAt), time.Hour), s.cfg.MaxTokenLifetime)
+	plan, err := s.planToken(ctx, TokenInput{
+		Name: old.Name, Owner: old.Owner, Scopes: old.Scopes, ExpiresAt: now.Add(lifetime),
+		AllowedCIDRs: old.AllowedCIDRs, ReadOnly: old.ReadOnly,
+	})
+	if err != nil {
+		return nil, err
+	}
+	res := &RotateResult{}
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		if res.Token, res.Secret, err = s.insertToken(ctx, tx, plan); err != nil {
+			return err
+		}
+		if in.RevokeOldAfter != nil {
+			at := now.Add(*in.RevokeOldAfter).UTC().Truncate(time.Microsecond)
+			res.RevokedNow = *in.RevokeOldAfter == 0
+			if res.RevokedNow {
+				_, err = tx.Exec(ctx, `UPDATE tokens SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL`, id, now)
+			} else {
+				_, err = tx.Exec(ctx, `UPDATE tokens SET expires_at = least(expires_at, $2) WHERE id = $1 AND revoked_at IS NULL`, id, at)
+			}
+			if err != nil {
+				return dbErr(err, "end old token")
+			}
+		}
+		res.Old, err = s.tokenInfo(ctx, tx, id)
+		if errors.Is(err, core.ErrNotFound) && res.RevokedNow {
+			old.ExpiresAt, err = now.UTC().Truncate(time.Microsecond), nil
+			res.Old = old
+		}
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	details := tokenAuditDetails(res.Token)
+	details["replaces"] = id
+	if in.RevokeOldAfter != nil {
+		details["old_ends_at"] = res.Old.ExpiresAt
+	}
+	s.record(ctx, core.AuditEvent{Action: AuditTokenRotate, Target: "token:" + res.Token.ID, Details: details})
+	if res.RevokedNow {
+		s.record(ctx, core.AuditEvent{
+			Action: AuditTokenRevoke, Target: "token:" + id,
+			Details: map[string]any{"name": old.Name, "owner": old.Owner, "reason": "rotated"},
+		})
+	}
+	return res, nil
+}
+
+// tokenInfo loads one live (not revoked) personal or service-account token.
+func (s *Service) tokenInfo(ctx context.Context, q querier, id string) (*TokenInfo, error) {
+	rows, err := q.Query(ctx, `
+		SELECT `+tokenInfoCols+`
+		FROM tokens t JOIN users u ON u.id = t.user_id
+		WHERE t.id = $1 AND t.kind = 'personal' AND t.revoked_at IS NULL`, id)
+	if err != nil {
+		return nil, dbErr(err, "token")
+	}
+	t, err := pgx.CollectExactlyOneRow(rows, scanTokenInfo)
+	if err != nil {
+		return nil, dbErr(err, fmt.Sprintf("token %q", id))
+	}
+	return t, nil
 }
 
 // TokenInfo is a personal access or service-account token as listed: the
@@ -196,6 +381,11 @@ type TokenInfo struct {
 	OwnerKind string `json:"owner_kind"`
 	// LastUsedIP is the client address of the latest use, if known.
 	LastUsedIP *string `json:"last_used_ip"`
+	// AllowedCIDRs are the client networks the token works from; empty
+	// means any.
+	AllowedCIDRs []string `json:"allowed_cidrs"`
+	// ReadOnly tokens can only read, whatever their scopes say.
+	ReadOnly bool `json:"read_only"`
 }
 
 // Token states for TokenQuery.Status.
@@ -240,13 +430,13 @@ func (q TokenQuery) validate() error {
 // tokenInfoCols selects a TokenInfo from "tokens t JOIN users u"; scan with scanTokenInfo.
 const tokenInfoCols = //nolint:gosec // G101: a column list, not a credential
 `t.id::text, t.name, u.username, u.kind, t.prefix, coalesce(t.scopes, '{}'), t.expires_at,
-	t.created_at, t.last_used_at, host(t.last_used_ip)`
+	t.created_at, t.last_used_at, host(t.last_used_ip), coalesce(t.allowed_cidrs::text[], '{}'), t.read_only`
 
 func scanTokenInfo(r pgx.CollectableRow) (*TokenInfo, error) {
 	t := &TokenInfo{}
 	var scopes []string
 	if err := r.Scan(&t.ID, &t.Name, &t.Owner, &t.OwnerKind, &t.Prefix, &scopes, &t.ExpiresAt,
-		&t.CreatedAt, &t.LastUsedAt, &t.LastUsedIP); err != nil {
+		&t.CreatedAt, &t.LastUsedAt, &t.LastUsedIP, &t.AllowedCIDRs, &t.ReadOnly); err != nil {
 		return nil, err
 	}
 	t.Scopes = parsePrivileges(scopes)
@@ -429,4 +619,40 @@ func truncate(s string, n int) string {
 		n--
 	}
 	return s[:n]
+}
+
+// CurrentToken describes the token a request authenticated with, for
+// GET /auth/session: what the token is and how far it reaches.
+type CurrentToken struct {
+	ID string `json:"id"`
+	// Kind is "personal" (personal access and service-account tokens) or
+	// "session" (short-lived tokens minted for registry logins).
+	Kind   string `json:"kind"`
+	Name   string `json:"name"`
+	Prefix string `json:"prefix"`
+	// Scopes are the token's effective scopes (narrowed to read for
+	// read-only tokens); nil means the owner's full rights.
+	Scopes       []core.Privilege `json:"scopes"`
+	ExpiresAt    time.Time        `json:"expires_at"`
+	ReadOnly     bool             `json:"read_only"`
+	AllowedCIDRs []string         `json:"allowed_cidrs"`
+}
+
+// CurrentToken returns the token the context principal authenticated with,
+// or nil when it did not use one.
+func (s *Service) CurrentToken(ctx context.Context) (*CurrentToken, error) {
+	p := core.PrincipalFrom(ctx)
+	if p.IsAnonymous() || p.TokenID == "" {
+		return nil, nil
+	}
+	t := &CurrentToken{ID: p.TokenID, Scopes: p.Scopes, ReadOnly: p.ReadOnly}
+	err := s.pool.QueryRow(ctx, `
+		SELECT t.kind, t.name, t.prefix, least(t.expires_at, coalesce(pt.expires_at, t.expires_at)),
+			coalesce(coalesce(t.allowed_cidrs, pt.allowed_cidrs)::text[], '{}')
+		FROM tokens t LEFT JOIN tokens pt ON pt.id = t.parent_id
+		WHERE t.id = $1`, p.TokenID).Scan(&t.Kind, &t.Name, &t.Prefix, &t.ExpiresAt, &t.AllowedCIDRs)
+	if err != nil {
+		return nil, dbErr(err, "current token")
+	}
+	return t, nil
 }

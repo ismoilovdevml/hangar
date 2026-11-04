@@ -272,28 +272,39 @@ func (s *Service) authenticateToken(ctx context.Context, secret string) (*core.P
 	}
 	now := s.now()
 	var (
-		tokenID string
-		scopes  []string
-		claims  []byte
+		tokenID  string
+		scopes   []string
+		claims   []byte
+		readOnly bool
+		cidrs    []string
 	)
+	// Session tokens minted from a restricted token keep its restrictions.
 	u, err := scanUser(s.pool.QueryRow(ctx, `
-		SELECT `+userCols+`, t.id::text, t.scopes, t.claims
+		SELECT `+userCols+`, t.id::text, t.scopes, t.claims,
+			t.read_only OR coalesce(pt.read_only, false), coalesce(t.allowed_cidrs, pt.allowed_cidrs)::text[]
 		FROM tokens t
 		JOIN users u ON u.id = t.user_id
 		LEFT JOIN tokens pt ON pt.id = t.parent_id
 		WHERE t.hash = $1 AND t.revoked_at IS NULL AND t.expires_at > $2 AND NOT u.disabled
 		  AND (t.parent_id IS NULL OR (pt.revoked_at IS NULL AND pt.expires_at > $2))`,
-		hashSecret(secret), now), &tokenID, &scopes, &claims)
+		hashSecret(secret), now), &tokenID, &scopes, &claims, &readOnly, &cidrs)
 	if err != nil {
 		if err = dbErr(err, "token"); errors.Is(err, core.ErrNotFound) {
 			return fail("unknown_expired_or_revoked")
 		}
 		return nil, err
 	}
+	if cidrs != nil && !addressAllowed(cidrs, core.RequestInfoFrom(ctx).RemoteIP) {
+		return fail("address_not_allowed")
+	}
 	p := u.principal(SourceToken)
 	p.TokenID = tokenID
 	if scopes != nil {
 		p.Scopes = parsePrivileges(scopes)
+	}
+	if readOnly {
+		p.ReadOnly = true
+		p.Scopes = readOnlyScopes(p.Scopes)
 	}
 	if len(claims) > 0 && string(claims) != "{}" {
 		if err := json.Unmarshal(claims, &p.Claims); err != nil {

@@ -89,6 +89,7 @@ func Register(r chi.Router, svc *auth.Service, opts Options) {
 	r.Post("/auth/login", h.login)
 	r.Post("/auth/logout", h.logout)
 	r.Get("/auth/session", h.session)
+	r.Get("/me", h.session)
 	r.Get("/auth/oidc/start", h.oidcStart)
 	r.Get("/auth/oidc/callback", h.oidcCallback)
 	r.Get("/identity-providers", h.identityProviders)
@@ -96,6 +97,7 @@ func Register(r chi.Router, svc *auth.Service, opts Options) {
 	r.Get("/tokens", h.listTokens)
 	r.Post("/tokens", h.createToken)
 	r.Delete("/tokens/{id}", h.revokeToken)
+	r.Post("/tokens/{id}/rotate", h.rotateToken)
 
 	r.Get("/users", h.listUsers)
 	r.Post("/users", h.createUser)
@@ -229,6 +231,7 @@ const (
 // password may call, relative to /api/v1.
 var passwordChangeRoutes = map[string]routeKind{
 	"GET /auth/session":       routeOwn,
+	"GET /me":                 routeOwn,
 	"PUT /me/password":        routeOwn,
 	"POST /auth/logout":       routeOwn,
 	"GET /auth/providers":     routePublic,
@@ -237,6 +240,9 @@ var passwordChangeRoutes = map[string]routeKind{
 	"GET /auth/oidc/callback": routePublic,
 	"GET /system/status":      routePublic,
 	"GET /system/version":     routePublic,
+	"GET /openapi.yaml":       routePublic,
+	"GET /openapi.json":       routePublic,
+	"GET /agent-guide.md":     routePublic,
 }
 
 func passwordChangeRoute(r *http.Request) routeKind {

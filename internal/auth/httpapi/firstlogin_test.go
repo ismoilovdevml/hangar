@@ -75,6 +75,11 @@ func TestFirstSignInPasswordChange(t *testing.T) {
 	if body["password_change_required"] != true {
 		t.Fatalf("session = %v", body)
 	}
+	resp, body = c.do(http.MethodGet, "/me", nil)
+	expect(t, resp, body, http.StatusOK, "")
+	if body["password_change_required"] != true {
+		t.Fatalf("GET /me = %v", body)
+	}
 
 	// Everything else is refused with a dedicated code.
 	id := body["user"].(map[string]any)["id"].(string)

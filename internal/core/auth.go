@@ -36,6 +36,9 @@ type Principal struct {
 	Scopes []Privilege `json:"scopes,omitempty"`
 	// TokenID is set when the request authenticated with a token.
 	TokenID string `json:"token_id,omitempty"`
+	// ReadOnly is set for read-only tokens: Scopes are already narrowed to
+	// read, and the REST API refuses every request that is not GET or HEAD.
+	ReadOnly bool `json:"read_only,omitempty"`
 	// Claims are the TokenRequest.Extra values of the session token used, if any.
 	Claims map[string]any `json:"claims,omitempty"`
 	// PasswordChangeRequired marks a local user who signed in with a
