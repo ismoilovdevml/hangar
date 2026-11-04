@@ -6,6 +6,7 @@
 //	hangar-healthcheck                     # GET http://127.0.0.1:<port>/readyz
 //	hangar-healthcheck -path /healthz      # liveness only
 //	hangar-healthcheck -url http://127.0.0.1:9000/readyz
+//	hangar-healthcheck -url http://nats:8222/healthz -wait 5m   # wait for a dependency
 //
 // The port comes from HANGAR_SERVER_ADDR (default ":8080"), so the probe
 // follows the listen address the server itself uses.
@@ -34,6 +35,8 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 	path := fs.String("path", "/readyz", "endpoint to probe: /readyz (dependencies) or /healthz (process)")
 	target := fs.String("url", "", "full URL to probe; overrides -path and HANGAR_SERVER_ADDR")
 	timeout := fs.Duration("timeout", 4*time.Second, "request timeout")
+	wait := fs.Duration("wait", 0, "keep retrying (every -interval) until success or this long has passed; 0 probes once")
+	interval := fs.Duration("interval", 2*time.Second, "pause between attempts with -wait")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -45,11 +48,19 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 			return 2
 		}
 	}
-	if err := probe(u, *timeout); err != nil {
-		_, _ = fmt.Fprintln(stderr, "hangar-healthcheck:", err)
-		return 1
+	deadline := time.Now().Add(*wait)
+	for {
+		err := probe(u, *timeout)
+		if err == nil {
+			return 0
+		}
+		if *wait <= 0 || time.Now().Add(*interval).After(deadline) {
+			_, _ = fmt.Fprintln(stderr, "hangar-healthcheck:", err)
+			return 1
+		}
+		_, _ = fmt.Fprintf(stderr, "hangar-healthcheck: waiting for %s: %v\n", u, err)
+		time.Sleep(*interval)
 	}
-	return 0
 }
 
 // localURL turns a listen address (":8080", "0.0.0.0:8080", "[::]:8080",

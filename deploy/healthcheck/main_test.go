@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestLocalURL(t *testing.T) {
@@ -67,5 +69,35 @@ func TestRun(t *testing.T) {
 	}
 	if code := run([]string{"-url", "http://127.0.0.1:1/readyz", "-timeout", "500ms"}, env, &stderr); code != 1 {
 		t.Fatalf("unreachable: exit %d, want 1", code)
+	}
+}
+
+func TestRunWait(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if calls.Add(1) < 3 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	none := func(string) string { return "" }
+
+	var stderr bytes.Buffer
+	if code := run([]string{"-url", srv.URL, "-wait", "5s", "-interval", "10ms"}, none, &stderr); code != 0 {
+		t.Fatalf("-wait: exit %d, stderr %q", code, stderr.String())
+	}
+	if got := calls.Load(); got != 3 {
+		t.Fatalf("probed %d times, want 3", got)
+	}
+
+	calls.Store(-1000)
+	start := time.Now()
+	if code := run([]string{"-url", srv.URL, "-wait", "100ms", "-interval", "20ms"}, none, &stderr); code != 1 {
+		t.Fatalf("-wait expiry: exit %d, want 1", code)
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Fatal("-wait did not stop at its deadline")
 	}
 }
