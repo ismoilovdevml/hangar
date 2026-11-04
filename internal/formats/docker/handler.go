@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -25,6 +24,8 @@ type handler struct {
 	unknown nameCache
 	// quarantine caches which digests of an image are blocked (quarantine.go).
 	quarantine quarantineCache
+	// conns routes connector hosts and ports (connectors.go).
+	conns *connectors
 }
 
 // authResult is who sent a request and, for registry tokens, what the token grants.
@@ -46,7 +47,13 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if rest == "" {
 		rest = "/"
 	}
-	rt := parseRoute(rest)
+	n, err := h.namingFor(r)
+	if err != nil {
+		h.internal(w, r, "connector lookup", err)
+		return
+	}
+	r = r.WithContext(withNaming(r.Context(), n))
+	rt := parseRoute(rest, n)
 	switch rt.kind {
 	case routePing:
 		h.servePing(w, r)
@@ -59,7 +66,11 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	case routeInvalid:
 		if rt.name != "" {
-			writeError(w, http.StatusBadRequest, codeNameInvalid, "invalid repository name "+rt.name+": want <hangar repository>/<image>")
+			want := "<hangar repository>/<image>"
+			if n.repo != "" {
+				want = "<image>"
+			}
+			writeError(w, http.StatusBadRequest, codeNameInvalid, "invalid repository name "+rt.name+": want "+want)
 			return
 		}
 		writeError(w, http.StatusNotFound, codeUnsupported, "unknown endpoint")
@@ -210,9 +221,12 @@ func (h *handler) authenticate(r *http.Request) (authResult, error) {
 	return authResult{p: p}, nil
 }
 
-// realm is the token endpoint advertised in challenges.
+// realm is the token endpoint advertised in challenges (per entry point).
 func (h *handler) realm(r *http.Request) string {
-	return h.baseURL(r) + "/v2/token"
+	if n, ok := namingFrom(r.Context()); ok {
+		return n.realm
+	}
+	return h.defaultNaming(r).realm
 }
 
 func (h *handler) baseURL(r *http.Request) string {
@@ -233,12 +247,13 @@ func (h *handler) baseURL(r *http.Request) string {
 	return scheme + "://" + host
 }
 
-// service is the token audience: the registry host name.
+// service is the token audience of the request entry point: the registry
+// host name, or a connector's own service.
 func (h *handler) service(r *http.Request) string {
-	if u, err := url.Parse(h.baseURL(r)); err == nil && u.Host != "" {
-		return u.Host
+	if n, ok := namingFrom(r.Context()); ok {
+		return n.service
 	}
-	return "hangar"
+	return h.defaultNaming(r).service
 }
 
 // unauthorized answers 401 with Bearer (and Basic) challenges.

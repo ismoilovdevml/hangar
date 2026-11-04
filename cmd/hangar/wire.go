@@ -61,6 +61,9 @@ type app struct {
 	health  *health.Checker
 	auth    *auth.Service
 	closers []func()
+	// watchConnectorPorts reports the dedicated ports of docker repository
+	// connectors (nil if the docker format is not built in).
+	watchConnectorPorts func(context.Context, func(map[int]string))
 }
 
 func (a *app) onClose(f func()) { a.closers = append(a.closers, f) }
@@ -169,6 +172,11 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	reg, err := builtin.RegistryWith(builtin.Options{Docker: docker.Options{TokenKey: []byte(cfg.Docker.TokenKey)}})
 	if err != nil {
 		return nil, err
+	}
+	if f, ok := reg.Get(docker.Name); ok {
+		if df, ok := f.(*docker.Format); ok {
+			a.watchConnectorPorts = df.WatchConnectorPorts
+		}
 	}
 
 	// Repositories and components. The authorizer needs the repositories for

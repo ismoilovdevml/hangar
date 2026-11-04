@@ -162,6 +162,7 @@ func (h *handler) serveCatalog(w http.ResponseWriter, r *http.Request) {
 		p = a.claims.original()
 	}
 	ctx := core.WithPrincipal(r.Context(), p)
+	n, _ := namingFrom(ctx)
 	var names []string
 	q := core.RepositoryQuery{Format: Name, Limit: listPage}
 	for {
@@ -171,7 +172,7 @@ func (h *handler) serveCatalog(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, repo := range page.Items {
-			if repo.Format != Name || !repo.Online || h.deps.AuthZ.Authorize(ctx, p, core.ActionRead, core.RepoResource(repo.Name)) != nil {
+			if repo.Format != Name || !repo.Online || (n.repo != "" && repo.Name != n.repo) || h.deps.AuthZ.Authorize(ctx, p, core.ActionRead, core.RepoResource(repo.Name)) != nil {
 				continue
 			}
 			members, err := h.contentRepos(ctx, repo)
@@ -185,7 +186,9 @@ func (h *handler) serveCatalog(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				for _, img := range imgs {
-					names = append(names, repo.Name+"/"+img)
+					if pub, ok := n.public(repo.Name, img); ok {
+						names = append(names, pub)
+					}
 				}
 			}
 		}

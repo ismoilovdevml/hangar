@@ -18,8 +18,78 @@ docker push hangar.example.com/docker-hosted/team/app:1.0
 
 `/v2/<repository>/<image path>/...`. An image path is required
 (`hangar.example.com/docker-hosted:1.0` is rejected with `NAME_INVALID`).
-Dedicated connector host names / ports (`RepoConfig.Connector`) are not routed
-yet. `/repository/<repo>/...` answers 404 with a hint to use `/v2/`.
+`/repository/<repo>/...` answers 404 with a hint to use `/v2/`.
+
+## Connectors
+
+A connector gives one docker repository an entry point of its own, where
+image names carry no repository prefix (`cr.example.com/team/app:1.0`).
+Configure it on the repository (`config.connector`):
+
+| Setting | Effect |
+|---|---|
+| `host: cr.example.com` | Requests whose effective `Host` is that name (case-insensitive, any port; `X-Forwarded-Host` only from `server.trusted_proxies`) are served by this repository. |
+| `http_port: 5001` | Hangar opens a plain-HTTP listener on that port (same interface as `server.addr`) serving only this repository's `/v2/` API and `/healthz`; the UI and REST API are not exposed there. Listeners open and close as repositories change; a port in use is logged and retried. |
+
+- A host or port can belong to one repository only, and the host cannot be
+  the `server.base_url` host (validated on create/update).
+- Registry tokens follow the entry point: the `WWW-Authenticate` challenge
+  of a host connector is
+  `Bearer realm="<base_url scheme>://cr.example.com/v2/token",service="cr.example.com"`,
+  so clients that can only reach `cr.example.com` get their tokens there.
+  A port connector advertises the main realm (`<base_url>/v2/token`) with
+  `service="<base_url host>:<port>"`; the token endpoint recognises the
+  connector by that service. Scopes name images without the prefix
+  (`repository:team/app:pull,push`), and a token is accepted only on the
+  entry point it was issued for.
+- `docker login cr.example.com`, `helm registry login cr.example.com` and
+  CI credentials work unchanged; authorization is that of the repository
+  behind the connector. The catalog on a connector lists only its images.
+
+Reverse proxy for a host connector (TLS terminated in front; Hangar must
+trust the proxy in `server.trusted_proxies`, and the proxy must pass the
+original `Host` or `X-Forwarded-Host`):
+
+```nginx
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name cr.example.com;
+    ssl_certificate     /etc/ssl/cr.example.com.crt;
+    ssl_certificate_key /etc/ssl/cr.example.com.key;
+
+    client_max_body_size 0;          # layers can be many GiB
+    proxy_request_buffering off;     # stream uploads
+    proxy_buffering off;             # stream downloads
+    proxy_read_timeout 900s;
+    proxy_send_timeout 900s;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-Host  $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+```caddyfile
+cr.example.com {
+    reverse_proxy 127.0.0.1:8080 {
+        flush_interval -1
+        transport http {
+            read_timeout 15m
+            write_timeout 15m
+        }
+    }
+}
+```
+
+Caddy forwards the original `Host` and sets `X-Forwarded-Host`/`-Proto`
+itself. For a port connector, point the proxy (or a load balancer
+listener) at `127.0.0.1:<http_port>` instead; the `Host` header is then
+irrelevant.
 
 ## Authentication
 

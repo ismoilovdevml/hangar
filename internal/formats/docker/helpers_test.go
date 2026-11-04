@@ -24,6 +24,8 @@ type testReg struct {
 	env *coretest.Env
 	srv *httptest.Server
 	now time.Time
+	// format is the mounted format instance (nil for remote fakes).
+	format *docker.Format
 }
 
 // newTestReg serves docker.New over HTTP with coretest fakes. Repositories:
@@ -51,10 +53,11 @@ func newTestRegWith(t *testing.T, adjust func(*core.Deps)) *testReg {
 	if adjust != nil {
 		adjust(&deps)
 	}
-	h = formats.NewHandler(deps, docker.NewWithOptions(docker.Options{
+	tr.format = docker.NewWithOptions(docker.Options{
 		TokenKey: []byte(testKey),
 		Now:      func() time.Time { return tr.now },
-	}))
+	})
+	h = formats.NewHandler(deps, tr.format)
 	return tr
 }
 

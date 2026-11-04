@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -50,6 +51,9 @@ type Options struct {
 // Format implements core.Format for Docker / OCI.
 type Format struct {
 	opts Options
+
+	mu sync.Mutex
+	h  *handler // set by MountRoot
 }
 
 var (
@@ -88,6 +92,9 @@ func (f *Format) Mount(r chi.Router, _ core.Deps) {
 // hangar.example.com/docker-hosted/team/app:1.0.
 func (f *Format) MountRoot(r chi.Router, deps core.Deps) {
 	h := f.newHandler(deps)
+	f.mu.Lock()
+	f.h = h
+	f.mu.Unlock()
 	r.Handle("/v2", h)
 	r.Handle("/v2/*", h)
 }
@@ -119,11 +126,15 @@ func (f *Format) newHandler(deps core.Deps) *handler {
 		o.Now = time.Now
 	}
 	h := &handler{deps: deps, log: log, sign: signer{key: key}, tokenTTL: o.TokenTTL, uploadTTL: o.UploadTTL, now: o.Now}
+	h.conns = newConnectors(deps.Repos, o.Now)
 	if deps.Events != nil {
 		// A changed remote URL or credentials may serve names the old one did not.
 		_, err := deps.Events.Subscribe(context.Background(), "repository.*", func(_ context.Context, e core.Event) {
 			if e.Repository != "" {
 				h.unknown.forget(e.Repository)
+			}
+			{
+				h.conns.invalidate()
 			}
 		})
 		if err != nil {
@@ -156,7 +167,7 @@ func (f *Format) Validate(repo *core.Repository) error {
 			return fmt.Errorf("repository %q: write member %q is not a member: %w", repo.Name, repo.Config.Group.WriteMember, core.ErrInvalid)
 		}
 	}
-	return nil
+	return f.validateConnector(repo)
 }
 
 // Coordinates implements core.Format: image:tag, image@digest for manifests

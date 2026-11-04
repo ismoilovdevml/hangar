@@ -155,7 +155,8 @@ func (h *handler) tryMount(w http.ResponseWriter, r *http.Request, rq *request, 
 	if !ok {
 		return false
 	}
-	fromRepoName, fromImage, ok := splitName(from)
+	n, _ := namingFrom(ctx)
+	fromRepoName, fromImage, ok := n.split(from)
 	if !ok {
 		return false
 	}
