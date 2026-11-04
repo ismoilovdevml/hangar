@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+- **Web UI · Cleanup policies**: policy list and an editor written as sentences
+  (age, last download, pre-release only, keep newest N, keep tags matching
+  globs), repository chips, a schedule builder that shows the cron in plain
+  words with the next run, a mandatory preview (count, bytes, sample, full CSV
+  export) before saving, Run now and Delete with confirmation, and run history.
+- **Web UI · Scheduled tasks**: "Running now" banner with live progress (SSE
+  `task.progress`), time-left estimate and Stop; task table with schedule, last
+  and next run, type/status/name filters in the URL, and Run now (confirmation
+  for tasks that delete data). Task page with paged run history and a run view
+  with progress and a live log.
+- **Web UI · Audit log**: filters for actor, action, target, outcome and time
+  range (presets or a custom UTC range) kept in the URL, expandable event
+  details, cursor paging, and CSV / NDJSON export with the same filters.
+- **Web UI · System**: status, version and build, uptime, nodes, dependency
+  health, base URL and registry host, and the effective configuration with
+  secrets masked.
+- Run, stop, save and delete actions are hidden from users without the matching
+  `system:<area>` privilege; screens say plainly when a server does not support
+  an endpoint yet.
+
 ## M0 — Skeleton (2026-11-03)
 
 Foundation every later milestone builds on. No package format is functional yet.
