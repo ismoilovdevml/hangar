@@ -3,19 +3,27 @@ package api
 import (
 	"net/http"
 	"sort"
+	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/rollup"
 )
 
 type upstreamHealthJSON struct {
-	Name      string `json:"name"`
-	URL       string `json:"url"`
-	State     string `json:"state"` // healthy, slow, blocked, offline, unknown
+	Name  string `json:"name"`
+	URL   string `json:"url"`
+	State string `json:"state"` // healthy, slow, blocked, offline, unknown
+	// LatencyMS is the median time to response headers over the range; nil
+	// without remote requests in it.
 	LatencyMS *int64 `json:"latency_ms"`
+	// Requests is the number of timed remote requests in the range; nil when
+	// traffic statistics are not wired.
+	Requests *int64 `json:"requests"`
 }
 
 // upstreamHealth lists the proxy repositories the caller may read with the
-// health the proxy subsystem reports ("unknown" when it is not wired).
+// live state the proxy subsystem reports ("unknown" when it is not wired)
+// and the remote latency recorded over ?range (every node, default today).
 func (a *API) upstreamHealth(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if err := requireUser(ctx); err != nil {
@@ -26,6 +34,19 @@ func (a *API) upstreamHealth(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.writeErr(w, r, err)
 		return
+	}
+	now := time.Now().UTC()
+	start, _, _, err := overviewWindow(r.URL.Query().Get("range"), now)
+	if err != nil {
+		a.writeErr(w, r, err)
+		return
+	}
+	var latency map[string]rollup.Histogram
+	if a.Traffic != nil {
+		if latency, err = a.Traffic.UpstreamLatency(ctx, start, now); err != nil {
+			a.writeErr(w, r, err)
+			return
+		}
 	}
 	repos, err := a.readableRepos(ctx)
 	if err != nil {
@@ -44,7 +65,11 @@ func (a *API) upstreamHealth(w http.ResponseWriter, r *http.Request) {
 		}
 		j := upstreamHealthJSON{Name: repo.Name, URL: core.RedactURL(repo.Config.Proxy.RemoteURL), State: "unknown"}
 		if h, ok := up[repo.Name]; ok {
-			j.State, j.LatencyMS = string(h.State), h.LatencyMS
+			j.State = string(h.State)
+		}
+		if a.Traffic != nil {
+			h := latency[repo.Name]
+			j.LatencyMS, j.Requests = latencyMS(h, 0.5), ptr(h.Total())
 		}
 		if !repo.Online {
 			j.State = "offline"

@@ -9,11 +9,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/ismoilovdevml/hangar/internal/api/apitest"
 	"github.com/ismoilovdevml/hangar/internal/api/catalog"
 	"github.com/ismoilovdevml/hangar/internal/audit"
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/observability"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/rollup"
 	"github.com/ismoilovdevml/hangar/internal/search"
 )
 
@@ -55,9 +59,18 @@ func TestAPIWithPostgres(t *testing.T) {
 	f.api.Catalog = catalog.New(pool, catalog.Options{})
 	f.api.Search = search.New(pool)
 	f.api.Audit = auditLog
+	// Traffic: this node's counters, recorded into the minute rows.
 	metrics := observability.NewMetrics()
-	f.api.RequestStats = NewRequestStats(metrics.Registry, now.Add(-30*time.Minute))
+	cache := prometheus.NewCounterVec(prometheus.CounterOpts{Name: proxy.MetricCacheRequests, Help: "x"}, []string{"format", "result"})
+	metrics.Registry.MustRegister(cache)
+	recorder := rollup.NewRecorder(pool, metrics.Registry, rollup.Options{Started: now.Add(-30 * time.Minute)})
+	f.api.Traffic = rollup.NewStore(pool)
 	metrics.HTTPRequests.WithLabelValues("GET", "/repository/{repo}/*", "200").Add(7)
+	cache.WithLabelValues("nuget", proxy.CacheResultHit).Add(3)
+	cache.WithLabelValues("nuget", proxy.CacheResultMiss).Add(1)
+	if err := recorder.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
 
 	// Recently published, newest first, only readable repositories.
 	var comps page[publishedComponent]
@@ -133,19 +146,61 @@ func TestAPIWithPostgres(t *testing.T) {
 	f.expect("alice", "GET", "/api/v1/blob-stores", nil, 403)
 	f.expect("admin", "GET", "/api/v1/blob-stores/nope", nil, 404)
 
-	// Overview: database aggregates plus this node's request counters.
+	// A group reports what its members serve: blobs counted once, distinct
+	// component coordinates. The proxy member cached ui-kit 5.3.1 (the same
+	// blob as the hosted copy) and left-pad.
+	npmProxy := mirror("npm-proxy", "npm", core.RepoProxy)
+	apitest.Exec(t, pool, `INSERT INTO group_members (group_id, member_id, position)
+		SELECT g.id, m.id, row_number() OVER (ORDER BY m.name) - 1 FROM repositories g, repositories m
+		WHERE g.name = 'npm-all' AND m.name IN ('npm-hosted', 'npm-proxy')`)
+	cachedUI := s.Component(npmProxy, "@acme", "ui-kit", "5.3.1", now.Add(-10*time.Minute), 0, "alice")
+	s.Asset(npmProxy, cachedUI, "@acme/ui-kit/-/ui-kit-5.3.1.tgz", d, 3000)
+	pad := s.Component(npmProxy, "", "left-pad", "1.3.0", now.Add(-10*time.Minute), 0, "alice")
+	s.Asset(npmProxy, pad, "left-pad/-/left-pad-1.3.0.tgz", s.Blob(store, "left-pad", 500, now.Add(-10*time.Minute)), 500)
+	_ = json.Unmarshal(f.expect("admin", "GET", "/api/v1/repositories/npm-all", nil, 200), &repo)
+	if repo.SizeBytes != 3500 || repo.ComponentCount != 3 {
+		t.Errorf("group totals = %d bytes, %d components", repo.SizeBytes, repo.ComponentCount)
+	}
+	_ = json.Unmarshal(f.expect("admin", "GET", "/api/v1/repositories/npm-proxy", nil, 200), &repo)
+	if repo.SizeBytes != 3500 || repo.ComponentCount != 2 {
+		t.Errorf("proxy totals = %d bytes, %d components", repo.SizeBytes, repo.ComponentCount)
+	}
+
+	// Overview: database aggregates plus the recorded traffic. The proxy
+	// cache fill is neither a publication nor an upload.
 	var ov overviewMetrics
 	_ = json.Unmarshal(f.expect("alice", "GET", "/api/v1/metrics/overview?range=1h", nil, 200), &ov)
-	if ov.Range != "1h" || ov.Storage.UsedBytes != 3000 || ov.Summary.PublishedSinceYesterday != 3 || ov.Issues.Critical != 1 ||
-		len(ov.Traffic) != 12 || ov.Requests.Total == nil || *ov.Requests.Total != 7 || ov.Cache.HitRatio != nil {
+	if ov.Range != "1h" || ov.Storage.UsedBytes != 3500 || ov.Summary.PublishedSinceYesterday != 3 || ov.Issues.Critical != 1 ||
+		len(ov.Traffic) != 12 || ov.Requests.Total == nil || *ov.Requests.Total != 7 {
 		t.Errorf("overview = %+v", ov)
 	}
-	var uploads int64
+	if c := ov.Cache; c.HitRatio == nil || *c.HitRatio != 0.75 || c.Hits == nil || *c.Hits != 3 || c.Misses == nil || *c.Misses != 1 {
+		t.Errorf("cache = %+v", c)
+	}
+	if cs := ov.Requests.CoverageStart; cs == nil || !cs.Equal(now.Add(-30*time.Minute).Truncate(time.Microsecond)) {
+		t.Errorf("coverage start = %v", cs)
+	}
+	var uploads, downloads int64
 	for _, b := range ov.Traffic {
 		uploads += b.Uploads
+		if b.Downloads != nil {
+			downloads += *b.Downloads
+		}
 	}
-	if uploads != 1 { // ui-kit 5.3.1, 30 minutes ago
-		t.Errorf("uploads in the last hour = %d", uploads)
+	if uploads != 1 || downloads != 7 { // ui-kit 5.3.1, 30 minutes ago
+		t.Errorf("uploads %d downloads %d in the last hour", uploads, downloads)
+	}
+	if ov.Traffic[0].Downloads != nil { // ended before recording started
+		t.Errorf("first bucket downloads = %v", *ov.Traffic[0].Downloads)
+	}
+	// The counters survive a restart: a new process reports the same window.
+	restarted := rollup.NewRecorder(pool, observability.NewMetrics().Registry, rollup.Options{Started: now})
+	if err := restarted.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	_ = json.Unmarshal(f.expect("alice", "GET", "/api/v1/metrics/overview?range=today", nil, 200), &ov)
+	if now.Add(-30*time.Minute).Day() == now.Day() && (ov.Requests.Total == nil || *ov.Requests.Total != 7) {
+		t.Errorf("after restart = %+v", ov.Requests)
 	}
 	f.expect("alice", "GET", "/api/v1/metrics/overview?range=year", nil, 400)
 

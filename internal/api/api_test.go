@@ -18,6 +18,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/core/coretest"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/rollup"
 )
 
 // fakeCatalog serves RepositoryStats and FormatDownloads; other methods panic.
@@ -41,6 +42,19 @@ func (f fakeUpstreams) List(context.Context, string, int) (core.Page[proxy.Healt
 		p.Items = append(p.Items, it)
 	}
 	return p, nil
+}
+
+// fakeTraffic serves UpstreamLatency; Overview panics. ranges records the
+// windows asked for.
+type fakeTraffic struct {
+	TrafficStats
+	latency map[string]rollup.Histogram
+	ranges  *[]time.Duration
+}
+
+func (f fakeTraffic) UpstreamLatency(_ context.Context, from, to time.Time) (map[string]rollup.Histogram, error) {
+	*f.ranges = append(*f.ranges, to.Sub(from))
+	return f.latency, nil
 }
 
 type fixture struct {
@@ -291,15 +305,46 @@ func TestUpstreamHealthAndEndpoints(t *testing.T) {
 	f.seedRepos()
 	f.env.AddRepo(t, &core.Repository{Name: "docker-hosted", Format: "docker", Type: core.RepoHosted,
 		Config: core.RepoConfig{Connector: &core.ConnectorConfig{Host: "cr.hangar.test"}}})
-	lat := int64(42)
+	lat := int64(42) // live smoothed latency: not what the endpoint reports
 	f.api.Upstreams = fakeUpstreams{"npm-proxy": {Name: "npm-proxy", State: proxy.StateHealthy, LatencyMS: &lat}}
 
+	// Without traffic statistics: live state only.
 	var up page[upstreamHealthJSON]
 	_ = json.Unmarshal(f.expect("alice", "GET", "/api/v1/upstreams/health", nil, 200), &up)
-	if len(up.Items) != 1 || up.Items[0].State != "healthy" || *up.Items[0].LatencyMS != 42 || up.Items[0].URL != "https://registry.npmjs.org" {
+	if len(up.Items) != 1 || up.Items[0].State != "healthy" || up.Items[0].LatencyMS != nil || up.Items[0].Requests != nil ||
+		up.Items[0].URL != "https://registry.npmjs.org" {
 		t.Errorf("upstreams = %+v", up)
 	}
-	f.api.Upstreams = nil
+
+	// With them: the median of the recorded remote latency over the range.
+	// 10 requests, 2 at most 100ms and 8 in (100ms, 250ms]: p50 = 100 + 150*3/8.
+	h := make(rollup.Histogram, len(rollup.UpstreamBounds)+1)
+	for i, b := range rollup.UpstreamBounds {
+		switch {
+		case b >= .25:
+			h[i] = 10
+		case b >= .1:
+			h[i] = 2
+		}
+	}
+	h[len(h)-1] = 10
+	var ranges []time.Duration
+	f.api.Traffic = fakeTraffic{latency: map[string]rollup.Histogram{"npm-proxy": h}, ranges: &ranges}
+	_ = json.Unmarshal(f.expect("alice", "GET", "/api/v1/upstreams/health?range=7d", nil, 200), &up)
+	if it := up.Items[0]; it.LatencyMS == nil || *it.LatencyMS != 156 || it.Requests == nil || *it.Requests != 10 {
+		t.Errorf("recorded latency = %+v", it)
+	}
+	if len(ranges) != 1 || ranges[0] != 7*24*time.Hour {
+		t.Errorf("windows asked = %v", ranges)
+	}
+	f.api.Traffic = fakeTraffic{latency: map[string]rollup.Histogram{}, ranges: &ranges}
+	_ = json.Unmarshal(f.expect("alice", "GET", "/api/v1/upstreams/health", nil, 200), &up)
+	if it := up.Items[0]; it.LatencyMS != nil || it.Requests == nil || *it.Requests != 0 {
+		t.Errorf("no remote requests = %+v", it)
+	}
+	f.expect("alice", "GET", "/api/v1/upstreams/health?range=year", nil, 400)
+
+	f.api.Upstreams, f.api.Traffic = nil, nil
 	_ = json.Unmarshal(f.expect("alice", "GET", "/api/v1/upstreams/health", nil, 200), &up)
 	if up.Items[0].State != "unknown" || up.Items[0].LatencyMS != nil {
 		t.Errorf("no source = %+v", up.Items[0])

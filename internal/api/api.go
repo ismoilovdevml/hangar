@@ -114,8 +114,10 @@ type API struct {
 	// AuthMiddleware authenticates every /api/v1 request (session cookie,
 	// CSRF, Bearer/Basic) and stores the principal with core.WithPrincipal.
 	// When nil, only Basic/Bearer credentials are accepted, via Deps.Auth.
-	AuthMiddleware  func(http.Handler) http.Handler
-	RequestStats    *RequestStats
+	AuthMiddleware func(http.Handler) http.Handler
+	// Traffic serves the request, cache and upstream latency numbers of the
+	// Overview screen; nil reports them as null.
+	Traffic         TrafficStats
 	AuthRoutes      RouteRegistrar
 	ExtraRoutes     []RouteRegistrar
 	EventsHeartbeat time.Duration // SSE keep-alive comment interval (default 15s)

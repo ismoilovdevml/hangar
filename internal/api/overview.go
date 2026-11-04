@@ -7,6 +7,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/api/catalog"
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/rollup"
 )
 
 // overviewWindow returns the requests window start and the traffic buckets for rng.
@@ -27,10 +28,11 @@ func overviewWindow(rng string, now time.Time) (start, bucketStart time.Time, bu
 
 type trafficBucket struct {
 	Start time.Time `json:"start"`
-	// Downloads are content downloads served by this node; null for buckets
-	// before it started or when request statistics are not wired.
+	// Downloads are content downloads served by every node; null for buckets
+	// that ended before traffic recording started, or when traffic
+	// statistics are not wired.
 	Downloads *int64 `json:"downloads"`
-	// Uploads are components published (all nodes).
+	// Uploads are components published to hosted repositories.
 	Uploads int64 `json:"uploads"`
 }
 
@@ -97,17 +99,20 @@ func (a *API) overview(w http.ResponseWriter, r *http.Request) {
 	for _, f := range o.StorageByFormat {
 		out.StorageByFormat = append(out.StorageByFormat, formatBytes{Format: f.Format, Bytes: f.Bytes})
 	}
-	var win *window
-	if a.RequestStats != nil {
-		ws := a.RequestStats.snapshot()
-		win = &ws
-		out.Requests = ws.requests(start)
-		out.Cache = ws.cache(start)
+	var traffic *rollup.Overview
+	if a.Traffic != nil {
+		traffic, err = a.Traffic.Overview(ctx, rollup.OverviewQuery{Start: start, End: now, BucketStart: bucketStart, Bucket: bucket})
+		if err != nil {
+			a.writeErr(w, r, err)
+			return
+		}
+		out.Requests = requestsFrom(traffic, start)
+		out.Cache = cacheFrom(traffic)
 	}
-	for _, b := range o.Published {
+	for i, b := range o.Published {
 		tb := trafficBucket{Start: b.Start, Uploads: b.Count}
-		if win != nil {
-			tb.Downloads = win.downloads(b.Start, b.Start.Add(bucket))
+		if traffic != nil && i < len(traffic.Downloads) && traffic.Covered(b.Start.Add(bucket)) {
+			tb.Downloads = ptr(traffic.Downloads[i])
 		}
 		out.Traffic = append(out.Traffic, tb)
 	}
