@@ -54,6 +54,8 @@ export const session: Session = {
       scopes: ['repo:*:read', 'repo:npm-*:write'],
       created_at: new Date(Date.now() - 30 * 86_400_000).toISOString(),
       expires_at: new Date(Date.now() + 9 * 86_400_000).toISOString(),
+      allowed_cidrs: [],
+      read_only: false,
     },
   ],
 };

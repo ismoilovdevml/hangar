@@ -24,6 +24,14 @@ info:
       `PUT /me/password` and `POST /auth/logout` (plus the endpoints open to
       everyone, served as for a visitor). Every other call answers 403 with
       code `password_change_required`. Their access tokens are not affected.
+    - `GET /auth/session` (or `GET /me`) tells the caller what it may do: its
+      effective privileges and, for tokens, the scopes, restrictions and expiry.
+    - Requests are rate-limited per client address; a 429 answer carries
+      `Retry-After`. Retry 429 and 5xx answers with backoff, never other 4xx.
+
+    This document is served at `/api/v1/openapi.yaml` (and `.json`), rendered
+    at `/api-docs`; `/api/v1/automation-guide.md` is a short guide for scripts and
+    other automated clients, indexed by `/llms.txt`.
   license:
     name: See repository
     url: https://github.com/ismoilovdevml/hangar
@@ -35,20 +43,37 @@ security:
   - basicAuth: []
 tags:
   - name: auth
+    description: Sign-in, the current session and what the caller may do.
+  - name: docs
+    description: This document and the guide for automated clients; public.
   - name: system
+    description: Version, health, nodes and logs of the server.
   - name: overview
+    description: Numbers for the Overview screen.
   - name: repositories
+    description: Hosted, proxy and group repositories.
   - name: blob-stores
+    description: Where package bytes are stored.
   - name: components
+    description: Packages (components), their versions and files (assets).
   - name: search
+    description: Search across every repository the caller can read.
   - name: security
+    description: Vulnerability findings, waivers and scans.
   - name: cleanup
+    description: Cleanup policies and their runs.
   - name: tasks
+    description: Scheduled maintenance tasks and their runs.
   - name: access
+    description: Users, service accounts, roles and access tokens.
   - name: settings
+    description: Sign-in providers and outbound proxies.
   - name: audit
+    description: The audit log.
   - name: cluster
+    description: Nodes and replication.
   - name: events
+    description: Server-sent events for live updates.
 
 paths:
   # ---------------------------------------------------------------- auth
@@ -177,6 +202,63 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Session" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  /me:
+    get:
+      tags: [auth]
+      operationId: getMe
+      summary: Who the caller is and what it may do (same body as /auth/session)
+      description: |
+        For automated clients: `privileges` are the effective privileges of
+        this request (the owner's roles narrowed by the token's scopes) and
+        `token` describes the token used, with its scopes, restrictions and
+        expiry.
+      responses:
+        "200":
+          description: The caller
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /openapi.yaml:
+    get:
+      tags: [docs]
+      operationId: getOpenAPIYAML
+      summary: This OpenAPI document as YAML
+      security: []
+      responses:
+        "200":
+          description: OpenAPI 3.1 document
+          content:
+            application/yaml:
+              schema: { type: string }
+  /openapi.json:
+    get:
+      tags: [docs]
+      operationId: getOpenAPIJSON
+      summary: This OpenAPI document as JSON
+      security: []
+      responses:
+        "200":
+          description: OpenAPI 3.1 document
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /automation-guide.md:
+    get:
+      tags: [docs]
+      operationId: getAutomationGuide
+      summary: Guide for scripts and other automated clients, with this server's URLs
+      description: |
+        Markdown: base URL, authentication, the error body, pagination, rate
+        limits and the most useful calls with examples. `/llms.txt` at the
+        site root links to it and to this document.
+      security: []
+      responses:
+        "200":
+          description: The guide
+          content:
+            text/markdown:
+              schema: { type: string }
   /me/client-endpoints:
     get:
       tags: [auth]
@@ -2460,6 +2542,36 @@ paths:
       responses:
         "204": { description: Revoked }
         "404": { $ref: "#/components/responses/NotFound" }
+  /tokens/{id}/rotate:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [access]
+      operationId: rotateToken
+      summary: Replace a token by a new one with the same scopes
+      description: |
+        Creates a token with the same name, owner, scopes, restrictions and
+        lifetime (capped at the server maximum) and returns its secret once.
+        The old token keeps working unless `revoke_old_after` is set: `0s`
+        revokes it at once, a longer duration ends it that much later (never
+        later than it would have expired). Your own tokens, or a service
+        account's with `system:tokens:write` (and `system:tokens:delete` to end
+        the old one). Audited as `token.rotate`.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TokenRotateInput" }
+      responses:
+        "201":
+          description: The replacement; `secret` is shown only in this response
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenRotated" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ---------------------------------------------------------------- audit
   /audit:
@@ -2717,7 +2829,11 @@ components:
       properties:
         code:
           type: string
-          description: Machine-readable code, e.g. `not_found`, `forbidden`, `invalid_argument`, `locked`, `password_change_required`
+          description: |
+            Machine-readable code, e.g. `invalid_argument` (400), `unauthenticated` (401),
+            `forbidden`, `read_only_token` or `password_change_required` (403),
+            `not_found` (404), `conflict` (409), `locked` (423), `rate_limited` (429),
+            `internal` (500)
         message: { type: string }
         retry_after:
           type: integer
@@ -2860,6 +2976,9 @@ components:
             succeeds only `GET /auth/session`, `PUT /me/password` and
             `POST /auth/logout` answer; `privileges` is empty.
         password_policy: { $ref: "#/components/schemas/PasswordPolicy" }
+        token:
+          description: The token this request authenticated with; absent for browser sessions and passwords
+          allOf: [{ $ref: "#/components/schemas/CurrentToken" }]
     PasswordPolicy:
       type: object
       description: Rules new local passwords must meet (`auth.password`)
@@ -2873,6 +2992,27 @@ components:
         allow_username:
           type: boolean
           description: Whether the password may contain the username
+    CurrentToken:
+      type: object
+      required: [id, kind, name, prefix, scopes, expires_at, read_only, allowed_cidrs]
+      properties:
+        id: { type: string }
+        kind:
+          type: string
+          description: "`personal` (personal access and service-account tokens) or `session` (short-lived registry logins)"
+          enum: [personal, session]
+        name: { type: string }
+        prefix: { type: string }
+        scopes:
+          type: [array, "null"]
+          description: Effective scopes (narrowed to read for read-only tokens); null means the owner's full rights
+          items: { $ref: "#/components/schemas/Privilege" }
+        expires_at: { $ref: "#/components/schemas/Timestamp" }
+        read_only: { type: boolean }
+        allowed_cidrs:
+          type: array
+          description: Client networks the token works from; empty means any
+          items: { type: string }
     TokenPolicy:
       type: object
       required: [max_lifetime, max_lifetime_days, expiry_warning]
@@ -4853,9 +4993,47 @@ components:
         expires_at:
           allOf: [{ $ref: "#/components/schemas/Timestamp" }]
           description: Required; tokens never live forever
+        allowed_cidrs:
+          type: array
+          maxItems: 32
+          description: |
+            Optional: the token only works from these client addresses or CIDR
+            networks (`203.0.113.7`, `10.20.0.0/16`, `2001:db8::/48`). Requests
+            from elsewhere fail authentication (audited as `address_not_allowed`).
+          items: { type: string }
+        read_only:
+          type: boolean
+          description: |
+            Optional: the token can only read. Its scopes are narrowed to read and
+            the REST API refuses every request other than GET and HEAD
+            (403 `read_only_token`).
+    TokenRotateInput:
+      type: object
+      properties:
+        revoke_old_after:
+          type: [string, "null"]
+          description: |
+            Go duration from 0s to 720h. `0s` revokes the old token now; `24h` lets
+            it work one more day. Omit or null to leave it as it is.
+          examples: ["0s", "24h"]
+    TokenRotated:
+      allOf:
+        - $ref: "#/components/schemas/TokenCreated"
+        - type: object
+          required: [replaced]
+          properties:
+            replaced:
+              type: object
+              required: [id, revoked, expires_at]
+              properties:
+                id: { type: string }
+                revoked: { type: boolean, description: Revoked at once }
+                expires_at:
+                  allOf: [{ $ref: "#/components/schemas/Timestamp" }]
+                  description: When the old token stops working (now, if revoked)
     Token:
       type: object
-      required: [id, name, owner, prefix, scopes, expires_at, created_at]
+      required: [id, name, owner, prefix, scopes, expires_at, created_at, allowed_cidrs, read_only]
       properties:
         id: { type: string }
         name: { type: string }
@@ -4873,6 +5051,11 @@ components:
         expires_at: { $ref: "#/components/schemas/Timestamp" }
         created_at: { $ref: "#/components/schemas/Timestamp" }
         last_used_at: { type: [string, "null"], format: date-time }
+        allowed_cidrs:
+          type: array
+          description: Client networks the token works from; empty means any
+          items: { type: string }
+        read_only: { type: boolean, description: The token can only read }
     TokenCreated:
       allOf:
         - $ref: "#/components/schemas/Token"

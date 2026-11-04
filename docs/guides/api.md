@@ -1,14 +1,61 @@
-# REST API
+# Automate Hangar: the REST API
 
-The management API lives under `<base_url>/api/v1` and speaks JSON. The full
-reference is [api/openapi.yaml](../../api/openapi.yaml); this page covers
-authentication, the calls you need most, pagination and errors.
+Everything the web UI does goes through a JSON REST API under
+`<base_url>/api/v1`. Scripts, CI jobs, configuration tools and other automated
+clients use the same API with an access token. This page is the starting point:
+how to connect an integration, what a token may do, the calls you need most,
+pagination, errors and rate limits.
+
+Every server also publishes its own reference, with its real URLs:
+
+| Where | What |
+|---|---|
+| `<base_url>/api-docs` | API reference in the web UI: every endpoint by area, schemas, curl examples and "Try it" (also under Settings → API reference) |
+| `<base_url>/api/v1/openapi.yaml`, `/api/v1/openapi.json` | the OpenAPI 3.1 document ([api/openapi.yaml](../../api/openapi.yaml)); public, no token needed |
+| `<base_url>/api/v1/automation-guide.md` | a short Markdown guide for automated clients: authentication, errors, paging, limits and examples |
+| `<base_url>/llms.txt` | a plain-text index of the documents above, at the conventional root path |
 
 Placeholders:
 
 - `https://hangar.example.com`: the server's `server.base_url`.
 - `$HANGAR_TOKEN`: a personal access token (`hgr_...`) in an environment variable.
 - `<id>`: an id returned by a previous call.
+
+## Connect an integration
+
+1. **Create a token.** In the web UI: My account → Personal access tokens →
+   New token for yourself, or Access & audit → Service accounts → (account) →
+   Tokens → New token for a shared integration. Prefer a service account per
+   integration: its actions are audited under its own name and it does not
+   stop working when a person leaves.
+2. **Give it only what it needs.** Pick a preset or build a custom set of
+   permissions (see [Tokens](#tokens) below), a short expiry, and optionally
+   the networks it may be used from and a read-only flag.
+3. **Hand it over.** After creation the secret is shown once, with
+   ready-to-paste snippets: a curl call, `HANGAR_URL` / `HANGAR_TOKEN` lines,
+   package-client configuration (npm, NuGet, pip, Maven, docker) and a block
+   for automation that also points at `/llms.txt` and the OpenAPI document.
+4. **Let the client check itself.** `GET /api/v1/me` answers who the caller is,
+   what it may do and when its token expires.
+
+```bash
+export HANGAR_URL=https://hangar.example.com
+export HANGAR_TOKEN=hgr_...
+curl -fsS -H "Authorization: Bearer $HANGAR_TOKEN" "$HANGAR_URL/api/v1/me"
+```
+
+```json
+{"user":{"username":"ci-publisher","kind":"service_account", ...},
+ "privileges":["repo:npm-hosted:read","repo:npm-hosted:write"],
+ "auth_method":"token",
+ "token":{"id":"...","kind":"personal","name":"release pipeline","prefix":"hgr_1Hzo",
+          "scopes":["repo:npm-hosted:read","repo:npm-hosted:write"],
+          "expires_at":"2027-02-01T00:00:00Z","read_only":false,"allowed_cidrs":["10.20.0.0/16"]},
+ "token_policy":{"max_lifetime":"8784h0m0s","max_lifetime_days":366,"expiry_warning":"336h0m0s"}, ...}
+```
+
+`privileges` is what this request may do: the owner's roles narrowed by the
+token's scopes. `GET /auth/session` returns the same body.
 
 ## Authentication
 
@@ -22,7 +69,8 @@ Every request may carry one of:
 | Session cookie | `hangar_session` cookie + `X-CSRF-Token` header on writes | the web UI |
 
 Every route requires sign-in except `GET /system/status`, `GET /system/version`,
-`GET /auth/providers` and `POST /auth/login`; anonymous calls to anything else
+`GET /auth/providers`, `POST /auth/login` and the documents `GET /openapi.yaml`,
+`GET /openapi.json` and `GET /automation-guide.md`; anonymous calls to anything else
 answer `401`. (Package endpoints are different: repositories with
 `anonymous_read` serve downloads without credentials.) Wrong, expired or revoked
 credentials answer `401`; a locked account answers `423`. Token-authenticated
@@ -35,13 +83,8 @@ in `security.cors.allowed_origins` if a separate web app needs access.
 curl -H "Authorization: Bearer $HANGAR_TOKEN" https://hangar.example.com/api/v1/auth/session
 ```
 
-returns the caller and its effective privileges:
-
-```json
-{"user":{"id":"...","username":"admin","display_name":"admin","email":""},
- "organization":{"slug":"hangar","name":"hangar","environment":"","region":""},
- "privileges":["repo:*:admin","system:repos:admin"]}
-```
+returns the caller and its effective privileges (see
+[Connect an integration](#connect-an-integration) for the token section).
 
 ## Common operations
 
@@ -161,11 +204,57 @@ curl -H "$H" "$API/tokens?all=true&owner_kind=service_account&status=active"
 
 # revoke (204); tokens minted from it stop working too
 curl -H "$H" -X DELETE "$API/tokens/<id>"
+
+# restrict a token to networks and to reading
+curl -H "$H" -H 'Content-Type: application/json' -X POST "$API/tokens" -d '{
+  "name": "dashboard", "scopes": ["repo:*:read", "system:audit:read"], "expires_at": "2027-01-31T00:00:00Z",
+  "allowed_cidrs": ["10.20.0.0/16", "203.0.113.7"], "read_only": true
+}'
+
+# rotate: a new secret with the same name, scopes, restrictions and lifetime;
+# the old token keeps working for 24 hours ("0s": revoked now; omit: kept)
+curl -H "$H" -H 'Content-Type: application/json' -X POST "$API/tokens/<id>/rotate" -d '{"revoke_old_after": "24h"}'
+# -> the new token with "secret", plus "replaced": {"id", "revoked", "expires_at"}
 ```
 
 The secret (`secret` in the create response) is shown once. Listings show only the
-`prefix` (`hgr_1Hzo`) plus `owner_kind`, `last_used_at` and `last_used_ip`. A token
-created by a scoped token cannot exceed the caller's scopes.
+`prefix` (`hgr_1Hzo`) plus `owner_kind`, `last_used_at`, `last_used_ip`,
+`allowed_cidrs` and `read_only`. A token created by a scoped token cannot exceed
+the caller's scopes, and a read-only token can only create read-only tokens.
+
+A token never does more than its owner: every request needs both a privilege
+from the owner's roles and a matching scope, checked again on each request, so
+taking a role away from the owner narrows the token at once. Scopes the owner
+lacks are accepted but have no effect; the web UI greys them out and says why.
+
+Restrictions, both optional:
+
+- `allowed_cidrs`: up to 32 addresses or CIDR networks. A request from any other
+  client address fails authentication with `401` and is audited as
+  `auth.token.failed` with reason `address_not_allowed`. Behind a reverse proxy
+  the client address comes from `X-Forwarded-For` only when the proxy is in
+  `server.trusted_proxies`.
+- `read_only`: the token's scopes are narrowed to `read`, and the REST API
+  answers `403 read_only_token` to anything other than GET and HEAD.
+
+Registry logins (docker, and other clients that trade the token for a short
+session token) inherit both restrictions.
+
+Rotation keeps the old lifetime (capped at the server maximum). Rotating your
+own token needs nothing more; a service account's needs `system:tokens:write`,
+plus `system:tokens:delete` to end the old one. Nobody can rotate another
+person's token. Rotations are audited as `token.rotate`.
+
+Presets in the web UI and the scopes they create:
+
+| Preset | Scopes |
+|---|---|
+| Read only | `repo:*:read` |
+| Publish to selected repositories | `repo:<name or glob>:read` and `:write` for each pick |
+| Repository admin | `repo:<name or glob>:admin` for each pick |
+| Security reviewer | `repo:*:read`, `system:security:read`, `system:security:write` |
+| Full admin | `system:*`, `repo:*:admin` |
+| Custom | any repositories × read / write / delete / admin, plus read / write / admin per administration area |
 
 Scopes have the form `repo:<pattern>:<action>` or `system:<area>:<action>`, where
 `<pattern>` is a glob (`*`, `npm-*`) and `<action>` is `read`, `write`, `delete`,
@@ -266,8 +355,8 @@ Some errors add `retry_after` (seconds) or `details`.
 |---|---|---|
 | 400 | `invalid_argument`, `digest_mismatch`, `preview_required` | bad input; a cleanup policy saved without a valid `preview_token` |
 | 401 | `unauthenticated` | missing or wrong credentials, or sign-in required |
-| 403 | `forbidden`, `quarantined`, `csrf_failed`, `cors_denied` | not allowed; component quarantined; cookie request without a valid `X-CSRF-Token`; browser call from an origin not allowed |
-| 404 | `not_found` | does not exist, or you may not read it |
+| 403 | `forbidden`, `read_only_token`, `quarantined`, `csrf_failed`, `cors_denied` | not allowed; a write with a read-only token; component quarantined; cookie request without a valid `X-CSRF-Token`; browser call from an origin not allowed |
+| 404 | `not_found` | does not exist, you may not read it, or no such endpoint |
 | 405 | `method_not_allowed` | |
 | 409 | `already_exists` (or `conflict` on `/users`, `/roles`, `/tokens`), `write_denied`, `already_running`, `not_running`, `managed` | name taken; write policy refused; task or policy run state |
 | 413 | `body_too_large` | request body over `security.limits.api_body_bytes` (1 MiB) |
@@ -291,6 +380,10 @@ every client behind a reverse proxy shares the proxy's budget.
 | Sign-in attempts (`POST /auth/login`) | 10 per minute, burst 10 | `auth.login_rate` |
 | Failed password checks per account | 5 in 15 minutes, then locked 15 minutes (`423`) | `auth.lockout` |
 
+Clients should retry only `429` and `5xx` answers, after the `Retry-After`
+seconds (also `retry_after` in the body), with backoff; other `4xx` answers will
+not change on a retry.
+
 When an address runs out of its failed-authentication budget, every request from
 it that carries credentials answers `429`, even with a valid token, until the
 budget refills. A misconfigured CI job with a revoked token can therefore block
@@ -300,6 +393,6 @@ disables a limit. Details in [docs/security.md](../security.md).
 ## Not implemented yet
 
 `openapi.yaml` also describes endpoints that currently answer
-`501 not_implemented`: security findings and waivers, component SBOMs and
-dependents, moving repositories between blob stores, identity providers, cluster
-nodes and replication. Check the status code before relying on one of them.
+`501 not_implemented`: component SBOMs and dependents, moving repositories
+between blob stores, and replication. Check the status code before relying on one of them. A
+path the document does not describe at all answers `404 not_found`.

@@ -6,7 +6,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { apiFetch } from '../../api/client';
 import { queryKeys } from '../../api/hooks';
 import type { components, operations } from '../../api/schema';
-import type { RepositoryList } from '../../api/types';
+import type { Repository, RepositoryList } from '../../api/types';
 
 type Schemas = components['schemas'];
 
@@ -19,6 +19,8 @@ export type Token = Schemas['Token'];
 export type TokenInput = Schemas['TokenInput'];
 export type TokenCreated = Schemas['TokenCreated'];
 export type TokenPage = Schemas['TokenPage'];
+export type TokenRotated = Schemas['TokenRotated'];
+export type TokenRotateInput = Schemas['TokenRotateInput'];
 export type SessionInfo = Schemas['SessionInfo'];
 export type EffectivePermissions = Schemas['EffectivePermissions'];
 export type ResourcePermissions = Schemas['ResourcePermissions'];
@@ -179,6 +181,21 @@ export const useCreateToken = () =>
   useMutate((body: TokenInput) => apiFetch<TokenCreated>('/tokens', { method: 'POST', body }));
 export const useRevokeToken = () =>
   useMutate((id: string) => apiFetch<void>(`/tokens/${encodeURIComponent(id)}`, { method: 'DELETE' }));
+export const useRotateToken = () =>
+  useMutate(({ id, body }: { id: string; body: TokenRotateInput }) =>
+    apiFetch<TokenRotated>(`/tokens/${encodeURIComponent(id)}/rotate`, { method: 'POST', body }),
+  );
+
+/** Repositories with format, type and client URL, for the snippets shown with a new token (first 1000). */
+export function useRepositoryTargets(enabled = true) {
+  return useQuery({
+    queryKey: [...accessKeys.repoNames, 'targets'] as const,
+    queryFn: async ({ signal }): Promise<Repository[]> =>
+      (await apiFetch<RepositoryList>('/repositories', { query: { limit: 1000 }, signal })).items,
+    enabled,
+    staleTime: 60_000,
+  });
+}
 
 /** Repository names for the token scope picker (first 1000). */
 export function useRepositoryNames(enabled: boolean) {

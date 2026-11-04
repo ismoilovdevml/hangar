@@ -116,7 +116,7 @@ describe('access & audit: members', () => {
 });
 
 describe('access & audit: tokens', () => {
-  it('creates a scoped token and shows the secret exactly once', async () => {
+  it('creates a token from a preset and shows the secret with ready snippets exactly once', async () => {
     const user = userEvent.setup();
     renderApp('/access?tab=tokens');
     const table = await screen.findByRole('table', { name: 'All access tokens' });
@@ -124,29 +124,63 @@ describe('access & audit: tokens', () => {
     expect(within(table).getByText('10.8.0.4')).toBeInTheDocument();
     expect(within(within(table).getByText('old laptop').closest('tr')!).getByText('Expired')).toBeInTheDocument();
     expect(within(within(table).getByText('laptop CLI').closest('tr')!).getByText('Expiring soon')).toBeInTheDocument();
+    const updater = within(table).getByText('image updater').closest('tr')!;
+    expect(within(updater).getByText('Read-only')).toBeInTheDocument();
+    expect(within(updater).getByText('10.8.0.0/16')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'New token' }));
     const dialog = await screen.findByRole('dialog', { name: 'New personal access token' });
     await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
     expect(within(dialog).getByText('Give the token a name you will recognise.')).toBeInTheDocument();
+    expect(within(dialog).getAllByRole('radio', { name: /days|year|Custom date/ }).map((r) => r.closest('label')!.textContent)).toEqual([
+      '7 days',
+      '30 days',
+      '90 days',
+      '1 year',
+      'Custom date',
+    ]);
 
     await user.type(within(dialog).getByLabelText('Name'), 'ci publish');
     await user.click(within(dialog).getByRole('radio', { name: '90 days' }));
-    await user.click(within(dialog).getByRole('radio', { name: /Matching a pattern/ }));
-    await user.type(within(dialog).getByLabelText('Pattern'), 'npm-*');
-    await user.click(within(dialog).getByRole('checkbox', { name: 'Write' }));
-    const preview = within(dialog).getByText('This token can').parentElement!;
-    expect(within(preview).getByText(/Read repositories matching npm-\*/)).toBeInTheDocument();
-    expect(within(preview).getByText(/Publish to repositories matching npm-\*/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('radio', { name: /Publish to selected repositories/ }));
+    const picker = await within(dialog).findByRole('group', { name: 'Repositories' });
+    await user.click(await within(picker).findByRole('checkbox', { name: 'nuget-internal' }));
+    await user.type(within(dialog).getByLabelText('Or a pattern'), 'npm-*');
+    await user.click(within(dialog).getByRole('button', { name: 'Add pattern' }));
+    expect(within(dialog).getByRole('button', { name: 'Remove npm-*' })).toBeInTheDocument();
+    const summary = within(dialog).getByTestId('token-summary');
+    expect(summary).toHaveTextContent('Can publish to nuget-internal and npm-*');
+    expect(summary).toHaveTextContent('Can download from nuget-internal and npm-*');
+    expect(summary).toHaveTextContent('Cannot manage users & roles');
+
+    await user.click(within(dialog).getByText('Restrictions (optional)'));
+    await user.type(within(dialog).getByLabelText('Works only from these addresses'), 'office');
+    await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
+    expect(within(dialog).getByText(/office is not an IP address/)).toBeInTheDocument();
+    await user.clear(within(dialog).getByLabelText('Works only from these addresses'));
+    await user.type(within(dialog).getByLabelText('Works only from these addresses'), '10.20.0.0/16');
 
     await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
     const secretDialog = await screen.findByRole('dialog', { name: 'Copy your token now' });
-    expect(within(secretDialog).getByTestId('token-secret').textContent).toMatch(/^hgr_/);
+    const secret = within(secretDialog).getByTestId('token-secret').textContent!;
+    expect(secret).toMatch(/^hgr_/);
     expect(within(secretDialog).getByRole('button', { name: 'Copy token' })).toBeInTheDocument();
     const created = accessState.tokens.find((t) => t.name === 'ci publish')!;
-    expect(created.scopes).toEqual(['repo:npm-*:read', 'repo:npm-*:write']);
+    expect(created.scopes).toEqual(['repo:npm-*:read', 'repo:npm-*:write', 'repo:nuget-internal:read', 'repo:nuget-internal:write']);
+    expect(created.allowed_cidrs).toEqual(['10.20.0.0/16']);
     const days = (new Date(created.expires_at).getTime() - Date.now()) / 86_400_000;
     expect(Math.round(days)).toBe(90);
+
+    // Snippets carry the server URL and the secret.
+    expect(within(secretDialog).getByText(`curl -fsS -H "Authorization: Bearer ${secret}" https://pkg.acme.io/api/v1/auth/session`)).toBeInTheDocument();
+    expect(within(secretDialog).getByText(`HANGAR_TOKEN=${secret}`)).toBeInTheDocument();
+    await user.click(within(secretDialog).getByRole('radio', { name: 'Package clients' }));
+    expect(await within(secretDialog).findByText(`//pkg.acme.io/repository/npm-internal/:_authToken=${secret}`)).toBeInTheDocument();
+    expect(within(secretDialog).getByText(/dotnet nuget push <package>.nupkg -s https:\/\/pkg.acme.io\/repository\/nuget-internal\/index.json/)).toBeInTheDocument();
+    await user.click(within(secretDialog).getByRole('radio', { name: 'Automation' }));
+    expect(within(secretDialog).getByText('Give this to an automated client')).toBeInTheDocument();
+    expect(within(secretDialog).getByText('# Start with the guide: https://pkg.acme.io/llms.txt')).toBeInTheDocument();
+    expect(within(secretDialog).getByRole('link', { name: '/llms.txt' })).toHaveAttribute('href', '/llms.txt');
 
     const done = within(secretDialog).getByRole('button', { name: 'Done' });
     expect(done).toBeDisabled();
@@ -157,6 +191,114 @@ describe('access & audit: tokens', () => {
     expect(await within(table).findByText('ci publish')).toBeInTheDocument();
     expect(within(table).getByText('ci publish').closest('tr')!.textContent).toMatch(/hgr_Ab3d…/);
     expect(screen.queryByText(/hgr_Ab3dEf6h/)).not.toBeInTheDocument();
+  });
+
+  it('warns about full admin and builds a custom token with a live summary', async () => {
+    const user = userEvent.setup();
+    renderApp('/account');
+    await user.click(await screen.findByRole('button', { name: 'New token' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New personal access token' });
+    await user.click(within(dialog).getByRole('radio', { name: /Full admin/ }));
+    expect(within(dialog).getByRole('note')).toHaveTextContent(/can do everything you can/);
+    expect(within(dialog).getByTestId('token-summary')).toHaveTextContent('Can manage every administration area');
+
+    await user.click(within(dialog).getByRole('radio', { name: /^Custom ?Pick/ }));
+    await user.type(within(dialog).getByLabelText('Or a pattern'), 'docker-*');
+    await user.click(within(dialog).getByRole('button', { name: 'Add pattern' }));
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Delete' }));
+    await choose(user, within(dialog).getByRole('combobox', { name: /Audit log/ }), 'Read');
+    const summary = within(dialog).getByTestId('token-summary');
+    expect(summary).toHaveTextContent('Can delete packages in docker-*');
+    expect(summary).toHaveTextContent('Can download from docker-*');
+    expect(summary).toHaveTextContent('Can view audit log');
+    expect(summary).toHaveTextContent('Cannot publish packages');
+
+    await user.click(within(dialog).getByText('Restrictions (optional)'));
+    await user.click(within(dialog).getByRole('checkbox', { name: /Read-only/ }));
+    expect(summary).toHaveTextContent('Cannot change anything: the token is read-only');
+    expect(summary).not.toHaveTextContent('Can delete packages');
+
+    await user.type(within(dialog).getByLabelText('Name'), 'audit reader');
+    await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
+    await screen.findByRole('dialog', { name: 'Copy your token now' });
+    expect(accessState.tokens.find((t) => t.name === 'audit reader')).toMatchObject({
+      scopes: ['repo:docker-*:delete', 'repo:docker-*:read', 'system:audit:read'],
+      read_only: true,
+    });
+  });
+
+  it('greys out what the owner cannot grant and explains why', async () => {
+    server.use(
+      http.get('*/api/v1/auth/session', () =>
+        HttpResponse.json({ ...session, privileges: ['repo:*:read', 'repo:npm-*:write'], user: { ...session.user, roles: ['Publisher'] } }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp('/account');
+    await user.click(await screen.findByRole('button', { name: 'New token' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New personal access token' });
+    const admin = within(dialog).getByRole('radio', { name: /Full admin/ });
+    expect(admin).toBeDisabled();
+    expect(admin.closest('label')).toHaveTextContent('Only administrators can create a full-admin token.');
+    expect(within(dialog).getByRole('radio', { name: /Security reviewer/ })).toBeDisabled();
+    expect(within(dialog).getByRole('radio', { name: /Repository admin/ })).toBeDisabled();
+
+    await user.click(within(dialog).getByRole('radio', { name: /Publish to selected repositories/ }));
+    const picker = await within(dialog).findByRole('group', { name: 'Repositories' });
+    expect(await within(picker).findByRole('checkbox', { name: /npm-internal/ })).toBeEnabled();
+    const docker = within(picker).getByRole('checkbox', { name: /docker-prod/ });
+    expect(docker).toBeDisabled();
+    expect(docker.closest('label')).toHaveAttribute('title', 'Your roles do not let you publish to docker-prod.');
+
+    await user.click(within(dialog).getByRole('radio', { name: /^Custom ?Pick/ }));
+    expect(within(dialog).getByRole('checkbox', { name: 'Admin' })).toBeDisabled();
+    expect(within(dialog).getByRole('group', { name: 'Administration areas' })).toHaveTextContent('Your roles grant no access here');
+  });
+
+  it('explains that a password change comes before new tokens', async () => {
+    server.use(
+      http.post('*/api/v1/tokens', () =>
+        HttpResponse.json({ code: 'password_change_required', message: 'set a new password before creating tokens' }, { status: 403 }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp('/account');
+    await user.click(await screen.findByRole('button', { name: 'New token' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New personal access token' });
+    await user.type(within(dialog).getByLabelText('Name'), 'ci');
+    await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/Set a new password first/);
+  });
+
+  it('rotates a token, shows the new secret and ends the old one', async () => {
+    const user = userEvent.setup();
+    renderApp('/account');
+    const table = await screen.findByRole('table', { name: 'Your access tokens' });
+    await user.click(await within(table).findByRole('button', { name: 'Rotate token release script' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Rotate “release script”?' });
+    expect(dialog).toHaveTextContent('same name, permissions and restrictions, valid for 230 days');
+    await user.click(within(dialog).getByRole('radio', { name: /Revoke it now/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Create replacement' }));
+    const secretDialog = await screen.findByRole('dialog', { name: 'Copy the new token now' });
+    expect(within(secretDialog).getByTestId('token-secret').textContent).toMatch(/^hgr_/);
+    expect(secretDialog).toHaveTextContent('The old token hgr_0002… is revoked.');
+    const mine = accessState.tokens.filter((t) => t.name === 'release script');
+    expect(mine).toHaveLength(1);
+    expect(mine[0]!.id).not.toBe('t_0002');
+    expect(mine[0]!.scopes).toEqual(['repo:docker-prod:write']);
+    expect(accessState.audit[0]?.action).toBe('token.rotate');
+  });
+
+  it('rotates with a grace period for the old token', async () => {
+    const user = userEvent.setup();
+    renderApp('/account');
+    const table = await screen.findByRole('table', { name: 'Your access tokens' });
+    await user.click(await within(table).findByRole('button', { name: 'Rotate token laptop CLI' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Rotate “laptop CLI”?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Create replacement' }));
+    const secretDialog = await screen.findByRole('dialog', { name: 'Copy the new token now' });
+    expect(secretDialog).toHaveTextContent(/The old token hgr_0001… keeps working until .* \(in (23 h|1 day)\)/);
+    expect(accessState.tokens.filter((t) => t.name === 'laptop CLI')).toHaveLength(2);
   });
 
   it('revokes a token after confirmation', async () => {
@@ -182,10 +324,17 @@ describe('access & audit: tokens', () => {
     await user.click(within(drawer).getByRole('button', { name: 'New token' }));
     const dialog = await screen.findByRole('dialog', { name: 'New token for gitea-runner' });
     await user.type(within(dialog).getByLabelText('Name'), 'release');
-    await user.click(within(dialog).getByRole('checkbox', { name: 'Write' }));
+    // The service account (CI deployer) cannot administer repositories.
+    expect(within(dialog).getByRole('radio', { name: /Full admin/ })).toBeDisabled();
+    await user.click(within(dialog).getByRole('radio', { name: /Publish to selected repositories/ }));
+    await user.click(await within(dialog).findByRole('checkbox', { name: 'docker-prod' }));
     await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
     await screen.findByRole('dialog', { name: 'Copy your token now' });
-    expect(accessState.tokens.find((t) => t.name === 'release')).toMatchObject({ owner: 'gitea-runner', owner_kind: 'service_account' });
+    expect(accessState.tokens.find((t) => t.name === 'release')).toMatchObject({
+      owner: 'gitea-runner',
+      owner_kind: 'service_account',
+      scopes: ['repo:docker-prod:read', 'repo:docker-prod:write'],
+    });
   });
 });
 

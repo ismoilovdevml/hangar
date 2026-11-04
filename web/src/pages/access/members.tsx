@@ -576,7 +576,7 @@ export function UserDrawer({ id, canWrite, canDelete, canManageTokens, onClose }
       )}
       {m && dialog === 'edit' && <MemberDialog kind={m.kind} member={m} onClose={() => setDialog(null)} />}
       {m && dialog === 'reset' && <ResetPasswordDialog member={m} onClose={() => setDialog(null)} />}
-      {m && dialog === 'token' && <CreateTokenDialog owner={m.username} onClose={() => setDialog(null)} />}
+      {m && dialog === 'token' && <CreateTokenDialog owner={m.username} ownerId={m.id} onClose={() => setDialog(null)} />}
       {m && dialog === 'requireChange' && (
         <ConfirmDialog
           title="Require a password change at next sign-in?"

@@ -125,6 +125,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Who the caller is and what it may do (same body as /auth/session)
+         * @description For automated clients: `privileges` are the effective privileges of
+         *     this request (the owner's roles narrowed by the token's scopes) and
+         *     `token` describes the token used, with its scopes, restrictions and
+         *     expiry.
+         */
+        get: operations["getMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/openapi.yaml": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** This OpenAPI document as YAML */
+        get: operations["getOpenAPIYAML"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/openapi.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** This OpenAPI document as JSON */
+        get: operations["getOpenAPIJSON"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/automation-guide.md": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Guide for scripts and other automated clients, with this server's URLs
+         * @description Markdown: base URL, authentication, the error body, pagination, rate
+         *     limits and the most useful calls with examples. `/llms.txt` at the
+         *     site root links to it and to this document.
+         */
+        get: operations["getAutomationGuide"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/client-endpoints": {
         parameters: {
             query?: never;
@@ -1826,6 +1905,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tokens/{id}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace a token by a new one with the same scopes
+         * @description Creates a token with the same name, owner, scopes, restrictions and
+         *     lifetime (capped at the server maximum) and returns its secret once.
+         *     The old token keeps working unless `revoke_old_after` is set: `0s`
+         *     revokes it at once, a longer duration ends it that much later (never
+         *     later than it would have expired). Your own tokens, or a service
+         *     account's with `system:tokens:write` (and `system:tokens:delete` to end
+         *     the old one). Audited as `token.rotate`.
+         */
+        post: operations["rotateToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/audit": {
         parameters: {
             query?: never;
@@ -1942,7 +2049,12 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         Error: {
-            /** @description Machine-readable code, e.g. `not_found`, `forbidden`, `invalid_argument`, `locked`, `password_change_required` */
+            /**
+             * @description Machine-readable code, e.g. `invalid_argument` (400), `unauthenticated` (401),
+             *     `forbidden`, `read_only_token` or `password_change_required` (403),
+             *     `not_found` (404), `conflict` (409), `locked` (423), `rate_limited` (429),
+             *     `internal` (500)
+             */
             code: string;
             message: string;
             /** @description Seconds until the action may be retried (lockout, rate limit) */
@@ -2053,6 +2165,8 @@ export interface components {
              */
             password_change_required?: boolean;
             password_policy?: components["schemas"]["PasswordPolicy"];
+            /** @description The token this request authenticated with; absent for browser sessions and passwords */
+            token?: components["schemas"]["CurrentToken"];
         };
         /** @description Rules new local passwords must meet (`auth.password`) */
         PasswordPolicy: {
@@ -2064,6 +2178,22 @@ export interface components {
             min_classes: number;
             /** @description Whether the password may contain the username */
             allow_username: boolean;
+        };
+        CurrentToken: {
+            id: string;
+            /**
+             * @description `personal` (personal access and service-account tokens) or `session` (short-lived registry logins)
+             * @enum {string}
+             */
+            kind: "personal" | "session";
+            name: string;
+            prefix: string;
+            /** @description Effective scopes (narrowed to read for read-only tokens); null means the owner's full rights */
+            scopes: components["schemas"]["Privilege"][] | null;
+            expires_at: components["schemas"]["Timestamp"];
+            read_only: boolean;
+            /** @description Client networks the token works from; empty means any */
+            allowed_cidrs: string[];
         };
         TokenPolicy: {
             max_lifetime: components["schemas"]["Duration"];
@@ -3571,6 +3701,36 @@ export interface components {
             scopes: components["schemas"]["Privilege"][];
             /** @description Required; tokens never live forever */
             expires_at: components["schemas"]["Timestamp"];
+            /**
+             * @description Optional: the token only works from these client addresses or CIDR
+             *     networks (`203.0.113.7`, `10.20.0.0/16`, `2001:db8::/48`). Requests
+             *     from elsewhere fail authentication (audited as `address_not_allowed`).
+             */
+            allowed_cidrs?: string[];
+            /**
+             * @description Optional: the token can only read. Its scopes are narrowed to read and
+             *     the REST API refuses every request other than GET and HEAD
+             *     (403 `read_only_token`).
+             */
+            read_only?: boolean;
+        };
+        TokenRotateInput: {
+            /**
+             * @description Go duration from 0s to 720h. `0s` revokes the old token now; `24h` lets
+             *     it work one more day. Omit or null to leave it as it is.
+             * @example 0s
+             * @example 24h
+             */
+            revoke_old_after?: string | null;
+        };
+        TokenRotated: components["schemas"]["TokenCreated"] & {
+            replaced: {
+                id: string;
+                /** @description Revoked at once */
+                revoked: boolean;
+                /** @description When the old token stops working (now, if revoked) */
+                expires_at: components["schemas"]["Timestamp"];
+            };
         };
         Token: {
             id: string;
@@ -3587,6 +3747,10 @@ export interface components {
             created_at: components["schemas"]["Timestamp"];
             /** Format: date-time */
             last_used_at?: string | null;
+            /** @description Client networks the token works from; empty means any */
+            allowed_cidrs: string[];
+            /** @description The token can only read */
+            read_only: boolean;
         };
         TokenCreated: components["schemas"]["Token"] & {
             /** @description The token (`hgr_...`). Shown once; store it now. */
@@ -4053,6 +4217,89 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    getMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getOpenAPIYAML: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OpenAPI 3.1 document */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/yaml": string;
+                };
+            };
+        };
+    };
+    getOpenAPIJSON: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OpenAPI 3.1 document */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    getAutomationGuide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The guide */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/markdown": string;
+                };
+            };
         };
     };
     listClientEndpoints: {
@@ -7152,6 +7399,36 @@ export interface operations {
                 };
                 content?: never;
             };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    rotateToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TokenRotateInput"];
+            };
+        };
+        responses: {
+            /** @description The replacement; `secret` is shown only in this response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenRotated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };

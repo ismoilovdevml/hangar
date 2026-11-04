@@ -21,6 +21,8 @@ export interface ClientTarget {
   publishes?: boolean;
   /** Who is signed in; a placeholder is shown when unknown. */
   username?: string;
+  /** A real token to put in the snippets (shown once after creating one); a placeholder otherwise. */
+  token?: string;
 }
 
 export interface ClientSetup {
@@ -36,7 +38,7 @@ const noScheme = (u: string) => u.replace(/^https?:/, '');
 /** The registry host docker clients log in to: the image URL up to the first slash. */
 const dockerHost = (url: string) => url.replace(/^https?:\/\//, '').split('/')[0] ?? url;
 /** `https://host/path` with `user:token@` inserted after the scheme. */
-const withCredentials = (url: string, user: string) => url.replace(/^(https?:\/\/)/, `$1${user}:${TOKEN}@`);
+const withCredentials = (url: string, user: string, token = TOKEN) => url.replace(/^(https?:\/\/)/, `$1${user}:${token}@`);
 const c = (text: string): CodeLine => ({ text, comment: true });
 const l = (text: string): CodeLine => ({ text });
 
@@ -47,6 +49,7 @@ const l = (text: string): CodeLine => ({ text });
  */
 export function clientSetup(t: ClientTarget): ClientSetup {
   const user = t.username || '<username>';
+  const tok = t.token || TOKEN;
   const repo = t.repository;
   const url = t.url ? slash(t.url) : '';
   switch (t.format) {
@@ -55,20 +58,20 @@ export function clientSetup(t: ClientTarget): ClientSetup {
       return {
         setup: [
           c('# The service index is public; restoring packages needs the token'),
-          l(`dotnet nuget add source ${index} -n ${repo} -u ${user} -p ${TOKEN} --store-password-in-clear-text`),
+          l(`dotnet nuget add source ${index} -n ${repo} -u ${user} -p ${tok} --store-password-in-clear-text`),
         ],
-        publish: t.publishes ? [l(`dotnet nuget push <package>.nupkg -s ${index} -k ${TOKEN}`)] : [],
+        publish: t.publishes ? [l(`dotnet nuget push <package>.nupkg -s ${index} -k ${tok}`)] : [],
       };
     }
     case 'npm':
       return {
-        setup: [c('# .npmrc in the project or your home directory'), l(`registry=${url}`), l(`${noScheme(url)}:_authToken=${TOKEN}`)],
+        setup: [c('# .npmrc in the project or your home directory'), l(`registry=${url}`), l(`${noScheme(url)}:_authToken=${tok}`)],
         publish: t.publishes ? [l(`npm publish --registry ${url}`)] : [],
       };
     case 'pypi':
       return {
-        setup: [l(`pip config set global.index-url ${withCredentials(`${url}simple/`, '__token__')}`)],
-        publish: t.publishes ? [l(`twine upload --repository-url ${url} -u __token__ -p ${TOKEN} dist/*`)] : [],
+        setup: [l(`pip config set global.index-url ${withCredentials(`${url}simple/`, '__token__', tok)}`)],
+        publish: t.publishes ? [l(`twine upload --repository-url ${url} -u __token__ -p ${tok} dist/*`)] : [],
       };
     case 'maven': {
       const server = `    <server><id>${repo}</id><username>${user}</username><password>\${env.HANGAR_TOKEN}</password></server>`;
@@ -76,7 +79,7 @@ export function clientSetup(t: ClientTarget): ClientSetup {
       const mirror = t.type !== 'hosted';
       return {
         setup: [
-          c(`# export HANGAR_TOKEN=${TOKEN}`),
+          c(`# export HANGAR_TOKEN=${tok}`),
           c('<!-- ~/.m2/settings.xml -->'),
           l('<settings>'),
           l('  <servers>'),
@@ -103,7 +106,7 @@ export function clientSetup(t: ClientTarget): ClientSetup {
       const host = t.host ?? (image ? dockerHost(image) : '');
       return {
         setup: [
-          l(`echo '${TOKEN}' | docker login ${host} -u ${user} --password-stdin`),
+          l(`echo '${tok}' | docker login ${host} -u ${user} --password-stdin`),
           ...(image ? [l(`docker pull ${image}/<image>:<tag>`)] : []),
         ],
         publish:
@@ -112,14 +115,14 @@ export function clientSetup(t: ClientTarget): ClientSetup {
     }
     case 'raw':
       return {
-        setup: [l(`curl -u ${user}:${TOKEN} -fLO ${url}<path>`)],
-        publish: t.publishes ? [l(`curl -u ${user}:${TOKEN} --upload-file ./<file> ${url}<path>/<file>`)] : [],
+        setup: [l(`curl -u ${user}:${tok} -fLO ${url}<path>`)],
+        publish: t.publishes ? [l(`curl -u ${user}:${tok} --upload-file ./<file> ${url}<path>/<file>`)] : [],
       };
     case 'helm':
-      return { setup: [l(`helm repo add ${repo} ${url} --username ${user} --password ${TOKEN}`)], publish: [] };
+      return { setup: [l(`helm repo add ${repo} ${url} --username ${user} --password ${tok}`)], publish: [] };
     case 'go':
       return {
-        setup: [l(`go env -w GOPROXY=${url},direct`), c(`# ~/.netrc: machine ${dockerHost(url)} login ${user} password ${TOKEN}`)],
+        setup: [l(`go env -w GOPROXY=${url},direct`), c(`# ~/.netrc: machine ${dockerHost(url)} login ${user} password ${tok}`)],
         publish: [],
       };
     case 'cargo':

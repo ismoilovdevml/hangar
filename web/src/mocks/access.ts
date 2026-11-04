@@ -5,7 +5,7 @@
 import { http, HttpResponse } from 'msw';
 import type { ApiError } from '../api/types';
 import { recordMockAudit } from './ops';
-import type { AuditEvent, EffectivePermissions, Member, MemberInput, Role, RoleInput, SessionInfo, Token, TokenInput } from '../pages/access/api';
+import type { AuditEvent, EffectivePermissions, Member, MemberInput, Role, RoleInput, SessionInfo, Token, TokenCreated, TokenInput, TokenRotateInput } from '../pages/access/api';
 
 const api = (path: string) => `*/api/v1${path}`;
 const DAY = 86_400_000;
@@ -58,13 +58,15 @@ function seed() {
     expires_at: iso(60 * DAY),
     last_used_at: null,
     last_used_ip: null,
+    allowed_cidrs: [],
+    read_only: false,
     ...t,
   });
   const tokens: Token[] = [
     token({ id: 't_0001', name: 'laptop CLI', owner: 'd.ismoilov', scopes: ['repo:*:read', 'repo:npm-*:write'], last_used_at: iso(-3_600_000), last_used_ip: '10.4.2.18', expires_at: iso(9 * DAY) }),
     token({ id: 't_0002', name: 'release script', owner: 'd.ismoilov', scopes: ['repo:docker-prod:write'], expires_at: iso(200 * DAY) }),
     token({ id: 't_0003', name: 'gitea deploy', owner: 'gitea-runner', owner_kind: 'service_account', scopes: ['repo:*:write', 'repo:*:read'], last_used_at: iso(-12_000), last_used_ip: '10.8.0.4', expires_at: iso(28 * DAY) }),
-    token({ id: 't_0004', name: 'image updater', owner: 'argo-cd', owner_kind: 'service_account', scopes: ['repo:docker-*:read'], last_used_at: iso(-17 * 60_000), last_used_ip: '10.8.0.9', expires_at: iso(61 * DAY) }),
+    token({ id: 't_0004', name: 'image updater', owner: 'argo-cd', owner_kind: 'service_account', scopes: ['repo:docker-*:read'], last_used_at: iso(-17 * 60_000), last_used_ip: '10.8.0.9', expires_at: iso(61 * DAY), allowed_cidrs: ['10.8.0.0/16'], read_only: true }),
     token({ id: 't_0005', name: 'old laptop', owner: 'j.karimov', scopes: ['repo:*:read'], expires_at: iso(-3 * DAY) }),
   ];
   const sessions: Record<string, SessionInfo[]> = {
@@ -121,6 +123,28 @@ function withCounts(): Role[] {
 
 function live(t: Token) {
   return new Date(t.expires_at).getTime() > Date.now();
+}
+
+/** Stores a new token and returns it with its one-time secret. */
+function mint(name: string, owner: string, ownerKind: 'user' | 'service_account', scopes: string[], expiresAt: string, cidrs: string[], readOnly: boolean): TokenCreated {
+  const id = `t_${++st.nextId}`;
+  const secret = `hgr_Ab3dEf6hIj9kLm2nOp5qRs8tUv1wXy4zAb7cDe0f${id.replace('_', '')}`;
+  const t: Token = {
+    id,
+    name,
+    owner,
+    owner_kind: ownerKind,
+    prefix: secret.slice(0, 8),
+    scopes: [...new Set(scopes)].sort(),
+    expires_at: expiresAt,
+    created_at: new Date().toISOString(),
+    last_used_at: null,
+    last_used_ip: null,
+    allowed_cidrs: cidrs,
+    read_only: readOnly,
+  };
+  st.tokens.unshift(t);
+  return { ...t, secret };
 }
 
 function refreshTokenCounts() {
@@ -430,23 +454,33 @@ export function accessHandlers(guard: Guard, onPasswordChanged: () => Record<str
       const owner = body.owner || 'd.ismoilov';
       const ownerUser = st.users.find((u) => u.username === owner);
       if (body.owner && ownerUser?.kind !== 'service_account') return invalid(`owner "${body.owner}" must be a service account`);
-      const id = `t_${++st.nextId}`;
-      const secret = `hgr_${'Ab3dEf6hIj9kLm2nOp5qRs8tUv1wXy4zAb7cDe0f'.slice(0, 40)}Zq9X1c`;
-      const t: Token = {
-        id,
-        name: body.name.trim(),
-        owner,
-        owner_kind: ownerUser?.kind ?? 'user',
-        prefix: secret.slice(0, 8),
-        scopes: [...new Set(body.scopes)].sort(),
-        expires_at: body.expires_at,
-        created_at: new Date().toISOString(),
-        last_used_at: null,
-        last_used_ip: null,
-      };
-      st.tokens.unshift(t);
-      record('token.create', `token:${id}`, { name: t.name, owner });
-      return HttpResponse.json({ ...t, secret }, { status: 201 });
+      const t = mint(body.name.trim(), owner, ownerUser?.kind ?? 'user', body.scopes, body.expires_at, body.allowed_cidrs ?? [], body.read_only ?? false);
+      record('token.create', `token:${t.id}`, { name: t.name, owner });
+      return HttpResponse.json(t, { status: 201 });
+    }),
+    http.post(api('/tokens/:id/rotate'), async ({ request, params }) => {
+      const denied = guard(request, true);
+      if (denied) return denied;
+      const old = st.tokens.find((x) => x.id === params.id);
+      if (!old) return notFound('token');
+      const text = await request.text();
+      const body = (text ? JSON.parse(text) : {}) as TokenRotateInput;
+      const after = body.revoke_old_after;
+      const graceMs = after == null ? null : (Number(/^(\d+)h$/.exec(after)?.[1] ?? (after === '0s' ? 0 : NaN)) * 3_600_000);
+      if (graceMs !== null && Number.isNaN(graceMs)) return invalid('revoke_old_after must be a duration between 0s and 720h0m0s');
+      const lifetime = Math.min(new Date(old.expires_at).getTime() - new Date(old.created_at).getTime(), 366 * DAY);
+      const t = mint(old.name, old.owner, old.owner_kind ?? 'user', old.scopes, new Date(Date.now() + lifetime).toISOString(), old.allowed_cidrs, old.read_only);
+      let revoked = false;
+      if (graceMs === 0) {
+        st.tokens = st.tokens.filter((x) => x !== old);
+        revoked = true;
+        old.expires_at = new Date().toISOString();
+      } else if (graceMs !== null) {
+        const end = Date.now() + graceMs;
+        if (end < new Date(old.expires_at).getTime()) old.expires_at = new Date(end).toISOString();
+      }
+      record('token.rotate', `token:${t.id}`, { name: t.name, owner: t.owner, replaces: old.id });
+      return HttpResponse.json({ ...t, replaced: { id: old.id, revoked, expires_at: old.expires_at } }, { status: 201 });
     }),
     http.delete(api('/tokens/:id'), ({ request, params }) => {
       const denied = guard(request, true);

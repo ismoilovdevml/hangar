@@ -51,6 +51,7 @@ type RouterOptions struct {
 //
 //	/healthz /readyz /metrics      operations
 //	/api/v1/...                    REST API (api/openapi.yaml)
+//	/llms.txt                      index for automated clients
 //	/repository/{repo}/... /v2/... format protocols
 //	everything else                web UI (SPA)
 func NewRouter(o RouterOptions) http.Handler {
@@ -80,6 +81,11 @@ func NewRouter(o RouterOptions) http.Handler {
 		r.Group(func(g chi.Router) {
 			g.Use(apiHeaders, sec.apiRateLimit, sec.failedAuthLimit, sec.bodyLimit(o.Security.APIBodyBytes))
 			o.API.Mount(g)
+		})
+		// The index for automated clients, at the conventional root path.
+		r.Group(func(g chi.Router) {
+			g.Use(apiHeaders, sec.apiRateLimit, sec.bodyLimit(maxOtherBody))
+			g.Get("/llms.txt", o.API.LLMsTxt)
 		})
 	}
 

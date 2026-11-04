@@ -91,25 +91,44 @@ npm config set //registry.example.com/repository/npm-internal/:_authToken "$HANG
 *My account → Personal access tokens → New token*, or **Access & audit →
 Access tokens → New token**.
 
-1. **Name** — what the token is for ("laptop CLI", "release script").
-2. **Expires** — presets of 7, 30, 90, 180 days or a year, or a custom date.
-   Every token expires; the server rejects lifetimes above
-   `auth.max_token_lifetime` (default 366 days).
-3. **Repository access** — all repositories, repositories matching a
-   pattern, selected repositories, or none; combined with the actions
-   read, write, delete, admin.
-4. **Administration scopes** (optional) — a level per system area, or
-   everything (`system:*`).
+1. **Name** — what the token is for ("laptop CLI", "release pipeline").
+2. **Expires** — 7, 30 or 90 days, a year, or a custom date. Every token
+   expires; the server rejects lifetimes above `auth.max_token_lifetime`
+   (default 366 days).
+3. **Permissions** — a preset:
+   - *Read only*: download from every repository.
+   - *Publish to selected repositories*: download and publish to the
+     repositories and patterns (`npm-*`) you pick.
+   - *Repository admin*: manage the picked repositories.
+   - *Security reviewer*: read vulnerability findings and waive them.
+   - *Full admin*: everything (`system:*`); the dialog warns before you use it.
+   - *Custom*: repositories (names or patterns) × read, write, delete, admin,
+     plus read, write or admin per administration area.
+4. **Restrictions** (optional) — the addresses or CIDR networks the token may
+   be used from, and a read-only flag that limits it to downloading and
+   viewing whatever its permissions say.
 
-The dialog previews what the token can do in plain words and warns about
-scopes your roles do not grant (they would have no effect). The secret is
-shown **once**; Hangar stores only its SHA-256. Use it as the password with
-any username (docker, npm, Maven, pip, NuGet) or as
-`Authorization: Bearer hgr_…` for the API.
+A token never does more than its owner: requests need a privilege from the
+owner's roles **and** a matching scope, checked on every request. The dialog
+greys out what the owner lacks (presets, repositories, actions, area levels)
+and says why. Below the form a live summary reads the token in plain words:
+"Can publish to nuget-internal", "Can download from npm-*", "Cannot manage
+users & roles, tokens, settings and repositories".
 
-Token lists show the prefix, scopes, creation date, last use (time and client
-address) and expiry. Revoking takes effect immediately, including registry
-logins obtained with the token. Administrators with `system:tokens:read` see
+The secret is shown **once**; Hangar stores only its SHA-256. The same panel
+offers ready-to-paste snippets with this server's real URL: a curl call with
+the Bearer header, `HANGAR_URL` / `HANGAR_TOKEN` lines, client configuration
+for npm, NuGet, pip, Maven and docker for repositories the token can reach,
+and a block to give to an automation, with links to `/llms.txt` and the
+OpenAPI document. See [the API guide](api.md) for automating Hangar.
+
+Token lists show the prefix, what the token can do, restriction badges,
+creation date, last use (time and client address) and expiry. **Rotate**
+creates a replacement with the same name, permissions, restrictions and
+lifetime and shows its secret; the old token keeps working for a grace period
+you choose (1 hour to 7 days), is revoked at once, or is kept until it
+expires. **Revoke** takes effect immediately, including registry logins
+obtained with the token. Administrators with `system:tokens:read` see
 everyone's tokens (`GET /tokens?all=true`, filters `owner`, `owner_kind`,
 `status`, `q`) and can revoke them with `system:tokens:delete`.
 
@@ -168,7 +187,7 @@ and outcome, and every refused attempt is recorded with outcome `denied`.
 |---|---|
 | Users | `user.create`, `user.update`, `user.delete`, `user.disable`, `user.enable`, `user.unlock`, `user.password` |
 | Sign-ins | `auth.login`, `auth.login.failed`, `auth.logout`, `auth.token.failed` |
-| Tokens | `token.create`, `token.revoke`, `token.issue` |
+| Tokens | `token.create`, `token.rotate`, `token.revoke`, `token.issue` |
 | Roles | `role.create`, `role.update`, `role.delete`, `role.bind`, `role.unbind` |
 | Sessions | `session.revoke`, `session.revoke_all` |
 
@@ -206,6 +225,9 @@ Sign-in with an OIDC provider or LDAP / Active Directory is configured under
   `user.password.require_change`. Their access tokens keep working.
 - Service-account tokens are the right way to give CI access. Do not create
   local members for pipelines.
-- Rotate tokens before they expire: create the new one, update the CI secret,
-  then revoke the old one; its last-used time shows when nothing uses it any
-  more.
+- Rotate tokens before they expire with **Rotate** (or
+  `POST /tokens/{id}/rotate`): pick a grace period, update the CI secret, and
+  the old token stops working on its own. Its last-used time shows whether
+  anything still uses it.
+- Restrict long-lived automation tokens to the runners' networks, and make
+  tokens read-only when the job only downloads.

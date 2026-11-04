@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -177,6 +178,8 @@ type sessionBody struct {
 	// POST /auth/logout answer until the password is changed.
 	PasswordChangeRequired bool           `json:"password_change_required"`
 	PasswordPolicy         passwordPolicy `json:"password_policy"`
+	// Token is the token the request authenticated with, if any.
+	Token *auth.CurrentToken `json:"token,omitempty"`
 }
 
 // Values of Session.auth_method.
@@ -225,6 +228,11 @@ func (h *handler) writeSession(w http.ResponseWriter, r *http.Request, p *core.P
 	if p.Kind == core.PrincipalServiceAccount {
 		kind = auth.KindServiceAccount
 	}
+	token, err := h.svc.CurrentToken(ctx)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
 	source := p.Source
 	if u, err := h.svc.GetUserByName(ctx, p.Name); err == nil {
 		source = u.Source
@@ -248,6 +256,7 @@ func (h *handler) writeSession(w http.ResponseWriter, r *http.Request, p *core.P
 			MinLength: h.cfg.Password.MinLength, MaxLength: h.cfg.Password.MaxLength,
 			MinClasses: h.cfg.Password.MinClasses, AllowUsername: h.cfg.Password.AllowUsername,
 		},
+		Token: token,
 	})
 }
 
@@ -294,6 +303,55 @@ func (h *handler) createToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, tokenCreated{TokenInfo: t, Secret: secret})
+}
+
+// rotateInput is schema TokenRotateInput.
+type rotateInput struct {
+	// RevokeOldAfter is a Go duration: "0s" ends the old token at once.
+	RevokeOldAfter *string `json:"revoke_old_after"`
+}
+
+// tokenRotated is schema TokenRotated.
+type tokenRotated struct {
+	tokenCreated
+	Replaced replacedToken `json:"replaced"`
+}
+
+type replacedToken struct {
+	ID        string    `json:"id"`
+	Revoked   bool      `json:"revoked"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// maxRotateGrace bounds how long a rotated token may keep working.
+const maxRotateGrace = 30 * 24 * time.Hour
+
+func (h *handler) rotateToken(w http.ResponseWriter, r *http.Request) {
+	var in rotateInput
+	if r.ContentLength != 0 {
+		if err := decode(w, r, &in); err != nil {
+			h.writeError(w, r, err)
+			return
+		}
+	}
+	var opts auth.RotateInput
+	if in.RevokeOldAfter != nil {
+		d, err := time.ParseDuration(*in.RevokeOldAfter)
+		if err != nil || d < 0 || d > maxRotateGrace {
+			h.writeError(w, r, fmt.Errorf("revoke_old_after must be a duration between 0s and %s: %w", maxRotateGrace, core.ErrInvalid))
+			return
+		}
+		opts.RevokeOldAfter = &d
+	}
+	res, err := h.svc.RotateToken(r.Context(), chi.URLParam(r, "id"), opts)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, tokenRotated{
+		tokenCreated: tokenCreated{TokenInfo: res.Token, Secret: res.Secret},
+		Replaced:     replacedToken{ID: res.Old.ID, Revoked: res.RevokedNow, ExpiresAt: res.Old.ExpiresAt},
+	})
 }
 
 func (h *handler) revokeToken(w http.ResponseWriter, r *http.Request) {

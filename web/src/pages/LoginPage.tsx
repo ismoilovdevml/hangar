@@ -9,7 +9,7 @@ import { useNow } from '../lib/useNow';
 const route = getRouteApi('/login');
 
 const DOCS_URL = 'https://github.com/ismoilovdevml/hangar/tree/main/docs/guides';
-const API_URL = 'https://github.com/ismoilovdevml/hangar/blob/main/api/openapi.yaml';
+const API_URL = '/api-docs';
 
 /** Messages for `?error=` set by the single sign-on callback. */
 const SSO_ERRORS: Record<string, string> = {
@@ -215,9 +215,7 @@ export function LoginPage() {
         <a href={DOCS_URL} target="_blank" rel="noreferrer">
           Documentation
         </a>
-        <a href={API_URL} target="_blank" rel="noreferrer">
-          API reference
-        </a>
+        <a href={API_URL}>API reference</a>
       </footer>
     </div>
   );

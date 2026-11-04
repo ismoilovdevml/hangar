@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboard
 import { Link } from '@tanstack/react-router';
 import { useSession } from '../api/hooks';
 import { initials } from '../lib/format';
-import { IconKey, IconLogout, IconShield, IconUser } from './icons';
+import { IconKey, IconLogout, IconShield, IconTerminal, IconUser } from './icons';
 import { IconSettings } from './opsIcons';
 
 const ITEM = '[role="menuitem"]';
@@ -143,6 +143,9 @@ export function AccountMenu({ onSignOut, compact }: { onSignOut: () => void; com
             <MenuLink icon={<IconSettings size={16} />} to="/settings" onPick={() => close(false)}>
               Settings
             </MenuLink>
+            <MenuLink icon={<IconTerminal size={16} />} to="/api-docs" onPick={() => close(false)}>
+              API reference
+            </MenuLink>
           </div>
           <div className="account-menu__group" role="group" aria-label="Session">
             <button
@@ -167,7 +170,7 @@ export function AccountMenu({ onSignOut, compact }: { onSignOut: () => void; com
   );
 }
 
-function MenuLink({ icon, to, hash, onPick, children }: { icon: ReactNode; to: '/account' | '/settings'; hash?: string; onPick: () => void; children: ReactNode }) {
+function MenuLink({ icon, to, hash, onPick, children }: { icon: ReactNode; to: '/account' | '/settings' | '/api-docs'; hash?: string; onPick: () => void; children: ReactNode }) {
   return (
     <Link to={to} hash={hash} role="menuitem" tabIndex={-1} className="account-menu__item" onClick={onPick}>
       <span className="account-menu__tile" aria-hidden="true">
