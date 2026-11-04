@@ -10,10 +10,58 @@ Docker clients (`registry.example.com`). Files: `deploy/compose/`.
 | `compose.yaml` | The stack. Optional services are enabled with `COMPOSE_PROFILES`. |
 | `.env.example` | Every setting and secret; copy to `.env`. |
 | `hangar.yaml` | Non-secret tuning, mounted read-only into the container. |
-| `Caddyfile` | TLS, the two hosts, streaming, `/metrics` blocked publicly. |
+| `Caddyfile` | TLS, the UI host, streaming, `/metrics` blocked publicly; loads `sites/*.caddy`. |
+| `sites/registry.caddy` | The separate registry host; delete it if you do not want one. |
 | `compose.connectors.example.yaml` | Publishes Docker port connectors. |
 
-## Prerequisites
+
+## With the installer (recommended)
+
+`deploy/install.sh` installs a published release: it checks Docker and Compose
+v2, downloads the release's compose files (verified against its
+`SHA256SUMS`), writes `/opt/hangar/.env` (mode 600) with secrets generated
+once (`HANGAR_SECRET_KEY`, `HANGAR_DOCKER_TOKEN_KEY`, the PostgreSQL and
+bootstrap administrator passwords), pulls the image, starts the stack and
+waits for `/readyz`. It never prints secrets and never replaces existing ones.
+
+```bash
+# Automatic HTTPS with Caddy (DNS must point at the host, ports 80/443 open)
+curl -fsSL https://raw.githubusercontent.com/ismoilovdevml/hangar/main/deploy/install.sh |
+  sudo bash -s -- --domain hangar.example.com --tls caddy --acme-email ops@example.com \
+  --registry-domain registry.example.com
+
+# Behind an existing reverse proxy that terminates TLS (e.g. a company nginx)
+curl -fsSL https://raw.githubusercontent.com/ismoilovdevml/hangar/main/deploy/install.sh |
+  sudo bash -s -- --domain hangar.example.com --tls none --bind 0.0.0.0 \
+  --trusted-proxies 10.0.0.5/32
+```
+
+In the reverse-proxy mode Hangar listens on `0.0.0.0:8080` over plain HTTP,
+`server.base_url` is `https://<domain>`, and `X-Forwarded-*` headers are
+trusted only from `--trusted-proxies`. Configure the proxy for large uploads
+([reverse-proxy.md](reverse-proxy.md)) and firewall port 8080 so only the
+proxy reaches it.
+
+Options: `--version vX.Y.Z|latest`, `--dir` (default `/opt/hangar`),
+`--port`, `--storage fs|s3` (with `s3`, MinIO runs unless `--s3-endpoint`
+names an external endpoint; credentials go in `.env`), `--base-url`,
+`--admin-user`, `--mirror URL` (internal copy of the release assets),
+`--files-from DIR` and `--image REF` (air-gapped hosts, tests). Run with
+`--help` for the full list.
+
+- **Re-run** with other flags to change a setting; flags you leave out keep
+  their installed value. `hangar.yaml` and `Caddyfile` you edited are kept
+  (the release version is written next to them as `*.new`); put compose
+  changes in `/opt/hangar/compose.override.yaml`, which Compose loads
+  automatically.
+- **Upgrade**: back up, then run the one-liner again with `--version vX.Y.Z`
+  (or `--version latest`). Migrations run on start.
+- **Uninstall**: `--uninstall` removes the containers and keeps the data;
+  `--uninstall --purge` also deletes the volumes and `/opt/hangar`.
+
+## Manual installation
+
+### Prerequisites
 
 - Docker Engine 24+ with the Compose plugin v2.24+.
 - DNS A/AAAA records for both host names pointing at the host, and ports 80
@@ -23,7 +71,7 @@ Docker clients (`registry.example.com`). Files: `deploy/compose/`.
 - Sizing: [requirements.md](requirements.md). The defaults suit a host with
   8 GiB RAM and 4 vCPU.
 
-## Steps
+### Steps
 
 ```bash
 git clone https://github.com/ismoilovdevml/hangar.git

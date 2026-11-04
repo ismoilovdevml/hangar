@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Releases**: version tags publish a multi-arch image
+  (`ghcr.io/ismoilovdevml/hangar`, linux/amd64 and linux/arm64, smoke-tested
+  against PostgreSQL), binaries for Linux and macOS with `SHA256SUMS`, and a
+  GitHub Release carrying the compose stack and the installer.
+- **Installer**: `deploy/install.sh` installs or upgrades the compose stack
+  from a release image in one command (`--tls caddy` or behind an existing
+  reverse proxy), generates secrets once without printing them, and supports
+  `--uninstall [--purge]`. The registry host moved to
+  `deploy/compose/sites/registry.caddy`.
 - **Web: Packages** (`/browse`): repository tree with packages and their
   newest versions; package header with format, version selector, signed,
   quarantine and security state; install command per client (npm/pnpm/Yarn,
