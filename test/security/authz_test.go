@@ -50,6 +50,22 @@ var apiPolicy = map[string]policy{
 	"POST /auth/logout":                          self,
 	"GET /auth/session":                          self,
 	"GET /me/client-endpoints":                   self,
+	"GET /me/sessions":                           self,
+	"DELETE /me/sessions":                        self,
+	"DELETE /me/sessions/{sid}":                  self,
+	"PUT /me/password":                           self,
+	"PUT /me/profile":                            self,
+	"GET /roles/{name}":                          privileged,
+	"POST /roles/{name}/members":                 privileged,
+	"DELETE /roles/{name}/members/{id}":          privileged,
+	"GET /users/{id}/permissions":                readerOwned,
+	"GET /users/{id}/sessions":                   readerOwned,
+	"DELETE /users/{id}/sessions":                readerOwned,
+	"DELETE /users/{id}/sessions/{sid}":          privileged,
+	"POST /users/{id}/disable":                   privileged,
+	"POST /users/{id}/enable":                    privileged,
+	"POST /users/{id}/unlock":                    privileged,
+	"PUT /users/{id}/password":                   privileged,
 	"GET /tokens":                                self,
 	"POST /tokens":                               self,
 	"GET /formats":                               filtered,
@@ -215,7 +231,7 @@ func fillAPIPath(p string, ids map[string]string) string {
 			}
 		}
 	}
-	for _, param := range []string{"{id}", "{run_id}"} {
+	for _, param := range []string{"{id}", "{run_id}", "{sid}"} {
 		p = strings.ReplaceAll(p, param, ids["{id}"])
 	}
 	return strings.ReplaceAll(p, "{name}", "x")
@@ -262,8 +278,9 @@ func TestAPIAuthorizationSweep(t *testing.T) {
 			body = map[string]any{}
 		}
 		for _, c := range callers {
-			if c.name != anonymous.name && op == "POST /auth/logout" {
-				continue // would end the caller's own session
+			if c.name != anonymous.name && (op == "POST /auth/logout" ||
+				(method != http.MethodGet && strings.HasPrefix(p, "/me/"))) {
+				continue // would end or change the caller's own sessions and account
 			}
 			r, err := h.do(c, method, path, body)
 			if err != nil {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
@@ -72,6 +73,40 @@ func TestPrivilegeEscalation(t *testing.T) {
 	}
 	if r, _ := h.do(reader, http.MethodGet, "/api/v1/users", nil); r.status != http.StatusForbidden {
 		t.Errorf("reader lists users after the attempt: %d", r.status)
+	}
+	// Nor join a role, by itself or through the repository-scoped token of
+	// an administrator.
+	for _, c := range []cred{reader, h.other()} {
+		if r, _ := h.do(c, http.MethodPost, "/api/v1/roles/Admin/members", map[string]any{"user_id": readerID}); r.status < 400 {
+			t.Errorf("%s added the reader to Admin: %d %s", c.name, r.status, r.body)
+		}
+		if r, _ := h.do(c, http.MethodPut, "/api/v1/users/"+readerID+"/password", map[string]any{"password": "Taken-Over-Pass-123"}); r.status < 400 {
+			t.Errorf("%s set the reader's password: %d %s", c.name, r.status, r.body)
+		}
+	}
+	if r, _ := h.do(reader, http.MethodGet, "/api/v1/users", nil); r.status != http.StatusForbidden {
+		t.Errorf("reader lists users after joining attempts: %d", r.status)
+	}
+	// A user may look at and end its own sessions, never another user's.
+	var adminID string
+	for _, u := range users.Items {
+		if u.Username == adminUser {
+			adminID = u.ID
+		}
+	}
+	for _, c := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/users/" + adminID + "/permissions"},
+		{http.MethodGet, "/api/v1/users/" + adminID + "/sessions"},
+		{http.MethodDelete, "/api/v1/users/" + adminID + "/sessions"},
+		{http.MethodPost, "/api/v1/users/" + adminID + "/disable"},
+	} {
+		if r, _ := h.do(reader, c.method, c.path, nil); r.status < 400 {
+			t.Errorf("reader %s %s (the administrator) = %d %s", c.method, c.path, r.status, r.body)
+		}
+	}
+	// Every owner's tokens are for administrators only.
+	if r, _ := h.do(reader, http.MethodGet, "/api/v1/tokens?all=true", nil); r.status < 400 && strings.Contains(string(r.body), "other-only") {
+		t.Errorf("reader sees other owners' tokens: %d %s", r.status, r.body)
 	}
 	// Nor create a role or an account.
 	if r, _ := h.do(reader, http.MethodPost, "/api/v1/roles", map[string]any{"name": "mine", "privileges": []string{"system:*:*"}}); r.status != http.StatusForbidden {
