@@ -39,6 +39,7 @@ tags:
   - name: cleanup
   - name: tasks
   - name: access
+  - name: settings
   - name: audit
   - name: cluster
   - name: events
@@ -1674,6 +1675,261 @@ paths:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/IdentityProvider" }
+  /identity-providers/oidc:
+    get:
+      tags: [settings]
+      operationId: getOidcSettings
+      summary: OIDC sign-in settings
+      description: |
+        `system:settings:read`. When `auth.oidc` is enabled in the configuration
+        file, the file's settings are returned with `source: file` and every
+        field in `file_fields` (read-only). The client secret is never returned.
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OIDCProviderSettings" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    put:
+      tags: [settings]
+      operationId: putOidcSettings
+      summary: Save the OIDC sign-in settings
+      description: |
+        `system:settings:admin`. Replaces every field and applies the result on
+        every node without a restart. An empty `client_secret` keeps the stored
+        secret; `clear_client_secret: true` removes it. Field problems answer 400
+        with `details.fields` (e.g. `issuer_url`, `group_roles[1].roles`). A
+        provider set in the configuration file answers 400. Audited as
+        `settings.oidc.update` with the names of the changed fields.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OIDCSettingsInput" }
+      responses:
+        "200":
+          description: Saved and applied
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OIDCProviderSettings" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /identity-providers/oidc:test:
+    post:
+      tags: [settings]
+      operationId: testOidcSettings
+      summary: Test OIDC settings
+      description: |
+        `system:settings:admin`. Fetches the discovery document, checks the
+        issuer and the signing keys, and tries a `client_credentials` grant to
+        check the client secret. Providers that do not allow that grant report
+        "Discovery ok, credentials are verified at first sign-in". Without
+        `settings` the settings in effect are tested; with them, the form values
+        (an empty secret uses the stored one).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                settings: { $ref: "#/components/schemas/OIDCSettingsInput" }
+      responses:
+        "200":
+          description: Outcome (also when the test failed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SettingsTestResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /identity-providers/ldap:
+    get:
+      tags: [settings]
+      operationId: getLdapSettings
+      summary: LDAP sign-in settings
+      description: Like `GET /identity-providers/oidc`; the bind password is never returned.
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LDAPProviderSettings" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    put:
+      tags: [settings]
+      operationId: putLdapSettings
+      summary: Save the LDAP sign-in settings
+      description: |
+        Like `PUT /identity-providers/oidc`. An empty `bind_password` keeps the
+        stored one; `clear_bind_password: true` removes it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LDAPSettingsInput" }
+      responses:
+        "200":
+          description: Saved and applied
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LDAPProviderSettings" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /identity-providers/ldap:test:
+    post:
+      tags: [settings]
+      operationId: testLdapSettings
+      summary: Test LDAP settings
+      description: |
+        `system:settings:admin`. Connects (with StartTLS when set), binds as the
+        service account and, with `username`, looks that user and their groups
+        up and shows the roles the mapping grants. No user password is needed.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                settings: { $ref: "#/components/schemas/LDAPSettingsInput" }
+                username: { type: string }
+      responses:
+        "200":
+          description: Outcome (also when the test failed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SettingsTestResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /proxies:
+    get:
+      tags: [settings]
+      operationId: listProxies
+      summary: Outbound proxies
+      description: |
+        Every signed-in user may list proxies (the repository proxy picker);
+        without `system:settings:read` items carry only `name`, `source` and
+        `default`, and `limited` is true. The proxy `http.proxy` defines in the
+        configuration file is listed as `config` with `source: file`; it is then
+        the platform default.
+      responses:
+        "200":
+          description: Proxies
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OutboundProxyList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [settings]
+      operationId: createProxy
+      summary: Create an outbound proxy
+      description: |
+        `system:settings:admin`. `default: true` makes it the platform default
+        and clears the flag elsewhere. Audited as `proxy.create` (without the
+        password).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OutboundProxyInput" }
+      responses:
+        "201":
+          description: Created and applied
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OutboundProxy" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /proxies/{name}:
+    parameters:
+      - $ref: "#/components/parameters/ProxyName"
+    get:
+      tags: [settings]
+      operationId: getProxy
+      summary: One outbound proxy
+      responses:
+        "200":
+          description: Proxy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OutboundProxy" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [settings]
+      operationId: updateProxy
+      summary: Change an outbound proxy
+      description: |
+        `system:settings:admin`. The name cannot change. An empty `password`
+        keeps the stored one; `clear_password: true` removes it. Proxies set in
+        the configuration file answer 400.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OutboundProxyInput" }
+      responses:
+        "200":
+          description: Saved and applied
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OutboundProxy" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [settings]
+      operationId: deleteProxy
+      summary: Delete an outbound proxy
+      description: |
+        `system:settings:admin`. Refused with 409 `in_use` while proxy
+        repositories select it by name (`details.repositories`, `details.total`).
+      responses:
+        "204": { description: Deleted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /proxies/{name}:test:
+    parameters:
+      - $ref: "#/components/parameters/ProxyName"
+    post:
+      tags: [settings]
+      operationId: testProxy
+      summary: Fetch a URL through a proxy
+      description: |
+        `system:settings:admin`. GETs `url` (default
+        `https://api.nuget.org/v3/index.json`) through the proxy and reports the
+        HTTP status and latency. With `settings`, unsaved form values are tested
+        (the proxy need not exist yet; an empty password uses the stored one).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url: { type: string, format: uri }
+                settings: { $ref: "#/components/schemas/OutboundProxyInput" }
+      responses:
+        "200":
+          description: Outcome (also when the request failed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SettingsTestResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /tokens:
     get:
       tags: [access]
@@ -1946,6 +2202,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    ProxyName:
+      name: name
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[a-z0-9][a-z0-9._-]{0,62}$" }
 
   responses:
     BadRequest:
@@ -2460,7 +2721,10 @@ components:
       properties:
         proxy:
           type: string
-          description: "`inherit` (default), `none`, or an http://, https:// or socks5:// proxy URL (password write-only)"
+          description: "`inherit` (default: the platform default proxy), `none` (direct), or an http://, https:// or socks5:// proxy URL (password write-only)"
+        proxy_name:
+          type: string
+          description: Name of an outbound proxy (`GET /proxies`) to use instead; `proxy` must then be empty or `inherit`.
         ca_bundle:
           type: string
           description: PEM certificates trusted for this remote in addition to the system roots
@@ -3436,6 +3700,232 @@ components:
         state: { type: string, enum: [ok, error, disabled] }
         last_sync_at: { type: [string, "null"], format: date-time }
         error: { type: string }
+    # ------------------------------------------------------------ settings
+    SettingsMeta:
+      type: object
+      required: [source, file_fields, updated_at]
+      properties:
+        source:
+          type: string
+          enum: [file, database, default]
+          description: "`file`: hangar.yaml or HANGAR_* (read-only); `database`: saved here; `default`: never saved"
+        file_fields:
+          type: array
+          items: { type: string }
+          description: Fields the configuration file sets; shown read-only
+        updated_at: { type: [string, "null"], format: date-time }
+        updated_by: { type: string }
+    GroupRole:
+      type: object
+      required: [group, roles]
+      properties:
+        group:
+          type: string
+          description: Group name (case-insensitive, a leading "/" optional); for LDAP also a group DN
+        roles:
+          type: array
+          items: { type: string }
+    RoleMappingSettings:
+      type: object
+      required: [group_roles, default_roles, allowed_groups, auto_create]
+      properties:
+        group_roles:
+          type: array
+          items: { $ref: "#/components/schemas/GroupRole" }
+        default_roles:
+          type: array
+          items: { type: string }
+          description: Granted to every user of the provider
+        allowed_groups:
+          type: array
+          items: { type: string }
+          description: When not empty, only members of these groups may sign in
+        auto_create:
+          type: boolean
+          description: Create users on their first sign-in
+    OIDCSettings:
+      allOf:
+        - $ref: "#/components/schemas/RoleMappingSettings"
+        - type: object
+          required: [enabled, issuer_url, client_id, client_auth, display_name, scopes, username_claim, email_claim, name_claim, groups_claim, ca_pem]
+          properties:
+            enabled: { type: boolean }
+            issuer_url: { type: string, description: "Issuer identifier; https (http for localhost only)" }
+            client_id: { type: string }
+            client_auth: { type: string, enum: [basic, post] }
+            display_name: { type: string, maxLength: 64, description: Label of the sign-in button }
+            scopes:
+              type: array
+              items: { type: string }
+              description: Must include openid
+            username_claim: { type: string }
+            email_claim: { type: string }
+            name_claim: { type: string }
+            groups_claim: { type: string, description: 'A dotted path reaches nested claims ("realm_access.roles")' }
+            ca_pem: { type: string, description: PEM certificates trusted for the provider }
+    OIDCSettingsInput:
+      allOf:
+        - $ref: "#/components/schemas/OIDCSettings"
+        - type: object
+          properties:
+            client_secret:
+              type: string
+              writeOnly: true
+              description: New secret; empty keeps the stored one
+            clear_client_secret: { type: boolean }
+    OIDCProviderSettings:
+      allOf:
+        - $ref: "#/components/schemas/OIDCSettings"
+        - $ref: "#/components/schemas/SettingsMeta"
+        - type: object
+          required: [client_secret_configured, redirect_uri]
+          properties:
+            client_secret_configured: { type: boolean }
+            ca_file: { type: string, description: auth.oidc.ca_file of a provider set in the file }
+            redirect_uri:
+              type: string
+              description: Callback URL to register at the provider (`<base_url>/api/v1/auth/oidc/callback`)
+    LDAPSettings:
+      allOf:
+        - $ref: "#/components/schemas/RoleMappingSettings"
+        - type: object
+          required: [enabled, url, start_tls, ca_pem, bind_dn, user_base_dn, user_filter, username_attribute, email_attribute,
+            name_attribute, group_attribute, group_base_dn, group_filter, group_name_attribute, nested_groups]
+          properties:
+            enabled: { type: boolean }
+            url: { type: string, description: "ldap://host[:port] or ldaps://host[:port]" }
+            start_tls: { type: boolean }
+            ca_pem: { type: string }
+            bind_dn: { type: string, description: Service account; empty for anonymous search }
+            user_base_dn: { type: string }
+            user_filter: { type: string, description: "Must contain {username}" }
+            username_attribute: { type: string }
+            email_attribute: { type: string }
+            name_attribute: { type: string }
+            group_attribute: { type: string, description: Read from the user entry unless group_base_dn is set }
+            group_base_dn: { type: string }
+            group_filter: { type: string, description: "{dn} is the user's DN, {username} the login name" }
+            group_name_attribute: { type: string }
+            nested_groups: { type: boolean, description: Active Directory nested groups; needs group_base_dn }
+    LDAPSettingsInput:
+      allOf:
+        - $ref: "#/components/schemas/LDAPSettings"
+        - type: object
+          properties:
+            bind_password:
+              type: string
+              writeOnly: true
+              description: New password; empty keeps the stored one
+            clear_bind_password: { type: boolean }
+    LDAPProviderSettings:
+      allOf:
+        - $ref: "#/components/schemas/LDAPSettings"
+        - $ref: "#/components/schemas/SettingsMeta"
+        - type: object
+          required: [bind_password_configured]
+          properties:
+            bind_password_configured: { type: boolean }
+            ca_file: { type: string }
+    SettingsTestStep:
+      type: object
+      required: [name, status, message, latency_ms]
+      properties:
+        name: { type: string, description: "e.g. discovery, issuer, keys, client_credentials, connect, bind, lookup, request" }
+        status: { type: string, enum: [ok, failed, skipped] }
+        message: { type: string }
+        latency_ms: { type: integer }
+    SettingsTestResult:
+      type: object
+      required: [ok, message, steps, latency_ms]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/SettingsTestStep" }
+        status_code: { type: integer, description: HTTP status of the proxy test request }
+        latency_ms: { type: integer }
+        user:
+          type: object
+          description: The entry an LDAP test found
+          required: [dn, username, email, display_name, groups, roles]
+          properties:
+            dn: { type: string }
+            username: { type: string }
+            email: { type: string }
+            display_name: { type: string }
+            groups:
+              type: array
+              items: { type: string }
+            roles:
+              type: array
+              items: { type: string }
+              description: Roles the provider's mapping grants
+    OutboundProxySettings:
+      type: object
+      required: [scheme, host, port, username, no_proxy, redirect_hosts, ca_pem, default]
+      properties:
+        scheme: { type: string, enum: [http, https], description: How Hangar talks to the proxy }
+        host: { type: string }
+        port: { type: integer, minimum: 1, maximum: 65535 }
+        username: { type: string }
+        no_proxy:
+          type: array
+          items: { type: string }
+          description: Hosts, domain suffixes (.corp.example), IPs and CIDRs reached directly
+        redirect_hosts:
+          type: array
+          items: { type: string }
+          description: |
+            Hosts upstream redirects may lead to and still use this proxy (a
+            registry's CDN). When not empty, only the repository's remote host and
+            these hosts go through the proxy. Empty: every host does.
+        ca_pem: { type: string, description: PEM certificates trusted for requests through this proxy }
+        default: { type: boolean, description: The platform default; at most one proxy }
+    OutboundProxyInput:
+      allOf:
+        - $ref: "#/components/schemas/OutboundProxySettings"
+        - type: object
+          properties:
+            name:
+              type: string
+              pattern: "^[a-z0-9][a-z0-9._-]{0,62}$"
+              description: Required on create; cannot change
+            password:
+              type: string
+              writeOnly: true
+              description: New password; empty keeps the stored one
+            clear_password: { type: boolean }
+    OutboundProxy:
+      allOf:
+        - $ref: "#/components/schemas/OutboundProxySettings"
+        - type: object
+          required: [name, password_configured, source, file_fields, repositories, inheriting, created_at, updated_at]
+          properties:
+            name: { type: string }
+            password_configured: { type: boolean }
+            source: { type: string, enum: [file, database] }
+            file_fields:
+              type: array
+              items: { type: string }
+            repositories: { type: integer, description: Proxy repositories that select this proxy by name }
+            inheriting: { type: integer, description: Proxy repositories that use the platform default (default proxy only) }
+            created_at: { type: [string, "null"], format: date-time }
+            updated_at: { type: [string, "null"], format: date-time }
+            updated_by: { type: string }
+    OutboundProxyList:
+      type: object
+      required: [items, default, limited]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OutboundProxy" }
+        default: { type: string, description: Name of the platform default proxy; empty when none }
+        environment_proxy:
+          type: string
+          description: HTTPS_PROXY of the server (password masked), used when there is no default
+        ca_file: { type: string, description: http.ca_file, trusted for every request }
+        limited: { type: boolean, description: Items carry names only (caller cannot read settings) }
     TokenInput:
       type: object
       required: [name, scopes, expires_at]
