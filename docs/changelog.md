@@ -38,6 +38,22 @@
 - **Sidebar status card** stays pinned at the bottom while the links scroll,
   links to System status and turns amber or red when the system is degraded or
   down. The bell shows a dot while tokens are about to expire.
+- **Settings → Authentication, presets first**: pick the identity provider
+  (Active Directory, OpenLDAP, FreeIPA, Keycloak, Microsoft Entra ID, Google
+  Workspace, Okta or any other OIDC / LDAP) and fill in three fields; the
+  preset sets scopes, claims, filters, attributes and nested groups, with
+  every field one *Customize* away. Setup steps per provider next to the
+  redirect URI, status chips for the methods in use, *Switch to …* when
+  another provider replaces the one in use. Typed credentials survive
+  switching cards. The chosen preset is stored as `preset` on
+  `/identity-providers/oidc` and `/identity-providers/ldap` (optional,
+  informational).
+- **Settings → Proxies, calm and short**: with no proxy the page says how
+  remotes are reached (directly, or through the server's `HTTPS_PROXY`).
+  A new proxy needs one field, the proxy address as in `HTTPS_PROXY`, plus
+  the platform-default switch; credentials, exceptions and the CA
+  certificate (upload or paste) are folded away. The test reports the
+  answer inline. Proxies are listed with their default flag and usage.
 - **Fewer release files**: the compose stack ships as one `hangar-compose.tar.gz`
   and only Linux binaries are published (`hangar-linux-amd64`,
   `hangar-linux-arm64`), next to `install.sh` and `SHA256SUMS`. The installer

@@ -15,14 +15,35 @@ connections do not use the HTTP proxy settings).
 ## Named proxies (Settings → Proxies)
 
 Administrators (`system:settings:admin`) manage outbound proxies in
-**Settings → Proxies** or through the API, without a restart. The table
-lists each proxy's name, host, port, whether it is the platform default and
-how many repositories use it.
+**Settings → Proxies** or through the API, without a restart. Users with
+`system:settings:read` see the page read-only.
+
+With no proxy yet, the page says how remotes are reached today:
+*Connecting directly*, or *Using the server's proxy* with the
+`HTTPS_PROXY` value when the server environment sets one. **Add a proxy**
+opens a short form:
+
+1. **Proxy address**, written as in `HTTPS_PROXY`:
+   `http://proxy.example.com:3128` (the port is required; `user:password@`
+   in the address moves to the credential fields). The proxy is named after
+   its host (`proxy.example.com`); **Choose a name** sets another one.
+2. **Use for every proxy repository** makes it the platform default.
+3. **Needs a username and password** and **Exceptions and certificates**
+   (no-proxy hosts, redirect target hosts, a CA certificate to upload or
+   paste) stay folded until needed.
+4. **Test** fetches `https://api.nuget.org/v3/index.json` through the
+   unsaved values and shows *api.nuget.org answered 200 in 182 ms*;
+   **Change** picks another URL. **Save** applies it on every node.
+
+Once proxies exist, the page lists each one with its address, whether it
+is the platform default and how many repositories pick it or inherit it,
+with **Edit**, **Test** and **Delete** per row and **Add another proxy**
+below.
 
 | Field | Meaning |
 |---|---|
-| Name | Key repositories refer to (`corp-proxy`); fixed after creation. |
-| Scheme, host, port | How Hangar reaches the proxy: `http` or `https`. |
+| Name | Key repositories refer to (`corp-proxy`); the host by default, fixed after creation. |
+| Proxy address | Scheme (`http` or `https`), host and port, e.g. `http://proxy.example.com:3128`. |
 | Username, password | Proxy Basic credentials. The password is sealed with `HANGAR_SECRET_KEY` and write-only. |
 | No proxy for | Hosts, `.domain` suffixes, IPs and CIDRs reached directly. |
 | Redirect target hosts | Hosts that upstream redirects may lead to and still go through this proxy, such as a registry's CDN (`.cloudflare.docker.com`). When the list is not empty, only the repository's remote host and these hosts use the proxy and everything else is reached directly. When it is empty, every host uses the proxy. |
@@ -34,7 +55,7 @@ proxy that accepts the server's address.
 
 **Test** fetches a URL (default `https://api.nuget.org/v3/index.json`)
 through the proxy and shows the HTTP status and the time it took; it works
-on unsaved form values too. A `407` means the proxy wants other credentials.
+on unsaved form values too and, from the list, on a saved proxy. A `407` means the proxy wants other credentials.
 
 A proxy that repositories select by name cannot be deleted: the API answers
 `409 in_use` with the repository names. Point those repositories elsewhere
