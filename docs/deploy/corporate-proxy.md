@@ -19,7 +19,7 @@ http:
   # proxy_password: from HANGAR_HTTP_PROXY_PASSWORD
   no_proxy:
     - .corp.example          # domain suffix
-    - nexus-old.corp.example # host
+    - legacy-registry.corp.example # host
     - 10.0.0.0/8             # CIDR
   use_environment: true      # with proxy empty: honour HTTP_PROXY/HTTPS_PROXY/NO_PROXY
   ca_file: /etc/hangar/ca/corp-root.pem
