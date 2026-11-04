@@ -47,6 +47,7 @@ volumes:
 
 services:
   hangar:
+    container_name: hangar
     <<: *hardening
     image: ${HANGAR_IMAGE:-ghcr.io/ismoilovdevml/hangar:latest}
     restart: unless-stopped
@@ -116,6 +117,7 @@ services:
           memory: 512m
 
   postgres:
+    container_name: hangar-postgres
     <<: *hardening
     profiles: [postgres]
     image: ${POSTGRES_IMAGE:-postgres:16.15-alpine}
@@ -178,6 +180,7 @@ services:
   # S3-compatible object storage. Upstream MinIO no longer publishes container
   # images; this is a community build of the same server.
   minio:
+    container_name: hangar-minio
     <<: *hardening
     profiles: [minio]
     image: ${MINIO_IMAGE:-pgsty/minio:RELEASE.2026-08-04T00-00-00Z}
@@ -216,6 +219,7 @@ services:
   # One-shot: creates the bucket and a least-privilege user for Hangar, so the
   # MinIO root credentials never reach the Hangar container. Idempotent.
   minio-init:
+    container_name: hangar-minio-init
     <<: *hardening
     profiles: [minio]
     image: ${MINIO_MC_IMAGE:-pgsty/mc:RELEASE.2026-10-26T00-00-00Z}
@@ -264,6 +268,7 @@ services:
         echo "minio-init: bucket $$BUCKET and user $$HANGAR_KEY ready"
 
   caddy:
+    container_name: hangar-caddy
     <<: *hardening
     profiles: [caddy]
     image: ${CADDY_IMAGE:-caddy:2.11.7-alpine}
