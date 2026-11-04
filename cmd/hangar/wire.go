@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -106,6 +109,7 @@ func openAuth(cfg config.Config, pool *pgxpool.Pool, bus core.EventBus, metrics 
 	}
 	authSvc, err := auth.New(pool, auth.Options{
 		Config: cfg.Auth, Audit: observability.ObserveAuth(auditLog, metrics), Events: bus, Directory: dir, Logger: log,
+		InitialPasswordFile: cfg.Bootstrap.InitialPasswordFile,
 	})
 	if err != nil {
 		closeAudit(auditLog, log)
@@ -497,8 +501,8 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Security:         securityOptions(cfg),
 	})
 
-	// First administrator from the environment.
-	if err := bootstrapFromConfig(ctx, cfg, authSvc, log); err != nil {
+	// First administrator: from the environment, or generated.
+	if err := bootstrapFromConfig(ctx, cfg, authSvc, log, os.Stderr); err != nil {
 		return nil, err
 	}
 
@@ -683,19 +687,65 @@ func chainMiddleware(first, second func(http.Handler) http.Handler) func(http.Ha
 	return func(next http.Handler) http.Handler { return first(second(next)) }
 }
 
-// bootstrapFromConfig creates the first administrator from
-// bootstrap.admin_user / bootstrap.admin_password when no administrator
-// exists. It never changes an existing administrator.
-func bootstrapFromConfig(ctx context.Context, cfg config.Config, svc *auth.Service, log *slog.Logger) error {
-	if cfg.Bootstrap.AdminUser == "" {
+// bootstrapFromConfig creates the first administrator. With
+// bootstrap.admin_user / bootstrap.admin_password it creates that user when
+// no administrator exists. Otherwise, when there are no users at all, it
+// creates "admin" with a one-time password (auth.EnsureInitialAdmin) and
+// prints a generated password to banner (standard error) only: never
+// through log, whose records are also kept for the System logs screen. It
+// never changes an existing administrator.
+func bootstrapFromConfig(ctx context.Context, cfg config.Config, svc *auth.Service, log *slog.Logger, banner io.Writer) error {
+	if cfg.Bootstrap.AdminUser != "" {
+		created, err := svc.EnsureBootstrapAdmin(ctx, cfg.Bootstrap.AdminUser, cfg.Bootstrap.AdminPassword, cfg.Bootstrap.RequirePasswordChange)
+		if err != nil {
+			return fmt.Errorf("bootstrap administrator %q: %w", cfg.Bootstrap.AdminUser, err)
+		}
+		if created {
+			log.Info("bootstrap administrator created", "username", cfg.Bootstrap.AdminUser,
+				"must_change_password", cfg.Bootstrap.RequirePasswordChange)
+		}
 		return nil
 	}
-	created, err := svc.EnsureBootstrapAdmin(ctx, cfg.Bootstrap.AdminUser, cfg.Bootstrap.AdminPassword)
+	a, err := svc.EnsureInitialAdmin(ctx)
 	if err != nil {
-		return fmt.Errorf("bootstrap administrator %q: %w", cfg.Bootstrap.AdminUser, err)
+		return fmt.Errorf("initial administrator: %w", err)
 	}
-	if created {
-		log.Info("bootstrap administrator created", "username", cfg.Bootstrap.AdminUser)
+	if a == nil {
+		return nil
 	}
+	writeInitialAdminBanner(banner, a)
+	where := "printed to standard error"
+	if a.FromFile {
+		where = "read from the initial password file"
+	} else if a.File != "" {
+		where = "printed to standard error and written to the initial password file"
+	}
+	log.Warn("initial administrator created; sign in and set a new password. The one-time password was "+where,
+		"username", a.Username, "password_file", a.File)
 	return nil
+}
+
+// writeInitialAdminBanner prints the first administrator's credentials as a
+// framed block that stands out in container logs.
+func writeInitialAdminBanner(w io.Writer, a *auth.InitialAdmin) {
+	const rule = "WARN ========================================================================"
+	lines := []string{rule, "WARN  Hangar created the first administrator.", "WARN"}
+	lines = append(lines, "WARN    username: "+a.Username)
+	if a.FromFile {
+		lines = append(lines,
+			"WARN    password: the one stored in "+a.File,
+			"WARN",
+			"WARN  Sign in and set a new password; the file is deleted after the change.")
+	} else {
+		lines = append(lines,
+			"WARN    password: "+a.Password,
+			"WARN",
+			"WARN  This password is shown once. Sign in and set a new password: until then",
+			"WARN  the account can do nothing else.")
+		if a.File != "" {
+			lines = append(lines, "WARN  It is also stored in "+a.File+" (deleted after the change).")
+		}
+	}
+	lines = append(lines, rule)
+	_, _ = fmt.Fprintln(w, strings.Join(lines, "\n"))
 }

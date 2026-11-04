@@ -280,3 +280,23 @@ func TestScanningSettings(t *testing.T) {
 		t.Fatalf("disabled scanning = %v", err)
 	}
 }
+
+func TestBootstrapPasswordChangeSettings(t *testing.T) {
+	t.Setenv("HANGAR_CONFIG", "")
+	t.Setenv("HANGAR_DATABASE_URL", "postgres://x/y")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Bootstrap.RequirePasswordChange || cfg.Bootstrap.InitialPasswordFile != "" {
+		t.Fatalf("defaults = %+v", cfg.Bootstrap)
+	}
+	t.Setenv("HANGAR_BOOTSTRAP_REQUIRE_PASSWORD_CHANGE", "false")
+	t.Setenv("HANGAR_BOOTSTRAP_INITIAL_PASSWORD_FILE", "/var/lib/hangar/secrets/initial-admin-password")
+	if cfg, err = Load(""); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Bootstrap.RequirePasswordChange || cfg.Bootstrap.InitialPasswordFile != "/var/lib/hangar/secrets/initial-admin-password" {
+		t.Fatalf("from env = %+v", cfg.Bootstrap)
+	}
+}

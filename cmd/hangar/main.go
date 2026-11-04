@@ -2,7 +2,7 @@
 //
 //	hangar serve   [--config hangar.yaml] [--migrate]
 //	hangar migrate [--config hangar.yaml] up|down|status|version
-//	hangar admin   bootstrap | token create ...
+//	hangar admin   bootstrap | reset-password | token create ...
 //	hangar version [--json]
 package main
 
@@ -25,6 +25,7 @@ Usage:
                                                     manage the database schema
   hangar admin   bootstrap --username NAME --password-stdin
                                                     create the first administrator
+  hangar admin   reset-password --user NAME        print a one-time password for a local user
   hangar admin   token create --user NAME --name LABEL --scopes LIST [--expires 90d]
                                                     create a personal access token
   hangar admin   rotate-secrets [--dry-run]        re-encrypt stored secrets with security.secret_key
