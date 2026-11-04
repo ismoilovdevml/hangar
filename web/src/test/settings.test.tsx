@@ -31,11 +31,13 @@ const customize = (user: User, form: HTMLElement) => user.click(within(form).get
 const openRoles = (user: User, form: HTMLElement) => user.click(within(form).getByRole('button', { name: /^Groups and roles/ }));
 
 describe('settings navigation', () => {
-  it('shows the Settings section to administrators', async () => {
-    renderApp('/');
+  it('reaches sign-in and proxies through the Settings page, not the sidebar', async () => {
+    renderApp('/settings');
     const nav = await screen.findByRole('navigation', { name: 'Primary' });
-    expect(await within(nav).findByRole('link', { name: 'Authentication' })).toHaveAttribute('href', '/settings/authentication');
-    expect(within(nav).getByRole('link', { name: 'Proxies' })).toHaveAttribute('href', '/settings/proxies');
+    expect(await screen.findByRole('link', { name: /^Sign-in/ })).toHaveAttribute('href', '/settings/authentication');
+    expect(screen.getByRole('link', { name: /^Internet access/ })).toHaveAttribute('href', '/settings/proxies');
+    expect(within(nav).queryByRole('link', { name: 'Authentication' })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole('link', { name: 'Proxies' })).not.toBeInTheDocument();
   });
 
   it('hides it from other users and explains the page', async () => {

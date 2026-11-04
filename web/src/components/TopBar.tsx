@@ -28,7 +28,8 @@ export function TopBar({ onSignOut }: { onSignOut: () => void }) {
   const session = useSession();
   const matches = useMatches();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const title = [...matches].reverse().find((m) => m.staticData?.title)?.staticData?.title;
+  const meta = [...matches].reverse().find((m) => m.staticData?.title)?.staticData;
+  const title = meta?.title;
   const org = session.data?.organization;
   const shortcut = isMac() ? '⌘K' : 'Ctrl K';
   // The Overview carries its own search box, so its header is bare and shows the system state instead.
@@ -40,6 +41,13 @@ export function TopBar({ onSignOut }: { onSignOut: () => void }) {
       <nav aria-label="Breadcrumb" className="breadcrumb">
         <ol>
           <li>{instanceName(org?.name)}</li>
+          {meta?.inSettings && (
+            <li>
+              <Link to="/settings" className="breadcrumb__link">
+                Settings
+              </Link>
+            </li>
+          )}
           {title && (
             <li aria-current="page" className="breadcrumb__current">
               {title}

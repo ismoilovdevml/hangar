@@ -33,6 +33,7 @@ import { VulnerabilitiesPage } from './pages/vulnerabilities/VulnerabilitiesPage
 import { validateVulnSearch, type VulnSearch } from './lib/vulnerabilities';
 import { AuditPage } from './pages/audit/AuditPage';
 import { CleanupPage, type CleanupSearch } from './pages/cleanup/CleanupPage';
+import { SettingsHubPage } from './pages/settings/SettingsHubPage';
 import { SystemPage } from './pages/settings/SystemPage';
 import { AuthenticationPage } from './pages/settings/AuthenticationPage';
 import { ProxiesPage } from './pages/settings/ProxiesPage';
@@ -48,6 +49,8 @@ declare module '@tanstack/react-router' {
   interface StaticDataRouteOption {
     /** Shown as the last breadcrumb segment and in the document title. */
     title?: string;
+    /** The page sits under Settings: the breadcrumb reads "Settings / <title>". */
+    inSettings?: boolean;
   }
   interface HistoryState {
     /** Cursors of the pages before the current one, so "Previous" works with opaque cursors. */
@@ -94,8 +97,8 @@ const appRoute = createRoute({
   component: AppShell,
 });
 
-const page = <TPath extends string>(path: TPath, title: string, component: () => JSX.Element) =>
-  createRoute({ getParentRoute: () => appRoute, path, staticData: { title }, component });
+const page = <TPath extends string>(path: TPath, title: string, component: () => JSX.Element, inSettings?: boolean) =>
+  createRoute({ getParentRoute: () => appRoute, path, staticData: { title, inSettings }, component });
 
 const overviewRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -225,7 +228,7 @@ const vulnerabilitiesRoute = createRoute({
 const auditRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/audit',
-  staticData: { title: 'Audit log' },
+  staticData: { title: 'Audit log', inSettings: true },
   validateSearch: (s: Record<string, unknown>): AuditSearch => validateAuditSearch(s),
   component: AuditPage,
 });
@@ -254,7 +257,7 @@ const accessRoute = createRoute({
 const accountRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/account',
-  staticData: { title: 'My account' },
+  staticData: { title: 'My account', inSettings: true },
   component: AccountPage,
 });
 
@@ -284,14 +287,14 @@ const blobStoreRoute = createRoute({
 const systemStatusRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/system/status',
-  staticData: { title: 'System status' },
+  staticData: { title: 'System status', inSettings: true },
   component: SystemStatusPage,
 });
 
 const systemLogsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/system/logs',
-  staticData: { title: 'System logs' },
+  staticData: { title: 'System logs', inSettings: true },
   validateSearch: (s: Record<string, unknown>): SystemLogsSearch => validateLogsSearch(s),
   component: SystemLogsPage,
 });
@@ -317,9 +320,11 @@ const routeTree = rootRoute.addChildren([
     systemStatusRoute,
     systemLogsRoute,
     auditRoute,
-    page('/settings', 'System', SystemPage),
-    page('/settings/authentication', 'Authentication', AuthenticationPage),
-    page('/settings/proxies', 'Proxies', ProxiesPage),
+    // Settings gathers configuration and personal pages; their old addresses stay as they were.
+    page('/settings', 'Settings', SettingsHubPage),
+    page('/settings/system', 'System', SystemPage, true),
+    page('/settings/authentication', 'Authentication', AuthenticationPage, true),
+    page('/settings/proxies', 'Proxies', ProxiesPage, true),
   ]),
 ]);
 

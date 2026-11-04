@@ -89,7 +89,7 @@ describe('audit log', () => {
 
 describe('system', () => {
   it('shows status, endpoints, dependencies, nodes and redacted configuration', async () => {
-    renderApp('/settings');
+    renderApp('/settings/system');
     expect(await screen.findByText('Operational')).toBeInTheDocument();
     expect(screen.getByText('All systems normal', { selector: '.meta' })).toBeInTheDocument();
     const statusPanel = screen.getByRole('region', { name: 'System status' });
@@ -119,7 +119,7 @@ describe('system', () => {
 
   it('filters configuration keys', async () => {
     const user = userEvent.setup();
-    renderApp('/settings');
+    renderApp('/settings/system');
     await screen.findByRole('region', { name: 'server settings' });
     await user.type(screen.getByLabelText('Filter settings'), 'base_url');
     await waitFor(() => expect(screen.queryByRole('region', { name: 'database settings' })).not.toBeInTheDocument());
@@ -129,7 +129,7 @@ describe('system', () => {
   it('copes with a server that does not expose configuration or nodes', async () => {
     opsMockState.configAvailable = false;
     server.use(http.get('*/api/v1/nodes', () => HttpResponse.json({ code: 'not_implemented', message: 'cluster' }, { status: 501 })));
-    renderApp('/settings');
+    renderApp('/settings/system');
     expect(await screen.findByText(/does not expose its effective configuration/)).toBeInTheDocument();
     expect(await screen.findByText(/does not list cluster nodes yet; it reports 3 of 3 up/)).toBeInTheDocument();
   });
