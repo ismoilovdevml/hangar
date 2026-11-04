@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const PORT = 4173;
+// E2E_PORT lets several checkouts run the suite side by side.
+const PORT = Number(process.env.E2E_PORT ?? 4173);
 
 /**
  * Smoke tests run against `vite preview` of a build made with VITE_API_MOCKS=true,
