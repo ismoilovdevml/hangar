@@ -16,7 +16,7 @@ func TestBuiltinFormatsRegisterAndMount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := reg.Names(); !slices.Equal(got, []string{"docker", "maven", "npm", "raw"}) {
+	if got := reg.Names(); !slices.Equal(got, []string{"docker", "maven", "npm", "pypi", "raw"}) {
 		t.Fatalf("names = %v", got)
 	}
 	env := coretest.NewEnv(t)

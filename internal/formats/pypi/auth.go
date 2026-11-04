@@ -1,0 +1,51 @@
+package pypi
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+
+	"github.com/ismoilovdevml/hangar/internal/core"
+)
+
+// authorize authenticates the request and checks action on repo. On failure
+// it has already answered: 401 with a Basic challenge (pip and twine then
+// use their configured credentials or keyring) or 403.
+func (h *handler) authorize(w http.ResponseWriter, r *http.Request, repo *core.Repository, action core.Action) (context.Context, bool) {
+	ctx := r.Context()
+	p, err := h.deps.Auth.Authenticate(ctx, core.CredentialsFromRequest(r))
+	if err != nil {
+		h.writeError(w, r, err)
+		return ctx, false
+	}
+	ctx = core.WithPrincipal(ctx, p)
+	if err := h.deps.AuthZ.Authorize(ctx, p, action, core.RepoResource(repo.Name)); err != nil {
+		h.writeError(w, r, err)
+		return ctx, false
+	}
+	return ctx, true
+}
+
+// writeError answers with a plain-text message, which pip and twine print.
+func (h *handler) writeError(w http.ResponseWriter, r *http.Request, err error) {
+	code := core.HTTPStatus(err)
+	msg := err.Error()
+	switch {
+	case code == http.StatusUnauthorized:
+		w.Header().Set("WWW-Authenticate", `Basic realm="hangar"`)
+		msg = "authentication required"
+	case code == http.StatusForbidden && !errors.Is(err, core.ErrQuarantined):
+		msg = "access denied"
+	case code >= http.StatusInternalServerError && code != http.StatusBadGateway && code != http.StatusNotImplemented:
+		h.log.ErrorContext(r.Context(), "pypi request failed", "method", r.Method, "path", r.URL.Path, "err", err)
+		msg = "internal error"
+	case code == http.StatusBadGateway:
+		h.log.WarnContext(r.Context(), "pypi upstream failed", "path", r.URL.Path, "err", err)
+		msg = "upstream unavailable"
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(code)
+	_, _ = fmt.Fprintln(w, msg) //nolint:gosec // text/plain with nosniff, never rendered as HTML
+}

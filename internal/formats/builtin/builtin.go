@@ -8,6 +8,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/formats/docker"
 	"github.com/ismoilovdevml/hangar/internal/formats/maven"
 	"github.com/ismoilovdevml/hangar/internal/formats/npm"
+	"github.com/ismoilovdevml/hangar/internal/formats/pypi"
 	"github.com/ismoilovdevml/hangar/internal/formats/raw"
 )
 
@@ -17,6 +18,7 @@ func Formats() []core.Format {
 		docker.New(),
 		maven.New(),
 		npm.New(),
+		pypi.New(),
 		raw.New(),
 	}
 }
