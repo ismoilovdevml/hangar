@@ -47,6 +47,8 @@ type Config struct {
 	Bootstrap Bootstrap   `yaml:"bootstrap"`
 	Scanner   Scanner     `yaml:"scanner"`
 	Metrics   Metrics     `yaml:"metrics"`
+	// Observability configures tracing and access log sampling.
+	Observability Observability `yaml:"observability"`
 }
 
 // Docker configures the Docker / OCI format.
@@ -200,6 +202,33 @@ type Metrics struct {
 	Path    string `yaml:"path"`
 }
 
+// Observability configures tracing and the access log.
+type Observability struct {
+	Tracing   Tracing   `yaml:"tracing"`
+	AccessLog AccessLog `yaml:"access_log"`
+}
+
+// Tracing exports OpenTelemetry traces over OTLP/HTTP.
+type Tracing struct {
+	Enabled bool `yaml:"enabled"`
+	// Endpoint is the OTLP/HTTP collector URL, e.g. http://otel-collector:4318
+	// (path defaults to /v1/traces). Collector auth headers come from
+	// OTEL_EXPORTER_OTLP_HEADERS.
+	Endpoint string `yaml:"endpoint"`
+	// SampleRatio is the share of new traces recorded (0 to 1); requests with
+	// a sampled W3C traceparent are always recorded.
+	SampleRatio float64 `yaml:"sample_ratio"`
+	// ServiceName is the service.name resource attribute.
+	ServiceName string `yaml:"service_name"`
+}
+
+// AccessLog configures the per-request log line.
+type AccessLog struct {
+	// SampleRatio is the share of requests logged (0 to 1); server errors
+	// are always logged.
+	SampleRatio float64 `yaml:"sample_ratio"`
+}
+
 // Default returns the built-in defaults: single node, filesystem blobs,
 // embedded NATS, data under ./data.
 func Default() Config {
@@ -227,6 +256,10 @@ func Default() Config {
 			MaxIdleConnsPerHost: 32,
 		},
 		Metrics: Metrics{Enabled: true, Path: "/metrics"},
+		Observability: Observability{
+			Tracing:   Tracing{SampleRatio: 0.1, ServiceName: "hangar"},
+			AccessLog: AccessLog{SampleRatio: 1},
+		},
 	}
 }
 
@@ -333,6 +366,18 @@ func (c *Config) Validate() error {
 	}
 	if c.Metrics.Path == "" || !strings.HasPrefix(c.Metrics.Path, "/") {
 		errs = append(errs, fmt.Errorf("metrics.path %q must start with /", c.Metrics.Path))
+	}
+	if t := c.Observability.Tracing; t.Enabled {
+		if u, err := url.Parse(t.Endpoint); err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			errs = append(errs, fmt.Errorf("observability.tracing.endpoint %q must be an http:// or https:// URL when tracing is enabled",
+				redactURL(t.Endpoint)))
+		}
+	}
+	if r := c.Observability.Tracing.SampleRatio; r < 0 || r > 1 {
+		errs = append(errs, fmt.Errorf("observability.tracing.sample_ratio %v: want 0 to 1", r))
+	}
+	if r := c.Observability.AccessLog.SampleRatio; r < 0 || r > 1 {
+		errs = append(errs, fmt.Errorf("observability.access_log.sample_ratio %v: want 0 to 1", r))
 	}
 	return errors.Join(errs...)
 }
@@ -446,6 +491,7 @@ func (c Config) Redacted() Config {
 	c.HTTP.Proxy = redactURL(c.HTTP.Proxy)
 	c.Database.URL = redactURL(c.Database.URL)
 	c.NATS.URL = redactURL(c.NATS.URL)
+	c.Observability.Tracing.Endpoint = redactURL(c.Observability.Tracing.Endpoint)
 	return c
 }
 
