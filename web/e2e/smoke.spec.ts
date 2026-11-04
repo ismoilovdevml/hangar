@@ -52,6 +52,50 @@ test('overview renders live data at desktop and phone width', async ({ page }) =
   expect(errors).toEqual([]);
 });
 
+test('repositories list filters through the URL at desktop and phone width', async ({ page }) => {
+  const errors = await collectErrors(page);
+  for (const [name, size] of [['repositories-1440', DESKTOP], ['repositories-390', PHONE]] as const) {
+    await page.setViewportSize(size);
+    await page.goto('/repositories');
+    await expect(page.getByRole('link', { name: 'docker-prod' })).toBeVisible();
+    await expect(page.getByText('Slow upstream')).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    await page.screenshot({ path: shot(name), fullPage: true });
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow, `horizontal overflow at ${size.width}px`).toBeLessThanOrEqual(0);
+  }
+  await page.setViewportSize(DESKTOP);
+  await page.getByRole('navigation', { name: 'Repository type' }).getByRole('link', { name: /^Proxy/ }).click();
+  await page.getByLabel('Format').selectOption('npm');
+  await expect(page).toHaveURL(/type=proxy/);
+  await expect(page).toHaveURL(/format=npm/);
+  await expect(page.getByRole('link', { name: 'npmjs-proxy' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'docker-prod' })).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('new repository form previews YAML and creates the repository', async ({ page }) => {
+  const errors = await collectErrors(page);
+  for (const [name, size] of [['repo-create-1440', DESKTOP], ['repo-create-390', PHONE]] as const) {
+    await page.setViewportSize(size);
+    await page.goto('/repositories/new');
+    await page.getByRole('radio', { name: /npm/ }).check({ force: true });
+    await page.getByRole('radio', { name: /Proxy/ }).check();
+    await expect(page.getByLabel('Name')).toHaveValue('npm-proxy');
+    await expect(page.getByText('remote_url: https://registry.npmjs.org')).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    await page.screenshot({ path: shot(name), fullPage: true });
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow, `horizontal overflow at ${size.width}px`).toBeLessThanOrEqual(0);
+  }
+  await page.setViewportSize(DESKTOP);
+  await page.getByLabel('Name').fill('npm-mirror');
+  await page.getByRole('button', { name: 'Create repository' }).click();
+  await expect(page).toHaveURL(/\/repositories\?q=npm-mirror/);
+  await expect(page.getByRole('link', { name: 'npm-mirror' })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('phone navigation opens from the menu button', async ({ page }) => {
   await page.setViewportSize(PHONE);
   await page.goto('/');

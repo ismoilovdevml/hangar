@@ -13,6 +13,10 @@ import { AppShell } from './components/AppShell';
 import { isRange } from './lib/format';
 import { LoginPage } from './pages/LoginPage';
 import { OverviewPage } from './pages/overview/OverviewPage';
+import { RepoCreatePage } from './pages/repositories/RepoCreatePage';
+import { RepositoriesPage } from './pages/repositories/RepositoriesPage';
+import { isFormat, isRepoType } from './lib/repositories';
+import type { Format, RepositoryType } from './api/types';
 import {
   AccessPage,
   BlobStoresPage,
@@ -20,8 +24,6 @@ import {
   CleanupPage,
   ClusterPage,
   NotFoundPage,
-  RepoCreatePage,
-  RepositoriesPage,
   SearchPage,
   TasksPage,
   VulnerabilitiesPage,
@@ -31,6 +33,10 @@ declare module '@tanstack/react-router' {
   interface StaticDataRouteOption {
     /** Shown as the last breadcrumb segment and in the document title. */
     title?: string;
+  }
+  interface HistoryState {
+    /** Cursors of the pages before the current one, so "Previous" works with opaque cursors. */
+    pageCursors?: string[];
   }
 }
 
@@ -95,6 +101,37 @@ const browseRoute = createRoute({
   component: BrowsePage,
 });
 
+export interface RepositoriesSearch {
+  type?: RepositoryType;
+  format?: Format;
+  q?: string;
+  cursor?: string;
+}
+
+const repositoriesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/repositories',
+  staticData: { title: 'Repositories' },
+  validateSearch: (s: Record<string, unknown>): RepositoriesSearch => ({
+    type: isRepoType(s.type) ? s.type : undefined,
+    format: isFormat(s.format) ? s.format : undefined,
+    q: str(s.q),
+    cursor: str(s.cursor),
+  }),
+  component: RepositoriesPage,
+});
+
+const repoCreateRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/repositories/new',
+  staticData: { title: 'New repository' },
+  validateSearch: (s: Record<string, unknown>): { format?: Format; type?: RepositoryType } => ({
+    format: isFormat(s.format) ? s.format : undefined,
+    type: isRepoType(s.type) ? s.type : undefined,
+  }),
+  component: RepoCreatePage,
+});
+
 const searchRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/search',
@@ -109,8 +146,8 @@ const routeTree = rootRoute.addChildren([
     overviewRoute,
     browseRoute,
     searchRoute,
-    page('/repositories', 'Repositories', RepositoriesPage),
-    page('/repositories/new', 'New repository', RepoCreatePage),
+    repositoriesRoute,
+    repoCreateRoute,
     page('/blob-stores', 'Blob stores', BlobStoresPage),
     page('/cleanup', 'Cleanup policies', CleanupPage),
     page('/vulnerabilities', 'Vulnerabilities', VulnerabilitiesPage),

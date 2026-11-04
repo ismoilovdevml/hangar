@@ -1,41 +1,6 @@
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import { useState, type FormEvent } from 'react';
-import { IconPlus } from '../components/icons';
 import { ScreenSkeleton } from './ScreenSkeleton';
-
-export function RepositoriesPage() {
-  return (
-    <ScreenSkeleton
-      title="Repositories"
-      description="Where packages live. Hosted stores your own, proxy caches the internet, group joins them under one URL."
-      actions={
-        <Link to="/repositories/new" className="button button--primary">
-          <IconPlus size={16} /> New repository
-        </Link>
-      }
-      planned={[
-        'Counts of hosted, proxy and group repositories.',
-        'Tabs All / Hosted / Proxy / Group, a format filter and a name filter, all kept in the URL.',
-        'A table with name, type, format, URL, size and status, with a copy-URL button per row.',
-      ]}
-    />
-  );
-}
-
-export function RepoCreatePage() {
-  return (
-    <ScreenSkeleton
-      title="Create a repository"
-      description="Three short steps. You can change everything later except the name and format."
-      planned={[
-        'Step 1: pick a format (Docker, npm, Maven, PyPI, Go, Helm, NuGet, Cargo, APT, Raw).',
-        'Step 2: pick hosted, proxy or group.',
-        'Step 3: name, blob store, remote URL, re-upload and cleanup policy, scanning and anonymous-read toggles.',
-        'A summary with the final URL and the same configuration as YAML, CLI and Terraform.',
-      ]}
-    />
-  );
-}
 
 const browseRoute = getRouteApi('/app/browse');
 

@@ -1,20 +1,37 @@
 import { useId, useState, type FormEvent } from 'react';
-import { getRouteApi, useNavigate } from '@tanstack/react-router';
+import { getRouteApi, useRouter } from '@tanstack/react-router';
 import { ApiRequestError } from '../api/client';
 import { useAuthProviders, useLogin, useSystemStatus } from '../api/hooks';
 import { IconLogo } from '../components/icons';
+import { useNow } from '../lib/useNow';
 
 const route = getRouteApi('/login');
 
 const STATUS_TONE = { ok: 'ok', degraded: 'warn', down: 'bad' } as const;
 
-function loginErrorMessage(err: unknown): string {
+function waitText(secs: number): string {
+  if (secs <= 0) return 'now';
+  if (secs < 60) return `in ${secs} s`;
+  return `in ${Math.ceil(secs / 60)} min`;
+}
+
+/**
+ * What went wrong. The text stays the same while a lockout or rate limit runs
+ * (it is announced once); the submit button carries the live countdown.
+ */
+function loginError(err: unknown, expired: boolean): string {
   if (err instanceof ApiRequestError) {
+    const wait = err.retryAfter;
     if (err.status === 401) return 'Wrong username or password.';
-    if (err.status === 423 || err.status === 429) {
-      const mins = err.body?.retry_after ? Math.ceil(err.body.retry_after / 60) : null;
-      return `Too many failed attempts. ${mins ? `Try again in ${mins} min` : 'Try again later'}, or ask an administrator to unlock your account.`;
+    if (err.status === 423) {
+      if (expired) return 'The lock has expired. You can try again.';
+      return `This account is locked after repeated failed sign-ins. ${wait ? `Try again ${waitText(wait)}` : 'Try again later'}, or ask an administrator to unlock it.`;
     }
+    if (err.status === 429) {
+      if (expired) return 'You can try again now.';
+      return `Too many sign-in attempts from this address. ${wait ? `Try again ${waitText(wait)}.` : 'Wait a moment and try again.'}`;
+    }
+    if (err.status === 403) return 'The server rejected this sign-in request. Open Hangar from its own address and try again.';
     return err.body?.message ?? 'Sign-in failed. Please try again.';
   }
   return 'Cannot reach the server. Check your connection and try again.';
@@ -22,7 +39,7 @@ function loginErrorMessage(err: unknown): string {
 
 export function LoginPage() {
   const { redirect } = route.useSearch();
-  const navigate = useNavigate();
+  const router = useRouter();
   const providers = useAuthProviders();
   const status = useSystemStatus();
   const login = useLogin();
@@ -38,9 +55,16 @@ export function LoginPage() {
   const instance = sys?.instance_name;
 
   const [missing, setMissing] = useState(false);
+  // When a lockout (423) or rate limit (429) ends, as epoch milliseconds.
+  const [retry, setRetry] = useState<{ at: number; secs: number } | null>(null);
+  const now = useNow(1000).getTime();
+  // The clock ticks once a second, so it can lag the moment the wait started: clamp.
+  const secsLeft = retry === null ? null : Math.min(retry.secs, Math.max(0, Math.ceil((retry.at - now) / 1000)));
+  const waiting = secsLeft !== null && secsLeft > 0;
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (waiting) return;
     if (!username.trim() || !password) {
       setMissing(true);
       return;
@@ -50,9 +74,14 @@ export function LoginPage() {
       { username: username.trim(), password, remember, realm },
       {
         onSuccess: () => {
-          // Only follow same-origin, in-app redirects.
+          setRetry(null);
+          // Only follow same-origin, in-app redirects (path plus query string).
           const target = redirect && redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/';
-          void navigate({ to: target });
+          router.history.push(target);
+        },
+        onError: (err) => {
+          const wait = err instanceof ApiRequestError && (err.status === 423 || err.status === 429) ? err.retryAfter : null;
+          setRetry(wait === null ? null : { at: Date.now() + wait * 1000, secs: wait });
         },
       },
     );
@@ -61,7 +90,7 @@ export function LoginPage() {
   const errorText = missing
     ? 'Enter your username and password.'
     : login.isError
-      ? loginErrorMessage(login.error)
+      ? loginError(login.error, secsLeft === 0)
       : null;
 
   return (
@@ -165,8 +194,8 @@ export function LoginPage() {
             </p>
           )}
 
-          <button type="submit" className="button button--dark button--block" disabled={login.isPending}>
-            {login.isPending ? 'Signing in…' : 'Sign in'}
+          <button type="submit" className="button button--dark button--block" disabled={login.isPending || waiting}>
+            {login.isPending ? 'Signing in…' : waiting ? `Try again ${waitText(secsLeft ?? 0)}` : 'Sign in'}
           </button>
 
           <p className="login-card__hint">

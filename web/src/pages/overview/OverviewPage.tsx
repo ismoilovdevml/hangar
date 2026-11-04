@@ -19,7 +19,8 @@ import {
 } from '../../lib/format';
 import { useNow } from '../../lib/useNow';
 import { ErrorNote } from '../../components/ErrorNote';
-import { plural, summarySentence } from '../../lib/overview';
+import { NotAvailable } from '../../components/NotAvailable';
+import { coverageNote, plural, summarySentence } from '../../lib/overview';
 import { RecentlyPublished } from './RecentlyPublished';
 import { ConnectClient, UpstreamSources } from './SidePanels';
 import { TrafficChart } from './TrafficChart';
@@ -28,66 +29,124 @@ const route = getRouteApi('/app/');
 
 const KPI_LABELS = ['Storage used', 'Requests', 'Served from cache', 'Critical issues'];
 
-function Kpis({ m, range }: { m: OverviewMetrics; range: OverviewRange }) {
-  const storageRatio = m.storage.capacity_bytes ? m.storage.used_bytes / m.storage.capacity_bytes : 0;
-  const used = splitBytes(m.storage.used_bytes);
-  const storageTone: Tone = storageRatio >= 0.9 ? 'bad' : storageRatio >= 0.75 ? 'warn' : 'info';
-  const hit = m.cache.hit_ratio;
-  const cacheTag: { text: string; tone: Tone } =
-    hit >= 0.8 ? { text: 'Healthy', tone: 'ok' } : hit >= 0.5 ? { text: 'Low', tone: 'warn' } : { text: 'Poor', tone: 'bad' };
-  const reqLabel = RANGES.find((r) => r.id === range)?.requests ?? 'Requests';
-  const crit = m.issues.critical;
+const join = (...parts: (string | null | false | undefined)[]) => parts.filter(Boolean).join(' · ');
 
-  return (
-    <>
+function StorageKpi({ m }: { m: OverviewMetrics }) {
+  const { used_bytes: usedBytes, capacity_bytes: cap, added_bytes_24h: added } = m.storage;
+  const used = splitBytes(usedBytes);
+  const addedNote = `${formatBytes(added)} added since yesterday`;
+  if (cap === null || cap <= 0) {
+    return (
       <KpiCard
         label="Storage used"
-        tag={{ text: `${Math.round(storageRatio * 100)}%`, tone: storageTone }}
         value={used.value}
-        unit={`${used.unit} of ${formatBytes(m.storage.capacity_bytes)}`}
-        meter={{ value: storageRatio, label: 'Storage used', valueText: `${formatBytes(m.storage.used_bytes)} of ${formatBytes(m.storage.capacity_bytes)}` }}
-        note={`${formatBytes(m.storage.added_bytes_24h)} added since yesterday`}
+        unit={`${used.unit} · no capacity limit set`}
+        note={addedNote}
       />
+    );
+  }
+  const ratio = usedBytes / cap;
+  const tone: Tone = ratio >= 0.9 ? 'bad' : ratio >= 0.75 ? 'warn' : 'info';
+  return (
+    <KpiCard
+      label="Storage used"
+      tag={{ text: `${Math.round(ratio * 100)}%`, tone }}
+      value={used.value}
+      unit={`${used.unit} of ${formatBytes(cap)}`}
+      meter={{ value: ratio, label: 'Storage used', valueText: `${formatBytes(usedBytes)} of ${formatBytes(cap)}` }}
+      note={addedNote}
+    />
+  );
+}
+
+function RequestsKpi({ m, range, now }: { m: OverviewMetrics; range: OverviewRange; now: Date }) {
+  const label = RANGES.find((r) => r.id === range)?.requests ?? 'Requests';
+  const { total, trend_pct: trend, peak_total: peak, p95_ms: p95 } = m.requests;
+  if (total === null) {
+    return (
       <KpiCard
-        label={reqLabel}
-        tag={{ text: formatSignedPercent(m.requests.trend_pct), tone: m.requests.trend_pct >= 0 ? 'ok' : 'neutral' }}
-        value={formatCompact(m.requests.total)}
-        meter={{
-          value: m.requests.peak_total ? m.requests.total / m.requests.peak_total : 0,
-          label: 'Requests compared with the busiest period in 30 days',
-          color: 'var(--chart-3)',
-        }}
-        note={`95% of responses within ${m.requests.p95_ms} ms`}
+        label={label}
+        value={<NotAvailable reason="Not reported" />}
+        note="This node does not report request statistics."
       />
+    );
+  }
+  return (
+    <KpiCard
+      label={label}
+      tag={trend === null ? undefined : { text: formatSignedPercent(trend), tone: trend >= 0 ? 'ok' : 'neutral' }}
+      value={formatCompact(total)}
+      meter={
+        peak
+          ? { value: total / peak, label: 'Requests compared with the busiest period in 30 days', color: 'var(--chart-3)' }
+          : undefined
+      }
+      note={join(p95 !== null && `95% of responses within ${Math.round(p95)} ms`, coverageNote(m, now)) || 'No latency data yet'}
+    />
+  );
+}
+
+function CacheKpi({ m }: { m: OverviewMetrics }) {
+  const { hit_ratio: hit, bytes_saved: saved } = m.cache;
+  if (hit === null) {
+    return (
       <KpiCard
         label="Served from cache"
-        tag={cacheTag}
-        value={formatPercent(hit)}
-        unit="%"
-        meter={{ value: hit, label: 'Cache hit ratio', color: 'var(--ok-bar)' }}
-        note={`${formatBytes(m.cache.bytes_saved)} of downloads saved`}
+        value={<NotAvailable reason="Not reported" />}
+        note={saved !== null ? `${formatBytes(saved)} of downloads saved` : 'No proxy cache traffic measured yet.'}
       />
-      <KpiCard
-        label="Critical issues"
-        tag={crit > 0 ? { text: 'Review', tone: 'peach' } : { text: 'Clear', tone: 'ok' }}
-        value={crit}
-        unit={`in ${plural(m.issues.packages_affected, 'package')}`}
-        meter={{
-          value: m.issues.open_findings ? crit / m.issues.open_findings : 0,
-          label: 'Critical share of open findings',
-          color: 'var(--chart-2)',
-        }}
-        note={`${m.issues.quarantined} already quarantined`}
-      />
+    );
+  }
+  const tag: { text: string; tone: Tone } =
+    hit >= 0.8 ? { text: 'Healthy', tone: 'ok' } : hit >= 0.5 ? { text: 'Low', tone: 'warn' } : { text: 'Poor', tone: 'bad' };
+  return (
+    <KpiCard
+      label="Served from cache"
+      tag={tag}
+      value={formatPercent(hit)}
+      unit="%"
+      meter={{ value: hit, label: 'Cache hit ratio', color: 'var(--ok-bar)' }}
+      note={saved !== null ? `${formatBytes(saved)} of downloads saved` : 'Bytes saved not reported'}
+    />
+  );
+}
+
+function IssuesKpi({ m }: { m: OverviewMetrics }) {
+  const crit = m.issues.critical;
+  return (
+    <KpiCard
+      label="Critical issues"
+      tag={crit > 0 ? { text: 'Review', tone: 'peach' } : { text: 'Clear', tone: 'ok' }}
+      value={crit}
+      unit={`in ${plural(m.issues.packages_affected, 'package')}`}
+      meter={{
+        value: m.issues.open_findings ? crit / m.issues.open_findings : 0,
+        label: 'Critical share of open findings',
+        color: 'var(--chart-2)',
+      }}
+      note={`${m.issues.quarantined} already quarantined`}
+    />
+  );
+}
+
+function Kpis({ m, range, now }: { m: OverviewMetrics; range: OverviewRange; now: Date }) {
+  return (
+    <>
+      <StorageKpi m={m} />
+      <RequestsKpi m={m} range={range} now={now} />
+      <CacheKpi m={m} />
+      <IssuesKpi m={m} />
     </>
   );
 }
 
 function StorageByFormat({ m }: { m: OverviewMetrics }) {
-  const max = Math.max(1, ...m.storage_by_format.map((f) => f.bytes));
+  const rows = m.storage_by_format.filter((f) => f.bytes > 0);
+  if (rows.length === 0) return <p className="meta">Nothing stored yet. Sizes per format appear after the first upload.</p>;
+  const max = Math.max(1, ...rows.map((f) => f.bytes));
   return (
     <ul className="formats">
-      {m.storage_by_format.map((f) => {
+      {rows.map((f) => {
         const meta = FORMAT_META[f.format];
         return (
           <li key={f.format} className="formats__row">
@@ -135,7 +194,7 @@ export function OverviewPage() {
       </div>
 
       <section aria-label="Key metrics" className="kpis">
-        {m ? <Kpis m={m} range={range} /> : KPI_LABELS.map((l) => <KpiCardSkeleton key={l} label={l} />)}
+        {m ? <Kpis m={m} range={range} now={now} /> : KPI_LABELS.map((l) => <KpiCardSkeleton key={l} label={l} />)}
       </section>
       {overview.isError && <ErrorNote what="overview metrics" onRetry={() => void overview.refetch()} />}
 
@@ -148,7 +207,7 @@ export function OverviewPage() {
             <div className="legend">
               <span className="legend__item">
                 <span className="legend__swatch" style={{ background: 'var(--chart-1)' }} />
-                Downloads
+                {m && !m.traffic.some((b) => b.downloads !== null) ? 'Downloads (not recorded)' : 'Downloads'}
               </span>
               <span className="legend__item">
                 <span className="legend__swatch" style={{ background: 'var(--chart-2)' }} />
