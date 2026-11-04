@@ -642,8 +642,8 @@ func (s *Service) ListAssets(ctx context.Context, q core.AssetQuery) (core.Page[
  WHERE repo_id = $1
    AND ($2::uuid IS NULL OR component_id = $2)
    AND path LIKE $3
-   AND ($4 = '' OR path > $4)
- ORDER BY path
+   AND ($4 = '' OR path COLLATE "C" > $4)
+ ORDER BY path COLLATE "C"
  LIMIT $5`, q.RepositoryID, compID, prefix, after, limit+1)
 	if err != nil {
 		return page, fmt.Errorf("list assets: %w", err)
