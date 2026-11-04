@@ -43,7 +43,32 @@ export const catalogKeys = {
 };
 
 /** Endpoints a server may not implement yet answer 501; those tabs are hidden, not faked. */
-const isMissing = (err: unknown) => err instanceof ApiRequestError && (err.status === 501 || err.status === 404);
+const isUnsupported = (err: unknown) => err instanceof ApiRequestError && err.status === 501;
+
+/**
+ * Optional per-component endpoints this server answered 501 for. Remembered
+ * for the page's lifetime so every package view does not ask again; a server
+ * upgrade is picked up on the next load.
+ */
+const unsupported = new Set<'dependents' | 'findings'>();
+
+/** Forgets what the server did not support (tests). */
+export function resetUnsupported(): void {
+  unsupported.clear();
+}
+
+async function optional<T>(kind: 'dependents' | 'findings', load: () => Promise<T>): Promise<T | null> {
+  if (unsupported.has(kind)) return null;
+  try {
+    return await load();
+  } catch (err) {
+    if (isUnsupported(err)) {
+      unsupported.add(kind);
+      return null;
+    }
+    throw err;
+  }
+}
 
 type Cursor = string | undefined;
 const nextCursor = (last: { next_cursor?: string | null }): Cursor => last.next_cursor ?? undefined;
@@ -108,17 +133,10 @@ export function useComponentDependents(id: string | undefined) {
     queryKey: catalogKeys.dependents(id ?? ''),
     enabled: !!id,
     retry: false,
-    queryFn: async ({ signal }) => {
-      try {
-        return await apiFetch<PublishedComponentPage>(`/components/${encodeURIComponent(id!)}/dependents`, {
-          query: { limit: 100 },
-          signal,
-        });
-      } catch (err) {
-        if (isMissing(err)) return null;
-        throw err;
-      }
-    },
+    queryFn: ({ signal }) =>
+      optional('dependents', () =>
+        apiFetch<PublishedComponentPage>(`/components/${encodeURIComponent(id!)}/dependents`, { query: { limit: 100 }, signal }),
+      ),
   });
 }
 
@@ -128,17 +146,10 @@ export function useComponentFindings(id: string | undefined) {
     queryKey: catalogKeys.findings(id ?? ''),
     enabled: !!id,
     retry: false,
-    queryFn: async ({ signal }) => {
-      try {
-        return await apiFetch<FindingPage>(`/components/${encodeURIComponent(id!)}/findings`, {
-          query: { limit: 200 },
-          signal,
-        });
-      } catch (err) {
-        if (isMissing(err)) return null;
-        throw err;
-      }
-    },
+    queryFn: ({ signal }) =>
+      optional('findings', () =>
+        apiFetch<FindingPage>(`/components/${encodeURIComponent(id!)}/findings`, { query: { limit: 200 }, signal }),
+      ),
   });
 }
 
@@ -147,7 +158,8 @@ export function useDeleteComponent() {
   return useMutation({
     mutationFn: (id: string) => apiFetch<void>(`/components/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     onSuccess: (_void, id) => {
-      qc.removeQueries({ queryKey: catalogKeys.component(id) });
+      // Everything about the deleted component (detail, versions, files...) is gone; asking again would 404.
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] === 'components' && q.queryKey[2] === id });
       void qc.invalidateQueries({ queryKey: catalogKeys.components });
       void qc.invalidateQueries({ queryKey: catalogKeys.search });
       void qc.invalidateQueries({ queryKey: queryKeys.repositories });
