@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- **Single sign-on (OIDC)**: "Continue with SSO" through any OpenID Connect
+  provider (`auth.oidc`): authorization code flow with PKCE (S256),
+  `client_secret_basic` or `client_secret_post`, encrypted state cookie,
+  ID token and nonce verification, userinfo fallback for missing claims,
+  lazy discovery with retry. New endpoints `GET /auth/oidc/start` and
+  `GET /auth/oidc/callback`; failures return to `/login?error=<code>`.
+- **LDAP / Active Directory sign-in** (`auth.ldap`): the login form's
+  directory realm and HTTP Basic for package clients, with service bind,
+  escaped user filter, groups from `memberOf` or a group search, optional AD
+  nested groups, LDAPS or StartTLS, and the local lockout and rate limits.
+- **Group to role mapping**: `group_roles`, `default_roles` and
+  `allowed_groups` per provider, plus role group mappings for providers
+  `oidc` and `ldap`. Mapped roles are re-synced on every sign-in; roles bound
+  by hand are kept. Keycloak full group paths (`/devops`) match. Unknown role
+  names stop the server at start-up.
+- **External users** are created at first sign-in (`auto_create`), linked by
+  issuer and subject (OIDC), have no local password, and never take over an
+  existing account with the same username (`account_conflict`).
+- `GET /auth/providers` reports the OIDC button and LDAP toggle;
+  `GET /identity-providers` lists both providers and their state.
+- Migration `00080` adds `users.external_issuer` and
+  `role_bindings.mapped_from`. Guide: [docs/guides/sso.md](guides/sso.md).
+
 - **Releases**: version tags publish a multi-arch image
   (`ghcr.io/ismoilovdevml/hangar`, linux/amd64 and linux/arm64, smoke-tested
   against PostgreSQL), binaries for Linux and macOS with `SHA256SUMS`, and a

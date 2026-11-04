@@ -190,6 +190,79 @@ auth:
   # How often token and user last-used times are written back.
   usage_flush_interval: 30s
 
+  # Single sign-on with an OpenID Connect provider (Keycloak, Entra ID,
+  # Okta, Authentik, Dex ...): authorization code flow with PKCE (S256).
+  # Register the redirect URI <server.base_url>/api/v1/auth/oidc/callback.
+  # See docs/guides/sso.md.
+  oidc:
+    enabled: false
+    issuer_url: "" # e.g. https://sso.example.com/realms/acme
+    client_id: ""
+    client_secret: "" # use HANGAR_AUTH_OIDC_CLIENT_SECRET; empty for a public client
+    # How the secret reaches the token endpoint: basic (client_secret_basic)
+    # or post (client_secret_post).
+    client_auth: basic
+    display_name: SSO # "Continue with SSO"
+    # Do not add "groups": groups arrive through a claim mapper, and some
+    # providers reject unknown scopes.
+    scopes: [openid, profile, email]
+    # Claims; a dotted path reaches into objects (realm_access.roles).
+    username_claim: preferred_username
+    email_claim: email
+    name_claim: name
+    groups_claim: groups
+    # Group -> roles. Names match case-insensitively and with or without a
+    # leading "/" (Keycloak full group paths). Mapped roles are re-synced on
+    # every sign-in; roles an administrator binds by hand are kept.
+    # Env: HANGAR_AUTH_OIDC_GROUP_ROLES='{"hangar-admins":["Admin"]}'.
+    group_roles: {}
+    #   hangar-admins: [Admin]
+    #   devops: [Publisher]
+    default_roles: [] # e.g. [Reader]: every SSO user
+    allowed_groups: [] # non-empty: only members of these groups may sign in
+    auto_create: true # false: only users who signed in before are admitted
+    insecure_skip_verify: false # never in production; use ca_file
+    ca_file: "" # PEM bundle for a private CA
+    timeout: 10s
+
+  # Sign-in with an LDAP directory or Active Directory: the login form's
+  # directory toggle (realm "ldap") and HTTP Basic from package clients.
+  ldap:
+    enabled: false
+    url: "" # ldaps://dc1.example.com:636 or ldap://dc1.example.com:389
+    start_tls: false # upgrade ldap:// before binding
+    insecure_skip_verify: false
+    ca_file: ""
+    # Service account that searches users and groups (both empty: anonymous).
+    bind_dn: "" # e.g. CN=svc-hangar,OU=Service Accounts,DC=example,DC=com
+    bind_password: "" # use HANGAR_AUTH_LDAP_BIND_PASSWORD
+    user_base_dn: "" # e.g. OU=People,DC=example,DC=com
+    # {username} is replaced by the escaped login name. OpenLDAP:
+    # (&(objectClass=inetOrgPerson)(uid={username})) with username_attribute uid.
+    user_filter: "(&(objectClass=user)(sAMAccountName={username}))"
+    username_attribute: sAMAccountName
+    email_attribute: mail
+    name_attribute: displayName
+    # Groups from this attribute of the user entry ...
+    group_attribute: memberOf
+    # ... or, when group_base_dn is set, from a search under it ({dn} is the
+    # user's DN, {username} the login name).
+    group_base_dn: ""
+    # Empty: (member={dn}), or (member:1.2.840.113556.1.4.1941:={dn}) with
+    # nested_groups.
+    group_filter: ""
+    group_name_attribute: cn
+    # Active Directory nested groups (LDAP_MATCHING_RULE_IN_CHAIN); needs
+    # group_base_dn.
+    nested_groups: false
+    # Group -> roles; a group matches by DN or by name (its first RDN value).
+    group_roles: {}
+    #   Hangar Admins: [Admin]
+    default_roles: []
+    allowed_groups: []
+    auto_create: true
+    timeout: 10s
+
 docker:
   # Signs Docker registry tokens and upload URLs (HMAC). At least 32 random
   # bytes (`openssl rand -base64 48`); every node needs the same value. Empty:
