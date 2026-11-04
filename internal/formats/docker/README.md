@@ -196,8 +196,10 @@ session is started.
   `MANIFEST_UNKNOWN` / `BLOB_UNKNOWN` (404) and remembers the name for
   `negative_cache_ttl` (30 s when unset), so the many probes of one push do
   not each reach the remote. With proxy credentials configured a `401/403`
-  is also logged as a warning (the credentials may be wrong). A remote `429`
-  is answered `TOOMANYREQUESTS`, other failures `502 UNAVAILABLE`.
+  is also logged as a warning (the credentials may be wrong). While the
+  remote rate limits (`core.ErrRateLimited`), cached tags, manifests and
+  blobs are still served; uncached content is answered `429 TOOMANYREQUESTS`
+  with the remote's `Retry-After`. Other failures are `502 UNAVAILABLE`.
 - **Group**: reads walk the members in order (nested groups flattened); the
   first member holding the content decides (including its quarantine). Tag
   lists, referrers and the catalog merge members. An unreachable or

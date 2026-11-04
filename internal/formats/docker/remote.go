@@ -32,9 +32,11 @@ import (
 // wraps core.ErrNotFound.
 var errRemoteDenied = fmt.Errorf("remote does not serve this name (unknown repository or access denied): %w", core.ErrNotFound)
 
-// errRateLimited marks a remote answering 429. It wraps core.ErrUpstream and
-// is answered as TOOMANYREQUESTS.
-var errRateLimited = fmt.Errorf("remote registry rate limit exceeded: %w", core.ErrUpstream)
+// errRateLimited marks a 429 answer that reached the format as a response
+// (the core upstream normally turns persistent 429s into a
+// core.RetryAfterError). Like that error it wraps core.ErrRateLimited and
+// core.ErrUpstream: answered TOOMANYREQUESTS, a miss inside a group.
+var errRateLimited = fmt.Errorf("remote registry rate limit exceeded: %w: %w", core.ErrRateLimited, core.ErrUpstream)
 
 // remoteErrorCode returns the first OCI error code in a remote's error body
 // ("" for HEAD responses or bodies that are not the OCI envelope).

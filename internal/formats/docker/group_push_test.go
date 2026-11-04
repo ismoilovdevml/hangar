@@ -50,6 +50,9 @@ func (h *hubLike) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	status, body := h.status, h.body
 	h.mu.Unlock()
 	if status != 0 {
+		if status == http.StatusTooManyRequests {
+			w.Header().Set("Retry-After", "7")
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		_, _ = io.WriteString(w, body)
@@ -192,6 +195,9 @@ func TestGroupRemoteFailures(t *testing.T) {
 			tr.expect(resp, body, tc.directStatus)
 			if errCode(body) != tc.directCode {
 				t.Fatalf("direct code: %s", body)
+			}
+			if tc.status == http.StatusTooManyRequests && resp.Header.Get("Retry-After") != "7" {
+				t.Fatalf("Retry-After = %q, want the remote's 7", resp.Header.Get("Retry-After"))
 			}
 
 			// Pushing through the group still works.

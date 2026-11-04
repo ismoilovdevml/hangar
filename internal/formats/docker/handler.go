@@ -325,7 +325,9 @@ func (h *handler) fail(w http.ResponseWriter, r *http.Request, rq *request, err 
 	case errors.Is(err, core.ErrUnauthenticated), errors.Is(err, core.ErrForbidden):
 		action, _ := actionFor(rq.kind, r.Method)
 		h.deny(w, r, rq.auth, err, rq.repo.Name, rq.name, action)
-	case errors.Is(err, errRateLimited):
+	case errors.Is(err, core.ErrRateLimited):
+		// Reached only when nothing is cached: cached copies are served instead.
+		core.SetRetryAfter(w.Header(), err)
 		writeError(w, http.StatusTooManyRequests, codeTooManyRequests, "the remote registry of this proxy repository is rate limiting requests; retry later")
 	case core.HTTPStatus(err) >= 500 && !errors.Is(err, core.ErrUpstream) && !errors.Is(err, core.ErrOffline):
 		h.internal(w, r, "request", err)
