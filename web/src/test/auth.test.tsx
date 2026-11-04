@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { apiFetch, ApiRequestError, resetCsrfToken } from '../api/client';
+import { session as mockSession } from '../mocks/data';
 import { mockState } from '../mocks/handlers';
 import { server } from '../mocks/node';
 import { renderApp } from './render';
@@ -61,7 +62,7 @@ describe('sign-in against the API', () => {
 
     // Sign out from the account menu: a POST that must carry the token the login answer gave.
     await user.click(await screen.findByRole('button', { name: /^Account/ }));
-    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Sign out' }));
     await waitFor(() => expect(history.location.pathname).toBe('/login'));
 
     const logout = seen.find((r) => r.path === '/api/v1/auth/logout')!;
@@ -167,11 +168,81 @@ describe('CSRF token handling in apiFetch', () => {
 });
 
 describe('account menu', () => {
-  it('shows who is signed in', async () => {
+  it('shows who is signed in and links to real account pages', async () => {
     const user = userEvent.setup();
     renderApp('/');
-    await user.click(await screen.findByRole('button', { name: 'Account: Dilshod Ismoilov' }));
-    const menu = screen.getByRole('region', { name: 'Account' });
-    expect(within(menu).getByText('Dilshod Ismoilov')).toBeInTheDocument();
+    const avatar = await screen.findByRole('button', { name: 'Account: Dilshod Ismoilov' });
+    expect(avatar).toHaveAttribute('aria-haspopup', 'menu');
+    expect(avatar).toHaveAttribute('aria-expanded', 'false');
+    await user.click(avatar);
+    expect(avatar).toHaveAttribute('aria-expanded', 'true');
+    const menu = screen.getByRole('menu', { name: 'Dilshod Ismoilov' });
+    expect(within(menu).getByText('d.ismoilov@acme.example')).toBeInTheDocument();
+    expect(within(menu).getByText('Admin')).toBeInTheDocument();
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
+      'My account',
+      'Access tokens',
+      'Password & sessions',
+      'Sign out',
+    ]);
+    expect(within(menu).getByRole('menuitem', { name: 'My account' })).toHaveAttribute('href', '/account');
+    expect(within(menu).getByRole('menuitem', { name: 'Access tokens' })).toHaveAttribute('href', '/account#my-tokens-title');
+    expect(within(menu).getByRole('menuitem', { name: 'Password & sessions' })).toHaveAttribute('href', '/account#password-title');
+    // No promise of a second factor the server does not have.
+    expect(menu).not.toHaveTextContent(/MFA|two-factor/i);
+
+    await user.click(within(menu).getByRole('menuitem', { name: 'My account' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'My account' })).toBeInTheDocument();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('works from the keyboard and returns focus to the avatar', async () => {
+    const user = userEvent.setup();
+    renderApp('/repositories');
+    const avatar = await screen.findByRole('button', { name: 'Account: Dilshod Ismoilov' });
+    avatar.focus();
+    await user.keyboard('{ArrowDown}');
+    const items = within(screen.getByRole('menu')).getAllByRole('menuitem');
+    expect(items[0]).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(items[1]).toHaveFocus();
+    await user.keyboard('{End}');
+    expect(items[3]).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(items[0]).toHaveFocus();
+    await user.keyboard('{ArrowUp}');
+    expect(items[3]).toHaveFocus();
+    await user.keyboard('{Home}');
+    expect(items[0]).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(avatar).toHaveFocus();
+
+    // ArrowUp opens on the last item; Tab closes and moves on.
+    await user.keyboard('{ArrowUp}');
+    expect(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Sign out' })).toHaveFocus();
+    await user.tab();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+
+    // A click outside closes it too.
+    await user.click(avatar);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    await user.click(screen.getByRole('heading', { level: 1, name: 'Repositories' }));
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('sends single sign-on users to their signed-in devices instead of a password form', async () => {
+    server.use(
+      http.get('*/api/v1/auth/session', () =>
+        HttpResponse.json({ ...mockSession, user: { ...mockSession.user, source: 'oidc', roles: [] } }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp('/');
+    await user.click(await screen.findByRole('button', { name: /^Account/ }));
+    const menu = screen.getByRole('menu');
+    expect(within(menu).getByRole('menuitem', { name: 'Signed-in devices' })).toHaveAttribute('href', '/account#my-sessions-title');
+    expect(within(menu).queryByRole('menuitem', { name: 'Password & sessions' })).not.toBeInTheDocument();
+    expect(within(menu).queryByText('Admin')).not.toBeInTheDocument();
   });
 });

@@ -18,7 +18,35 @@ describe('app shell', () => {
     const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' });
     expect(await within(crumbs).findByText('acme-platform')).toBeInTheDocument();
     expect(within(crumbs).getByText('Overview')).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument();
+    // One token expires soon: the bell says so.
+    expect(screen.getByRole('button', { name: 'Notifications, 1 waiting' })).toBeInTheDocument();
+    // The Overview's header shows the system state instead of the search button.
+    expect(await screen.findByRole('link', { name: 'All systems normal' })).toHaveAttribute('href', '/system/status');
+    expect(screen.queryByRole('button', { name: /Search packages, digests, CVEs/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps the search button and status card on other pages, and shows a degraded system', async () => {
+    server.use(
+      http.get('*/api/v1/system/status', () =>
+        HttpResponse.json({ ...data.systemStatus, state: 'degraded', message: 'Upstream proxies degraded', nodes_up: 2 }),
+      ),
+    );
+    renderApp('/repositories');
+    expect(await screen.findByRole('button', { name: /Search packages, digests, CVEs/ })).toBeInTheDocument();
+    const nav = screen.getByRole('navigation', { name: 'Primary' });
+    const card = (await within(nav).findByText('Upstream proxies degraded')).closest('a')!;
+    expect(card).toHaveAttribute('href', '/system/status');
+    expect(card).toHaveClass('system-card--warn');
+    expect(within(card).getByText('2 of 3 nodes · v1.0.0')).toBeInTheDocument();
+  });
+
+  it('says when the system status cannot be read', async () => {
+    server.use(http.get('*/api/v1/system/status', () => HttpResponse.json({ code: 'internal', message: 'boom' }, { status: 500 })));
+    renderApp('/');
+    const nav = await screen.findByRole('navigation', { name: 'Primary' });
+    expect(await within(nav).findByText('Status unavailable', {}, { timeout: 4000 })).toBeInTheDocument();
+    const header = screen.getByRole('banner');
+    expect(within(header).getByRole('link', { name: 'Status unavailable' })).toHaveAttribute('href', '/system/status');
   });
 
   it('shows the instance as a static badge, without a switcher', async () => {

@@ -47,47 +47,51 @@ export function Sidebar() {
       <div className="sidebar__body" id={bodyId}>
         <InstanceBadge name={org?.name} environment={org?.environment} region={org?.region} loading={session.isPending} />
 
-        {NAV.filter((section) => !section.requires || allows(session.data?.privileges, 'system', section.requires.area, section.requires.action)).map((section) => (
-          <div className="nav-section" key={section.title}>
-            <h2 className="nav-section__title">{section.title}</h2>
-            <ul className="nav-section__list">
-              {section.items.map((item) => (
-                <li key={item.to}>
-                  <Link
-                    to={item.to}
-                    className="nav-item"
-                    activeOptions={{ exact: item.to === '/' || item.to === '/settings' }}
-                    activeProps={{ className: 'is-active' }}
-                  >
-                    <item.icon size={18} />
-                    {item.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-
-        <div className="system-card" role="status" aria-live="polite">
-          {sys ? (
-            <>
-              <span className="system-card__state">
-                <span className={`status__dot dot-${STATUS_TONE[sys.state]} status__dot--halo`} aria-hidden="true" />
-                {sys.message}
-              </span>
-              <span className="system-card__meta">
-                {sys.nodes_up} of {sys.nodes_total} nodes · v{sys.version}
-              </span>
-            </>
-          ) : status.isError ? (
-            <span className="system-card__state">
-              <span className="status__dot dot-neutral" aria-hidden="true" />
-              Status unavailable
-            </span>
-          ) : (
-            <span className="system-card__meta">Checking system status…</span>
-          )}
+        <div className="sidebar__nav">
+          {NAV.filter((section) => !section.requires || allows(session.data?.privileges, 'system', section.requires.area, section.requires.action)).map((section) => (
+            <div className="nav-section" key={section.title}>
+              <h2 className="nav-section__title">{section.title}</h2>
+              <ul className="nav-section__list">
+                {section.items.map((item) => (
+                  <li key={item.to}>
+                    <Link
+                      to={item.to}
+                      className="nav-item"
+                      activeOptions={{ exact: item.to === '/' || item.to === '/settings' }}
+                      activeProps={{ className: 'is-active' }}
+                    >
+                      <item.icon size={18} />
+                      {item.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
+
+        <Link to="/system/status" className={`system-card system-card--${sys ? STATUS_TONE[sys.state] : 'neutral'}`}>
+          <span className="system-card__body" role="status" aria-live="polite">
+            {sys ? (
+              <>
+                <span className="system-card__state">
+                  <span className={`status__dot dot-${STATUS_TONE[sys.state]} status__dot--halo`} aria-hidden="true" />
+                  {sys.message}
+                </span>
+                <span className="system-card__meta">
+                  {sys.nodes_up} of {sys.nodes_total} nodes · v{sys.version}
+                </span>
+              </>
+            ) : status.isError ? (
+              <span className="system-card__state">
+                <span className="status__dot dot-neutral" aria-hidden="true" />
+                Status unavailable
+              </span>
+            ) : (
+              <span className="system-card__meta">Checking system status…</span>
+            )}
+          </span>
+        </Link>
       </div>
     </nav>
   );
