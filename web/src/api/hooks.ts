@@ -174,10 +174,11 @@ export function useRepositoriesByFormat(format: Format | undefined) {
   });
 }
 
-export function useBlobStores() {
+export function useBlobStores(enabled = true) {
   return useQuery({
     queryKey: queryKeys.blobStores,
     queryFn: ({ signal }) => apiFetch<BlobStoreList>('/blob-stores', { signal }),
+    enabled,
   });
 }
 

@@ -183,11 +183,13 @@ describe('account menu', () => {
       'My account',
       'Access tokens',
       'Password & sessions',
+      'Settings',
       'Sign out',
     ]);
     expect(within(menu).getByRole('menuitem', { name: 'My account' })).toHaveAttribute('href', '/account');
     expect(within(menu).getByRole('menuitem', { name: 'Access tokens' })).toHaveAttribute('href', '/account#my-tokens-title');
     expect(within(menu).getByRole('menuitem', { name: 'Password & sessions' })).toHaveAttribute('href', '/account#password-title');
+    expect(within(menu).getByRole('menuitem', { name: 'Settings' })).toHaveAttribute('href', '/settings');
     // No promise of a second factor the server does not have.
     expect(menu).not.toHaveTextContent(/MFA|two-factor/i);
 
@@ -207,11 +209,11 @@ describe('account menu', () => {
     await user.keyboard('{ArrowDown}');
     expect(items[1]).toHaveFocus();
     await user.keyboard('{End}');
-    expect(items[3]).toHaveFocus();
+    expect(items[4]).toHaveFocus();
     await user.keyboard('{ArrowDown}');
     expect(items[0]).toHaveFocus();
     await user.keyboard('{ArrowUp}');
-    expect(items[3]).toHaveFocus();
+    expect(items[4]).toHaveFocus();
     await user.keyboard('{Home}');
     expect(items[0]).toHaveFocus();
     await user.keyboard('{Escape}');

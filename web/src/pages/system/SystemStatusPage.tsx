@@ -352,7 +352,7 @@ export function SystemStatusPage() {
         <div className="checklist checklist--empty glass">
           <p className="meta">
             The system status needs the <code className="inline-code">system:cluster:read</code> privilege. Ask an administrator for it, or see
-            the overall state on the <Link to="/settings">System</Link> page.
+            the overall state on the <Link to="/settings/system">System</Link> page.
           </p>
         </div>
       </div>

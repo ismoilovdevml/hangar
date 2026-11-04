@@ -92,6 +92,8 @@
 .breadcrumb ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; }
 .breadcrumb li + li::before { content: '/'; margin: 0 10px; color: var(--ink-3); }
 .breadcrumb__current { color: var(--ink); font-weight: 600; }
+.breadcrumb__link { color: inherit; text-decoration: none; border-radius: 4px; }
+.breadcrumb__link:hover { color: var(--lake-ink); text-decoration: underline; }
 .search-trigger {
   display: flex; align-items: center; gap: 10px; flex: 0 1 360px; min-width: 0; min-height: 44px; padding: 0 14px;
   background: var(--glass-bg-strong); border: 1px solid var(--track); border-radius: var(--r-control);

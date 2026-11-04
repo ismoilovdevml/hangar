@@ -85,6 +85,33 @@ describe('app shell', () => {
     expect(overview).not.toHaveAttribute('aria-current');
   });
 
+  it('keeps settings and system pages out of the sidebar', async () => {
+    renderApp('/');
+    const nav = await screen.findByRole('navigation', { name: 'Primary' });
+    for (const label of ['System status', 'System logs', 'System', 'Audit log', 'My account', 'Settings', 'Authentication', 'Proxies']) {
+      expect(within(nav).queryByRole('link', { name: label })).not.toBeInTheDocument();
+    }
+    expect(within(nav).queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['/settings', 'Cluster & replication'],
+    ['/system/status', 'Cluster & replication'],
+    ['/settings/authentication', 'Access & audit'],
+    ['/account', 'Access & audit'],
+  ])('lights up the area of %s without calling it the current page', async (path, label) => {
+    renderApp(path);
+    const nav = await screen.findByRole('navigation', { name: 'Primary' });
+    const item = within(nav).getByRole('link', { name: label });
+    await waitFor(() => expect(item).toHaveAttribute('aria-current', 'true'));
+    expect(item).toHaveClass('is-active');
+    const marked = within(nav)
+      .getAllByRole('listitem')
+      .map((li) => within(li).getByRole('link'))
+      .filter((a) => a.hasAttribute('aria-current'));
+    expect(marked).toEqual([item]);
+  });
+
   it('keeps Repositories active on the create-repository page', async () => {
     renderApp('/repositories/new');
     const nav = await screen.findByRole('navigation', { name: 'Primary' });

@@ -12,7 +12,7 @@ for the directory. Replace them with your own.
 ## Configure from the web UI or the API
 
 Administrators (`system:settings:admin`, e.g. the built-in `Admin` role)
-configure both providers in **Settings → Authentication** without editing
+configure both providers in **Settings → Sign-in** (`/settings/authentication`) without editing
 files or restarting. Users with only `system:settings:read` see the same
 page read-only.
 

@@ -2,8 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type Keyboard
 import { createPortal } from 'react-dom';
 import { useNavigate } from '@tanstack/react-router';
 import { useSession } from '../api/hooks';
-import { allows } from '../lib/can';
-import { NAV } from '../nav';
+import { canSee, NAV, SETTINGS_PAGES } from '../nav';
 import { CommandPaletteContext } from './commandPaletteContext';
 import { IconArrowRight, IconLogout, IconPlus, IconSearch } from './icons';
 
@@ -62,18 +61,21 @@ function CommandPaletteDialog({ onClose, onSignOut }: { onClose: () => void; onS
   }, []);
 
   const commands = useMemo<Command[]>(() => {
-    const go: Command[] = NAV.filter(
-      (section) => !section.requires || allows(privileges, 'system', section.requires.area, section.requires.action),
-    ).flatMap((section) =>
-      section.items.map((item) => ({
-        id: `nav:${item.to}`,
-        group: 'Go to' as const,
-        label: item.label,
-        keywords: `${section.title} ${item.keywords ?? ''}`,
-        icon: <item.icon size={16} />,
-        run: () => void navigate({ to: item.to }),
-      })),
-    );
+    // Sidebar pages first, then the pages that live under Settings.
+    const go: Command[] = [...NAV, SETTINGS_PAGES]
+      .filter((section) => canSee(privileges, section.requires))
+      .flatMap((section) =>
+        section.items
+          .filter((item) => canSee(privileges, item.requires))
+          .map((item) => ({
+            id: `nav:${item.to}${item.hash ? `#${item.hash}` : ''}`,
+            group: 'Go to' as const,
+            label: item.label,
+            keywords: `${section.title} ${item.keywords ?? ''}`,
+            icon: <item.icon size={16} />,
+            run: () => void navigate({ to: item.to, hash: item.hash }),
+          })),
+      );
     const actions: Command[] = [
       {
         id: 'action:new-repo',

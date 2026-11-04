@@ -67,8 +67,15 @@ JetBrains Mono (`@fontsource`), no external font requests in production.
   title, one-sentence explanation, primary action → glass panels in grids with 16 px gaps.
   The Overview drops the bar: its header is the breadcrumb, a system state pill, bell and
   avatar, and its hero carries the search box.
-- The sidebar's links scroll on short screens; the system status card (state, nodes up,
-  version) stays pinned at its bottom and links to System status.
+- The sidebar holds only the everyday pages (Registry, Storage, Security, Operations). Its
+  links scroll on short screens; the system status card (state, nodes up, version) stays
+  pinned at its bottom and links to System status. A page without its own entry lights
+  up the entry of its area: Sign-in, My account and Audit log under Access & audit, the
+  other Settings and System pages under Cluster & replication.
+- **Settings** (`/settings`, avatar menu → Settings, ⌘K) gathers configuration and
+  personal pages as rows in glass cards (720 px column): name, a one-line live status,
+  chevron. Rows the user may not open are left out. Pages reached from it keep their
+  addresses and show "Settings / <page>" in the breadcrumb.
 - Tables live inside a panel; wide tables scroll horizontally inside it.
 
 ## Components

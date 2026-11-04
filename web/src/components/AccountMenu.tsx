@@ -3,12 +3,13 @@ import { Link } from '@tanstack/react-router';
 import { useSession } from '../api/hooks';
 import { initials } from '../lib/format';
 import { IconKey, IconLogout, IconShield, IconUser } from './icons';
+import { IconSettings } from './opsIcons';
 
 const ITEM = '[role="menuitem"]';
 
 /**
  * The avatar in the top bar and the account menu it opens: who is signed in,
- * links to their account, tokens and sign-in security, and signing out.
+ * links to their account, tokens and sign-in security, Settings, and signing out.
  * Menu-button pattern: arrows move between items, Escape closes and returns
  * focus to the avatar, Tab closes and moves on.
  */
@@ -138,6 +139,11 @@ export function AccountMenu({ onSignOut, compact }: { onSignOut: () => void; com
               </MenuLink>
             )}
           </div>
+          <div className="account-menu__group" role="group" aria-label="Settings">
+            <MenuLink icon={<IconSettings size={16} />} to="/settings" onPick={() => close(false)}>
+              Settings
+            </MenuLink>
+          </div>
           <div className="account-menu__group" role="group" aria-label="Session">
             <button
               type="button"
@@ -161,7 +167,7 @@ export function AccountMenu({ onSignOut, compact }: { onSignOut: () => void; com
   );
 }
 
-function MenuLink({ icon, to, hash, onPick, children }: { icon: ReactNode; to: '/account'; hash?: string; onPick: () => void; children: ReactNode }) {
+function MenuLink({ icon, to, hash, onPick, children }: { icon: ReactNode; to: '/account' | '/settings'; hash?: string; onPick: () => void; children: ReactNode }) {
   return (
     <Link to={to} hash={hash} role="menuitem" tabIndex={-1} className="account-menu__item" onClick={onPick}>
       <span className="account-menu__tile" aria-hidden="true">

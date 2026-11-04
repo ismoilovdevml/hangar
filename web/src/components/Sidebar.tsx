@@ -1,8 +1,7 @@
 import { useId, useState } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { useSession, useSystemStatus } from '../api/hooks';
-import { allows } from '../lib/can';
-import { NAV } from '../nav';
+import { activeNav, canSee, NAV } from '../nav';
 import { initials, instanceName } from '../lib/format';
 import { IconClose, IconLogo, IconMenu } from './icons';
 
@@ -19,6 +18,7 @@ export function Sidebar() {
 
   const org = session.data?.organization;
   const sys = status.data;
+  const active = activeNav(pathname);
 
   return (
     <nav aria-label="Primary" className={open ? 'sidebar glass is-open' : 'sidebar glass'}>
@@ -48,23 +48,28 @@ export function Sidebar() {
         <InstanceBadge name={org?.name} environment={org?.environment} region={org?.region} loading={session.isPending} />
 
         <div className="sidebar__nav">
-          {NAV.filter((section) => !section.requires || allows(session.data?.privileges, 'system', section.requires.area, section.requires.action)).map((section) => (
+          {NAV.filter((section) => canSee(session.data?.privileges, section.requires)).map((section) => (
             <div className="nav-section" key={section.title}>
               <h2 className="nav-section__title">{section.title}</h2>
               <ul className="nav-section__list">
-                {section.items.map((item) => (
-                  <li key={item.to}>
-                    <Link
-                      to={item.to}
-                      className="nav-item"
-                      activeOptions={{ exact: item.to === '/' || item.to === '/settings' }}
-                      activeProps={{ className: 'is-active' }}
-                    >
-                      <item.icon size={18} />
-                      {item.label}
-                    </Link>
-                  </li>
-                ))}
+                {section.items.map((item) => {
+                  const on = active?.to === item.to;
+                  return (
+                    <li key={item.to}>
+                      {/* The current page is marked "page"; a page that only belongs to this area (Settings, System) is marked "true". */}
+                      <Link
+                        to={item.to}
+                        className={on ? 'nav-item is-active' : 'nav-item'}
+                        activeOptions={{ exact: true, includeSearch: false, includeHash: false }}
+                        activeProps={{}}
+                        aria-current={on ? (active.own ? 'page' : 'true') : undefined}
+                      >
+                        <item.icon size={18} />
+                        {item.label}
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}

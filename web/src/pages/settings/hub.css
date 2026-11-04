@@ -1,0 +1,50 @@
+/* Settings hub: grouped rows, each leading to the page that changes the setting. */
+
+.hub-screen { width: 100%; max-width: 720px; margin-inline: auto; gap: 14px; padding-top: 12px; }
+
+.hub-header { display: flex; flex-direction: column; gap: 6px; padding: 0 6px 6px; }
+.hub-header__title { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.25; color: var(--ink-strong); }
+.hub-header__desc { margin: 0; font-size: 14px; color: var(--ink-2); }
+
+.hub-group { border-radius: var(--r-card); overflow: hidden; }
+.hub-list { list-style: none; margin: 0; padding: 0; }
+.hub-list > li + li { border-top: 1px solid var(--hairline); }
+
+.hub-row {
+  display: grid; grid-template-columns: 180px minmax(0, 1fr) 18px; gap: 14px; align-items: center;
+  min-height: 54px; padding: 16px 22px; box-sizing: border-box;
+  color: var(--ink); text-decoration: none;
+  transition: background var(--t-fast);
+}
+.hub-row:hover { background: rgba(255, 255, 255, 0.7); }
+.hub-row:focus-visible { box-shadow: inset var(--focus-ring); }
+.hub-list > li:first-child .hub-row:focus-visible { border-radius: var(--r-card) var(--r-card) 0 0; }
+.hub-list > li:last-child .hub-row:focus-visible { border-radius: 0 0 var(--r-card) var(--r-card); }
+.hub-list > li:only-child .hub-row:focus-visible { border-radius: var(--r-card); }
+
+.hub-row__key { font-size: 15px; font-weight: 700; color: var(--ink-strong); }
+.hub-row__value {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  font-size: 14px; color: var(--ink-3);
+}
+.hub-row__text { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hub-row__value--mono { font-family: var(--font-mono); font-size: 13px; }
+.hub-row__value--attention { color: var(--warn-ink); }
+.hub-row__skeleton { width: 160px; max-width: 100%; height: 12px; }
+.hub-row__chevron { color: var(--ink-3); justify-self: end; }
+
+.hub-foot { margin: 0; padding: 4px 6px; font-size: 12px; color: var(--ink-3); }
+.hub-foot__status { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; text-decoration: none; border-radius: 4px; }
+.hub-foot__status:hover { text-decoration: underline; }
+.hub-foot__status--ok { color: var(--ok-ink); }
+.hub-foot__status--warn { color: var(--warn-ink); }
+.hub-foot__status--bad { color: var(--bad-ink); }
+
+/* Phone: the status line goes under the name. */
+@media (max-width: 640px) {
+  .hub-screen { padding-top: 0; }
+  .hub-row { grid-template-columns: minmax(0, 1fr) 18px; row-gap: 4px; padding: 14px 16px; }
+  .hub-row__key { grid-column: 1; }
+  .hub-row__value { grid-column: 1; grid-row: 2; }
+  .hub-row__chevron { grid-column: 2; grid-row: 1 / span 2; }
+}

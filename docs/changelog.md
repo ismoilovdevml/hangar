@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **Settings hub**: a new Settings page (`/settings`, avatar menu → Settings,
+  ⌘K) gathers addresses, instance name, sign-in, internet access, storage,
+  nodes, configuration, system status, system logs, the audit log, My account
+  and access tokens in grouped rows, each with a one-line live status
+  ("corp-proxy · proxy.example.com:3128", "All 14 checks passing"). Rows follow
+  the user's privileges: a user without system privileges sees only their
+  account. The System page moved from `/settings` to `/settings/system`; every
+  other address (`/account`, `/audit`, `/system/status`, `/system/logs`,
+  `/settings/authentication`, `/settings/proxies`) is unchanged and shows
+  "Settings" in its breadcrumb.
+- **Shorter sidebar**: System status, System logs, System, Audit log, My
+  account and the Settings section left the sidebar. A page without its own
+  entry lights up the entry of its area (Access & audit or Cluster &
+  replication). The command palette still finds every page and hides the ones
+  the user may not open.
 - **README images**: badges, logos and screenshots in package READMEs now
   load. The package info API returns, for every image of a README, a
   same-origin URL signed by the server (`readme.images`); Hangar fetches
