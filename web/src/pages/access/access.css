@@ -12,6 +12,8 @@
 
 /* ---------- table cells ---------- */
 .cell-stack { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cell-stack > .pill { align-self: flex-start; }
+button.tabs__item { background: transparent; cursor: pointer; }
 .cell-strong { font-weight: 600; color: var(--ink); }
 .mono { font-family: var(--font-mono); font-size: 12.5px; }
 .pill-row { display: inline-flex; flex-wrap: wrap; gap: 4px; }
