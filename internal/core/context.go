@@ -8,6 +8,7 @@ const (
 	principalKey ctxKey = iota
 	repositoryKey
 	requestInfoKey
+	accessViaKey
 )
 
 // WithPrincipal returns ctx carrying p. Services read it to authorize and to
@@ -34,6 +35,22 @@ func WithRepository(ctx context.Context, r *Repository) context.Context {
 func RepositoryFrom(ctx context.Context) *Repository {
 	r, _ := ctx.Value(repositoryKey).(*Repository)
 	return r
+}
+
+// WithAccessVia returns ctx noting that the request reaches its repository
+// through the group named group. Format handlers set it before they read (and
+// cache-fill) a member of a group, so that ComponentService.Publish of a proxy
+// member authorizes the reader against repo:<group>:read — the right the client
+// actually holds — instead of the member's own read privilege. It has no
+// effect on hosted repositories: writes always need the target's write right.
+func WithAccessVia(ctx context.Context, group string) context.Context {
+	return context.WithValue(ctx, accessViaKey, group)
+}
+
+// AccessViaFrom returns the group set by WithAccessVia, or "".
+func AccessViaFrom(ctx context.Context) string {
+	g, _ := ctx.Value(accessViaKey).(string)
+	return g
 }
 
 // RequestInfo is per-request metadata set by the HTTP middleware and used for

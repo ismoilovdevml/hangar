@@ -15,6 +15,7 @@
 package httpclient
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -23,10 +24,12 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/http/httpproxy"
@@ -52,6 +55,19 @@ type Options struct {
 	TLSHandshakeTimeout   time.Duration
 	ExpectContinueTimeout time.Duration
 
+	// DialGuard, when set, is called with the IP address of every direct
+	// connection, after DNS resolution and right before connecting (from
+	// net.Dialer.Control). An error aborts the connection. This closes the DNS
+	// rebinding gap of URL checks: a name that resolved to a public address
+	// when checked cannot resolve to an internal one when dialled.
+	// Connections to an outbound proxy are not checked (the proxy is
+	// configured by the operator and may well be internal); the proxy
+	// enforces its own policy for the targets it reaches.
+	DialGuard func(netip.Addr) error
+	// DialAllowHost, when set, exempts host names from DialGuard (allow-listed
+	// internal mirrors, which resolve to internal addresses by design).
+	DialAllowHost func(host string) bool
+
 	// environ overrides os.Getenv for tests.
 	environ func(string) string
 }
@@ -64,6 +80,9 @@ type Factory struct {
 
 	mu      sync.Mutex
 	clients map[string]*http.Client
+	// proxyAddrs are the host:port of every configured outbound proxy;
+	// connections to them skip DialGuard. Guarded by mu after New.
+	proxyAddrs map[string]bool
 }
 
 var _ core.HTTPClientFactory = (*Factory)(nil)
@@ -112,13 +131,14 @@ func New(opts Options) (*Factory, error) {
 		}
 	}
 
-	f := &Factory{opts: opts, baseRoots: roots, clients: map[string]*http.Client{}}
+	f := &Factory{opts: opts, baseRoots: roots, clients: map[string]*http.Client{}, proxyAddrs: map[string]bool{}}
 	switch {
 	case opts.Proxy != "":
 		pu, err := proxyURL(opts.Proxy, opts.ProxyUsername, opts.ProxyPassword)
 		if err != nil {
 			return nil, fmt.Errorf("http.proxy: %w", err)
 		}
+		f.addProxyAddr(pu)
 		cfg := httpproxy.Config{HTTPProxy: pu.String(), HTTPSProxy: pu.String(), NoProxy: strings.Join(opts.NoProxy, ",")}
 		f.global = cfg.ProxyFunc()
 	case opts.UseEnvironment:
@@ -132,6 +152,11 @@ func New(opts Options) (*Factory, error) {
 		}
 		if cfg.HTTPProxy != "" || cfg.HTTPSProxy != "" {
 			f.global = cfg.ProxyFunc()
+			for _, raw := range []string{cfg.HTTPProxy, cfg.HTTPSProxy} {
+				if u, err := parseLooseProxy(raw); err == nil {
+					f.addProxyAddr(u)
+				}
+			}
 		}
 	}
 	return f, nil
@@ -246,10 +271,14 @@ func (f *Factory) transport(cfg core.UpstreamHTTP) (*http.Transport, error) {
 			return nil, fmt.Errorf("caBundle: no PEM certificates found: %w", core.ErrInvalid)
 		}
 	}
-	dialer := &net.Dialer{Timeout: connect, KeepAlive: 30 * time.Second}
+	if cfg.Proxy != "" && cfg.Proxy != core.ProxyNone && cfg.Proxy != core.ProxyInherit {
+		if pu, err := proxyURL(cfg.Proxy, "", ""); err == nil {
+			f.addProxyAddr(pu) // f.mu is held by ForUpstream
+		}
+	}
 	return &http.Transport{
 		Proxy:                 proxy,
-		DialContext:           dialer.DialContext,
+		DialContext:           f.dialContext(connect),
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          f.opts.MaxIdleConns,
 		MaxIdleConnsPerHost:   f.opts.MaxIdleConnsPerHost,
@@ -263,6 +292,65 @@ func (f *Factory) transport(cfg core.UpstreamHTTP) (*http.Transport, error) {
 			InsecureSkipVerify: cfg.InsecureSkipVerify, //nolint:gosec // explicit, audited per-remote opt-in
 		},
 	}, nil
+}
+
+// dialContext returns the transport's dial function: plain for connections to
+// a configured proxy, guarded by DialGuard for everything else.
+func (f *Factory) dialContext(timeout time.Duration) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	plain := &net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second}
+	if f.opts.DialGuard == nil {
+		return plain.DialContext
+	}
+	guard := f.opts.DialGuard
+	guarded := &net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second,
+		Control: func(_, address string, _ syscall.RawConn) error {
+			host, _, err := net.SplitHostPort(address)
+			if err != nil {
+				return err
+			}
+			a, err := netip.ParseAddr(host)
+			if err != nil {
+				return fmt.Errorf("dial %s: not an IP address", address)
+			}
+			return guard(a.WithZone(""))
+		}}
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, _, _ := net.SplitHostPort(addr)
+		f.mu.Lock()
+		toProxy := f.proxyAddrs[strings.ToLower(addr)]
+		f.mu.Unlock()
+		if toProxy || (f.opts.DialAllowHost != nil && f.opts.DialAllowHost(strings.ToLower(strings.TrimSuffix(host, ".")))) {
+			return plain.DialContext(ctx, network, addr)
+		}
+		return guarded.DialContext(ctx, network, addr)
+	}
+}
+
+// addProxyAddr remembers u's host:port (default port by scheme) as a proxy.
+func (f *Factory) addProxyAddr(u *url.URL) {
+	if u == nil || u.Hostname() == "" {
+		return
+	}
+	port := u.Port()
+	if port == "" {
+		switch u.Scheme {
+		case "https":
+			port = "443"
+		case "socks5", "socks5h":
+			port = "1080"
+		default:
+			port = "80"
+		}
+	}
+	f.proxyAddrs[strings.ToLower(net.JoinHostPort(u.Hostname(), port))] = true
+}
+
+// parseLooseProxy parses a proxy environment value, which may omit the scheme.
+func parseLooseProxy(raw string) (*url.URL, error) {
+	if !strings.Contains(raw, "://") {
+		raw = "http://" + raw
+	}
+	return url.Parse(raw)
 }
 
 func cacheKey(remote *url.URL, cfg core.UpstreamHTTP, auth *core.UpstreamAuth) string {

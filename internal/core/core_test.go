@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -174,5 +175,15 @@ func TestHTTPStatus(t *testing.T) {
 	}
 	if s := HTTPStatus(errors.New("boom")); s != http.StatusInternalServerError {
 		t.Fatalf("status = %d", s)
+	}
+}
+
+func TestAccessVia(t *testing.T) {
+	ctx := context.Background()
+	if g := AccessViaFrom(ctx); g != "" {
+		t.Fatalf("empty ctx = %q", g)
+	}
+	if g := AccessViaFrom(WithAccessVia(ctx, "npm-group")); g != "npm-group" {
+		t.Fatalf("AccessViaFrom = %q", g)
 	}
 }

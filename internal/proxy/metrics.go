@@ -1,0 +1,136 @@
+package proxy
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"sync"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
+
+// Cache metric names. internal/api reads them for the Overview cache numbers.
+const (
+	MetricCacheRequests = "hangar_proxy_cache_requests_total"
+	MetricCacheHitBytes = "hangar_proxy_cache_hit_bytes_total"
+)
+
+// Cache results recorded by CacheHit and CacheMiss.
+const (
+	CacheResultHit  = "hit"
+	CacheResultMiss = "miss"
+)
+
+var (
+	cacheRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: MetricCacheRequests,
+		Help: "Proxy repository content requests by cache result (hit = served from the local cache, miss = fetched from the remote).",
+	}, []string{"format", "result"})
+	cacheHitBytes = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: MetricCacheHitBytes,
+		Help: "Bytes served from the proxy cache without contacting the remote.",
+	}, []string{"format"})
+)
+
+// RegisterMetrics registers the proxy cache counters on r. Registering on a
+// registry that already has them is not an error.
+func RegisterMetrics(r prometheus.Registerer) error {
+	for _, c := range []prometheus.Collector{cacheRequests, cacheHitBytes} {
+		if err := r.Register(c); err != nil {
+			var are prometheus.AlreadyRegisteredError
+			if !errors.As(err, &are) {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// CacheHit records a proxy request of format answered from the local cache
+// with size bytes (0 if unknown, e.g. a HEAD or a 304 to the client).
+// Formats call it when they serve a cached asset of a proxy repository
+// without fetching it from the remote; a revalidation answered 304 by the
+// remote also counts as a hit.
+func CacheHit(format string, size int64) {
+	cacheRequests.WithLabelValues(format, CacheResultHit).Inc()
+	if size > 0 {
+		cacheHitBytes.WithLabelValues(format).Add(float64(size))
+	}
+}
+
+// CacheMiss records a proxy request of format that had to fetch the content
+// from the remote (whether or not the remote had it).
+func CacheMiss(format string) {
+	cacheRequests.WithLabelValues(format, CacheResultMiss).Inc()
+}
+
+// CacheTally collects the proxy cache outcome of one client request so the
+// request is counted once in the cache metrics, however many proxy members
+// of a group it consulted: a miss when any remote had to be asked for the
+// content, otherwise a hit when a proxy cache answered. Requests answered by
+// hosted repositories alone are not counted.
+//
+//	ctx, tally := proxy.WithCacheTally(r.Context())
+//	defer tally.Record(Name, r.Method)
+//	... proxy.NoteCacheHit(ctx, size) / proxy.NoteCacheMiss(ctx) at decision points
+type CacheTally struct {
+	mu        sync.Mutex
+	hit, miss bool
+	size      int64
+}
+
+type cacheTallyKey struct{}
+
+// WithCacheTally returns ctx carrying a fresh tally for one client request.
+func WithCacheTally(ctx context.Context) (context.Context, *CacheTally) {
+	t := &CacheTally{}
+	return context.WithValue(ctx, cacheTallyKey{}, t), t
+}
+
+// NoteCacheHit notes that a proxy repository answered from its cache (fresh,
+// revalidated with a 304, or stale because the remote failed) with size
+// bytes. Without a tally in ctx it does nothing.
+func NoteCacheHit(ctx context.Context, size int64) {
+	if t, ok := ctx.Value(cacheTallyKey{}).(*CacheTally); ok {
+		t.mu.Lock()
+		t.hit = true
+		t.size += size
+		t.mu.Unlock()
+	}
+}
+
+// NoteCacheMiss notes that a proxy repository asked its remote for the
+// content. Without a tally in ctx it does nothing.
+func NoteCacheMiss(ctx context.Context) {
+	if t, ok := ctx.Value(cacheTallyKey{}).(*CacheTally); ok {
+		t.mu.Lock()
+		t.miss = true
+		t.mu.Unlock()
+	}
+}
+
+// Record adds the request to the cache metrics of format. A HEAD request
+// served no bytes.
+func (t *CacheTally) Record(format, method string) {
+	t.mu.Lock()
+	hit, miss, size := t.hit, t.miss, t.size
+	t.mu.Unlock()
+	switch {
+	case miss:
+		CacheMiss(format)
+	case hit:
+		if method == http.MethodHead {
+			size = 0
+		}
+		CacheHit(format, size)
+	}
+}
+
+// SetSize replaces the hit byte count with n, for responses derived from
+// cached documents (a checksum computed from a cached jar serves the checksum,
+// not the jar).
+func (t *CacheTally) SetSize(n int64) {
+	t.mu.Lock()
+	t.size = n
+	t.mu.Unlock()
+}

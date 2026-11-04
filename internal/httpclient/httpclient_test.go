@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -209,5 +211,81 @@ func TestReadTimeout(t *testing.T) {
 	}
 	if time.Since(start) > 5*time.Second {
 		t.Fatal("timeout not applied")
+	}
+}
+
+// errLoopback blocks loopback addresses, like the SSRF guard does.
+var errLoopback = errors.New("loopback blocked")
+
+func blockLoopback(a netip.Addr) error {
+	if a.IsLoopback() {
+		return errLoopback
+	}
+	return nil
+}
+
+// DialGuard sees the address actually dialled: a host name that resolves to a
+// blocked address (DNS rebinding) is refused at connect time.
+func TestDialGuard(t *testing.T) {
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "remote") }))
+	defer remote.Close()
+	_, port, _ := strings.Cut(strings.TrimPrefix(remote.URL, "http://"), ":")
+	byName := "http://localhost:" + port + "/x" // resolves to 127.0.0.1 only at dial time
+
+	get := func(f *Factory, target string) (string, error) {
+		t.Helper()
+		c, err := f.ForUpstream(target, core.UpstreamHTTP{}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := c.Get(target)
+		if err != nil {
+			return "", err
+		}
+		defer func() { _ = resp.Body.Close() }()
+		b, _ := io.ReadAll(resp.Body)
+		return string(b), nil
+	}
+
+	f, _ := New(Options{environ: env(nil), DialGuard: blockLoopback})
+	if _, err := get(f, byName); !errors.Is(err, errLoopback) {
+		t.Fatalf("direct dial to loopback by name = %v, want errLoopback", err)
+	}
+	if _, err := get(f, remote.URL); !errors.Is(err, errLoopback) {
+		t.Fatalf("direct dial to loopback IP = %v, want errLoopback", err)
+	}
+
+	// Allow-listed host names skip the dial check.
+	f, _ = New(Options{environ: env(nil), DialGuard: blockLoopback, DialAllowHost: func(h string) bool { return h == "localhost" }})
+	if body, err := get(f, byName); err != nil || body != "remote" {
+		t.Fatalf("allow-listed host = %q, %v", body, err)
+	}
+
+	// Connections to the configured outbound proxy are not checked: the
+	// operator chose it and the proxy applies its own policy.
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "via proxy") }))
+	defer proxy.Close()
+	f, _ = New(Options{Proxy: proxy.URL, environ: env(nil), DialGuard: blockLoopback})
+	if body, err := get(f, "http://public.example/x"); err != nil || body != "via proxy" {
+		t.Fatalf("through proxy = %q, %v", body, err)
+	}
+	// ... but no_proxy targets are dialled directly and checked.
+	f, _ = New(Options{Proxy: proxy.URL, NoProxy: []string{"localhost"}, environ: env(nil), DialGuard: blockLoopback})
+	if _, err := get(f, byName); !errors.Is(err, errLoopback) {
+		t.Fatalf("no_proxy target = %v, want errLoopback", err)
+	}
+	// Per-remote proxies count as proxies too.
+	f, _ = New(Options{environ: env(nil), DialGuard: blockLoopback})
+	c, err := f.ForUpstream("http://public.example/", core.UpstreamHTTP{Proxy: proxy.URL}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := c.Get("http://public.example/x")
+	if err != nil {
+		t.Fatalf("per-remote proxy = %v", err)
+	}
+	_ = resp.Body.Close()
+	if u, _ := url.Parse(proxy.URL); !f.proxyAddrs[u.Host] {
+		t.Errorf("per-remote proxy %s not registered: %v", u.Host, f.proxyAddrs)
 	}
 }
