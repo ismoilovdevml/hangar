@@ -6,7 +6,11 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), texta
 
 interface DrawerProps {
   title: ReactNode;
+  /** Above the title (status pills). */
+  eyebrow?: ReactNode;
   subtitle?: ReactNode;
+  /** Pinned under the scrolling body (actions). */
+  footer?: ReactNode;
   onClose: () => void;
   children: ReactNode;
 }
@@ -15,7 +19,7 @@ interface DrawerProps {
  * A modal side panel: focus moves in on open and back to the opener on
  * close, Tab stays inside, Escape and a click on the scrim close it.
  */
-export function Drawer({ title, subtitle, onClose, children }: DrawerProps) {
+export function Drawer({ title, eyebrow, subtitle, footer, onClose, children }: DrawerProps) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const close = useRef(onClose);
@@ -66,16 +70,18 @@ export function Drawer({ title, subtitle, onClose, children }: DrawerProps) {
       <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="vdrawer glass">
         <div className="vdrawer__head">
           <div className="vdrawer__titles">
+            {eyebrow && <div className="vdrawer__eyebrow">{eyebrow}</div>}
             <h2 id={titleId} className="vdrawer__title">
               {title}
             </h2>
             {subtitle && <div className="vdrawer__subtitle">{subtitle}</div>}
           </div>
-          <button type="button" className="icon-button icon-button--sm" aria-label="Close" onClick={onClose}>
+          <button type="button" className="icon-button icon-button--sm vdrawer__close" aria-label="Close" onClick={onClose}>
             <IconClose size={18} />
           </button>
         </div>
         <div className="vdrawer__body">{children}</div>
+        {footer && <div className="vdrawer__foot">{footer}</div>}
       </div>
     </div>,
     document.body,
