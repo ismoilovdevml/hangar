@@ -40,8 +40,9 @@ describe('overview', () => {
     expect(within(table).getByText('Just now')).toBeInTheDocument();
 
     const upstreams = screen.getByRole('region', { name: 'Upstream sources' });
-    expect(await within(upstreams).findByText('npmjs.org')).toBeInTheDocument();
+    expect(await within(upstreams).findByText('npmjs-proxy')).toBeInTheDocument();
     expect(within(upstreams).getByText('Blocked')).toBeInTheDocument();
+    expect(within(upstreams).getByText('Unknown')).toBeInTheDocument();
 
     expect(await screen.findByText('docker login cr.acme.io')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy client setup commands' })).toBeInTheDocument();

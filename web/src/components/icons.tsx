@@ -129,3 +129,27 @@ export const IconLogout = (p: IconProps) => (
     <path d="M10 4H6.5A2.5 2.5 0 004 6.5v11A2.5 2.5 0 006.5 20H10M15 8l4 4-4 4M19 12H9" {...s} strokeLinecap="round" strokeLinejoin="round" />
   </Svg>
 );
+export const IconGlobe = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="8.5" {...s} />
+    <path d="M3.5 12h17M12 3.5c2.3 2.4 3.5 5.2 3.5 8.5s-1.2 6.1-3.5 8.5c-2.3-2.4-3.5-5.2-3.5-8.5s1.2-6.1 3.5-8.5z" {...s} />
+  </Svg>
+);
+export const IconGroup = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3.5" y="4" width="7" height="6" rx="2" {...s} />
+    <rect x="13.5" y="4" width="7" height="6" rx="2" {...s} />
+    <rect x="8.5" y="14" width="7" height="6" rx="2" {...s} />
+    <path d="M7 10v2h10v-2M12 12v2" {...s} />
+  </Svg>
+);
+export const IconArrowUp = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 19V5M6 11l6-6 6 6" {...s} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+export const IconArrowDown = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 5v14M6 13l6 6 6-6" {...s} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);

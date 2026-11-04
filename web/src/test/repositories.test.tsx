@@ -1,0 +1,100 @@
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it } from 'vitest';
+import { repositories } from '../mocks/data';
+import { renderApp } from './render';
+
+const all = repositories();
+const count = (t: string) => all.filter((r) => r.type === t).length;
+const search = (h: { location: { search: string } }) => new URLSearchParams(h.location.search);
+
+describe('repositories list', () => {
+  it('shows count cards, tab counts and repository rows from the API', async () => {
+    renderApp('/repositories');
+    const table = await screen.findByRole('table', { name: 'Repositories' });
+    expect(await within(table).findByText('docker-prod')).toBeInTheDocument();
+
+    const cards = screen.getByRole('region', { name: 'Repository counts' });
+    expect(within(cards).getByRole('link', { name: `${count('hosted')} Hosted · your own packages` })).toBeInTheDocument();
+    expect(within(cards).getByRole('link', { name: `${count('proxy')} Proxy · cached upstreams` })).toBeInTheDocument();
+    expect(within(cards).getByRole('link', { name: `${count('group')} Group · one URL for many` })).toBeInTheDocument();
+
+    const tabs = screen.getByRole('navigation', { name: 'Repository type' });
+    expect(within(tabs).getByRole('link', { name: `All ${all.length}` })).toHaveAttribute('aria-current', 'page');
+
+    const row = within(table).getByText('npmjs-proxy').closest('tr')!;
+    expect(within(row).getByText('Proxy')).toBeInTheDocument();
+    expect(within(row).getByText('registry.npmjs.org')).toBeInTheDocument();
+    expect(within(row).getByText('Slow upstream')).toBeInTheDocument();
+    expect(within(row).getByText('435 GB')).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Copy URL of npmjs-proxy' })).toBeInTheDocument();
+    expect(within(within(table).getByText('ghcr-proxy').closest('tr')!).getByText('Blocked by policy')).toBeInTheDocument();
+    // Groups store nothing themselves: no invented size.
+    expect(within(within(table).getByText('docker-all').closest('tr')!).getByText('—')).toBeInTheDocument();
+    expect(screen.getByText(`Showing 20 of ${all.length}`)).toBeInTheDocument();
+  });
+
+  it('keeps the type tab, format and name filters in the URL', async () => {
+    const user = userEvent.setup();
+    const { history } = renderApp('/repositories');
+    const tabs = await screen.findByRole('navigation', { name: 'Repository type' });
+
+    await user.click(within(tabs).getByRole('link', { name: /^Proxy/ }));
+    await waitFor(() => expect(search(history).get('type')).toBe('proxy'));
+    const table = screen.getByRole('table', { name: 'Repositories' });
+    await waitFor(() => expect(within(table).queryByText('docker-prod')).not.toBeInTheDocument());
+    expect(within(table).getByText('dockerhub-proxy')).toBeInTheDocument();
+    expect(within(tabs).getByRole('link', { name: /^Proxy/ })).toHaveAttribute('aria-current', 'page');
+
+    await user.selectOptions(screen.getByLabelText('Format'), 'npm');
+    await waitFor(() => expect(search(history).get('format')).toBe('npm'));
+    expect(search(history).get('type')).toBe('proxy');
+    await waitFor(() => expect(within(table).queryByText('dockerhub-proxy')).not.toBeInTheDocument());
+    expect(within(table).getByText('npmjs-proxy')).toBeInTheDocument();
+    // Tab counts follow the format filter.
+    expect(within(tabs).getByRole('link', { name: `All ${all.filter((r) => r.format === 'npm').length}` })).toBeInTheDocument();
+
+    await user.click(within(tabs).getByRole('link', { name: /^All/ }));
+    await waitFor(() => expect(search(history).get('type')).toBeNull());
+    await user.type(screen.getByLabelText('Filter by name'), 'internal');
+    await waitFor(() => expect(search(history).get('q')).toBe('internal'));
+    await waitFor(() => expect(within(table).queryByText('npm-all')).not.toBeInTheDocument());
+    expect(within(table).getByText('npm-internal')).toBeInTheDocument();
+  });
+
+  it('restores filters from a shared link', async () => {
+    renderApp('/repositories?type=group&format=docker');
+    const table = await screen.findByRole('table', { name: 'Repositories' });
+    expect(await within(table).findByText('docker-all')).toBeInTheDocument();
+    expect(within(table).getAllByRole('row')).toHaveLength(2); // header + one group
+    expect(screen.getByLabelText('Format')).toHaveValue('docker');
+    expect(within(screen.getByRole('navigation', { name: 'Repository type' })).getByRole('link', { name: /^Group/ })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('pages with the server cursor and comes back with Previous', async () => {
+    const user = userEvent.setup();
+    const { history } = renderApp('/repositories');
+    const table = await screen.findByRole('table', { name: 'Repositories' });
+    await within(table).findByText('docker-prod');
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() => expect(search(history).get('cursor')).toBe('o20'));
+    expect(await within(table).findByText(all[20]!.name)).toBeInTheDocument();
+    expect(screen.getByText(`Showing ${all.length - 20} of ${all.length}`)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Previous' }));
+    await waitFor(() => expect(search(history).get('cursor')).toBeNull());
+    expect(await within(table).findByText('docker-prod')).toBeInTheDocument();
+  });
+
+  it('says when nothing matches and offers a way back', async () => {
+    renderApp('/repositories?q=does-not-exist');
+    expect(await screen.findByText(/No repositories match these filters/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Show all' })).toBeInTheDocument();
+  });
+});

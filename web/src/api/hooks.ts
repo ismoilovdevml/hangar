@@ -1,13 +1,21 @@
-import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiFetch } from './client';
+import { keepPreviousData, queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiFetch, resetCsrfToken } from './client';
 import type {
   AuthProviders,
+  BlobStoreList,
+  CleanupPolicyPage,
   ClientEndpoint,
+  Format,
+  FormatInfo,
+  ListRepositoriesQuery,
   LoginRequest,
   OverviewMetrics,
   OverviewRange,
   Page,
   PublishedComponent,
+  Repository,
+  RepositoryInput,
+  RepositoryList,
   Session,
   SystemStatus,
   UpstreamHealth,
@@ -17,15 +25,21 @@ export const queryKeys = {
   session: ['session'] as const,
   systemStatus: ['system', 'status'] as const,
   authProviders: ['auth', 'providers'] as const,
+  formats: ['formats'] as const,
   overview: (range: OverviewRange) => ['metrics', 'overview', range] as const,
   recentComponents: ['components', 'recent'] as const,
   upstreams: ['upstreams', 'health'] as const,
   clientEndpoints: ['me', 'client-endpoints'] as const,
+  repositories: ['repositories'] as const,
+  repositoryList: (q: ListRepositoriesQuery) => ['repositories', 'list', q] as const,
+  repositoriesByFormat: (format: Format) => ['repositories', 'by-format', format] as const,
+  blobStores: ['blob-stores'] as const,
+  cleanupPolicies: ['cleanup-policies'] as const,
 };
 
 export const sessionQuery = queryOptions({
   queryKey: queryKeys.session,
-  queryFn: ({ signal }) => apiFetch<Session>('/auth/session', { signal }),
+  queryFn: ({ signal }) => apiFetch<Session>('/auth/session', { signal, allowUnauthorized: true }),
   staleTime: 5 * 60_000,
   retry: false,
 });
@@ -37,7 +51,7 @@ export function useSession() {
 export function useSystemStatus() {
   return useQuery({
     queryKey: queryKeys.systemStatus,
-    queryFn: ({ signal }) => apiFetch<SystemStatus>('/system/status', { signal }),
+    queryFn: ({ signal }) => apiFetch<SystemStatus>('/system/status', { signal, allowUnauthorized: true }),
     refetchInterval: 30_000,
   });
 }
@@ -45,7 +59,7 @@ export function useSystemStatus() {
 export function useAuthProviders() {
   return useQuery({
     queryKey: queryKeys.authProviders,
-    queryFn: ({ signal }) => apiFetch<AuthProviders>('/auth/providers', { signal }),
+    queryFn: ({ signal }) => apiFetch<AuthProviders>('/auth/providers', { signal, allowUnauthorized: true }),
     staleTime: Infinity,
   });
 }
@@ -53,18 +67,36 @@ export function useAuthProviders() {
 export function useLogin() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: LoginRequest) => apiFetch<Session>('/auth/login', { method: 'POST', body }),
-    onSuccess: (session) => qc.setQueryData(queryKeys.session, session),
+    mutationFn: (body: LoginRequest) =>
+      apiFetch<Session>('/auth/login', { method: 'POST', body, allowUnauthorized: true }),
+    onSuccess: (session) => {
+      // A new principal: nothing cached for the previous one may leak through.
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'auth' && q.queryKey[0] !== 'system' });
+      qc.setQueryData(queryKeys.session, session);
+    },
   });
 }
 
 export function useLogout() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => apiFetch<void>('/auth/logout', { method: 'POST' }),
-    onSettled: () => qc.clear(),
+    mutationFn: () => apiFetch<void>('/auth/logout', { method: 'POST', allowUnauthorized: true }),
+    onSettled: () => {
+      resetCsrfToken();
+      qc.clear();
+    },
   });
 }
+
+export function useFormats() {
+  return useQuery({
+    queryKey: queryKeys.formats,
+    queryFn: ({ signal }) => apiFetch<{ items: FormatInfo[] }>('/formats', { signal }),
+    staleTime: Infinity,
+  });
+}
+
+/* ---------------------------------------------------------------- overview */
 
 export function useOverview(range: OverviewRange) {
   return useQuery({
@@ -72,7 +104,7 @@ export function useOverview(range: OverviewRange) {
     queryFn: ({ signal }) =>
       apiFetch<OverviewMetrics>('/metrics/overview', { query: { range }, signal }),
     refetchInterval: 60_000,
-    placeholderData: (prev) => prev,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -100,7 +132,70 @@ export function useUpstreamHealth() {
 export function useClientEndpoints() {
   return useQuery({
     queryKey: queryKeys.clientEndpoints,
-    queryFn: ({ signal }) => apiFetch<Page<ClientEndpoint>>('/me/client-endpoints', { signal }),
+    queryFn: ({ signal }) =>
+      apiFetch<Page<ClientEndpoint>>('/me/client-endpoints', { query: { limit: 3 }, signal }),
     staleTime: 10 * 60_000,
+  });
+}
+
+/* ---------------------------------------------------------------- repositories */
+
+export function useRepositories(query: ListRepositoriesQuery) {
+  return useQuery({
+    queryKey: queryKeys.repositoryList(query),
+    queryFn: ({ signal }) => apiFetch<RepositoryList>('/repositories', { query, signal }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Every repository of one format the caller can read (group member picker). */
+export function useRepositoriesByFormat(format: Format | undefined) {
+  return useQuery({
+    queryKey: queryKeys.repositoriesByFormat(format ?? 'raw'),
+    enabled: !!format,
+    queryFn: async ({ signal }) => {
+      const items: Repository[] = [];
+      let cursor: string | undefined;
+      // Bounded: a group picker with more than 5000 candidates needs search, not a list.
+      for (let i = 0; i < 5; i++) {
+        const page = await apiFetch<RepositoryList>('/repositories', {
+          query: { format, limit: 1000, cursor },
+          signal,
+        });
+        items.push(...page.items);
+        if (!page.next_cursor) break;
+        cursor = page.next_cursor;
+      }
+      return items;
+    },
+  });
+}
+
+export function useBlobStores() {
+  return useQuery({
+    queryKey: queryKeys.blobStores,
+    queryFn: ({ signal }) => apiFetch<BlobStoreList>('/blob-stores', { signal }),
+  });
+}
+
+/** Cleanup policies to attach. Older servers may not serve the endpoint yet. */
+export function useCleanupPolicies() {
+  return useQuery({
+    queryKey: queryKeys.cleanupPolicies,
+    queryFn: ({ signal }) => apiFetch<CleanupPolicyPage>('/cleanup-policies', { signal }),
+    retry: false,
+  });
+}
+
+export function useCreateRepository() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: RepositoryInput) =>
+      apiFetch<Repository>('/repositories', { method: 'POST', body }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.repositories });
+      void qc.invalidateQueries({ queryKey: queryKeys.upstreams });
+      void qc.invalidateQueries({ queryKey: queryKeys.clientEndpoints });
+    },
   });
 }

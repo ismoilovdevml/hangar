@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router';
+import { useLiveStatus, type LiveStatus } from '../../api/events';
 import { useRecentComponents } from '../../api/hooks';
 import type { PublishedComponent } from '../../api/types';
 import { DataTable, type Column } from '../../components/DataTable';
@@ -7,8 +8,26 @@ import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
 import { ErrorNote } from '../../components/ErrorNote';
 import { relativeTime } from '../../lib/format';
-import { scanPill } from '../../lib/overview';
+import { componentName, scanPill } from '../../lib/overview';
 import { useNow } from '../../lib/useNow';
+
+const LIVE: Record<LiveStatus, { text: string; tone: 'ok' | 'warn' | 'neutral' }> = {
+  open: { text: 'Live', tone: 'ok' },
+  connecting: { text: 'Connecting…', tone: 'neutral' },
+  reconnecting: { text: 'Reconnecting…', tone: 'warn' },
+  closed: { text: 'Not live', tone: 'neutral' },
+  unavailable: { text: 'Live updates off', tone: 'neutral' },
+};
+
+function LiveBadge() {
+  const s = LIVE[useLiveStatus()];
+  return (
+    <span className="live-badge" role="status" title="Updates from the server event stream">
+      <span className={`status__dot dot-${s.tone}`} aria-hidden="true" />
+      {s.text}
+    </span>
+  );
+}
 
 export function RecentlyPublished() {
   const q = useRecentComponents();
@@ -27,7 +46,7 @@ export function RecentlyPublished() {
         >
           <FormatBadge format={c.format} />
           <span className="pkg-link__text">
-            <span className="pkg-link__name">{c.name}</span>
+            <span className="pkg-link__name">{componentName(c)}</span>
             <span className="pkg-link__ver">{c.version}</span>
           </span>
         </Link>
@@ -59,9 +78,12 @@ export function RecentlyPublished() {
       flush
       className="recent"
       action={
-        <Link to="/browse" className="panel__link">
-          View all
-        </Link>
+        <span className="panel__actions">
+          <LiveBadge />
+          <Link to="/browse" className="panel__link">
+            View all
+          </Link>
+        </span>
       }
     >
       {q.isError ? (

@@ -39,20 +39,26 @@ export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env };
   const mocks = env.VITE_API_MOCKS === 'true';
   const backend = env.HANGAR_BACKEND_URL ?? 'http://localhost:8080';
+  // The Host header is kept (no changeOrigin), so the server's same-origin check
+  // sees the browser's Origin and Host agree. In mock mode nothing is proxied.
+  const proxy = mocks
+    ? undefined
+    : {
+        '/api': { target: backend },
+        '/v2': { target: backend },
+        '/repository': { target: backend },
+      };
 
   return {
     plugins: [react(), mockServiceWorker(mocks)],
     server: {
       port: 5173,
-      proxy: {
-        '/api': { target: backend },
-        '/v2': { target: backend },
-        '/repository': { target: backend },
-      },
+      proxy,
     },
     preview: {
       port: 4173,
       strictPort: true,
+      proxy,
     },
     test: {
       environment: 'jsdom',

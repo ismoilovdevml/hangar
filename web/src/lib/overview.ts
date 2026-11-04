@@ -49,3 +49,43 @@ export function axisLabels(buckets: TrafficBucket[], range: OverviewRange): stri
   );
   return [...picks.map((i) => bucketLabel(buckets[i]!.start, range)), 'Now'];
 }
+
+/** Start of the window the server counts requests over for `range` (UTC midnight for "today"). */
+export function rangeStart(range: OverviewRange, generatedAt: string): Date {
+  const now = new Date(generatedAt).getTime();
+  const DAY = 86_400_000;
+  switch (range) {
+    case '1h':
+      return new Date(now - 3_600_000);
+    case 'today':
+      return new Date(now - (now % DAY));
+    case '7d':
+      return new Date(now - 7 * DAY);
+    case '30d':
+      return new Date(now - 30 * DAY);
+  }
+}
+
+/**
+ * When the request counters started later than the range (the server restarted),
+ * says from when the numbers count; null when they cover the whole range.
+ */
+export function coverageNote(m: OverviewMetrics, now: Date = new Date()): string | null {
+  const from = m.requests.coverage_start;
+  if (!from) return null;
+  const start = new Date(from);
+  if (Number.isNaN(start.getTime())) return null;
+  if (start.getTime() - rangeStart(m.range, m.generated_at).getTime() < 60_000) return null;
+  const sameDay = start.toDateString() === now.toDateString();
+  const fmt = new Intl.DateTimeFormat('en-GB', sameDay
+    ? { hour: '2-digit', minute: '2-digit', hour12: false }
+    : { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+  return `Counted since ${fmt.format(start)}`;
+}
+
+/** Package coordinates in the format's idiom, from namespace + name. */
+export function componentName(c: { format: string; namespace?: string; name: string }): string {
+  const ns = c.namespace?.trim();
+  if (!ns || c.name.startsWith(ns)) return c.name;
+  return c.format === 'maven' ? `${ns}:${c.name}` : `${ns}/${c.name}`;
+}

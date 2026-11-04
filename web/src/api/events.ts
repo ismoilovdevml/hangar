@@ -1,76 +1,132 @@
-import { useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { API_BASE } from './client';
 import { queryKeys, RECENT_LIMIT } from './hooks';
-import type { LiveEvent, Page, PublishedComponent } from './types';
+import { openEventStream, type StreamStatus } from './sse';
+import type { LiveEvent, LiveEventType, Page, PublishedComponent, UpstreamHealth } from './types';
 
-export type LiveStatus = 'connecting' | 'open' | 'closed' | 'unsupported';
+export type LiveStatus = StreamStatus;
 
-const EVENT_TYPES: LiveEvent['type'][] = [
+const EVENT_TYPES: readonly LiveEventType[] = [
   'component.published',
   'component.quarantined',
+  'component.deleted',
   'task.progress',
+  'task.finished',
+  'upstream.status',
 ];
 
+const isLiveType = (t: string): t is LiveEventType => (EVENT_TYPES as readonly string[]).includes(t);
+
+/** Query keys refetched (at most once per `delay`) after events that change them. */
+type Invalidate = (key: readonly unknown[]) => void;
+
 /** Applies one live event to the query cache. Exported for tests. */
-export function applyLiveEvent(
-  qc: ReturnType<typeof useQueryClient>,
-  event: LiveEvent,
-): void {
+export function applyLiveEvent(qc: QueryClient, event: LiveEvent, invalidate: Invalidate): void {
+  const recent = queryKeys.recentComponents;
   switch (event.type) {
     case 'component.published':
-      qc.setQueryData<Page<PublishedComponent>>(queryKeys.recentComponents, (prev) => {
+      qc.setQueryData<Page<PublishedComponent>>(recent, (prev) => {
         if (!prev) return prev;
         const rest = prev.items.filter((c) => c.id !== event.data.id);
         return { ...prev, items: [event.data, ...rest].slice(0, RECENT_LIMIT) };
       });
-      void qc.invalidateQueries({ queryKey: ['metrics', 'overview'] });
+      invalidate(['metrics', 'overview']);
+      invalidate(queryKeys.repositories);
       break;
     case 'component.quarantined':
-      void qc.invalidateQueries({ queryKey: queryKeys.recentComponents });
-      void qc.invalidateQueries({ queryKey: ['metrics', 'overview'] });
+      qc.setQueryData<Page<PublishedComponent>>(recent, (prev) =>
+        prev && {
+          ...prev,
+          items: prev.items.map((c) => (c.id === event.data.id ? { ...c, scan: { ...c.scan, state: 'quarantined' } } : c)),
+        },
+      );
+      invalidate(['metrics', 'overview']);
+      break;
+    case 'component.deleted':
+      qc.setQueryData<Page<PublishedComponent>>(recent, (prev) =>
+        prev && { ...prev, items: prev.items.filter((c) => c.id !== event.data.id) },
+      );
+      invalidate(recent);
+      invalidate(['metrics', 'overview']);
+      invalidate(queryKeys.repositories);
       break;
     case 'task.progress':
-      void qc.invalidateQueries({ queryKey: ['tasks'] });
+    case 'task.finished':
+      invalidate(['tasks']);
+      break;
+    case 'upstream.status':
+      qc.setQueryData<Page<UpstreamHealth>>(queryKeys.upstreams, (prev) => {
+        if (!prev) return prev;
+        const known = prev.items.some((u) => u.name === event.data.name);
+        return {
+          ...prev,
+          items: known ? prev.items.map((u) => (u.name === event.data.name ? event.data : u)) : [...prev.items, event.data],
+        };
+      });
+      invalidate(queryKeys.repositories);
       break;
   }
 }
 
+/** Collapses bursts of invalidations (a CI pipeline publishing 50 packages) into one refetch per key. */
+function batchedInvalidate(qc: QueryClient, delayMs: number) {
+  const pending = new Map<string, readonly unknown[]>();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const flush = () => {
+    timer = undefined;
+    for (const key of pending.values()) void qc.invalidateQueries({ queryKey: key });
+    pending.clear();
+  };
+  return {
+    invalidate: (key: readonly unknown[]) => {
+      pending.set(JSON.stringify(key), key);
+      timer ??= setTimeout(flush, delayMs);
+    },
+    cancel: () => clearTimeout(timer),
+  };
+}
+
+export const LiveStatusContext = createContext<LiveStatus>('connecting');
+
+export function useLiveStatus(): LiveStatus {
+  return useContext(LiveStatusContext);
+}
+
 /**
- * Subscribes to the server-sent event stream at /api/v1/events and folds events into
- * the TanStack Query cache. EventSource reconnects on its own after network errors.
+ * Subscribes to /api/v1/events and folds events into the TanStack Query cache.
+ * Reconnects with backoff and resumes with Last-Event-ID; a 401 hands over to
+ * `onUnauthorized` (sign-in again).
  */
-export function useLiveEvents(enabled = true): LiveStatus {
+export function useLiveEvents(onUnauthorized: () => void, enabled = true): LiveStatus {
   const qc = useQueryClient();
-  const supported = typeof window !== 'undefined' && 'EventSource' in window;
-  const [status, setStatus] = useState<LiveStatus>(supported ? 'connecting' : 'unsupported');
+  const [status, setStatus] = useState<LiveStatus>('connecting');
+  const unauthorized = useRef(onUnauthorized);
+  useEffect(() => {
+    unauthorized.current = onUnauthorized;
+  }, [onUnauthorized]);
 
   useEffect(() => {
-    if (!enabled || !supported) return;
-    const source = new EventSource(`${API_BASE}/events`, { withCredentials: true });
-    const onOpen = () => setStatus('open');
-    const onError = () =>
-      setStatus(source.readyState === EventSource.CLOSED ? 'closed' : 'connecting');
-    const handlers = EVENT_TYPES.map((type) => {
-      const handler = (e: MessageEvent<string>) => {
+    if (!enabled) return;
+    const batch = batchedInvalidate(qc, 2_000);
+    const close = openEventStream({
+      url: `${API_BASE}/events?types=${EVENT_TYPES.join(',')}`,
+      onStatus: setStatus,
+      onUnauthorized: () => unauthorized.current(),
+      onMessage: (m) => {
+        if (!isLiveType(m.event)) return;
         try {
-          applyLiveEvent(qc, { type, data: JSON.parse(e.data) } as LiveEvent);
+          applyLiveEvent(qc, { type: m.event, data: JSON.parse(m.data) } as LiveEvent, batch.invalidate);
         } catch {
-          // Ignore malformed frames; the next refetch reconciles state.
+          // A malformed frame is skipped; the next refetch reconciles state.
         }
-      };
-      source.addEventListener(type, handler);
-      return [type, handler] as const;
+      },
     });
-    source.addEventListener('open', onOpen);
-    source.addEventListener('error', onError);
     return () => {
-      handlers.forEach(([type, h]) => source.removeEventListener(type, h));
-      source.removeEventListener('open', onOpen);
-      source.removeEventListener('error', onError);
-      source.close();
+      close();
+      batch.cancel();
     };
-  }, [enabled, supported, qc]);
+  }, [enabled, qc]);
 
   return status;
 }

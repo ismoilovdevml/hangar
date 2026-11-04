@@ -4,10 +4,17 @@
  */
 import type {
   AuthProviders,
+  BlobStore,
+  BlobStoreList,
+  CleanupPolicy,
   ClientEndpoint,
+  Format,
   OverviewMetrics,
   OverviewRange,
   PublishedComponent,
+  Repository,
+  RepositoryStatus,
+  RepositoryType,
   Session,
   SystemStatus,
   UpstreamHealth,
@@ -29,6 +36,7 @@ export const session: Session = {
     environment: 'prod',
     region: 'eu-central',
   },
+  privileges: ['system:*'],
 };
 
 export const systemStatus: SystemStatus = {
@@ -88,7 +96,7 @@ export function overview(range: OverviewRange, now = Date.now()): OverviewMetric
     generated_at: new Date(now).toISOString(),
     summary: { published_since_yesterday: 214, failed_pushes: 0 },
     storage: { used_bytes: 4.82 * TB, capacity_bytes: 12 * TB, added_bytes_24h: 38 * GB },
-    requests: { total: r.total, trend_pct: r.trend, peak_total: r.peak, p95_ms: 41 },
+    requests: { total: r.total, trend_pct: r.trend, peak_total: r.peak, p95_ms: 41, coverage_start: null },
     cache: { hit_ratio: 0.942, bytes_saved: 2.1 * TB },
     issues: { critical: 7, packages_affected: 3, quarantined: 2, open_findings: 39 },
     traffic: traffic(range, now),
@@ -131,16 +139,129 @@ export const LIVE_SEEDS: Omit<PublishedComponent, 'id' | 'published_at'>[] = [
   { format: 'pypi', name: 'acme-feature-store', version: '2.2.0', repository: 'pypi-internal', publisher: { kind: 'user', display_name: 'Malika Yusupova' }, scan: { ...clean, state: 'pending' } },
 ];
 
+/** Upstream health is reported per proxy repository (name = repository name). */
 export const upstreams: UpstreamHealth[] = [
-  { name: 'Docker Hub', url: 'https://registry-1.docker.io', state: 'healthy', latency_ms: 88 },
-  { name: 'npmjs.org', url: 'https://registry.npmjs.org', state: 'slow', latency_ms: 412 },
-  { name: 'Maven Central', url: 'https://repo1.maven.org/maven2', state: 'healthy', latency_ms: 64 },
-  { name: 'PyPI', url: 'https://pypi.org', state: 'healthy', latency_ms: 95 },
-  { name: 'ghcr.io', url: 'https://ghcr.io', state: 'blocked', latency_ms: null },
+  { name: 'dockerhub-proxy', url: 'https://registry-1.docker.io', state: 'healthy', latency_ms: 88 },
+  { name: 'npmjs-proxy', url: 'https://registry.npmjs.org', state: 'slow', latency_ms: 412 },
+  { name: 'maven-central', url: 'https://repo1.maven.org/maven2/', state: 'healthy', latency_ms: 64 },
+  { name: 'pypi-proxy', url: 'https://pypi.org', state: 'unknown', latency_ms: null },
+  { name: 'ghcr-proxy', url: 'https://ghcr.io', state: 'blocked', latency_ms: null },
 ];
 
 export const clientEndpoints: ClientEndpoint[] = [
   { format: 'docker', endpoint: 'cr.acme.io', repository: 'docker-group' },
   { format: 'npm', endpoint: 'https://pkg.acme.io/npm/', repository: 'npm-group' },
   { format: 'pypi', endpoint: 'https://pkg.acme.io/pypi/simple', repository: 'pypi-group' },
+];
+
+/* ---------- repositories, blob stores, cleanup policies ---------- */
+
+/** Formats the mock server speaks (the same set a default build serves). */
+export const formats: Format[] = ['docker', 'maven', 'npm', 'nuget', 'pypi', 'raw'];
+
+const BASE_URL = 'https://pkg.acme.io';
+const REGISTRY_HOST = 'cr.acme.io';
+
+export function repositoryUrl(format: string, name: string): string {
+  return format === 'docker' ? `${REGISTRY_HOST}/${name}` : `${BASE_URL}/repository/${name}/`;
+}
+
+type RepoSeed = [name: string, format: Format, type: RepositoryType, description: string, bytes: number, status?: RepositoryStatus, extra?: Partial<Repository['config']>];
+
+const REPO_SEEDS: RepoSeed[] = [
+  ['docker-all', 'docker', 'group', 'Single pull endpoint for every team', 0, 'online', { group: { members: ['docker-prod', 'dockerhub-proxy', 'ghcr-proxy'], write_member: 'docker-prod' } }],
+  ['docker-prod', 'docker', 'hosted', 'Release images, immutable tags', 1.84 * TB],
+  ['dockerhub-proxy', 'docker', 'proxy', '', 920 * GB, 'online', { proxy: { remote_url: 'https://registry-1.docker.io', metadata_ttl: '6h0m0s', content_ttl: '0s', negative_cache_ttl: '10m0s' } }],
+  ['npm-all', 'npm', 'group', 'internal + npmjs', 0, 'online', { group: { members: ['npm-internal', 'npmjs-proxy'], write_member: 'npm-internal' } }],
+  ['npm-internal', 'npm', 'hosted', '@acme scope', 41 * GB],
+  ['npmjs-proxy', 'npm', 'proxy', '', 435 * GB, 'slow_upstream', { proxy: { remote_url: 'https://registry.npmjs.org', metadata_ttl: '30m0s', content_ttl: '0s', negative_cache_ttl: '10m0s' } }],
+  ['maven-releases', 'maven', 'hosted', 'Release policy, no redeploy', 388 * GB],
+  ['maven-snapshots', 'maven', 'hosted', 'Snapshots, kept 14 days', 96 * GB],
+  ['pypi-internal', 'pypi', 'hosted', 'ML and tooling wheels', 22 * GB],
+  ['ghcr-proxy', 'docker', 'proxy', '', 64 * GB, 'blocked', { proxy: { remote_url: 'https://ghcr.io', metadata_ttl: '6h0m0s', content_ttl: '0s', negative_cache_ttl: '10m0s' } }],
+  ['maven-central', 'maven', 'proxy', '', 512 * GB, 'online', { proxy: { remote_url: 'https://repo1.maven.org/maven2/', metadata_ttl: '24h0m0s', content_ttl: '0s', negative_cache_ttl: '10m0s' } }],
+  ['maven-all', 'maven', 'group', 'Releases, snapshots and Central', 0, 'online', { group: { members: ['maven-releases', 'maven-snapshots', 'maven-central'] } }],
+  ['pypi-proxy', 'pypi', 'proxy', '', 118 * GB, 'online', { proxy: { remote_url: 'https://pypi.org', metadata_ttl: '1h0m0s', content_ttl: '0s', negative_cache_ttl: '10m0s' } }],
+  ['nuget-internal', 'nuget', 'hosted', 'Shared .NET libraries', 7.4 * GB],
+  ['raw-artifacts', 'raw', 'hosted', 'Build outputs and installers', 64 * GB],
+  ['raw-legacy', 'raw', 'hosted', 'Read-only archive', 210 * GB, 'offline'],
+  ['docker-dev', 'docker', 'hosted', 'Branch builds, cleaned nightly', 310 * GB],
+  ['docker-staging', 'docker', 'hosted', 'Release candidates', 180 * GB],
+  ['npm-sandbox', 'npm', 'hosted', 'Experiments', 1.2 * GB],
+  ['maven-thirdparty', 'maven', 'hosted', 'Vendor jars without a public repo', 12 * GB],
+  ['pypi-ml', 'pypi', 'hosted', 'Model packages', 140 * GB],
+  ['helm-charts', 'raw', 'hosted', 'Chart tarballs', 3.1 * GB],
+  ['nuget-proxy', 'nuget', 'proxy', '', 9.8 * GB, 'online', { proxy: { remote_url: 'https://api.nuget.org', metadata_ttl: '1h0m0s', content_ttl: '0s', negative_cache_ttl: '10m0s' } }],
+  ['pypi-all', 'pypi', 'group', '', 0, 'online', { group: { members: ['pypi-internal', 'pypi-ml', 'pypi-proxy'] } }],
+];
+
+export function repositories(): Repository[] {
+  const created = '2026-06-01T09:00:00Z';
+  return REPO_SEEDS.map(([name, format, type, description, bytes, status = 'online', extra = {}], i) => ({
+    id: `r_${String(i + 1).padStart(3, '0')}`,
+    name,
+    format,
+    type,
+    description,
+    blob_store: type === 'group' ? undefined : bytes > 1 * TB ? 's3-eu-primary' : 'fs-local',
+    online: status !== 'offline',
+    config: {
+      anonymous_read: false,
+      scan_on_arrival: true,
+      quarantine_critical: type !== 'proxy',
+      ...(type === 'hosted' ? { hosted: { write_policy: format === 'docker' ? 'allow' : 'allow_once' } } : {}),
+      ...extra,
+    },
+    url: repositoryUrl(format, name),
+    status,
+    size_bytes: Math.round(bytes),
+    component_count: type === 'group' ? 0 : Math.round(bytes / (40 * 1e6)),
+    created_at: created,
+    updated_at: created,
+  }));
+}
+
+export const blobStores: BlobStore[] = [
+  {
+    id: 'b_01', name: 's3-eu-primary', kind: 's3', state: 'ok', location: 's3://acme-artifacts/hangar', soft_quota_bytes: 12 * TB,
+    used_bytes: 4.62 * TB, capacity_bytes: 12 * TB, repository_count: 9, blob_count: 1_204_331, reclaimable_bytes: 48 * GB,
+    dedup_saved_bytes: 1.3 * TB, created_at: '2026-01-10T08:00:00Z', write_latency_ms: 24, encryption: 'SSE-S3',
+  },
+  {
+    id: 'b_02', name: 'fs-local', kind: 'fs', state: 'unknown', location: '/var/lib/hangar/blobs', fs: { path: '/var/lib/hangar/blobs' },
+    used_bytes: 200 * GB, capacity_bytes: null, repository_count: 14, blob_count: 88_120, reclaimable_bytes: 0,
+    dedup_saved_bytes: 12 * GB, created_at: '2026-01-10T08:00:00Z', write_latency_ms: null, encryption: 'none',
+  },
+  {
+    id: 'b_03', name: 's3-archive', kind: 's3', state: 'read_only', location: 's3://acme-archive/hangar', soft_quota_bytes: 40 * TB,
+    used_bytes: 18 * TB, capacity_bytes: 40 * TB, repository_count: 1, blob_count: 3_002_118, reclaimable_bytes: 0,
+    dedup_saved_bytes: 2.2 * TB, created_at: '2025-03-02T08:00:00Z', write_latency_ms: 61, encryption: 'SSE-KMS',
+  },
+];
+
+export function blobStoreList(): BlobStoreList {
+  return {
+    items: blobStores,
+    totals: {
+      used_bytes: blobStores.reduce((n, b) => n + b.used_bytes, 0),
+      capacity_bytes: null,
+      dedup_saved_bytes: blobStores.reduce((n, b) => n + (b.dedup_saved_bytes ?? 0), 0),
+      growth_bytes_per_day: 38 * GB,
+      days_to_full: null,
+      reclaimable_bytes: 48 * GB,
+    },
+  };
+}
+
+export const cleanupPolicies: CleanupPolicy[] = [
+  {
+    id: 'cp_01', name: 'keep-last-20', description: 'keep last 20 · delete unused after 90 days', format: null,
+    criteria: { keep_newest: 20, not_downloaded_days: 90 }, repositories: ['docker-dev'], schedule: '0 2 * * *',
+    enabled: true, schedule_text: 'Every day at 02:00 UTC', created_at: '2026-02-01T10:00:00Z',
+  },
+  {
+    id: 'cp_02', name: 'snapshots-14d', description: 'snapshots older than 14 days', format: 'maven',
+    criteria: { older_than_days: 14, prerelease_only: true }, repositories: ['maven-snapshots'], schedule: '0 3 * * *',
+    enabled: true, schedule_text: 'Every day at 03:00 UTC', created_at: '2026-02-01T10:00:00Z',
+  },
 ];

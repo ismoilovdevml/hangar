@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import { useClientEndpoints, useUpstreamHealth } from '../../api/hooks';
 import type { UpstreamState } from '../../api/types';
 import { CodeBlock } from '../../components/CodeBlock';
@@ -10,6 +11,7 @@ const UPSTREAM: Record<UpstreamState, { label: string; tone: 'ok' | 'warn' | 'ba
   slow: { label: 'Slow', tone: 'warn' },
   blocked: { label: 'Blocked', tone: 'bad' },
   offline: { label: 'Offline', tone: 'bad' },
+  unknown: { label: 'Unknown', tone: 'neutral' },
 };
 
 export function UpstreamSources() {
@@ -21,7 +23,9 @@ export function UpstreamSources() {
       ) : q.isPending ? (
         <p className="meta">Checking upstreams…</p>
       ) : q.data.items.length === 0 ? (
-        <p className="meta">No proxy repositories yet.</p>
+        <p className="meta">
+          No proxy repositories yet. <Link to="/repositories/new" search={{ type: 'proxy' }}>Add one</Link> to cache a public registry.
+        </p>
       ) : (
         <ul className="upstreams">
           {q.data.items.map((u) => {
@@ -60,6 +64,10 @@ export function ConnectClient() {
         <ErrorNote what="client endpoints" onRetry={() => void q.refetch()} />
       ) : q.isPending ? (
         <p className="meta">Loading endpoints…</p>
+      ) : q.data.items.length === 0 ? (
+        <p className="meta">
+          No repositories you can read yet. <Link to="/repositories/new">Create one</Link> to get client settings.
+        </p>
       ) : (
         <CodeBlock label="client setup commands" lines={clientSnippet(q.data.items)} />
       )}

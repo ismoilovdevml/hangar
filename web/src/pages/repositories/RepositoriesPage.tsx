@@ -1,0 +1,280 @@
+import { useEffect, useId, useRef, useState, type ComponentType, type SVGProps } from 'react';
+import { getRouteApi, Link, useRouterState } from '@tanstack/react-router';
+import { useRepositories } from '../../api/hooks';
+import type { Repository, RepositoryCounts, RepositoryType } from '../../api/types';
+import { CopyButton } from '../../components/CopyButton';
+import { DataTable, type Column } from '../../components/DataTable';
+import { ErrorNote } from '../../components/ErrorNote';
+import { IconDatabase, IconGlobe, IconGroup, IconPlus, IconSearch } from '../../components/icons';
+import { NotAvailable } from '../../components/NotAvailable';
+import { PageHeader } from '../../components/PageHeader';
+import { Panel } from '../../components/Panel';
+import { Pill, StatusDot } from '../../components/Pill';
+import { FORMAT_META, formatBytes } from '../../lib/format';
+import { ALL_FORMATS, displayUrl, isFormat, repoSubtitle, STATUS_META, TYPE_META } from '../../lib/repositories';
+
+const route = getRouteApi('/app/repositories');
+
+export const PAGE_SIZE = 20;
+
+const CARD_ICON: Record<RepositoryType, ComponentType<SVGProps<SVGSVGElement> & { size?: number }>> = {
+  hosted: IconDatabase,
+  proxy: IconGlobe,
+  group: IconGroup,
+};
+
+function CountCards({ counts }: { counts: RepositoryCounts | undefined }) {
+  return (
+    <section className="count-cards" aria-label="Repository counts">
+      {(['hosted', 'proxy', 'group'] as const).map((t) => {
+        const Icon = CARD_ICON[t];
+        const meta = TYPE_META[t];
+        return (
+          <Link key={t} to="/repositories" search={{ type: t }} className="count-card glass">
+            <span className={`count-card__icon tone-${meta.tone}`} aria-hidden="true">
+              <Icon size={20} />
+            </span>
+            <span className="count-card__text">
+              <span className="count-card__number">{counts ? counts[t] : <span className="skeleton" style={{ width: 36, height: 28 }} />}</span>{' '}
+              <span className="count-card__label">
+                {meta.label} · {meta.card}
+              </span>
+            </span>
+          </Link>
+        );
+      })}
+    </section>
+  );
+}
+
+const TABS: { id: RepositoryType | undefined; label: string; key: keyof RepositoryCounts }[] = [
+  { id: undefined, label: 'All', key: 'all' },
+  { id: 'hosted', label: 'Hosted', key: 'hosted' },
+  { id: 'proxy', label: 'Proxy', key: 'proxy' },
+  { id: 'group', label: 'Group', key: 'group' },
+];
+
+/** Name filter: typed locally, written to the URL after a short pause. */
+function NameFilter({ value, onChange }: { value: string; onChange: (q: string | undefined) => void }) {
+  const [draft, setDraft] = useState(value);
+  const [synced, setSynced] = useState(value);
+  // The URL changed from elsewhere (tab click, back button): adopt it.
+  if (value !== synced) {
+    setSynced(value);
+    setDraft(value);
+  }
+  const commit = useRef(onChange);
+  useEffect(() => {
+    commit.current = onChange;
+  }, [onChange]);
+  useEffect(() => {
+    if (draft.trim() === value) return;
+    const t = setTimeout(() => commit.current(draft.trim() || undefined), 300);
+    return () => clearTimeout(t);
+  }, [draft, value]);
+  const id = useId();
+  return (
+    <div className="filter-search">
+      <label htmlFor={id} className="visually-hidden">
+        Filter by name
+      </label>
+      <IconSearch size={16} />
+      <input
+        id={id}
+        className="filter-search__input"
+        type="search"
+        placeholder="Filter by name"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        autoComplete="off"
+        spellCheck={false}
+      />
+    </div>
+  );
+}
+
+export function RepositoriesPage() {
+  const search = route.useSearch();
+  const navigate = route.useNavigate();
+  const pageCursors = useRouterState({ select: (s) => s.location.state.pageCursors });
+  const { type, format, q, cursor } = search;
+  const list = useRepositories({ type, format, q, cursor, limit: PAGE_SIZE });
+  const data = list.data;
+  const formatId = useId();
+
+  const setFilter = (patch: Partial<typeof search>) =>
+    void navigate({ search: (s) => ({ ...s, ...patch, cursor: undefined }), replace: 'q' in patch });
+
+  const stack = cursor ? (pageCursors ?? []) : [];
+  const goNext = () => {
+    if (!data?.next_cursor) return;
+    void navigate({
+      search: (s) => ({ ...s, cursor: data.next_cursor ?? undefined }),
+      state: { pageCursors: [...stack, cursor ?? ''] },
+    });
+  };
+  const goPrev = () => {
+    // Without the history of cursors (a shared link), "Previous" returns to the first page.
+    const prev = stack.length ? stack[stack.length - 1] : '';
+    void navigate({
+      search: (s) => ({ ...s, cursor: prev || undefined }),
+      state: { pageCursors: stack.slice(0, -1) },
+    });
+  };
+
+  const filtered = !!(format || q);
+  const tabTotal = data ? data.counts[type ?? 'all'] : 0;
+
+  const columns: Column<Repository>[] = [
+    {
+      key: 'name',
+      header: 'Name',
+      className: 'col-first',
+      cell: (r) => (
+        <div className="repo-name">
+          <Link to="/browse" search={{ repo: r.name }} className="repo-name__link">
+            {r.name}
+          </Link>
+          {repoSubtitle(r) && <span className="repo-name__sub">{repoSubtitle(r)}</span>}
+        </div>
+      ),
+    },
+    { key: 'type', header: 'Type', cell: (r) => <Pill tone={TYPE_META[r.type].tone}>{TYPE_META[r.type].label}</Pill> },
+    { key: 'format', header: 'Format', className: 'muted', cell: (r) => (isFormat(r.format) ? FORMAT_META[r.format].label : r.format) },
+    {
+      key: 'url',
+      header: 'URL',
+      cell: (r) => (
+        <code className="repo-url" title={r.url}>
+          {displayUrl(r.url)}
+        </code>
+      ),
+    },
+    {
+      key: 'size',
+      header: 'Size',
+      align: 'right',
+      className: 'muted nowrap',
+      cell: (r) => (r.type === 'group' ? <NotAvailable reason="not applicable: groups store nothing themselves" /> : formatBytes(r.size_bytes)),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      className: 'nowrap',
+      cell: (r) => {
+        const s = STATUS_META[r.status];
+        return <StatusDot tone={s.tone} label={s.label} />;
+      },
+    },
+    {
+      key: 'copy',
+      header: <span className="visually-hidden">Copy URL</span>,
+      align: 'right',
+      className: 'col-last',
+      cell: (r) => <CopyButton text={r.url} label={`Copy URL of ${r.name}`} />,
+    },
+  ];
+
+  const empty = list.isPending ? (
+    'Loading…'
+  ) : filtered || type ? (
+    <>
+      No repositories match these filters.{' '}
+      <Link to="/repositories" search={{}}>
+        Show all
+      </Link>
+    </>
+  ) : (
+    <>
+      No repositories yet. <Link to="/repositories/new">Create the first one</Link>.
+    </>
+  );
+
+  return (
+    <div className="screen">
+      <PageHeader
+        title="Repositories"
+        description="Where packages live. Hosted stores your own, proxy caches the internet, group joins them under one URL."
+        actions={
+          <Link to="/repositories/new" search={type ? { type } : {}} className="button button--primary">
+            <IconPlus size={16} /> New repository
+          </Link>
+        }
+      />
+
+      <CountCards counts={data?.counts} />
+
+      <Panel flush className="repo-panel" aria-label="Repository list">
+        <div className="repo-toolbar">
+          <nav aria-label="Repository type" className="tabs">
+            {TABS.map((t) => {
+              const active = t.id === type;
+              return (
+                <Link
+                  key={t.label}
+                  to="/repositories"
+                  search={(s) => ({ ...s, type: t.id, cursor: undefined })}
+                  className={active ? 'tabs__item is-active' : 'tabs__item'}
+                  aria-current={active ? 'page' : undefined}
+                  activeOptions={{ includeSearch: false }}
+                >
+                  {t.label}{' '}
+                  <span className="tabs__count">{data ? data.counts[t.key] : ''}</span>
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="repo-toolbar__filters">
+            <div className="filter-select">
+              <label htmlFor={formatId} className="filter-select__label">
+                Format
+              </label>
+              <select
+                id={formatId}
+                className="filter-select__input"
+                value={format ?? ''}
+                onChange={(e) => setFilter({ format: isFormat(e.target.value) ? e.target.value : undefined })}
+              >
+                <option value="">All formats</option>
+                {ALL_FORMATS.map((f) => (
+                  <option key={f} value={f}>
+                    {FORMAT_META[f].label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <NameFilter value={q ?? ''} onChange={(v) => setFilter({ q: v })} />
+          </div>
+        </div>
+
+        {list.isError ? (
+          <ErrorNote what="repositories" onRetry={() => void list.refetch()} />
+        ) : (
+          <DataTable
+            caption="Repositories"
+            columns={columns}
+            rows={data?.items ?? []}
+            rowKey={(r) => r.id}
+            busy={list.isFetching}
+            minWidth={860}
+            empty={empty}
+          />
+        )}
+
+        <div className="repo-footer">
+          <p className="meta" aria-live="polite">
+            {data ? `Showing ${data.items.length} of ${tabTotal}` : ' '}
+          </p>
+          <div className="repo-footer__pager">
+            <button type="button" className="button button--secondary button--sm" onClick={goPrev} disabled={!cursor}>
+              Previous
+            </button>
+            <button type="button" className="button button--secondary button--sm" onClick={goNext} disabled={!data?.next_cursor}>
+              Next
+            </button>
+          </div>
+        </div>
+      </Panel>
+    </div>
+  );
+}
