@@ -29,17 +29,24 @@ version wrote.
 
 ## Compose
 
+Re-run the installer with the data directory (add `--version vX.Y.Z` to pin
+a release):
+
 ```bash
-cd deploy/compose
-sed -i 's|^HANGAR_IMAGE=.*|HANGAR_IMAGE=ghcr.io/ismoilovdevml/hangar:<new version>|' .env
-docker compose pull hangar
-docker compose up -d hangar       # migrates on start, then becomes healthy
-docker compose ps hangar
-docker compose logs hangar | grep -i migration
+curl -fsSL https://github.com/ismoilovdevml/hangar/releases/latest/download/install.sh |
+  sudo bash -s -- --data-dir /srv/hangar
 ```
 
-Downtime is the restart (a few seconds, plus migrations). Uploads in flight
-get `server.shutdown_timeout` to finish.
+It dumps the database to `<data>/backups/` (the three newest are kept), pulls
+the new images, restarts the stack (migrations run on start) and waits for
+`/readyz`. Data, secrets, `config/hangar.yaml` and the installer settings are
+kept. Downtime is the restart (a few seconds, plus migrations). Uploads in
+flight get `server.shutdown_timeout` to finish.
+
+To go back, restore the dump taken before the upgrade and re-run the
+installer with the previous `--version`. Installations in `/opt/hangar` from
+earlier installers move to a data directory first:
+[install-compose.md](install-compose.md#move-an-installation-from-opthangar).
 
 ## Helm
 

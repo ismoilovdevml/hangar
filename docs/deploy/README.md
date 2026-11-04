@@ -57,10 +57,13 @@ Hangar reads `hangar.yaml` (`--config` or `HANGAR_CONFIG`) and `HANGAR_*`
 environment variables, which win over the file. Every key, its default and
 its environment variable is documented in
 [`hangar.example.yaml`](../../hangar.example.yaml). Unknown keys stop the
-server at start. Secrets belong in the environment (or Kubernetes Secrets),
-never in the file: `HANGAR_DATABASE_URL`, `HANGAR_SECRET_KEY`,
-`HANGAR_DOCKER_TOKEN_KEY`, `HANGAR_STORAGE_S3_SECRET_ACCESS_KEY`,
-`HANGAR_HTTP_PROXY_PASSWORD`, `HANGAR_BOOTSTRAP_ADMIN_PASSWORD`.
+server at start. Secrets belong in the environment or in files in
+`secrets_dir` (one file per setting, named after its path:
+`security.secret_key`; the compose installer uses this, and it works with
+Kubernetes secret volumes), never in the file: `HANGAR_DATABASE_URL`,
+`HANGAR_SECRET_KEY`, `HANGAR_DOCKER_TOKEN_KEY`,
+`HANGAR_STORAGE_S3_SECRET_ACCESS_KEY`, `HANGAR_HTTP_PROXY_PASSWORD`,
+`HANGAR_BOOTSTRAP_ADMIN_PASSWORD`.
 
 The settings every production install sets:
 

@@ -1,9 +1,13 @@
 # Caddy in front of Hangar: automatic TLS (Let's Encrypt / ZeroSSL) for the
-# UI host and a separate Docker registry host. Host names come from .env.
+# UI host and a separate Docker registry host. install.sh writes this file to
+# <data>/caddy/Caddyfile on every run (put your own sites in caddy/sites/);
+# the host names come from the installer settings.
 #
 # Caddy does not limit request bodies and streams them to Hangar without
 # buffering by default, which multi-GB image layers and artifacts need.
 {
+	# ACME account e-mail for expiry notices (--acme-email); install.sh
+	# removes this line when none is given.
 	email {$ACME_EMAIL}
 	servers {
 		timeouts {

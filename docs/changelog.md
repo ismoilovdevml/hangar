@@ -46,6 +46,35 @@
   `hangar admin bootstrap` must now change their password at the first
   sign-in. Set `HANGAR_BOOTSTRAP_REQUIRE_PASSWORD_CHANGE=false` for automation
   that keeps using the configured password.
+- **Two-question install**: `curl -fsSL
+  https://github.com/ismoilovdevml/hangar/releases/latest/download/install.sh
+  | sudo bash` asks for a data directory (default `/srv/hangar`) and an
+  optional domain (Caddy with automatic TLS, or behind your reverse proxy),
+  generates every secret, starts Hangar and PostgreSQL and prints the URL,
+  the user `admin` and the one-time password the server generated
+  (`bootstrap.initial_password_file`, `<data>/secrets/initial-admin-password`). Every question has a flag
+  (`--data-dir`, `--domain`, `--tls caddy|proxy`, `--port`, `--yes`).
+  Re-running it upgrades in place after dumping the database to
+  `<data>/backups/`; `--uninstall` keeps the data, `--purge` deletes it after
+  a typed confirmation; `--files-from` and `--mirror` serve offline hosts.
+- **One data directory, no named volumes**: the compose stack bind-mounts
+  `config/`, `secrets/`, `postgres/`, `blobs/`, `nats/` and `caddy/` of the
+  data directory with SELinux labels and the container users' ownership.
+  The installer-managed `.env` holds no secrets. MinIO is no longer part of
+  the compose stack, and the release archive `hangar-compose.tar.gz` no
+  longer contains `env.example`.
+- **Secrets from files**: new setting `secrets_dir` (`HANGAR_SECRETS_DIR`):
+  a file named after a setting's path (`security.secret_key`,
+  `database.url`, `auth.oidc.client_secret`) holds its value; the
+  environment still wins. Works with Kubernetes secret volumes.
+- **Moving `/opt/hangar` installations**: `install.sh --migrate-from
+  /opt/hangar --data-dir /srv/hangar` (offered automatically when found)
+  converts the `.env` secrets into files, keeps `hangar.yaml`, the URL, port,
+  bind address and trusted proxies, copies the `hangar_postgres-data` and
+  `hangar_hangar-data` volumes, starts the new layout, checks `/readyz` and
+  prints rollback steps; the old directory and volumes are left untouched.
+  The installer flags `--dir`, `--storage`, `--s3-endpoint` and
+  `--admin-user` are gone.
 
 - **README images**: badges, logos and screenshots in package READMEs now
   load. The package info API returns, for every image of a README, a

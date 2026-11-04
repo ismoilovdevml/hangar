@@ -31,31 +31,20 @@ A self-hosted package registry for Docker, npm, Maven, PyPI, NuGet and raw files
 
 ## Quick start
 
-On a Linux host with Docker and the Compose plugin, install the latest release
-(published image, nothing is built on the server):
+On a Linux host with Docker and the Compose plugin:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ismoilovdevml/hangar/main/deploy/install.sh |
-  sudo bash -s -- --domain hangar.example.com
+curl -fsSL https://github.com/ismoilovdevml/hangar/releases/latest/download/install.sh | sudo bash
 ```
 
-The installer writes `/opt/hangar` (compose files and `.env` with generated
-secrets), starts PostgreSQL and Hangar, waits until `/readyz` is ready and
-prints the URL. The first administrator is `admin`; its password is in the
-`.env` file (`sudo grep HANGAR_BOOTSTRAP_ADMIN_PASSWORD /opt/hangar/.env`).
-Useful options:
-
-- `--tls caddy --acme-email ops@example.com`: automatic HTTPS on ports 80/443.
-- `--tls none --bind 0.0.0.0 --trusted-proxies 10.0.0.5/32`: behind your own
-  reverse proxy (for example a company nginx that terminates TLS).
-- `--version v0.1.0`: pin a release; re-run with a newer `--version` to upgrade.
-- `--storage s3`: blobs in a bundled MinIO, or `--s3-endpoint` for external S3.
-
-Back up `/opt/hangar/.env`: `HANGAR_SECRET_KEY` decrypts credentials stored in
-the database. Other ways to install (Helm, systemd, manual compose), backups and
-upgrades: [docs/deploy](docs/deploy/README.md). To run from source
-(`go run ./cmd/hangar serve --migrate`) and for tokens and a first upload, see
-the [getting started guide](docs/guides/getting-started.md).
+It asks for a data directory (default `/srv/hangar`) and an optional domain,
+generates every secret, starts Hangar and PostgreSQL, and prints the URL, the
+user `admin` and a one-time password. Re-run it to upgrade. Unattended
+installs, TLS, moving an older `/opt/hangar` installation and uninstalling:
+[install-compose.md](docs/deploy/install-compose.md). Other ways to install
+(Helm, systemd), backups and upgrades: [docs/deploy](docs/deploy/README.md).
+To run from source (`go run ./cmd/hangar serve --migrate`) and for tokens and
+a first upload, see the [getting started guide](docs/guides/getting-started.md).
 
 ## Use it from your tools
 

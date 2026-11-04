@@ -1,8 +1,13 @@
-# Hangar settings for the compose stack (mounted read-only at
-# /etc/hangar/hangar.yaml). Only tuning lives here: addresses, credentials and
-# everything set in compose.yaml's `environment:` come from .env, and
-# environment variables win over this file. Every key is documented in
-# hangar.example.yaml at the repository root.
+# Hangar server settings: <data>/config/hangar.yaml, mounted read-only at
+# /etc/hangar/hangar.yaml. Yours to edit; the installer never replaces it.
+# Restart after a change: docker compose -f <data>/compose.yaml restart hangar
+#
+# Every key is documented in hangar.example.yaml at the repository root.
+# Not here:
+#   - secrets: one file each in <data>/secrets, named after the setting
+#     (auth.oidc.client_secret, http.proxy_password), mode 600, owner 65532;
+#   - server.base_url, server.trusted_proxies, the port and the storage paths:
+#     set by the installer (re-run it with --domain, --trusted-proxies, ...).
 
 server:
   addr: ":8080"

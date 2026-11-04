@@ -1,197 +1,212 @@
 # Install with Docker Compose
 
-One host runs Hangar, PostgreSQL 16, MinIO and Caddy. Caddy obtains TLS
-certificates automatically and serves two host names: the UI host
-(`hangar.example.com`: UI, API, every package format) and a registry host for
-Docker clients (`registry.example.com`). Files: `deploy/compose/`.
-
-| File | Purpose |
-|---|---|
-| `compose.yaml` | The stack. Optional services are enabled with `COMPOSE_PROFILES`. |
-| `.env.example` | Every setting and secret; copy to `.env`. |
-| `hangar.yaml` | Non-secret tuning, mounted read-only into the container. |
-| `Caddyfile` | TLS, the UI host, streaming, `/metrics` blocked publicly; loads `sites/*.caddy`. |
-| `sites/registry.caddy` | The separate registry host; delete it if you do not want one. |
-| `compose.connectors.example.yaml` | Publishes Docker port connectors. |
-
-
-## With the installer (recommended)
-
-`deploy/install.sh` installs a published release: it checks Docker and Compose
-v2, downloads the release's compose files (verified against its
-`SHA256SUMS`), writes `/opt/hangar/.env` (mode 600) with secrets generated
-once (`HANGAR_SECRET_KEY`, `HANGAR_DOCKER_TOKEN_KEY`, the PostgreSQL and
-bootstrap administrator passwords), pulls the image, starts the stack and
-waits for `/readyz`. It never prints secrets and never replaces existing ones.
+One command on a Linux host with Docker Engine and the Compose plugin (2.20+):
 
 ```bash
-# Automatic HTTPS with Caddy (DNS must point at the host, ports 80/443 open)
-curl -fsSL https://raw.githubusercontent.com/ismoilovdevml/hangar/main/deploy/install.sh |
-  sudo bash -s -- --domain hangar.example.com --tls caddy --acme-email ops@example.com \
-  --registry-domain registry.example.com
-
-# Behind an existing reverse proxy that terminates TLS (e.g. a company nginx)
-curl -fsSL https://raw.githubusercontent.com/ismoilovdevml/hangar/main/deploy/install.sh |
-  sudo bash -s -- --domain hangar.example.com --tls none --bind 0.0.0.0 \
-  --trusted-proxies 10.0.0.5/32
+curl -fsSL https://github.com/ismoilovdevml/hangar/releases/latest/download/install.sh | sudo bash
 ```
 
-In the reverse-proxy mode Hangar listens on `0.0.0.0:8080` over plain HTTP,
-`server.base_url` is `https://<domain>`, and `X-Forwarded-*` headers are
-trusted only from `--trusted-proxies`. Configure the proxy for large uploads
-([reverse-proxy.md](reverse-proxy.md)) and firewall port 8080 so only the
-proxy reaches it.
+It asks two questions:
 
-Options: `--version vX.Y.Z|latest`, `--dir` (default `/opt/hangar`),
-`--port`, `--storage fs|s3` (with `s3`, MinIO runs unless `--s3-endpoint`
-names an external endpoint; credentials go in `.env`), `--base-url`,
-`--admin-user`, `--mirror URL` (internal copy of the release assets),
-`--files-from DIR` and `--image REF` (air-gapped hosts, tests). Run with
-`--help` for the full list.
+1. **Data directory** (default `/srv/hangar`): everything Hangar stores lives
+   there.
+2. **Domain** (optional). Empty: Hangar is served at `http://<host-ip>:8080`.
+   With a domain it asks whether Hangar gets a certificate itself (Caddy and
+   Let's Encrypt on ports 80/443) or sits behind your reverse proxy, which
+   terminates TLS.
 
-- **Re-run** with other flags to change a setting; flags you leave out keep
-  their installed value. `hangar.yaml` and `Caddyfile` you edited are kept
-  (the release version is written next to them as `*.new`); put compose
-  changes in `/opt/hangar/compose.override.yaml`, which Compose loads
-  automatically.
-- **Upgrade**: back up, then run the one-liner again with `--version vX.Y.Z`
-  (or `--version latest`). Migrations run on start.
-- **Uninstall**: `--uninstall` removes the containers and keeps the data;
-  `--uninstall --purge` also deletes the volumes and `/opt/hangar`.
+The installer generates every secret, starts PostgreSQL and Hangar (database
+created and migrated automatically), waits until Hangar is ready and prints:
 
-## Manual installation
+```
+  URL:        https://hangar.example.com
+  Username:   admin
+  Password:   Xk3mP-7qRtz-Hc9vW-2nBfe
+              Shown once. Sign in and choose your own password.
+  Data:       /srv/hangar
+```
 
-### Prerequisites
+plus the commands for logs, upgrade and uninstall. There is no `.env` to fill
+in and no environment variable to set.
 
-- Docker Engine 24+ with the Compose plugin v2.24+.
-- DNS A/AAAA records for both host names pointing at the host, and ports 80
-  and 443 (TCP, plus 443/UDP for HTTP/3) reachable from the Internet for
-  Let's Encrypt. Behind a firewall without inbound Internet access, see
-  "Internal certificates" below.
-- Sizing: [requirements.md](requirements.md). The defaults suit a host with
-  8 GiB RAM and 4 vCPU.
+## Unattended
 
-### Steps
+Every question has a flag; `--yes` (or no terminal) uses flags and defaults.
+`--data-dir` is required then.
 
 ```bash
-git clone https://github.com/ismoilovdevml/hangar.git
-cd hangar/deploy/compose
-cp .env.example .env
-chmod 600 .env
+# Plain HTTP on the host address
+curl -fsSL .../install.sh | sudo bash -s -- --data-dir /srv/hangar --yes
+
+# Automatic HTTPS (DNS points here, ports 80/443 open)
+curl -fsSL .../install.sh | sudo bash -s -- --data-dir /srv/hangar \
+  --domain hangar.example.com --tls caddy --yes
+
+# Behind a company reverse proxy at 10.0.0.5
+curl -fsSL .../install.sh | sudo bash -s -- --data-dir /srv/hangar \
+  --domain hangar.example.com --tls proxy --port 8090 --trusted-proxies 10.0.0.5/32 --yes
 ```
 
-Edit `.env`:
+Behind a reverse proxy, pass `--trusted-proxies` so Hangar sees client
+addresses (rate limits and audit logs use them), configure the proxy for large
+uploads ([reverse-proxy.md](reverse-proxy.md)) and firewall the port so only
+the proxy reaches it.
 
-1. Host names: `HANGAR_DOMAIN`, `HANGAR_REGISTRY_DOMAIN`, `ACME_EMAIL`, and
-   `HANGAR_BASE_URL=https://<HANGAR_DOMAIN>`.
-2. Secrets, each from `openssl rand -hex 24` unless noted (URL-safe values
-   only, they end up inside connection URLs):
-   - `POSTGRES_PASSWORD`
-   - `MINIO_ROOT_PASSWORD`, `HANGAR_STORAGE_S3_SECRET_ACCESS_KEY`
-   - `HANGAR_DOCKER_TOKEN_KEY`: `openssl rand -base64 48`
-   - `HANGAR_SECRET_KEY`: `openssl rand -base64 32`
-   - `HANGAR_BOOTSTRAP_ADMIN_PASSWORD`: at least 12 characters
-3. Image: pin `HANGAR_IMAGE` to a release tag (`ghcr.io/ismoilovdevml/hangar:<version>`)
-   rather than `latest`, so that upgrades are deliberate.
+More flags (`--help`): `--version vX.Y.Z`, `--bind`, `--base-url`,
+`--acme-email`, `--registry-domain` (a separate host for Docker clients),
+`--image`.
 
-Start and check:
+## The data directory
+
+| Path | Contents | Owner |
+|---|---|---|
+| `compose.yaml` | The stack; replaced on upgrade | root |
+| `.env` | Installer settings: image, port, URL. No secrets; managed by the installer | root |
+| `config/hangar.yaml` | Server settings; yours, never replaced | root |
+| `secrets/` | One file per secret, mode 600 | 65532 (Hangar) |
+| `postgres/` | PostgreSQL data | 70 (postgres) |
+| `blobs/` | Package files | 65532 |
+| `nats/` | Job queue state | 65532 |
+| `caddy/` | Caddyfile, `sites/`, certificates (with `--tls caddy`) | root |
+| `backups/` | Database dump taken before each upgrade (the three newest) | root |
+
+All are bind mounts with SELinux labels (`:Z`, or `:z` for `secrets/`, which
+PostgreSQL reads too), so Rocky Linux and RHEL work with SELinux enforcing.
+Back up the whole directory; `secrets/security.secret_key` decrypts the
+credentials stored in the database.
+
+### Secrets
+
+The server reads `secrets/` through `secrets_dir`: a file named after a
+setting's path holds its value. The installer writes
+`security.secret_key`, `docker.token_key` and `database.url`, plus
+`postgres-password` for PostgreSQL; the server adds
+`initial-admin-password` on its first start. To add one, for example an SSO client
+secret, create the file and restart:
 
 ```bash
-docker compose up -d
-docker compose ps            # every service "healthy"; minio-init "exited (0)"
-docker compose logs hangar | tail
-curl -fsS https://hangar.example.com/readyz
+cd /srv/hangar
+printf '%s' 'the-client-secret' | sudo tee secrets/auth.oidc.client_secret >/dev/null
+sudo chown 65532:65532 secrets/auth.oidc.client_secret && sudo chmod 600 secrets/auth.oidc.client_secret
+sudo docker compose restart hangar
 ```
 
-Open `https://hangar.example.com`, sign in as the bootstrap administrator,
-change the password, then remove `HANGAR_BOOTSTRAP_ADMIN_USER` and
-`HANGAR_BOOTSTRAP_ADMIN_PASSWORD` from `.env` and run `docker compose up -d`
-again. More in [first-admin.md](first-admin.md).
+Names without a dot (`postgres-password`, `initial-admin-password`) are not
+settings and are skipped; a misspelt dotted name stops the start with an error.
+Details: `secrets_dir` in [hangar.example.yaml](../../hangar.example.yaml).
 
-Store `.env` (it holds `HANGAR_SECRET_KEY`) in your password manager or
-secret store: a database backup is only fully usable with that key.
+### First administrator
+
+On its first start with an empty database the server creates `admin` with a
+one-time password and writes it to `secrets/initial-admin-password` (mode 600,
+`bootstrap.initial_password_file`). The installer prints it once; at the first
+sign-in you choose your own password, and the file is deleted. A moved
+installation keeps its administrators and gets no such password. Lost it
+before signing in:
+`cd /srv/hangar && sudo docker compose exec hangar hangar admin reset-password --user admin`.
+More: [first-admin.md](first-admin.md).
+
+## Settings
+
+- Server settings: `config/hangar.yaml`, then
+  `docker compose restart hangar` (run `docker compose` commands in the data
+  directory).
+- Domain, TLS mode, port, trusted proxies: re-run the installer with the flag;
+  everything else is kept.
+- Compose changes (extra ports, mounts): `compose.override.yaml` in the data
+  directory, which Compose loads automatically. Docker port connectors:
+  start from `compose.connectors.example.yaml`.
+- Extra Caddy sites (host connectors): `caddy/sites/*.caddy`.
+- Resource limits (`HANGAR_MEMORY`, `POSTGRES_SHARED_BUFFERS`, ... in
+  `compose.yaml`): add them to `.env`; the installer keeps lines it does not
+  manage.
+
+## Upgrade
+
+Run the installer again (the `Upgrade:` line of its summary):
+
+```bash
+curl -fsSL https://github.com/ismoilovdevml/hangar/releases/latest/download/install.sh |
+  sudo bash -s -- --data-dir /srv/hangar
+```
+
+It keeps data, secrets and settings, dumps the database to `backups/`, pulls
+the new images and restarts; migrations run on start. `--version vX.Y.Z`
+pins a release. More: [upgrade.md](upgrade.md).
+
+## Move an installation from /opt/hangar
+
+Earlier installers used `/opt/hangar` with a `.env` holding the secrets and
+the Docker volumes `hangar_postgres-data` and `hangar_hangar-data`. Move it
+into a data directory:
+
+```bash
+curl -fsSL .../install.sh | sudo bash -s -- --migrate-from /opt/hangar --data-dir /srv/hangar
+```
+
+Run interactively, the installer offers this itself when it finds the old
+layout. It:
+
+1. checks the old installation (local file storage, bundled PostgreSQL, both
+   volumes present) and the free space, and pulls the new images;
+2. turns the secrets in `.env` into files in `secrets/` (secret key, Docker
+   token key, PostgreSQL password, SSO client secret, LDAP bind password,
+   outbound proxy settings) and keeps the domain, URL, port, bind address,
+   trusted proxies and resource limits;
+3. copies `/opt/hangar/hangar.yaml` (with your `auth.oidc` block and other
+   settings) to `config/hangar.yaml`;
+4. stops the old stack, copies both volumes into `postgres/`, `blobs/` and
+   `nats/`, starts the new stack and waits for `/readyz`.
+
+`/opt/hangar` and the volumes are never changed, so rollback is:
+
+```bash
+cd /srv/hangar && sudo docker compose down
+cd /opt/hangar && sudo docker compose up -d
+```
+
+(changes made after the move are lost). When you no longer need the old
+installation: `docker volume rm hangar_postgres-data hangar_hangar-data` and
+`rm -rf /opt/hangar`. S3 storage and external databases are not moved
+automatically. A `compose.override.yaml` in `/opt/hangar` is not copied;
+re-create what you need in the data directory.
+
+## Uninstall
+
+```bash
+curl -fsSL .../install.sh | sudo bash -s -- --data-dir /srv/hangar --uninstall
+```
+
+removes the containers and keeps the data directory (re-run the installer to
+start again). Add `--purge` to delete the data directory too; it asks you to
+type the directory's path (`--yes` without a terminal).
+
+## Offline hosts
+
+- `--mirror https://files.example.com/hangar --version vX.Y.Z`: release
+  assets from an internal copy (`<URL>/<version>/SHA256SUMS` and
+  `hangar-compose.tar.gz`), verified against `SHA256SUMS`.
+- `--files-from hangar-compose.tar.gz` (or a directory with its files):
+  no download at all.
+- Images: `docker load` them first; when a pull fails the installer uses the
+  local copies.
+
+Releases before this layout ship no `hangar-compose.tar.gz` with a secrets
+directory; install those with their own `install.sh`.
 
 ## What the stack does
 
 - **hangar**: read-only root filesystem, all capabilities dropped,
-  `no-new-privileges`, healthcheck on `/readyz` via the built-in
-  `hangar-healthcheck`, 60 s stop grace period (uploads in flight get
-  `server.shutdown_timeout`). Published on `127.0.0.1:8080` only; Caddy is
-  the public entry. Applies database migrations on start
-  (`HANGAR_DATABASE_MIGRATE_ON_START=true`). NATS runs embedded with its state
-  in the `hangar-data` volume.
-- **postgres**: PostgreSQL 16 with data checksums and settings for an 8 GiB
-  host (`POSTGRES_SHARED_BUFFERS`, `POSTGRES_EFFECTIVE_CACHE_SIZE`, ... in
-  `.env`). Not published on the host.
-- **minio** and **minio-init**: MinIO refuses to start without root
-  credentials. `minio-init` creates the bucket and a user limited to it, so
-  the root credentials never reach Hangar. The console is published on
-  `127.0.0.1:9001`; reach it through an SSH tunnel.
-- **caddy**: certificates for both hosts, HTTP to HTTPS redirect, HTTP/3,
-  streaming in both directions without size limits, `/metrics` answered with
-  404 on the public host. Hangar trusts `X-Forwarded-*` only from the stack's
-  Docker network (`HANGAR_NETWORK_SUBNET`, `HANGAR_TRUSTED_PROXIES`).
-- Logs: JSON lines, rotated by Docker (5 x 50 MB per container).
-- Resource limits: `HANGAR_CPUS`/`HANGAR_MEMORY`, `POSTGRES_CPUS`/`POSTGRES_MEMORY`,
-  `MINIO_CPUS`/`MINIO_MEMORY`, `CADDY_CPUS`/`CADDY_MEMORY`.
-
-## Variants
-
-**External PostgreSQL.** Remove `postgres` from `COMPOSE_PROFILES` and set
-`HANGAR_DATABASE_URL=postgres://hangar:PASSWORD@db.internal:5432/hangar?sslmode=verify-full`
-(percent-encode special characters in the password).
-
-**AWS S3 or another S3 service.** Remove `minio` from `COMPOSE_PROFILES` and
-set `HANGAR_STORAGE_S3_ENDPOINT=` (empty for AWS, or the service URL),
-`HANGAR_STORAGE_S3_REGION`, `HANGAR_STORAGE_S3_BUCKET`,
-`HANGAR_STORAGE_S3_USE_PATH_STYLE=false` for AWS, and the access key pair.
-
-**Filesystem blobs.** `HANGAR_STORAGE_KIND=fs` stores blobs in the
-`hangar-data` volume (`/var/lib/hangar/blobs`). Remove `minio` from
-`COMPOSE_PROFILES`.
-
-**Your own reverse proxy.** Remove `caddy` from `COMPOSE_PROFILES`, publish
-Hangar where your proxy reaches it (`HANGAR_BIND_ADDR`, `HANGAR_HTTP_PORT`)
-and set `HANGAR_TRUSTED_PROXIES` to the proxy's address. Settings for large
-uploads: [reverse-proxy.md](reverse-proxy.md).
-
-**Corporate outbound proxy.** `HANGAR_HTTP_PROXY`, `HANGAR_HTTP_NO_PROXY` and
-the credentials in `.env`; see [corporate-proxy.md](corporate-proxy.md).
-
-**Docker port connectors.** A Docker repository with
-`"connector": {"http_port": 5001}` listens on its own port inside the
-container. Publish it with the override file:
-
-```bash
-cp compose.connectors.example.yaml compose.connectors.yaml   # list your ports
-docker compose -f compose.yaml -f compose.connectors.yaml up -d
-```
-
-Port connectors are plain HTTP; prefer host connectors
-(`"connector": {"host": "cr.example.com"}`) behind Caddy with TLS. A host
-connector needs its own site block in the `Caddyfile`, written like the
-`{$HANGAR_REGISTRY_DOMAIN}` block.
-
-**Internal certificates.** Without inbound Internet access, give Caddy your
-own certificates: add `tls /etc/caddy/certs/hangar.crt /etc/caddy/certs/hangar.key`
-to each site block and mount the files, or use `tls internal` for a private
-CA that clients must trust.
-
-**Monitoring.** Prometheus on the same Docker network scrapes
-`hangar:8080/metrics`; dashboards and alert rules are in
-`deploy/observability/` ([monitoring.md](../operations/monitoring.md)).
-
-## Validate changes
-
-From the repository root, `make compose-config` checks `compose.yaml` and the
-connector override against `.env.example`. After editing `.env`, run
-`docker compose config --quiet` in `deploy/compose/`: it fails with a clear
-message when a required secret is missing.
-
-## Day 2
-
-- Backups: [backup-restore.md](backup-restore.md) (compose mode of
-  `deploy/scripts/backup.sh`).
-- Upgrades: [upgrade.md](upgrade.md).
-- Logs: `docker compose logs -f hangar`; set `log.level: debug` in
-  `hangar.yaml` temporarily for more detail.
+  `no-new-privileges`, health check on `/readyz`, 60 s stop grace period.
+  Published on `127.0.0.1` with Caddy, else on all addresses. Applies
+  database migrations on start; NATS runs embedded.
+- **postgres**: PostgreSQL 16 with data checksums, sized for an 8 GiB host,
+  not published on the host.
+- **caddy** (`--tls caddy`): certificates, HTTP to HTTPS redirect, HTTP/3,
+  streaming without size limits, `/metrics` answered with 404 publicly.
+  Hangar trusts `X-Forwarded-*` only from the stack's network and
+  `--trusted-proxies`.
+- Logs: JSON lines rotated by Docker (5 x 50 MB per container):
+  `docker compose logs -f hangar`.
+- Monitoring: Prometheus on the same Docker network scrapes
+  `hangar:8080/metrics` ([monitoring.md](../operations/monitoring.md)).
