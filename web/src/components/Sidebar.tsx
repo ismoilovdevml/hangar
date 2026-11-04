@@ -2,7 +2,8 @@ import { useId, useState } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { useSession, useSystemStatus } from '../api/hooks';
 import { NAV } from '../nav';
-import { IconChevronUpDown, IconClose, IconLogo, IconMenu } from './icons';
+import { initials, instanceName } from '../lib/format';
+import { IconClose, IconLogo, IconMenu } from './icons';
 
 const STATUS_TONE = { ok: 'ok', degraded: 'warn', down: 'bad' } as const;
 
@@ -43,16 +44,7 @@ export function Sidebar() {
       </div>
 
       <div className="sidebar__body" id={bodyId}>
-        <button type="button" className="org-switcher" aria-label={org ? `Organization: ${org.name}. Switch organization` : 'Switch organization'}>
-          <span className="org-switcher__avatar" aria-hidden="true">
-            {(org?.name ?? '··').slice(0, 2).toUpperCase()}
-          </span>
-          <span className="org-switcher__text">
-            <span className="org-switcher__name">{org?.name ?? 'Loading…'}</span>
-            <span className="org-switcher__meta">{org ? `${org.environment} · ${org.region}` : ' '}</span>
-          </span>
-          <IconChevronUpDown />
-        </button>
+        <InstanceBadge name={org?.name} environment={org?.environment} region={org?.region} loading={session.isPending} />
 
         {NAV.map((section) => (
           <div className="nav-section" key={section.title}>
@@ -97,5 +89,40 @@ export function Sidebar() {
         </div>
       </div>
     </nav>
+  );
+}
+
+interface InstanceBadgeProps {
+  name?: string;
+  environment?: string;
+  region?: string;
+  loading: boolean;
+}
+
+/** Which instance this is: a single install has nothing to switch, so it is a label, not a control. */
+function InstanceBadge({ name, environment, region, loading }: InstanceBadgeProps) {
+  if (loading) {
+    return (
+      <div className="instance-badge" aria-hidden="true">
+        <span className="instance-badge__avatar instance-badge__avatar--loading" />
+        <span className="skeleton" style={{ width: 96, height: 12 }} />
+      </div>
+    );
+  }
+  const display = instanceName(name);
+  const meta = [environment, region].map((v) => v?.trim()).filter(Boolean).join(' · ');
+  return (
+    <div className="instance-badge">
+      <span className="instance-badge__avatar" aria-hidden="true">
+        {initials(display)}
+      </span>
+      <span className="instance-badge__text">
+        <span className="visually-hidden">Instance: </span>
+        <span className="instance-badge__name" title={display}>
+          {display}
+        </span>
+        {meta && <span className="instance-badge__meta">{meta}</span>}
+      </span>
+    </div>
   );
 }

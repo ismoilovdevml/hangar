@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
+import * as data from '../mocks/data';
 import { server } from '../mocks/node';
 import { renderApp } from './render';
 
@@ -18,6 +19,27 @@ describe('app shell', () => {
     expect(await within(crumbs).findByText('acme-platform')).toBeInTheDocument();
     expect(within(crumbs).getByText('Overview')).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument();
+  });
+
+  it('shows the instance as a static badge, without a switcher', async () => {
+    renderApp('/');
+    const nav = await screen.findByRole('navigation', { name: 'Primary' });
+    expect(await within(nav).findByText('acme-platform')).toBeInTheDocument();
+    expect(within(nav).getByText('prod · eu-central')).toBeInTheDocument();
+    expect(within(nav).queryByRole('button', { name: /organization/i })).not.toBeInTheDocument();
+  });
+
+  it('names the default instance "Hangar" and leaves out empty environment and region', async () => {
+    server.use(
+      http.get('*/api/v1/auth/session', () =>
+        HttpResponse.json({ ...data.session, organization: { slug: 'hangar', name: 'hangar', environment: '', region: '' } }),
+      ),
+    );
+    renderApp('/');
+    const nav = await screen.findByRole('navigation', { name: 'Primary' });
+    const badge = (await within(nav).findByText('Hangar', { selector: '.instance-badge__name' })).closest('.instance-badge')!;
+    expect(badge).not.toHaveTextContent('·');
+    expect(within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByText('Hangar')).toBeInTheDocument();
   });
 
   it('marks only the current section as active and follows navigation', async () => {
