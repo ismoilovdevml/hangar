@@ -49,21 +49,9 @@ export function relativeTime(iso: string, now: Date = new Date()): string {
   return d === 1 ? 'Yesterday' : `${d} days ago`;
 }
 
-export function greeting(now: Date = new Date()): string {
-  const h = now.getHours();
-  if (h < 5) return 'Good evening';
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
-}
-
 export function longDate(now: Date = new Date()): string {
   const part = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-GB', o).format(now);
   return `${part({ weekday: 'long' })}, ${part({ day: 'numeric' })} ${part({ month: 'long' })}`;
-}
-
-export function firstName(displayName: string): string {
-  return displayName.trim().split(/\s+/)[0] ?? displayName;
 }
 
 /** How the instance is named in the shell: the unconfigured default reads as the product name. */

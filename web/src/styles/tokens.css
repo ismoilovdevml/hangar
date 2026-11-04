@@ -21,6 +21,11 @@
   --track: rgba(30, 43, 58, 0.08);
   --surface-solid: #FFFFFF;
   --surface-muted: #EEF2F6;
+  --surface-soft: #F7FAFC;   /* the hole of a ring chart */
+  --menu-hover: #EEF3F7;     /* hovered or focused menu item */
+  --menu-tile: #F2F5F8;      /* icon tile of a menu item */
+  --bad-hover: #FBEDED;      /* hovered or focused destructive menu item */
+  --shadow-menu: 0 2px 4px rgba(23, 36, 51, .08), 0 24px 48px -12px rgba(23, 36, 51, .35);
   --scrim: rgba(23, 36, 51, 0.32);
 
   /* text */
@@ -116,6 +121,11 @@
   --track: rgba(220, 230, 239, 0.10);
   --surface-solid: #2A3A4C;
   --surface-muted: #2A3A4C;
+  --surface-soft: #243446;
+  --menu-hover: #33465B;
+  --menu-tile: #33465B;
+  --bad-hover: #4A2626;
+  --shadow-menu: 0 2px 4px rgba(0, 0, 0, .3), 0 24px 48px -12px rgba(0, 0, 0, .6);
   --scrim: rgba(0, 0, 0, 0.5);
   --ink-strong: #F1F5F9;
   --ink: #E2E8EF;

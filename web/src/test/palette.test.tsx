@@ -27,7 +27,8 @@ describe('command palette', () => {
 
   it('opens with Ctrl+K and the search button, and closes with Escape', async () => {
     const user = userEvent.setup();
-    renderApp('/');
+    // The Overview has its own search box; every other page has the search button.
+    renderApp('/repositories');
     const trigger = await screen.findByRole('button', { name: /Search packages, digests, CVEs/ });
 
     await user.keyboard('{Control>}k{/Control}');

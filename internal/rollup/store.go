@@ -45,13 +45,19 @@ type Overview struct {
 	PrevRequests *int64
 	// PeakRequests is the busiest recorded window of the same length ending
 	// in the last 30 days (at 5-minute resolution), at least Requests.
-	PeakRequests  int64
+	PeakRequests int64
+	// ServerErrors and Denied count the requests of the window answered with
+	// a 5xx status, and refused with 401 or 403.
+	ServerErrors  int64
+	Denied        int64
 	Latency       Histogram // request latency at RequestBounds
 	CacheHits     int64
 	CacheMisses   int64
 	CacheHitBytes int64
-	// Downloads per traffic bucket from BucketStart, oldest first.
-	Downloads []int64
+	// Downloads and BucketRequests per traffic bucket from BucketStart,
+	// oldest first.
+	Downloads      []int64
+	BucketRequests []int64
 }
 
 // Covered reports whether recording had started by t.
@@ -82,12 +88,17 @@ func (s *Store) Overview(ctx context.Context, q OverviewQuery) (*Overview, error
 			COALESCE(sum(requests) FILTER (WHERE minute < $2), 0)::bigint,
 			COALESCE(sum(cache_hits) FILTER (WHERE minute >= $2), 0)::bigint,
 			COALESCE(sum(cache_misses) FILTER (WHERE minute >= $2), 0)::bigint,
-			COALESCE(sum(cache_hit_bytes) FILTER (WHERE minute >= $2), 0)::bigint
+			COALESCE(sum(cache_hit_bytes) FILTER (WHERE minute >= $2), 0)::bigint,
+			COALESCE(sum(server_errors) FILTER (WHERE minute >= $2), 0)::bigint,
+			COALESCE(sum(denied) FILTER (WHERE minute >= $2), 0)::bigint
 		FROM traffic_minutes WHERE minute >= $1 AND minute < $3`, prevStart, start, end)
 	b.Queue(`SELECT u.i, sum(u.v)::bigint
 		FROM traffic_minutes t, unnest(t.latency) WITH ORDINALITY AS u(v, i)
 		WHERE t.minute >= $1 AND t.minute < $2 GROUP BY u.i`, start, end)
 	b.Queue(`SELECT date_bin($1::interval, minute, $2), sum(downloads)::bigint
+		FROM traffic_minutes WHERE minute >= $2 AND minute < $3 GROUP BY 1`,
+		interval(q.Bucket), q.BucketStart.UTC(), end)
+	b.Queue(`SELECT date_bin($1::interval, minute, $2), sum(requests)::bigint
 		FROM traffic_minutes WHERE minute >= $2 AND minute < $3 GROUP BY 1`,
 		interval(q.Bucket), q.BucketStart.UTC(), end)
 	b.Queue(`SELECT date_bin($1::interval, minute, $2), sum(requests)::bigint
@@ -101,7 +112,8 @@ func (s *Store) Overview(ctx context.Context, q OverviewQuery) (*Overview, error
 		return nil, fmt.Errorf("traffic coverage: %w", err)
 	}
 	var prev int64
-	if err := br.QueryRow().Scan(&o.Requests, &prev, &o.CacheHits, &o.CacheMisses, &o.CacheHitBytes); err != nil {
+	if err := br.QueryRow().Scan(&o.Requests, &prev, &o.CacheHits, &o.CacheMisses, &o.CacheHitBytes,
+		&o.ServerErrors, &o.Denied); err != nil {
 		return nil, fmt.Errorf("traffic totals: %w", err)
 	}
 	if o.Covered(prevStart) {
@@ -118,8 +130,13 @@ func (s *Store) Overview(ctx context.Context, q OverviewQuery) (*Overview, error
 	if err := scanBins(br, downloads); err != nil {
 		return nil, fmt.Errorf("traffic downloads: %w", err)
 	}
+	requests := map[int64]int64{}
+	if err := scanBins(br, requests); err != nil {
+		return nil, fmt.Errorf("traffic requests: %w", err)
+	}
 	for t := q.BucketStart.UTC(); t.Before(end); t = t.Add(q.Bucket) {
 		o.Downloads = append(o.Downloads, downloads[t.UnixMicro()])
+		o.BucketRequests = append(o.BucketRequests, requests[t.UnixMicro()])
 	}
 	bins := map[int64]int64{}
 	if err := scanBins(br, bins); err != nil {

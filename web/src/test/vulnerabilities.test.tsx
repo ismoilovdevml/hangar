@@ -145,9 +145,9 @@ describe('vulnerabilities', () => {
       }),
     );
     renderApp('/');
-    const card = () => screen.getByRole('article', { name: 'Critical issues' });
+    const card = () => screen.getByRole('link', { name: /^Security/ });
     await waitFor(() => expect(within(card()).getByText('Not scanned yet')).toBeInTheDocument());
-    expect(within(card()).queryByText('Clear')).not.toBeInTheDocument();
+    expect(within(card()).queryByText('Clean')).not.toBeInTheDocument();
     expect(within(card()).getByText('No package has been scanned yet')).toBeInTheDocument();
   });
 

@@ -3,80 +3,114 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { renderApp } from './render';
 
+const card = (name: RegExp) => screen.getByRole('link', { name });
+
 describe('overview', () => {
-  it('renders KPI cards from the metrics API', async () => {
+  it('summarises the day from the metrics API', async () => {
     renderApp('/');
-    const kpis = await screen.findByRole('region', { name: 'Key metrics' });
-    await within(kpis).findByText('4.82');
-    const storage = within(kpis).getByRole('article', { name: 'Storage used' });
-    expect(within(storage).getByText('TB of 12 TB')).toBeInTheDocument();
-    expect(within(storage).getByText('40%')).toBeInTheDocument();
-    expect(within(storage).getByText('38 GB added since yesterday')).toBeInTheDocument();
-    expect(within(storage).getByRole('meter', { name: 'Storage used' })).toHaveAttribute('aria-valuenow', '40');
+    const today = await screen.findByRole('region', { name: /^Today · / });
+    expect(await within(today).findByText(/packages cached/)).toHaveTextContent(
+      '18.4M requests, 1,120 packages cached, 186 published, 4 pushes rejected.',
+    );
+    expect(within(today).getByRole('img', { name: /^Requests per hour, busiest around \d\d:\d\d with / })).toBeInTheDocument();
+    expect(within(today).getByRole('table', { name: 'Requests per hour' })).toBeInTheDocument();
+    expect(within(today).getByRole('radio', { name: 'Today' })).toHaveAttribute('aria-checked', 'true');
 
-    const requests = within(kpis).getByRole('article', { name: 'Requests today' });
-    expect(within(requests).getByText('18.4M')).toBeInTheDocument();
-    expect(within(requests).getByText('+6%')).toBeInTheDocument();
+    const outcomes = screen.getByRole('region', { name: 'Request outcomes' });
+    expect(within(outcomes).getByRole('img', { name: '98.8 percent of requests succeeded' })).toBeInTheDocument();
+    expect(within(outcomes).getByText(/^p95/)).toHaveTextContent('p95 41 ms · 173K denied · 38.6K server errors');
 
-    const cache = within(kpis).getByRole('article', { name: 'Served from cache' });
-    expect(within(cache).getByText('94.2')).toBeInTheDocument();
-    expect(within(cache).getByText('Healthy')).toBeInTheDocument();
-    expect(within(cache).getByText(/^45\.4K of 48\.2K requests · \d+(\.\d)? GB saved$/)).toBeInTheDocument();
+    const storage = card(/^Storage/);
+    expect(storage).toHaveAttribute('href', '/blob-stores');
+    expect(within(storage).getByText('4.82 TB')).toBeInTheDocument();
+    expect(within(storage).getByText('Docker 60% · 7 formats · 40% of quota')).toBeInTheDocument();
 
-    const issues = within(kpis).getByRole('article', { name: 'Critical issues' });
-    expect(within(issues).getByText('7')).toBeInTheDocument();
-    expect(within(issues).getByText('in 3 packages')).toBeInTheDocument();
-    expect(within(issues).getByText('2 already quarantined')).toBeInTheDocument();
+    const security = card(/^Security/);
+    expect(security).toHaveAttribute('href', '/vulnerabilities');
+    expect(within(security).getByText('7 critical')).toBeInTheDocument();
+    expect(within(security).getByText('In 3 packages · 2 quarantined')).toBeInTheDocument();
 
-    expect(screen.getByText('Everything is calm. 214 packages published since yesterday, no failed pushes.')).toBeInTheDocument();
+    // The worst upstream comes first.
+    const upstream = await waitFor(() => card(/^Upstream/));
+    expect(upstream).toHaveAttribute('href', '/repositories?type=proxy');
+    expect(within(upstream).getByText('ghcr.io')).toBeInTheDocument();
+    expect(within(upstream).getByText('blocked · cache hit 94% · 2 of 5 healthy')).toBeInTheDocument();
   });
 
-  it('renders recent packages, upstreams and client snippets', async () => {
+  it('lists what needs attention, most urgent first, linking to where it is fixed', async () => {
     renderApp('/');
+    const todo = await screen.findByRole('region', { name: 'To do' });
+    const items = await within(todo).findAllByRole('link');
+    expect(items.map((a) => a.querySelector('.todo__item-title')?.textContent)).toEqual([
+      'ghcr-proxy is blocked',
+      '4 pushes rejected',
+      'Review 7 critical vulnerabilities',
+      'Renew the laptop CLI token',
+    ]);
+    expect(items.map((a) => a.getAttribute('href'))).toEqual([
+      '/repositories/ghcr-proxy/settings',
+      '/audit?action=component.publish',
+      '/vulnerabilities',
+      '/account#my-tokens-title',
+    ]);
+    expect(todo.querySelector('.todo__count')).toHaveTextContent('4 items');
+    // The backup task is scheduled and the blob stores have quotas: no reminders for those.
+    expect(todo).not.toHaveTextContent(/backup|quota/i);
+  });
+
+  it('shows the most downloaded packages and recent publications', async () => {
+    renderApp('/');
+    const top = await screen.findByRole('region', { name: 'Most downloaded' });
+    const chips = await within(top).findAllByRole('link');
+    expect(chips[0]).toHaveTextContent('log4j-core84K downloads');
+    expect(chips.length).toBeLessThanOrEqual(6);
+
     const table = await screen.findByRole('table', { name: 'Recently published packages' });
     expect(await within(table).findByText('payments-api')).toBeInTheDocument();
     expect(within(table).getByText('1 critical')).toBeInTheDocument();
-    expect(within(table).getByText('2 high')).toBeInTheDocument();
     expect(within(table).getByText('Just now')).toBeInTheDocument();
-
-    const upstreams = screen.getByRole('region', { name: 'Upstream sources' });
-    expect(await within(upstreams).findByText('npmjs-proxy')).toBeInTheDocument();
-    expect(within(upstreams).getByText('Blocked')).toBeInTheDocument();
-    expect(within(upstreams).getByText('Unknown')).toBeInTheDocument();
-    expect(within(upstreams).getByText('Median latency · today')).toBeInTheDocument();
-    expect(within(upstreams).getByText('412 ms')).toHaveAttribute('title', 'Median of 860 remote requests');
-    // A remote without requests in the range: no latency, and why.
-    const pypi = within(upstreams).getByText('pypi-proxy').closest('li')!;
-    expect(within(pypi).getByTitle('No remote requests in this range')).toHaveTextContent('—');
-
-    const connect = screen.getByRole('region', { name: 'Connect a client' });
-    expect(await within(connect).findByText("echo '<token>' | docker login cr.acme.io -u d.ismoilov --password-stdin")).toBeInTheDocument();
-    expect(within(connect).getByRole('button', { name: 'Copy Docker set-up commands' })).toBeInTheDocument();
-    expect(within(connect).getByRole('link', { name: 'Create an access token' })).toHaveAttribute('href', '/account#my-tokens-title');
   });
 
-  it('switches the client snippet between the suggested repositories', async () => {
+  it('searches from the box and offers qualifier examples', async () => {
+    const user = userEvent.setup();
+    const { history } = renderApp('/');
+    const hero = await screen.findByRole('region', { name: 'What do you need today?' });
+    expect(await within(hero).findByRole('link', { name: 'format:docker' })).toHaveAttribute('href', '/search?q=format%3Adocker');
+    await user.type(within(hero).getByRole('searchbox', { name: 'Search packages' }), 'serilog{Enter}');
+    await waitFor(() => expect(history.location.pathname).toBe('/search'));
+    expect(history.location.search).toBe('?q=serilog');
+  });
+
+  it('offers quick actions that lead somewhere real', async () => {
     const user = userEvent.setup();
     renderApp('/');
-    const connect = await screen.findByRole('region', { name: 'Connect a client' });
-    await user.click(await within(connect).findByRole('radio', { name: 'npm' }));
-    expect(within(connect).getByText('registry=https://pkg.acme.io/repository/npm-group/')).toBeInTheDocument();
-    expect(within(connect).getByText('//pkg.acme.io/repository/npm-group/:_authToken=<token>')).toBeInTheDocument();
-    expect(within(connect).queryByText('Publish')).not.toBeInTheDocument();
+    const actions = await screen.findByRole('list', { name: 'Quick actions' });
+    expect(within(actions).getByRole('link', { name: /Create a token/ })).toHaveAttribute('href', '/account#my-tokens-title');
+    expect(within(actions).getByRole('link', { name: /New repository/ })).toHaveAttribute('href', '/repositories/new');
+    expect(within(actions).getByRole('link', { name: /Browse packages/ })).toHaveAttribute('href', '/browse');
+
+    await user.click(within(actions).getByRole('button', { name: /Connect a client/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Connect a client' });
+    expect(await within(dialog).findByText("echo '<token>' | docker login cr.acme.io -u d.ismoilov --password-stdin")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('radio', { name: 'npm' }));
+    expect(within(dialog).getByText('registry=https://pkg.acme.io/repository/npm-group/')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(within(actions).getByRole('button', { name: /Connect a client/ })).toHaveFocus();
   });
 
   it('keeps the selected range in the URL', async () => {
     const user = userEvent.setup();
     const { history } = renderApp('/');
     const group = await screen.findByRole('radiogroup', { name: 'Time range' });
-    expect(within(group).getByRole('radio', { name: 'Today' })).toHaveAttribute('aria-checked', 'true');
-    await user.click(within(group).getByRole('radio', { name: '7 days' }));
+    await user.click(within(group).getByRole('radio', { name: '7d' }));
     await waitFor(() => expect(history.location.search).toContain('range=7d'));
-    expect(await screen.findByRole('article', { name: 'Requests · 7 days' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Traffic · 7 days' })).toBeInTheDocument();
-    // Upstream latency follows the range.
-    const upstreams = screen.getByRole('region', { name: 'Upstream sources' });
-    expect(await within(upstreams).findByText('Median latency · 7 days')).toBeInTheDocument();
-    expect(await within(upstreams).findByTitle('Median of 5.6K remote requests')).toHaveTextContent('412 ms');
+    const range = await screen.findByRole('region', { name: 'Last 7 days' });
+    expect(await within(range).findByText(/packages cached/)).toHaveTextContent(
+      '121M requests, 7,400 packages cached, 1,310 published, 9 pushes rejected.',
+    );
+    expect(within(range).getByRole('img', { name: /^Requests per 6 hours/ })).toBeInTheDocument();
+    // The to-do list counts rejected pushes over the same range.
+    expect(await within(screen.getByRole('region', { name: 'To do' })).findByText('9 pushes rejected')).toBeInTheDocument();
   });
 });

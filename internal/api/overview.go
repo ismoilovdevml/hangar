@@ -34,6 +34,15 @@ type trafficBucket struct {
 	Downloads *int64 `json:"downloads"`
 	// Uploads are components published to hosted repositories.
 	Uploads int64 `json:"uploads"`
+	// Requests are requests served by every node; null like Downloads.
+	Requests *int64 `json:"requests"`
+}
+
+// overviewActivity is the activity block of OverviewMetrics.
+type overviewActivity struct {
+	Published      int64 `json:"published"`
+	Cached         int64 `json:"cached"`
+	PushesRejected int64 `json:"pushes_rejected"`
 }
 
 type formatBytes struct {
@@ -54,8 +63,9 @@ type overviewMetrics struct {
 		CapacityBytes *int64 `json:"capacity_bytes"`
 		AddedBytes24h int64  `json:"added_bytes_24h"`
 	} `json:"storage"`
-	Requests requestNumbers `json:"requests"`
-	Cache    cacheNumbers   `json:"cache"`
+	Activity overviewActivity `json:"activity"`
+	Requests requestNumbers   `json:"requests"`
+	Cache    cacheNumbers     `json:"cache"`
 	Issues   struct {
 		Critical         int64 `json:"critical"`
 		PackagesAffected int64 `json:"packages_affected"`
@@ -95,7 +105,7 @@ func (a *API) overview(w http.ResponseWriter, r *http.Request) {
 	if rng == "" {
 		rng = "today"
 	}
-	o, err := a.Catalog.Overview(ctx, catalog.OverviewQuery{Now: now, Start: bucketStart, Bucket: bucket})
+	o, err := a.Catalog.Overview(ctx, catalog.OverviewQuery{Now: now, Start: bucketStart, Bucket: bucket, WindowStart: start})
 	if err != nil {
 		a.writeErr(w, r, err)
 		return
@@ -103,6 +113,7 @@ func (a *API) overview(w http.ResponseWriter, r *http.Request) {
 	out := overviewMetrics{Range: rng, GeneratedAt: now, Traffic: []trafficBucket{}, StorageByFormat: []formatBytes{}}
 	out.Summary.PublishedSinceYesterday, out.Summary.FailedPushes = o.PublishedLast24h, o.FailedPushes24h
 	out.Storage.UsedBytes, out.Storage.CapacityBytes, out.Storage.AddedBytes24h = o.UsedBytes, o.CapacityBytes, o.AddedBytes24h
+	out.Activity = overviewActivity{Published: o.Activity.Published, Cached: o.Activity.Cached, PushesRejected: o.Activity.PushesRejected}
 	out.Issues.Critical, out.Issues.PackagesAffected = o.CriticalFindings, o.PackagesAffected
 	out.Issues.Quarantined, out.Issues.OpenFindings = o.Quarantined, o.OpenFindings
 	if a.Scanning != nil {
@@ -130,6 +141,9 @@ func (a *API) overview(w http.ResponseWriter, r *http.Request) {
 		tb := trafficBucket{Start: b.Start, Uploads: b.Count}
 		if traffic != nil && i < len(traffic.Downloads) && traffic.Covered(b.Start.Add(bucket)) {
 			tb.Downloads = ptr(traffic.Downloads[i])
+			if i < len(traffic.BucketRequests) {
+				tb.Requests = ptr(traffic.BucketRequests[i])
+			}
 		}
 		out.Traffic = append(out.Traffic, tb)
 	}

@@ -66,6 +66,7 @@ func TestRead(t *testing.T) {
 	s.serve(50, "/healthz", "GET", "200", 0.001)
 	s.serve(7, "/api/v1/events", "GET", "200", 120)
 	s.serve(1, "/metrics", "GET", "200", 0.001)
+	s.serve(3, "/healthz", "GET", "503", 0.001)
 	s.hit("nuget", 6, 600)
 	s.hit("npm", 2, 50)
 	s.miss("nuget", 3)
@@ -75,6 +76,9 @@ func TestRead(t *testing.T) {
 	c := Read(s.m.Registry)
 	if c.Requests != 24 || c.Downloads != 13 {
 		t.Errorf("requests %d downloads %d, want 24 13", c.Requests, c.Downloads)
+	}
+	if c.ServerErrors != 0 || c.Denied != 0 {
+		t.Errorf("outcomes of uncounted routes leaked: %d %d", c.ServerErrors, c.Denied)
 	}
 	if c.CacheHits != 8 || c.CacheMisses != 3 || c.CacheHitBytes != 650 {
 		t.Errorf("cache = %d/%d/%d", c.CacheHits, c.CacheMisses, c.CacheHitBytes)
@@ -90,6 +94,19 @@ func TestRead(t *testing.T) {
 	}
 	if c.Upstreams["npm-proxy"].Total() != 1 {
 		t.Errorf("npm-proxy = %v", c.Upstreams["npm-proxy"])
+	}
+
+	// Server errors (5xx) and refusals (401, 403) of counted routes.
+	s.serve(2, "/repository/{repo}/*", "PUT", "401", 0.3)
+	s.serve(1, "/api/v1/components", "GET", "403", 0.4)
+	s.serve(1, "/api/v1/components", "GET", "500", 0.4)
+	s.serve(1, "/repository/{repo}/*", "GET", "502", 0.02)
+	c = Read(s.m.Registry)
+	if c.Requests != 29 || c.ServerErrors != 2 || c.Denied != 3 {
+		t.Errorf("requests %d server errors %d denied %d, want 29 2 3", c.Requests, c.ServerErrors, c.Denied)
+	}
+	if c.Latency.Total() != 29 {
+		t.Errorf("latency observations = %d", c.Latency.Total())
 	}
 }
 

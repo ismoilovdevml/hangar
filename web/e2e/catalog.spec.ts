@@ -52,14 +52,14 @@ test('deleting a version asks first', async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await page.goto('/browse?repo=npm-internal&ns=@acme&name=ui-kit&version=5.3.0');
   await expect(page.getByRole('heading', { level: 1, name: '@acme/ui-kit' })).toBeVisible();
-  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('button', { name: 'Delete version', exact: true }).first().click();
   const dialog = page.getByRole('alertdialog', { name: 'Delete @acme/ui-kit 5.3.0?' });
   await expect(dialog).toBeVisible();
   await page.screenshot({ path: shot('browse-delete-1440') });
   await dialog.getByRole('button', { name: 'Delete version' }).click();
   await expect(dialog).toBeHidden();
   await expect(page).not.toHaveURL(/version=5\.3\.0/);
-  await expect(page.getByLabel('Version', { exact: true })).toHaveCount(0); // one version left: no selector
+  await expect(page.getByRole('treeitem', { name: /5\.3\.0/ })).toHaveCount(0);
 });
 
 test('search with qualifiers, facets and keyboard', async ({ page }) => {

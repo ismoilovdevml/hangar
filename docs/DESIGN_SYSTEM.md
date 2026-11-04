@@ -56,7 +56,7 @@ Wallpaper file: `web/public/lake-dawn.jpg` (2400×1500).
 ```
 
 ## Type scale
-Page title 32/700 (−0.02em) · greeting 34/700 · section title 16/700 · body 14–15/500 ·
+Page title 32/700 (−0.02em) · overview hero 24/700 · section title 16/700 · body 14–15/500 ·
 labels 12–13/600 · KPI numbers 28–32/700 · code 12–13 mono. Self-host Manrope and
 JetBrains Mono (`@fontsource`), no external font requests in production.
 
@@ -65,6 +65,10 @@ JetBrains Mono (`@fontsource`), no external font requests in production.
   content column; both wrap to one column under ~860 px.
 - Content: glass top bar (breadcrumb, ⌘K search, bell, avatar) → page header with
   title, one-sentence explanation, primary action → glass panels in grids with 16 px gaps.
+  The Overview drops the bar: its header is the breadcrumb, a system state pill, bell and
+  avatar, and its hero carries the search box.
+- The sidebar's links scroll on short screens; the system status card (state, nodes up,
+  version) stays pinned at its bottom and links to System status.
 - Tables live inside a panel; wide tables scroll horizontally inside it.
 
 ## Components
@@ -76,6 +80,10 @@ JetBrains Mono (`@fontsource`), no external font requests in production.
 - **Pill**: 12/600, `--r-pill`, tinted bg + matching ink (status, type, severity).
 - **Format badge**: 32–44 px rounded square, tinted, 10–11 px uppercase code (OCI, NPM, MVN, PY, HELM).
 - **Meter**: 6–10 px track, rounded fill; turns `--chart-2` above 75%.
+- **Account menu**: opaque `--surface-solid` card (300 px, radius 16, `--shadow-menu`), header with
+  avatar, name, email and role pill; items 44 px with a 30 px icon tile (`--menu-tile`, lake-soft
+  when hovered or focused, `--menu-hover` row); Sign out in the danger tone. Menu-button keyboard
+  pattern: arrows, Home/End, Escape returns focus to the avatar.
 - **Code block**: `#1F2B38` bg, `#DCE6EF` text, comments `#8FA3B5`, copy button.
 
 ## Rules

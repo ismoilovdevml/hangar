@@ -97,6 +97,8 @@ func (h Histogram) add(o Histogram) Histogram {
 type Counts struct {
 	Requests      int64
 	Downloads     int64
+	ServerErrors  int64 // requests answered with a 5xx status
+	Denied        int64 // requests refused with 401 or 403
 	CacheHits     int64
 	CacheMisses   int64
 	CacheHitBytes int64
@@ -106,7 +108,7 @@ type Counts struct {
 
 // trafficZero reports whether the traffic_minutes part is all zero.
 func (c Counts) trafficZero() bool {
-	return c.Requests == 0 && c.Downloads == 0 && c.CacheHits == 0 && c.CacheMisses == 0 &&
+	return c.Requests == 0 && c.Downloads == 0 && c.ServerErrors == 0 && c.Denied == 0 && c.CacheHits == 0 && c.CacheMisses == 0 &&
 		c.CacheHitBytes == 0 && c.Latency.Total() == 0
 }
 
@@ -128,6 +130,7 @@ func (c Counts) Sub(prev Counts) Counts {
 	d := func(a, b int64) int64 { return max(a-b, 0) }
 	out := Counts{
 		Requests: d(c.Requests, prev.Requests), Downloads: d(c.Downloads, prev.Downloads),
+		ServerErrors: d(c.ServerErrors, prev.ServerErrors), Denied: d(c.Denied, prev.Denied),
 		CacheHits: d(c.CacheHits, prev.CacheHits), CacheMisses: d(c.CacheMisses, prev.CacheMisses),
 		CacheHitBytes: d(c.CacheHitBytes, prev.CacheHitBytes), Latency: c.Latency.sub(prev.Latency),
 	}
@@ -146,6 +149,7 @@ func (c Counts) Sub(prev Counts) Counts {
 func (c Counts) Add(o Counts) Counts {
 	out := Counts{
 		Requests: c.Requests + o.Requests, Downloads: c.Downloads + o.Downloads,
+		ServerErrors: c.ServerErrors + o.ServerErrors, Denied: c.Denied + o.Denied,
 		CacheHits: c.CacheHits + o.CacheHits, CacheMisses: c.CacheMisses + o.CacheMisses,
 		CacheHitBytes: c.CacheHitBytes + o.CacheHitBytes,
 		Latency:       append(Histogram(nil), c.Latency...).add(o.Latency),
@@ -237,6 +241,12 @@ func Read(g prometheus.Gatherer) Counts {
 				n := round(m.GetCounter().GetValue())
 				c.Requests += n
 				code := label(m, "code")
+				switch {
+				case len(code) == 3 && code[0] == '5':
+					c.ServerErrors += n
+				case code == "401" || code == "403":
+					c.Denied += n
+				}
 				if isFormatRoute(route) && label(m, "method") == "GET" && (code == "200" || code == "206") {
 					c.Downloads += n
 				}

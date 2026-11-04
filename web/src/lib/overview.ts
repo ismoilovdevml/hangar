@@ -1,16 +1,12 @@
-import type { OverviewMetrics, OverviewRange, ScanSummary, TrafficBucket } from '../api/types';
+import type { Task } from '../api/opsTypes';
+import type { components } from '../api/schema';
+import type { Format, OverviewMetrics, OverviewRange, ScanSummary, TrafficBucket, UpstreamHealth } from '../api/types';
+
+type Token = components['schemas']['Token'];
 import type { Tone } from './format';
 
 export function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
-}
-
-/** The one-line summary under the greeting. */
-export function summarySentence(m: OverviewMetrics): string {
-  const { published_since_yesterday: pub, failed_pushes: failed } = m.summary;
-  const lead = failed === 0 ? 'Everything is calm.' : 'A few things need a look.';
-  const pushes = failed === 0 ? 'no failed pushes' : plural(failed, 'failed push', 'failed pushes');
-  return `${lead} ${plural(pub, 'package')} published since yesterday, ${pushes}.`;
 }
 
 /**
@@ -101,4 +97,209 @@ export function componentName(c: { format: string; namespace?: string; name: str
   const ns = c.namespace?.trim();
   if (!ns || c.name.startsWith(ns)) return c.name;
   return c.format === 'maven' ? `${ns}:${c.name}` : `${ns}/${c.name}`;
+}
+
+/* ---------------------------------------------------------------- overview cards */
+
+/** Share of requests answered without a server error or an auth refusal; null without requests or outcome counts. */
+export function successRatio(r: OverviewMetrics['requests']): number | null {
+  if (r.total === null || r.total <= 0 || r.server_errors === null || r.denied === null) return null;
+  return Math.max(0, r.total - r.server_errors - r.denied) / r.total;
+}
+
+/** "98.6" for a ratio, without a misleading "100.0" while any request failed. */
+export function ratioPercent(ratio: number): string {
+  const v = Math.floor(ratio * 1000) / 10;
+  return v.toFixed(1);
+}
+
+/** The host of a URL, or the URL itself when it does not parse. */
+export function urlHost(url: string): string {
+  try {
+    return new URL(url).host || url;
+  } catch {
+    return url;
+  }
+}
+
+const UPSTREAM_RANK: Record<UpstreamHealth['state'], number> = { offline: 0, blocked: 1, slow: 2, unknown: 3, healthy: 4 };
+
+/** The upstream to show first: the worst state, then the busiest. */
+export function headlineUpstream(items: UpstreamHealth[]): UpstreamHealth | null {
+  return (
+    [...items].sort((a, b) => UPSTREAM_RANK[a.state] - UPSTREAM_RANK[b.state] || (b.requests ?? 0) - (a.requests ?? 0))[0] ?? null
+  );
+}
+
+/** Where a to-do item leads. */
+export type TodoLink =
+  | { kind: 'account-tokens' }
+  | { kind: 'access-tokens' }
+  | { kind: 'audit-pushes' }
+  | { kind: 'vulnerabilities' }
+  | { kind: 'system-status' }
+  | { kind: 'tasks' }
+  | { kind: 'task'; id: string }
+  | { kind: 'blob-stores' }
+  | { kind: 'repository'; name: string };
+
+export interface TodoItem {
+  id: string;
+  /** bad = act now, warn = recommended, info = setup. */
+  tone: 'bad' | 'warn' | 'info';
+  tag: string;
+  title: string;
+  detail: string;
+  link: TodoLink;
+}
+
+export interface TodoInput {
+  metrics: OverviewMetrics;
+  upstreams?: UpstreamHealth[];
+  system?: { state: 'ok' | 'degraded' | 'down'; message: string; nodes_up: number; nodes_total: number };
+  tokenWarnings?: Token[];
+  /** The signed-in username: their own tokens are renewed on My account. */
+  username?: string;
+  /** Scheduled tasks, when the user may read them. */
+  tasks?: Task[];
+  canAdminBlobStores?: boolean;
+  now?: Date;
+}
+
+const TONE_ORDER = { bad: 0, warn: 1, info: 2 } as const;
+
+function expiresIn(iso: string, now: Date): string {
+  const ms = new Date(iso).getTime() - now.getTime();
+  if (ms <= 0) return 'Expired';
+  const h = Math.floor(ms / 3_600_000);
+  if (h < 1) return 'Expires in under an hour';
+  if (h < 48) return `Expires in ${h} h`;
+  return `Expires in ${Math.floor(h / 24)} days`;
+}
+
+/** What needs someone's attention, built only from what the server reports; most urgent first. */
+export function todoItems(input: TodoInput): TodoItem[] {
+  const { metrics: m, now = new Date() } = input;
+  const out: TodoItem[] = [];
+
+  const sys = input.system;
+  if (sys && sys.state !== 'ok') {
+    out.push({
+      id: 'system',
+      tone: sys.state === 'down' ? 'bad' : 'warn',
+      tag: sys.state === 'down' ? 'OUTAGE' : 'DEGRADED',
+      title: sys.message,
+      detail: `${sys.nodes_up} of ${sys.nodes_total} ${sys.nodes_total === 1 ? 'node' : 'nodes'} up`,
+      link: { kind: 'system-status' },
+    });
+  }
+
+  for (const u of input.upstreams ?? []) {
+    if (u.state !== 'offline' && u.state !== 'blocked') continue;
+    out.push({
+      id: `upstream-${u.name}`,
+      tone: 'bad',
+      tag: 'UPSTREAM',
+      title: `${u.name} is ${u.state}`,
+      detail: `${urlHost(u.url)} cannot be reached; uncached packages fail`,
+      link: { kind: 'repository', name: u.name },
+    });
+  }
+
+  const rejected = m.activity.pushes_rejected;
+  if (rejected > 0) {
+    out.push({
+      id: 'pushes',
+      tone: 'bad',
+      tag: 'PUSHES FAILING',
+      title: `${plural(rejected, 'push', 'pushes')} rejected`,
+      detail: 'Failed or denied publish attempts in this period',
+      link: { kind: 'audit-pushes' },
+    });
+  }
+
+  if (m.issues.critical > 0) {
+    out.push({
+      id: 'critical',
+      tone: 'bad',
+      tag: 'SECURITY',
+      title: `Review ${plural(m.issues.critical, 'critical vulnerability', 'critical vulnerabilities')}`,
+      detail: `In ${plural(m.issues.packages_affected, 'package')} · ${m.issues.quarantined} quarantined`,
+      link: { kind: 'vulnerabilities' },
+    });
+  }
+
+  for (const t of input.tokenWarnings ?? []) {
+    if (!t.expires_at) continue;
+    const own = t.owner === input.username;
+    out.push({
+      id: `token-${t.id}`,
+      tone: 'warn',
+      tag: 'EXPIRES SOON',
+      title: `Renew the ${t.name} token`,
+      detail: `${expiresIn(t.expires_at, now)} · ${own ? 'your token' : t.owner}`,
+      link: own ? { kind: 'account-tokens' } : { kind: 'access-tokens' },
+    });
+  }
+
+  if (input.tasks) {
+    const backups = input.tasks.filter((t) => t.type === 'db_backup');
+    const scheduled = backups.filter((t) => t.enabled && t.schedule);
+    const failed = backups.find((t) => t.last_run?.status === 'failed');
+    if (failed) {
+      out.push({
+        id: 'backup-failed',
+        tone: 'bad',
+        tag: 'BACKUP FAILED',
+        title: `${failed.name} failed`,
+        detail: failed.last_run?.message || 'The last database backup did not finish',
+        link: { kind: 'task', id: failed.id },
+      });
+    } else if (scheduled.length === 0) {
+      out.push({
+        id: 'backup',
+        tone: 'warn',
+        tag: 'RECOMMENDED',
+        title: 'Schedule a database backup',
+        detail: backups.some((t) => t.last_run) ? 'No backup is scheduled' : 'No backup has ever run',
+        link: { kind: 'tasks' },
+      });
+    }
+  }
+
+  if (m.issues.scanning && !m.issues.scanning.enabled) {
+    out.push({
+      id: 'scanning',
+      tone: 'info',
+      tag: 'SETUP',
+      title: 'Turn on vulnerability scanning',
+      detail: 'Packages are not checked for known vulnerabilities',
+      link: { kind: 'vulnerabilities' },
+    });
+  }
+
+  if (input.canAdminBlobStores && (m.storage.capacity_bytes === null || m.storage.capacity_bytes <= 0)) {
+    out.push({
+      id: 'quota',
+      tone: 'info',
+      tag: 'SETUP',
+      title: 'Set a storage quota',
+      detail: 'Get warned before the disk fills',
+      link: { kind: 'blob-stores' },
+    });
+  }
+
+  return out.sort((a, b) => TONE_ORDER[a.tone] - TONE_ORDER[b.tone]);
+}
+
+/** The storage card's footnote: which formats fill it and whether a quota applies. */
+export function storageNote(m: OverviewMetrics, label: (f: Format) => string): string {
+  const rows = m.storage_by_format.filter((f) => f.bytes > 0);
+  const total = rows.reduce((n, f) => n + f.bytes, 0);
+  const cap = m.storage.capacity_bytes;
+  const quota = cap === null || cap <= 0 ? 'no quota' : `${Math.round((m.storage.used_bytes / cap) * 100)}% of quota`;
+  if (rows.length === 0 || total <= 0) return `Nothing stored yet · ${quota}`;
+  if (rows.length === 1) return `All ${label(rows[0]!.format)} · ${quota}`;
+  const top = rows[0]!;
+  return `${label(top.format)} ${Math.round((top.bytes / total) * 100)}% · ${rows.length} formats · ${quota}`;
 }

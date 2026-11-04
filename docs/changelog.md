@@ -21,6 +21,23 @@
 - **Package icon**: NuGet packages show their own icon (`<icon>` in the
   .nupkg, or `<iconUrl>` through the image proxy) in the package header
   (`icon_url` in the package info API).
+- **Overview, rebuilt**: a search hero with quick actions (connect a client,
+  create a token, new repository, browse packages); an activity sentence with
+  requests per interval; a request outcome ring (share answered without a 5xx
+  or a 401/403, p95); a To do list built from real signals (unhealthy system or
+  upstreams, rejected pushes, critical findings, expiring tokens, missing or
+  failed database backup, scanning off, no storage quota); Storage, Security
+  and Upstream cards; the most downloaded packages; recently published.
+  `GET /metrics/overview` adds `activity` (published, cached, pushes rejected
+  over the range), `requests.server_errors`, `requests.denied` and per-bucket
+  `traffic[].requests`; the outcomes are recorded from this version on
+  (migration `00170`).
+- **Account menu**: the avatar opens a solid menu with name, email and role,
+  My account, Access tokens, Password & sessions (Signed-in devices for single
+  sign-on users) and Sign out, with full keyboard support.
+- **Sidebar status card** stays pinned at the bottom while the links scroll,
+  links to System status and turns amber or red when the system is degraded or
+  down. The bell shows a dot while tokens are about to expire.
 - **Fewer release files**: the compose stack ships as one `hangar-compose.tar.gz`
   and only Linux binaries are published (`hangar-linux-amd64`,
   `hangar-linux-arm64`), next to `install.sh` and `SHA256SUMS`. The installer

@@ -159,3 +159,14 @@ export const IconKey = (p: IconProps) => (
     <path d="m10.8 12.2 8.2-8.2M16 7l2.5 2.5M14 9l2 2" {...s} strokeLinecap="round" />
   </Svg>
 );
+export const IconUser = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="8" r="4" {...s} />
+    <path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" {...s} strokeLinecap="round" />
+  </Svg>
+);
+export const IconTerminal = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 7l5 5-5 5M12 17h7" {...s} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
