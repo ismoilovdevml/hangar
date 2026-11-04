@@ -201,7 +201,9 @@
 }
 .config-list__row dt code { color: var(--ink-2); font-size: 12.5px; overflow-wrap: anywhere; }
 .config-list__row dd { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.config-list__row dd > * { min-width: 0; max-width: 100%; }
 .config-value { font-size: 12.5px; color: var(--ink); overflow-wrap: anywhere; }
-.config-secret { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); }
+.config-secret { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--ink-3); overflow-wrap: anywhere; font-family: var(--font-mono); font-size: 12.5px; }
+.config-secret .pill { font-family: var(--font-sans); }
 .config-source { font-size: 11px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; }
 @media (max-width: 600px) { .config-list__row { grid-template-columns: 1fr; } }
