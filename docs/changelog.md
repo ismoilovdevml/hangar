@@ -17,6 +17,36 @@
   entry lights up the entry of its area (Access & audit or Cluster &
   replication). The command palette still finds every page and hides the ones
   the user may not open.
+- **First administrator without configuration**: on the first start of an
+  empty installation without `bootstrap.admin_user`, Hangar creates the local
+  user `admin` with a generated one-time password, printed once to standard
+  error (never into the System logs buffer) and written to
+  `bootstrap.initial_password_file` (mode 0600) when set. A password already
+  in that file is used instead. The file is deleted after the first password
+  change. Only one node creates the user. See
+  [first administrator](deploy/first-admin.md).
+- **Required password change**: the generated administrator, administrators
+  from `bootstrap.admin_user` / `hangar admin bootstrap` (unless
+  `bootstrap.require_password_change: false`), users given a one-time
+  password by the new `hangar admin reset-password --user NAME`, and members
+  an administrator flags with **Require password change**
+  (`POST /users/{id}/require-password-change`) must set a new password before
+  anything else. Until then their password sessions reach only
+  `GET /auth/session` (`password_change_required: true`), `PUT /me/password`
+  and logout; everything else answers 403 `password_change_required`, package
+  clients and token creation are refused, and the UI shows only a
+  **Set a new password** page with live policy checks. The change re-issues
+  the session and is audited as `user.password.changed` (`reason:
+  first_login`). Members show a **Must change password** badge
+  (`must_change_password`); the session reports `password_policy`. Migration
+  `00200`. Changing your own password now always re-issues the session
+  cookie.
+- **Behaviour change**: administrators created from
+  `HANGAR_BOOTSTRAP_ADMIN_USER` / `HANGAR_BOOTSTRAP_ADMIN_PASSWORD` or
+  `hangar admin bootstrap` must now change their password at the first
+  sign-in. Set `HANGAR_BOOTSTRAP_REQUIRE_PASSWORD_CHANGE=false` for automation
+  that keeps using the configured password.
+
 - **README images**: badges, logos and screenshots in package READMEs now
   load. The package info API returns, for every image of a README, a
   same-origin URL signed by the server (`readme.images`); Hangar fetches

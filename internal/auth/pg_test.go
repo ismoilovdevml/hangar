@@ -49,14 +49,14 @@ func TestMigrationUpDown(t *testing.T) {
 func TestBootstrapAdmin(t *testing.T) {
 	e := authtest.New(t, auth.Config{})
 	ctx := context.Background()
-	if _, err := e.Svc.EnsureBootstrapAdmin(ctx, "admin", "short"); !errors.Is(err, core.ErrInvalid) {
+	if _, err := e.Svc.EnsureBootstrapAdmin(ctx, "admin", "short", false); !errors.Is(err, core.ErrInvalid) {
 		t.Fatalf("weak password: err = %v", err)
 	}
-	created, err := e.Svc.EnsureBootstrapAdmin(ctx, "admin", authtest.AdminPassword)
+	created, err := e.Svc.EnsureBootstrapAdmin(ctx, "admin", authtest.AdminPassword, false)
 	if err != nil || !created {
 		t.Fatalf("first bootstrap = %v, %v", created, err)
 	}
-	created, err = e.Svc.EnsureBootstrapAdmin(ctx, "admin", "another long passphrase")
+	created, err = e.Svc.EnsureBootstrapAdmin(ctx, "admin", "another long passphrase", false)
 	if err != nil || created {
 		t.Fatalf("second bootstrap = %v, %v; want no-op", created, err)
 	}
@@ -83,7 +83,7 @@ func TestBootstrapPromotesExistingWhenNoAdmin(t *testing.T) {
 	if _, err := e.Pool.Exec(context.Background(), `DELETE FROM users WHERE username = 'admin'`); err != nil {
 		t.Fatal(err)
 	}
-	created, err := e.Svc.EnsureBootstrapAdmin(context.Background(), "ops", "recovered passphrase!")
+	created, err := e.Svc.EnsureBootstrapAdmin(context.Background(), "ops", "recovered passphrase!", false)
 	if err != nil || !created {
 		t.Fatalf("promote = %v, %v", created, err)
 	}

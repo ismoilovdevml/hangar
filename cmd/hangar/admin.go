@@ -23,7 +23,13 @@ import (
 
 const adminUsage = `usage:
   hangar admin bootstrap --username NAME --password-stdin [--config FILE]
-        create the first administrator (no-op when an administrator exists)
+        create the first administrator (no-op when an administrator exists);
+        they must set a new password at the first sign-in unless
+        bootstrap.require_password_change is false
+  hangar admin reset-password --user NAME [--config FILE]
+        give a local user a new one-time password, print it once and make
+        them set their own at the next sign-in; clears a lockout and ends
+        their sessions
   hangar admin token create --user NAME --name LABEL --scopes LIST [--expires 90d] [--config FILE]
         create a personal access token for NAME and print it once
         LIST is comma-separated, e.g. "repo:*:read,repo:*:write"
@@ -38,6 +44,8 @@ func adminCmd(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	switch {
 	case len(args) >= 1 && args[0] == "bootstrap":
 		return adminBootstrap(args[1:], stdin, stdout, stderr)
+	case len(args) >= 1 && args[0] == "reset-password":
+		return adminResetPassword(args[1:], stdout, stderr)
 	case len(args) >= 2 && args[0] == "token" && args[1] == "create":
 		return adminTokenCreate(args[2:], stdout, stderr)
 	case len(args) >= 1 && args[0] == "rotate-secrets":
@@ -91,15 +99,45 @@ func adminBootstrap(args []string, stdin io.Reader, stdout, stderr io.Writer) er
 		return err
 	}
 	return withAuth(cfg, log, func(ctx context.Context, svc *auth.Service) error {
-		created, err := svc.EnsureBootstrapAdmin(ctx, *username, password)
+		created, err := svc.EnsureBootstrapAdmin(ctx, *username, password, cfg.Bootstrap.RequirePasswordChange)
 		if err != nil {
 			return err
 		}
-		if created {
+		switch {
+		case created && cfg.Bootstrap.RequirePasswordChange:
+			_, err = fmt.Fprintf(stdout, "administrator %q is ready; they must set a new password at the first sign-in\n", *username)
+		case created:
 			_, err = fmt.Fprintf(stdout, "administrator %q is ready\n", *username)
-		} else {
+		default:
 			_, err = fmt.Fprintln(stdout, "an administrator already exists; nothing changed")
 		}
+		return err
+	})
+}
+
+func adminResetPassword(args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("admin reset-password", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	user := fs.String("user", "", "local user to reset (required)")
+	cfg, log, err := loadConfig(fs, args, stderr)
+	if err != nil {
+		return err
+	}
+	if *user == "" {
+		fs.Usage()
+		return errors.New("--user is required")
+	}
+	return withAuth(cfg, log, func(ctx context.Context, svc *auth.Service) error {
+		password, u, err := svc.ResetPasswordOneTime(ctx, *user)
+		if err != nil {
+			return fmt.Errorf("user %q: %w", *user, err)
+		}
+		note := ""
+		if u.Disabled {
+			note = "; the account is disabled, enable it to sign in"
+		}
+		_, _ = fmt.Fprintf(stderr, "one-time password for %s (shown once; it must be changed at the next sign-in%s):\n", u.Username, note)
+		_, err = fmt.Fprintln(stdout, password)
 		return err
 	})
 }

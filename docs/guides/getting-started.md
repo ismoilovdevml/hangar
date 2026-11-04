@@ -89,9 +89,15 @@ curl http://localhost:8080/api/v1/system/status
 Option A: environment variables (used above). When `HANGAR_BOOTSTRAP_ADMIN_USER`
 and `HANGAR_BOOTSTRAP_ADMIN_PASSWORD` are both set and no enabled administrator
 exists, `hangar serve` creates that local user with the built-in `Admin` role.
-Once an administrator exists, these variables change nothing. Remove
-`HANGAR_BOOTSTRAP_ADMIN_PASSWORD` after the first start and change the password
-(web UI: My account, or `PUT /api/v1/me/password`).
+Once an administrator exists, these variables change nothing. At the first
+sign-in Hangar asks for a new password (unless
+`HANGAR_BOOTSTRAP_REQUIRE_PASSWORD_CHANGE=false`); remove
+`HANGAR_BOOTSTRAP_ADMIN_PASSWORD` after the first start.
+
+Without these variables, the first start of an empty installation creates
+`admin` with a generated one-time password, printed once to the server's
+standard error and written to `HANGAR_BOOTSTRAP_INITIAL_PASSWORD_FILE` when set;
+see [first administrator](../deploy/first-admin.md).
 
 Option B: the CLI, which talks to the database directly (no running server
 needed; it reads the same configuration):
@@ -109,7 +115,8 @@ Five failed password checks within 15 minutes, including HTTP Basic requests wit
 a wrong password, lock the account for 15 minutes (`423`). A client address with
 too many failed authentications is also throttled (`429`, see [api.md](api.md#rate-limits)).
 `hangar admin bootstrap` restores access if every administrator is locked out or
-disabled.
+disabled; `hangar admin reset-password --user NAME` prints a one-time password for
+a local user who lost theirs.
 
 ## 3. Sign in and create a personal access token
 

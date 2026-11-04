@@ -5,7 +5,7 @@
  */
 import { delay, http, HttpResponse } from 'msw';
 import type { ApiError, LoginRequest, OverviewRange, Repository, RepositoryInput, RepositoryType } from '../api/types';
-import { accessHandlers, resetAccessState } from './access';
+import { accessHandlers, resetAccessState, setMockPassword } from './access';
 import { catalogHandlers, resetCatalogState } from './catalog';
 import { findingsHandlers, resetFindingsState } from './findings';
 import * as data from './data';
@@ -23,6 +23,9 @@ const LOCK_SECONDS = 900;
 function initialState() {
   return {
     signedIn: true,
+    /** Signed in as "admin" with a password that must be replaced first. */
+    passwordChangeRequired: false,
+    username: data.session.user.username,
     failedLogins: 0,
     csrf: 'mock-csrf-0',
     sessions: 0,
@@ -34,6 +37,8 @@ let state = initialState();
 
 export function resetMockState(): void {
   state = initialState();
+  // Sign-ins and password changes set the CSRF cookie; start the next test without it.
+  if (typeof document !== 'undefined') document.cookie = 'hangar_csrf=; Path=/; Max-Age=0';
   resetOpsMockState();
   resetAccessState();
   resetCatalogState();
@@ -53,6 +58,12 @@ export const mockState = {
   get csrf() {
     return state.csrf;
   },
+  get passwordChangeRequired() {
+    return state.passwordChangeRequired;
+  },
+  set passwordChangeRequired(v: boolean) {
+    state.passwordChangeRequired = v;
+  },
   get repositories(): readonly Repository[] {
     return state.repositories;
   },
@@ -63,13 +74,39 @@ const error = (status: number, body: ApiError, headers?: Record<string, string>)
 
 const unauthenticated = () => error(401, { code: 'unauthenticated', message: 'not signed in' });
 
+/** Routes a user who must change their password may still call. */
+const PASSWORD_CHANGE_ROUTES = new Set(['GET /auth/session', 'PUT /me/password', 'POST /auth/logout']);
+
 /** Session check plus the CSRF rule the real middleware applies to mutating requests. */
 function guard(request: Request, mutating = false): Response | null {
   if (!state.signedIn) return unauthenticated();
   if (mutating && request.headers.get(CSRF_HEADER) !== state.csrf) {
     return error(403, { code: 'csrf_failed', message: `missing or invalid ${CSRF_HEADER} header` });
   }
+  if (state.passwordChangeRequired) {
+    const path = new URL(request.url).pathname.replace(/^\/api\/v1/, '');
+    if (!PASSWORD_CHANGE_ROUTES.has(`${request.method} ${path}`)) {
+      return error(403, { code: 'password_change_required', message: 'set a new password before doing anything else (PUT /api/v1/me/password)' });
+    }
+  }
   return null;
+}
+
+/** GET /auth/session for the mock user; "admin" is the generated first administrator. */
+function sessionBody() {
+  const base =
+    state.username === 'admin'
+      ? { ...data.session, user: { ...data.session.user, username: 'admin', display_name: 'admin', email: '' } }
+      : data.session;
+  return state.passwordChangeRequired ? { ...base, privileges: [], token_warnings: [], password_change_required: true } : base;
+}
+
+/** PUT /me/password succeeded: the session is re-issued without limits. */
+function passwordChanged() {
+  state.passwordChangeRequired = false;
+  state.sessions++;
+  state.csrf = `mock-csrf-${state.sessions}`;
+  return { [CSRF_HEADER]: state.csrf, 'Set-Cookie': `hangar_csrf=${state.csrf}; Path=/; SameSite=Lax` };
 }
 
 const RANGES: OverviewRange[] = ['1h', 'today', '7d', '30d'];
@@ -143,7 +180,7 @@ export const handlers = [
   http.get(api('/formats'), () => HttpResponse.json({ items: data.formats.map((name) => ({ name })) })),
 
   http.get(api('/auth/session'), () =>
-    state.signedIn ? HttpResponse.json(data.session, { headers: { [CSRF_HEADER]: state.csrf } }) : unauthenticated(),
+    state.signedIn ? HttpResponse.json(sessionBody(), { headers: { [CSRF_HEADER]: state.csrf } }) : unauthenticated(),
   ),
 
   http.post(api('/auth/login'), async ({ request }) => {
@@ -173,7 +210,11 @@ export const handlers = [
     state.signedIn = true;
     state.sessions++;
     state.csrf = `mock-csrf-${state.sessions}`;
-    return HttpResponse.json(data.session, {
+    state.username = body.username;
+    // "admin" plays the generated first administrator: its password must be replaced.
+    state.passwordChangeRequired = body.username === 'admin';
+    if (state.passwordChangeRequired) setMockPassword(body.password);
+    return HttpResponse.json(sessionBody(), {
       headers: { [CSRF_HEADER]: state.csrf, 'Set-Cookie': `hangar_csrf=${state.csrf}; Path=/; SameSite=Lax` },
     });
   }),
@@ -182,6 +223,7 @@ export const handlers = [
     const denied = guard(request, true);
     if (denied && denied.status === 403) return denied;
     state.signedIn = false;
+    state.passwordChangeRequired = false;
     return new HttpResponse(null, { status: 204, headers: { 'Set-Cookie': 'hangar_csrf=; Path=/; Max-Age=0' } });
   }),
 
@@ -318,7 +360,7 @@ export const handlers = [
   ...opsHandlers(guard),
   ...systemHandlers(guard),
 
-  ...accessHandlers(guard),
+  ...accessHandlers(guard, passwordChanged),
 
   http.get(api('/events'), ({ request }) =>
     guard(request) ??

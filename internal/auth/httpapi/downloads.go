@@ -37,7 +37,9 @@ func DownloadSessions(svc *auth.Service) func(http.Handler) http.Handler {
 				return
 			}
 			p, _, err := svc.SessionPrincipal(r.Context(), c.Value)
-			if err != nil {
+			// A user who must change their password downloads nothing
+			// with the session until they have.
+			if err != nil || p.PasswordChangeRequired {
 				next.ServeHTTP(w, r)
 				return
 			}

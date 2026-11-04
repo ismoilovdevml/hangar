@@ -36,6 +36,9 @@ type User struct {
 	UpdatedAt    time.Time  `json:"updated_at"`
 	// PasswordSet reports whether the user has a local password.
 	PasswordSet bool `json:"password_set"`
+	// MustChangePassword: the local user has to set a new password before
+	// anything else (first sign-in, one-time password, administrator request).
+	MustChangePassword bool `json:"must_change_password"`
 
 	passwordHash string
 	failedLogins int
@@ -48,13 +51,14 @@ const userCols = `u.id::text, u.username, u.kind, coalesce(u.email, ''), u.displ
 	coalesce((SELECT array_agg(r.name ORDER BY r.name) FROM role_bindings b JOIN roles r ON r.id = b.role_id
 	          WHERE b.user_id = u.id AND b.subject_kind = 'user'), '{}'),
 	(SELECT count(*) FROM tokens t WHERE t.user_id = u.id AND t.kind = 'personal'
-	   AND t.revoked_at IS NULL AND t.expires_at > now())`
+	   AND t.revoked_at IS NULL AND t.expires_at > now()),
+	u.must_change_password`
 
 func scanUser(row pgx.Row, extra ...any) (*User, error) {
 	u := &User{}
 	dest := append([]any{&u.ID, &u.Username, &u.Kind, &u.Email, &u.DisplayName, &u.Source,
 		&u.Disabled, &u.LockedUntil, &u.passwordHash, &u.failedLogins, &u.LastActiveAt,
-		&u.CreatedAt, &u.UpdatedAt, &u.Description, &u.Roles, &u.TokenCount}, extra...)
+		&u.CreatedAt, &u.UpdatedAt, &u.Description, &u.Roles, &u.TokenCount, &u.MustChangePassword}, extra...)
 	if err := row.Scan(dest...); err != nil {
 		return nil, err
 	}
@@ -62,7 +66,8 @@ func scanUser(row pgx.Row, extra ...any) (*User, error) {
 	return u, nil
 }
 
-// principal is the core.Principal for u.
+// principal is the core.Principal for u. A password sign-in (any source
+// but a token) of a user who must change their password is restricted.
 func (u *User) principal(source string) *core.Principal {
 	kind := core.PrincipalUser
 	if u.Kind == KindServiceAccount {
@@ -76,6 +81,8 @@ func (u *User) principal(source string) *core.Principal {
 		DisplayName: u.DisplayName,
 		Source:      source,
 		Roles:       append([]string{}, u.Roles...),
+
+		PasswordChangeRequired: u.MustChangePassword && source != SourceToken,
 	}
 }
 

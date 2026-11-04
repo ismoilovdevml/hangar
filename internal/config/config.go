@@ -89,6 +89,17 @@ type Bootstrap struct {
 	// Nothing changes once an administrator exists.
 	AdminUser     string `yaml:"admin_user"`
 	AdminPassword string `yaml:"admin_password"` // from env; masked by Redacted
+	// RequirePasswordChange makes the administrator created from AdminUser
+	// and AdminPassword, or by `hangar admin bootstrap`, set a new password
+	// at the first sign-in (default true).
+	RequirePasswordChange bool `yaml:"require_password_change"`
+	// InitialPasswordFile (HANGAR_BOOTSTRAP_INITIAL_PASSWORD_FILE): without
+	// AdminUser, the first start of an empty installation creates the local
+	// administrator "admin" with a one-time password. If this file holds a
+	// password, that one is used; otherwise one is generated, printed once
+	// to standard error and written here (mode 0600). The file is deleted
+	// after the administrator sets a new password.
+	InitialPasswordFile string `yaml:"initial_password_file"`
 }
 
 // Server configures the HTTP listener.
@@ -314,6 +325,7 @@ func Default() Config {
 			Tracing:   Tracing{SampleRatio: 0.1, ServiceName: "hangar"},
 			AccessLog: AccessLog{SampleRatio: 1},
 		},
+		Bootstrap: Bootstrap{RequirePasswordChange: true},
 	}
 }
 

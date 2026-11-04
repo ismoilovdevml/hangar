@@ -81,6 +81,23 @@ export function signalUnauthorized(): void {
   onUnauthorized?.();
 }
 
+/** Error code of every call made while the signed-in user must change their password. */
+export const PASSWORD_CHANGE_REQUIRED = 'password_change_required';
+
+let onPasswordChangeRequired: (() => void) | null = null;
+
+/**
+ * Called when an API call answers 403 `password_change_required` (an
+ * administrator required a new password while this session was open). The app
+ * sends the user to the change-password page; returns the unregister function.
+ */
+export function setPasswordChangeHandler(fn: (() => void) | null): () => void {
+  onPasswordChangeRequired = fn;
+  return () => {
+    if (onPasswordChangeRequired === fn) onPasswordChangeRequired = null;
+  };
+}
+
 /* ---------------------------------------------------------------- fetch */
 
 type Query = Record<string, string | number | boolean | null | undefined>;
@@ -171,6 +188,7 @@ export async function apiFetch<T>(path: string, init: ApiFetchInit = {}): Promis
   if (!res.ok) {
     const err = await toError(res);
     if (err.status === 401 && !init.allowUnauthorized) onUnauthorized?.();
+    if (err.status === 403 && err.code === PASSWORD_CHANGE_REQUIRED) onPasswordChangeRequired?.();
     throw err;
   }
   if (res.status === 204) return undefined as T;

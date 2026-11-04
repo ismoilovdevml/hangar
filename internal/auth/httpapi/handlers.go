@@ -157,6 +157,14 @@ type tokenPolicy struct {
 	ExpiryWarning   string `json:"expiry_warning"`
 }
 
+// passwordPolicy is schema PasswordPolicy.
+type passwordPolicy struct {
+	MinLength     int  `json:"min_length"`
+	MaxLength     int  `json:"max_length"`
+	MinClasses    int  `json:"min_classes"`
+	AllowUsername bool `json:"allow_username"`
+}
+
 // sessionBody is schema Session.
 type sessionBody struct {
 	User          sessionUser       `json:"user"`
@@ -165,6 +173,10 @@ type sessionBody struct {
 	AuthMethod    string            `json:"auth_method"`
 	TokenPolicy   tokenPolicy       `json:"token_policy"`
 	TokenWarnings []*auth.TokenInfo `json:"token_warnings"`
+	// PasswordChangeRequired: only GET /auth/session, PUT /me/password and
+	// POST /auth/logout answer until the password is changed.
+	PasswordChangeRequired bool           `json:"password_change_required"`
+	PasswordPolicy         passwordPolicy `json:"password_policy"`
 }
 
 // Values of Session.auth_method.
@@ -198,10 +210,12 @@ func (h *handler) writeSession(w http.ResponseWriter, r *http.Request, p *core.P
 		h.writeError(w, r, err)
 		return
 	}
-	warnings, err := h.svc.TokenWarnings(ctx)
-	if err != nil {
-		h.writeError(w, r, err)
-		return
+	warnings := []*auth.TokenInfo{}
+	if !p.PasswordChangeRequired {
+		if warnings, err = h.svc.TokenWarnings(ctx); err != nil {
+			h.writeError(w, r, err)
+			return
+		}
 	}
 	display := p.DisplayName
 	if display == "" {
@@ -228,7 +242,12 @@ func (h *handler) writeSession(w http.ResponseWriter, r *http.Request, p *core.P
 			MaxLifetimeDays: int(h.cfg.MaxTokenLifetime / (24 * time.Hour)),
 			ExpiryWarning:   h.cfg.TokenExpiryWarning.String(),
 		},
-		TokenWarnings: warnings,
+		TokenWarnings:          nonNil(warnings),
+		PasswordChangeRequired: p.PasswordChangeRequired,
+		PasswordPolicy: passwordPolicy{
+			MinLength: h.cfg.Password.MinLength, MaxLength: h.cfg.Password.MaxLength,
+			MinClasses: h.cfg.Password.MinClasses, AllowUsername: h.cfg.Password.AllowUsername,
+		},
 	})
 }
 
@@ -303,14 +322,18 @@ type member struct {
 	LockedUntil  *time.Time `json:"locked_until"`
 	LastActiveAt *time.Time `json:"last_active_at"`
 	PasswordSet  bool       `json:"password_set"`
-	CreatedAt    time.Time  `json:"created_at"`
+	// MustChangePassword: the user has to set a new password at the next
+	// sign-in (or request) before anything else.
+	MustChangePassword bool      `json:"must_change_password"`
+	CreatedAt          time.Time `json:"created_at"`
 }
 
 func toMember(u *auth.User, now time.Time) member {
 	m := member{
 		ID: u.ID, Username: u.Username, Kind: u.Kind, DisplayName: u.DisplayName, Description: u.Description,
 		Source: u.Source, Roles: nonNil(u.Roles), TokenCount: u.TokenCount, Disabled: u.Disabled,
-		LastActiveAt: u.LastActiveAt, PasswordSet: u.PasswordSet, CreatedAt: u.CreatedAt,
+		LastActiveAt: u.LastActiveAt, PasswordSet: u.PasswordSet, MustChangePassword: u.MustChangePassword,
+		CreatedAt: u.CreatedAt,
 	}
 	if u.Email != "" {
 		m.Email = &u.Email

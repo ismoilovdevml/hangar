@@ -38,6 +38,10 @@ type Principal struct {
 	TokenID string `json:"token_id,omitempty"`
 	// Claims are the TokenRequest.Extra values of the session token used, if any.
 	Claims map[string]any `json:"claims,omitempty"`
+	// PasswordChangeRequired marks a local user who signed in with a
+	// password that must be replaced first. Such a principal is authorized
+	// for nothing; only the password change itself is open to it.
+	PasswordChangeRequired bool `json:"-"`
 }
 
 // Anonymous returns the principal for requests without credentials.

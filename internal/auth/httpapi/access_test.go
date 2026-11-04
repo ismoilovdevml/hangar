@@ -265,6 +265,15 @@ func TestMyAccount(t *testing.T) {
 	expect(t, resp, body, http.StatusBadRequest, "invalid_argument")
 	resp, body = c1.do(http.MethodPut, "/me/password", map[string]any{"current_password": pw, "new_password": "a fresh passphrase"})
 	expect(t, resp, body, http.StatusNoContent, "")
+	// The session is re-issued: new id, new CSRF token.
+	c1.csrf = resp.Header.Get("X-CSRF-Token")
+	resp, body = c1.do(http.MethodGet, "/me/sessions", nil)
+	expect(t, resp, body, http.StatusOK, "")
+	if items := body["items"].([]any); len(items) != 1 || items[0].(map[string]any)["id"] == current {
+		t.Fatalf("sessions after the change = %v", items)
+	} else {
+		current = items[0].(map[string]any)["id"].(string)
+	}
 	resp, body = c1.do(http.MethodGet, "/auth/session", nil)
 	expect(t, resp, body, http.StatusOK, "")
 	resp, body = c2.do(http.MethodGet, "/auth/session", nil)

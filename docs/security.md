@@ -84,7 +84,15 @@ A lost key cannot be recovered: re-enter the affected credentials.
       `hangar.yaml` (`storage.s3.secret_access_key`, `http.proxy_password`,
       `bootstrap.admin_password`).
 - [ ] After the first start, remove `HANGAR_BOOTSTRAP_ADMIN_PASSWORD` from the
-      environment and sign in to change the bootstrap password.
+      environment and sign in to change the bootstrap password (Hangar
+      requires it unless `bootstrap.require_password_change` is `false`).
+- [ ] Without bootstrap settings, the first start generates the `admin`
+      password and prints it once to standard error (never into the
+      System logs buffer) and to `bootstrap.initial_password_file` (mode
+      `0600`). Sign in and replace it promptly: until then the account can do
+      nothing else, and the file is deleted after the change. Treat container
+      logs from the first start as sensitive. See
+      [first administrator](deploy/first-admin.md).
 - [ ] Give CI tokens the narrowest scopes (`repo:<name>:write`) and an
       expiry; prefer service accounts over personal tokens.
 - [ ] Leave `anonymous_read` off except for repositories that are meant to

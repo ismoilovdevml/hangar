@@ -183,6 +183,9 @@ func (s *Service) ChangePassword(ctx context.Context, current, next, keepSession
 		return errWrongPassword
 	}
 	if current == next {
+		if u.MustChangePassword {
+			return fmt.Errorf("choose a new password; the one you were given cannot be kept: %w", core.ErrInvalid)
+		}
 		return fmt.Errorf("the new password must differ from the current one: %w", core.ErrInvalid)
 	}
 	if err := s.cfg.Password.Check(u.Username, next); err != nil {
@@ -196,7 +199,7 @@ func (s *Service) ChangePassword(ctx context.Context, current, next, keepSession
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
 			UPDATE users SET password_hash = $2, password_changed_at = now(), failed_logins = 0,
-				failed_window_start = NULL, locked_until = NULL, updated_at = now()
+				failed_window_start = NULL, locked_until = NULL, must_change_password = false, updated_at = now()
 			WHERE id = $1 AND password_hash = $3`, u.ID, hash, u.passwordHash)
 		if err != nil {
 			return dbErr(err, "change password")
@@ -211,10 +214,18 @@ func (s *Service) ChangePassword(ctx context.Context, current, next, keepSession
 		return err
 	}
 	s.credentialsChanged()
-	s.record(ctx, core.AuditEvent{
-		Action: AuditUserPassword, Target: "user:" + u.Username,
-		Details: map[string]any{"id": u.ID, "self": true, "other_sessions_ended": ended},
-	})
+	if u.MustChangePassword {
+		s.record(ctx, core.AuditEvent{
+			Action: AuditUserPasswordChanged, Target: "user:" + u.Username,
+			Details: map[string]any{"id": u.ID, "self": true, "reason": "first_login", "other_sessions_ended": ended},
+		})
+	} else {
+		s.record(ctx, core.AuditEvent{
+			Action: AuditUserPassword, Target: "user:" + u.Username,
+			Details: map[string]any{"id": u.ID, "self": true, "other_sessions_ended": ended},
+		})
+	}
+	s.discardInitialPassword(ctx, func(stored string) bool { return equalSecret(stored, current) })
 	return nil
 }
 

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { RouterProvider, useRouterState, type RouterHistory } from '@tanstack/react-router';
-import { setUnauthorizedHandler } from './api/client';
+import { setPasswordChangeHandler, setUnauthorizedHandler } from './api/client';
+import { queryKeys } from './api/hooks';
 import { createQueryClient } from './lib/queryClient';
 import { createAppRouter } from './router';
 
@@ -28,6 +29,19 @@ export function App({ queryClient, history }: { queryClient?: QueryClient; histo
         if (loc.pathname === '/login') return;
         qc.clear();
         void router.navigate({ to: '/login', search: { redirect: loc.href }, replace: true });
+      }),
+    [qc, router],
+  );
+
+  // 403 password_change_required: the account must set a new password before
+  // anything else (an administrator asked for it while this tab was open).
+  useEffect(
+    () =>
+      setPasswordChangeHandler(() => {
+        const loc = router.state.location;
+        if (loc.pathname === '/change-password' || loc.pathname === '/login') return;
+        void qc.invalidateQueries({ queryKey: queryKeys.session });
+        void router.navigate({ to: '/change-password', search: { redirect: loc.href }, replace: true });
       }),
     [qc, router],
   );

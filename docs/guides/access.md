@@ -198,7 +198,12 @@ Sign-in with an OIDC provider or LDAP / Active Directory is configured under
 
 - Recover access when every administrator is locked out or disabled with
   `hangar admin bootstrap` (see `hangar admin --help`); it only acts when no
-  enabled administrator exists.
+  enabled administrator exists. `hangar admin reset-password --user NAME`
+  gives a local user a one-time password they must replace at the next
+  sign-in.
+- **Require password change** (member actions) makes a local member set a new
+  password before they can do anything else; it is audited as
+  `user.password.require_change`. Their access tokens keep working.
 - Service-account tokens are the right way to give CI access. Do not create
   local members for pipelines.
 - Rotate tokens before they expire: create the new one, update the CI secret,

@@ -279,9 +279,20 @@ docker:
 # First administrator, created on start when both are set and no enabled
 # administrator exists. Nothing changes once one exists; remove them after
 # the first sign-in. Alternative: `hangar admin bootstrap`.
+#
+# Without admin_user, the first start of an empty installation creates the
+# local user "admin" with a one-time password: read from
+# initial_password_file when that file holds one, otherwise generated,
+# printed once to standard error and written to initial_password_file (mode
+# 0600). The file is deleted after the administrator sets a new password.
 bootstrap:
   admin_user: ""
   admin_password: "" # use HANGAR_BOOTSTRAP_ADMIN_PASSWORD
+  # The administrator created from admin_user / admin_password or by
+  # `hangar admin bootstrap` must set a new password at the first sign-in.
+  # Set to false for automated setups that use the password as given.
+  require_password_change: true
+  initial_password_file: "" # e.g. /var/lib/hangar/secrets/initial-admin-password
 
 scanner:
   # Reserved for container image scanning (not active yet): Docker images

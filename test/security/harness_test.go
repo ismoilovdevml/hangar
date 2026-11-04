@@ -173,6 +173,8 @@ func start() (*harness, func(), error) {
 		"HANGAR_LOG_LEVEL=warn",
 		"HANGAR_BOOTSTRAP_ADMIN_USER="+adminUser,
 		"HANGAR_BOOTSTRAP_ADMIN_PASSWORD="+adminPassword,
+		// The sweep signs in as this administrator right away.
+		"HANGAR_BOOTSTRAP_REQUIRE_PASSWORD_CHANGE=false",
 		"HANGAR_SECRET_KEY="+h.key,
 		"HANGAR_DOCKER_TOKEN_KEY="+randomHex(32),
 		"HANGAR_HTTP_USE_ENVIRONMENT=false",

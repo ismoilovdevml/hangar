@@ -85,6 +85,9 @@ func (a *Authorizer) Authorize(ctx context.Context, p *core.Principal, action co
 	if p == nil {
 		p = core.Anonymous()
 	}
+	if p.PasswordChangeRequired {
+		return ErrPasswordChangeRequired
+	}
 	key := decisionKey(p, action, res)
 	allowed, ok := a.decisions.get(key)
 	if !ok {
@@ -139,7 +142,7 @@ func (a *Authorizer) anonymousRead(ctx context.Context, repo string) (bool, erro
 // actions it cannot take. For scoped tokens it is the (conservative)
 // intersection of role privileges and scopes.
 func (a *Authorizer) Privileges(ctx context.Context, p *core.Principal) ([]core.Privilege, error) {
-	if p.IsAnonymous() {
+	if p.IsAnonymous() || p.PasswordChangeRequired {
 		return []core.Privilege{}, nil
 	}
 	privs, err := a.rolePrivileges(ctx, p.Roles)

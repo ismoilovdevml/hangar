@@ -18,6 +18,12 @@ info:
     - Authentication: session cookie (browser), or `Authorization: Bearer hgr_...`
       (personal access / service-account token), or HTTP Basic with a token as
       the password. Every mutating call is authorized and audited.
+    - A local user who must change their password (the generated first
+      administrator, a one-time password, or an administrator's request) and
+      signs in with that password may only call `GET /auth/session`,
+      `PUT /me/password` and `POST /auth/logout` (plus the endpoints open to
+      everyone, served as for a visitor). Every other call answers 403 with
+      code `password_change_required`. Their access tokens are not affected.
   license:
     name: See repository
     url: https://github.com/ismoilovdevml/hangar
@@ -161,6 +167,9 @@ paths:
       tags: [auth]
       operationId: getSession
       summary: Current user and organization
+      description: |
+        With `password_change_required` the session is limited to this call,
+        `PUT /me/password` and `POST /auth/logout` until the password is changed.
       responses:
         "200":
           description: Active session
@@ -212,14 +221,25 @@ paths:
         Needs the current password; wrong guesses count towards the account
         lockout. Not available to token-authenticated requests. Every other
         session of yours ends and short-lived session tokens are revoked;
-        personal access tokens keep working.
+        personal access tokens keep working. The session making the request is
+        replaced by a new one (new cookie and CSRF token).
+
+        When a password change was required (`password_change_required`), it
+        clears that state, the new password must differ from the one given,
+        the change is audited as `user.password.changed` with reason
+        `first_login`, and the initial administrator password file is
+        deleted if it held the old password.
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: "#/components/schemas/PasswordChange" }
       responses:
-        "204": { description: Changed }
+        "204":
+          description: Changed; `Set-Cookie` carries the new session
+          headers:
+            Set-Cookie:
+              schema: { type: string }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1892,6 +1912,29 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /users/{id}/require-password-change:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [access]
+      operationId: requireUserPasswordChange
+      summary: Make a local user set a new password before anything else
+      description: |
+        Needs `system:users:write`. From the user's next request on, their
+        sessions and password sign-ins are limited to changing the password
+        (see `password_change_required`); their access tokens keep working.
+        Local users with a password only; not yourself. Audited as
+        `user.password.require_change`. Repeating it changes nothing.
+      responses:
+        "200":
+          description: The user, with `must_change_password` set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Member" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /users/{id}/permissions:
     parameters:
       - $ref: "#/components/parameters/Id"
@@ -2643,7 +2686,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     Forbidden:
-      description: Missing privilege
+      description: Missing privilege, or (code `password_change_required`) the password must be changed first
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -2674,7 +2717,7 @@ components:
       properties:
         code:
           type: string
-          description: Machine-readable code, e.g. `not_found`, `forbidden`, `invalid_argument`, `locked`
+          description: Machine-readable code, e.g. `not_found`, `forbidden`, `invalid_argument`, `locked`, `password_change_required`
         message: { type: string }
         retry_after:
           type: integer
@@ -2809,6 +2852,27 @@ components:
             Live tokens expiring within `token_policy.expiry_warning`, soonest first:
             the caller's own and, with `system:tokens:read`, service accounts' tokens.
           items: { $ref: "#/components/schemas/Token" }
+        password_change_required:
+          type: boolean
+          description: |
+            The user signed in with a password they must replace (first sign-in,
+            one-time password, administrator request). Until `PUT /me/password`
+            succeeds only `GET /auth/session`, `PUT /me/password` and
+            `POST /auth/logout` answer; `privileges` is empty.
+        password_policy: { $ref: "#/components/schemas/PasswordPolicy" }
+    PasswordPolicy:
+      type: object
+      description: Rules new local passwords must meet (`auth.password`)
+      required: [min_length, max_length, min_classes, allow_username]
+      properties:
+        min_length: { type: integer, description: Minimum length in characters }
+        max_length: { type: integer, description: Maximum length in characters }
+        min_classes:
+          type: integer
+          description: How many of lower case, upper case, digits and symbols must appear (0 = no rule)
+        allow_username:
+          type: boolean
+          description: Whether the password may contain the username
     TokenPolicy:
       type: object
       required: [max_lifetime, max_lifetime_days, expiry_warning]
@@ -4463,6 +4527,9 @@ components:
         password_set:
           type: boolean
           description: Whether the user has a local password
+        must_change_password:
+          type: boolean
+          description: The user has to set a new password before doing anything else
         created_at: { $ref: "#/components/schemas/Timestamp" }
     MemberInput:
       type: object

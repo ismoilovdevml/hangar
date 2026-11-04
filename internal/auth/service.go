@@ -55,6 +55,15 @@ const (
 	AuditRoleDelete      = "role.delete"
 )
 
+// Audit actions of the required password change.
+const (
+	// AuditUserPasswordChanged: a user who had to replace their password
+	// (first sign-in, one-time password, administrator request) did.
+	AuditUserPasswordChanged = "user.password.changed"
+	// AuditUserPasswordRequire: an administrator required a password change.
+	AuditUserPasswordRequire = "user.password.require_change"
+)
+
 // Options are the collaborators of a Service.
 type Options struct {
 	Config Config
@@ -67,7 +76,11 @@ type Options struct {
 	Repos core.RepositoryService
 	// Directory is required when Config.LDAP is enabled.
 	Directory Directory
-	Logger    *slog.Logger
+	// InitialPasswordFile (bootstrap.initial_password_file) holds the first
+	// administrator's one-time password; see EnsureInitialAdmin. It is
+	// deleted once that password is replaced.
+	InitialPasswordFile string
+	Logger              *slog.Logger
 	// Now overrides the clock (tests).
 	Now func() time.Time
 }
@@ -90,6 +103,8 @@ type Service struct {
 	hasher    *Hasher
 	dummyHash string
 	authz     *Authorizer
+
+	initialPasswordFile string
 
 	basicKey []byte
 	basic    *ttlCache[[32]byte, string] // HMAC(username, password) -> user id
@@ -121,17 +136,19 @@ func New(pool *pgxpool.Pool, opts Options) (*Service, error) {
 		return nil, err
 	}
 	s := &Service{
-		pool:       pool,
-		cfg:        cfg,
-		audit:      opts.Audit,
-		events:     opts.Events,
-		log:        opts.Logger,
-		now:        opts.Now,
-		hasher:     NewHasher(cfg.Argon2, cfg.MaxConcurrentHashes),
-		tokenUsage: map[string]tokenUse{},
-		userUsage:  map[string]time.Time{},
-		stop:       make(chan struct{}),
-		done:       make(chan struct{}),
+		pool:   pool,
+		cfg:    cfg,
+		audit:  opts.Audit,
+		events: opts.Events,
+		log:    opts.Logger,
+		now:    opts.Now,
+		hasher: NewHasher(cfg.Argon2, cfg.MaxConcurrentHashes),
+
+		initialPasswordFile: opts.InitialPasswordFile,
+		tokenUsage:          map[string]tokenUse{},
+		userUsage:           map[string]time.Time{},
+		stop:                make(chan struct{}),
+		done:                make(chan struct{}),
 	}
 	if s.log == nil {
 		s.log = slog.Default()

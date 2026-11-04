@@ -24,6 +24,9 @@ func (s *Service) Issue(ctx context.Context, p *core.Principal, req core.TokenRe
 	if p.IsAnonymous() || !validUUID(p.ID) {
 		return "", time.Time{}, fmt.Errorf("issue token: %w", core.ErrUnauthenticated)
 	}
+	if p.PasswordChangeRequired {
+		return "", time.Time{}, ErrPasswordChangeRequired
+	}
 	ttl := req.TTL
 	if ttl <= 0 {
 		ttl = s.cfg.SessionTokenTTL
@@ -106,6 +109,11 @@ func (s *Service) CreateToken(ctx context.Context, in TokenInput) (*TokenInfo, s
 	p := core.PrincipalFrom(ctx)
 	if p.IsAnonymous() || !validUUID(p.ID) {
 		return nil, "", fmt.Errorf("create token: %w", core.ErrUnauthenticated)
+	}
+	// Checked against the account, not the principal: a token or the CLI
+	// acting for a user who must change their password may not mint one.
+	if err := s.checkPasswordCurrent(ctx, p); err != nil {
+		return nil, "", err
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	now := s.now()
