@@ -316,6 +316,12 @@ export function resetOpsMockState(): void {
   state = initialState();
 }
 
+/** Appends an audit event recorded by another mock area (newest first), so GET /audit sees it. */
+export function recordMockAudit(e: Omit<AuditEvent, 'id'>): void {
+  const id = state.audit.reduce((m, x) => Math.max(m, x.id), 0) + 1;
+  state.audit.unshift({ ...e, id });
+}
+
 /** Test helpers. */
 export const opsMockState = {
   get policies(): readonly CleanupPolicy[] {

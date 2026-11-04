@@ -89,6 +89,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change your own display name and email (local accounts) */
+        put: operations["updateMyProfile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change your own password
+         * @description Needs the current password; wrong guesses count towards the account
+         *     lockout. Not available to token-authenticated requests. Every other
+         *     session of yours ends and short-lived session tokens are revoked;
+         *     personal access tokens keep working.
+         */
+        put: operations["changeMyPassword"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your active browser sessions, most recently used first */
+        get: operations["listMySessions"];
+        put?: never;
+        post?: never;
+        /** Sign out everywhere else (every session except the current one) */
+        delete: operations["revokeMyOtherSessions"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/sessions/{sid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sid: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** End one of your sessions (ending the current one signs you out) */
+        delete: operations["revokeMySession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/status": {
         parameters: {
             query?: never;
@@ -625,7 +702,158 @@ export interface paths {
         get: operations["getUser"];
         put: operations["updateUser"];
         post?: never;
+        /** @description Deletes the user with their tokens, sessions and role bindings. You cannot delete yourself or the last enabled administrator. */
         delete: operations["deleteUser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clear a lockout after failed sign-ins */
+        post: operations["unlockUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable an account
+         * @description Ends the account's sessions; its tokens stop working until it is enabled again. You cannot disable yourself or the last enabled administrator.
+         */
+        post: operations["disableUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable a disabled account */
+        post: operations["enableUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set another local user's password
+         * @description Clears any lockout and ends all of the user's sessions. Change your own password with `PUT /me/password`.
+         */
+        put: operations["resetUserPassword"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Effective permissions of a user, and why
+         * @description For every repository and system area the user can act on: the allowed
+         *     actions and each grant behind them (role and privilege, or the
+         *     repository's anonymous read). Needs `system:users:read`, or the user
+         *     themself.
+         */
+        get: operations["getUserPermissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A user's active browser sessions */
+        get: operations["listUserSessions"];
+        put?: never;
+        post?: never;
+        /**
+         * End every session of a user
+         * @description Also revokes the user's short-lived session tokens. When the user is the caller, the current session is kept.
+         */
+        delete: operations["revokeUserSessions"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/sessions/{sid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+                sid: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** End one session of a user */
+        delete: operations["revokeUserSession"];
         options?: never;
         head?: never;
         patch?: never;
@@ -656,10 +884,52 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        get: operations["getRole"];
         put: operations["updateRole"];
         post?: never;
         delete: operations["deleteRole"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/roles/{name}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Grant the role to a user (no-op if they have it) */
+        post: operations["addRoleMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/roles/{name}/members/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Take the role away from a user
+         * @description The last enabled administrator keeps the Admin role.
+         */
+        delete: operations["removeRoleMember"];
         options?: never;
         head?: never;
         patch?: never;
@@ -689,9 +959,19 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The caller's tokens; with `system:tokens:admin`, `owner` selects another principal. */
+        /**
+         * @description The caller's live (not revoked) tokens, newest first, expired ones included.
+         *     With `system:tokens:read`, `owner` selects another principal and `all=true`
+         *     lists everyone's.
+         */
         get: operations["listTokens"];
         put?: never;
+        /**
+         * @description A personal access token for the caller, or (with `system:tokens:write`)
+         *     a token for the service account named in `owner`. A token never grants
+         *     more than its owner's roles: requests need both a role privilege and a
+         *     matching scope.
+         */
         post: operations["createToken"];
         delete?: never;
         options?: never;
@@ -711,6 +991,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** @description Your own tokens, or anyone's with `system:tokens:delete`. Tokens minted from it stop working too. */
         delete: operations["revokeToken"];
         options?: never;
         head?: never;
@@ -895,6 +1176,15 @@ export interface components {
             username: string;
             display_name: string;
             email: string;
+            /** @enum {string} */
+            kind?: "user" | "service_account";
+            /**
+             * @description Where the identity lives; only `local` users have a password to change here
+             * @enum {string}
+             */
+            source?: "local" | "oidc" | "ldap" | "saml";
+            /** @description Roles bound directly to the user */
+            roles?: string[];
         };
         Organization: {
             slug: string;
@@ -907,6 +1197,23 @@ export interface components {
             organization: components["schemas"]["Organization"];
             /** @description Effective privileges, so the UI can hide actions the user cannot take */
             privileges?: components["schemas"]["Privilege"][];
+            /**
+             * @description How this request authenticated
+             * @enum {string}
+             */
+            auth_method?: "session" | "token" | "basic";
+            token_policy?: components["schemas"]["TokenPolicy"];
+            /**
+             * @description Live tokens expiring within `token_policy.expiry_warning`, soonest first:
+             *     the caller's own and, with `system:tokens:read`, service accounts' tokens.
+             */
+            token_warnings?: components["schemas"]["Token"][];
+        };
+        TokenPolicy: {
+            max_lifetime: components["schemas"]["Duration"];
+            /** @description `max_lifetime` in whole days, for expiry pickers */
+            max_lifetime_days: number;
+            expiry_warning: components["schemas"]["Duration"];
         };
         ClientEndpoint: {
             format: components["schemas"]["Format"];
@@ -1451,12 +1758,18 @@ export interface components {
             /** @enum {string} */
             source: "local" | "oidc" | "ldap" | "saml";
             roles: string[];
+            /** @description Live (unrevoked, unexpired) personal or service-account tokens */
             token_count: number;
             disabled?: boolean;
             /** Format: date-time */
             locked_until?: string | null;
             /** Format: date-time */
             last_active_at?: string | null;
+            /** @description Free-text note, mostly for service accounts */
+            description?: string;
+            /** @description Whether the user has a local password */
+            password_set?: boolean;
+            created_at?: components["schemas"]["Timestamp"];
         };
         MemberInput: {
             username: string;
@@ -1464,7 +1777,11 @@ export interface components {
             kind: "user" | "service_account";
             display_name?: string;
             email?: string;
-            /** @description Local users only */
+            description?: string;
+            /**
+             * @description Local users only. To change your own password use `PUT /me/password`,
+             *     for others prefer `PUT /users/{id}/password`.
+             */
             password?: string;
             roles?: string[];
             disabled?: boolean;
@@ -1512,6 +1829,10 @@ export interface components {
             id: string;
             name: string;
             owner: string;
+            /** @enum {string} */
+            owner_kind?: "user" | "service_account";
+            /** @description Client address of the latest use */
+            last_used_ip?: string | null;
             /** @description First characters of the secret, for recognition (`hgr_1a2b`) */
             prefix: string;
             scopes: components["schemas"]["Privilege"][];
@@ -1527,6 +1848,89 @@ export interface components {
         TokenPage: {
             items: components["schemas"]["Token"][];
             next_cursor?: components["schemas"]["NextCursor"];
+        };
+        ProfileInput: {
+            display_name?: string;
+            /** @description Empty clears it */
+            email?: string;
+        };
+        PasswordChange: {
+            /** Format: password */
+            current_password: string;
+            /** Format: password */
+            new_password: string;
+        };
+        PasswordReset: {
+            /** Format: password */
+            password: string;
+        };
+        SessionInfo: {
+            id: string;
+            created_at: components["schemas"]["Timestamp"];
+            /** @description Updated at most once a minute */
+            last_seen_at: components["schemas"]["Timestamp"];
+            expires_at: components["schemas"]["Timestamp"];
+            ip: string | null;
+            user_agent: string;
+            remember: boolean;
+            /** @description The session making this request */
+            current: boolean;
+        };
+        SessionInfoList: {
+            items: components["schemas"]["SessionInfo"][];
+        };
+        SessionsEnded: {
+            ended: number;
+        };
+        RoleMemberInput: {
+            user_id: string;
+        };
+        /** @enum {string} */
+        Action: "read" | "write" | "delete" | "admin";
+        PermissionGrant: {
+            action: components["schemas"]["Action"];
+            /**
+             * @description `role`: a privilege of one of the user's roles; `anonymous`: the repository allows anonymous read
+             * @enum {string}
+             */
+            source: "role" | "anonymous";
+            role?: string;
+            privilege?: components["schemas"]["Privilege"];
+        };
+        ResourcePermissions: {
+            /**
+             * @example repo:npm-hosted
+             * @example system:audit
+             */
+            resource: string;
+            name: string;
+            /** @description Repositories only */
+            format?: string;
+            /** @description Repositories only */
+            type?: string;
+            anonymous_read?: boolean;
+            actions: components["schemas"]["Action"][];
+            grants: components["schemas"]["PermissionGrant"][];
+        };
+        RoleGrant: {
+            name: string;
+            builtin: boolean;
+            privileges: components["schemas"]["Privilege"][];
+        };
+        EffectivePermissions: {
+            user_id: string;
+            username: string;
+            /** @enum {string} */
+            kind: "user" | "service_account";
+            /** @description A disabled account can do nothing now; the lists show what applies once enabled */
+            disabled: boolean;
+            locked: boolean;
+            roles: components["schemas"]["RoleGrant"][];
+            /** @description Repositories with at least one allowed action, by name */
+            repositories: components["schemas"]["ResourcePermissions"][];
+            system: components["schemas"]["ResourcePermissions"][];
+            /** @description What the report cannot show (group-mapped roles, token scopes) */
+            notes: string[];
         };
         AuditEvent: {
             /** Format: int64 */
@@ -1702,6 +2106,7 @@ export interface components {
         Cursor: string;
         Limit: number;
         Id: string;
+        SessionId: string;
         RepositoryName: components["schemas"]["RepositoryName"];
     };
     requestBodies: never;
@@ -1827,6 +2232,132 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateMyProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileInput"];
+            };
+        };
+        responses: {
+            /** @description Updated profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    changeMyPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChange"];
+            };
+        };
+        responses: {
+            /** @description Changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description Account locked after repeated wrong passwords */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listMySessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions; `current` marks the one making the request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionInfoList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    revokeMyOtherSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions ended */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionsEnded"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    revokeMySession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sid: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ended */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     getSystemStatus: {
@@ -2906,6 +3437,11 @@ export interface operations {
             query?: {
                 q?: string;
                 kind?: "user" | "service_account";
+                /** @description Only users holding this role directly */
+                role?: string;
+                /** @description `active` = enabled and not locked */
+                status?: "active" | "disabled" | "locked";
+                source?: "local" | "oidc" | "ldap" | "saml";
                 /** @description Opaque cursor from the previous page's `next_cursor` */
                 cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];
@@ -3019,6 +3555,212 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    unlockUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unlocked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    disableUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    enableUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Enabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    resetUserPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordReset"];
+            };
+        };
+        responses: {
+            /** @description Password set */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getUserPermissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Effective permissions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectivePermissions"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listUserSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionInfoList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    revokeUserSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions ended */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionsEnded"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    revokeUserSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+                sid: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ended */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listRoles: {
@@ -3065,6 +3807,30 @@ export interface operations {
                     "application/json": components["schemas"]["Role"];
                 };
             };
+        };
+    };
+    getRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Role */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Role"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     updateRole: {
@@ -3120,6 +3886,69 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Built-in roles cannot be deleted */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    addRoleMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleMemberInput"];
+            };
+        };
+        responses: {
+            /** @description Granted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    removeRoleMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listIdentityProviders: {
@@ -3148,6 +3977,12 @@ export interface operations {
         parameters: {
             query?: {
                 owner?: string;
+                /** @description Every owner's tokens (needs `system:tokens:read`) */
+                all?: boolean;
+                owner_kind?: "user" | "service_account";
+                status?: "active" | "expired";
+                /** @description Substring of the token name */
+                q?: string;
                 /** @description Opaque cursor from the previous page's `next_cursor` */
                 cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];
@@ -3167,6 +4002,9 @@ export interface operations {
                     "application/json": components["schemas"]["TokenPage"];
                 };
             };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     createToken: {
@@ -3192,6 +4030,8 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     revokeToken: {

@@ -29,6 +29,9 @@ export const session: Session = {
     username: 'd.ismoilov',
     display_name: 'Dilshod Ismoilov',
     email: 'd.ismoilov@acme.example',
+    kind: 'user',
+    source: 'local',
+    roles: ['Admin'],
   },
   organization: {
     slug: 'acme-platform',
@@ -36,7 +39,21 @@ export const session: Session = {
     environment: 'prod',
     region: 'eu-central',
   },
-  privileges: ['system:*'],
+  privileges: ['repo:*:admin', 'system:*'],
+  auth_method: 'session',
+  token_policy: { max_lifetime: '8784h0m0s', max_lifetime_days: 366, expiry_warning: '336h0m0s' },
+  token_warnings: [
+    {
+      id: 't_0001',
+      name: 'laptop CLI',
+      owner: 'd.ismoilov',
+      owner_kind: 'user',
+      prefix: 'hgr_0001',
+      scopes: ['repo:*:read', 'repo:npm-*:write'],
+      created_at: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+      expires_at: new Date(Date.now() + 9 * 86_400_000).toISOString(),
+    },
+  ],
 };
 
 export const systemStatus: SystemStatusDetail = {

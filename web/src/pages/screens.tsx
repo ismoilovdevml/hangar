@@ -90,20 +90,6 @@ export function VulnerabilitiesPage() {
   );
 }
 
-export function AccessPage() {
-  return (
-    <ScreenSkeleton
-      title="Access & audit"
-      description="Who can read, publish and administer — and a record of everything they did."
-      planned={[
-        'Tabs for members, roles, access tokens and service accounts.',
-        'Sign-in provider status (OIDC, LDAP, SAML, local).',
-        'The audit log stream with CSV and JSON export.',
-      ]}
-    />
-  );
-}
-
 export function ClusterPage() {
   return (
     <ScreenSkeleton
