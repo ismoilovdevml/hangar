@@ -62,7 +62,12 @@ func (s *Components) Publish(ctx context.Context, repo *core.Repository, req cor
 	if repo.Type == core.RepoGroup {
 		return nil, nil, fmt.Errorf("publish to group %q: resolve the write member first: %w", repo.Name, core.ErrInvalid)
 	}
-	if err := s.authorize(ctx, core.ActionWrite, repo); err != nil {
+	// A proxy publish is a cache fill on behalf of a reader.
+	action := core.ActionWrite
+	if repo.Type == core.RepoProxy {
+		action = core.ActionRead
+	}
+	if err := s.authorize(ctx, action, repo); err != nil {
 		return nil, nil, err
 	}
 	if repo.Type == core.RepoHosted && repo.WritePolicy() == core.WriteDeny {

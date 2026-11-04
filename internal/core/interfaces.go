@@ -172,7 +172,8 @@ type PublishRequest struct {
 
 // ComponentService manages components and assets. Reads do not authorize.
 // Publish and the Delete methods authorize the context principal
-// (repo:<name>:write / repo:<name>:delete), enforce the write policy, run in one
+// (repo:<name>:write for hosted, repo:<name>:read for proxy cache fills /
+// repo:<name>:delete), enforce the write policy (hosted only), run in one
 // database transaction, update blob reference counts, emit an audit event and
 // publish component.published / component.deleted.
 type ComponentService interface {
