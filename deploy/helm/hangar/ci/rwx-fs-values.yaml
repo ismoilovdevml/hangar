@@ -1,0 +1,17 @@
+# Two replicas sharing a ReadWriteMany volume (NFS, CephFS) with bundled NATS.
+replicaCount: 2
+config:
+  server:
+    base_url: https://hangar.example.com
+database:
+  existingSecret: hangar-db
+storage:
+  kind: fs
+  fs:
+    persistence:
+      accessModes: [ReadWriteMany]
+      storageClass: cephfs
+nats:
+  bundled:
+    replicas: 3
+    password: OnlyLettersAndDigits123

@@ -1,0 +1,41 @@
+{{- if .Values.tests.enabled }}
+# helm test <release>: the Service answers /readyz (database, blob store and
+# event bus reachable from Hangar).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "hangar.fullname" . }}-test-readyz
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  securityContext:
+    {{- toYaml .Values.podSecurityContext | nindent 4 }}
+  containers:
+    - name: readyz
+      image: {{ include "hangar.image" . }}
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      command:
+        - /usr/local/bin/hangar-healthcheck
+        - -url
+        - http://{{ include "hangar.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}/readyz
+        - -timeout
+        - 10s
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          memory: 64Mi
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+{{- end }}

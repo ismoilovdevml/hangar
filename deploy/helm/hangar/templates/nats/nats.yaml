@@ -1,0 +1,294 @@
+{{- if eq .Values.nats.mode "bundled" }}
+{{- $name := include "hangar.natsName" . -}}
+{{- $n := .Values.nats.bundled -}}
+{{- $replicas := int $n.replicas -}}
+{{- $headless := printf "%s-headless" $name -}}
+{{- if not $n.existingSecret }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+type: Opaque
+data:
+  {{ $n.existingSecretKey }}: {{ $n.password | default (include "hangar.persistentRandom" (list . $name $n.existingSecretKey)) | b64enc | quote }}
+---
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+data:
+  nats.conf: |
+    # $POD_NAME and $NATS_PASSWORD are resolved from the environment.
+    server_name: $POD_NAME
+    listen: 0.0.0.0:4222
+    http: 0.0.0.0:8222
+    pid_file: /var/run/nats/nats.pid
+    lame_duck_duration: 30s
+    lame_duck_grace_period: 10s
+
+    authorization {
+      user: hangar
+      password: $NATS_PASSWORD
+    }
+
+    jetstream {
+      store_dir: /data
+      max_memory_store: {{ $n.jetstream.maxMemoryStore }}
+      max_file_store: {{ $n.jetstream.maxFileStore }}
+    }
+    {{- if gt $replicas 1 }}
+
+    cluster {
+      name: {{ $name }}
+      listen: 0.0.0.0:6222
+      routes: [
+        {{- range $i := until $replicas }}
+        nats://{{ $name }}-{{ $i }}.{{ $headless }}.{{ $.Release.Namespace }}.svc:6222
+        {{- end }}
+      ]
+      connect_retries: 120
+    }
+    {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $headless }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: client
+      port: 4222
+    - name: cluster
+      port: 6222
+    - name: monitor
+      port: 8222
+  selector:
+    {{- include "hangar.natsSelectorLabels" . | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+spec:
+  ports:
+    - name: client
+      port: 4222
+      targetPort: client
+    - name: monitor
+      port: 8222
+      targetPort: monitor
+  selector:
+    {{- include "hangar.natsSelectorLabels" . | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+spec:
+  serviceName: {{ $headless }}
+  replicas: {{ $replicas }}
+  # Routes need every peer resolvable at once.
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      {{- include "hangar.natsSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hangar.labels" . | nindent 8 }}
+        {{- include "hangar.natsSelectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ printf "%v-%v" $n.jetstream $replicas | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $n.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: nats
+          image: "{{ $n.image.repository }}:{{ $n.image.tag }}"
+          imagePullPolicy: {{ $n.image.pullPolicy }}
+          command: ["nats-server", "--config", "/etc/nats/nats.conf"]
+          ports:
+            - name: client
+              containerPort: 4222
+            - name: cluster
+              containerPort: 6222
+            - name: monitor
+              containerPort: 8222
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NATS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hangar.natsPasswordSecret" . }}
+                  key: {{ $n.existingSecretKey }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: monitor
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 90
+          livenessProbe:
+            httpGet:
+              path: /healthz?js-enabled-only=true
+              port: monitor
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz?js-server-only=true
+              port: monitor
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                # Lame duck mode: clients move to the other servers first.
+                command: ["nats-server", "-sl=ldm=/var/run/nats/nats.pid"]
+          resources:
+            {{- toYaml $n.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nats
+              readOnly: true
+            - name: data
+              mountPath: /data
+            - name: run
+              mountPath: /var/run/nats
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $name }}
+        - name: run
+          emptyDir:
+            sizeLimit: 16Mi
+      affinity:
+        {{- if $n.affinity }}
+        {{- toYaml $n.affinity | nindent 8 }}
+        {{- else }}
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    {{- include "hangar.natsSelectorLabels" . | nindent 20 }}
+        {{- end }}
+      {{- with $n.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $n.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with $n.persistence.storageClass }}
+        storageClassName: {{ if eq . "-" }}""{{ else }}{{ . }}{{ end }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $n.persistence.size }}
+{{- if and $n.podDisruptionBudget.enabled (gt $replicas 1) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+spec:
+  maxUnavailable: {{ $n.podDisruptionBudget.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "hangar.natsSelectorLabels" . | nindent 6 }}
+{{- end }}
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hangar.natsSelectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    # Clients (and the start-up health wait): Hangar pods only.
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "hangar.selectorLabels" . | nindent 14 }}
+      ports:
+        - port: 4222
+          protocol: TCP
+        - port: 8222
+          protocol: TCP
+    # Routes and monitoring between NATS servers.
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "hangar.natsSelectorLabels" . | nindent 14 }}
+      ports:
+        - port: 6222
+          protocol: TCP
+        - port: 8222
+          protocol: TCP
+{{- end }}
+{{- end }}

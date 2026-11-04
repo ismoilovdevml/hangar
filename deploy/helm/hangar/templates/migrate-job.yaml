@@ -1,0 +1,96 @@
+{{- if eq .Values.migrations.mode "job" }}
+{{- /*
+Runs `hangar migrate up` before install and before every upgrade, so new pods
+only ever start on a current schema and only one process migrates. Hooks run
+before the release's regular resources exist, so the Job reads the database
+URL from the user's existing Secret or from a hook Secret of its own, and runs
+under the namespace's default ServiceAccount without a token.
+*/ -}}
+{{- $hookSecret := printf "%s-migrate" (include "hangar.fullname" .) -}}
+{{- if not .Values.database.existingSecret }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $hookSecret }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+type: Opaque
+data:
+  database-url: {{ .Values.database.url | b64enc | quote }}
+---
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "hangar.fullname" . }}-migrate
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    {{- with .Values.migrations.job.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  backoffLimit: {{ .Values.migrations.job.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.migrations.job.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "hangar.labels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      enableServiceLinks: false
+      containers:
+        - name: migrate
+          image: {{ include "hangar.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["migrate", "up"]
+          env:
+            - name: HANGAR_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.database.existingSecret }}
+                  name: {{ .Values.database.existingSecret }}
+                  key: {{ .Values.database.existingSecretKey }}
+                  {{- else }}
+                  name: {{ $hookSecret }}
+                  key: database-url
+                  {{- end }}
+            - name: HANGAR_LOG_FORMAT
+              value: {{ dig "log" "format" "json" .Values.config | quote }}
+          resources:
+            {{- toYaml .Values.migrations.job.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

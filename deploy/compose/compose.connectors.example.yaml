@@ -1,0 +1,16 @@
+# Docker port connectors: a Docker repository configured with
+# "connector": {"http_port": 5001} gets its own plain-HTTP listener inside the
+# hangar container. Publish each such port here and start the stack with both
+# files:
+#
+#   cp compose.connectors.example.yaml compose.connectors.yaml   # edit ports
+#   docker compose -f compose.yaml -f compose.connectors.yaml up -d
+#
+# Connector ports speak plain HTTP. Keep them on loopback or a trusted network
+# (Docker clients need them listed in "insecure-registries"), or prefer a host
+# connector ("connector": {"host": "cr.example.com"}) behind Caddy with TLS.
+
+services:
+  hangar:
+    ports:
+      - "${HANGAR_CONNECTOR_BIND_ADDR:-127.0.0.1}:5001:5001"

@@ -213,6 +213,32 @@
   assets; k6 load scenarios in `test/load`.
 - **Docs**: user guides in `docs/guides` (getting started, one page per
   client, CI integration, REST API) and a shorter README.
+- **Container image**: the web UI is always embedded; a static
+  `hangar-healthcheck` probe drives the `HEALTHCHECK` on the distroless,
+  non-root image; builds are reproducible (build date from
+  `SOURCE_DATE_EPOCH`, no VCS stamping, no build ids).
+- **Production Docker Compose** (`deploy/compose`): Hangar, tuned
+  PostgreSQL 16, MinIO with a bucket-only user, and Caddy with automatic TLS
+  for the UI host and a separate registry host; secrets from `.env`
+  (`HANGAR_SECRET_KEY` and `HANGAR_DOCKER_TOKEN_KEY` required), healthchecks,
+  resource limits, read-only containers, `/metrics` kept off the public host,
+  and an override for Docker port connectors.
+- **Helm chart** (`deploy/helm/hangar`): stateless multi-replica Deployment
+  with anti-affinity, PDB and optional HPA; migrations in a pre-install and
+  pre-upgrade hook Job; optional bundled NATS JetStream cluster; Ingress
+  presets for ingress-nginx and Traefik with a registry host, or Gateway API
+  routes; `existingSecret` for every secret, with generated secret and token
+  keys kept across upgrades; ServiceMonitor, NetworkPolicies, connector ports
+  on the Service, `values.schema.json` and validation of unsupported
+  combinations.
+- **Operations**: backup and restore scripts (`deploy/scripts`: PostgreSQL
+  dump plus an add-only blob copy for filesystem, S3 and the compose MinIO),
+  a hardened systemd unit (`deploy/systemd/hangar.service`), deployment
+  guides in `docs/deploy` (requirements and sizing, compose, Helm, binary,
+  TLS and reverse proxies, corporate proxy, first administrator, backup,
+  upgrades, high availability, troubleshooting), and a `hangar.example.yaml`
+  that covers every configuration key. `make deploy-check` validates the
+  chart, the compose stack and the scripts.
 
 ## M0 — Skeleton (2026-11-03)
 

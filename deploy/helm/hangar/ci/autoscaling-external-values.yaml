@@ -1,0 +1,49 @@
+# Autoscaling with external NATS and AWS S3 through IRSA (no static keys),
+# Traefik ingress, corporate proxy with a private CA and inline secrets.
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetMemoryUtilizationPercentage: 80
+config:
+  server:
+    base_url: https://artifacts.corp.example
+  http:
+    proxy: http://proxy.corp.example:3128
+    proxy_username: hangar
+    no_proxy: [.corp.example, 10.0.0.0/8]
+    ca_file: /etc/hangar/ca/ca.crt
+database:
+  url: postgres://hangar:secret@pg.corp.example:5432/hangar?sslmode=verify-full
+storage:
+  kind: s3
+  s3:
+    region: eu-central-1
+    bucket: corp-hangar-blobs
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/hangar
+nats:
+  mode: external
+  external:
+    url: nats://hangar:natspass@nats.messaging.svc:4222
+dockerTokenKey:
+  value: 0123456789abcdef0123456789abcdef0123456789abcdef
+httpProxyPassword:
+  value: proxy-secret
+bootstrapAdmin:
+  username: admin
+  password: change-me-at-first-login
+ingress:
+  enabled: true
+  className: traefik
+  preset: traefik
+  host: artifacts.corp.example
+extraVolumes:
+  - name: corp-ca
+    configMap:
+      name: corp-ca-bundle
+extraVolumeMounts:
+  - name: corp-ca
+    mountPath: /etc/hangar/ca
+    readOnly: true

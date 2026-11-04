@@ -1,0 +1,48 @@
+Hangar ({{ include "hangar.image" . }}) is deploying as "{{ include "hangar.fullname" . }}" in namespace {{ .Release.Namespace }}.
+
+  Replicas:    {{ if .Values.autoscaling.enabled }}{{ .Values.autoscaling.minReplicas }}-{{ .Values.autoscaling.maxReplicas }} (autoscaling){{ else }}{{ .Values.replicaCount }}{{ end }}
+  Blob store:  {{ .Values.storage.kind }}{{ if eq .Values.storage.kind "s3" }} (bucket {{ .Values.storage.s3.bucket }}){{ end }}
+  Event bus:   NATS {{ .Values.nats.mode }}
+  Migrations:  {{ .Values.migrations.mode }}
+
+1. Wait until every pod is ready and check it:
+
+     kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "hangar.fullname" . }}
+     helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+2. Open {{ dig "server" "base_url" "" .Values.config }}
+{{- if not (or .Values.ingress.enabled .Values.httpRoute.enabled) }}
+   (no Ingress/HTTPRoute is enabled; for a quick look:
+     kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "hangar.fullname" . }} 8080:{{ .Values.service.port }})
+{{- end }}
+{{- if include "hangar.bootstrapEnabled" . }}
+   Sign in as the bootstrap administrator, change its password, then remove
+   bootstrapAdmin from your values.
+{{- else }}
+   No bootstrap administrator is configured. Create the first one with:
+     kubectl -n {{ .Release.Namespace }} exec -i deploy/{{ include "hangar.fullname" . }} -- \
+       hangar admin bootstrap --username admin --password-stdin <<< 'a-long-password'
+{{- end }}
+
+3. Docker clients:
+{{- if .Values.ingress.registryHost }}
+     docker login {{ .Values.ingress.registryHost }}
+     docker push {{ .Values.ingress.registryHost }}/<repository>/<image>:<tag>
+{{- else if .Values.httpRoute.registryHostnames }}
+     docker login {{ first .Values.httpRoute.registryHostnames }}
+{{- else }}
+     docker login {{ regexReplaceAll "^https?://" (dig "server" "base_url" "" .Values.config) "" }}
+{{- end }}
+{{- if and (not .Values.secretKey.value) (not .Values.secretKey.existingSecret) }}
+
+IMPORTANT: security.secret_key was generated and stored in Secret
+"{{ include "hangar.secretName" . }}" (kept on uninstall). It decrypts the credentials
+Hangar stores in the database: back it up together with your database backups:
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "hangar.secretName" . }} -o jsonpath='{.data.{{ .Values.secretKey.existingSecretKey }}}' | base64 -d
+{{- end }}
+{{- if and (not .Values.dockerTokenKey.value) (not .Values.dockerTokenKey.existingSecret) }}
+
+NOTE: the Docker token key was generated and is kept by `helm upgrade`. If this
+chart is rendered offline (Argo CD, `helm template`), set dockerTokenKey.value
+or dockerTokenKey.existingSecret so it stays stable.
+{{- end }}

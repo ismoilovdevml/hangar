@@ -1,0 +1,23 @@
+apiVersion: v2
+name: hangar
+description: >-
+  Hangar, a self-hosted package registry: Docker/OCI, npm, Maven, PyPI, NuGet
+  and raw repositories behind one stateless, horizontally scalable server.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/ismoilovdevml/hangar
+sources:
+  - https://github.com/ismoilovdevml/hangar
+keywords:
+  - registry
+  - docker
+  - oci
+  - npm
+  - maven
+  - pypi
+  - nuget
+  - artifacts
+annotations:
+  category: DeveloperTools

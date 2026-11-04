@@ -1,0 +1,253 @@
+{{- $rwo := and (eq .Values.storage.kind "fs") (not (has "ReadWriteMany" .Values.storage.fs.persistence.accessModes)) -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hangar.fullname" . }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "hangar.selectorLabels" . | nindent 6 }}
+  strategy:
+    {{- if $rwo }}
+    # A ReadWriteOnce volume cannot be attached to the old and new pod at once.
+    type: Recreate
+    {{- else }}
+    {{- toYaml .Values.updateStrategy | nindent 4 }}
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "hangar.labels" . | nindent 8 }}
+        {{- include "hangar.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include "hangar.configYaml" . | sha256sum }}
+        checksum/secret-values: {{ include "hangar.secretValuesChecksum" . }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "hangar.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      enableServiceLinks: false
+      {{- if eq .Values.nats.mode "bundled" }}
+      initContainers:
+        # On a fresh install NATS starts together with Hangar; wait for a
+        # healthy JetStream instead of crash-looping until it is up.
+        - name: wait-for-nats
+          image: {{ include "hangar.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /usr/local/bin/hangar-healthcheck
+            - -url
+            - http://{{ include "hangar.natsName" . }}.{{ .Release.Namespace }}.svc:8222/healthz
+            - -wait
+            - 10m
+            - -interval
+            - 3s
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+      {{- end }}
+      containers:
+        - name: hangar
+          image: {{ include "hangar.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["serve"]
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            {{- range .Values.service.connectorPorts }}
+            - name: {{ printf "conn-%v" . }}
+              containerPort: {{ . }}
+              protocol: TCP
+            {{- end }}
+          env:
+            - name: HANGAR_CONFIG
+              value: /etc/hangar/hangar.yaml
+            - name: HANGAR_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hangar.databaseSecret" . }}
+                  key: {{ .Values.database.existingSecretKey }}
+            {{- if and (eq .Values.storage.kind "s3") (include "hangar.s3StaticCredentials" .) }}
+            - name: HANGAR_STORAGE_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hangar.s3Secret" . }}
+                  key: {{ .Values.storage.s3.accessKeyIDKey }}
+            - name: HANGAR_STORAGE_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hangar.s3Secret" . }}
+                  key: {{ .Values.storage.s3.secretAccessKeyKey }}
+            {{- end }}
+            - name: HANGAR_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hangar.secretKeySecret" . }}
+                  key: {{ .Values.secretKey.existingSecretKey }}
+            - name: HANGAR_SECURITY_PREVIOUS_SECRET_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hangar.secretKeySecret" . }}
+                  key: {{ .Values.secretKey.previousKeysKey }}
+                  # Present only during a key rotation.
+                  optional: true
+            - name: HANGAR_DOCKER_TOKEN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hangar.dockerTokenSecret" . }}
+                  key: {{ .Values.dockerTokenKey.existingSecretKey }}
+            {{- if include "hangar.bootstrapEnabled" . }}
+            - name: HANGAR_BOOTSTRAP_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hangar.bootstrapSecret" . }}
+                  key: {{ .Values.bootstrapAdmin.usernameKey }}
+            - name: HANGAR_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hangar.bootstrapSecret" . }}
+                  key: {{ .Values.bootstrapAdmin.passwordKey }}
+            {{- end }}
+            {{- if or .Values.httpProxyPassword.value .Values.httpProxyPassword.existingSecret }}
+            - name: HANGAR_HTTP_PROXY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hangar.proxyPasswordSecret" . }}
+                  key: {{ .Values.httpProxyPassword.existingSecretKey }}
+            {{- end }}
+            {{- if eq .Values.nats.mode "bundled" }}
+            - name: NATS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hangar.natsPasswordSecret" . }}
+                  key: {{ .Values.nats.bundled.existingSecretKey }}
+            - name: HANGAR_NATS_URL
+              value: "nats://hangar:$(NATS_PASSWORD)@{{ include "hangar.natsName" . }}.{{ .Release.Namespace }}.svc:4222"
+            {{- else if eq .Values.nats.mode "external" }}
+            - name: HANGAR_NATS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hangar.natsExternalSecret" . }}
+                  key: {{ .Values.nats.external.existingSecretKey }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if and .Values.lifecycle.preStopSleepSeconds (semverCompare ">=1.30-0" .Capabilities.KubeVersion.Version) }}
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: {{ .Values.lifecycle.preStopSleepSeconds }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/hangar
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/hangar
+            - name: tmp
+              mountPath: /tmp
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "hangar.fullname" . }}
+        - name: data
+          {{- if eq .Values.storage.kind "fs" }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.storage.fs.persistence.existingClaim | default (printf "%s-data" (include "hangar.fullname" .)) }}
+          {{- else }}
+          # Embedded NATS state only (S3 holds the blobs).
+          emptyDir:
+            sizeLimit: 2Gi
+          {{- end }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- if or .Values.affinity (ne .Values.podAntiAffinityPreset "none") }}
+      affinity:
+        {{- if .Values.affinity }}
+        {{- toYaml .Values.affinity | nindent 8 }}
+        {{- else if eq .Values.podAntiAffinityPreset "hard" }}
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  {{- include "hangar.selectorLabels" . | nindent 18 }}
+        {{- else }}
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    {{- include "hangar.selectorLabels" . | nindent 20 }}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- tpl (toYaml .) $ | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
