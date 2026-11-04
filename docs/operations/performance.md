@@ -22,19 +22,22 @@ disk's flush latency (see writes).
 ## Results
 
 32 virtual users, 30 s, measured traffic only (fixtures published by each
-scenario's setup are excluded). No request failed in any run.
+scenario's setup are excluded), on the build of this branch rebased onto
+`main` (with sign-in, rate limiting and the other security changes active).
+No request failed and every threshold passed.
 
 | Scenario | Requests/s | p95 | p99 | Notes |
 |---|---:|---:|---:|---|
-| raw downloads (1 KiB to 1 MiB) | 19 581 | 2.4 ms | 3.1 ms | 1 MiB files: p95 3.0 ms |
-| docker blob GETs (4 KiB to 1 MiB) | 21 110 | 2.8 ms | 4.5 ms | registry bearer token |
-| npm metadata and tarballs | 14 881 | 3.3 ms | 4.3 ms | 100-version full packument: p95 4.0 ms |
-| maven metadata, checksums, POMs, jars | 28 116 | 1.8 ms | 2.3 ms | `maven-metadata.xml`: p95 1.0 ms |
-| mixed, reads (90 %) | 1 226 in total | 5.7 ms | 16.3 ms | |
-| mixed, writes (10 %) | | 477 ms | 568 ms | npm publish p95 537 ms, Maven deploy 191 ms, raw upload 179 ms, dist-tag 517 ms |
-| seeded metadata reads | 785 | 155 ms | 188 ms | dominated by NuGet search, see below |
+| raw downloads (1 KiB to 1 MiB) | 19 112 | 2.5 ms | 3.6 ms | 1 MiB files: p95 3.3 ms |
+| docker blob GETs (4 KiB to 1 MiB) | 22 279 | 2.5 ms | 3.9 ms | registry bearer token |
+| npm metadata and tarballs | 14 144 | 3.0 ms | 3.8 ms | 100-version full packument: p95 3.7 ms |
+| maven metadata, checksums, POMs, jars | 28 302 | 1.7 ms | 2.3 ms | `maven-metadata.xml`: p95 1.0 ms |
+| mixed, reads (90 %) | 1 135 in total | 6.1 ms | 19.5 ms | |
+| mixed, writes (10 %) | | 474 ms | 590 ms | npm publish p95 553 ms, Maven deploy 202 ms, raw upload 224 ms, dist-tag 481 ms |
+| seeded metadata reads | 764 | 158 ms | 197 ms | dominated by NuGet search, see below |
 
-Single endpoints on the seeded data, 32 concurrent connections (`oha`, 8 s):
+Single endpoints on the seeded data, 32 concurrent connections (`oha`, 8 s;
+measured before the rebase onto `main`):
 
 | Request | Requests/s | p95 |
 |---|---:|---:|
@@ -45,15 +48,15 @@ Single endpoints on the seeded data, 32 concurrent connections (`oha`, 8 s):
 
 ### Compared with the previous build
 
-The same scenarios against the build before this work (`237ab95`, same data,
-same machine):
+The same scenarios against the build this work started from (`237ab95`,
+same data, same machine). The single-endpoint rows compare `oha` runs.
 
 | Scenario | Before: req/s, p95 | After: req/s, p95 |
 |---|---|---|
-| raw | 14 482, 3.2 ms | 19 581, 2.4 ms |
-| docker | 17 908, 3.1 ms | 21 110, 2.8 ms |
-| npm | 2 344, 57.8 ms (100-version packument: 99 ms) | 14 881, 3.3 ms (4.0 ms) |
-| maven | 9 164, 7.4 ms | 28 116, 1.8 ms |
+| raw | 14 482, 3.2 ms | 19 112, 2.5 ms |
+| docker | 17 908, 3.1 ms | 22 279, 2.5 ms |
+| npm | 2 344, 57.8 ms (100-version packument: 99 ms) | 14 144, 3.0 ms (3.7 ms) |
+| maven | 9 164, 7.4 ms | 28 302, 1.7 ms |
 | seeded npm packument lookup | 7 602, 4.8 ms | 17 245, 3.9 ms |
 | seeded raw listing | 15 742, 2.9 ms | 19 258, 2.6 ms |
 
