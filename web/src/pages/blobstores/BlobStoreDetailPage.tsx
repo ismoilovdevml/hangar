@@ -195,7 +195,7 @@ function UsedBy({ s }: { s: BlobStore }) {
           empty={repos.isPending ? 'Loading…' : 'No repository keeps its files here yet.'}
         />
       )}
-      {repos.data && rows.length !== s.repository_count && (
+      {repos.data && rows.length < s.repository_count && (
         <p className="meta store-detail__note">
           The store holds files of {s.repository_count} {s.repository_count === 1 ? 'repository' : 'repositories'}; you can see {rows.length} of them.
         </p>

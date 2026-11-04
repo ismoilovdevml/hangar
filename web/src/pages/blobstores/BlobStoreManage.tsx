@@ -7,7 +7,7 @@ import type { BlobStore } from '../../api/types';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Panel } from '../../components/Panel';
 import { quotaBytes, quotaToForm, type QuotaUnit } from '../../lib/blobStores';
-import { formatBytes } from '../../lib/format';
+import { formatBytes, formatCompact } from '../../lib/format';
 
 function message(err: unknown, action: string): string {
   if (err instanceof ApiRequestError) {
@@ -92,7 +92,7 @@ export function BlobStoreManage({ s }: { s: BlobStore }) {
       <div className="store-manage__delete">
         <p className="danger-zone__text">
           {inUse
-            ? `Deleting needs an empty store: it still holds ${s.repository_count} ${s.repository_count === 1 ? 'repository' : 'repositories'} and ${s.blob_count} blobs (${formatBytes(s.used_bytes)}).`
+            ? `Deleting needs an empty store: it still holds ${s.repository_count} ${s.repository_count === 1 ? 'repository' : 'repositories'} and ${formatCompact(s.blob_count)} blobs (${formatBytes(s.used_bytes)}).`
             : 'The store holds no repositories and no blobs. Deleting it removes the definition; files on the backend are not touched.'}
         </p>
         <div>
