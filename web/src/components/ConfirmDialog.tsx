@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 interface ConfirmDialogProps {
@@ -9,6 +9,8 @@ interface ConfirmDialogProps {
   tone?: 'danger' | 'primary';
   busy?: boolean;
   error?: string | null;
+  /** When set, the user must type this exact text (e.g. the name) before confirming. */
+  typeToConfirm?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -17,15 +19,29 @@ interface ConfirmDialogProps {
  * Modal confirmation for irreversible or expensive actions. Render it only
  * while open; it traps focus, closes on Escape and returns focus on close.
  */
-export function ConfirmDialog({ title, children, confirmLabel, tone = 'primary', busy, error, onConfirm, onCancel }: ConfirmDialogProps) {
+export function ConfirmDialog({
+  title,
+  children,
+  confirmLabel,
+  tone = 'primary',
+  busy,
+  error,
+  typeToConfirm,
+  onConfirm,
+  onCancel,
+}: ConfirmDialogProps) {
   const titleId = useId();
   const bodyId = useId();
+  const inputId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [typed, setTyped] = useState('');
+  const ready = !typeToConfirm || typed === typeToConfirm;
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
-    cancelRef.current?.focus();
+    (inputRef.current ?? cancelRef.current)?.focus();
     return () => previous?.focus?.();
   }, []);
 
@@ -71,6 +87,29 @@ export function ConfirmDialog({ title, children, confirmLabel, tone = 'primary',
         <div className="dialog__body" id={bodyId}>
           {children}
         </div>
+        {typeToConfirm && (
+          <div className="field">
+            <label htmlFor={inputId} className="field__label">
+              Type <code className="inline-code">{typeToConfirm}</code> to confirm
+            </label>
+            <input
+              ref={inputRef}
+              id={inputId}
+              className="input input--mono"
+              autoComplete="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && ready && !busy) {
+                  e.preventDefault();
+                  onConfirm();
+                }
+              }}
+            />
+          </div>
+        )}
         {error && (
           <p className="form-error" role="alert">
             {error}
@@ -84,7 +123,7 @@ export function ConfirmDialog({ title, children, confirmLabel, tone = 'primary',
             type="button"
             className={tone === 'danger' ? 'button button--danger' : 'button button--primary'}
             onClick={onConfirm}
-            disabled={busy}
+            disabled={busy || !ready}
             aria-busy={busy || undefined}
           >
             {busy ? 'Working…' : confirmLabel}

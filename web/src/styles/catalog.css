@@ -1,0 +1,18 @@
+/* Shared by the package, repository settings and blob store pages. */
+
+/* Label/value grid */
+.facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); gap: 16px 24px; margin: 0; }
+.facts > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.facts dt { font-size: 13px; color: var(--ink-3); }
+.facts dd { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.facts__wide { grid-column: 1 / -1; }
+.facts__mono { font-family: var(--font-mono); font-size: 13px !important; font-weight: 500 !important; }
+.facts__copy { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; }
+.facts__copy > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+
+
+/* Secondary-weight destructive button (the red filled one is for confirming). */
+.button--danger-outline { background: var(--glass-bg-strong); color: var(--bad-ink); border: 1px solid rgba(178, 59, 59, .35); }
+.button--danger-outline:hover { background: var(--bad-bg); color: var(--bad-ink); }
+.button--danger-outline:disabled { opacity: .5; cursor: not-allowed; }
+.button--danger-outline:disabled:hover { background: var(--glass-bg-strong); }

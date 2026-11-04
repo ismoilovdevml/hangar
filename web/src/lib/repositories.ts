@@ -212,8 +212,26 @@ function isUrl(s: string, schemes: string[]): boolean {
   }
 }
 
+/**
+ * Whether the server already holds the upstream secret for the form's
+ * credentials: it keeps a stored password or token when an update leaves it
+ * empty and the kind, username and header name are unchanged.
+ */
+export function secretStored(f: RepoForm, stored: UpstreamAuth | undefined): boolean {
+  return (
+    !!stored &&
+    stored.kind === f.authKind &&
+    (stored.username ?? '') === f.authUsername.trim() &&
+    (stored.header_name ?? '') === f.authHeader.trim()
+  );
+}
+
 /** Client-side checks that mirror the server's; the server stays the authority. */
-export function validateRepoForm(f: RepoForm, ctx: { memberTypes?: ReadonlyMap<string, RepositoryType> } = {}): RepoFormErrors {
+export function validateRepoForm(
+  f: RepoForm,
+  ctx: { memberTypes?: ReadonlyMap<string, RepositoryType>; storedAuth?: UpstreamAuth } = {},
+): RepoFormErrors {
+  const keepSecret = secretStored(f, ctx.storedAuth);
   const e: RepoFormErrors = {};
   if (!f.format) e.format = 'Pick a format.';
   if (!f.type) e.type = 'Pick how the repository behaves.';
@@ -231,12 +249,12 @@ export function validateRepoForm(f: RepoForm, ctx: { memberTypes?: ReadonlyMap<s
     }
     if (f.authKind === 'basic') {
       if (!f.authUsername.trim()) e.authUsername = 'Enter the upstream username.';
-      if (!f.authPassword) e.authPassword = 'Enter the upstream password.';
+      if (!f.authPassword && !keepSecret) e.authPassword = 'Enter the upstream password.';
     }
-    if (f.authKind === 'bearer' && !f.authToken) e.authToken = 'Enter the token.';
+    if (f.authKind === 'bearer' && !f.authToken && !keepSecret) e.authToken = 'Enter the token.';
     if (f.authKind === 'header') {
       if (!/^[A-Za-z0-9-]+$/.test(f.authHeader.trim())) e.authHeader = 'Enter a header name such as Private-Token.';
-      if (!f.authToken) e.authToken = 'Enter the header value.';
+      if (!f.authToken && !keepSecret) e.authToken = 'Enter the header value.';
     }
     if (f.proxyMode === 'url' && !isUrl(f.proxyUrl.trim(), ['http:', 'https:', 'socks5:'])) {
       e.proxyUrl = 'Use an http://, https:// or socks5:// proxy address.';

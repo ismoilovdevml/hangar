@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll } from 'vitest';
+import { resetUnsupported } from '../api/catalog';
 import { resetMockState } from '../mocks/handlers';
 import { server } from '../mocks/node';
 
@@ -9,6 +10,7 @@ afterEach(() => {
   cleanup();
   server.resetHandlers();
   resetMockState();
+  resetUnsupported();
 });
 afterAll(() => server.close());
 

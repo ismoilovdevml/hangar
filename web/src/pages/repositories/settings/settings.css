@@ -1,0 +1,8 @@
+.repo-settings__title { display: inline-flex; align-items: center; gap: 14px; min-width: 0; overflow-wrap: anywhere; }
+.repo-settings__url { display: flex; align-items: center; gap: 8px; }
+.repo-settings__url span { flex: 1; min-width: 0; }
+.repo-settings__save { display: flex; flex-direction: column; gap: 10px; }
+.note { padding: 10px 12px; border-radius: var(--r-small); background: var(--lake-soft); color: var(--lake-ink); font-size: 13px; font-weight: 600; }
+.danger-zone { gap: 12px; }
+.danger-zone__text { font-size: 14px; color: var(--ink-2); line-height: 1.55; }
+.summary .repo-settings__client .code-block pre { white-space: pre-wrap; overflow-wrap: anywhere; }

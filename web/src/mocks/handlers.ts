@@ -6,6 +6,7 @@
 import { delay, http, HttpResponse } from 'msw';
 import type { ApiError, LoginRequest, OverviewRange, Repository, RepositoryInput, RepositoryType } from '../api/types';
 import { accessHandlers, resetAccessState } from './access';
+import { catalogHandlers, resetCatalogState } from './catalog';
 import * as data from './data';
 import { onMockLiveEvent, opsHandlers, resetOpsMockState } from './ops';
 
@@ -31,6 +32,7 @@ export function resetMockState(): void {
   state = initialState();
   resetOpsMockState();
   resetAccessState();
+  resetCatalogState();
 }
 
 /** Test helpers: inspect or change the mock server's state. */
@@ -118,6 +120,8 @@ function validateRepository(body: RepositoryInput): string | null {
 }
 
 export const handlers = [
+  ...catalogHandlers(guard, () => state.repositories.map((r) => r.name)),
+
   http.get(api('/system/status'), () => HttpResponse.json(data.systemStatus)),
   http.get(api('/auth/providers'), () => HttpResponse.json(data.authProviders)),
   http.get(api('/formats'), () => HttpResponse.json({ items: data.formats.map((name) => ({ name })) })),
@@ -232,7 +236,55 @@ export const handlers = [
     return HttpResponse.json(repo, { status: 201 });
   }),
 
-  http.get(api('/blob-stores'), ({ request }) => guard(request) ?? HttpResponse.json(data.blobStoreList())),
+  http.get(api('/repositories/:name'), ({ request, params }) => {
+    const denied = guard(request);
+    if (denied) return denied;
+    const repo = state.repositories.find((r) => r.name === params.name);
+    return repo ? HttpResponse.json(repo) : error(404, { code: 'not_found', message: `repository "${String(params.name)}" not found` });
+  }),
+
+  http.put(api('/repositories/:name'), async ({ request, params }) => {
+    const denied = guard(request, true);
+    if (denied) return denied;
+    const old = state.repositories.find((r) => r.name === params.name);
+    if (!old) return error(404, { code: 'not_found', message: `repository "${String(params.name)}" not found` });
+    const body = (await request.json()) as RepositoryInput;
+    if (body.name !== old.name || body.format !== old.format || body.type !== old.type) {
+      return error(400, { code: 'invalid_argument', message: 'name, format and type are immutable' });
+    }
+    if ((body.blob_store ?? '') !== (old.blob_store ?? '')) {
+      return error(400, { code: 'invalid_argument', message: `repository "${old.name}": blob store cannot be changed` });
+    }
+    const invalid = validateRepository(body);
+    if (invalid) return error(400, { code: 'invalid_argument', message: invalid });
+    const config = structuredClone(body.config);
+    if (config.proxy?.auth) config.proxy.auth = { ...config.proxy.auth, password: undefined, token: undefined };
+    const online = body.online ?? true;
+    const repo: Repository = {
+      ...old,
+      description: body.description ?? '',
+      online,
+      status: online ? (old.status === 'offline' ? 'online' : old.status) : 'offline',
+      config,
+      updated_at: new Date().toISOString(),
+    };
+    state.repositories = state.repositories.map((r) => (r.name === repo.name ? repo : r));
+    return HttpResponse.json(repo);
+  }),
+
+  http.delete(api('/repositories/:name'), ({ request, params }) => {
+    const denied = guard(request, true);
+    if (denied) return denied;
+    const name = String(params.name);
+    if (!state.repositories.some((r) => r.name === name)) return error(404, { code: 'not_found', message: `repository "${name}" not found` });
+    const groups = state.repositories.filter((r) => r.config.group?.members.includes(name)).map((r) => r.name);
+    if (groups.length) {
+      return error(400, { code: 'invalid_argument', message: `repository "${name}" is a member of group(s) ${groups.join(', ')}; remove it there first` });
+    }
+    state.repositories = state.repositories.filter((r) => r.name !== name);
+    return new HttpResponse(null, { status: 204 });
+  }),
+
   ...opsHandlers(guard),
 
   ...accessHandlers(guard),

@@ -5,7 +5,7 @@ import type { Repository, RepositoryCounts, RepositoryType } from '../../api/typ
 import { CopyButton } from '../../components/CopyButton';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
-import { IconDatabase, IconGlobe, IconGroup, IconPlus, IconSearch } from '../../components/icons';
+import { IconDatabase, IconGlobe, IconGroup, IconPackage, IconPlus, IconSearch } from '../../components/icons';
 import { NotAvailable } from '../../components/NotAvailable';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
@@ -132,7 +132,7 @@ export function RepositoriesPage() {
       className: 'col-first',
       cell: (r) => (
         <div className="repo-name">
-          <Link to="/browse" search={{ repo: r.name }} className="repo-name__link">
+          <Link to="/repositories/$name/settings" params={{ name: r.name }} className="repo-name__link">
             {r.name}
           </Link>
           {repoSubtitle(r) && <span className="repo-name__sub">{repoSubtitle(r)}</span>}
@@ -168,10 +168,17 @@ export function RepositoriesPage() {
     },
     {
       key: 'copy',
-      header: <span className="visually-hidden">Copy URL</span>,
+      header: <span className="visually-hidden">Actions</span>,
       align: 'right',
       className: 'col-last',
-      cell: (r) => <CopyButton text={r.url} label={`Copy URL of ${r.name}`} />,
+      cell: (r) => (
+        <span className="row-actions">
+          <Link to="/browse" search={{ repo: r.name }} className="copy-button" aria-label={`Browse packages in ${r.name}`} title="Browse packages">
+            <IconPackage size={16} />
+          </Link>
+          <CopyButton text={r.url} label={`Copy URL of ${r.name}`} />
+        </span>
+      ),
     },
   ];
 

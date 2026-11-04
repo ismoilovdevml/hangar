@@ -57,7 +57,7 @@ test('repositories list filters through the URL at desktop and phone width', asy
   for (const [name, size] of [['repositories-1440', DESKTOP], ['repositories-390', PHONE]] as const) {
     await page.setViewportSize(size);
     await page.goto('/repositories');
-    await expect(page.getByRole('link', { name: 'docker-prod' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'docker-prod', exact: true })).toBeVisible();
     await expect(page.getByText('Slow upstream')).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({ path: shot(name), fullPage: true });
@@ -69,8 +69,8 @@ test('repositories list filters through the URL at desktop and phone width', asy
   await page.getByLabel('Format').selectOption('npm');
   await expect(page).toHaveURL(/type=proxy/);
   await expect(page).toHaveURL(/format=npm/);
-  await expect(page.getByRole('link', { name: 'npmjs-proxy' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'docker-prod' })).toBeHidden();
+  await expect(page.getByRole('link', { name: 'npmjs-proxy', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'docker-prod', exact: true })).toBeHidden();
   expect(errors).toEqual([]);
 });
 
@@ -92,7 +92,7 @@ test('new repository form previews YAML and creates the repository', async ({ pa
   await page.getByLabel('Name').fill('npm-mirror');
   await page.getByRole('button', { name: 'Create repository' }).click();
   await expect(page).toHaveURL(/\/repositories\?q=npm-mirror/);
-  await expect(page.getByRole('link', { name: 'npm-mirror' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'npm-mirror', exact: true })).toBeVisible();
   expect(errors).toEqual([]);
 });
 
