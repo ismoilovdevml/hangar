@@ -30,6 +30,10 @@ const (
 	CSPPackage = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; frame-ancestors 'none'; sandbox"
 )
 
+// cspWebUIImages is the img-src directive of CSPWebUI; Security.UIImageSources
+// extend it.
+const cspWebUIImages = "img-src 'self' data:;" //nolint:gosec // a policy directive, not a credential
+
 // maxOtherBody bounds request bodies outside the API and package endpoints
 // (web UI, health, metrics), which take none.
 const maxOtherBody = 64 << 10
@@ -63,6 +67,9 @@ type Security struct {
 	UploadBodyBytes int64
 	// BodyIdleTimeout fails a body read that waits longer than this for data.
 	BodyIdleTimeout time.Duration
+	// UIImageSources are extra img-src sources of the web UI's policy, e.g.
+	// "https:" when README images load directly from their hosts.
+	UIImageSources []string
 	// Now is the clock (tests).
 	Now func() time.Time
 }
@@ -131,10 +138,14 @@ func packageHeaders(next http.Handler) http.Handler {
 }
 
 // uiHeaders applies the web UI's content security policy.
-func uiHeaders(next http.Handler) http.Handler {
+func (h *hardening) uiHeaders(next http.Handler) http.Handler {
+	csp := CSPWebUI
+	if len(h.cfg.UIImageSources) > 0 {
+		csp = strings.Replace(csp, cspWebUIImages, strings.TrimSuffix(cspWebUIImages, ";")+" "+strings.Join(h.cfg.UIImageSources, " ")+";", 1)
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hdr := w.Header()
-		hdr.Set("Content-Security-Policy", CSPWebUI)
+		hdr.Set("Content-Security-Policy", csp)
 		hdr.Set("Cross-Origin-Opener-Policy", "same-origin")
 		next.ServeHTTP(w, r)
 	})

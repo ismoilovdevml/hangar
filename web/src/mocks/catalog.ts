@@ -455,6 +455,13 @@ function assetDetail(a: StoredAsset, repos: readonly Repository[]): AssetDetail 
 
 const UI_KIT_README = `# Acme UI kit
 
+[![Build](https://ci.example.com/acme/ui-kit/badge.svg)](https://ci.example.com/acme/ui-kit)
+[![npm](http://img.example.com/npm/v/@acme/ui-kit.svg)](https://npm.example.com/package/@acme/ui-kit)
+[![Coverage](https://img.example.com/coverage/acme/ui-kit.svg)](https://coverage.example.com/acme/ui-kit)
+![Offline](https://offline.example.com/badge.svg)
+
+<p align="center"><img src="docs/screenshot.svg" alt="Screenshot" width="420"></p>
+
 React components for **Acme** products. See [the design system](https://design.example.com) for guidelines.
 
 ## Install
@@ -473,6 +480,10 @@ npm install @acme/ui-kit
 [Unsafe link](javascript:alert(1))
 `;
 
+/** A signed README image URL as the server issues them (the mock accepts any signature). */
+const imageURL = (componentID: string, kind: 'u' | 'p', source: string) =>
+  `/api/v1/components/${componentID}/readme-images/mock-signature?${new URLSearchParams({ [kind]: source })}`;
+
 function componentInfo(c: ComponentDetail): ComponentInfo {
   switch (c.id) {
     case 'c_311':
@@ -482,27 +493,76 @@ function componentInfo(c: ComponentDetail): ComponentInfo {
         licenses: ['MIT'],
         keywords: ['react', 'ui', 'components'],
         homepage: 'https://ui.example.com',
-        readme: { format: 'markdown', content: UI_KIT_README, source: 'README in the version manifest', truncated: false },
+        readme: {
+          format: 'markdown',
+          content: UI_KIT_README,
+          source: 'README in the version manifest',
+          truncated: false,
+          images: {
+            'https://ci.example.com/acme/ui-kit/badge.svg': imageURL(c.id, 'u', 'https://ci.example.com/acme/ui-kit/badge.svg'),
+            'http://img.example.com/npm/v/@acme/ui-kit.svg': imageURL(c.id, 'u', 'https://img.example.com/npm/v/@acme/ui-kit.svg'),
+            'https://img.example.com/coverage/acme/ui-kit.svg': imageURL(c.id, 'u', 'https://img.example.com/coverage/acme/ui-kit.svg'),
+            'https://offline.example.com/badge.svg': imageURL(c.id, 'u', 'https://offline.example.com/badge.svg'),
+            'docs/screenshot.svg': imageURL(c.id, 'p', 'package/docs/screenshot.svg'),
+          },
+        },
+        readme_images: 'proxy',
       };
     case 'c_ledger':
-      return { description: 'Double-entry ledger engine', licenses: ['Apache License 2.0'], keywords: [] };
+      return { description: 'Double-entry ledger engine', licenses: ['Apache License 2.0'], keywords: [], readme_images: 'proxy' };
     case 'c_1207':
       return {
         description: 'ML helpers',
         licenses: ['BSD-3-Clause'],
         keywords: ['ml'],
-        readme: { format: 'text', content: 'acme-ml-utils\n=============\n\nHelpers for model training.', source: 'the long description in the upload metadata', truncated: false },
+        readme: { format: 'text', content: 'acme-ml-utils\n=============\n\nHelpers for model training.', source: 'the long description in the upload metadata', truncated: false, images: {} },
+        readme_images: 'proxy',
       };
     case 'c_nuget':
       return {
         description: 'Shared .NET primitives',
         licenses: ['Apache-2.0'],
         keywords: ['acme', 'core'],
-        readme: { format: 'markdown', content: '## Acme.Core\n\nShared primitives.', source: 'docs/README.md in the .nupkg', truncated: false },
+        readme: {
+          format: 'markdown',
+          content: '## Acme.Core\n\n![Acme.Core](images/banner.svg)\n\nShared primitives.',
+          source: 'docs/README.md in the .nupkg',
+          truncated: false,
+          images: { 'images/banner.svg': imageURL(c.id, 'p', 'docs/images/banner.svg') },
+        },
+        icon_url: imageURL(c.id, 'p', 'icon.svg'),
+        readme_images: 'proxy',
       };
     default:
-      return { licenses: [], keywords: [] };
+      return { licenses: [], keywords: [], readme_images: 'proxy' };
   }
+}
+
+/** Shields-style badge for the mock image host. */
+function badgeSVG(label: string, value: string, color: string): string {
+  const w1 = 6 + label.length * 7;
+  const w2 = 6 + value.length * 7;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w1 + w2}" height="20" role="img" aria-label="${label}: ${value}">
+<rect width="${w1}" height="20" fill="#555"/><rect x="${w1}" width="${w2}" height="20" fill="${color}"/>
+<g fill="#fff" font-family="Verdana,sans-serif" font-size="11"><text x="${w1 / 2}" y="14" text-anchor="middle">${label}</text><text x="${w1 + w2 / 2}" y="14" text-anchor="middle">${value}</text></g></svg>`;
+}
+
+/** The images the mock README image endpoint serves, by source. */
+function mockImage(kind: string, source: string): string | null {
+  if (kind === 'p') {
+    if (source.endsWith('icon.svg')) {
+      return '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#512bd4"/><path d="M18 42V22h6l10 13V22h6v20h-6L24 29v13z" fill="#fff"/></svg>';
+    }
+    if (source.endsWith('.svg')) {
+      return '<svg xmlns="http://www.w3.org/2000/svg" width="840" height="300" viewBox="0 0 840 300"><rect width="840" height="300" rx="18" fill="#eef3f8"/><rect x="40" y="40" width="240" height="44" rx="10" fill="#2f6fb3"/><rect x="40" y="110" width="760" height="20" rx="6" fill="#c9d6e3"/><rect x="40" y="146" width="620" height="20" rx="6" fill="#c9d6e3"/><rect x="40" y="200" width="160" height="56" rx="12" fill="#1f8a5b"/><rect x="220" y="200" width="160" height="56" rx="12" fill="#fff" stroke="#c9d6e3" stroke-width="2"/></svg>';
+    }
+    return null;
+  }
+  if (source.includes('offline.example.com')) return null;
+  if (source.includes('/badge.svg')) return badgeSVG('build', 'passing', '#4c1');
+  if (source.includes('/npm/')) return badgeSVG('npm', 'v5.3.1', '#007ec6');
+  if (source.includes('/coverage/')) return badgeSVG('coverage', '94%', '#97ca00');
+  return null;
 }
 
 const STORE_NAME = /^[a-z0-9][a-z0-9-]{1,62}$/;
@@ -579,6 +639,24 @@ export function catalogHandlers(guard: Guard, readableRepos: () => string[], rep
       withGuard(({ params }) => {
         const c = find(String(params.id));
         return c ? HttpResponse.json(componentInfo(c)) : error(404, { code: 'not_found', message: 'component not found' });
+      }),
+    ),
+
+    http.get(
+      api('/components/:id/readme-images/:sig'),
+      withGuard(({ params, request }) => {
+        if (!find(String(params.id))) return error(404, { code: 'not_found', message: 'component not found' });
+        const q = new URL(request.url).searchParams;
+        const kind = q.has('u') ? 'u' : 'p';
+        const svg = mockImage(kind, q.get(kind) ?? '');
+        if (!svg) return error(404, { code: 'image_unavailable', message: 'the image could not be loaded from its host' });
+        return new HttpResponse(svg, {
+          headers: {
+            'Content-Type': 'image/svg+xml',
+            'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; sandbox",
+            'X-Content-Type-Options': 'nosniff',
+          },
+        });
       }),
     ),
 

@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ismoilovdevml/hangar/internal/api/catalog"
+	"github.com/ismoilovdevml/hangar/internal/api/readmeimg"
 	"github.com/ismoilovdevml/hangar/internal/config"
 	"github.com/ismoilovdevml/hangar/internal/db"
 	"github.com/ismoilovdevml/hangar/internal/secrets"
@@ -89,7 +90,20 @@ func securityOptions(cfg config.Config) server.Security {
 		APIBodyBytes:          s.Limits.APIBodyBytes,
 		UploadBodyBytes:       s.Limits.UploadBodyBytes,
 		BodyIdleTimeout:       s.Limits.BodyIdleTimeout,
+		UIImageSources:        readmeImageSources(cfg.UI),
 	}
+}
+
+// readmeImageSources are the img-src sources the web UI needs for README
+// images: none when Hangar serves them, the remote schemes in direct mode.
+func readmeImageSources(ui config.UI) []string {
+	if ui.ReadmeImages != string(readmeimg.ModeDirect) {
+		return nil
+	}
+	if ui.ReadmeImagesAllowHTTP {
+		return []string{"https:", "http:"}
+	}
+	return []string{"https:"}
 }
 
 // adminRotateSecrets re-encrypts every stored secret with the primary key:

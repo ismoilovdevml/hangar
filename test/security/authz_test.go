@@ -89,6 +89,7 @@ var apiPolicy = map[string]policy{
 	"GET /components/{id}/dependents":            repoRead,
 	"GET /components/{id}/sbom":                  repoRead,
 	"GET /components/{id}/info":                  repoRead,
+	"GET /components/{id}/readme-images/{sig}":   repoRead,
 	"GET /repositories/{name}/browse":            repoRead,
 	"GET /assets/{id}":                           repoRead,
 	"POST /repositories":                         privileged,

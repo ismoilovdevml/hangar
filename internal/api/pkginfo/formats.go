@@ -74,6 +74,7 @@ func (x *extraction) npm(ctx context.Context) {
 		case isReadme(file) && x.info.Readme == nil:
 			b, _ := io.ReadAll(io.LimitReader(r, MaxReadme+1))
 			x.setReadme(string(b), readmeFormat(file), file+" in the package tarball")
+			x.archiveRoot, x.readmeDir = dir+"/", dir+"/"
 		}
 		return manifest != nil && x.info.Readme != nil
 	})
@@ -107,11 +108,32 @@ func (x *extraction) npmManifest(m map[string]json.RawMessage, source string) {
 			}
 		}
 	}
+	x.npmRepository(m["repository"])
 	var kws []string
 	if json.Unmarshal(m["keywords"], &kws) == nil {
 		x.addKeywords(kws...)
 	} else if s := str("keywords"); s != "" {
 		x.addKeywords(strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ' ' })...)
+	}
+}
+
+// npmRepository accepts "owner/repo", "github:owner/repo", a URL, or
+// {"type": "git", "url": ..., "directory": ...}.
+func (x *extraction) npmRepository(raw json.RawMessage) {
+	if len(raw) == 0 {
+		return
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		x.setSource(s, "", "")
+		return
+	}
+	var o struct {
+		URL       string `json:"url"`
+		Directory string `json:"directory"`
+	}
+	if json.Unmarshal(raw, &o) == nil {
+		x.setSource(o.URL, "", o.Directory)
 	}
 }
 
@@ -146,7 +168,13 @@ type nuspec struct {
 			Type  string `xml:"type,attr"`
 			Value string `xml:",chardata"`
 		} `xml:"license"`
-		Readme string `xml:"readme"`
+		Readme     string `xml:"readme"`
+		Icon       string `xml:"icon"`
+		IconURL    string `xml:"iconUrl"`
+		Repository struct {
+			URL    string `xml:"url,attr"`
+			Commit string `xml:"commit,attr"`
+		} `xml:"repository"`
 	} `xml:"metadata"`
 }
 
@@ -160,6 +188,11 @@ func (x *extraction) nuget(ctx context.Context) {
 		return
 	}
 	defer closer.Close()
+	x.membersListed = true
+	x.members = make(map[string]struct{}, len(zr.File))
+	for _, f := range zr.File {
+		x.members[f.Name] = struct{}{}
+	}
 	var spec *zip.File
 	for _, f := range zr.File {
 		if !strings.Contains(f.Name, "/") && strings.HasSuffix(strings.ToLower(f.Name), ".nuspec") {
@@ -193,16 +226,39 @@ func (x *extraction) nuget(ctx context.Context) {
 	case strings.TrimSpace(md.LicenseURL) != "":
 		x.addLicense(strings.TrimSpace(md.LicenseURL))
 	}
-	if path := strings.TrimLeft(strings.ReplaceAll(strings.TrimSpace(md.Readme), `\`, "/"), "/"); path != "" {
-		for _, f := range zr.File {
-			if strings.EqualFold(f.Name, path) {
-				if b, ok := readZipFile(f, MaxReadme+1); ok {
-					x.setReadme(string(b), readmeFormat(path), path+" in the .nupkg")
+	x.setSource(md.Repository.URL, md.Repository.Commit, "")
+	if x.info.Homepage != "" {
+		x.setSource(x.info.Homepage, "", "")
+	}
+	if p := nupkgPath(md.Readme); p != "" {
+		if name, ok := x.member(p); ok {
+			for _, f := range zr.File {
+				if f.Name == name {
+					if b, ok := readZipFile(f, MaxReadme+1); ok {
+						x.setReadme(string(b), readmeFormat(name), name+" in the .nupkg")
+						if i := strings.LastIndexByte(name, '/'); i >= 0 {
+							x.readmeDir = name[:i+1]
+						}
+					}
+					break
 				}
-				break
 			}
 		}
 	}
+	switch p := nupkgPath(md.Icon); {
+	case p != "":
+		if name, ok := x.member(p); ok {
+			x.info.Icon = &Image{Member: name}
+		}
+	case strings.HasPrefix(strings.TrimSpace(md.IconURL), "https://") || strings.HasPrefix(strings.TrimSpace(md.IconURL), "http://"):
+		x.info.Icon = &Image{URL: strings.TrimSpace(md.IconURL)}
+	}
+}
+
+// nupkgPath turns a path in the .nuspec (which may use backslashes) into a
+// .nupkg entry name.
+func nupkgPath(p string) string {
+	return strings.TrimLeft(strings.ReplaceAll(strings.TrimSpace(p), `\`, "/"), "/")
 }
 
 // ---------------------------------------------------------------- PyPI
@@ -315,9 +371,18 @@ func (x *extraction) pyMetadata(m pyMeta, source string) {
 	x.setHomepage(m.get("home_page"))
 	for _, u := range m["project_urls"] {
 		label, url, ok := strings.Cut(u, ",")
-		if ok && strings.EqualFold(strings.TrimSpace(label), "homepage") {
-			x.setHomepage(url)
+		if !ok {
+			continue
 		}
+		switch strings.ToLower(strings.TrimSpace(label)) {
+		case "homepage":
+			x.setHomepage(url)
+		case "source", "source code", "repository", "code", "github", "gitlab":
+			x.setSource(url, "", "")
+		}
+	}
+	if x.source.url == "" {
+		x.setSource(x.info.Homepage, "", "")
 	}
 	x.addLicense(m.get("license_expression"))
 	if l := m.get("license"); l != "" && !strings.Contains(strings.TrimSpace(l), "\n") {

@@ -15,6 +15,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/api"
 	"github.com/ismoilovdevml/hangar/internal/api/catalog"
 	"github.com/ismoilovdevml/hangar/internal/api/pkginfo"
+	"github.com/ismoilovdevml/hangar/internal/api/readmeimg"
 	"github.com/ismoilovdevml/hangar/internal/audit"
 	"github.com/ismoilovdevml/hangar/internal/auth"
 	"github.com/ismoilovdevml/hangar/internal/auth/httpapi"
@@ -128,6 +129,25 @@ func oidcOptions(cfg config.Config, log *slog.Logger) (oidc.Options, error) {
 		return opts, err
 	}
 	return opts, nil
+}
+
+// openReadmeImages builds the README image service. URLs are signed with a
+// key derived from security.secret_key, else with a key kept in the
+// database, so every node accepts URLs another node issued.
+func openReadmeImages(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, clients *httpclient.Factory, guard *proxy.Guard,
+	log *slog.Logger) (*readmeimg.Service, error) {
+	opts := readmeimg.Options{Mode: readmeimg.Mode(cfg.UI.ReadmeImages), AllowHTTP: cfg.UI.ReadmeImagesAllowHTTP, Pool: pool,
+		Clients: clients, Router: clients, Guard: guard, Logger: log}
+	if cfg.Security.SecretKey != "" {
+		secret, err := secrets.ParseKey(cfg.Security.SecretKey)
+		if err != nil {
+			return nil, fmt.Errorf("security.secret_key: %w", err)
+		}
+		if opts.Key, err = readmeimg.DeriveKey(secret); err != nil {
+			return nil, err
+		}
+	}
+	return readmeimg.New(ctx, opts)
 }
 
 // openOIDC builds the OIDC provider when auth.oidc is enabled in the
@@ -426,6 +446,10 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		OIDCSource:   signIn.Provider,
 		Logger:       log,
 	}
+	readmeImages, err := openReadmeImages(ctx, cfg, pool, clients, guard, log)
+	if err != nil {
+		return nil, err
+	}
 	restAPI := &api.API{
 		Deps:           deps,
 		InstanceName:   cfg.Server.InstanceName,
@@ -434,6 +458,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Started:        started,
 		Catalog:        catalog.New(pool, catalog.Options{Sealer: storeSealer(keyring), ConfiguredStores: []string{DefaultBlobStore}}),
 		PackageInfo:    pkginfo.New(pool, deps.Components, deps.Blobs, log),
+		ReadmeImages:   readmeImages,
 		Search:         search.New(pool),
 		Audit:          auditLog,
 		Upstreams:      healthReporter,

@@ -13,7 +13,7 @@ an operator must configure, and how to report a vulnerability
 | Browser sessions | CSRF, XSS, clickjacking, session theft through uploaded content | `HttpOnly`/`Secure`/`SameSite` session cookie, CSRF token on mutations, origin check, CORS deny-by-default, CSP for the UI, sandboxed CSP for everything served from package endpoints, `X-Frame-Options: DENY`, `frame-ancestors 'none'`, `nosniff`. |
 | Single sign-on | Login CSRF, code interception, token substitution, account takeover by name | OIDC authorization code flow with PKCE (S256); state, nonce and verifier in a short-lived AES-GCM encrypted `HttpOnly` cookie (key derived from `security.secret_key`); ID token signature, issuer, audience, expiry and nonce verified; same-origin post-login redirects only. External identities are linked by issuer and subject and never take over a local, service or other external account. LDAP: filter values escaped, exactly one entry required, empty passwords refused (no anonymous bind). |
 | Upstream credentials and S3 keys | Disclosure through a database dump, backup, read-only SQL access or the API | Envelope encryption at rest (below); never returned by the API; opened only when the outbound client or the storage driver is built; never sent to redirect targets. |
-| Internal network | Server-side request forgery through proxy repositories | Outbound address policy: loopback, private, link-local (cloud metadata), CGNAT, multicast, reserved and IPv4-embedding IPv6 ranges are refused when a proxy is saved, on every redirect hop and when a connection is dialled. Only `http.allow_private_networks` opens exceptions. |
+| Internal network | Server-side request forgery through proxy repositories and README images | Outbound address policy: loopback, private, link-local (cloud metadata), CGNAT, multicast, reserved and IPv4-embedding IPv6 ranges are refused when a proxy is saved, on every redirect hop and when a connection is dialled. Only `http.allow_private_networks` opens exceptions. |
 | Availability | Slow-header, slow-body and oversized requests, API floods | `server.read_header_timeout`, body idle timeout, header and API body limits, per-IP API rate limit; uploads are streamed, never buffered. |
 | Audit trail | Repudiation | Every mutation, denial and failed sign-in is recorded in the append-only audit log with the client IP (forwarding headers honoured only from `server.trusted_proxies`). |
 
@@ -118,6 +118,52 @@ A lost key cannot be recovered: re-enter the affected credentials.
 | Request bodies | API 1 MiB, uploads unlimited and streamed, everything else 64 KiB; a body that stalls is aborted | `security.limits.*` |
 | Rate limits | Per client IP (IPv6 per /64): API requests; failed authentications on API and package endpoints | `security.rate_limit.*`, `auth.login_rate` |
 | Idle connections | Closed | `server.idle_timeout` |
+| README images | Loaded from Hangar's own origin, see [README images](#readme-images); the UI policy keeps `img-src 'self' data:` unless `direct` is chosen | `ui.readme_images`, `ui.readme_images_allow_http` |
+
+### README images
+
+Package READMEs reference images on other hosts (badges, logos) and files
+inside the package or its source repository. The web UI's policy
+(`img-src 'self' data:`) blocks other hosts, so the package info API
+(`GET /components/{id}/info`) resolves every image of a README and returns,
+per image source, the URL the browser may load. `ui.readme_images` decides
+what that is:
+
+| Mode | Remote images | Privacy |
+|---|---|---|
+| `proxy` (default) | Hangar fetches them and serves them from `GET /api/v1/components/{id}/readme-images/{sig}` | Browsers contact no other host; the image hosts see Hangar's address only |
+| `direct` | Browsers load them from their hosts; the UI policy becomes `img-src 'self' data: https:` (`http:` too with `ui.readme_images_allow_http`) | Every image host learns each viewer's IP address, browser, and when a README was opened |
+| `off` | Not loaded; the image's alternative text is shown as a placeholder | Nothing leaves the browser or the server |
+
+Images stored inside the package (NuGet `<icon>` and README images in the
+.nupkg, files in an npm tarball) are always served by Hangar from the stored
+blob, in every mode. Relative image paths are resolved inside the package
+first, then in the source repository the package names (github.com and
+gitlab.com raw file URLs, at the published commit when known).
+
+The image endpoint is not an open proxy:
+
+- Image URLs are signed with HMAC-SHA256 over the component id and the
+  source; the key is derived from `security.secret_key` (else generated
+  once and kept in `readme_image_key`, migration `00160`). Only URLs the
+  info API issued are accepted (`403 invalid_signature` otherwise).
+- The caller needs read access to the component's repository, like for the
+  README itself (`401` signed out, `404` without access).
+- Fetches use the outbound HTTP settings (platform default proxy, CA
+  bundle) and the outbound address policy on the URL, on every redirect hop
+  (at most 5) and on every dialled address. https only: `http://` sources
+  are upgraded to `https://` and redirects to `http://` refused, unless
+  `ui.readme_images_allow_http`. No cookies, credentials or referrer are
+  sent; 15 s and 5 MiB at most.
+- Only content that sniffs as PNG, JPEG, GIF, WebP, AVIF or SVG is served,
+  whatever type the remote declares. Responses carry
+  `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; sandbox`,
+  `X-Content-Type-Options: nosniff` and `Cross-Origin-Resource-Policy: same-origin`,
+  so an SVG opened on its own runs no script and loads nothing.
+- Results are cached in memory (32 MiB) and in `readme_image_cache` for
+  24 hours, failures for 15 minutes, shared by every node. A remote image
+  that cannot be loaded answers `404 image_unavailable` (not a 5xx, so a
+  broken third-party badge does not trigger server error alerts).
 
 ## Security tests
 

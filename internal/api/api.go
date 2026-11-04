@@ -57,6 +57,9 @@ type Catalog interface {
 // stored files (implemented by pkginfo.Service).
 type PackageInfo interface {
 	Info(ctx context.Context, repo *core.Repository, c *core.Component) (*pkginfo.Info, error)
+	// Member reads a file of the version's package archive (README images,
+	// the package icon), at most limit bytes.
+	Member(ctx context.Context, repo *core.Repository, c *core.Component, name string, limit int64) ([]byte, error)
 }
 
 // Searcher runs global searches (implemented by search.Service).
@@ -114,6 +117,7 @@ type API struct {
 
 	Catalog        Catalog
 	PackageInfo    PackageInfo
+	ReadmeImages   ReadmeImages // nil: README images are not shown
 	Search         Searcher
 	Audit          AuditReader
 	Upstreams      UpstreamHealth
@@ -215,6 +219,7 @@ func (a *API) Mount(r chi.Router) {
 		r.Get("/components/{id}/assets", a.listComponentAssets)
 		r.Get("/components/{id}/versions", a.listComponentVersions)
 		r.Get("/components/{id}/info", a.getComponentInfo)
+		r.Get("/components/{id}/readme-images/{sig}", a.getReadmeImage)
 		r.Get("/assets/{id}", a.getAsset)
 		r.Delete("/assets/{id}", a.deleteAsset)
 		r.Get("/components/{id}/findings", a.listComponentFindings)

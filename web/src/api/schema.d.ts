@@ -637,6 +637,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{id}/readme-images/{sig}": {
+        parameters: {
+            query?: {
+                /** @description Remote image URL (proxy mode). Exactly one of u and p. */
+                u?: string;
+                /** @description File inside the package archive. Exactly one of u and p. */
+                p?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+                /** @description Signature the server issued for this component and source */
+                sig: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * An image of a version's README, or its icon
+         * @description Serves the URLs `GET /components/{id}/info` returns in `readme.images` and `icon_url`; only URLs this server signed for the component are accepted, so this is not an open proxy. `p` names a file inside the .nupkg or npm tarball. `u` is a remote image the server fetches when `ui.readme_images` is `proxy`: through the outbound HTTP settings and the address policy (the URL and every redirect hop), https only unless `ui.readme_images_allow_http`, at most 5 MiB and 15 s, without cookies, credentials or referrer, and cached for 24 hours (failures for 15 minutes). Only content that sniffs as PNG, JPEG, GIF, WebP, AVIF or SVG is served, with `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; sandbox` and `X-Content-Type-Options: nosniff`. Needs read access to the component's repository.
+         */
+        get: operations["getReadmeImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assets/{id}": {
         parameters: {
             query?: never;
@@ -2457,6 +2486,10 @@ export interface components {
             source: string;
             /** @description The README was longer than 512 KiB and was cut */
             truncated: boolean;
+            /** @description Each image source of a Markdown README, as written in it (Markdown images and HTML img tags), mapped to the URL the browser loads: a signed `/components/{id}/readme-images/...` URL, or in direct mode the remote https URL itself. Relative paths are resolved inside the package, else in the source repository (github.com, gitlab.com). Sources left out are shown as their alternative text. */
+            images: {
+                [key: string]: string;
+            };
         };
         ComponentInfo: {
             description?: string;
@@ -2465,6 +2498,13 @@ export interface components {
             keywords: string[];
             homepage?: string;
             readme?: components["schemas"]["Readme"];
+            /** @description The package's own icon (NuGet `<icon>` in the .nupkg, or `<iconUrl>`), loadable like `readme.images` */
+            icon_url?: string;
+            /**
+             * @description How README images on other hosts are shown (`ui.readme_images`)
+             * @enum {string}
+             */
+            readme_images: "proxy" | "direct" | "off";
         };
         FacetValue: {
             value: string;
@@ -4535,6 +4575,69 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    getReadmeImage: {
+        parameters: {
+            query?: {
+                /** @description Remote image URL (proxy mode). Exactly one of u and p. */
+                u?: string;
+                /** @description File inside the package archive. Exactly one of u and p. */
+                p?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+                /** @description Signature the server issued for this component and source */
+                sig: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/gif": string;
+                    "image/webp": string;
+                    "image/avif": string;
+                    "image/svg+xml": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description The URL is not signed by this server for this component (`invalid_signature`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such component or file, remote images are not proxied (`not_found`), or the remote image could not be loaded or is not an image (`image_unavailable`; not a server error, so a broken third-party badge does not raise 5xx alerts) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The file is not a served image type (`not_an_image`) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     getAsset: {

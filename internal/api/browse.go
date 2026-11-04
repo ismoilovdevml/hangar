@@ -462,5 +462,5 @@ func (a *API) getComponentInfo(w http.ResponseWriter, r *http.Request) {
 		a.writeErr(w, r, err)
 		return
 	}
-	WriteJSON(w, http.StatusOK, info)
+	WriteJSON(w, http.StatusOK, a.componentInfoOut(c.ID, info))
 }
