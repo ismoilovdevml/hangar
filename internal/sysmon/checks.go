@@ -3,6 +3,9 @@ package sysmon
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -44,7 +47,8 @@ func ms(v int64) *int64 { return &v }
 
 // DatabaseCheck reports the readiness ping and the connection pool.
 func DatabaseCheck(pool *pgxpool.Pool, ready Readiness) Check {
-	return Check{Name: "database", Label: "PostgreSQL", Run: func(ctx context.Context) Result {
+	target := databaseTarget(pool)
+	return Check{Name: "database", Label: "Database", Run: func(ctx context.Context) Result {
 		r, ok := ready(ctx, "database")
 		if !ok {
 			start := time.Now()
@@ -61,14 +65,16 @@ func DatabaseCheck(pool *pgxpool.Pool, ready Readiness) Check {
 			{"Waited for a connection", fmt.Sprintf("%d times, %s in total", st.EmptyAcquireCount(), roundDuration(st.EmptyAcquireWaitTime()))},
 		}
 		if r.Status != health.StatusOK {
-			return Result{Status: StatusDown, Detail: "Unreachable: " + observability.Scrub(r.Error), LatencyMS: ms(r.LatencyMS), Facts: facts}
+			return Result{Status: StatusDown, Detail: "Unreachable: " + observability.Scrub(r.Error), Target: target, LatencyMS: ms(r.LatencyMS), Facts: facts}
 		}
+		detail := fmt.Sprintf("%d of %d connections in use", st.AcquiredConns(), st.MaxConns())
 		var server string
 		if err := pool.QueryRow(ctx, `SELECT current_setting('server_version')`).Scan(&server); err == nil {
 			facts = append([]Fact{{"Server", "PostgreSQL " + server}}, facts...)
+			detail = "PostgreSQL " + server + " · " + detail
 		}
-		res := Result{Status: StatusHealthy, LatencyMS: ms(r.LatencyMS), Facts: facts,
-			Detail: fmt.Sprintf("Ping %d ms; %d of %d connections in use", r.LatencyMS, st.AcquiredConns(), st.MaxConns())}
+		res := Result{Status: StatusHealthy, Detail: detail, Metric: fmt.Sprintf("%d ms", r.LatencyMS), Target: target,
+			LatencyMS: ms(r.LatencyMS), Facts: facts}
 		switch {
 		case st.MaxConns() > 0 && st.AcquiredConns() >= st.MaxConns():
 			res.Status, res.Detail = StatusDegraded, fmt.Sprintf("Connection pool exhausted (%d of %d in use); requests wait for a connection", st.AcquiredConns(), st.MaxConns())
@@ -77,6 +83,19 @@ func DatabaseCheck(pool *pgxpool.Pool, ready Readiness) Check {
 		}
 		return res
 	}}
+}
+
+// databaseTarget is the address of the database without credentials:
+// "db.example.com:5432/hangar", or the socket directory and database.
+func databaseTarget(pool *pgxpool.Pool) string {
+	c := pool.Config().ConnConfig
+	if c.Host == "" {
+		return c.Database
+	}
+	if strings.HasPrefix(c.Host, "/") {
+		return c.Host + "/" + c.Database
+	}
+	return net.JoinHostPort(c.Host, strconv.Itoa(int(c.Port))) + "/" + c.Database
 }
 
 // BlobStore is a blob store row: name, driver kind and, for fs, its path.
@@ -91,7 +110,7 @@ type BlobStore struct {
 func BlobStoresCheck(list func(ctx context.Context) ([]BlobStore, error),
 	open func(ctx context.Context, name string) (core.BlobStore, error), ready Readiness,
 ) Check {
-	return Check{Name: "blobstores", Label: "Blob stores", Run: func(ctx context.Context) Result {
+	return Check{Name: "blobstores", Label: "Blob storage", Run: func(ctx context.Context) Result {
 		stores, err := list(ctx)
 		if err != nil {
 			r, ok := ready(ctx, "blobstore")
@@ -109,14 +128,23 @@ func BlobStoresCheck(list func(ctx context.Context) ([]BlobStore, error),
 		}
 		res := Result{Status: StatusHealthy}
 		var unreachable, low []string
+		var probes []storeProbe
 		for _, s := range stores {
-			state, fact := probeStore(ctx, s, open)
-			res.Facts = append(res.Facts, fact)
-			switch state {
+			p := probeStore(ctx, s, open)
+			probes = append(probes, p)
+			res.Facts = append(res.Facts, p.fact)
+			switch p.status {
 			case StatusDown:
 				unreachable = append(unreachable, s.Name)
 			case StatusDegraded:
 				low = append(low, s.Name)
+			}
+		}
+		res.Metric = storesMetric(probes)
+		if len(stores) == 1 {
+			res.Target = stores[0].Name
+			if stores[0].Kind == "fs" && stores[0].Path != "" {
+				res.Target = stores[0].Path
 			}
 		}
 		switch {
@@ -124,11 +152,12 @@ func BlobStoresCheck(list func(ctx context.Context) ([]BlobStore, error),
 			res.Status, res.Detail = StatusDown, "Unreachable: "+strings.Join(unreachable, ", ")
 		case len(low) > 0:
 			res.Status, res.Detail = StatusDegraded, "Low on free space: "+strings.Join(low, ", ")
+		case len(stores) == 1 && probes[0].size > 0:
+			res.Detail = fmt.Sprintf("%s · %s free of %s", probes[0].fact.Label, HumanBytes(probes[0].free), HumanBytes(probes[0].size))
+		case len(stores) == 1:
+			res.Detail = probes[0].fact.Label + " · reachable"
 		default:
 			res.Detail = fmt.Sprintf("%d of %d reachable", len(stores), len(stores))
-			if len(stores) == 1 {
-				res.Detail = "Reachable"
-			}
 		}
 		return res
 	}}
@@ -140,11 +169,40 @@ type pinger interface {
 
 type unwrapper interface{ Unwrap() core.BlobStore }
 
-func probeStore(ctx context.Context, s BlobStore, open func(ctx context.Context, name string) (core.BlobStore, error)) (string, Fact) {
+// storeProbe is the outcome of one blob store's probe.
+type storeProbe struct {
+	status string
+	fact   Fact
+	// tookMS is the ping time; -1 when the store did not answer.
+	tookMS int64
+	// free and size of a filesystem store; size is 0 when unknown.
+	free, size uint64
+}
+
+// storesMetric is the least free space of the filesystem stores, else the
+// slowest ping.
+func storesMetric(probes []storeProbe) string {
+	ratio, took := 2.0, int64(-1)
+	for _, p := range probes {
+		if p.size > 0 {
+			ratio = min(ratio, float64(p.free)/float64(p.size))
+		}
+		took = max(took, p.tookMS)
+	}
+	switch {
+	case ratio <= 1:
+		return fmt.Sprintf("%.0f%% free", ratio*100)
+	case took >= 0:
+		return fmt.Sprintf("%d ms", took)
+	}
+	return ""
+}
+
+func probeStore(ctx context.Context, s BlobStore, open func(ctx context.Context, name string) (core.BlobStore, error)) storeProbe {
 	label := s.Name + " (" + s.Kind + ")"
 	st, err := open(ctx, s.Name)
 	if err != nil {
-		return StatusDown, Fact{label, "Cannot open: " + observability.Scrub(err.Error())}
+		return storeProbe{status: StatusDown, tookMS: -1, fact: Fact{label, "Cannot open: " + observability.Scrub(err.Error())}}
 	}
 	for {
 		u, ok := st.(unwrapper)
@@ -156,23 +214,24 @@ func probeStore(ctx context.Context, s BlobStore, open func(ctx context.Context,
 	start := time.Now()
 	if p, ok := st.(pinger); ok {
 		if err := p.Ping(ctx); err != nil {
-			return StatusDown, Fact{label, "Unreachable: " + observability.Scrub(err.Error())}
+			return storeProbe{status: StatusDown, tookMS: -1, fact: Fact{label, "Unreachable: " + observability.Scrub(err.Error())}}
 		}
 	}
 	took := time.Since(start).Milliseconds()
 	if s.Kind != "fs" || s.Path == "" {
-		return StatusHealthy, Fact{label, fmt.Sprintf("Reachable (%d ms)", took)}
+		return storeProbe{status: StatusHealthy, tookMS: took, fact: Fact{label, fmt.Sprintf("Reachable (%d ms)", took)}}
 	}
 	size, free, ok := observability.DiskUsage(s.Path)
 	if !ok || size == 0 {
-		return StatusHealthy, Fact{label, fmt.Sprintf("Reachable (%d ms); free space unknown", took)}
+		return storeProbe{status: StatusHealthy, tookMS: took, fact: Fact{label, fmt.Sprintf("Reachable (%d ms); free space unknown", took)}}
 	}
 	ratio := float64(free) / float64(size)
-	text := fmt.Sprintf("Reachable; %s free of %s (%.0f%%)", HumanBytes(free), HumanBytes(size), ratio*100)
+	p := storeProbe{status: StatusHealthy, tookMS: took, free: free, size: size,
+		fact: Fact{label, fmt.Sprintf("Reachable; %s free of %s (%.0f%%)", HumanBytes(free), HumanBytes(size), ratio*100)}}
 	if ratio < lowFreeRatio && free < lowFreeBytes {
-		return StatusDegraded, Fact{label, text}
+		p.status = StatusDegraded
 	}
-	return StatusHealthy, Fact{label, text}
+	return p
 }
 
 // HumanBytes renders n in binary units ("1.5 GiB").
@@ -189,6 +248,17 @@ func HumanBytes(n uint64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
 
+// shortDuration renders d for a headline: "143 µs", "12 ms", "1.4 s".
+func shortDuration(d time.Duration) string {
+	switch {
+	case d < time.Millisecond:
+		return fmt.Sprintf("%d µs", d.Microseconds())
+	case d < time.Second:
+		return fmt.Sprintf("%d ms", d.Milliseconds())
+	}
+	return fmt.Sprintf("%.1f s", d.Seconds())
+}
+
 func roundDuration(d time.Duration) string {
 	switch {
 	case d == 0:
@@ -203,7 +273,7 @@ func roundDuration(d time.Duration) string {
 
 // EventBusCheck reports the NATS connection and JetStream usage.
 func EventBusCheck(nc *nats.Conn, js jetstream.JetStream, embedded bool, ready Readiness) Check {
-	return Check{Name: "eventbus", Label: "NATS / JetStream", Run: func(ctx context.Context) Result {
+	return Check{Name: "eventbus", Label: "Event bus", Run: func(ctx context.Context) Result {
 		mode := "External cluster"
 		if embedded {
 			mode = "Embedded server"
@@ -216,28 +286,30 @@ func EventBusCheck(nc *nats.Conn, js jetstream.JetStream, embedded bool, ready R
 			}
 			return Result{Status: StatusDown, Detail: "Not connected (" + status + "); events and jobs are paused", Facts: facts}
 		}
-		if url := nc.ConnectedUrlRedacted(); url != "" {
-			facts = append(facts, Fact{"Server", url})
+		target := nc.ConnectedUrlRedacted()
+		if target != "" {
+			facts = append(facts, Fact{"Server", target})
 		}
 		facts = append(facts, Fact{"Reconnects", strconv.FormatUint(nc.Stats().Reconnects, 10)})
 		var latency *int64
+		metric := "connected"
 		if r, ok := ready(ctx, "eventbus"); ok {
-			latency = ms(r.LatencyMS)
+			latency, metric = ms(r.LatencyMS), fmt.Sprintf("%d ms", r.LatencyMS)
 			if r.Status != health.StatusOK {
-				return Result{Status: StatusDown, Detail: observability.Scrub(r.Error), LatencyMS: latency, Facts: facts}
+				return Result{Status: StatusDown, Detail: observability.Scrub(r.Error), Target: target, LatencyMS: latency, Facts: facts}
 			}
 		}
 		info, err := js.AccountInfo(ctx)
 		if err != nil {
-			return Result{Status: StatusDown, Detail: "JetStream unavailable: " + err.Error(), LatencyMS: latency, Facts: facts}
+			return Result{Status: StatusDown, Detail: "JetStream unavailable: " + err.Error(), Target: target, LatencyMS: latency, Facts: facts}
 		}
 		facts = append(facts,
 			Fact{"Streams", strconv.Itoa(info.Streams)},
 			Fact{"Consumers", strconv.Itoa(info.Consumers)},
 			Fact{"Stored", HumanBytes(info.Store)},
 		)
-		return Result{Status: StatusHealthy, LatencyMS: latency, Facts: facts,
-			Detail: "Connected; JetStream holds " + plural(info.Streams, "stream")}
+		return Result{Status: StatusHealthy, Metric: metric, Target: target, LatencyMS: latency, Facts: facts,
+			Detail: fmt.Sprintf("JetStream · %s · %s, %s", strings.ToLower(mode), plural(info.Streams, "stream"), plural(info.Consumers, "consumer"))}
 	}}
 }
 
@@ -245,9 +317,9 @@ func EventBusCheck(nc *nats.Conn, js jetstream.JetStream, embedded bool, ready R
 func SchedulerCheck(pool *pgxpool.Pool, leader func() (bool, time.Time)) Check {
 	return Check{Name: "scheduler", Label: "Task scheduler", Run: func(ctx context.Context) Result {
 		lead, since := leader()
-		role := "Follower: another node schedules tasks; this one executes them"
+		role, metric := "Another node is the leader; this one runs tasks", RoleFollower
 		if lead {
-			role = "Leader: this node schedules tasks"
+			role, metric = "This node is the leader", RoleLeader
 		}
 		facts := []Fact{{"Role since", since.UTC().Format(time.RFC3339)}}
 		var active, failed, overdue int64
@@ -257,7 +329,7 @@ func SchedulerCheck(pool *pgxpool.Pool, leader func() (bool, time.Time)) Check {
 				(SELECT count(*) FROM tasks WHERE enabled AND schedule IS NOT NULL
 					AND next_run_at < now() - make_interval(secs => $1))`, overdueAfter.Seconds()).Scan(&active, &failed, &overdue)
 		if err != nil {
-			return Result{Status: StatusDegraded, Detail: role + "; task runs cannot be read: " + observability.Scrub(err.Error()), Facts: facts}
+			return Result{Status: StatusDegraded, Detail: role + "; task runs cannot be read: " + observability.Scrub(err.Error()), Metric: metric, Facts: facts}
 		}
 		facts = append(facts,
 			Fact{"Active runs", strconv.FormatInt(active, 10)},
@@ -265,10 +337,11 @@ func SchedulerCheck(pool *pgxpool.Pool, leader func() (bool, time.Time)) Check {
 			Fact{"Overdue tasks", strconv.FormatInt(overdue, 10)},
 		)
 		if overdue > 0 {
-			return Result{Status: StatusDegraded, Facts: facts,
-				Detail: fmt.Sprintf("%s; %s more than an hour late", role, plural(int(overdue), "scheduled task"))}
+			return Result{Status: StatusDegraded, Metric: metric, Facts: facts,
+				Detail: fmt.Sprintf("%s · %s more than an hour late", role, plural(int(overdue), "scheduled task"))}
 		}
-		return Result{Status: StatusHealthy, Detail: role, Facts: facts}
+		return Result{Status: StatusHealthy, Metric: metric, Facts: facts,
+			Detail: fmt.Sprintf("%s · %d active, %d failed in 24 h", role, active, failed)}
 	}}
 }
 
@@ -289,7 +362,7 @@ func SearchCheck(pool *pgxpool.Pool) Check {
 			return Result{Status: StatusDown, Detail: "Search is unavailable: " + observability.Scrub(err.Error())}
 		}
 		if valid == nil || ready == nil || docs == nil {
-			return Result{Status: StatusDegraded, Detail: "Index " + searchIndex + " is missing; searches scan every component"}
+			return Result{Status: StatusDegraded, Target: searchIndex, Detail: "Index " + searchIndex + " is missing; searches scan every component"}
 		}
 		start := time.Now()
 		var hit bool
@@ -298,16 +371,20 @@ func SearchCheck(pool *pgxpool.Pool) Check {
 			return Result{Status: StatusDown, Detail: "Search query failed: " + observability.Scrub(err.Error())}
 		}
 		took := time.Since(start)
-		facts := []Fact{{"Components (estimate)", strconv.FormatInt(max(int64(*docs), 0), 10)}, {"Probe query", roundDuration(took)}}
+		count := max(int64(*docs), 0)
+		facts := []Fact{{"Components (estimate)", strconv.FormatInt(count, 10)}, {"Probe query", roundDuration(took)}}
+		res := Result{Status: StatusHealthy, Metric: shortDuration(took), Target: searchIndex, LatencyMS: ms(took.Milliseconds()), Facts: facts}
 		switch {
 		case !*valid || !*ready:
-			return Result{Status: StatusDegraded, LatencyMS: ms(took.Milliseconds()), Facts: facts,
-				Detail: "Index is being rebuilt or invalid; run REINDEX INDEX " + searchIndex}
+			res.Status, res.Detail = StatusDegraded, "Index is being rebuilt or invalid; run REINDEX INDEX "+searchIndex
 		case took > slowQuery:
-			return Result{Status: StatusDegraded, LatencyMS: ms(took.Milliseconds()), Facts: facts,
-				Detail: fmt.Sprintf("Slow: a probe search took %s", roundDuration(took))}
+			res.Status, res.Detail = StatusDegraded, fmt.Sprintf("Slow: a probe search took %s", roundDuration(took))
+		case count > 0:
+			res.Detail = fmt.Sprintf("Index valid · about %d components", count)
+		default:
+			res.Detail = "Index valid; searches answer normally"
 		}
-		return Result{Status: StatusHealthy, LatencyMS: ms(took.Milliseconds()), Facts: facts, Detail: "Index valid; searches answer normally"}
+		return res
 	}}
 }
 
@@ -323,12 +400,21 @@ type AuthProvider struct {
 // AuthCheck reports external sign-in providers. Local accounts always work,
 // so a failing provider degrades sign-in but never takes it down.
 func AuthCheck(providers []AuthProvider) Check {
-	return Check{Name: "auth", Label: "External sign-in", Run: func(context.Context) Result {
+	names := make([]string, len(providers))
+	for i, p := range providers {
+		names[i] = p.Name
+	}
+	label := "Sign-in"
+	if len(names) > 0 {
+		label += " (" + strings.Join(names, ", ") + ")"
+	}
+	return Check{Name: "auth", Label: label, Run: func(context.Context) Result {
 		if len(providers) == 0 {
-			return Result{Status: StatusHealthy, Detail: "Not configured; local accounts only"}
+			return Result{Status: StatusHealthy, Metric: "local", Detail: "No external provider; local accounts only"}
 		}
-		res := Result{Status: StatusHealthy}
+		res := Result{Status: StatusHealthy, Metric: "ok"}
 		var failing []string
+		used := 0
 		for _, p := range providers {
 			ok, at, err := p.Status()
 			value := "Working"
@@ -338,20 +424,23 @@ func AuthCheck(providers []AuthProvider) Check {
 				failing = append(failing, p.Name)
 			case !ok:
 				value = "Not contacted yet"
+			default:
+				used++
 			}
 			if !at.IsZero() {
 				value += " (last used " + at.UTC().Format(time.RFC3339) + ")"
 			}
 			res.Facts = append(res.Facts, Fact{p.Name, value})
 		}
-		names := make([]string, len(providers))
-		for i, p := range providers {
-			names[i] = p.Name
-		}
 		res.Detail = strings.Join(names, " and ") + " enabled"
-		if len(failing) > 0 {
-			res.Status = StatusDegraded
+		switch {
+		case len(failing) > 0:
+			res.Status, res.Metric = StatusDegraded, "failing"
 			res.Detail = strings.Join(failing, " and ") + " failing; local accounts still sign in"
+		case used == len(providers):
+			res.Detail += " · worked at last use"
+		case used == 0:
+			res.Detail += " · not used since start"
 		}
 		return res
 	}}
@@ -368,7 +457,9 @@ func UpstreamsCheck(list UpstreamLister) Check {
 	return Check{Name: "upstreams", Label: "Upstream proxies", Run: func(ctx context.Context) Result {
 		counts := map[proxy.State]int{}
 		bad := map[proxy.State][]string{}
+		var hosts []string
 		total := 0
+		slowest := int64(-1)
 		cursor := ""
 		for range maxUpstreamPages {
 			page, err := list(ctx, cursor, core.MaxPageSize)
@@ -378,6 +469,12 @@ func UpstreamsCheck(list UpstreamLister) Check {
 			for _, it := range page.Items {
 				total++
 				counts[it.State]++
+				if it.LatencyMS != nil {
+					slowest = max(slowest, *it.LatencyMS)
+				}
+				if u, err := url.Parse(it.URL); err == nil && u.Host != "" && !slices.Contains(hosts, u.Host) {
+					hosts = append(hosts, u.Host)
+				}
 				if it.State == proxy.StateOffline || it.State == proxy.StateBlocked {
 					bad[it.State] = append(bad[it.State], it.Name)
 				}
@@ -391,12 +488,17 @@ func UpstreamsCheck(list UpstreamLister) Check {
 			return Result{Status: StatusHealthy, Detail: "No proxy repositories"}
 		}
 		res := Result{Status: StatusHealthy}
+		if slowest >= 0 {
+			res.Metric = fmt.Sprintf("%d ms", slowest)
+		}
 		order := []proxy.State{proxy.StateHealthy, proxy.StateSlow, proxy.StateBlocked, proxy.StateOffline}
 		var parts []string
-		for _, s := range order {
+		for _, s := range order[1:] {
 			if counts[s] > 0 {
 				parts = append(parts, fmt.Sprintf("%d %s", counts[s], s))
 			}
+		}
+		for _, s := range order {
 			res.Facts = append(res.Facts, Fact{titleCase(string(s)), strconv.Itoa(counts[s])})
 		}
 		for _, s := range []proxy.State{proxy.StateOffline, proxy.StateBlocked} {
@@ -405,7 +507,13 @@ func UpstreamsCheck(list UpstreamLister) Check {
 				res.Facts = append(res.Facts, Fact{titleCase(string(s)) + " remotes", listNames(names, 5)})
 			}
 		}
-		res.Detail = fmt.Sprintf("%d proxy repositories: %s", total, strings.Join(parts, ", "))
+		res.Detail = fmt.Sprintf("%d of %d healthy", counts[proxy.StateHealthy], total)
+		if len(parts) > 0 {
+			res.Detail += " · " + strings.Join(parts, ", ")
+		}
+		if len(hosts) > 0 && len(hosts) <= 2 {
+			res.Detail += " · " + strings.Join(hosts, ", ")
+		}
 		if len(bad[proxy.StateOffline])+len(bad[proxy.StateBlocked]) > 0 {
 			res.Status = StatusDegraded
 		}

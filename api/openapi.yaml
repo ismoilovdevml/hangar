@@ -2657,11 +2657,29 @@ components:
         name:
           type: string
           description: database, blobstores, eventbus, scheduler, search, auth, upstreams
-        label: { type: string, description: "Display name, e.g. PostgreSQL" }
+        label: { type: string, description: "Display name, e.g. Database or Sign-in (OIDC)" }
         status: { $ref: "#/components/schemas/SystemStatusLevel" }
         detail: { type: string, description: One sentence explaining the status }
         checked_at: { $ref: "#/components/schemas/Timestamp" }
         latency_ms: { type: integer }
+        metric:
+          type: string
+          description: The check's one headline value, e.g. "2 ms", "22% free", "leader"
+        target:
+          type: string
+          description: What the check probes, without credentials (database address, blob store path, event bus URL, index name)
+        since:
+          allOf: [{ $ref: "#/components/schemas/Timestamp" }]
+          description: When this node first saw the current status; at the earliest, its first check after start
+        last_incident:
+          type: object
+          description: The most recent finished period in which this node saw the subsystem not healthy. Kept in memory; a restart forgets it.
+          required: [status, detail, started_at, ended_at]
+          properties:
+            status: { $ref: "#/components/schemas/SystemStatusLevel" }
+            detail: { type: string, description: Explanation at the worst point of the period }
+            started_at: { $ref: "#/components/schemas/Timestamp" }
+            ended_at: { $ref: "#/components/schemas/Timestamp" }
         facts:
           type: array
           description: Labelled values in display order (pool usage, free space, ...)

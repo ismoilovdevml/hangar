@@ -61,10 +61,24 @@ type Fact struct {
 
 // Result is the outcome of one subsystem check.
 type Result struct {
-	Status    string `json:"status"`
-	Detail    string `json:"detail"`
+	Status string `json:"status"`
+	Detail string `json:"detail"`
+	// Metric is the one headline value of the check: "2 ms", "22% free",
+	// "leader". Empty when the check has none.
+	Metric string `json:"metric,omitempty"`
+	// Target is what the check probes: a database address, a path, a URL.
+	Target    string `json:"target,omitempty"`
 	LatencyMS *int64 `json:"latency_ms,omitempty"`
 	Facts     []Fact `json:"facts,omitempty"`
+}
+
+// Incident is a period in which a subsystem was not healthy.
+type Incident struct {
+	// Status is the worst status of the period.
+	Status    string    `json:"status"`
+	Detail    string    `json:"detail"`
+	StartedAt time.Time `json:"started_at"`
+	EndedAt   time.Time `json:"ended_at"`
 }
 
 // Subsystem is a check result with its name and time.
@@ -72,7 +86,22 @@ type Subsystem struct {
 	Name      string    `json:"name"`
 	Label     string    `json:"label"`
 	CheckedAt time.Time `json:"checked_at"`
+	// Since is when this node first saw the current status; at the
+	// earliest, its first check after start.
+	Since *time.Time `json:"since,omitempty"`
+	// LastIncident is the most recent finished period this node saw the
+	// subsystem not healthy. It is kept in memory, so a restart forgets it.
+	LastIncident *Incident `json:"last_incident,omitempty"`
 	Result
+}
+
+// track follows one subsystem's status between check runs.
+type track struct {
+	status string
+	since  time.Time
+	// bad is the open incident; nil while healthy.
+	bad  *Incident
+	last *Incident
 }
 
 // Check is one subsystem probe. Run must honour ctx; it is stopped after
@@ -134,9 +163,10 @@ type Monitor struct {
 	leader      atomic.Bool
 	leaderSince atomic.Int64 // unix nanoseconds of the last role change
 
-	runMu sync.Mutex // one check run at a time
-	mu    sync.Mutex
-	last  *Node
+	runMu  sync.Mutex        // one check run at a time
+	tracks map[string]*track // by check name; guarded by runMu
+	mu     sync.Mutex
+	last   *Node
 	// up and total are from the last heartbeat read (Summary).
 	up, total int
 }
@@ -160,7 +190,7 @@ func New(pool *pgxpool.Pool, opts Options) *Monitor {
 	if log == nil {
 		log = slog.Default()
 	}
-	m := &Monitor{pool: pool, opts: opts, log: log, up: 1, total: 1}
+	m := &Monitor{pool: pool, opts: opts, log: log, up: 1, total: 1, tracks: map[string]*track{}}
 	m.leaderSince.Store(opts.Started.UnixNano())
 	return m
 }
@@ -209,6 +239,9 @@ func (m *Monitor) Check(ctx context.Context) Node {
 		wg.Go(func() { subs[i] = m.run(ctx, c) })
 	}
 	wg.Wait()
+	for i := range subs {
+		m.observe(&subs[i])
+	}
 	info := version.Get()
 	n := Node{
 		ID: m.opts.NodeID, Hostname: m.opts.Hostname, URL: m.opts.URL,
@@ -256,6 +289,40 @@ func (m *Monitor) run(ctx context.Context, c Check) (s Subsystem) {
 	}
 	s.CheckedAt = time.Now().UTC()
 	return s
+}
+
+// observe records a check result in the subsystem's history and fills its
+// Since and LastIncident.
+func (m *Monitor) observe(s *Subsystem) {
+	at := s.CheckedAt
+	t := m.tracks[s.Name]
+	switch {
+	case t == nil:
+		t = &track{status: s.Status, since: at}
+		m.tracks[s.Name] = t
+		if s.Status != StatusHealthy {
+			t.bad = &Incident{Status: s.Status, Detail: s.Detail, StartedAt: at}
+		}
+	case t.status == s.Status:
+	case s.Status == StatusHealthy: // recovered
+		t.bad.EndedAt = at
+		t.last, t.bad = t.bad, nil
+	case t.bad == nil: // a new incident
+		t.bad = &Incident{Status: s.Status, Detail: s.Detail, StartedAt: at}
+	default: // degraded <-> down within one incident
+		if worse(t.bad.Status, s.Status) != t.bad.Status {
+			t.bad.Status, t.bad.Detail = s.Status, s.Detail
+		}
+	}
+	if t.status != s.Status {
+		t.status, t.since = s.Status, at
+	}
+	since := t.since
+	s.Since = &since
+	if t.last != nil {
+		last := *t.last
+		s.LastIncident = &last
+	}
 }
 
 // Worst returns the worst status of subs (healthy when empty).
