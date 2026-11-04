@@ -517,7 +517,9 @@ paths:
           in: query
           description: |
             Free text plus qualifiers: `format:npm`, `repo:npm-hosted`, `sha256:ab12`,
-            `cve:CVE-2026-1234`, `unused:>90d`, `license:GPL-3.0`, `published:<2026-01-01`.
+            `cve:CVE-2026-1234`, `unused:>90d`, `license:GPL-3.0`, `published:<2026-01-01`,
+            `security:findings` (pending, clean, findings, quarantined). Each free-text word is
+            a prefix match on the package coordinates.
           schema: { type: string }
         - name: sort
           in: query
@@ -1094,6 +1096,11 @@ paths:
             text/event-stream:
               schema: { $ref: "#/components/schemas/LiveEvent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "503":
+          description: Event bus unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
 components:
   securitySchemes:
@@ -1347,8 +1354,12 @@ components:
       required: [start, downloads, uploads]
       properties:
         start: { $ref: "#/components/schemas/Timestamp" }
-        downloads: { type: integer }
-        uploads: { type: integer }
+        downloads:
+          type: [integer, "null"]
+          description: Content downloads served by this node; null for buckets before it started or without request statistics
+        uploads:
+          type: integer
+          description: Components published in the bucket (all nodes)
     OverviewMetrics:
       type: object
       required: [range, generated_at, summary, storage, requests, cache, issues, traffic, storage_by_format]
@@ -1366,26 +1377,38 @@ components:
           required: [used_bytes, capacity_bytes, added_bytes_24h]
           properties:
             used_bytes: { $ref: "#/components/schemas/Bytes" }
-            capacity_bytes: { $ref: "#/components/schemas/Bytes" }
+            capacity_bytes:
+              type: [integer, "null"]
+              description: Sum of the blob stores' soft quotas; null unless every store has one
             added_bytes_24h: { $ref: "#/components/schemas/Bytes" }
         requests:
           type: object
+          description: |
+            Requests served by this node, from its Prometheus counters (probes,
+            /metrics and the event stream excluded). Counters restart with the
+            process: `coverage_start` says from when the numbers are observed.
+            Every value is null when request statistics are not available.
           required: [total, trend_pct, peak_total, p95_ms]
           properties:
-            total: { type: integer }
+            total: { type: [integer, "null"] }
             trend_pct:
-              type: number
-              description: Change versus the previous range of the same length, in percent
+              type: [number, "null"]
+              description: Change versus the previous range of the same length, in percent; null without data for that range
             peak_total:
-              type: integer
-              description: Busiest equivalent range in the last 30 days
-            p95_ms: { type: number }
+              type: [integer, "null"]
+              description: Busiest equivalent range in the last 30 days (of the observed history)
+            p95_ms: { type: [number, "null"] }
+            coverage_start:
+              type: [string, "null"]
+              format: date-time
+              description: Start of the period the numbers actually cover (later than the range start after a restart)
         cache:
           type: object
+          description: Proxy cache effectiveness; null when the proxy subsystem reports no cache metrics.
           required: [hit_ratio, bytes_saved]
           properties:
-            hit_ratio: { type: number, minimum: 0, maximum: 1 }
-            bytes_saved: { $ref: "#/components/schemas/Bytes" }
+            hit_ratio: { type: [number, "null"], minimum: 0, maximum: 1 }
+            bytes_saved: { type: [integer, "null"] }
         issues:
           type: object
           required: [critical, packages_affected, quarantined, open_findings]
@@ -1407,7 +1430,8 @@ components:
               bytes: { $ref: "#/components/schemas/Bytes" }
     UpstreamState:
       type: string
-      enum: [healthy, slow, blocked, offline]
+      enum: [healthy, slow, blocked, offline, unknown]
+      description: unknown = no health data for the remote
     UpstreamHealth:
       type: object
       required: [name, url, state, latency_ms]
@@ -1592,7 +1616,10 @@ components:
           required: [id, state, location, used_bytes, repository_count, blob_count]
           properties:
             id: { type: string }
-            state: { type: string, enum: [ok, degraded, unavailable, read_only] }
+            state:
+              type: string
+              enum: [ok, degraded, unavailable, read_only, unknown]
+              description: unknown when the storage subsystem does not report live state
             location:
               type: string
               description: Human-readable location (bucket/prefix or path)
@@ -1602,6 +1629,9 @@ components:
               description: Null when the backend has no fixed capacity
             repository_count: { type: integer }
             blob_count: { type: integer }
+            reclaimable_bytes: { $ref: "#/components/schemas/Bytes" }
+            dedup_saved_bytes: { $ref: "#/components/schemas/Bytes" }
+            created_at: { $ref: "#/components/schemas/Timestamp" }
             write_latency_ms: { type: [number, "null"] }
             encryption:
               type: string
@@ -1746,6 +1776,11 @@ components:
         coordinates:
           type: string
           description: Rendered in the format's idiom (`@acme/ui@5.3.1`, `com.acme:ledger-core:7.0.0`)
+        namespace: { type: string }
+        name: { type: string }
+        version:
+          type: string
+          description: Newest matching version
         repository: { type: string }
         versions: { type: integer }
         downloads: { type: integer }

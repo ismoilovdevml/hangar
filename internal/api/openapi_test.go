@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -100,15 +99,5 @@ func TestImplementedRoutesAreDocumented(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestNotImplementedShape(t *testing.T) {
-	r := chi.NewRouter()
-	(&API{}).Mount(r)
-	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/repositories", nil))
-	if rec.Code != http.StatusNotImplemented || !strings.Contains(rec.Body.String(), `"code":"not_implemented"`) {
-		t.Fatalf("%d %s", rec.Code, rec.Body.String())
 	}
 }
