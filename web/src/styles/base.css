@@ -52,7 +52,7 @@ code, pre, kbd { font-family: var(--font-mono); }
 }
 
 .skip-link {
-  position: absolute; left: 16px; top: -60px; z-index: 100;
+  position: absolute; left: 16px; top: -60px; z-index: var(--z-skip-link);
   padding: 10px 14px; border-radius: var(--r-control);
   background: var(--surface-solid); color: var(--lake-ink); font-weight: 700;
   box-shadow: var(--shadow-raised);

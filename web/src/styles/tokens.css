@@ -81,6 +81,19 @@
 
   /* motion */
   --t-fast: 120ms;
+
+  /*
+   * Stacking layers. Glass panels use backdrop-filter, which makes each one its
+   * own stacking context, so anything that floats over page content must sit on
+   * one of these layers instead of relying on DOM order.
+   */
+  --z-raised: 1;          /* an in-flow block lifted over later siblings (search box suggestions) */
+  --z-shell: 20;          /* top bar and the menus anchored to it */
+  --z-popover: 40;        /* portalled listboxes and menus over page content */
+  --z-palette: 50;        /* command palette */
+  --z-modal: 60;          /* dialogs and drawers */
+  --z-modal-popover: 70;  /* listboxes opened from inside a dialog */
+  --z-skip-link: 100;
 }
 
 /*
