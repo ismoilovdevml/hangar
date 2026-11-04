@@ -139,6 +139,12 @@ func (s *Service) Publish(ctx context.Context, repo *core.Repository, req core.P
 	s.record(ctx, action, target, core.OutcomeSuccess, map[string]any{"assets": len(out)})
 	if comp != nil {
 		s.emit(ctx, core.EventComponentPublished, repo, target, comp)
+	} else {
+		paths := make([]string, len(out))
+		for i, a := range out {
+			paths[i] = a.Path
+		}
+		s.emitAssets(ctx, core.EventAssetPublished, repo, paths)
 	}
 	return comp, out, nil
 }
@@ -853,6 +859,7 @@ RETURNING `+componentCols, compID))
 		return err
 	}
 	s.record(ctx, "asset.delete", target, core.OutcomeSuccess, nil)
+	s.emitAssets(ctx, core.EventAssetDeleted, repo, []string{p})
 	if orphan != nil {
 		orphan.Repository, orphan.Format = repo.Name, repo.Format
 		ct := componentTarget(repo, orphan)
@@ -1033,6 +1040,18 @@ func (s *Service) emit(ctx context.Context, typ string, repo *core.Repository, s
 	e := core.Event{Type: typ, At: time.Now().UTC(), Actor: core.PrincipalFrom(ctx).Name, Repository: repo.Name, Subject: subject, Data: data}
 	if err := s.opts.Events.Publish(ctx, e); err != nil {
 		s.log.WarnContext(ctx, "publish event failed", "type", typ, "subject", subject, "error", err)
+	}
+}
+
+// emitAssets publishes an asset-level event (see core.EventAssetPublished).
+func (s *Service) emitAssets(ctx context.Context, typ string, repo *core.Repository, paths []string) {
+	if s.opts.Events == nil || len(paths) == 0 {
+		return
+	}
+	data, _ := json.Marshal(map[string][]string{"paths": paths})
+	e := core.Event{Type: typ, At: time.Now().UTC(), Actor: core.PrincipalFrom(ctx).Name, Repository: repo.Name, Subject: paths[0], Data: data}
+	if err := s.opts.Events.Publish(ctx, e); err != nil {
+		s.log.WarnContext(ctx, "publish event failed", "type", typ, "subject", paths[0], "error", err)
 	}
 }
 

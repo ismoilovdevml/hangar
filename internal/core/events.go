@@ -27,6 +27,16 @@ const (
 // node drops its copy.
 const EventRepositoryCacheInvalidated = "repository.cache_invalidated"
 
+// Asset-level events, for caches that derive documents from loose assets
+// (repository metadata, raw files) which component events do not cover.
+const (
+	// EventAssetPublished: assets without a component were written. Subject
+	// is the first path; Data is {"paths": [...]}.
+	EventAssetPublished = "asset.published"
+	// EventAssetDeleted: one asset was deleted. Subject is its path.
+	EventAssetDeleted = "asset.deleted"
+)
+
 // Event is a fact that already happened. Handlers must be idempotent: delivery
 // is at-least-once in clustered mode.
 type Event struct {
