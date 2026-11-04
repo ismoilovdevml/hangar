@@ -223,6 +223,40 @@ func TestOIDCSecretIsWriteOnly(t *testing.T) {
 	}
 }
 
+func TestPresetIsStored(t *testing.T) {
+	e := newEnv(t, settings.Options{})
+	in := validOIDC("https://sso.example.com/realms/acme")
+	in.Preset = "keycloak"
+	got, err := e.svc.PutOIDC(e.admin, in)
+	if err != nil || got.Preset != "keycloak" {
+		t.Fatalf("oidc preset = %+v, %v", got, err)
+	}
+	if got, err = e.svc.GetOIDC(e.admin); err != nil || got.Preset != "keycloak" {
+		t.Fatalf("oidc preset after get = %+v, %v", got, err)
+	}
+	ldapIn := settings.LDAPInput{LDAPSettings: settings.LDAPSettings{Enabled: true, URL: "ldaps://dc1.example.com",
+		UserBaseDN: "DC=example,DC=com", Preset: "active-directory"}}
+	if l, err := e.svc.PutLDAP(e.admin, ldapIn); err != nil || l.Preset != "active-directory" {
+		t.Fatalf("ldap preset = %+v, %v", l, err)
+	}
+
+	// A PUT without a preset clears it; a malformed one is refused by field.
+	in.Preset = ""
+	if got, err = e.svc.PutOIDC(e.admin, in); err != nil || got.Preset != "" {
+		t.Fatalf("cleared preset = %+v, %v", got, err)
+	}
+	for _, bad := range []string{"Keycloak", "entra id", "-x", strings.Repeat("a", 33)} {
+		in.Preset = bad
+		if fe := fieldErrors(t, func() error { _, err := e.svc.PutOIDC(e.admin, in); return err }()); fe["preset"] == "" {
+			t.Errorf("preset %q accepted: %v", bad, fe)
+		}
+	}
+	ldapIn.Preset = "Active Directory"
+	if fe := fieldErrors(t, func() error { _, err := e.svc.PutLDAP(e.admin, ldapIn); return err }()); fe["preset"] == "" {
+		t.Errorf("ldap preset accepted: %v", fe)
+	}
+}
+
 func TestValidationReportsFields(t *testing.T) {
 	e := newEnv(t, settings.Options{})
 	in := validOIDC("ftp://sso.example.com")

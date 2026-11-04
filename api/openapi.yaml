@@ -4177,6 +4177,13 @@ components:
             name_claim: { type: string }
             groups_claim: { type: string, description: 'A dotted path reaches nested claims ("realm_access.roles")' }
             ca_pem: { type: string, description: PEM certificates trusted for the provider }
+            preset:
+              type: string
+              maxLength: 32
+              pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+              description: >-
+                Provider template the settings page filled the form from (keycloak, entra-id, google, okta, other);
+                informational, empty when unknown or set in the configuration file. Omitted on PUT clears it.
     OIDCSettingsInput:
       allOf:
         - $ref: "#/components/schemas/OIDCSettings"
@@ -4221,6 +4228,13 @@ components:
             group_filter: { type: string, description: "{dn} is the user's DN, {username} the login name" }
             group_name_attribute: { type: string }
             nested_groups: { type: boolean, description: Active Directory nested groups; needs group_base_dn }
+            preset:
+              type: string
+              maxLength: 32
+              pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+              description: >-
+                Directory template the settings page filled the form from (active-directory, openldap, freeipa, other);
+                informational, empty when unknown or set in the configuration file. Omitted on PUT clears it.
     LDAPSettingsInput:
       allOf:
         - $ref: "#/components/schemas/LDAPSettings"

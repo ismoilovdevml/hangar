@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -50,6 +51,10 @@ type OIDCSettings struct {
 	NameClaim     string   `json:"name_claim"`
 	GroupsClaim   string   `json:"groups_claim"`
 	CAPEM         string   `json:"ca_pem"`
+	// Preset names the provider template the settings page filled the
+	// form from ("keycloak", "entra-id", ...). Informational only: it
+	// lets the page reopen on the same template.
+	Preset string `json:"preset"`
 	Mapping
 }
 
@@ -70,6 +75,8 @@ type LDAPSettings struct {
 	GroupFilter        string `json:"group_filter"`
 	GroupNameAttribute string `json:"group_name_attribute"`
 	NestedGroups       bool   `json:"nested_groups"`
+	// Preset is like OIDCSettings.Preset ("active-directory", ...).
+	Preset string `json:"preset"`
 	Mapping
 }
 
@@ -213,6 +220,7 @@ func (m *Mapping) normalize() {
 }
 
 func (o *OIDCSettings) normalize() {
+	o.Preset = strings.TrimSpace(o.Preset)
 	for _, p := range []*string{&o.IssuerURL, &o.ClientID, &o.ClientAuth, &o.DisplayName, &o.UsernameClaim, &o.EmailClaim, &o.NameClaim, &o.GroupsClaim} {
 		*p = strings.TrimSpace(*p)
 	}
@@ -223,6 +231,7 @@ func (o *OIDCSettings) normalize() {
 }
 
 func (l *LDAPSettings) normalize() {
+	l.Preset = strings.TrimSpace(l.Preset)
 	for _, p := range []*string{&l.URL, &l.BindDN, &l.UserBaseDN, &l.UserFilter, &l.UsernameAttribute, &l.EmailAttribute,
 		&l.NameAttribute, &l.GroupAttribute, &l.GroupBaseDN, &l.GroupFilter, &l.GroupNameAttribute} {
 		*p = strings.TrimSpace(*p)
@@ -330,6 +339,7 @@ func (s *Service) GetOIDC(ctx context.Context) (*OIDC, error) {
 		return nil, err
 	}
 	set := oidcSettingsFrom(doc.config(""))
+	set.Preset = doc.Preset
 	if !found {
 		set = oidcSettingsFrom(auth.DefaultConfig().OIDC)
 	}
@@ -357,6 +367,7 @@ func (s *Service) PutOIDC(ctx context.Context, in OIDCInput) (*OIDC, error) {
 		}
 		cfg := in.config(secret)
 		s.problems(fe, cfg.Problems())
+		checkPreset(fe, in.Preset)
 		if err := s.checkMapping(ctx, fe, in.Mapping); err != nil {
 			return err
 		}
@@ -364,6 +375,7 @@ func (s *Service) PutOIDC(ctx context.Context, in OIDCInput) (*OIDC, error) {
 			return err
 		}
 		doc := oidcDoc{OIDCSettings: oidcSettingsFrom(cfg), ClientSecret: sealed}
+		doc.Preset = in.Preset
 		changed = diffFields(old, doc, old.ClientSecret != sealed, "client_secret")
 		return saveDoc(ctx, tx, keyOIDC, doc, core.PrincipalFrom(ctx).Name)
 	})
@@ -395,6 +407,7 @@ func (s *Service) GetLDAP(ctx context.Context) (*LDAP, error) {
 		return nil, err
 	}
 	set := ldapSettingsFrom(doc.config(""))
+	set.Preset = doc.Preset
 	if !found {
 		set = ldapSettingsFrom(auth.DefaultConfig().LDAP)
 	}
@@ -422,6 +435,7 @@ func (s *Service) PutLDAP(ctx context.Context, in LDAPInput) (*LDAP, error) {
 		}
 		cfg := in.config(password)
 		s.problems(fe, cfg.Problems())
+		checkPreset(fe, in.Preset)
 		if err := s.checkMapping(ctx, fe, in.Mapping); err != nil {
 			return err
 		}
@@ -429,6 +443,7 @@ func (s *Service) PutLDAP(ctx context.Context, in LDAPInput) (*LDAP, error) {
 			return err
 		}
 		doc := ldapDoc{LDAPSettings: ldapSettingsFrom(cfg), BindPassword: sealed}
+		doc.Preset = in.Preset
 		changed = diffFields(old, doc, old.BindPassword != sealed, "bind_password")
 		return saveDoc(ctx, tx, keyLDAP, doc, core.PrincipalFrom(ctx).Name)
 	})
@@ -469,6 +484,17 @@ func (s *Service) mergeSecret(stored, given string, clear bool, field string) (p
 		return plain, stored, fe, nil
 	}
 	return "", "", fe, nil
+}
+
+// presetPattern is the form of a preset name: a short lower-case slug.
+var presetPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+
+// checkPreset accepts an empty preset or a slug of at most 32 characters.
+// The list of presets belongs to the web UI, so any slug is stored.
+func checkPreset(fe FieldErrors, preset string) {
+	if preset != "" && (len(preset) > 32 || !presetPattern.MatchString(preset)) {
+		fe.add("preset", "must be a lower-case name such as keycloak (letters, digits and '-', at most 32 characters)")
+	}
 }
 
 // problems adds the auth package's findings, except the mapping table,
