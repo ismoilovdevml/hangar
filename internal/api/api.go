@@ -1,6 +1,7 @@
 // Package api serves the JSON REST API under /api/v1, described by
 // api/openapi.yaml. Every endpoint in that file is routed here; endpoints whose
-// service is not built yet answer 501 with the standard error body.
+// service is not wired answer 501, and paths the API does not have answer
+// 404, both with the standard error body.
 //
 // Every request is authenticated first (session cookie via Sessions, or Basic
 // / Bearer credentials via Deps.Auth) and carries its principal in the
@@ -162,7 +163,11 @@ func (a *API) Mount(r chi.Router) {
 		} else {
 			r.Use(a.authenticate)
 		}
-		r.Use(requireSignIn)
+		r.Use(requireSignIn, refuseReadOnlyWrites)
+
+		r.Get("/openapi.yaml", a.openAPIYAML)
+		r.Get("/openapi.json", a.openAPIJSON)
+		r.Get("/agent-guide.md", a.automationGuide)
 
 		r.Get("/system/status", a.systemStatus)
 		r.Get("/system/version", func(w http.ResponseWriter, _ *http.Request) {
@@ -255,7 +260,12 @@ func (a *API) Mount(r chi.Router) {
 		}
 
 		r.NotFound(func(w http.ResponseWriter, r *http.Request) {
-			WriteError(w, http.StatusNotImplemented, "not_implemented", "endpoint "+r.Method+" "+r.URL.Path+" is not implemented yet")
+			if documented(r.Method, strings.TrimPrefix(r.URL.Path, Prefix)) {
+				WriteError(w, http.StatusNotImplemented, "not_implemented", "endpoint "+r.Method+" "+r.URL.Path+" is not implemented yet")
+				return
+			}
+			WriteError(w, http.StatusNotFound, "not_found",
+				"no endpoint "+r.Method+" "+r.URL.Path+" on this server; the API is described at "+Prefix+"/openapi.yaml")
 		})
 		r.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
 			WriteError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")

@@ -50,6 +50,9 @@ var PublicRoutes = map[string]bool{
 	"POST /auth/login":        true,
 	"GET /auth/oidc/start":    true,
 	"GET /auth/oidc/callback": true,
+	"GET /openapi.yaml":       true,
+	"GET /openapi.json":       true,
+	"GET /agent-guide.md":     true,
 }
 
 // requireSignIn answers 401 to anonymous callers of every route that is not
@@ -58,6 +61,20 @@ func requireSignIn(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if core.PrincipalFrom(r.Context()).IsAnonymous() && !PublicRoutes[r.Method+" "+strings.TrimPrefix(r.URL.Path, Prefix)] {
 			WriteError(w, http.StatusUnauthorized, "unauthenticated", "sign in required")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// refuseReadOnlyWrites answers 403 read_only_token to read-only tokens on
+// every request that is not GET or HEAD. Their scopes are already narrowed to
+// read, which covers every authorized action; this also stops the actions
+// that need no privilege (own tokens, own profile).
+func refuseReadOnlyWrites(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if core.PrincipalFrom(r.Context()).ReadOnly && r.Method != http.MethodGet && r.Method != http.MethodHead {
+			WriteError(w, http.StatusForbidden, "read_only_token", "this token is read-only")
 			return
 		}
 		next.ServeHTTP(w, r)
