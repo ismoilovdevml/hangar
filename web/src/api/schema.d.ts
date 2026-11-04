@@ -3070,6 +3070,8 @@ export interface components {
             groups_claim: string;
             /** @description PEM certificates trusted for the provider */
             ca_pem: string;
+            /** @description Provider template the settings page filled the form from (keycloak, entra-id, google, okta, other); informational, empty when unknown or set in the configuration file. Omitted on PUT clears it. */
+            preset?: string;
         };
         OIDCSettingsInput: components["schemas"]["OIDCSettings"] & {
             /** @description New secret; empty keeps the stored one */
@@ -3105,6 +3107,8 @@ export interface components {
             group_name_attribute: string;
             /** @description Active Directory nested groups; needs group_base_dn */
             nested_groups: boolean;
+            /** @description Directory template the settings page filled the form from (active-directory, openldap, freeipa, other); informational, empty when unknown or set in the configuration file. Omitted on PUT clears it. */
+            preset?: string;
         };
         LDAPSettingsInput: components["schemas"]["LDAPSettings"] & {
             /** @description New password; empty keeps the stored one */

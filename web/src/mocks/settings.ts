@@ -38,6 +38,7 @@ function seed() {
     name_claim: 'name',
     groups_claim: 'groups',
     ca_pem: '',
+    preset: 'keycloak',
     group_roles: [
       { group: '/platform-admins', roles: ['Admin'] },
       { group: '/developers', roles: ['Publisher'] },
@@ -68,6 +69,7 @@ function seed() {
     group_filter: '(member={dn})',
     group_name_attribute: 'cn',
     nested_groups: false,
+    preset: 'active-directory',
     group_roles: [{ group: 'Hangar Admins', roles: ['Admin'] }],
     default_roles: [],
     allowed_groups: [],
@@ -109,13 +111,24 @@ export function resetSettingsState(): void {
 
 /** Test helpers: change what the mocked server holds. */
 export const mockSettings = {
-  /** Makes OIDC managed by the configuration file. */
+  /** Makes OIDC managed by the configuration file (which stores no preset). */
   oidcFromFile() {
-    state.oidc = { ...state.oidc, source: 'file', file_fields: OIDC_FIELDS, updated_at: null, updated_by: undefined };
+    state.oidc = { ...state.oidc, source: 'file', file_fields: OIDC_FIELDS, preset: '', updated_at: null, updated_by: undefined };
   },
   /** Makes LDAP managed by the configuration file. */
   ldapFromFile() {
-    state.ldap = { ...state.ldap, source: 'file', file_fields: LDAP_FILE_FIELDS, updated_at: null, updated_by: undefined };
+    state.ldap = { ...state.ldap, source: 'file', file_fields: LDAP_FILE_FIELDS, preset: '', updated_at: null, updated_by: undefined };
+  },
+  /** Neither provider was ever saved: the server's defaults. */
+  nothingSaved() {
+    state.oidc = {
+      ...state.oidc, enabled: false, issuer_url: '', client_id: '', client_secret_configured: false, display_name: 'SSO', preset: '',
+      group_roles: [], default_roles: [], source: 'default', updated_at: null, updated_by: undefined,
+    };
+    state.ldap = {
+      ...state.ldap, enabled: false, url: '', bind_dn: '', bind_password_configured: false, user_base_dn: '', preset: '',
+      group_roles: [], source: 'default', updated_at: null, updated_by: undefined,
+    };
   },
   /** Adds the proxy of the configuration file (http.proxy), which becomes the default. */
   proxyFromFile() {
@@ -124,6 +137,11 @@ export const mockSettings = {
       name: 'config', scheme: 'http', host: 'proxy.example.com', port: 3128, username: '', no_proxy: [], redirect_hosts: [], ca_pem: '', default: true,
       password_configured: false, source: 'file', file_fields: PROXY_FILE_FIELDS, repositories: 0, inheriting: 0, created_at: null, updated_at: null,
     });
+  },
+  /** No proxies at all, as on a server that reaches the internet directly. */
+  noProxies(environmentProxy = '') {
+    state.proxies = [];
+    state.environmentProxy = environmentProxy;
   },
   get oidc() {
     return state.oidc;

@@ -13,15 +13,64 @@ for the directory. Replace them with your own.
 
 Administrators (`system:settings:admin`, e.g. the built-in `Admin` role)
 configure both providers in **Settings → Authentication** without editing
-files or restarting:
+files or restarting. Users with only `system:settings:read` see the same
+page read-only.
 
-- **OIDC card**: issuer URL, client ID and secret, client authentication,
-  button label, scopes, claims, the group → role mapping table, default
-  roles, allowed groups, auto-create and an optional CA bundle. The card
-  shows the redirect URI to register at the provider
-  (`<server.base_url>/api/v1/auth/oidc/callback`) with a copy button.
-- **LDAP card**: URL, StartTLS, CA bundle, bind DN and password, user base
-  DN and filter, attributes, group options and the same mapping fields.
+### Walkthrough: pick a preset
+
+1. **What do you use?** The page opens with eight cards: *Active Directory*,
+   *OpenLDAP*, *FreeIPA* (LDAP), *Keycloak*, *Microsoft Entra ID*, *Google
+   Workspace*, *Okta* (OIDC) and *Other* (any OIDC provider such as GitLab,
+   Authentik or Dex, or any LDAP directory; a switch picks the protocol). The
+   card of the provider in use is selected and marked *in use*; the status
+   chips next to the title show every sign-in method that is on, and a
+   failing one is spelled out under the title.
+2. **Fill in three things.** OIDC: the issuer URL (the field shows the
+   provider's template, e.g. `https://<host>/realms/<realm>` or
+   `https://login.microsoftonline.com/<tenant-id>/v2.0`; Google's issuer is
+   filled in), the client ID and the client secret. LDAP: the server, the
+   service account (`user@domain` or a DN) and its password.
+3. **Check what the preset sets.** *We'll use* lists the scopes, claims or
+   attributes the preset chose. **Customize** opens every other field
+   (button label, client authentication, scopes, claims, CA bundle; LDAP
+   base DNs, filters, attributes, group search, nested groups, StartTLS).
+   An error in one of those fields opens them by itself.
+4. **Register Hangar at the provider.** The page shows the redirect URI to
+   copy (`<server.base_url>/api/v1/auth/oidc/callback`) and, under *How to
+   set up …*, where the client and the groups claim are created at that
+   provider.
+5. **Groups and roles** opens the group → role mapping table, the default
+   roles, the allowed groups and auto-create. The footer says what a new
+   user gets (*New users get Reader*).
+6. **Test**, then **Add Keycloak** (or *Save* for the provider in use). The
+   settings apply on every node at once.
+
+What each preset fills in:
+
+| Preset | Fills in |
+|---|---|
+| Keycloak | scopes `openid profile email`, `preferred_username`, groups from the `groups` claim (Group Membership mapper) |
+| Microsoft Entra ID | as Keycloak; Entra sends group **object IDs**, so map those IDs |
+| Google Workspace | issuer `https://accounts.google.com`, username from `email`; Google sends no groups (make the OAuth app *Internal* to keep other accounts out) |
+| Okta | scopes `openid profile email groups`, groups from the `groups` claim (groups claim filter on the app) |
+| Active Directory | `sAMAccountName`, `mail`, `displayName`; nested groups through `LDAP_MATCHING_RULE_IN_CHAIN`; user and group search from the domain root of the service account |
+| OpenLDAP | `(&(objectClass=inetOrgPerson)(uid={username}))`, `uid`, `mail`, `cn`; groups from `memberOf` (memberof overlay) |
+| FreeIPA | `uid`, `mail`, `displayName`; users under `cn=users,cn=accounts,<root>`; groups from `memberOf` |
+| Other | the server defaults; every field is open |
+
+Switching cards keeps what you typed in the credential fields (client ID
+and secret, server, service account and password) and the mapping table;
+only the preset's own fields change. A search base derived from the
+service account follows it until you type your own. The chosen preset is
+stored with the settings (`preset`, informational only) so the page reopens
+on it; providers saved earlier or set in the configuration file are
+recognised by their issuer or filter.
+
+Hangar signs in with one OIDC provider and one directory. Picking another
+OIDC card while one is in use offers **Switch to …** and asks for that
+provider's own client secret, so the stored secret of the old provider is
+never sent to the new one by mistake.
+
 - **Test** checks the values in the form before you save them. OIDC: the
   discovery document, that its `issuer` matches exactly, the signing keys,
   and a `client_credentials` request that verifies the client secret. Many
@@ -30,11 +79,13 @@ files or restarting:
   connect (with StartTLS), service bind and, with a username, a lookup of
   that user, their groups and the roles the mapping grants. No user
   password is needed.
-- **Save** validates every field (unknown roles, bad URLs, filters without
-  `{username}`, …), stores the settings in the database and applies them on
-  every node within seconds: the node you saved on at once, the others
-  through the event bus, with a 30-second poll as a safety net. The login
-  page shows or hides the SSO button and the directory toggle accordingly.
+- **Save** validates every field (unknown roles, bad URLs, `<…>` template
+  parts left in the issuer, filters without `{username}`, …), stores the
+  settings in the database and applies them on every node within seconds:
+  the node you saved on at once, the others through the event bus, with a
+  30-second poll as a safety net. The login page shows or hides the SSO
+  button and the directory toggle accordingly. The switch next to the
+  provider's name turns a saved provider off and on.
 
 Secrets (client secret, bind password) are sealed with
 `HANGAR_SECRET_KEY` and are write-only: the UI and the API only say whether
@@ -48,7 +99,9 @@ changed fields, never the secret values; tests are audited as
 **The configuration file wins.** A provider enabled in `hangar.yaml` or the
 `HANGAR_AUTH_OIDC_*` / `HANGAR_AUTH_LDAP_*` environment is shown read-only,
 labelled *set in configuration file*, and cannot be saved from the UI;
-change it in the file and restart. The other provider can still be managed
+change it in the file and restart. **Test** still works and checks the
+file's settings. Other cards of the same protocol show their setup steps
+and the redirect URI, with a note that the file has to change. The other provider can still be managed
 in the UI. To move a provider from the file to the UI, set
 `enabled: false` there (or remove it), restart, and enter it in the UI.
 
@@ -69,7 +122,7 @@ curl -u admin -X PUT https://hangar.example.com/api/v1/identity-providers/oidc \
     "client_id": "hangar", "client_secret": "…", "client_auth": "basic",
     "display_name": "Company SSO", "scopes": ["openid", "profile", "email"],
     "username_claim": "preferred_username", "email_claim": "email",
-    "name_claim": "name", "groups_claim": "groups", "ca_pem": "",
+    "name_claim": "name", "groups_claim": "groups", "ca_pem": "", "preset": "keycloak",
     "group_roles": [{"group": "/devops", "roles": ["Publisher"]}],
     "default_roles": ["Reader"], "allowed_groups": [], "auto_create": true}'
 ```
