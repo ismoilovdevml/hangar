@@ -276,7 +276,7 @@ func (s *Service) authenticateToken(ctx context.Context, secret string) (*core.P
 			s.log.WarnContext(ctx, "auth: token claims unreadable", "token_id", tokenID, "error", err)
 		}
 	}
-	s.noteTokenUse(tokenID, u.ID)
+	s.noteTokenUse(tokenID, u.ID, core.RequestInfoFrom(ctx).RemoteIP)
 	return p, nil
 }
 

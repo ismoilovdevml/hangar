@@ -102,7 +102,7 @@ type TokenInput struct {
 
 // CreateToken creates a token for the caller, or for a service account
 // (needs system:tokens:write). The secret is returned once.
-func (s *Service) CreateToken(ctx context.Context, in TokenInput) (*core.Token, string, error) {
+func (s *Service) CreateToken(ctx context.Context, in TokenInput) (*TokenInfo, string, error) {
 	p := core.PrincipalFrom(ctx)
 	if p.IsAnonymous() || !validUUID(p.ID) {
 		return nil, "", fmt.Errorf("create token: %w", core.ErrUnauthenticated)
@@ -114,6 +114,8 @@ func (s *Service) CreateToken(ctx context.Context, in TokenInput) (*core.Token, 
 		return nil, "", fmt.Errorf("token name must be 1 to 100 characters: %w", core.ErrInvalid)
 	case len(in.Scopes) == 0:
 		return nil, "", fmt.Errorf("token needs at least one scope: %w", core.ErrInvalid)
+	case len(in.Scopes) > maxPrivileges:
+		return nil, "", fmt.Errorf("token has more than %d scopes: %w", maxPrivileges, core.ErrInvalid)
 	case in.ExpiresAt.IsZero():
 		return nil, "", fmt.Errorf("token expires_at is required: %w", core.ErrInvalid)
 	case !in.ExpiresAt.After(now):
@@ -121,6 +123,10 @@ func (s *Service) CreateToken(ctx context.Context, in TokenInput) (*core.Token, 
 	case in.ExpiresAt.After(now.Add(s.cfg.MaxTokenLifetime)):
 		return nil, "", fmt.Errorf("token expires_at must be within %s: %w", s.cfg.MaxTokenLifetime, core.ErrInvalid)
 	}
+	if err := ValidatePrivileges(in.Scopes); err != nil {
+		return nil, "", err
+	}
+	in.Scopes = compactPrivileges(in.Scopes)
 	if p.Scopes != nil {
 		// A scoped token may only mint tokens within its own scopes.
 		for _, want := range in.Scopes {
@@ -129,7 +135,10 @@ func (s *Service) CreateToken(ctx context.Context, in TokenInput) (*core.Token, 
 			}
 		}
 	}
-	ownerID, ownerName := p.ID, p.Name
+	ownerID, ownerName, ownerKind := p.ID, p.Name, KindUser
+	if p.Kind == core.PrincipalServiceAccount {
+		ownerKind = KindServiceAccount
+	}
 	if in.Owner != "" && in.Owner != p.Name {
 		if err := s.require(ctx, AuditTokenCreate, core.ActionWrite, core.SystemResource(core.SystemTokens)); err != nil {
 			return nil, "", err
@@ -147,16 +156,16 @@ func (s *Service) CreateToken(ctx context.Context, in TokenInput) (*core.Token, 
 		if owner.Disabled {
 			return nil, "", fmt.Errorf("service account %q is disabled: %w", in.Owner, core.ErrInvalid)
 		}
-		ownerID, ownerName = owner.ID, owner.Username
+		ownerID, ownerName, ownerKind = owner.ID, owner.Username, owner.Kind
 	}
 	secret, err := newTokenSecret()
 	if err != nil {
 		return nil, "", fmt.Errorf("create token: %w", err)
 	}
-	t := &core.Token{
+	t := &TokenInfo{Token: core.Token{
 		Name: in.Name, Owner: ownerName, Prefix: secret[:tokenDisplayLen],
 		Scopes: slices.Clone(in.Scopes), ExpiresAt: in.ExpiresAt.UTC().Truncate(time.Microsecond),
-	}
+	}, OwnerKind: ownerKind}
 	err = s.pool.QueryRow(ctx, `
 		INSERT INTO tokens (user_id, name, kind, hash, prefix, scopes, expires_at)
 		VALUES ($1, $2, 'personal', $3, $4, $5, $6) RETURNING id::text, created_at`,
@@ -166,30 +175,89 @@ func (s *Service) CreateToken(ctx context.Context, in TokenInput) (*core.Token, 
 	}
 	s.record(ctx, core.AuditEvent{
 		Action: AuditTokenCreate, Target: "token:" + t.ID,
-		Details: map[string]any{"name": t.Name, "owner": ownerName, "scopes": privilegeStrings(t.Scopes), "expires_at": t.ExpiresAt},
+		Details: map[string]any{"name": t.Name, "owner": ownerName, "owner_kind": ownerKind, "scopes": privilegeStrings(t.Scopes), "expires_at": t.ExpiresAt},
 	})
 	return t, secret, nil
 }
+
+// TokenInfo is a personal access or service-account token as listed: the
+// public core.Token plus where it was last used and its owner's kind.
+type TokenInfo struct {
+	core.Token
+	// OwnerKind is "user" or "service_account".
+	OwnerKind string `json:"owner_kind"`
+	// LastUsedIP is the client address of the latest use, if known.
+	LastUsedIP *string `json:"last_used_ip"`
+}
+
+// Token states for TokenQuery.Status.
+const (
+	TokenActive  = "active"  // not expired
+	TokenExpired = "expired" // past expires_at
+)
 
 // TokenQuery filters ListTokens.
 type TokenQuery struct {
 	// Owner selects another principal's tokens (needs system:tokens:read);
 	// empty means the caller's.
-	Owner  string
+	Owner string
+	// All lists every principal's tokens (needs system:tokens:read); Owner
+	// then narrows the list to one owner.
+	All bool
+	// OwnerKind narrows an All listing to "user" or "service_account" owners.
+	OwnerKind string
+	// Status is TokenActive, TokenExpired or empty for both.
+	Status string
+	// Q is a substring of the token name.
+	Q      string
 	Limit  int
 	Cursor string
 }
 
+func (q TokenQuery) validate() error {
+	switch q.Status {
+	case "", TokenActive, TokenExpired:
+	default:
+		return fmt.Errorf("status %q: want active or expired: %w", q.Status, core.ErrInvalid)
+	}
+	if q.OwnerKind != "" && q.OwnerKind != KindUser && q.OwnerKind != KindServiceAccount {
+		return fmt.Errorf("owner_kind %q: want user or service_account: %w", q.OwnerKind, core.ErrInvalid)
+	}
+	if len(q.Q) > 100 || len(q.Owner) > 256 {
+		return fmt.Errorf("filter is too long: %w", core.ErrInvalid)
+	}
+	return nil
+}
+
+// tokenInfoCols selects a TokenInfo from "tokens t JOIN users u"; scan with scanTokenInfo.
+const tokenInfoCols = //nolint:gosec // G101: a column list, not a credential
+`t.id::text, t.name, u.username, u.kind, t.prefix, coalesce(t.scopes, '{}'), t.expires_at,
+	t.created_at, t.last_used_at, host(t.last_used_ip)`
+
+func scanTokenInfo(r pgx.CollectableRow) (*TokenInfo, error) {
+	t := &TokenInfo{}
+	var scopes []string
+	if err := r.Scan(&t.ID, &t.Name, &t.Owner, &t.OwnerKind, &t.Prefix, &scopes, &t.ExpiresAt,
+		&t.CreatedAt, &t.LastUsedAt, &t.LastUsedIP); err != nil {
+		return nil, err
+	}
+	t.Scopes = parsePrivileges(scopes)
+	return t, nil
+}
+
 // ListTokens lists personal and service-account tokens that are not revoked
 // (expired ones included), newest first. Secrets are never returned.
-func (s *Service) ListTokens(ctx context.Context, q TokenQuery) (core.Page[*core.Token], error) {
-	var page core.Page[*core.Token]
+func (s *Service) ListTokens(ctx context.Context, q TokenQuery) (core.Page[*TokenInfo], error) {
+	var page core.Page[*TokenInfo]
 	p := core.PrincipalFrom(ctx)
 	if p.IsAnonymous() {
 		return page, fmt.Errorf("list tokens: %w", core.ErrUnauthenticated)
 	}
+	if err := q.validate(); err != nil {
+		return page, err
+	}
 	owner := p.Name
-	if q.Owner != "" && q.Owner != p.Name {
+	if q.All || (q.Owner != "" && q.Owner != p.Name) {
 		if err := s.require(ctx, "token.list", core.ActionRead, core.SystemResource(core.SystemTokens)); err != nil {
 			return page, err
 		}
@@ -200,25 +268,26 @@ func (s *Service) ListTokens(ctx context.Context, q TokenQuery) (core.Page[*core
 	if err != nil {
 		return page, err
 	}
+	var pattern *string
+	if q.Q != "" {
+		v := "%" + strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(q.Q) + "%"
+		pattern = &v
+	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT t.id::text, t.name, u.username, t.prefix, coalesce(t.scopes, '{}'), t.expires_at, t.created_at, t.last_used_at
+		SELECT `+tokenInfoCols+`
 		FROM tokens t JOIN users u ON u.id = t.user_id
-		WHERE u.username = $1 AND t.kind = 'personal' AND t.revoked_at IS NULL
+		WHERE t.kind = 'personal' AND t.revoked_at IS NULL
+		  AND ($1 = '' OR u.username = $1)
 		  AND ($2::timestamptz IS NULL OR (t.created_at, t.id) < ($2, $3::uuid))
+		  AND ($5 = '' OR u.kind = $5)
+		  AND ($6 = '' OR ($6 = 'active' AND t.expires_at > $8) OR ($6 = 'expired' AND t.expires_at <= $8))
+		  AND ($7::text IS NULL OR t.name ILIKE $7)
 		ORDER BY t.created_at DESC, t.id DESC
-		LIMIT $4`, owner, curAt, curID, limit+1)
+		LIMIT $4`, owner, curAt, curID, limit+1, q.OwnerKind, q.Status, pattern, s.now())
 	if err != nil {
 		return page, dbErr(err, "list tokens")
 	}
-	page.Items, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (*core.Token, error) {
-		t := &core.Token{}
-		var scopes []string
-		if err := r.Scan(&t.ID, &t.Name, &t.Owner, &t.Prefix, &scopes, &t.ExpiresAt, &t.CreatedAt, &t.LastUsedAt); err != nil {
-			return nil, err
-		}
-		t.Scopes = parsePrivileges(scopes)
-		return t, nil
-	})
+	page.Items, err = pgx.CollectRows(rows, scanTokenInfo)
 	if err != nil {
 		return page, dbErr(err, "list tokens")
 	}
@@ -228,6 +297,35 @@ func (s *Service) ListTokens(ctx context.Context, q TokenQuery) (core.Page[*core
 		page.NextCursor = encodeTimeCursor(last.CreatedAt, last.ID)
 	}
 	return page, nil
+}
+
+// maxTokenWarnings bounds the warnings returned with the session.
+const maxTokenWarnings = 20
+
+// TokenWarnings returns the live tokens that expire within
+// Config.TokenExpiryWarning, soonest first: the caller's own and, for
+// holders of system:tokens:read, those of service accounts (which nobody
+// else would notice expiring).
+func (s *Service) TokenWarnings(ctx context.Context) ([]*TokenInfo, error) {
+	p := core.PrincipalFrom(ctx)
+	if p.IsAnonymous() || !validUUID(p.ID) {
+		return []*TokenInfo{}, nil
+	}
+	serviceAccounts := s.authz.Authorize(ctx, p, core.ActionRead, core.SystemResource(core.SystemTokens)) == nil
+	now := s.now()
+	rows, err := s.pool.Query(ctx, `
+		SELECT `+tokenInfoCols+`
+		FROM tokens t JOIN users u ON u.id = t.user_id
+		WHERE t.kind = 'personal' AND t.revoked_at IS NULL AND NOT u.disabled
+		  AND t.expires_at > $2 AND t.expires_at <= $3
+		  AND (t.user_id = $1 OR ($4 AND u.kind = 'service_account'))
+		ORDER BY t.expires_at, t.id
+		LIMIT $5`, p.ID, now, now.Add(s.cfg.TokenExpiryWarning), serviceAccounts, maxTokenWarnings)
+	if err != nil {
+		return nil, dbErr(err, "token warnings")
+	}
+	out, err := pgx.CollectRows(rows, scanTokenInfo)
+	return nonNil(out), dbErr(err, "token warnings")
 }
 
 // RevokeToken revokes one of the caller's tokens, or anyone's with

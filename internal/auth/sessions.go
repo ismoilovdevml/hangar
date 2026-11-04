@@ -8,6 +8,8 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/ismoilovdevml/hangar/internal/core"
 )
 
@@ -102,4 +104,115 @@ func (s *Service) DeleteSession(ctx context.Context, secret string) error {
 	}
 	_, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE hash = $1`, hashSecret(secret))
 	return dbErr(err, "delete session")
+}
+
+// SessionInfo describes a browser session for the session lists. The secret
+// and CSRF token are never exposed.
+type SessionInfo struct {
+	ID         string    `json:"id"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastSeenAt time.Time `json:"last_seen_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	IP         *string   `json:"ip"`
+	UserAgent  string    `json:"user_agent"`
+	Remember   bool      `json:"remember"`
+	// Current marks the session making the request.
+	Current bool `json:"current"`
+}
+
+// maxSessionsListed bounds a session list; older sessions beyond it are
+// still ended by the "end all" actions.
+const maxSessionsListed = 500
+
+// authorizeUserSessions lets users manage their own sessions and holders of
+// system:users:<action> anyone's. It returns the target's username.
+func (s *Service) authorizeUserSessions(ctx context.Context, userID, auditAction string, action core.Action) (string, error) {
+	p := core.PrincipalFrom(ctx)
+	if p.IsAnonymous() {
+		return "", fmt.Errorf("sessions: %w", core.ErrUnauthenticated)
+	}
+	if userID != p.ID {
+		if err := s.require(ctx, auditAction, action, core.SystemResource(core.SystemUsers)); err != nil {
+			return "", err
+		}
+	}
+	u, err := s.userByID(ctx, s.pool, userID)
+	if err != nil {
+		return "", err
+	}
+	return u.Username, nil
+}
+
+// ListSessions lists the active browser sessions of a user, most recently
+// used first: the caller's own, or anyone's with system:users:read.
+// currentID marks the caller's session.
+func (s *Service) ListSessions(ctx context.Context, userID, currentID string) ([]SessionInfo, error) {
+	if _, err := s.authorizeUserSessions(ctx, userID, "session.list", core.ActionRead); err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT id::text, created_at, last_seen_at, expires_at, host(ip), user_agent, remember
+		FROM sessions WHERE user_id = $1 AND expires_at > $2
+		ORDER BY last_seen_at DESC, id LIMIT $3`, userID, s.now(), maxSessionsListed)
+	if err != nil {
+		return nil, dbErr(err, "list sessions")
+	}
+	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (SessionInfo, error) {
+		var si SessionInfo
+		err := r.Scan(&si.ID, &si.CreatedAt, &si.LastSeenAt, &si.ExpiresAt, &si.IP, &si.UserAgent, &si.Remember)
+		si.Current = si.ID == currentID
+		return si, err
+	})
+	if err != nil {
+		return nil, dbErr(err, "list sessions")
+	}
+	return out, nil
+}
+
+// RevokeSession ends one browser session of a user: the caller's own, or
+// anyone's with system:users:write. Unknown ids are not found.
+func (s *Service) RevokeSession(ctx context.Context, userID, sessionID string) error {
+	username, err := s.authorizeUserSessions(ctx, userID, AuditSessionRevoke, core.ActionWrite)
+	if err != nil {
+		return err
+	}
+	if !validUUID(sessionID) {
+		return fmt.Errorf("session %q: %w", sessionID, core.ErrNotFound)
+	}
+	tag, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE id = $1 AND user_id = $2`, sessionID, userID)
+	if err != nil {
+		return dbErr(err, "revoke session")
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("session %q: %w", sessionID, core.ErrNotFound)
+	}
+	s.record(ctx, core.AuditEvent{
+		Action: AuditSessionRevoke, Target: "user:" + username,
+		Details: map[string]any{"session_id": sessionID, "self": userID == core.PrincipalFrom(ctx).ID},
+	})
+	return nil
+}
+
+// RevokeSessions ends every browser session of a user except keep (the
+// caller's current session, or "" to end all) and revokes their short-lived
+// session tokens: the caller's own, or anyone's with system:users:write.
+func (s *Service) RevokeSessions(ctx context.Context, userID, keep string) (int64, error) {
+	username, err := s.authorizeUserSessions(ctx, userID, AuditSessionsRevoke, core.ActionWrite)
+	if err != nil {
+		return 0, err
+	}
+	var ended int64
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		ended, err = endSessions(ctx, tx, userID, keep)
+		return err
+	})
+	if err != nil {
+		return 0, err
+	}
+	s.record(ctx, core.AuditEvent{
+		Action: AuditSessionsRevoke, Target: "user:" + username,
+		Details: map[string]any{"sessions_ended": ended, "self": userID == core.PrincipalFrom(ctx).ID, "kept_current": keep != ""},
+	})
+	return ended, nil
 }

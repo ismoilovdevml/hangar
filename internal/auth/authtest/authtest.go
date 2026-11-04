@@ -32,8 +32,9 @@ const EnvDatabaseURL = "HANGAR_TEST_DATABASE_URL"
 // FastArgon2 keeps tests quick; never use it in production.
 var FastArgon2 = auth.Argon2Params{Memory: 1024, Iterations: 1, Parallelism: 1, SaltLength: 16, KeyLength: 32}
 
-// Migrations returns the base schema (00001-00006) and the auth range
-// (00020-00029), so these tests do not depend on unrelated migrations.
+// Migrations returns the base schema (00001-00006) and the auth ranges
+// (00020-00029, 00040-00049), so these tests do not depend on unrelated
+// migrations.
 func Migrations(t testing.TB) fs.FS {
 	t.Helper()
 	src := db.Migrations()
@@ -44,7 +45,7 @@ func Migrations(t testing.TB) fs.FS {
 	out := fstest.MapFS{}
 	for _, e := range entries {
 		n, err := strconv.Atoi(strings.SplitN(e.Name(), "_", 2)[0])
-		if err != nil || (n > 6 && (n < 20 || n > 29)) {
+		if err != nil || !authMigration(n) {
 			continue
 		}
 		b, err := fs.ReadFile(src, e.Name())
@@ -54,6 +55,10 @@ func Migrations(t testing.TB) fs.FS {
 		out[e.Name()] = &fstest.MapFile{Data: b}
 	}
 	return out
+}
+
+func authMigration(n int) bool {
+	return n <= 6 || (n >= 20 && n <= 29) || (n >= 40 && n <= 49)
 }
 
 // Pool connects to a fresh schema (dropped at cleanup). If migrate is true

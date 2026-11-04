@@ -39,6 +39,7 @@ type UserInput struct {
 	Kind        string   `json:"kind"`
 	DisplayName *string  `json:"display_name"`
 	Email       *string  `json:"email"`
+	Description *string  `json:"description"`
 	Password    *string  `json:"password"`
 	Roles       []string `json:"roles"`
 	Disabled    *bool    `json:"disabled"`
@@ -51,14 +52,11 @@ func (in *UserInput) validate(policy PasswordPolicy) error {
 	if in.Kind != KindUser && in.Kind != KindServiceAccount {
 		return fmt.Errorf("kind %q: want user or service_account: %w", in.Kind, core.ErrInvalid)
 	}
-	if in.DisplayName != nil && utf8.RuneCountInString(*in.DisplayName) > 200 {
-		return fmt.Errorf("display_name is too long: %w", core.ErrInvalid)
+	if err := validateProfile(in.DisplayName, in.Email); err != nil {
+		return err
 	}
-	if in.Email != nil && *in.Email != "" {
-		e := *in.Email
-		if len(e) > 254 || strings.ContainsAny(e, " \t\r\n") || strings.Count(e, "@") != 1 || strings.HasPrefix(e, "@") || strings.HasSuffix(e, "@") {
-			return fmt.Errorf("email %q is not valid: %w", e, core.ErrInvalid)
-		}
+	if in.Description != nil && utf8.RuneCountInString(*in.Description) > 1000 {
+		return fmt.Errorf("description is too long (at most 1000 characters): %w", core.ErrInvalid)
 	}
 	if in.Password != nil {
 		if in.Kind == KindServiceAccount {
@@ -71,12 +69,56 @@ func (in *UserInput) validate(policy PasswordPolicy) error {
 	return nil
 }
 
+// validateProfile checks the fields a user may also change about themself.
+func validateProfile(displayName, email *string) error {
+	if displayName != nil && utf8.RuneCountInString(*displayName) > 200 {
+		return fmt.Errorf("display_name is too long (at most 200 characters): %w", core.ErrInvalid)
+	}
+	if email != nil && *email != "" {
+		e := *email
+		if len(e) > 254 || strings.ContainsAny(e, " \t\r\n") || strings.Count(e, "@") != 1 || strings.HasPrefix(e, "@") || strings.HasSuffix(e, "@") {
+			return fmt.Errorf("email %q is not valid: %w", e, core.ErrInvalid)
+		}
+	}
+	return nil
+}
+
+// User status filters for UserQuery.Status.
+const (
+	StatusActive   = "active"   // enabled and not locked
+	StatusDisabled = "disabled" // disabled by an administrator
+	StatusLocked   = "locked"   // locked after failed sign-ins
+)
+
 // UserQuery filters ListUsers.
 type UserQuery struct {
 	Q      string // substring of username, display name or email
 	Kind   string // user, service_account or empty
+	Role   string // holds this role directly; empty for any
+	Status string // StatusActive, StatusDisabled, StatusLocked or empty
+	Source string // local, oidc, ldap, saml or empty
 	Limit  int
 	Cursor string
+}
+
+func (q UserQuery) validate() error {
+	if q.Kind != "" && q.Kind != KindUser && q.Kind != KindServiceAccount {
+		return fmt.Errorf("kind %q: want user or service_account: %w", q.Kind, core.ErrInvalid)
+	}
+	switch q.Status {
+	case "", StatusActive, StatusDisabled, StatusLocked:
+	default:
+		return fmt.Errorf("status %q: want active, disabled or locked: %w", q.Status, core.ErrInvalid)
+	}
+	switch q.Source {
+	case "", SourceLocal, "oidc", "ldap", "saml":
+	default:
+		return fmt.Errorf("source %q: want local, oidc, ldap or saml: %w", q.Source, core.ErrInvalid)
+	}
+	if len(q.Q) > 256 || len(q.Role) > 64 {
+		return fmt.Errorf("filter is too long: %w", core.ErrInvalid)
+	}
+	return nil
 }
 
 // CreateUser creates a local user or service account (system:users:write).
@@ -98,10 +140,10 @@ func (s *Service) CreateUser(ctx context.Context, in UserInput) (*User, error) {
 	var id string
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `
-			INSERT INTO users (username, kind, email, display_name, password_hash, password_changed_at, disabled, source)
-			VALUES ($1, $2, $3, $4, $5, CASE WHEN $5::text IS NULL THEN NULL ELSE now() END, $6, 'local')
+			INSERT INTO users (username, kind, email, display_name, description, password_hash, password_changed_at, disabled, source)
+			VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $6::text IS NULL THEN NULL ELSE now() END, $7, 'local')
 			RETURNING id::text`,
-			in.Username, in.Kind, nullIfEmpty(in.Email), deref(in.DisplayName), hash, derefBool(in.Disabled)).Scan(&id)
+			in.Username, in.Kind, nullIfEmpty(in.Email), deref(in.DisplayName), deref(in.Description), hash, derefBool(in.Disabled)).Scan(&id)
 		if err != nil {
 			return dbErr(err, fmt.Sprintf("create user %q", in.Username))
 		}
@@ -138,8 +180,8 @@ func (s *Service) ListUsers(ctx context.Context, q UserQuery) (core.Page[*User],
 	if err := s.require(ctx, "user.list", core.ActionRead, core.SystemResource(core.SystemUsers)); err != nil {
 		return page, err
 	}
-	if q.Kind != "" && q.Kind != KindUser && q.Kind != KindServiceAccount {
-		return page, fmt.Errorf("kind %q: want user or service_account: %w", q.Kind, core.ErrInvalid)
+	if err := q.validate(); err != nil {
+		return page, err
 	}
 	after, err := decodeStringCursor(q.Cursor)
 	if err != nil {
@@ -155,7 +197,14 @@ func (s *Service) ListUsers(ctx context.Context, q UserQuery) (core.Page[*User],
 		WHERE ($1::text IS NULL OR u.username ILIKE $1 OR u.display_name ILIKE $1 OR u.email ILIKE $1)
 		  AND ($2 = '' OR u.kind = $2)
 		  AND ($3::text IS NULL OR u.username > $3)
-		ORDER BY u.username LIMIT $4`, pattern, q.Kind, after, limit+1)
+		  AND ($5 = '' OR EXISTS (SELECT 1 FROM role_bindings b JOIN roles r ON r.id = b.role_id
+		                          WHERE b.user_id = u.id AND b.subject_kind = 'user' AND r.name = $5))
+		  AND ($6 = '' OR u.source = $6)
+		  AND ($7 = ''
+		       OR ($7 = 'disabled' AND u.disabled)
+		       OR ($7 = 'locked' AND NOT u.disabled AND u.locked_until > $8)
+		       OR ($7 = 'active' AND NOT u.disabled AND (u.locked_until IS NULL OR u.locked_until <= $8)))
+		ORDER BY u.username LIMIT $4`, pattern, q.Kind, after, limit+1, q.Role, q.Source, q.Status, s.now())
 	if err != nil {
 		return page, dbErr(err, "list users")
 	}
@@ -183,6 +232,9 @@ func (s *Service) UpdateUser(ctx context.Context, id string, in UserInput) (*Use
 	caller := core.PrincipalFrom(ctx)
 	if id == caller.ID && in.Disabled != nil && *in.Disabled {
 		return nil, fmt.Errorf("you cannot disable your own account: %w", core.ErrInvalid)
+	}
+	if id == caller.ID && in.Password != nil {
+		return nil, fmt.Errorf("change your own password with PUT /me/password (it needs the current password): %w", core.ErrInvalid)
 	}
 	var hash *string
 	if in.Password != nil {
@@ -221,6 +273,9 @@ func (s *Service) UpdateUser(ctx context.Context, id string, in UserInput) (*Use
 		if in.Email != nil && *in.Email != old.Email {
 			changed = append(changed, "email")
 		}
+		if in.Description != nil && *in.Description != old.Description {
+			changed = append(changed, "description")
+		}
 		if in.Disabled != nil && *in.Disabled != old.Disabled {
 			changed = append(changed, "disabled")
 		}
@@ -232,6 +287,7 @@ func (s *Service) UpdateUser(ctx context.Context, id string, in UserInput) (*Use
 				username = $2,
 				display_name = coalesce($3, display_name),
 				email = CASE WHEN $4::boolean THEN $5 ELSE email END,
+				description = coalesce($8, description),
 				disabled = coalesce($6, disabled),
 				password_hash = coalesce($7, password_hash),
 				password_changed_at = CASE WHEN $7::text IS NULL THEN password_changed_at ELSE now() END,
@@ -240,7 +296,7 @@ func (s *Service) UpdateUser(ctx context.Context, id string, in UserInput) (*Use
 				locked_until = CASE WHEN $7::text IS NULL THEN locked_until END,
 				updated_at = now()
 			WHERE id = $1`,
-			id, in.Username, in.DisplayName, in.Email != nil, nullIfEmpty(in.Email), in.Disabled, hash)
+			id, in.Username, in.DisplayName, in.Email != nil, nullIfEmpty(in.Email), in.Disabled, hash, in.Description)
 		if err != nil {
 			return dbErr(err, fmt.Sprintf("update user %q", old.Username))
 		}
@@ -253,8 +309,8 @@ func (s *Service) UpdateUser(ctx context.Context, id string, in UserInput) (*Use
 			}
 		}
 		if hash != nil || slices.Contains(changed, "disabled") || slices.Contains(changed, "username") {
-			if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, id); err != nil {
-				return dbErr(err, "end sessions")
+			if _, err := endSessions(ctx, tx, id, ""); err != nil {
+				return err
 			}
 		}
 		return nil
@@ -304,22 +360,25 @@ func (s *Service) DeleteUser(ctx context.Context, id string) error {
 	return nil
 }
 
-// UnlockUser clears a lockout (system:users:write).
-func (s *Service) UnlockUser(ctx context.Context, id string) error {
+// UnlockUser clears a lockout after failed sign-ins (system:users:write) and
+// returns the user.
+func (s *Service) UnlockUser(ctx context.Context, id string) (*User, error) {
 	if err := s.require(ctx, AuditUserUnlock, core.ActionWrite, core.SystemResource(core.SystemUsers)); err != nil {
-		return err
+		return nil, err
 	}
 	u, err := s.userByID(ctx, s.pool, id)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	wasLocked := u.lockedAt(s.now())
 	if _, err := s.pool.Exec(ctx, `
 		UPDATE users SET failed_logins = 0, failed_window_start = NULL, locked_until = NULL, updated_at = now()
 		WHERE id = $1`, id); err != nil {
-		return dbErr(err, "unlock user")
+		return nil, dbErr(err, "unlock user")
 	}
-	s.record(ctx, core.AuditEvent{Action: AuditUserUnlock, Target: "user:" + u.Username, Details: map[string]any{"id": id}})
-	return nil
+	s.record(ctx, core.AuditEvent{Action: AuditUserUnlock, Target: "user:" + u.Username,
+		Details: map[string]any{"id": id, "was_locked": wasLocked}})
+	return s.userByID(ctx, s.pool, id)
 }
 
 func (s *Service) lockUser(ctx context.Context, tx pgx.Tx, id string) (*User, error) {

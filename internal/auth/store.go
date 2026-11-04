@@ -25,6 +25,7 @@ type User struct {
 	Kind         string     `json:"kind"`
 	DisplayName  string     `json:"display_name"`
 	Email        string     `json:"email,omitempty"`
+	Description  string     `json:"description"`
 	Source       string     `json:"source"`
 	Disabled     bool       `json:"disabled"`
 	LockedUntil  *time.Time `json:"locked_until,omitempty"`
@@ -33,6 +34,8 @@ type User struct {
 	TokenCount   int        `json:"token_count"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
+	// PasswordSet reports whether the user has a local password.
+	PasswordSet bool `json:"password_set"`
 
 	passwordHash string
 	failedLogins int
@@ -41,7 +44,7 @@ type User struct {
 // userCols selects a User from "users u"; scan with scanUser.
 const userCols = `u.id::text, u.username, u.kind, coalesce(u.email, ''), u.display_name, u.source,
 	u.disabled, u.locked_until, coalesce(u.password_hash, ''), u.failed_logins, u.last_active_at,
-	u.created_at, u.updated_at,
+	u.created_at, u.updated_at, u.description,
 	coalesce((SELECT array_agg(r.name ORDER BY r.name) FROM role_bindings b JOIN roles r ON r.id = b.role_id
 	          WHERE b.user_id = u.id AND b.subject_kind = 'user'), '{}'),
 	(SELECT count(*) FROM tokens t WHERE t.user_id = u.id AND t.kind = 'personal'
@@ -51,10 +54,11 @@ func scanUser(row pgx.Row, extra ...any) (*User, error) {
 	u := &User{}
 	dest := append([]any{&u.ID, &u.Username, &u.Kind, &u.Email, &u.DisplayName, &u.Source,
 		&u.Disabled, &u.LockedUntil, &u.passwordHash, &u.failedLogins, &u.LastActiveAt,
-		&u.CreatedAt, &u.UpdatedAt, &u.Roles, &u.TokenCount}, extra...)
+		&u.CreatedAt, &u.UpdatedAt, &u.Description, &u.Roles, &u.TokenCount}, extra...)
 	if err := row.Scan(dest...); err != nil {
 		return nil, err
 	}
+	u.PasswordSet = u.passwordHash != ""
 	return u, nil
 }
 

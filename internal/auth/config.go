@@ -29,6 +29,9 @@ type Config struct {
 	MaxSessionTokenTTL time.Duration `yaml:"max_session_token_ttl"`
 	// MaxTokenLifetime caps the expiry of personal and service-account tokens.
 	MaxTokenLifetime time.Duration `yaml:"max_token_lifetime"`
+	// TokenExpiryWarning is how long before expiry a token is listed in the
+	// session's token warnings.
+	TokenExpiryWarning time.Duration `yaml:"token_expiry_warning"`
 
 	// BasicCacheTTL is how long a verified username/password pair is
 	// remembered so clients that send Basic auth on every request (Maven,
@@ -107,6 +110,7 @@ func DefaultConfig() Config {
 		SessionTokenTTL:    15 * time.Minute,
 		MaxSessionTokenTTL: 24 * time.Hour,
 		MaxTokenLifetime:   366 * 24 * time.Hour,
+		TokenExpiryWarning: 14 * 24 * time.Hour,
 		BasicCacheTTL:      2 * time.Minute,
 		AuthZCacheTTL:      5 * time.Second,
 		LoginRate:          RateLimit{PerMinute: 10, Burst: 10},
@@ -171,6 +175,9 @@ func (c Config) WithDefaults() Config {
 	if c.MaxTokenLifetime == 0 {
 		c.MaxTokenLifetime = d.MaxTokenLifetime
 	}
+	if c.TokenExpiryWarning <= 0 {
+		c.TokenExpiryWarning = d.TokenExpiryWarning
+	}
 	if c.BasicCacheTTL == 0 {
 		c.BasicCacheTTL = d.BasicCacheTTL
 	}
@@ -207,6 +214,8 @@ func (c Config) Validate() error {
 		return fmt.Errorf("auth.password.max_length below min_length: %w", core.ErrInvalid)
 	case c.Session.TTL <= 0 || c.Session.RememberTTL <= 0:
 		return fmt.Errorf("auth.session ttl must be positive: %w", core.ErrInvalid)
+	case c.MaxTokenLifetime < time.Hour:
+		return fmt.Errorf("auth.max_token_lifetime %s: must be at least 1h: %w", c.MaxTokenLifetime, core.ErrInvalid)
 	}
 	return nil
 }
