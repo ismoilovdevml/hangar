@@ -10,6 +10,7 @@ import (
 	"hash"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -167,18 +168,32 @@ func (h *handler) proxyDoc(ctx context.Context, repo *core.Repository, name pkgN
 }
 
 // expectedDist finds the upstream's declared checksums for a tarball in a
-// cached packument, without contacting the remote.
-func (h *handler) expectedDist(ctx context.Context, repo *core.Repository, bs core.BlobStore, name pkgName, rel string) (string, manifest) {
+// cached packument, without contacting the remote, and the absolute URL the
+// packument gave when the tarball lives outside the remote URL.
+func (h *handler) expectedDist(ctx context.Context, repo *core.Repository, bs core.BlobStore, name pkgName, rel string) (string, manifest, string) {
 	for _, abbr := range []bool{true, false} {
 		doc, err := h.cachedProxyDoc(ctx, repo, bs, name, abbr)
 		if err != nil {
 			continue
 		}
 		if v, m := doc.versionForTarball(rel); m != nil {
-			return v, m
+			return v, m, doc.origins[rel]
 		}
 	}
-	return "", nil
+	return "", nil, ""
+}
+
+// tarballRequest fetches rel from the remote, or from the tarball CDN the
+// packument named when that host is one of the repository's related hosts
+// (registries that serve tarballs from another host). Without a related
+// host the remote is asked for the tarball under its own URL, as before.
+func tarballRequest(repo *core.Repository, rel, origin string) core.UpstreamRequest {
+	if origin != "" {
+		if u, err := url.Parse(origin); err == nil && core.MatchHost(repo.Config.Proxy.RelatedHosts, u.Host) {
+			return core.UpstreamRequest{URL: origin}
+		}
+	}
+	return core.UpstreamRequest{Path: rel}
 }
 
 // tarballHashes collects the digests npm declares for tarballs.
@@ -214,7 +229,7 @@ func (h *handler) proxyTarball(ctx context.Context, repo *core.Repository, rel s
 	if err != nil {
 		return nil, nil, err
 	}
-	version, exp := h.expectedDist(ctx, repo, bs, name, rel)
+	version, exp, origin := h.expectedDist(ctx, repo, bs, name, rel)
 	if version == "" {
 		version = versionFromFile(name, rel)
 	}
@@ -223,7 +238,7 @@ func (h *handler) proxyTarball(ctx context.Context, repo *core.Repository, rel s
 		return nil, nil, err
 	}
 	proxy.NoteCacheMiss(ctx)
-	resp, err := up.Fetch(ctx, core.UpstreamRequest{Path: rel})
+	resp, err := up.Fetch(ctx, tarballRequest(repo, rel, origin))
 	if err != nil {
 		return nil, nil, err
 	}

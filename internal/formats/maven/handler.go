@@ -141,6 +141,9 @@ func (h *handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	if code == http.StatusUnauthorized {
 		w.Header().Set("WWW-Authenticate", `Basic realm="Hangar", charset="UTF-8"`)
 	}
+	if code == http.StatusTooManyRequests {
+		core.SetRetryAfter(w.Header(), err)
+	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(code)
