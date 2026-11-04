@@ -6,9 +6,12 @@
 // another node takes over within RetryEvery. Any node executes the enqueued
 // jobs (the job queue distributes them), so the leader only decides when.
 //
-// Schedules are intervals kept in memory: a new leader runs each entry once
-// after its Delay and then every Every. Jobs must therefore be idempotent and
-// cheap to repeat, which every maintenance job is (GC, purges, partitions).
+// Two kinds of work are scheduled. Entries are intervals kept in memory: a
+// new leader runs each entry once after its Delay and then every Every, so
+// their jobs must be idempotent and cheap to repeat. Tickers are called
+// periodically while the node leads and decide themselves what is due; the
+// task service is one, scheduling the cron schedules stored in the tasks
+// table.
 package scheduler
 
 import (
@@ -43,9 +46,27 @@ type Entry struct {
 	Job core.Job
 }
 
+// Ticker is periodic work done only by the leader. Tick returns when it
+// wants to be called next; the scheduler calls it again no later than
+// RetryEvery and no sooner than a second later. A zero time means "after
+// RetryEvery". Errors are logged.
+type Ticker interface {
+	Tick(ctx context.Context, now time.Time) (time.Time, error)
+}
+
+// TickerFunc adapts a function to Ticker.
+type TickerFunc func(ctx context.Context, now time.Time) (time.Time, error)
+
+// Tick implements Ticker.
+func (f TickerFunc) Tick(ctx context.Context, now time.Time) (time.Time, error) { return f(ctx, now) }
+
+// minTickGap bounds how often a ticker runs.
+const minTickGap = time.Second
+
 // Options configure a Scheduler.
 type Options struct {
 	Entries    []Entry
+	Tickers    []Ticker
 	RetryEvery time.Duration
 	// LockKey overrides the advisory lock id (default LockKey).
 	LockKey int64
@@ -124,7 +145,7 @@ func (s *Scheduler) lead(ctx context.Context) error {
 			_ = conn.Conn().Close(uctx)
 		}
 	}()
-	s.log.Info("scheduler: this node is the leader", "entries", len(s.opts.Entries))
+	s.log.Info("scheduler: this node is the leader", "entries", len(s.opts.Entries), "tickers", len(s.opts.Tickers))
 	if s.opts.OnLeader != nil {
 		s.opts.OnLeader(true)
 		defer s.opts.OnLeader(false)
@@ -134,6 +155,10 @@ func (s *Scheduler) lead(ctx context.Context) error {
 	next := make([]time.Time, len(s.opts.Entries))
 	for i, e := range s.opts.Entries {
 		next[i] = start.Add(e.Delay)
+	}
+	nextTick := make([]time.Time, len(s.opts.Tickers))
+	for i := range nextTick {
+		nextTick[i] = start
 	}
 	check := time.NewTicker(s.opts.RetryEvery)
 	defer check.Stop()
@@ -149,6 +174,14 @@ func (s *Scheduler) lead(ctx context.Context) error {
 				wake = next[i]
 			}
 		}
+		for i, t := range s.opts.Tickers {
+			if !now.Before(nextTick[i]) {
+				nextTick[i] = s.tick(ctx, t, now)
+			}
+			if nextTick[i].Before(wake) {
+				wake = nextTick[i]
+			}
+		}
 		timer := time.NewTimer(time.Until(wake))
 		select {
 		case <-ctx.Done():
@@ -161,6 +194,24 @@ func (s *Scheduler) lead(ctx context.Context) error {
 			}
 		case <-timer.C:
 		}
+	}
+}
+
+// tick runs one ticker and returns when to run it again.
+func (s *Scheduler) tick(ctx context.Context, t Ticker, now time.Time) time.Time {
+	want, err := t.Tick(ctx, now)
+	if err != nil && ctx.Err() == nil {
+		s.log.Warn("scheduler: ticker failed", "error", err)
+	}
+	after := time.Now()
+	lo, hi := after.Add(minTickGap), after.Add(s.opts.RetryEvery)
+	switch {
+	case want.IsZero() || want.After(hi):
+		return hi
+	case want.Before(lo):
+		return lo
+	default:
+		return want
 	}
 }
 
