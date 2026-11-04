@@ -52,7 +52,7 @@ Before real use, set two keys and keep them in your secret manager:
 - `HANGAR_SECRET_KEY` (`openssl rand -base64 32`) encrypts stored upstream credentials and S3 keys.
 - `HANGAR_DOCKER_TOKEN_KEY` (`openssl rand -base64 48`) keeps `docker login` sessions valid across restarts.
 
-To run from source instead (`go run ./cmd/hangar serve --migrate`), and for tokens and a first upload, see the [getting started guide](docs/guides/getting-started.md).
+For production installs see [docs/deploy](docs/deploy/README.md). To run from source instead (`go run ./cmd/hangar serve --migrate`), and for tokens and a first upload, see the [getting started guide](docs/guides/getting-started.md).
 
 ## Use it from your tools
 
@@ -89,6 +89,7 @@ Maven/Gradle, raw files and CI systems (GitLab CI, GitHub Actions, Jenkins, Gite
 ## Documentation
 
 - [User guides](docs/guides/README.md): clients, CI, access and the REST API
+- [Deployment](docs/deploy/README.md): Docker Compose with automatic TLS, Helm chart, binary with systemd, backups, upgrades and high availability
 - [Security](docs/security.md): hardening checklist and how secrets are stored; report vulnerabilities as described in [SECURITY.md](SECURITY.md)
 - Operations: [monitoring](docs/operations/monitoring.md), [runbooks](docs/operations/runbooks.md), [performance](docs/operations/performance.md)
 - [REST API reference](api/openapi.yaml) (OpenAPI)
