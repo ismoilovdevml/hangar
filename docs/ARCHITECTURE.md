@@ -17,7 +17,7 @@
 ```
 
 - Nodes are stateless apart from a local read-through blob cache (LRU on disk).
-- Leader (via PostgreSQL advisory lock) runs schedulers; any node executes queued jobs.
+- Leader (via PostgreSQL advisory lock) starts scheduled task runs (cron schedules in `tasks`); any node executes runs, heart-beating progress, and takes over runs whose node went silent (resuming from checkpoints).
 - Single-node mode: embedded NATS, filesystem blobs, one PostgreSQL — `docker compose up` works.
 
 ## Request path (download)
@@ -101,7 +101,8 @@ findings(id, component_id, advisory_id, severity, cvss, package, installed, fixe
          status, waiver_reason, waiver_until, assignee)
 users, roles, privileges, role_bindings, tokens(hash, scopes, expires_at), identity_providers
 cleanup_policies(id, name, criteria jsonb, schedule), policy_repos
-tasks(id, type, schedule, config, enabled), task_runs(id, task_id, status, progress, log, started, finished)
+tasks(id, name, type, schedule, config, enabled, builtin, policy_id, next_run_at),
+task_runs(id, task_id, status, progress, message, log, state, result, node, heartbeat_at, claims, started, finished)
 audit_events(id, at, actor, action, target, ip, details jsonb)  -- append-only, partitioned by month
 nodes(id, address, role, last_heartbeat, stats jsonb), replication_targets, replication_state
 ```
@@ -110,7 +111,7 @@ nodes(id, address, role, last_heartbeat, stats jsonb), replication_targets, repl
 
 - `GET/POST /api/v1/...` JSON REST for UI and automation, described in `api/openapi.yaml`.
   Resources: repositories, blob-stores, components, assets, search, findings, waivers,
-  cleanup-policies (+ `/preview`), tasks (+ `/{id}/run`, `/{id}/stop`), users, roles, tokens,
+  cleanup-policies (+ `/preview`, `/{name}/run`, `/{name}/stop`, `/{name}/runs`), tasks (+ `/{id}/run`, `/{id}/stop`, `/{id}/runs`), users, roles, tokens,
   audit, nodes, replication, system/status, metrics/overview.
 - `GET /api/v1/events` — Server-Sent Events: publishes, quarantines, task progress.
 - Config as code: `hangar apply -f` / `hangar export` (YAML), Terraform provider later.

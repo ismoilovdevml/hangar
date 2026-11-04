@@ -80,7 +80,7 @@ func (e executor) Execute(ctx context.Context, x *tasks.Exec) error {
 	}
 	if !resumed {
 		// Evaluate the whole run at one instant, also across resumptions.
-		cp.Result = RunResult{Policy: p.Name, EvaluatedAt: s.opts.Now().UTC()}
+		cp.Result = RunResult{Policy: p.Name, EvaluatedAt: s.opts.Now().UTC(), Repositories: []RepoSummary{}}
 		x.Logf("Policy %s: cleaning %d repositories %v", p.Name, len(repos), names(repos))
 	}
 	res := &cp.Result
