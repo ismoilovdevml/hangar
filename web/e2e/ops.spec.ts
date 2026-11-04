@@ -34,6 +34,11 @@ test('cleanup policy editor previews before saving at desktop and phone width', 
     await page.goto('/cleanup?policy=docker-lean');
     await expect(page.getByRole('heading', { level: 2, name: 'docker-lean' })).toBeVisible();
     await expect(page.getByLabel('Days since published')).toHaveValue('90');
+    if (w === '1440') {
+      // Full-page shots stretch the sticky sidebar; keep a plain viewport shot too.
+      await page.evaluate(() => document.fonts.ready);
+      await page.screenshot({ path: shot('cleanup-viewport-1440') });
+    }
     await page.getByRole('button', { name: 'Preview', exact: true }).click();
     await expect(page.getByRole('heading', { name: /would be freed/ })).toBeVisible();
     await checkFrame(page, `cleanup-${w}`);
