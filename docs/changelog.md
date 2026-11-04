@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- **Automation-friendly API**: the OpenAPI document is public at
+  `/api/v1/openapi.yaml` and `/api/v1/openapi.json`; `/api/v1/agent-guide.md`
+  and `/llms.txt` give scripts and automated clients a short guide with the
+  server's real URLs (authentication, error body, paging, rate limits, common
+  calls). `GET /me` (same body as `GET /auth/session`) now includes a `token`
+  section with the token's scopes, restrictions and expiry. Requests to paths
+  the API does not have answer `404 not_found` instead of `501`.
+- **API reference page** at `/api-docs` (login footer, avatar menu,
+  Settings, ⌘K): every endpoint grouped by area, parameters, bodies,
+  responses and schemas, search, copyable curl commands for this server, and
+  "Try it" with the current session or a pasted token. Public; built in, no
+  third-party renderer.
+- **Token creation, redone**: permission presets (read only, publish to
+  selected repositories, repository admin, security reviewer, full admin,
+  custom), a repository picker with glob patterns, a custom editor with a
+  live plain-language summary, and greyed-out choices beyond the owner's own
+  rights. After creation the secret comes with paste-ready snippets: curl,
+  `HANGAR_URL` / `HANGAR_TOKEN`, npm, NuGet, pip, Maven and docker
+  configuration, and a block for automation.
+- **Token restrictions**: optional `allowed_cidrs` (client networks) and
+  `read_only` (scopes narrowed to read; the API refuses writes with
+  `403 read_only_token`); registry logins inherit them. Migration `00210`.
+- **Token rotation**: `POST /tokens/{id}/rotate` and a Rotate button create a
+  replacement with the same scopes, restrictions and lifetime; the old token
+  is revoked now, after a grace period, or kept. Audited as `token.rotate`.
 - **Settings hub**: a new Settings page (`/settings`, avatar menu → Settings,
   ⌘K) gathers addresses, instance name, sign-in, internet access, storage,
   nodes, configuration, system status, system logs, the audit log, My account
