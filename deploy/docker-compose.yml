@@ -1,5 +1,6 @@
-# Hangar single-host stack: PostgreSQL, MinIO, NATS JetStream, Trivy server and
-# Hangar itself.
+# Hangar development stack: PostgreSQL, MinIO, NATS JetStream, Trivy server and
+# Hangar itself, with throwaway credentials and every port published.
+# For production use deploy/compose/ (docs/deploy/install-compose.md).
 #
 #   docker compose -f deploy/docker-compose.yml up -d --build
 #   open http://localhost:8080
@@ -103,13 +104,15 @@ services:
       HANGAR_SERVER_BASE_URL: ${HANGAR_BASE_URL:-http://localhost:8080}
       HANGAR_DATABASE_URL: postgres://${POSTGRES_USER:-hangar}:${POSTGRES_PASSWORD:-hangar}@postgres:5432/${POSTGRES_DB:-hangar}?sslmode=disable
       HANGAR_DATABASE_MIGRATE_ON_START: "true"
-      # Filesystem blobs until the S3 driver lands; then switch to:
-      #   HANGAR_STORAGE_KIND: s3
-      #   HANGAR_STORAGE_S3_ENDPOINT: http://minio:9000
-      #   HANGAR_STORAGE_S3_BUCKET: hangar
-      #   HANGAR_STORAGE_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-hangar}
-      #   HANGAR_STORAGE_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-hangar-secret}
-      HANGAR_STORAGE_KIND: fs
+      HANGAR_STORAGE_KIND: s3
+      HANGAR_STORAGE_S3_ENDPOINT: http://minio:9000
+      HANGAR_STORAGE_S3_BUCKET: hangar
+      HANGAR_STORAGE_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-hangar}
+      HANGAR_STORAGE_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-hangar-secret}
+      # Development only: stable registry tokens across restarts, plain-HTTP cookies.
+      HANGAR_DOCKER_TOKEN_KEY: ${HANGAR_DOCKER_TOKEN_KEY:-dev-only-token-key-change-me-0123456789abcdef}
+      HANGAR_BOOTSTRAP_ADMIN_USER: ${HANGAR_BOOTSTRAP_ADMIN_USER:-admin}
+      HANGAR_BOOTSTRAP_ADMIN_PASSWORD: ${HANGAR_BOOTSTRAP_ADMIN_PASSWORD:-hangar-dev-password}
       HANGAR_NATS_EMBEDDED: "false"
       HANGAR_NATS_URL: nats://nats:4222
       HANGAR_SCANNER_TRIVY_URL: http://trivy:4954

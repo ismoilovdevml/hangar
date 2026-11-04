@@ -1,0 +1,56 @@
+# Caddy in front of Hangar: automatic TLS (Let's Encrypt / ZeroSSL) for the
+# UI host and a separate Docker registry host. Host names come from .env.
+#
+# Caddy does not limit request bodies and streams them to Hangar without
+# buffering by default, which multi-GB image layers and artifacts need.
+{
+	email {$ACME_EMAIL}
+	servers {
+		timeouts {
+			read_header 30s
+			idle 5m
+		}
+		# HTTP/3 needs 443/udp, published in compose.yaml.
+		protocols h1 h2 h3
+	}
+}
+
+(hangar_upstream) {
+	reverse_proxy hangar:8080 {
+		# Stream downloads and the live event feed (SSE) immediately.
+		flush_interval -1
+		transport http {
+			dial_timeout 10s
+		}
+	}
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+}
+
+# UI, REST API and every package format (/repository/<repo>/..., /v2/...).
+{$HANGAR_DOMAIN} {
+	import security_headers
+	import hangar_upstream
+	log
+}
+
+# Docker / OCI clients only: docker login {$HANGAR_REGISTRY_DOMAIN}.
+# Registry tokens are issued by the UI host (server.base_url), which Docker
+# reaches through the realm in the 401 challenge.
+{$HANGAR_REGISTRY_DOMAIN} {
+	import security_headers
+	@registry path /v2 /v2/*
+	handle @registry {
+		import hangar_upstream
+	}
+	handle {
+		respond "This host serves the container registry API only (/v2/)." 404
+	}
+	log
+}

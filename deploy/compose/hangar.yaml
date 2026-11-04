@@ -1,0 +1,41 @@
+# Hangar settings for the compose stack (mounted read-only at
+# /etc/hangar/hangar.yaml). Only tuning lives here: addresses, credentials and
+# everything set in compose.yaml's `environment:` come from .env, and
+# environment variables win over this file. Every key is documented in
+# hangar.example.yaml at the repository root.
+
+server:
+  addr: ":8080"
+  instance_name: hangar
+  read_header_timeout: 10s
+  idle_timeout: 120s
+  # Uploads still running get this long to finish on `docker compose stop`
+  # (keep it below stop_grace_period in compose.yaml).
+  shutdown_timeout: 45s
+
+log:
+  level: info
+  format: json
+
+database:
+  max_conns: 30
+  min_conns: 2
+  conn_lifetime: 1h
+
+storage:
+  s3:
+    # 16 MiB parts; raise for very large artifacts on fast links.
+    part_size: 16777216
+  gc:
+    grace_period: 48h
+    batch_size: 100
+    temp_max_age: 24h
+
+http:
+  use_environment: true
+  connect_timeout: 10s
+  read_timeout: 60s
+
+metrics:
+  enabled: true
+  path: /metrics
