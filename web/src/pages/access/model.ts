@@ -120,47 +120,6 @@ export function allows(privileges: readonly string[] | undefined, domain: Domain
 
 /* ---------------------------------------------------------------- token scopes */
 
-export type RepoScopeMode = 'none' | 'all' | 'pattern' | 'list';
-
-export interface ScopeDraft {
-  repoMode: RepoScopeMode;
-  pattern: string;
-  repos: string[];
-  actions: Action[];
-  /** System scopes as "area:action" (area may be "*"). */
-  system: string[];
-}
-
-export const EMPTY_SCOPES: ScopeDraft = { repoMode: 'all', pattern: '', repos: [], actions: ['read'], system: [] };
-
-/** Turns the scope builder's state into privileges, or explains what is missing. */
-export function buildScopes(d: ScopeDraft): { scopes: string[]; error: string | null } {
-  const scopes: string[] = [];
-  if (d.repoMode !== 'none') {
-    if (d.actions.length === 0) return { scopes: [], error: 'Pick at least one repository action.' };
-    let targets: string[] = [];
-    if (d.repoMode === 'all') targets = ['*'];
-    else if (d.repoMode === 'pattern') {
-      const err = repoPatternError(d.pattern.trim());
-      if (err) return { scopes: [], error: err };
-      targets = [d.pattern.trim()];
-    } else {
-      if (d.repos.length === 0) return { scopes: [], error: 'Pick at least one repository.' };
-      targets = d.repos;
-    }
-    // admin covers the rest; keep the list short and readable.
-    const actions = d.actions.includes('admin') ? (['admin'] as Action[]) : d.actions;
-    for (const t of targets) for (const a of actions) scopes.push(`repo:${t}:${a}`);
-  }
-  for (const s of d.system) {
-    const [area, action] = s.split(':') as [string, string];
-    scopes.push(area === '*' && action === '*' ? 'system:*' : `system:${area}:${action}`);
-  }
-  if (scopes.length === 0) return { scopes, error: 'A token needs at least one scope.' };
-  if (scopes.length > 100) return { scopes: [], error: 'At most 100 scopes; use a pattern instead of a long list.' };
-  return { scopes: [...new Set(scopes)], error: null };
-}
-
 /** Scopes a token asks for that the user's own privileges do not cover (they would have no effect). */
 export function uncoveredScopes(scopes: string[], privileges: readonly string[] | undefined): string[] {
   return scopes.filter((s) => {
@@ -183,12 +142,12 @@ export function uncoveredScopes(scopes: string[], privileges: readonly string[] 
 
 const DAY = 86_400_000;
 
-export const EXPIRY_PRESETS = [7, 30, 90, 180, 365] as const;
+export const EXPIRY_PRESETS = [7, 30, 90, 365] as const;
 
-/** Presets that fit the server's maximum lifetime, always including the maximum itself. */
+/** Presets that fit the server's maximum lifetime, plus the maximum itself when it is shorter than a year. */
 export function expiryPresets(maxDays: number): number[] {
   const out: number[] = EXPIRY_PRESETS.filter((d) => d <= maxDays);
-  if (maxDays > 0 && !out.includes(maxDays) && maxDays < 3650) out.push(maxDays);
+  if (maxDays > 0 && maxDays < 365 && !out.includes(maxDays)) out.push(maxDays);
   return out;
 }
 
@@ -421,6 +380,9 @@ export interface AccessSearch extends MemberFilters {
 /** The message to show for a failed request. */
 export function errorText(err: unknown): string {
   if (err instanceof ApiRequestError) {
+    if (err.code === 'password_change_required')
+      return 'Set a new password first: tokens and other changes are blocked until this account’s password is changed (My account → Password).';
+    if (err.code === 'read_only_token') return 'You signed in with a read-only token, which cannot change anything.';
     if (err.status === 403) return 'You do not have permission to do this.';
     if (err.status === 423 && err.retryAfter) return `Locked after repeated wrong passwords. Try again in ${Math.ceil(err.retryAfter / 60)} min.`;
     return err.body?.message ?? err.message;

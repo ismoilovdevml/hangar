@@ -85,7 +85,7 @@ describe('todoItems', () => {
       metrics: { ...m, storage: { ...m.storage, capacity_bytes: null } },
       canAdminBlobStores: true,
       tokenWarnings: [
-        { id: 'k', name: 'ci-publisher', owner: 'ci', owner_kind: 'service_account', prefix: 'hgr_k', scopes: [], created_at: NOW.toISOString(), expires_at: '2026-11-05T00:00:00Z' },
+        { id: 'k', name: 'ci-publisher', owner: 'ci', owner_kind: 'service_account', prefix: 'hgr_k', scopes: [], created_at: NOW.toISOString(), expires_at: '2026-11-05T00:00:00Z', allowed_cidrs: [], read_only: false },
       ],
       username: 'd.ismoilov',
       now: NOW,

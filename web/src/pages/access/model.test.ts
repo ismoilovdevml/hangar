@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   allows,
-  buildScopes,
   customExpiry,
   describeAudit,
   describePrivilege,
   describeUserAgent,
-  EMPTY_SCOPES,
   expiryPresets,
   expiryText,
   globMatch,
@@ -55,23 +53,6 @@ describe('privileges', () => {
 });
 
 describe('token scopes', () => {
-  it('builds scopes from the builder', () => {
-    expect(buildScopes(EMPTY_SCOPES)).toEqual({ scopes: ['repo:*:read'], error: null });
-    expect(buildScopes({ ...EMPTY_SCOPES, repoMode: 'pattern', pattern: 'npm-*', actions: ['read', 'write'] }).scopes).toEqual([
-      'repo:npm-*:read',
-      'repo:npm-*:write',
-    ]);
-    expect(buildScopes({ ...EMPTY_SCOPES, repoMode: 'list', repos: ['a1', 'b2'], actions: ['read', 'admin'] }).scopes).toEqual([
-      'repo:a1:admin',
-      'repo:b2:admin',
-    ]);
-    expect(buildScopes({ ...EMPTY_SCOPES, repoMode: 'none', system: ['audit:read', '*:*'] }).scopes).toEqual(['system:audit:read', 'system:*']);
-    expect(buildScopes({ ...EMPTY_SCOPES, repoMode: 'none' }).error).toMatch(/at least one scope/);
-    expect(buildScopes({ ...EMPTY_SCOPES, actions: [] }).error).toMatch(/repository action/);
-    expect(buildScopes({ ...EMPTY_SCOPES, repoMode: 'list' }).error).toMatch(/at least one repository/);
-    expect(buildScopes({ ...EMPTY_SCOPES, repoMode: 'pattern', pattern: 'Bad Name' }).error).toMatch(/lower-case/);
-  });
-
   it('flags scopes the owner’s roles do not grant', () => {
     expect(uncoveredScopes(['repo:npm-*:write', 'system:users:read'], ['repo:*:read', 'repo:npm-*:write'])).toEqual(['system:users:read']);
     expect(uncoveredScopes(['repo:docker-prod:delete'], ['repo:*:admin'])).toEqual([]);
@@ -82,7 +63,7 @@ describe('token scopes', () => {
 
 describe('expiry', () => {
   it('offers presets within the maximum lifetime', () => {
-    expect(expiryPresets(366)).toEqual([7, 30, 90, 180, 365, 366]);
+    expect(expiryPresets(366)).toEqual([7, 30, 90, 365]);
     expect(expiryPresets(90)).toEqual([7, 30, 90]);
     expect(expiryPresets(45)).toEqual([7, 30, 45]);
   });
