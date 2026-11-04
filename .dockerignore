@@ -1,3 +1,6 @@
+# Build context for the Dockerfile: Go sources, web/ sources and the
+# healthcheck probe. Everything else stays out so that caches stay warm and
+# no local state (secrets, data, builds) reaches the image.
 .git
 .github
 bin
@@ -6,6 +9,7 @@ dist
 coverage.out
 *.test
 deploy
+!deploy/healthcheck
 docs
 test
 web/node_modules
@@ -18,3 +22,4 @@ hangar.yaml
 hangar.local.yaml
 .env
 .env.*
+**/.DS_Store
