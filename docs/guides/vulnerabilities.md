@@ -2,8 +2,9 @@
 
 Hangar checks every npm, Maven, PyPI, NuGet and Go package version it stores
 against the public [OSV](https://osv.dev) advisory database (or a mirror of
-it) and lists what it finds on the **Vulnerabilities** screen, on the package
-page and in search (`security:findings`, `cve:CVE-2024-21907`).
+it) and lists what it finds on the **Vulnerabilities** screen as a fix plan
+(what to upgrade, and whether builds still pull the vulnerable versions), on
+the package page and in search (`security:findings`, `cve:CVE-2024-21907`).
 
 Docker images are **not** scanned yet. They show *Image scanning not
 configured*, never *Clean*. Raw files have no advisory source and show *No
@@ -15,7 +16,7 @@ advisory source*.
 |---|---|
 | A package arrives (hosted publish or a proxy caching it) | That version, in repositories with **Scan on arrival** (`scan_on_arrival: true`) |
 | Every hour, task `vulnerability-rescan` | Versions never scanned, versions whose last scan failed (after 30 minutes), and versions whose last scan is older than `scanning.rescan_interval` (default 24 h), in every repository, so new advisories are picked up |
-| On demand | One version: `POST /api/v1/components/{id}:scan` or **Scan now** in the finding drawer. A repository: `POST /api/v1/repositories/{name}:scan` or **Scan *repo* now** on the Vulnerabilities screen |
+| On demand | Everything: **Rescan** on the Vulnerabilities screen or `POST /api/v1/vulnerabilities/rescan`. One repository: `POST /api/v1/repositories/{name}:scan`. One version: `POST /api/v1/components/{id}:scan` |
 
 For each version Hangar asks OSV `POST /v1/querybatch` (up to 1000 versions
 per request, result pages followed) and then `GET /v1/vulns/{id}` for each
@@ -46,12 +47,93 @@ the advisory's affected ranges (the range that contains your version; an
 advisory that lists affected versions explicitly is matched exactly). *No fix
 yet* means no fixing release is known.
 
+## The fix plan
+
+The Vulnerabilities screen answers "what do we upgrade first?". Its header
+counts the open findings by severity and shows how many packages are scanned
+and when OSV was last asked; **Rescan** (needs `system:security:write`)
+queues a scan of every repository and shows the progress until each package
+that existed when it started has been checked (a run that has not finished
+after 3 hours is reported as stopped).
+
+The banner sums up the impact: *Upgrading 6 packages fixes 22 of 33 findings
+that builds actually use*. A package version is **in use** when it was
+downloaded within `scanning.in_use_window` (30 days by default); the bar
+shows the findings in used versus unused packages.
+
+The table has **one row per package** (format and package name, across
+repositories):
+
+| Column | Meaning |
+|---|---|
+| Package | The package and its most severe advisory (GHSA and CVE) |
+| Vulnerable versions | The versions with unresolved findings present in the registry |
+| Findings | How many, the highest severity and the highest CVSS score |
+| Upgrade to | Per release line of the vulnerable versions (e.g. 8.x and 10.x) the lowest version that fixes every finding of that line that has a fix: `8.0.4 / 10.0.10` |
+| Pulled · 7 d | Downloads of the vulnerable versions in the last 7 days and the distinct clients behind them |
+| Assignee | Who fixes it |
+
+The upgrade is chosen from the versions the advisories name as fixes: the
+lowest one above every vulnerable version of the line that none of the
+line's advisories still affects (an advisory whose ranges reopen later is
+checked against all of them). Findings without any fixing release are left
+out of the choice and counted as *without a fix*.
+
+**Copy upgrade** copies the command for the package's ecosystem, one line
+per release line:
+
+| Format | Command |
+|---|---|
+| NuGet | `dotnet add package Newtonsoft.Json --version 13.0.1` |
+| npm | `npm install lodash@4.17.21` |
+| PyPI | `pip install Django==4.2.16` |
+| Maven | `mvn versions:use-dep-version -Dincludes=org.apache.logging.log4j:log4j-core -DdepVersion=2.17.1 -DforceVersion=true` |
+| Go | `go get golang.org/x/net@v0.33.0` |
+
+Tabs: **In use first** (default: used packages first, then by severity and
+pulls; unused ones are dimmed at the end), **All packages** (by severity)
+and **Waived** (packages with waived findings). **Assigned to me**, the
+repository picker and the search box (package, advisory id, CVE, title)
+narrow the table. **Export CSV** downloads the rows of the current tab and
+filters.
+
+Click a row to expand it into its findings; click a finding to open it:
+severity, CVSS and status, **How to fix** with the upgrade sentence and a
+copyable command, **Who pulls it · last 7 days**, the affected ranges, the
+publication date, the summary and a link to the full advisory on osv.dev.
+
+### Who pulls a package
+
+Every successful download of a package version is attributed to its client:
+the principal (user or service account) for authenticated pulls, otherwise
+the client address and the client kind read from the user agent (*NuGet*,
+*npm*, *pip*, *Maven*, *Go*, *Docker*, *Browser*, ...). Counts are kept per
+version, UTC day and client in `component_pulls`. Like the download counters
+they are buffered in memory and written every 15 seconds in one statement;
+every node adds its own counts, so the numbers cover the whole cluster and
+survive restarts. Rows older than 90 days are deleted. The pull columns start
+counting when the server with this feature first runs; *in use* also looks
+at the last download time every package already had.
+
+Seeing who pulls a package needs `system:security:read` (or `:write`);
+everyone who can read the repository sees the counts.
+
+### Assigning
+
+**Assign** (in the drawer, or the assignee cell of a row for the whole
+package) makes an active Hangar user responsible. Assigning a package
+assigns all of its unresolved findings, and findings a later scan adds to it
+go to the same user. Assigning needs `system:security:write` and is audited
+as `finding.assign` / `finding.unassign`. Nobody is notified; the assignee is
+shown in the table and the drawer.
+
 ## Configuration
 
 ```yaml
 scanning:
   enabled: true              # HANGAR_SCANNING_ENABLED
   rescan_interval: 24h       # HANGAR_SCANNING_RESCAN_INTERVAL, at least 1h
+  in_use_window: 720h        # HANGAR_SCANNING_IN_USE_WINDOW, 24h..2160h: "in use" in the fix plan
   osv:
     url: https://api.osv.dev # HANGAR_SCANNING_OSV_URL
 ```
@@ -81,7 +163,8 @@ A finding is one advisory on one package version. Statuses:
 - **waived**: accepted until a date. A waiver needs a reason (3 to 2000
   characters) and an end date at most a year ahead, needs the
   `system:security:write` privilege, and is audited (`finding.waive`,
-  `finding.waiver_revoke`). Waived findings do not count as open and do not
+  `finding.waiver_revoke`). **Waive** on a fix plan row waives every
+  finding of the package, or the one picked, with one reason and date. Waived findings do not count as open and do not
   quarantine.
 - When a waiver ends the finding is re-opened within a minute (audited as
   `finding.waiver_expired`); the old reason stays visible.
@@ -108,17 +191,28 @@ the repository.
 | `GET /api/v1/findings/{id}` | One finding with the advisory text and references |
 | `POST /api/v1/findings/{id}/waiver` `{"reason": "...", "until": "2026-12-31T23:59:59Z"}` | Waive |
 | `DELETE /api/v1/findings/{id}/waiver` | Revoke a waiver |
-| `GET /api/v1/findings/trend?days=30` | Daily counts for the trend chart |
+| `GET /api/v1/findings/trend?days=30` | Daily counts of unresolved findings |
+| `GET /api/v1/vulnerabilities/fix-plan?tab=in_use&window=7d&assignee=me&q=json` | The fix plan; `format=csv` or `Accept: text/csv` for CSV |
+| `POST /api/v1/vulnerabilities/fix-plan/assign` `{"package": "nuget:Newtonsoft.Json", "assignee": "alice"}` | Assign every finding of a package (`null` removes) |
+| `POST /api/v1/vulnerabilities/fix-plan/waive` `{"package": "...", "finding_ids": [], "reason": "...", "until": "..."}` | Waive a package's findings (empty list = all) |
+| `GET /api/v1/findings/{id}/pullers?window=7d` | Who downloaded the finding's version |
+| `PUT` / `DELETE /api/v1/findings/{id}/assignee` `{"assignee": "alice"}` | Assign / unassign one finding |
+| `GET /api/v1/vulnerabilities/assignees?q=al` | Users findings can be assigned to |
+| `POST` / `GET /api/v1/vulnerabilities/rescan` | Rescan every repository / its progress |
 | `GET /api/v1/components/{id}/findings` | Findings and scan state of one version |
 | `POST /api/v1/components/{id}:scan` | Scan one version now |
 | `POST /api/v1/repositories/{name}:scan` | Queue a scan of a repository |
 | `GET /api/v1/scanning/status` | Source, rescan interval and coverage |
 
-Example:
+Examples:
 
 ```bash
 curl -s -H "Authorization: Bearer $HANGAR_TOKEN" \
   "https://hangar.example.com/api/v1/findings?severity=critical&fix_available=true" | jq '.items[] | {advisory_id, package, installed, fixed_in}'
+
+# What to upgrade, as a spreadsheet
+curl -s -H "Authorization: Bearer $HANGAR_TOKEN" -H "Accept: text/csv" \
+  "https://hangar.example.com/api/v1/vulnerabilities/fix-plan?tab=all" -o fix-plan.csv
 ```
 
 ## Troubleshooting
@@ -132,6 +226,11 @@ curl -s -H "Authorization: Bearer $HANGAR_TOKEN" \
   repository. Everything else is still picked up by the hourly task.
 - **The trend counts findings of deleted packages differently**: deleting a
   package deletes its findings, and with them their history.
+- **Every row shows 0 pulls right after the upgrade**: pull attribution starts
+  when the new server runs; the footer of the table says since when pulls
+  are recorded. *In use* already works from the last download times.
+- **A row says *Several* as assignee**: its findings are assigned to
+  different users (or some to nobody); assign the package to set one.
 
 ## Not covered yet
 

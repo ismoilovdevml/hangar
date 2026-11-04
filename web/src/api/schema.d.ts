@@ -848,6 +848,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/findings/{id}/pullers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** @description Who downloaded the finding's package version in the window, busiest first (at most 10): the principal for authenticated pulls, otherwise the client address and client kind from the user agent. Needs a readable finding and `system:security:read` or `:write`. Pulls are kept 90 days; `pulls_since` is the first day recorded. */
+        get: operations["getFindingPullers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings/{id}/assignee": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Makes an active Hangar user responsible for the finding. Requires `system:security:write`; audited as `finding.assign`. No notification is sent. */
+        put: operations["assignFinding"];
+        post?: never;
+        /** @description Removes the assignee. Requires `system:security:write`; audited as `finding.unassign`. */
+        delete: operations["unassignFinding"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/scanning/status": {
         parameters: {
             query?: never;
@@ -859,6 +898,92 @@ export interface paths {
         get: operations["getScanningStatus"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vulnerabilities/fix-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The unresolved findings of the readable repositories grouped by package (format and package name): the vulnerable versions present, the lowest upgrade per release line that fixes every finding with a fix, and the downloads of the vulnerable versions in the pull window with the number of distinct clients. A package is `in_use` when one of its vulnerable versions was downloaded within `scanning.in_use_window` (30 days by default). Tabs: `in_use` (default; in-use packages first), `all` (by severity), `waived` (packages with waived findings). The summary covers the open findings and ignores the tab. With `format=csv` or `Accept: text/csv` the packages are returned as a CSV file. */
+        get: operations["getFixPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vulnerabilities/fix-plan/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Sets (or with a null or empty assignee removes) the assignee of every unresolved finding of a package in the readable repositories. New findings of an assigned package get the same assignee. Requires `system:security:write`; audited once as `finding.assign` or `finding.unassign` with target `package:<format>/<package>`. */
+        post: operations["assignPackage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vulnerabilities/fix-plan/waive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Waives the listed findings of a package, or all of its unresolved findings when `finding_ids` is empty, with one reason and end date. Requires `system:security:write`; each finding is audited as `finding.waive`. */
+        post: operations["waivePackage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vulnerabilities/assignees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Active users findings can be assigned to. Requires `system:security:write`. */
+        get: operations["listAssignees"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vulnerabilities/rescan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The last "rescan every repository" and its progress. Requires `system:security:read` or `:write`. */
+        get: operations["getRescan"];
+        put?: never;
+        /** @description Queues a scan of every repository of a scanned format (one repository scan job each). While a run is in progress it is returned instead (200). Requires `system:security:write`; audited as `vulnerability.rescan`. */
+        post: operations["startRescan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2617,7 +2742,11 @@ export interface components {
             waived_by?: string | null;
             /** Format: date-time */
             waived_at?: string | null;
+            /** @description Username of the Hangar user responsible */
             assignee?: string | null;
+            assigned_by?: string | null;
+            /** Format: date-time */
+            assigned_at?: string | null;
             /** @example osv */
             source?: string;
             first_seen_at?: components["schemas"]["Timestamp"];
@@ -2727,6 +2856,182 @@ export interface components {
             reason: string;
             /** @description In the future, at most a year ahead */
             until: components["schemas"]["Timestamp"];
+        };
+        Pullers: {
+            component_id: string;
+            window_days: number;
+            /** @description Downloads in the window */
+            pulls: number;
+            /** @description Distinct clients in the window */
+            clients: number;
+            /**
+             * Format: date
+             * @description First day with pull records
+             */
+            pulls_since: string | null;
+            items: components["schemas"]["Puller"][];
+        };
+        Puller: {
+            /**
+             * @example ci-publisher
+             * @example 10.0.4.12 · NuGet
+             */
+            label: string;
+            principal: string | null;
+            /** @enum {string} */
+            kind: "user" | "service_account" | "anonymous";
+            address: string;
+            /**
+             * @description Client kind from the user agent
+             * @example NuGet
+             * @example npm
+             * @example Browser
+             */
+            agent: string;
+            pulls: number;
+            last_at: components["schemas"]["Timestamp"];
+        };
+        AssigneeInput: {
+            /** @description Username of an active user */
+            assignee: string;
+        };
+        Assignee: {
+            username: string;
+            display_name: string;
+        };
+        PackageAssignInput: {
+            /**
+             * @description Package key `<format>:<package>`
+             * @example nuget:Newtonsoft.Json
+             */
+            package: string;
+            /** @description Username; null or empty removes the assignee */
+            assignee?: string | null;
+        };
+        PackageWaiverInput: {
+            /** @example nuget:Newtonsoft.Json */
+            package: string;
+            /** @description Findings of the package to waive; empty = every unresolved one */
+            finding_ids?: string[];
+            reason: string;
+            /** @description In the future, at most a year ahead */
+            until: components["schemas"]["Timestamp"];
+        };
+        PackageChange: {
+            key: string;
+            /** @description Ids of the findings changed */
+            findings: string[];
+        };
+        FixPlan: {
+            /** @enum {string} */
+            tab: "in_use" | "all" | "waived";
+            window_days: number;
+            in_use_days: number;
+            /** Format: date */
+            pulls_since: string | null;
+            summary: components["schemas"]["FixPlanSummary"];
+            items: components["schemas"]["PackagePlan"][];
+        };
+        FixPlanSummary: {
+            /** @description Packages with open findings */
+            packages: number;
+            packages_in_use: number;
+            /** @description In-use packages whose upgrade fixes at least one finding */
+            packages_to_upgrade: number;
+            /** @description Open findings */
+            findings: number;
+            findings_in_use: number;
+            findings_unused: number;
+            /** @description In-use findings the upgrades fix */
+            findings_fixed_in_use: number;
+            waived_packages: number;
+        };
+        UpgradeLine: {
+            /**
+             * @description Major version of the vulnerable versions
+             * @example 8
+             */
+            line: string;
+            from: string[];
+            /** @description Lowest version fixing every fixable finding of the line */
+            to: string | null;
+            /** @example dotnet add package System.Text.Json --version 8.0.5 */
+            command: string | null;
+            fixes: number;
+            /** @description Findings of the line without any fixing release */
+            unfixed: number;
+        };
+        PlanFinding: {
+            id: string;
+            advisory_id: string;
+            aliases: string[];
+            title: string;
+            severity: components["schemas"]["Severity"];
+            cvss: number | null;
+            status: components["schemas"]["FindingStatus"];
+            installed: string;
+            fixed_in: string | null;
+            assignee: string | null;
+            /** Format: date-time */
+            waiver_until: string | null;
+            component_id: string;
+            repository: string;
+            in_use: boolean;
+            pulls: number;
+            clients: number;
+        };
+        PackagePlan: {
+            /** @example nuget:Newtonsoft.Json */
+            key: string;
+            format: components["schemas"]["Format"];
+            package: string;
+            repositories: string[];
+            /** @description Most severe first */
+            advisories: {
+                id: string;
+                aliases: string[];
+                severity: components["schemas"]["Severity"];
+                cvss: number | null;
+            }[];
+            /** @description Vulnerable versions in the registry, lowest first */
+            versions: string[];
+            findings: number;
+            max_severity: components["schemas"]["Severity"];
+            max_cvss: number | null;
+            severities: components["schemas"]["SeverityCounts"];
+            upgrades: components["schemas"]["UpgradeLine"][];
+            /** @description Findings the upgrades fix */
+            fixable: number;
+            /** @description Downloads of the vulnerable versions in the window */
+            pulls: number;
+            /** @description Distinct clients behind them */
+            clients: number;
+            in_use: boolean;
+            /** Format: date-time */
+            last_pulled_at: string | null;
+            /** @description Shared by every finding; null when none or mixed */
+            assignee: string | null;
+            assignee_mixed: boolean;
+            items: components["schemas"]["PlanFinding"][];
+        };
+        Rescan: {
+            id: string;
+            started_at: components["schemas"]["Timestamp"];
+            started_by: string;
+            repositories: number;
+            /** @description Components that existed when it started */
+            total: number;
+            /** @description Of them */
+            done: number;
+            /**
+             * @description stalled = not finished within 3 hours
+             * @enum {string}
+             */
+            state: "running" | "done" | "stalled";
+        };
+        RescanStarted: {
+            run: components["schemas"]["Rescan"];
+            started: boolean;
         };
         /**
          * @description Scope: `version_include` (if set) must match and, with
@@ -3500,6 +3805,8 @@ export interface components {
         Limit: number;
         Id: string;
         SessionId: string;
+        /** @description Pull window in days, e.g. 7d (1d..90d) */
+        PullWindow: string;
         RepositoryName: components["schemas"]["RepositoryName"];
         /** @description Policy name or id */
         CleanupPolicyRef: string;
@@ -4996,6 +5303,87 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    getFindingPullers: {
+        parameters: {
+            query?: {
+                /** @description Pull window in days, e.g. 7d (1d..90d) */
+                window?: components["parameters"]["PullWindow"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Clients by pulls */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pullers"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    assignFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssigneeInput"];
+            };
+        };
+        responses: {
+            /** @description Assigned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    unassignFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unassigned (or there was no assignee) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     getScanningStatus: {
         parameters: {
             query?: never;
@@ -5013,6 +5401,181 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ScanningStatus"];
                 };
+            };
+        };
+    };
+    getFixPlan: {
+        parameters: {
+            query?: {
+                tab?: "in_use" | "all" | "waived";
+                /** @description Pull window in days, e.g. 7d (1d..90d) */
+                window?: components["parameters"]["PullWindow"];
+                /** @description Only findings assigned to this user; `me` is the caller */
+                assignee?: string;
+                /** @description Exact repository name */
+                repository?: string;
+                /** @description Matches the package, the advisory id, an alias (CVE) or the title */
+                q?: string;
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The fix plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FixPlan"];
+                    "text/csv": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    assignPackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PackageAssignInput"];
+            };
+        };
+        responses: {
+            /** @description The findings changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackageChange"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    waivePackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PackageWaiverInput"];
+            };
+        };
+        responses: {
+            /** @description The findings waived */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackageChange"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAssignees: {
+        parameters: {
+            query?: {
+                /** @description Matches the username, display name or email */
+                q?: string;
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Users */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Assignee"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getRescan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The last run, or null */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        run: components["schemas"]["Rescan"] | null;
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    startRescan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A run is already in progress */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RescanStarted"];
+                };
+            };
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RescanStarted"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            /** @description Scanning is turned off or not available */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -1,9 +1,10 @@
 /**
  * Pure helpers of the Vulnerabilities screen: URL filters, severity and
- * status wording, waiver validation and the trend summary.
+ * status wording, the fix plan wording and waiver validation.
  */
-import type { FindingQuery } from '../api/findings';
-import type { Finding, FindingTrendPoint, Severity } from '../api/types';
+import { ApiRequestError } from '../api/client';
+import type { FixPlanQuery } from '../api/findings';
+import type { Finding, PackagePlan, Severity, UpgradeLine } from '../api/types';
 import type { Tone } from './format';
 
 export const SEVERITIES = ['critical', 'high', 'medium', 'low', 'unknown'] as const satisfies readonly Severity[];
@@ -18,30 +19,23 @@ export const SEVERITY_META: Record<Severity, { label: string; tone: Tone; color:
 
 export const isSeverity = (v: unknown): v is Severity => typeof v === 'string' && (SEVERITIES as readonly string[]).includes(v);
 
-/** Status filter of the list: "active" (the default) is everything not fixed. */
-export const STATUS_FILTERS = [
-  { id: 'active', label: 'Not fixed', api: undefined },
-  { id: 'open', label: 'Open', api: 'open,assigned' },
-  { id: 'waived', label: 'Waived', api: 'waived' },
-  { id: 'fixed', label: 'Fixed', api: 'fixed' },
+/** Tabs of the fix plan; "in_use" (the default) is not written to the URL. */
+export const PLAN_TABS = [
+  { id: 'in_use', label: 'In use first' },
+  { id: 'all', label: 'All packages' },
+  { id: 'waived', label: 'Waived' },
 ] as const;
-export type StatusFilter = (typeof STATUS_FILTERS)[number]['id'];
-
-export const FIX_FILTERS = [
-  { id: 'any', label: 'Any' },
-  { id: 'yes', label: 'Fix available' },
-  { id: 'no', label: 'No fix yet' },
-] as const;
-export type FixFilter = (typeof FIX_FILTERS)[number]['id'];
+export type PlanTab = (typeof PLAN_TABS)[number]['id'];
 
 /** Filters of /vulnerabilities, all in the query string. */
 export interface VulnSearch {
-  severity?: Severity;
-  status?: Exclude<StatusFilter, 'active'>;
-  fix?: Exclude<FixFilter, 'any'>;
+  tab?: Exclude<PlanTab, 'in_use'>;
+  /** Only findings assigned to the signed-in user. */
+  mine?: boolean;
   repo?: string;
   q?: string;
-  cursor?: string;
+  /** The package rows expanded into their findings (package keys). */
+  open?: string[];
   /** The finding open in the drawer. */
   finding?: string;
 }
@@ -49,35 +43,64 @@ export interface VulnSearch {
 const str = (v: unknown) => (typeof v === 'string' && v.trim().length > 0 ? v.trim() : undefined);
 
 export function validateVulnSearch(s: Record<string, unknown>): VulnSearch {
-  const status = STATUS_FILTERS.find((f) => f.id !== 'active' && f.id === s.status)?.id as VulnSearch['status'];
-  const fix = s.fix === 'yes' || s.fix === 'no' ? s.fix : undefined;
+  const tab = s.tab === 'all' || s.tab === 'waived' ? s.tab : undefined;
+  const open = (Array.isArray(s.open) ? s.open : typeof s.open === 'string' ? [s.open] : [])
+    .map(str)
+    .filter((v): v is string => !!v)
+    .slice(0, 50);
   return {
-    severity: isSeverity(s.severity) ? s.severity : undefined,
-    status,
-    fix,
+    tab,
+    mine: s.mine === true || s.mine === 'true' || s.mine === 1 ? true : undefined,
     repo: str(s.repo),
     q: str(s.q),
-    cursor: str(s.cursor),
+    open: open.length ? open : undefined,
     finding: str(s.finding),
   };
 }
 
-export const PAGE_SIZE = 50;
+/** The pull window of the screen. */
+export const PULL_WINDOW = '7d';
 
-/** The API query for the list filters. */
-export function findingQuery(s: VulnSearch): FindingQuery {
-  return {
-    severity: s.severity,
-    status: STATUS_FILTERS.find((f) => f.id === (s.status ?? 'active'))?.api,
-    fix_available: s.fix === 'yes' ? true : s.fix === 'no' ? false : undefined,
-    repository: s.repo,
-    q: s.q,
-    cursor: s.cursor,
-    limit: PAGE_SIZE,
-  };
+/** The API query for the plan filters. */
+export function planQuery(s: VulnSearch): FixPlanQuery {
+  return { tab: s.tab ?? 'in_use', window: PULL_WINDOW, assignee: s.mine ? 'me' : undefined, repository: s.repo, q: s.q };
 }
 
-export const hasFilters = (s: VulnSearch) => !!(s.severity || s.status || s.fix || s.repo || s.q);
+export const hasFilters = (s: VulnSearch) => !!(s.mine || s.repo || s.q);
+
+/** "8.0.4 / 10.0.10": the distinct upgrade targets; null when none is known. */
+export function upgradeTargets(p: Pick<PackagePlan, 'upgrades'>): string | null {
+  const to = [...new Set(p.upgrades.map((u) => u.to).filter((v): v is string => !!v))];
+  return to.length ? to.join(' / ') : null;
+}
+
+/** The upgrade commands of a package, one per line (for the clipboard). */
+export function upgradeCommands(p: Pick<PackagePlan, 'upgrades'>): string {
+  return [...new Set(p.upgrades.map((u) => u.command).filter((v): v is string => !!v))].join('\n');
+}
+
+/** The upgrade line that covers one vulnerable version. */
+export function lineFor(p: Pick<PackagePlan, 'upgrades'>, version: string): UpgradeLine | undefined {
+  return p.upgrades.find((u) => u.from.includes(version));
+}
+
+/** "GHSA-5crp-9r3c-p9vr · CVE-2024-21907", or "CVE-2018-8292 + 3 more". */
+export function advisoryIds(p: Pick<PackagePlan, 'advisories'>): string {
+  const first = p.advisories[0];
+  if (!first) return '';
+  const cve = first.aliases.find((a) => a.startsWith('CVE-'));
+  const ids = first.id === cve || !cve ? first.id : `${first.id} · ${cve}`;
+  const more = p.advisories.length - 1;
+  return more > 0 ? `${ids} + ${more} more` : ids;
+}
+
+/** "2 high · 8.1": the findings count at the highest severity, and the highest score. */
+export function findingsSummary(p: Pick<PackagePlan, 'findings' | 'max_severity' | 'max_cvss' | 'severities'>): string {
+  const n = p.severities[p.max_severity as keyof typeof p.severities] ?? p.findings;
+  const others = p.findings - n;
+  const head = `${n} ${SEVERITY_META[p.max_severity].label.toLowerCase()}${others > 0 ? ` + ${others}` : ''}`;
+  return p.max_cvss != null ? `${head} · ${p.max_cvss.toFixed(1)}` : head;
+}
 
 /** Package and version as the advisory names them: `Newtonsoft.Json@12.0.1`. */
 export const packageAt = (f: Pick<Finding, 'package' | 'installed'>) => (f.installed ? `${f.package}@${f.installed}` : f.package);
@@ -141,21 +164,5 @@ export function validateWaiver(reason: string, dateValue: string, now: Date = ne
   return errors;
 }
 
-/** One sentence describing the trend, for screen readers and the chart caption. */
-export function trendSummary(points: readonly FindingTrendPoint[]): string {
-  if (points.length === 0) return 'No finding history yet.';
-  const total = (p: FindingTrendPoint) => p.critical + p.high + p.medium + p.low;
-  const first = points[0]!;
-  const last = points[points.length - 1]!;
-  const added = points.reduce((n, p) => n + p.new, 0);
-  const fixed = points.reduce((n, p) => n + p.resolved, 0);
-  const now = total(last);
-  const then = total(first);
-  const change = now === then ? 'unchanged' : now > then ? `up from ${then}` : `down from ${then}`;
-  return `${now} unresolved findings today (${last.critical} critical), ${change} ${points.length} days ago; ${added} detected and ${fixed} fixed in that time.`;
-}
-
-/** Short day label for the chart axis: "4 Nov". */
-export function trendDayLabel(date: string): string {
-  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
-}
+/** The message of a failed request, for an inline error. */
+export const errorText = (err: unknown) => (err instanceof ApiRequestError ? err.message : 'Something went wrong. Try again.');

@@ -232,7 +232,10 @@ type Scanning struct {
 	// RescanInterval is how old a component's last scan may get before the
 	// hourly rescan task checks it again against new advisories.
 	RescanInterval time.Duration `yaml:"rescan_interval"`
-	OSV            OSV           `yaml:"osv"`
+	// InUseWindow: a vulnerable version downloaded within it counts as "in
+	// use" in the fix plan of the Vulnerabilities screen (1 to 90 days).
+	InUseWindow time.Duration `yaml:"in_use_window"`
+	OSV         OSV           `yaml:"osv"`
 }
 
 // OSV is the advisory database the scanner queries.
@@ -304,7 +307,7 @@ func Default() Config {
 			MaxIdleConnsPerHost: 32,
 		},
 		Metrics:  Metrics{Enabled: true, Path: "/metrics"},
-		Scanning: Scanning{Enabled: true, RescanInterval: 24 * time.Hour, OSV: OSV{URL: "https://api.osv.dev"}},
+		Scanning: Scanning{Enabled: true, RescanInterval: 24 * time.Hour, InUseWindow: 30 * 24 * time.Hour, OSV: OSV{URL: "https://api.osv.dev"}},
 		Security: DefaultSecurity(),
 		UI:       UI{ReadmeImages: "proxy"},
 		Observability: Observability{
@@ -431,6 +434,9 @@ func (c *Config) Validate() error {
 	case "proxy", "direct", "off":
 	default:
 		errs = append(errs, fmt.Errorf("ui.readme_images %q: want proxy, direct or off", c.UI.ReadmeImages))
+	}
+	if w := c.Scanning.InUseWindow; w < 24*time.Hour || w > 90*24*time.Hour {
+		errs = append(errs, fmt.Errorf("scanning.in_use_window %s must be between 24h and 2160h (90 days)", w))
 	}
 	if c.Scanning.Enabled {
 		if u, err := url.Parse(c.Scanning.OSV.URL); err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {

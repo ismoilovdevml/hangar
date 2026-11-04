@@ -54,6 +54,33 @@
   the platform-default switch; credentials, exceptions and the CA
   certificate (upload or paste) are folded away. The test reports the
   answer inline. Proxies are listed with their default flag and usage.
+- **Vulnerability fix plan**: the Vulnerabilities screen groups findings by
+  package and says what to upgrade: the vulnerable versions present, the
+  lowest version fixing every finding per release line (e.g.
+  `8.0.4 / 10.0.10`), a copyable `dotnet add package` / `npm install` /
+  `pip install` / `mvn versions:use-dep-version` / `go get` command, and how
+  often the vulnerable versions were pulled in the last 7 days and by how
+  many clients. Packages nobody downloaded within `scanning.in_use_window`
+  (default 30 days) are dimmed and listed last; a banner sums up what the
+  upgrades fix. Tabs *In use first*, *All packages* and *Waived*, CSV export
+  (`GET /vulnerabilities/fix-plan?format=csv`).
+- **Who pulls a package**: downloads are attributed per package version, UTC
+  day and client (principal, or address and client kind) in
+  `component_pulls` (migration `00150`, kept 90 days), batched like the
+  download counters and summed over every node. The finding drawer lists the
+  busiest clients of the last 7 days (`GET /findings/{id}/pullers`,
+  `system:security:read`).
+- **Assign findings** to a Hangar user, one finding or a whole package (new
+  findings of the package follow), shown in the fix plan with an *Assigned to
+  me* filter; audited as `finding.assign` / `finding.unassign`. Waive a whole
+  package or one of its findings in one step.
+- **Rescan** on the Vulnerabilities screen (`system:security:write`) queues a
+  scan of every repository and shows its progress
+  (`POST/GET /vulnerabilities/rescan`, audited as `vulnerability.rescan`).
+- The trend chart, the scanner panel and the per-repository *Scan now*
+  button left the Vulnerabilities screen; `GET /findings/trend` and
+  `POST /repositories/{name}:scan` are unchanged.
+
 - **Fewer release files**: the compose stack ships as one `hangar-compose.tar.gz`
   and only Linux binaries are published (`hangar-linux-amd64`,
   `hangar-linux-arm64`), next to `install.sh` and `SHA256SUMS`. The installer

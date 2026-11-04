@@ -33,6 +33,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/rollup"
 	"github.com/ismoilovdevml/hangar/internal/scanning"
 	"github.com/ismoilovdevml/hangar/internal/scanning/osv"
+	"github.com/ismoilovdevml/hangar/internal/scanning/pulls"
 	"github.com/ismoilovdevml/hangar/internal/search"
 	"github.com/ismoilovdevml/hangar/internal/secrets"
 	"github.com/ismoilovdevml/hangar/internal/server"
@@ -304,6 +305,13 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	}
 	comps := component.New(pool, component.Options{AuthZ: authz, Audit: auditLog, Events: bus, Blobs: observedBlobs, Logger: log})
 	a.onClose(func() { _ = comps.Close() })
+	// Who pulls which package version (the fix plan of the Vulnerabilities
+	// screen): buffered like the download counters, written every few seconds.
+	pullRec := pulls.New(pool, pulls.Options{Logger: log})
+	pullCtx, stopPulls := context.WithCancel(context.WithoutCancel(ctx))
+	pullsDone := make(chan struct{})
+	go func() { pullRec.Run(pullCtx); close(pullsDone) }()
+	a.onClose(func() { stopPulls(); <-pullsDone })
 
 	// Outbound HTTP and proxy upstreams.
 	userAgent := cfg.HTTP.UserAgent
@@ -343,7 +351,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 
 	deps := core.Deps{
 		Repos:       repos,
-		Components:  comps,
+		Components:  pulls.Wrap(comps, pullRec),
 		Blobs:       observedBlobs,
 		Upstreams:   observability.InstrumentUpstreams(upstreams, metrics),
 		HTTPClients: clients,
@@ -655,7 +663,7 @@ func buildScanner(cfg config.Config, pool *pgxpool.Pool, clients *httpclient.Fac
 	}
 	return scanning.New(scanning.Options{
 		Pool: pool, Advisories: advisories, SourceURL: advisories.BaseURL(), Enabled: sc.Enabled,
-		RescanInterval: sc.RescanInterval, Events: deps.Events, Jobs: deps.Jobs, Audit: deps.Audit, Logger: deps.Logger,
+		RescanInterval: sc.RescanInterval, InUseWindow: sc.InUseWindow, Events: deps.Events, Jobs: deps.Jobs, Audit: deps.Audit, Logger: deps.Logger,
 	})
 }
 

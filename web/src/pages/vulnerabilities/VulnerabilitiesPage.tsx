@@ -1,171 +1,178 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { getRouteApi, Link, useRouterState } from '@tanstack/react-router';
+import { getRouteApi, Link } from '@tanstack/react-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { ApiRequestError } from '../../api/client';
 import {
+  downloadFixPlanCsv,
+  findingKeys,
   useFindingRepositories,
   useFindings,
-  useFindingTrend,
+  useFixPlan,
+  useRescan,
   useScanningStatus,
-  useScanRepository,
+  useStartRescan,
 } from '../../api/findings';
 import { isMissingEndpoint, useCanSystem } from '../../api/ops';
-import { usePermissions } from '../../api/permissions';
-import type { Finding, FindingList, ScanningStatus, Severity } from '../../api/types';
-import { DataTable, type Column } from '../../components/DataTable';
+import type { FixPlan, FindingList, PackagePlan, Rescan, ScanningStatus } from '../../api/types';
 import { ErrorNote } from '../../components/ErrorNote';
 import { FormatIcon } from '../../components/FormatIcon';
 import { IconSearch } from '../../components/icons';
-import { KpiCard, KpiCardSkeleton } from '../../components/KpiCard';
-import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
 import { Select, type SelectOption } from '../../components/Select';
 import { relativeTime } from '../../lib/format';
 import { plural } from '../../lib/overview';
-import {
-  findingQuery,
-  findingStatus,
-  FIX_FILTERS,
-  hasFilters,
-  packageAt,
-  SEVERITIES,
-  SEVERITY_META,
-  sortedAliases,
-  STATUS_FILTERS,
-  type VulnSearch,
-} from '../../lib/vulnerabilities';
+import { errorText, hasFilters, PLAN_TABS, planQuery, SEVERITY_META, type VulnSearch } from '../../lib/vulnerabilities';
 import { FindingDrawer } from './FindingDrawer';
-import { TrendChart } from './TrendChart';
+import { FixPlanTable } from './FixPlanTable';
+import { AssignDialog, WaiveDialog } from './PlanDialogs';
 import './vulnerabilities.css';
 
 const route = getRouteApi('/app/vulnerabilities');
 
-const CARD_SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
+const HEADER_SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
 
-function SeverityCards({ list, loading }: { list?: FindingList; loading: boolean }) {
-  if (loading || !list) {
-    return (
-      <div className="kpis" aria-busy="true">
-        {CARD_SEVERITIES.map((s) => (
-          <KpiCardSkeleton key={s} label={SEVERITY_META[s].label} />
-        ))}
-      </div>
-    );
-  }
-  const total = SEVERITIES.reduce((n, s) => n + (list.totals[s] ?? 0), 0);
+/** "0 critical · 27 high · 6 medium · 0 low": open findings of the readable repositories. */
+function SeverityPills({ list }: { list?: FindingList }) {
   return (
-    <div className="kpis">
-      {CARD_SEVERITIES.map((s) => {
-        const n = list.totals[s] + (s === 'low' ? (list.totals.unknown ?? 0) : 0);
-        const fixable = list.fixable[s] + (s === 'low' ? (list.fixable.unknown ?? 0) : 0);
-        const meta = SEVERITY_META[s];
+    <ul className="vhead__pills" aria-label="Open findings by severity" aria-busy={!list || undefined}>
+      {HEADER_SEVERITIES.map((s) => {
+        const n = list ? list.totals[s] + (s === 'low' ? (list.totals.unknown ?? 0) : 0) : null;
         return (
-          <KpiCard
-            key={s}
-            label={meta.label}
-            tag={n > 0 ? { text: 'Open', tone: meta.tone } : { text: 'None open', tone: 'ok' }}
-            value={n}
-            unit={n === 1 ? 'finding' : 'findings'}
-            meter={{ value: total ? n / total : 0, label: `${meta.label} share of open findings`, color: meta.color }}
-            note={
-              n === 0 ? (
-                'Nothing open at this severity.'
-              ) : (
-                <>
-                  {fixable === n ? 'All have a fix' : fixable === 0 ? 'No fix released yet' : `${fixable} of ${n} have a fix`} ·{' '}
-                  <Link to="/vulnerabilities" search={(prev) => ({ ...prev, severity: s, status: undefined, cursor: undefined, finding: undefined })}>
-                    Show
-                  </Link>
-                </>
-              )
-            }
-          />
+          <li key={s}>
+            <Pill tone={n ? SEVERITY_META[s].tone : 'neutral'} className={n ? 'vhead__pill' : 'vhead__pill is-zero'}>
+              {n ?? '–'} {s}
+            </Pill>
+          </li>
         );
       })}
+    </ul>
+  );
+}
+
+/** "451 scanned · OSV · checked 47 min ago" and the Rescan button with its progress. */
+function ScanState({ status, canRescan, canFollow }: { status?: ScanningStatus; canRescan: boolean; canFollow: boolean }) {
+  const qc = useQueryClient();
+  const rescan = useRescan(canFollow);
+  const start = useStartRescan();
+  const run = rescan.data?.run ?? (start.data?.run as Rescan | undefined);
+  const running = run?.state === 'running';
+  // When a run finishes, the findings it changed are read again.
+  const wasRunning = useRef(false);
+  useEffect(() => {
+    if (wasRunning.current && !running) void qc.invalidateQueries({ queryKey: findingKeys.all });
+    wasRunning.current = running;
+  }, [running, qc]);
+
+  if (!status) return <span className="vhead__meta">Loading scanner…</span>;
+  const c = status.coverage;
+  const pct = run && run.total ? Math.floor((run.done / run.total) * 100) : 0;
+  return (
+    <div className="vhead__scan">
+      <span className="vhead__meta" role="status">
+        {!status.enabled
+          ? 'Scanning is turned off on this server'
+          : running
+            ? `Rescanning · ${run.done.toLocaleString('en-US')} of ${plural(run.total, 'package')}`
+            : `${c.scanned.toLocaleString('en-US')} scanned · OSV · ${c.last_scan_at ? `checked ${relativeTime(c.last_scan_at).toLowerCase()}` : 'not checked yet'}`}
+        {!running && run?.state === 'stalled' && ` · the last rescan stopped at ${run.done} of ${run.total}`}
+      </span>
+      {canRescan && status.enabled && (
+        <button
+          type="button"
+          className="button button--secondary button--sm vhead__rescan"
+          disabled={running || start.isPending}
+          onClick={() => start.mutate()}
+        >
+          {start.isPending ? 'Queuing…' : running ? `Rescanning ${pct}%` : 'Rescan'}
+        </button>
+      )}
+      {running && (
+        <span className="vhead__progress" role="progressbar" aria-label="Rescan progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+          <span style={{ width: `${pct}%` }} />
+        </span>
+      )}
+      {start.isError && (
+        <p className="form-error vhead__error" role="alert">
+          {errorText(start.error)}
+        </p>
+      )}
     </div>
   );
 }
 
-function ScannerPanel({ status, repo, canScanRepo }: { status?: ScanningStatus; repo?: string; canScanRepo: boolean }) {
-  const scan = useScanRepository();
-  if (!status) {
+/** "Upgrading 6 packages fixes 22 of 33 findings that builds actually use." */
+function ImpactBanner({ plan, status }: { plan: FixPlan; status?: ScanningStatus }) {
+  const s = plan.summary;
+  if (s.findings === 0) {
+    const scanned = status?.coverage.scanned ?? 0;
     return (
-      <Panel title="Scanner" titleId="vuln-scanner" className="vscanner">
-        <p className="meta">Loading…</p>
-      </Panel>
+      <section className="vimpact glass" aria-label="Impact">
+        <div className="vimpact__text">
+          <p className="vimpact__lead">
+            {scanned === 0 ? 'No package has been scanned yet.' : `No open vulnerabilities in the ${plural(scanned, 'scanned package')}.`}
+          </p>
+          <span className="vimpact__sub">
+            {scanned === 0
+              ? 'Packages are checked against OSV when they arrive and every day after; Rescan checks everything now.'
+              : s.waived_packages
+                ? `${plural(s.waived_packages, 'package')} ${s.waived_packages === 1 ? 'has' : 'have'} waived findings.`
+                : 'New advisories are picked up by the daily rescan.'}
+          </span>
+        </div>
+      </section>
     );
   }
-  const c = status.coverage;
-  const source = (() => {
-    try {
-      return new URL(status.source_url).host;
-    } catch {
-      return status.source_url;
-    }
-  })();
+  const unusedPct = Math.round((s.findings_unused / s.findings) * 100);
+  const notFixed = s.findings_in_use - s.findings_fixed_in_use;
   return (
-    <Panel title="Scanner" titleId="vuln-scanner" className="vscanner" action={<Pill tone={status.enabled ? 'ok' : 'neutral'}>{status.enabled ? 'On' : 'Off'}</Pill>}>
-      {!status.enabled && <p className="vscanner__off">Scanning is turned off on this server (scanning.enabled). Stored findings are still shown.</p>}
-      <dl className="vscanner__facts">
-        <div>
-          <dt>Scanned</dt>
-          <dd>{c.scanned}</dd>
-        </div>
-        <div>
-          <dt>Waiting for a first scan</dt>
-          <dd>{c.never}</dd>
-        </div>
-        <div>
-          <dt>Last scan failed</dt>
-          <dd className={c.failed ? 'vscanner__bad' : undefined}>{c.failed}</dd>
-        </div>
-        <div>
-          <dt>Not scanned</dt>
-          <dd>{c.unsupported}</dd>
-        </div>
-      </dl>
-      <p className="meta">
-        Advisories from OSV ({source}). Packages are checked on arrival in repositories with scan on arrival, and every package again
-        once its last check is older than {status.rescan_interval.replace(/0m0s$/, '').replace(/h$/, ' h')}.
-        {c.last_scan_at ? ` Last check ${relativeTime(c.last_scan_at)}.` : ' No package checked yet.'}
-      </p>
-      {c.unsupported > 0 && <p className="meta">Docker images are not scanned: image scanning is not configured. Raw files have no advisory source.</p>}
-      {status.enabled &&
-        (repo ? (
-          canScanRepo ? (
-            <div className="vscanner__actions">
-              <button type="button" className="button button--secondary button--sm" disabled={scan.isPending} onClick={() => scan.mutate(repo)}>
-                {scan.isPending ? 'Queuing…' : `Scan ${repo} now`}
-              </button>
-              <p className="meta" role="status">
-                {scan.data ? `Queued a scan of ${plural(scan.data.components, 'package')} in ${scan.data.repository}. Results appear here as it runs.` : ''}
-              </p>
-              {scan.isError && (
-                <p className="form-error" role="alert">
-                  {scan.error instanceof ApiRequestError ? scan.error.message : 'Could not queue the scan.'}
-                </p>
-              )}
-            </div>
+    <section className="vimpact glass" aria-label="Impact">
+      <div className="vimpact__text">
+        <p className="vimpact__lead">
+          {s.findings_in_use === 0 ? (
+            <>
+              None of the <b>{plural(s.findings, 'finding')}</b> is in a package builds used in the last {plan.in_use_days} days.
+            </>
+          ) : s.packages_to_upgrade === 0 ? (
+            <>
+              <b>{plural(s.findings_in_use, 'finding')}</b> of {s.findings} {s.findings_in_use === 1 ? 'is' : 'are'} in packages builds use, and no upgrade fixes them yet.
+            </>
           ) : (
-            <p className="meta">Scanning {repo} on demand needs write access to it.</p>
-          )
-        ) : (
-          <p className="meta">Pick a repository in the filters to scan it now.</p>
-        ))}
-    </Panel>
-  );
-}
-
-/** A labelled filter pill around the shared Select. */
-function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: readonly SelectOption[]; onChange: (v: string) => void }) {
-  const id = useId();
-  return (
-    <div className="filter-select">
-      <label htmlFor={id} className="filter-select__label">
-        {label}
-      </label>
-      <Select id={id} variant="inline" value={value} options={options} onChange={onChange} />
-    </div>
+            <>
+              Upgrading <b>{plural(s.packages_to_upgrade, 'package')}</b> fixes{' '}
+              <b>
+                {s.findings_fixed_in_use} of {s.findings}
+              </b>{' '}
+              findings that builds actually use.
+            </>
+          )}
+        </p>
+        <span className="vimpact__sub">
+          {s.findings_unused > 0
+            ? `The other ${s.findings_unused} ${s.findings_unused === 1 ? 'is' : 'are'} in packages nobody downloaded in ${plan.in_use_days} days.`
+            : `Every finding is in a package downloaded in the last ${plan.in_use_days} days.`}
+          {notFixed > 0 && ` ${plural(notFixed, 'finding')} in use ${notFixed === 1 ? 'has' : 'have'} no fixed release yet.`}
+        </span>
+      </div>
+      <div
+        className="vimpact__bar"
+        role="img"
+        aria-label={`${s.findings_in_use} findings in used packages, ${s.findings_unused} in unused packages`}
+      >
+        <div className="vimpact__track">
+          <span className="vimpact__used" style={{ width: `${100 - unusedPct}%` }} />
+          <span className="vimpact__unused" style={{ width: `${unusedPct}%` }} />
+        </div>
+        <div className="vimpact__legend">
+          <span>
+            <b className="vimpact__used-n">{s.findings_in_use}</b> in use
+          </span>
+          <span>
+            <b>{s.findings_unused}</b> unused
+          </span>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -188,9 +195,9 @@ function SearchFilter({ value, onChange }: { value: string; onChange: (q: string
   }, [draft, value]);
   const id = useId();
   return (
-    <div className="filter-search">
+    <div className="filter-search vplan-search">
       <label htmlFor={id} className="visually-hidden">
-        Search advisories and packages
+        Search packages and advisories
       </label>
       <IconSearch size={16} />
       <input
@@ -207,198 +214,202 @@ function SearchFilter({ value, onChange }: { value: string; onChange: (q: string
   );
 }
 
+type Dialog = { kind: 'waive'; p: PackagePlan } | { kind: 'assign'; p: PackagePlan } | null;
+
 export function VulnerabilitiesPage() {
   const search = route.useSearch();
   const navigate = route.useNavigate();
-  const pageCursors = useRouterState({ select: (s) => s.location.state.pageCursors });
-  const list = useFindings(findingQuery(search));
-  // The cards count open findings of the repository filter only.
-  const totals = useFindings({ repository: search.repo, limit: 1 });
-  const trend = useFindingTrend(search.repo);
+  const tab = search.tab ?? 'in_use';
+  const plan = useFixPlan(planQuery(search));
+  // Header counts and the waived badge ignore the filters.
+  const totals = useFindings({ limit: 1 });
   const status = useScanningStatus();
   const repos = useFindingRepositories();
-  const perms = usePermissions();
-  const canSecurity = useCanSystem('security', 'write');
-  const canScan = (repo: string) => canSecurity || perms.can('write', 'repo', repo);
+  const canWrite = useCanSystem('security', 'write');
+  const canRead = useCanSystem('security', 'read') || canWrite;
+  const [dialog, setDialog] = useState<Dialog>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const repoId = useId();
 
-  const setFilter = (patch: Partial<VulnSearch>) =>
-    void navigate({ search: (s) => ({ ...s, ...patch, cursor: undefined }), replace: 'q' in patch });
-  const openFinding = (id: string | undefined) => void navigate({ search: (s) => ({ ...s, finding: id }), replace: true });
-
-  const data = list.data;
-  const stack = search.cursor ? (pageCursors ?? []) : [];
-  const goNext = () => {
-    if (!data?.next_cursor) return;
-    void navigate({ search: (s) => ({ ...s, cursor: data.next_cursor ?? undefined }), state: { pageCursors: [...stack, search.cursor ?? ''] } });
+  const setSearch = (patch: Partial<VulnSearch>, replace = false) => void navigate({ search: (s) => ({ ...s, ...patch }), replace });
+  const toggle = (key: string) => {
+    const open = search.open ?? [];
+    const next = open.includes(key) ? open.filter((k) => k !== key) : [...open, key];
+    setSearch({ open: next.length ? next : undefined }, true);
   };
-  const goPrev = () => {
-    const prev = stack[stack.length - 1];
-    void navigate({ search: (s) => ({ ...s, cursor: prev || undefined }), state: { pageCursors: stack.slice(0, -1) } });
-  };
+  const openFinding = (id: string | undefined) => setSearch({ finding: id }, true);
 
-  if (list.isError && isMissingEndpoint(list.error)) {
+  if (plan.isError && isMissingEndpoint(plan.error)) {
     return (
       <div className="screen">
-        <PageHeader title="Vulnerabilities" />
+        <h1 className="vhead__title">Vulnerabilities</h1>
         <Panel>
-          <p className="meta">This server does not scan packages for vulnerabilities. Upgrade Hangar to see findings here.</p>
+          <p className="meta">This server does not have the vulnerability fix plan. Upgrade Hangar to see it here.</p>
         </Panel>
       </div>
     );
   }
 
-  const severityOptions = [{ value: '', label: 'All' }, ...SEVERITIES.map((s) => ({ value: s, label: SEVERITY_META[s].label }))];
-  const statusOptions = STATUS_FILTERS.map((f) => ({ value: f.id, label: f.label }));
-  const fixOptions = FIX_FILTERS.map((f) => ({ value: f.id, label: f.label }));
+  const data = plan.data;
+  const items = data?.items ?? [];
+  const filtered = hasFilters(search);
+  const waivedCount = data?.summary.waived_packages;
+  const tabLabel = (id: (typeof PLAN_TABS)[number]['id'], label: string) =>
+    id === 'all' && data ? `All ${data.summary.packages} packages` : id === 'waived' && waivedCount ? `Waived · ${waivedCount}` : label;
+
+  const empty = plan.isPending ? (
+    'Loading…'
+  ) : filtered ? (
+    search.mine && !search.q && !search.repo ? (
+      'Nothing is assigned to you.'
+    ) : (
+      <>
+        No package matches these filters.{' '}
+        <Link to="/vulnerabilities" search={{ tab: search.tab }}>
+          Clear filters
+        </Link>
+      </>
+    )
+  ) : tab === 'waived' ? (
+    'No waived findings.'
+  ) : status.data && status.data.coverage.scanned === 0 ? (
+    'No package has been scanned yet. The fix plan appears after the first scan.'
+  ) : (
+    'No open vulnerabilities. Nothing to upgrade.'
+  );
+
   const repoOptions: SelectOption[] = [
     { value: '', label: 'All' },
     ...(repos.data ?? []).map((r) => ({ value: r.name, label: r.name, icon: <FormatIcon format={r.format} size={16} label={null} /> })),
   ];
   if (search.repo && !repoOptions.some((o) => o.value === search.repo)) repoOptions.push({ value: search.repo, label: search.repo });
 
-  const columns: Column<Finding>[] = [
-    {
-      key: 'advisory',
-      header: 'Advisory',
-      className: 'col-first',
-      cell: (f) => {
-        const cve = sortedAliases(f.aliases).find((a) => a.startsWith('CVE-'));
-        return (
-          <div className="vrow-advisory">
-            <button type="button" className="vrow-advisory__open" onClick={() => openFinding(f.id)} aria-haspopup="dialog">
-              {f.advisory_id}
-            </button>
-            {cve && cve !== f.advisory_id && <span className="vrow-advisory__alias">{cve}</span>}
-            <span className="vrow-advisory__title">{f.title}</span>
-          </div>
-        );
-      },
-    },
-    {
-      key: 'severity',
-      header: 'Severity',
-      cell: (f) => (
-        <span className="vrow-severity">
-          <Pill tone={SEVERITY_META[f.severity].tone}>{SEVERITY_META[f.severity].label}</Pill>
-          {f.cvss != null && <span className="meta">{f.cvss.toFixed(1)}</span>}
-        </span>
-      ),
-    },
-    {
-      key: 'package',
-      header: 'Package',
-      cell: (f) => (
-        <span className="vrow-package">
-          {f.component && <FormatIcon format={f.component.format} size={18} />}
-          <span className="vrow-package__name">{packageAt(f)}</span>
-        </span>
-      ),
-    },
-    { key: 'repo', header: 'Repository', className: 'muted', cell: (f) => f.component?.repository ?? '—' },
-    { key: 'fix', header: 'Fixed in', cell: (f) => f.fixed_in ?? <span className="muted">No fix yet</span> },
-    {
-      key: 'status',
-      header: 'Status',
-      className: 'col-last',
-      cell: (f) => {
-        const st = findingStatus(f);
-        return <Pill tone={st.tone}>{st.label}</Pill>;
-      },
-    },
-  ];
+  const exportCsv = async () => {
+    setExporting(true);
+    setExportError(null);
+    try {
+      await downloadFixPlanCsv(planQuery(search));
+    } catch (err) {
+      setExportError(errorText(err));
+    } finally {
+      setExporting(false);
+    }
+  };
 
-  const filtered = hasFilters(search);
-  const emptyText = list.isPending ? (
-    'Loading…'
-  ) : filtered ? (
-    <>
-      No findings match these filters.{' '}
-      <Link to="/vulnerabilities" search={{}}>
-        Clear filters
-      </Link>
-    </>
-  ) : status.data && status.data.coverage.scanned === 0 ? (
-    'No package has been scanned yet. Findings appear here after the first scan.'
-  ) : (
-    'No known vulnerabilities in the scanned packages.'
-  );
+  const drawerPlan = search.finding ? items.find((p) => p.items.some((f) => f.id === search.finding)) : undefined;
+  const waivable = (p: PackagePlan) =>
+    p.items.filter((f) => f.status !== 'waived').map((f) => ({ id: f.id, label: `${f.advisory_id} on ${f.installed}` }));
 
   return (
-    <div className="screen">
-      <PageHeader
-        title="Vulnerabilities"
-        description="Known vulnerabilities in npm, Maven, PyPI, NuGet and Go packages, from the OSV advisory database. Waive what does not apply, with a reason and an end date."
-      />
+    <div className="screen vscreen">
+      <header className="vhead">
+        <h1 className="vhead__title">Vulnerabilities</h1>
+        {totals.isError ? <span className="meta">Counts unavailable</span> : <SeverityPills list={totals.data} />}
+        <span className="vhead__spacer" />
+        {status.isError ? (
+          <span className="vhead__meta">Scanner status unavailable</span>
+        ) : (
+          <ScanState status={status.data} canRescan={canWrite} canFollow={canRead} />
+        )}
+      </header>
 
-      {totals.isError && !isMissingEndpoint(totals.error) ? (
-        <ErrorNote what="the severity counts" onRetry={() => void totals.refetch()} />
+      {plan.isError ? null : data ? (
+        <ImpactBanner plan={data} status={status.data} />
       ) : (
-        <SeverityCards list={totals.data} loading={totals.isPending} />
+        <section className="vimpact glass" aria-label="Impact" aria-busy="true">
+          <div className="vimpact__text">
+            <p className="vimpact__lead vimpact__lead--skeleton">Working out the fix plan…</p>
+          </div>
+        </section>
       )}
 
-      <div className="vgrid">
-        <Panel title="Last 30 days" titleId="vuln-trend" className="vtrend-panel">
-          {trend.isError ? (
-            <ErrorNote what="the trend" onRetry={() => void trend.refetch()} />
-          ) : trend.data ? (
-            <TrendChart points={trend.data.items} />
-          ) : (
-            <p className="meta" aria-busy="true">
-              Loading…
+      <section className="vplan-panel panel glass panel--flush" aria-labelledby="vplan-title">
+        <div className="vplan-panel__head">
+          <h2 id="vplan-title" className="vplan-panel__title">
+            Fix plan
+          </h2>
+          <div role="tablist" aria-label="Show" className="vtabs">
+            {PLAN_TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.id}
+                className={tab === t.id ? 'vtabs__tab is-active' : 'vtabs__tab'}
+                onClick={() => setSearch({ tab: t.id === 'in_use' ? undefined : t.id, open: undefined })}
+              >
+                {tabLabel(t.id, t.label)}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="button button--secondary button--sm" onClick={() => void exportCsv()} disabled={exporting || !data}>
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </button>
+        </div>
+        <div className="vplan-panel__filters">
+          <SearchFilter value={search.q ?? ''} onChange={(q) => setSearch({ q }, true)} />
+          <div className="filter-select">
+            <label htmlFor={repoId} className="filter-select__label">
+              Repository
+            </label>
+            <Select id={repoId} variant="inline" value={search.repo ?? ''} options={repoOptions} onChange={(v) => setSearch({ repo: v || undefined })} />
+          </div>
+          <button type="button" className="button button--secondary button--sm" aria-pressed={!!search.mine} onClick={() => setSearch({ mine: search.mine ? undefined : true })}>
+            Assigned to me
+          </button>
+          {exportError && (
+            <p className="form-error" role="alert">
+              {exportError}
             </p>
           )}
-          <p className="meta vtrend-panel__note">Unresolved findings at the end of each day, by severity. Waived findings are included.</p>
-        </Panel>
-        {status.isError ? (
-          <Panel title="Scanner">
-            <ErrorNote what="the scanner status" onRetry={() => void status.refetch()} />
-          </Panel>
-        ) : (
-          <ScannerPanel status={status.data} repo={search.repo} canScanRepo={!!search.repo && canScan(search.repo)} />
-        )}
-      </div>
-
-      <Panel flush aria-label="Findings" className="vfindings">
-        <div className="repo-toolbar">
-          <div className="repo-toolbar__filters repo-toolbar__filters--start vfilters">
-            <FilterSelect
-              label="Severity"
-              value={search.severity ?? ''}
-              options={severityOptions}
-              onChange={(v) => setFilter({ severity: (v || undefined) as Severity | undefined })}
-            />
-            <FilterSelect
-              label="Status"
-              value={search.status ?? 'active'}
-              options={statusOptions}
-              onChange={(v) => setFilter({ status: v === 'active' ? undefined : (v as VulnSearch['status']) })}
-            />
-            <FilterSelect label="Fix" value={search.fix ?? 'any'} options={fixOptions} onChange={(v) => setFilter({ fix: v === 'any' ? undefined : (v as VulnSearch['fix']) })} />
-            <FilterSelect label="Repository" value={search.repo ?? ''} options={repoOptions} onChange={(v) => setFilter({ repo: v || undefined })} />
-            <SearchFilter value={search.q ?? ''} onChange={(q) => setFilter({ q })} />
-          </div>
         </div>
-        {list.isError ? (
-          <ErrorNote what="findings" onRetry={() => void list.refetch()} />
+        {plan.isError ? (
+          plan.error instanceof ApiRequestError && plan.error.status === 401 ? (
+            <p className="meta vplan-panel__note">Sign in again to see the fix plan.</p>
+          ) : (
+            <ErrorNote what="the fix plan" onRetry={() => void plan.refetch()} />
+          )
         ) : (
-          <DataTable caption="Findings" columns={columns} rows={data?.items ?? []} rowKey={(f) => f.id} minWidth={960} busy={list.isFetching} empty={emptyText} />
+          <FixPlanTable
+            items={items}
+            tab={tab}
+            windowDays={data?.window_days ?? 7}
+            inUseDays={data?.in_use_days ?? 30}
+            expanded={search.open ?? []}
+            onToggle={toggle}
+            onOpenFinding={(id) => openFinding(id)}
+            onWaive={(p) => setDialog({ kind: 'waive', p })}
+            onAssign={(p) => setDialog({ kind: 'assign', p })}
+            canWrite={canWrite}
+            busy={plan.isFetching}
+            empty={empty}
+          />
         )}
         <div className="repo-footer">
           <p className="meta" aria-live="polite">
-            {data ? `${plural(data.total, 'finding')}${filtered ? ' match' : ''}${data.waived ? ` · ${data.waived} waived` : ''}` : ' '}
+            {data
+              ? `${plural(items.length, 'package')}${filtered ? ' match' : ''} · pulls of the last ${data.window_days} days${
+                  data.pulls_since ? `, recorded since ${new Date(`${data.pulls_since}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}` : ''
+                } · in use = downloaded in the last ${data.in_use_days} days`
+              : ' '}
           </p>
-          <div className="repo-footer__pager">
-            <button type="button" className="button button--secondary button--sm" onClick={goPrev} disabled={!search.cursor}>
-              Previous
-            </button>
-            <button type="button" className="button button--secondary button--sm" onClick={goNext} disabled={!data?.next_cursor}>
-              Next
-            </button>
-          </div>
         </div>
-      </Panel>
+      </section>
 
-      {search.finding && <FindingDrawer id={search.finding} onClose={() => openFinding(undefined)} canWaive={canSecurity} canScan={canScan} />}
+      {search.finding && (
+        <FindingDrawer id={search.finding} plan={drawerPlan} onClose={() => openFinding(undefined)} canWrite={canWrite} canSeePullers={canRead} />
+      )}
+      {dialog?.kind === 'waive' && (
+        <WaiveDialog packageKey={dialog.p.key} packageName={dialog.p.package} findings={waivable(dialog.p)} onClose={() => setDialog(null)} />
+      )}
+      {dialog?.kind === 'assign' && (
+        <AssignDialog
+          target={{ kind: 'package', key: dialog.p.key, label: dialog.p.package }}
+          current={dialog.p.assignee ?? null}
+          onClose={() => setDialog(null)}
+        />
+      )}
     </div>
   );
 }

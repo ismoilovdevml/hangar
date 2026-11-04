@@ -85,6 +85,11 @@ type Options struct {
 	Jobs             core.JobQueue
 	Audit            core.AuditLog
 	Logger           *slog.Logger
+	// InUseWindow: a vulnerable version downloaded within it is "in use" in
+	// the fix plan. DefaultInUseWindow when zero.
+	InUseWindow time.Duration
+	// Now is the clock (tests); time.Now when nil.
+	Now func() time.Time
 }
 
 // Service scans components and manages findings. It is safe for concurrent use.
@@ -117,8 +122,16 @@ func New(opts Options) (*Service, error) {
 	if opts.Logger == nil {
 		opts.Logger = slog.New(slog.DiscardHandler)
 	}
+	if opts.InUseWindow <= 0 {
+		opts.InUseWindow = DefaultInUseWindow
+	}
+	if opts.Now == nil {
+		opts.Now = time.Now
+	}
 	return &Service{opts: opts, store: &store{pool: opts.Pool}, log: opts.Logger, vulns: map[string]*osv.Vuln{}}, nil
 }
+
+func (s *Service) now() time.Time { return s.opts.Now() }
 
 // Enabled reports whether scanning is on.
 func (s *Service) Enabled() bool { return s.opts.Enabled }
@@ -631,19 +644,9 @@ func (s *Service) Subscribe(ctx context.Context, bus core.EventBus) (func(), err
 // Waive puts a waiver on a finding: reason is required and until must be
 // in the future, at most a year ahead. The waiver is audited.
 func (s *Service) Waive(ctx context.Context, f *Finding, reason string, until time.Time) error {
-	reason = strings.TrimSpace(reason)
-	if len(reason) < 3 {
-		return fmt.Errorf("waiver reason must be at least 3 characters: %w", core.ErrInvalid)
-	}
-	if len(reason) > 2000 {
-		return fmt.Errorf("waiver reason must be at most 2000 characters: %w", core.ErrInvalid)
-	}
-	now := time.Now()
-	if !until.After(now) {
-		return fmt.Errorf("waiver expiry must be in the future: %w", core.ErrInvalid)
-	}
-	if until.After(now.Add(maxWaiver)) {
-		return fmt.Errorf("waiver expiry must be within a year: %w", core.ErrInvalid)
+	reason, err := checkWaiver(reason, until)
+	if err != nil {
+		return err
 	}
 	by := core.PrincipalFrom(ctx).Name
 	if err := s.store.waive(ctx, f.ID, reason, until.UTC(), by); err != nil {
@@ -651,8 +654,29 @@ func (s *Service) Waive(ctx context.Context, f *Finding, reason string, until ti
 	}
 	s.record(ctx, core.AuditEvent{Action: "finding.waive", Target: findingTarget(f),
 		Details: map[string]any{"advisory": f.AdvisoryID, "reason": reason, "until": until.UTC().Format(time.RFC3339)}})
-	_, _, err := s.enforce(ctx, "c.id = ANY($1::uuid[])", []string{f.Component.ID})
+	_, _, err = s.enforce(ctx, "c.id = ANY($1::uuid[])", []string{f.Component.ID})
 	return err
+}
+
+// checkWaiver validates a waiver: reason is required (3 to 2000
+// characters) and until must be in the future, at most a year ahead. It
+// returns the trimmed reason.
+func checkWaiver(reason string, until time.Time) (string, error) {
+	reason = strings.TrimSpace(reason)
+	if len(reason) < 3 {
+		return "", fmt.Errorf("waiver reason must be at least 3 characters: %w", core.ErrInvalid)
+	}
+	if len(reason) > 2000 {
+		return "", fmt.Errorf("waiver reason must be at most 2000 characters: %w", core.ErrInvalid)
+	}
+	now := time.Now()
+	if !until.After(now) {
+		return "", fmt.Errorf("waiver expiry must be in the future: %w", core.ErrInvalid)
+	}
+	if until.After(now.Add(maxWaiver)) {
+		return "", fmt.Errorf("waiver expiry must be within a year: %w", core.ErrInvalid)
+	}
+	return reason, nil
 }
 
 // RevokeWaiver re-opens a waived finding; findings without a waiver are left as they are.

@@ -297,6 +297,10 @@ scanning:
   # A component is checked again for new advisories once its last scan is
   # older than this (at least 1h). HANGAR_SCANNING_RESCAN_INTERVAL.
   rescan_interval: 24h
+  # A vulnerable version downloaded within this window counts as "in use" in
+  # the fix plan of the Vulnerabilities screen (24h..2160h).
+  # HANGAR_SCANNING_IN_USE_WINDOW.
+  in_use_window: 720h
   osv:
     # OSV API root, or an internal mirror serving the same API. Requests go
     # through the `http` section (proxy, CA bundle); list a mirror on a
