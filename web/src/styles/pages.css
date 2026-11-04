@@ -150,8 +150,6 @@
 /* ---------- login ---------- */
 .login { min-height: 100vh; padding: 32px; display: flex; flex-direction: column; }
 .wall--center { background-position: center; }
-.login__header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.login__status { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--ink); }
 .login__main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px 0; }
 .login-card {
   width: 100%; max-width: 420px; padding: 36px; border-radius: 26px;
@@ -164,7 +162,7 @@
 .login-card__alt { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .login-card__alt > :only-child { grid-column: 1 / -1; }
 .login-card__row { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 14px; margin: -8px 0; }
-.login-card__hint { font-size: 13px; line-height: 1.6; color: var(--ink-3); text-align: center; }
+.login-card__mark { align-self: center; margin-bottom: 6px; }
 .divider { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--ink-3); white-space: nowrap; }
 .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: rgba(30, 43, 58, .1); }
 .login__footer { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); }

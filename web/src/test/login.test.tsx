@@ -8,7 +8,7 @@ describe('login', () => {
     const user = userEvent.setup();
     const { history } = renderApp('/login');
     expect(await screen.findByRole('link', { name: 'Continue with company SSO' })).toHaveAttribute('href', '/api/v1/auth/oidc/start');
-    expect(await screen.findByText('Sign in to acme-platform registry')).toBeInTheDocument();
+    expect(await screen.findByText('Sign in to acme-platform')).toBeInTheDocument();
     await user.type(screen.getByLabelText('Username'), 'd.ismoilov');
     await user.type(screen.getByLabelText('Password'), 'correct-horse');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));

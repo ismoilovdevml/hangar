@@ -63,7 +63,10 @@ const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
   staticData: { title: 'Sign in' },
-  validateSearch: (s: Record<string, unknown>): { redirect?: string } => ({ redirect: str(s.redirect) }),
+  validateSearch: (s: Record<string, unknown>): { redirect?: string; error?: string } => ({
+    redirect: str(s.redirect),
+    error: str(s.error),
+  }),
   component: LoginPage,
 });
 
