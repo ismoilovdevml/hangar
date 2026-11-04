@@ -80,6 +80,37 @@ Formats compiled into the server today: `docker`, `maven`, `npm`, `nuget`, `pypi
   (for example a higher version). Use scoped or prefixed names for internal
   packages, or keep the public proxy out of groups that serve internal names.
 
+## Browsing
+
+**Packages** in the web UI is a tree of every repository you can read. Expand a
+repository to see its content the way clients see it:
+
+| Format | Tree |
+|---|---|
+| npm | scope, package, then the package's files (tarballs, manifests) |
+| Maven | groupId segments, artifactId, version, files |
+| NuGet | package id, version, `.nupkg` / `.nuspec` / `.snupkg` |
+| PyPI | project, files |
+| Docker | image path, then `manifests` (tags and digests) and `blobs` |
+| raw | directories and files |
+
+A group shows the merged content of the members you can read; each entry names
+the member that holds it. The tree is keyboard navigable (arrow keys, Home, End,
+Enter), loads folders on demand, and the selection is part of the URL, so a link
+opens the same node.
+
+Selecting a package or version shows its README (rendered from the package's own
+files; links and images are restricted), licences, downloads, vulnerability
+status, its versions and files, the repositories that hold it, and the client
+commands to install it. Selecting a file shows its path, size, checksums, dates,
+and, in a proxy, that it is a cached copy. **Delete version** and **Delete file**
+need `repo:<name>:delete`; both are audited and release the file's blob for
+compaction.
+
+The same data is in the REST API: `GET /api/v1/repositories/<name>/browse?path=<folder>`
+(direct children, cursor-paged), `GET|DELETE /api/v1/assets/<id>` and
+`GET /api/v1/components/<id>/info` (README, licences, keywords).
+
 ## Plain HTTP
 
 Hangar's listener speaks plain HTTP; terminate TLS in a reverse proxy or load

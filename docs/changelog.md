@@ -45,6 +45,31 @@
 - **Repositories list**: a "Last activity" column (`last_activity_at`, from
   existing upload and download timestamps, no extra writes), type icons, and
   sorting by name, type, format or last activity (`GET /repositories?sort=`).
+- **Repository browser**: the Packages page is a tree of repositories with
+  each one's content laid out as clients see it (npm scopes and packages,
+  Maven coordinates, NuGet ids and versions, PyPI projects, Docker images and
+  tags, raw directories), loaded folder by folder, keyboard navigable, with a
+  filter box and links that keep the selected node. Groups merge their
+  readable members and name the member that holds each entry. The version
+  picker is a versions table; no native selects remain.
+- **Package page**: version card (newest, published or cached, downloads for
+  the version and in total, size, vulnerability status, licences, home page,
+  keywords), a "Set me up" panel with install commands per client, a Download
+  button, and Readme, Versions, Files and Repositories tabs. READMEs are
+  rendered as restricted Markdown (no raw HTML, http(s)/mailto links only,
+  https images without a referrer).
+- **File page**: path, repository (and the group it was reached through),
+  package, content type, size, checksums, blob and file dates, downloads,
+  the upstream of cached proxy files, a download link and **Delete file**.
+- API: `GET /repositories/{name}/browse` (direct children of a folder,
+  cursor-paged, one index seek per child), `GET /assets/{id}`,
+  `DELETE /assets/{id}` (`repo:<name>:delete`, audited as `asset.delete`, the
+  blob becomes eligible for compaction) and `GET /components/{id}/info`
+  (README, description, licences, keywords and home page, read from the
+  npm manifest or tarball, the `.nupkg`'s nuspec and README, PyPI core
+  metadata or the Maven POM). The versions listing reports `size_bytes`.
+- Migration `00110` adds `component_info`, the cache of extracted package
+  facts (dropped with the version).
 
 - **Single sign-on (OIDC)**: "Continue with SSO" through any OpenID Connect
   provider (`auth.oidc`): authorization code flow with PKCE (S256),
