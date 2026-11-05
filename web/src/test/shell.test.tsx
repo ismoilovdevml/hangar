@@ -85,20 +85,19 @@ describe('app shell', () => {
     expect(overview).not.toHaveAttribute('aria-current');
   });
 
-  it('keeps settings and system pages out of the sidebar', async () => {
+  it('keeps the working pages in the sidebar; My account lives in Settings', async () => {
     renderApp('/');
     const nav = await screen.findByRole('navigation', { name: 'Primary' });
-    for (const label of ['System status', 'System logs', 'System', 'Audit log', 'My account', 'Settings', 'Authentication', 'Proxies']) {
-      expect(within(nav).queryByRole('link', { name: label })).not.toBeInTheDocument();
+    for (const label of ['System status', 'System logs', 'Audit log', 'Settings', 'Authentication', 'Proxies']) {
+      expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument();
     }
-    expect(within(nav).queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(within(nav).getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+    expect(within(nav).queryByRole('link', { name: 'My account' })).not.toBeInTheDocument();
   });
 
   it.each([
-    ['/settings', 'Cluster & replication'],
-    ['/system/status', 'Cluster & replication'],
-    ['/settings/authentication', 'Access & audit'],
-    ['/account', 'Access & audit'],
+    ['/account', 'Settings'],
+    ['/api-docs', 'Settings'],
   ])('lights up the area of %s without calling it the current page', async (path, label) => {
     renderApp(path);
     const nav = await screen.findByRole('navigation', { name: 'Primary' });

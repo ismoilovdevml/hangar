@@ -15,7 +15,8 @@ function signInAs(privileges: string[]) {
   );
 }
 
-const row = (name: string) => screen.getByRole('link', { name: new RegExp(`^${name}`) });
+const main = () => within(screen.getByRole('main'));
+const row = (name: string) => main().getByRole('link', { name: new RegExp(`^${name}`) });
 
 describe('settings hub', () => {
   it('lists every setting with how it is set now and where it is changed', async () => {
@@ -50,7 +51,7 @@ describe('settings hub', () => {
     expect(within(mine).getByRole('link', { name: /^Access tokens/ })).toHaveTextContent('1 token expiring soon');
     expect(within(mine).getByRole('link', { name: /^Access tokens/ })).toHaveAttribute('href', '/account#my-tokens-title');
     // This build has the API reference page, so the hub links to it.
-    expect(screen.getByRole('link', { name: /^API reference/ })).toHaveAttribute('href', '/api-docs');
+    expect(main().getByRole('link', { name: /^API reference/ })).toHaveAttribute('href', '/api-docs');
 
     const status = await screen.findByRole('link', { name: 'All systems normal' });
     expect(status).toHaveAttribute('href', '/system/status');
@@ -65,20 +66,20 @@ describe('settings hub', () => {
     expect(row('My account')).toBeInTheDocument();
     expect(row('Access tokens')).toBeInTheDocument();
     for (const name of ['Addresses', 'Sign-in', 'Internet access', 'Storage', 'Nodes', 'Configuration', 'System status', 'System logs', 'Audit log']) {
-      expect(screen.queryByRole('link', { name: new RegExp(`^${name}`) })).not.toBeInTheDocument();
+      expect(main().queryByRole('link', { name: new RegExp(`^${name}`) })).not.toBeInTheDocument();
     }
   });
 
   it('shows each operations page only to the privilege that opens it', async () => {
     signInAs(['repo:*:read', 'system:audit:read', 'system:cluster:read']);
     renderApp('/settings');
-    expect(await screen.findByRole('link', { name: /^Audit log/ })).toBeInTheDocument();
+    expect(await within(await screen.findByRole('main')).findByRole('link', { name: /^Audit log/ })).toBeInTheDocument();
     expect(row('Nodes')).toBeInTheDocument();
     expect(row('System status')).toBeInTheDocument();
     // Logs need cluster:admin; sign-in and configuration need settings:read.
-    expect(screen.queryByRole('link', { name: /^System logs/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /^Sign-in/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /^Configuration/ })).not.toBeInTheDocument();
+    expect(main().queryByRole('link', { name: /^System logs/ })).not.toBeInTheDocument();
+    expect(main().queryByRole('link', { name: /^Sign-in/ })).not.toBeInTheDocument();
+    expect(main().queryByRole('link', { name: /^Configuration/ })).not.toBeInTheDocument();
   });
 
   it('says so when a status line cannot be read', async () => {

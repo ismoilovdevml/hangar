@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { activeNav, NAV, SETTINGS_PAGES, visibleHub } from '../nav';
 
 describe('sidebar', () => {
-  it('holds only the everyday pages; configuration lives in Settings', () => {
+  it('keeps every working page; only My account moved into Settings', () => {
     expect(NAV.map((s) => [s.title, s.items.map((i) => i.label)])).toEqual([
       ['Registry', ['Overview', 'Packages', 'Search', 'Repositories']],
       ['Storage', ['Blob stores', 'Cleanup policies']],
-      ['Security', ['Vulnerabilities', 'Access & audit']],
-      ['Operations', ['Scheduled tasks', 'Cluster & replication']],
+      ['Security', ['Vulnerabilities', 'Access & audit', 'Audit log']],
+      ['Operations', ['Scheduled tasks', 'Cluster & replication', 'System status', 'System logs']],
+      ['Settings', ['Settings', 'Authentication', 'Proxies']],
     ]);
   });
 
@@ -18,14 +19,15 @@ describe('sidebar', () => {
     ['/blob-stores/fs-local', '/blob-stores', true],
     ['/tasks/t_backup', '/tasks', true],
     ['/cluster/', '/cluster', true],
-    ['/settings', '/cluster', false],
-    ['/settings/system', '/cluster', false],
-    ['/settings/proxies', '/cluster', false],
-    ['/system/status', '/cluster', false],
-    ['/system/logs', '/cluster', false],
-    ['/settings/authentication', '/access', false],
-    ['/account', '/access', false],
-    ['/audit', '/access', false],
+    ['/settings', '/settings', true],
+    ['/settings/system', '/settings', true],
+    ['/settings/proxies', '/settings/proxies', true],
+    ['/system/status', '/system/status', true],
+    ['/system/logs', '/system/logs', true],
+    ['/settings/authentication', '/settings/authentication', true],
+    ['/account', '/settings', false],
+    ['/api-docs', '/settings', false],
+    ['/audit', '/audit', true],
   ])('lights up the right entry on %s', (path, to, own) => {
     expect(activeNav(path)).toEqual({ to, own });
   });
@@ -38,20 +40,9 @@ describe('sidebar', () => {
 });
 
 describe('settings pages', () => {
-  it('keeps every page that left the sidebar reachable from the command palette', () => {
+  it('keeps the pages without a sidebar entry reachable from the command palette', () => {
     const paths = SETTINGS_PAGES.items.map((i) => `${i.to}${i.hash ? `#${i.hash}` : ''}`);
-    expect(paths).toEqual([
-      '/settings',
-      '/account',
-      '/account#my-tokens-title',
-      '/settings/authentication',
-      '/settings/proxies',
-      '/settings/system',
-      '/api-docs',
-      '/system/status',
-      '/system/logs',
-      '/audit',
-    ]);
+    expect(paths).toEqual(['/account', '/account#my-tokens-title', '/settings/system', '/api-docs']);
   });
 });
 

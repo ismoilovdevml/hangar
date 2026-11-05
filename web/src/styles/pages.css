@@ -197,8 +197,8 @@
 .overview { display: flex; flex-direction: column; gap: 14px; }
 
 .hero {
-  border-radius: 22px; padding: 24px 28px 20px;
-  display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+  border-radius: 22px; padding: 18px 26px 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 11px; text-align: center;
 }
 .hero__title { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink-strong); }
 .hero__search {
@@ -230,7 +230,7 @@
   display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 10px; text-align: left;
 }
 .quick-action {
-  width: 100%; height: 100%; display: flex; align-items: center; gap: 12px; padding: 11px 14px;
+  width: 100%; height: 100%; display: flex; align-items: center; gap: 12px; padding: 9px 14px;
   border-radius: 14px; background: rgba(255, 255, 255, .6); border: 1px solid var(--track);
   color: var(--ink); font: inherit; text-align: left; cursor: pointer;
   transition: background-color var(--t-fast), box-shadow var(--t-fast);
@@ -241,9 +241,9 @@
 .quick-action__title { font-size: 14px; font-weight: 700; }
 .quick-action__sub { font-size: 12px; color: var(--ink-3); }
 
-.ov-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
-.ov-grid > .today, .ov-grid > .outcome { min-height: 222px; }
-.ov-grid > .ov-stat { min-height: 150px; }
+.ov-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.ov-grid > .today, .ov-grid > .outcome { min-height: 196px; }
+.ov-grid > .ov-stat { min-height: 128px; }
 .ov-card { min-width: 0; border-radius: var(--r-card); padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; color: var(--ink); }
 .ov-card__label { font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .ov-card__loading { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }

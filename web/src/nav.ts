@@ -68,7 +68,7 @@ export function canSee(privileges: readonly string[] | undefined, requires: Requ
   return !requires || allows(privileges, 'system', requires.area, requires.action);
 }
 
-/** The sidebar: the pages people work in every day. Configuration lives in Settings. */
+/** The sidebar. Personal pages (My account, tokens) live in Settings. */
 export const NAV: NavSection[] = [
   {
     title: 'Registry',
@@ -91,6 +91,13 @@ export const NAV: NavSection[] = [
     items: [
       { to: '/vulnerabilities', label: 'Vulnerabilities', icon: IconShield, keywords: 'cve scanning findings quarantine' },
       { to: '/access', label: 'Access & audit', icon: IconUsers, keywords: 'users members service accounts roles permissions tokens' },
+      {
+        to: '/audit',
+        label: 'Audit log',
+        icon: IconAudit,
+        keywords: 'events history who did export compliance',
+        requires: { area: 'audit', action: 'read' },
+      },
     ],
   },
   {
@@ -98,57 +105,55 @@ export const NAV: NavSection[] = [
     items: [
       { to: '/tasks', label: 'Scheduled tasks', icon: IconClock, keywords: 'jobs cron' },
       { to: '/cluster', label: 'Cluster & replication', icon: IconCluster, keywords: 'nodes edge ha' },
+      {
+        to: '/system/status',
+        label: 'System status',
+        icon: IconPulse,
+        keywords: 'health nodes heartbeat database nats subsystems uptime checks',
+        requires: { area: 'cluster', action: 'read' },
+      },
+      {
+        to: '/system/logs',
+        label: 'System logs',
+        icon: IconLogs,
+        keywords: 'log records errors warnings debug server output',
+        requires: { area: 'cluster', action: 'admin' },
+      },
+    ],
+  },
+  {
+    title: 'Settings',
+    items: [
+      { to: '/settings', label: 'Settings', icon: IconSettings, keywords: 'preferences configuration administration my account profile' },
+      {
+        to: '/settings/authentication',
+        label: 'Authentication',
+        icon: IconLock,
+        keywords: 'sign-in sso oidc ldap active directory keycloak login groups roles',
+        requires: { area: 'settings', action: 'read' },
+      },
+      {
+        to: '/settings/proxies',
+        label: 'Proxies',
+        icon: IconRoute,
+        keywords: 'internet access http proxy outbound corporate no_proxy ca certificate',
+        requires: { area: 'settings', action: 'read' },
+      },
     ],
   },
 ];
 
 /**
- * Pages reached from the Settings hub instead of the sidebar. The command
+ * Pages reached from the Settings hub but not the sidebar. The command
  * palette lists them next to the sidebar pages so every page stays one search away.
  */
 export const SETTINGS_PAGES: NavSection = {
   title: 'Settings',
   items: [
-    { to: '/settings', label: 'Settings', icon: IconSettings, keywords: 'preferences configuration administration' },
     { to: '/account', label: 'My account', icon: IconUser, keywords: 'profile password sessions devices personal' },
     { to: '/account', hash: 'my-tokens-title', label: 'Access tokens', icon: IconKey, keywords: 'personal access tokens api ci cli' },
-    {
-      to: '/settings/authentication',
-      label: 'Authentication',
-      icon: IconLock,
-      keywords: 'sign-in sso oidc ldap active directory keycloak login groups roles',
-      requires: { area: 'settings', action: 'read' },
-    },
-    {
-      to: '/settings/proxies',
-      label: 'Proxies',
-      icon: IconRoute,
-      keywords: 'internet access http proxy outbound corporate no_proxy ca certificate',
-      requires: { area: 'settings', action: 'read' },
-    },
     { to: '/settings/system', label: 'System', icon: IconTerminal, keywords: 'version build addresses base url endpoints configuration hangar.yaml' },
     { to: '/api-docs', label: 'API reference', icon: IconTerminal, keywords: 'rest api openapi endpoints curl automation integration scripts token' },
-    {
-      to: '/system/status',
-      label: 'System status',
-      icon: IconPulse,
-      keywords: 'health nodes heartbeat database nats subsystems uptime checks',
-      requires: { area: 'cluster', action: 'read' },
-    },
-    {
-      to: '/system/logs',
-      label: 'System logs',
-      icon: IconLogs,
-      keywords: 'log records errors warnings debug server output',
-      requires: { area: 'cluster', action: 'admin' },
-    },
-    {
-      to: '/audit',
-      label: 'Audit log',
-      icon: IconAudit,
-      keywords: 'events history who did export compliance',
-      requires: { area: 'audit', action: 'read' },
-    },
   ],
 };
 
@@ -229,16 +234,13 @@ export function visibleHub(privileges: readonly string[] | undefined): HubGroup[
 
 /**
  * Pages without a sidebar entry light up the entry of the area they belong to:
- * sign-in, accounts and the audit log sit with Access & audit, the rest of
- * Settings and the system pages with Cluster & replication.
+ * My account, the API reference and System sit inside Settings.
  */
 const AREA_OF: [prefix: string, item: AppPath][] = [
-  ['/settings/authentication', '/access'],
-  ['/account', '/access'],
-  ['/audit', '/access'],
-  ['/settings', '/cluster'],
-  ['/system', '/cluster'],
-];
+  ['/account', '/settings'],
+  ['/api-docs', '/settings'],
+  ['/settings/system', '/settings'],
+]
 
 const under = (pathname: string, prefix: string) => pathname === prefix || pathname.startsWith(`${prefix}/`);
 
