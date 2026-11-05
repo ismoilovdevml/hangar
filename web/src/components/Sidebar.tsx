@@ -2,7 +2,6 @@ import { useId, useState } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { useSession, useSystemStatus } from '../api/hooks';
 import { activeNav, canSee, NAV } from '../nav';
-import { initials, instanceName } from '../lib/format';
 import { IconClose, IconLogo, IconMenu } from './icons';
 
 const STATUS_TONE = { ok: 'ok', degraded: 'warn', down: 'bad' } as const;
@@ -16,7 +15,6 @@ export function Sidebar() {
   const session = useSession();
   const status = useSystemStatus();
 
-  const org = session.data?.organization;
   const sys = status.data;
   const active = activeNav(pathname);
 
@@ -45,7 +43,6 @@ export function Sidebar() {
       </div>
 
       <div className="sidebar__body" id={bodyId}>
-        <InstanceBadge name={org?.name} environment={org?.environment} region={org?.region} loading={session.isPending} />
 
         <div className="sidebar__nav">
           {NAV.filter((section) => canSee(session.data?.privileges, section.requires)).map((section) => (
@@ -102,37 +99,3 @@ export function Sidebar() {
   );
 }
 
-interface InstanceBadgeProps {
-  name?: string;
-  environment?: string;
-  region?: string;
-  loading: boolean;
-}
-
-/** Which instance this is: a single install has nothing to switch, so it is a label, not a control. */
-function InstanceBadge({ name, environment, region, loading }: InstanceBadgeProps) {
-  if (loading) {
-    return (
-      <div className="instance-badge" aria-hidden="true">
-        <span className="instance-badge__avatar instance-badge__avatar--loading" />
-        <span className="skeleton" style={{ width: 96, height: 12 }} />
-      </div>
-    );
-  }
-  const display = instanceName(name);
-  const meta = [environment, region].map((v) => v?.trim()).filter(Boolean).join(' · ');
-  return (
-    <div className="instance-badge">
-      <span className="instance-badge__avatar" aria-hidden="true">
-        {initials(display)}
-      </span>
-      <span className="instance-badge__text">
-        <span className="visually-hidden">Instance: </span>
-        <span className="instance-badge__name" title={display}>
-          {display}
-        </span>
-        {meta && <span className="instance-badge__meta">{meta}</span>}
-      </span>
-    </div>
-  );
-}

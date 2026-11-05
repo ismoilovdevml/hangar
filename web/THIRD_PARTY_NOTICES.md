@@ -2,7 +2,7 @@
 
 ## Format marks (`src/components/FormatIcon.tsx`)
 
-The Docker, npm, Apache Maven, NuGet, PyPI, Helm and Go marks are SVG path data
+The Docker, npm, Apache Maven, NuGet, Python (shown for PyPI), Helm and Go marks are SVG path data
 copied from [Simple Icons](https://simpleicons.org) 13.21.0
 (https://github.com/simple-icons/simple-icons).
 
