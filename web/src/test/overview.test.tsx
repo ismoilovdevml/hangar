@@ -58,17 +58,15 @@ describe('overview', () => {
     expect(todo).not.toHaveTextContent(/backup|quota/i);
   });
 
-  it('shows the most downloaded packages and recent publications', async () => {
+  it('shows the most downloaded packages and fits the overview on one screen', async () => {
     renderApp('/');
     const top = await screen.findByRole('region', { name: 'Most downloaded' });
     const chips = await within(top).findAllByRole('link');
     expect(chips[0]).toHaveTextContent('log4j-core84K downloads');
     expect(chips.length).toBeLessThanOrEqual(6);
 
-    const table = await screen.findByRole('table', { name: 'Recently published packages' });
-    expect(await within(table).findByText('payments-api')).toBeInTheDocument();
-    expect(within(table).getByText('1 critical')).toBeInTheDocument();
-    expect(within(table).getByText('Just now')).toBeInTheDocument();
+    // Recent publications are on the Packages page; the overview stays one screen.
+    expect(screen.queryByRole('table', { name: 'Recently published packages' })).not.toBeInTheDocument();
   });
 
   it('searches from the box and offers qualifier examples', async () => {

@@ -10,7 +10,6 @@ import { useNow } from '../../lib/useNow';
 import { OutcomeCard, SecurityCard, StorageCard, UpstreamCard } from './Cards';
 import { Hero } from './Hero';
 import { MostDownloaded } from './MostDownloaded';
-import { RecentlyPublished } from './RecentlyPublished';
 import { TodayCard } from './TodayCard';
 import { TodoCard } from './TodoCard';
 
@@ -75,8 +74,6 @@ export function OverviewPage() {
         <UpstreamCard items={upstreams.data?.items} error={upstreams.isError} onRetry={() => void upstreams.refetch()} m={m} />
         <MostDownloaded />
       </div>
-
-      <RecentlyPublished />
     </div>
   );
 }

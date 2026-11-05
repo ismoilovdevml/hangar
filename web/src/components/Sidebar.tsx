@@ -52,7 +52,7 @@ export function Sidebar() {
             <div className="nav-section" key={section.title}>
               <h2 className="nav-section__title">{section.title}</h2>
               <ul className="nav-section__list">
-                {section.items.map((item) => {
+                {section.items.filter((item) => canSee(session.data?.privileges, item.requires)).map((item) => {
                   const on = active?.to === item.to;
                   return (
                     <li key={item.to}>

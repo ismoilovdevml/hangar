@@ -50,6 +50,8 @@ code, pre, kbd { font-family: var(--font-mono); }
   overflow: hidden; clip: rect(0 0 0 0);
   white-space: nowrap; border: 0;
 }
+/* Tables ignore width/height, so a hidden one would still stretch the page. */
+table.visually-hidden { display: block; }
 
 .skip-link {
   position: absolute; left: 16px; top: -60px; z-index: var(--z-skip-link);
