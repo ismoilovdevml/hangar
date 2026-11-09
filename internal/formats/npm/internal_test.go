@@ -274,3 +274,35 @@ func TestRelativizeTarballs(t *testing.T) {
 		t.Fatalf("render = %s", out)
 	}
 }
+
+func TestAuditRanges(t *testing.T) {
+	for affected, want := range map[string]string{
+		">=1.0.0, <1.2.3; <0.9.1": ">=1.0.0 <1.2.3 || <0.9.1",
+		"all versions":            "*",
+		"<=2.0.0":                 "<=2.0.0",
+		"":                        "",
+	} {
+		if got := npmRange(affected); got != want {
+			t.Errorf("npmRange(%q) = %q, want %q", affected, got, want)
+		}
+	}
+	for _, tt := range []struct {
+		v, rng    string
+		ok, known bool
+	}{
+		{"4.17.20", "<4.17.21", true, true},
+		{"4.17.21", "<4.17.21", false, true},
+		{"4.17.21", ">=4.0.0 <4.17.21", false, true},
+		{"3.0.0", ">= 4.0.0 < 4.17.21", false, true},
+		{"1.5.0", "<1.0.0 || >=1.5.0 <2", true, true},
+		{"2.0.0", "*", true, true},
+		{"1.0.0", "1.0.0", true, true},
+		{"1.0.0-rc.1", "<1.0.0", true, true},
+		{"1.2.3", "^1.0.0", false, false},
+		{"not-semver", "<1", false, false},
+	} {
+		if ok, known := satisfies(tt.v, tt.rng); ok != tt.ok || known != tt.known {
+			t.Errorf("satisfies(%q, %q) = %v, %v", tt.v, tt.rng, ok, known)
+		}
+	}
+}

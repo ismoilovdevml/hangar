@@ -3,7 +3,6 @@ package npm
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -116,40 +115,5 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request, repo *core.Repo
 	_ = h.deps.Audit.Record(ctx, core.AuditEvent{Action: "npm.logout", Target: "repo:" + repo.Name,
 		Details: map[string]any{"user": p.Name, "token_id": p.TokenID}})
 	ok(w, http.StatusOK)
-	return nil
-}
-
-// emptyQuickAudit is the response shape of /-/npm/v1/security/audits[/quick].
-func emptyQuickAudit() map[string]any {
-	return map[string]any{
-		"actions":    []any{},
-		"advisories": map[string]any{},
-		"muted":      []any{},
-		"metadata": map[string]any{
-			"vulnerabilities": map[string]int{"info": 0, "low": 0, "moderate": 0, "high": 0, "critical": 0},
-			"dependencies":    0, "devDependencies": 0, "optionalDependencies": 0, "totalDependencies": 0,
-		},
-	}
-}
-
-// audit answers npm's audit endpoints with "no advisories". Findings from
-// Hangar's own scanner will be returned here once the security service
-// exposes them to formats; the request body is not inspected.
-func (h *handler) audit(w http.ResponseWriter, r *http.Request, repo *core.Repository, rest string) error {
-	if r.Method != http.MethodPost {
-		return errMethod
-	}
-	if err := h.authorize(r.Context(), core.ActionRead, repo); err != nil {
-		return err
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(r.Body, 64<<20))
-	switch rest {
-	case "advisories/bulk":
-		writeJSON(w, http.StatusOK, map[string]any{})
-	case "audits/quick", "audits":
-		writeJSON(w, http.StatusOK, emptyQuickAudit())
-	default:
-		return fmt.Errorf("unknown audit endpoint: %w", core.ErrNotFound)
-	}
 	return nil
 }

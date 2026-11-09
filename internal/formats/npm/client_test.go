@@ -25,7 +25,7 @@ func newClient(t *testing.T, ts *testServer, token string) *npmClient {
 	host := strings.TrimPrefix(ts.url, "http://")
 	var rc strings.Builder
 	rc.WriteString("registry=" + ts.registry("npm-group") + "\n")
-	for _, r := range []string{"npm-group", "npm-hosted", "npm-proxy", "npm-upstream"} {
+	for _, r := range []string{"npm-group", "npm-hosted", "npm-proxy", "npm-upstream", "npm-all", "npm-public"} {
 		rc.WriteString("//" + host + "/repository/" + r + "/:_authToken=" + token + "\n")
 	}
 	rc.WriteString("fund=false\nupdate-notifier=false\naudit=true\nloglevel=warn\n")
@@ -124,6 +124,7 @@ func TestRealClients(t *testing.T) {
 		t.Skip("real-client test skipped in -short mode")
 	}
 	ts := newServer(t)
+	newFakeScanner(ts) // every stored version scanned, nothing found
 	c := newClient(t, ts, ts.env.Auth.AddToken("alice"))
 	group, hosted, upstream := ts.registry("npm-group"), ts.registry("npm-hosted"), ts.registry("npm-upstream")
 

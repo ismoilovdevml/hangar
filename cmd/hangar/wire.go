@@ -29,6 +29,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/events"
 	"github.com/ismoilovdevml/hangar/internal/formats/builtin"
 	"github.com/ismoilovdevml/hangar/internal/formats/docker"
+	"github.com/ismoilovdevml/hangar/internal/formats/npm"
 	"github.com/ismoilovdevml/hangar/internal/formats/nuget"
 	"github.com/ismoilovdevml/hangar/internal/health"
 	"github.com/ismoilovdevml/hangar/internal/httpclient"
@@ -613,6 +614,12 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	if f, ok := reg.Get(nuget.Name); ok && scanner.Enabled() {
 		if nf, ok := f.(*nuget.Format); ok {
 			nf.SetAdvisories(nugetAdvisories{scanner: scanner})
+		}
+	}
+	// npm audit answers for hosted packages from the stored findings.
+	if f, ok := reg.Get(npm.Name); ok {
+		if nf, ok := f.(*npm.Format); ok {
+			nf.SetAdvisories(scanner)
 		}
 	}
 

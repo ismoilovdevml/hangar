@@ -315,22 +315,6 @@ func TestAuthEndpoints(t *testing.T) {
 	}
 }
 
-func TestAudit(t *testing.T) {
-	ts := newServer(t)
-	bulk := ts.do(t, http.MethodPost, "/repository/npm-group/-/npm/v1/security/advisories/bulk", "alice",
-		strings.NewReader(`{"lodash":["4.17.20"]}`))
-	if bulk.StatusCode != http.StatusOK || strings.TrimSpace(string(readAll(t, bulk))) != "{}" {
-		t.Fatalf("bulk = %d", bulk.StatusCode)
-	}
-	quick := decodeJSON(t, ts.do(t, http.MethodPost, "/repository/npm-group/-/npm/v1/security/audits/quick", "alice", strings.NewReader(`{}`)))
-	if quick["metadata"].(map[string]any)["vulnerabilities"] == nil {
-		t.Fatalf("quick = %v", quick)
-	}
-	if r := ts.do(t, http.MethodPost, "/repository/npm-group/-/npm/v1/security/advisories/bulk", "", strings.NewReader(`{}`)); r.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("anonymous audit = %d", r.StatusCode)
-	}
-}
-
 func TestDistTags(t *testing.T) {
 	ts := newServer(t)
 	ts.publish(t, "npm-hosted", "@acme/ui", "1.0.0", "latest")

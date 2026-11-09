@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -83,6 +84,8 @@ type Format struct {
 	// Neither can go stale (see docCache).
 	docs     *docCache
 	rendered *docCache
+	// advisories answers npm audit for hosted packages (SetAdvisories).
+	advisories atomic.Pointer[advisoriesBox]
 }
 
 var _ core.Format = (*Format)(nil)

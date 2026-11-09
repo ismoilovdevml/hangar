@@ -33,6 +33,8 @@ func status(err error) int {
 		return http.StatusRequestEntityTooLarge
 	case errors.Is(err, errVersionExists), errors.Is(err, errVersionUnpublished), errors.Is(err, errUnpublishDenied):
 		return http.StatusForbidden
+	case errors.Is(err, errAuditUnavailable):
+		return http.StatusServiceUnavailable
 	}
 	return core.HTTPStatus(err)
 }
@@ -102,7 +104,7 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	r = r.WithContext(ctx)
 	if err := h.route(w, r, repo); err != nil {
-		if code := status(err); code >= 500 && code != http.StatusNotImplemented {
+		if code := status(err); code >= 500 && code != http.StatusNotImplemented && !errors.Is(err, errAuditUnavailable) {
 			h.deps.Logger.ErrorContext(r.Context(), "npm request failed", "repository", repo.Name,
 				"method", r.Method, "path", r.URL.Path, "error", err)
 		}

@@ -30,10 +30,11 @@ import (
 //	npm-proxy     proxy of npm-upstream
 //	npm-group     group [npm-hosted, npm-proxy], writes go to npm-hosted
 type testServer struct {
-	env   *coretest.Env
-	srv   *httptest.Server
-	url   string
-	repos map[string]*core.Repository
+	env    *coretest.Env
+	format *npm.Format
+	srv    *httptest.Server
+	url    string
+	repos  map[string]*core.Repository
 }
 
 func newServer(t *testing.T) *testServer {
@@ -42,7 +43,8 @@ func newServer(t *testing.T) *testServer {
 	srv := httptest.NewUnstartedServer(nil)
 	ts := &testServer{env: env, srv: srv, url: "http://" + srv.Listener.Addr().String(), repos: map[string]*core.Repository{}}
 	env.BaseURL = ts.url
-	srv.Config.Handler = formats.NewHandler(env.Deps(), npm.New())
+	ts.format = npm.New()
+	srv.Config.Handler = formats.NewHandler(env.Deps(), ts.format)
 	srv.Start()
 	t.Cleanup(srv.Close)
 
