@@ -219,3 +219,39 @@ func TestRealClients(t *testing.T) {
 		}
 	})
 }
+
+// TestRealNpmLogout: the token npm login minted stops working after a real
+// `npm logout`, while a personal access token used the same way survives it.
+func TestRealNpmLogout(t *testing.T) {
+	npmBin, err := exec.LookPath("npm")
+	if err != nil {
+		t.Skip("npm not installed")
+	}
+	if testing.Short() {
+		t.Skip("real-client test skipped in -short mode")
+	}
+	ts := newServer(t)
+	resp := ts.do(t, http.MethodPut, "/repository/npm-hosted/-/user/org.couchdb.user:alice", "",
+		strings.NewReader(`{"name":"alice","password":"secret"}`), "Content-Type", "application/json")
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("login = %d", resp.StatusCode)
+	}
+	loginToken, _ := decodeJSON(t, resp)["token"].(string)
+	hosted := ts.registry("npm-hosted")
+
+	c := newClient(t, ts, loginToken)
+	if out := c.must(t, t.TempDir(), npmBin, "whoami", "--registry", hosted); strings.TrimSpace(out) != "alice" {
+		t.Fatalf("whoami = %q", out)
+	}
+	c.must(t, t.TempDir(), npmBin, "logout", "--registry", hosted)
+	if ts.env.Auth.Valid(loginToken) {
+		t.Fatal("npm logout left the login token valid")
+	}
+
+	pat := ts.env.Auth.AddToken("alice")
+	c = newClient(t, ts, pat)
+	c.must(t, t.TempDir(), npmBin, "logout", "--registry", hosted)
+	if !ts.env.Auth.Valid(pat) {
+		t.Fatal("npm logout revoked a personal access token")
+	}
+}

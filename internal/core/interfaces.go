@@ -295,6 +295,16 @@ type TokenIssuer interface {
 	Issue(ctx context.Context, p *Principal, req TokenRequest) (secret string, expiresAt time.Time, err error)
 }
 
+// TokenRevoker is implemented by TokenIssuers that can take back a token
+// they issued, for client logouts (npm logout). Formats type-assert
+// Deps.Tokens to it.
+type TokenRevoker interface {
+	// RevokeIssued revokes the token with id that Issue minted for the
+	// context principal. Tokens of other kinds (personal access tokens) and
+	// other users' tokens are refused with ErrNotFound.
+	RevokeIssued(ctx context.Context, id string) error
+}
+
 // AuthZ decides whether a principal may act on a resource.
 type AuthZ interface {
 	// Authorize returns nil if allowed, ErrUnauthenticated if p is anonymous and

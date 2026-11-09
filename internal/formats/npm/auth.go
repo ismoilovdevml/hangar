@@ -1,10 +1,12 @@
 package npm
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 )
@@ -58,6 +60,8 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request, repo *core.Repos
 	secret, exp, err := h.deps.Tokens.Issue(ctx, p, core.TokenRequest{
 		TTL:  repoConfig(repo).loginTokenTTL(),
 		Name: "npm login (" + repo.Name + ")",
+		// Marks the token as npm login's own, which npm logout may revoke.
+		Extra: map[string]any{claimNPMLogin: repo.Name},
 	})
 	if err != nil {
 		return err
@@ -67,6 +71,51 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request, repo *core.Repos
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"ok": true, "id": "org.couchdb.user:" + p.Name, "rev": "1", "token": secret,
 	})
+	return nil
+}
+
+// claimNPMLogin is the token claim that marks tokens minted by npm login;
+// its value is the repository logged in to.
+const claimNPMLogin = "npm_login"
+
+// logout answers npm logout (DELETE /-/user/token/<token>): the token is
+// revoked when npm login minted it. Other tokens (personal access tokens
+// pasted into .npmrc, tokens of other clients) are left alone, as their
+// owner manages them in Hangar; npm forgets its copy either way, so the
+// answer is 200 both times.
+func (h *handler) logout(w http.ResponseWriter, r *http.Request, repo *core.Repository, secret string) error {
+	if r.Method != http.MethodDelete {
+		return errMethod
+	}
+	ctx := r.Context()
+	if secret == "" || strings.Contains(secret, "/") {
+		return fmt.Errorf("bad token: %w", core.ErrInvalid)
+	}
+	// Holding the token is the proof: it is authenticated as itself.
+	p, err := h.deps.Auth.Authenticate(ctx, core.Credentials{Token: secret})
+	if err != nil {
+		if errors.Is(err, core.ErrUnauthenticated) {
+			ok(w, http.StatusOK) // expired or already revoked
+			return nil
+		}
+		return err
+	}
+	if _, minted := p.Claims[claimNPMLogin]; !minted || p.TokenID == "" {
+		h.deps.Logger.InfoContext(ctx, "npm logout left a token that npm login did not mint", "repository", repo.Name, "user", p.Name)
+		ok(w, http.StatusOK)
+		return nil
+	}
+	rv, can := h.deps.Tokens.(core.TokenRevoker)
+	if !can {
+		return fmt.Errorf("token revocation is not configured: %w", core.ErrNotImplemented)
+	}
+	ctx = core.WithPrincipal(ctx, p)
+	if err := rv.RevokeIssued(ctx, p.TokenID); err != nil && !errors.Is(err, core.ErrNotFound) {
+		return err
+	}
+	_ = h.deps.Audit.Record(ctx, core.AuditEvent{Action: "npm.logout", Target: "repo:" + repo.Name,
+		Details: map[string]any{"user": p.Name, "token_id": p.TokenID}})
+	ok(w, http.StatusOK)
 	return nil
 }
 

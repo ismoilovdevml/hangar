@@ -196,13 +196,7 @@ func (h *handler) routeSpecial(w http.ResponseWriter, r *http.Request, repo *cor
 		}
 		return errMethod
 	case strings.HasPrefix(rest, "user/token/"):
-		// npm logout. Session tokens cannot be revoked through the format
-		// contract; they expire (login_token_ttl) or are revoked in the UI.
-		if r.Method != http.MethodDelete {
-			return errMethod
-		}
-		ok(w, http.StatusOK)
-		return nil
+		return h.logout(w, r, repo, strings.TrimPrefix(rest, "user/token/"))
 	case strings.HasPrefix(rest, "package/"):
 		return h.routeDistTags(w, r, repo, strings.TrimPrefix(rest, "package/"))
 	case strings.HasPrefix(rest, "npm/v1/security/"):

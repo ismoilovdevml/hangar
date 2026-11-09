@@ -285,8 +285,33 @@ func TestAuthEndpoints(t *testing.T) {
 			t.Errorf("login %s = %d, want %d", body, r.StatusCode, want)
 		}
 	}
-	if r := ts.do(t, http.MethodDelete, "/repository/npm-hosted/-/user/token/"+token, "alice", nil); r.StatusCode != http.StatusOK {
-		t.Fatalf("logout = %d", r.StatusCode)
+	// Regression: npm logout answered 200 but left the token working.
+	pat := ts.env.Auth.AddToken("alice")
+	logout := func(secret string) {
+		t.Helper()
+		r := ts.do(t, http.MethodDelete, "/repository/npm-hosted/-/user/token/"+secret, "", nil, "Authorization", "Bearer "+secret)
+		if r.StatusCode != http.StatusOK {
+			t.Fatalf("logout = %d %s", r.StatusCode, readAll(t, r))
+		}
+	}
+	logout(token)
+	if ts.env.Auth.Valid(token) {
+		t.Fatal("npm logout left the npm login token valid")
+	}
+	if r := ts.do(t, http.MethodGet, "/repository/npm-hosted/-/whoami", "", nil, "Authorization", "Bearer "+token); r.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("whoami after logout = %d", r.StatusCode)
+	}
+	if n := len(ts.env.Audit.Events("npm.logout")); n != 1 {
+		t.Fatalf("logout audited %d times", n)
+	}
+	// A token npm login did not mint (a personal access token in .npmrc)
+	// is not revoked; a token already revoked is not an error.
+	logout(pat)
+	if !ts.env.Auth.Valid(pat) {
+		t.Fatal("npm logout revoked a personal access token")
+	}
+	if r := ts.do(t, http.MethodDelete, "/repository/npm-hosted/-/user/token/"+token, "", nil); r.StatusCode != http.StatusOK {
+		t.Fatalf("logout of a revoked token = %d", r.StatusCode)
 	}
 }
 

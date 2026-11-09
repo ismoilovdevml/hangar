@@ -27,6 +27,7 @@ type issued struct {
 var (
 	_ core.Authenticator = (*Auth)(nil)
 	_ core.TokenIssuer   = (*Auth)(nil)
+	_ core.TokenRevoker  = (*Auth)(nil)
 )
 
 // NewAuth returns an Auth with no users.
@@ -96,6 +97,29 @@ func (a *Auth) Issue(_ context.Context, p *core.Principal, req core.TokenRequest
 	a.tokens[secret] = issued{p: np, exp: exp}
 	a.mu.Unlock()
 	return secret, exp, nil
+}
+
+// RevokeIssued implements core.TokenRevoker for tokens minted by Issue
+// for the context principal; tokens added with AddToken are refused.
+func (a *Auth) RevokeIssued(ctx context.Context, id string) error {
+	p := core.PrincipalFrom(ctx)
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for secret, t := range a.tokens {
+		if id != "" && t.p.TokenID == id && t.p.Name == p.Name {
+			delete(a.tokens, secret)
+			return nil
+		}
+	}
+	return fmt.Errorf("token %q: %w", id, core.ErrNotFound)
+}
+
+// Valid reports whether secret is a token Authenticate still accepts.
+func (a *Auth) Valid(secret string) bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	t, ok := a.tokens[secret]
+	return ok && time.Now().Before(t.exp)
 }
 
 func newSecret() string {
