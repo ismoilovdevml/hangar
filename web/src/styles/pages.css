@@ -352,9 +352,6 @@
 
 /* ---------- skeleton screens ---------- */
 .screen { display: flex; flex-direction: column; gap: 18px; }
-.in-progress { gap: 10px; max-width: 760px; }
-.in-progress__lead { color: var(--ink-2); font-size: 14px; }
-.in-progress__list { margin: 0; padding-left: 20px; color: var(--ink-2); display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .search-form { display: flex; gap: 10px; padding: 10px; border-radius: var(--r-panel); max-width: 760px; }
 
 /* ---------- login ---------- */

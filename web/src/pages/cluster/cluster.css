@@ -1,0 +1,10 @@
+.cluster-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 14px; }
+.node-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); }
+.node-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: var(--r-control); border: 1px solid var(--hairline); }
+.node-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.node-card__name { font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+.node-card__facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 13px; }
+.node-card__facts > div { display: contents; }
+.node-card__facts dt { color: var(--ink-3); }
+.node-card__facts dd { margin: 0; color: var(--ink-2); min-width: 0; overflow-wrap: anywhere; }
+#replication-title { display: flex; align-items: center; gap: 8px; }
