@@ -16,10 +16,21 @@ describe('FormatIcon', () => {
   });
 
   it('falls back to a neutral icon for formats without a mark', () => {
-    const { container } = render(<FormatIcon format="rpm" />);
-    const icon = screen.getByRole('img', { name: 'rpm' });
+    const { container } = render(<FormatIcon format="conda" />);
+    const icon = screen.getByRole('img', { name: 'conda' });
     expect(icon).toHaveClass('format-icon--generic');
     expect(container.querySelectorAll('path').length).toBeGreaterThan(0);
+  });
+
+  it('draws APT and RPM with neutral icons and their names', () => {
+    render(
+      <>
+        <FormatIcon format="apt" />
+        <FormatIcon format="rpm" />
+      </>,
+    );
+    expect(screen.getByRole('img', { name: 'APT' })).toHaveClass('format-icon--generic');
+    expect(screen.getByRole('img', { name: 'RPM' })).toHaveClass('format-icon--generic');
   });
 
   it('is hidden from screen readers when a visible name sits next to it', () => {

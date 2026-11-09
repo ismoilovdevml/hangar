@@ -12,7 +12,7 @@ import type {
 import { formatBytes, type Tone } from './format';
 import { toYaml, YamlComment, type YamlValue } from './yaml';
 
-export const ALL_FORMATS: Format[] = ['docker', 'npm', 'maven', 'pypi', 'go', 'helm', 'nuget', 'cargo', 'apt', 'raw'];
+export const ALL_FORMATS: Format[] = ['docker', 'npm', 'maven', 'pypi', 'go', 'helm', 'nuget', 'cargo', 'apt', 'rpm', 'raw'];
 export const REPO_TYPES: RepositoryType[] = ['hosted', 'proxy', 'group'];
 
 export const isFormat = (v: unknown): v is Format => ALL_FORMATS.includes(v as Format);
@@ -34,7 +34,8 @@ export const FORMAT_HINT: Record<Format, string> = {
   helm: 'Charts',
   nuget: '.NET',
   cargo: 'Rust',
-  apt: 'Debian',
+  apt: 'Debian, Ubuntu',
+  rpm: 'RHEL, Rocky, Fedora',
   raw: 'Any file',
 };
 
@@ -49,6 +50,7 @@ export const DEFAULT_REMOTE: Record<Format, string> = {
   nuget: 'https://api.nuget.org',
   cargo: 'https://index.crates.io',
   apt: 'http://deb.debian.org/debian',
+  rpm: 'https://dl.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os/',
   raw: '',
 };
 

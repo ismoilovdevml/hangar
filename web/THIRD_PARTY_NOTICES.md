@@ -15,3 +15,8 @@ The marks are trademarks of their respective owners. Hangar uses them only to
 identify the package format a repository or package belongs to; their use does
 not imply endorsement. The raw-file and generic package icons are original
 drawings.
+
+APT and RPM repositories use the generic package icon, not a distribution
+mark. In Simple Icons 13.21.0 the Debian mark is listed under CC BY-SA 3.0
+(not CC0), and the Red Hat mark carries no CC0 grant for its use as a
+trademark beyond the path data, so neither is included.
