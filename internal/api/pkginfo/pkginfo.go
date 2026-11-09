@@ -158,6 +158,8 @@ func (x *extraction) run(ctx context.Context) {
 		x.pypi(ctx)
 	case "maven":
 		x.maven(ctx)
+	case "helm":
+		x.helm(ctx)
 	}
 	x.resolveImages(ctx)
 }
@@ -379,7 +381,7 @@ func (s *Service) Member(ctx context.Context, repo *core.Repository, c *core.Com
 				break
 			}
 		}
-	case "npm":
+	case "npm", "helm":
 		tgz := x.assetBySuffix(ctx, ".tgz")
 		if tgz == nil {
 			return nil, notFound

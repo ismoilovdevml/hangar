@@ -54,6 +54,8 @@ func TestFolderKind(t *testing.T) {
 		{"docker", "team/app/", c("team", "app", "1.0"), nodePackage},
 		{"docker", "team/", c("team", "app", "1.0"), nodeFolder},
 		{"raw", "releases/", c("releases", "app", ""), nodeFolder},
+		{"helm", "web/", c("", "web", "1.2.0"), nodePackage},
+		{"helm", "web/1.2.0/", c("", "web", "1.2.0"), nodeVersion},
 		{"maven", "com/", nil, nodeFolder},
 	} {
 		if got := folderKind(tc.format, tc.tree, tc.c); got != tc.want {

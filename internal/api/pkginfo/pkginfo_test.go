@@ -263,3 +263,41 @@ func TestInfoIsCached(t *testing.T) {
 		t.Errorf("rows after delete = %s", got)
 	}
 }
+
+func TestHelmChart(t *testing.T) {
+	e := newEnv(t)
+	r := repo("helm-hosted", "helm", core.RepoHosted)
+	archive := tgz(t, map[string]string{
+		"web/Chart.yaml":            "apiVersion: v2\nname: web\nversion: 1.0.0\n",
+		"web/README.md":             "# Web\n\n![logo](docs/logo.png)\n",
+		"web/docs/logo.png":         "png",
+		"web/charts/sub/README.md":  "nested, ignored",
+		"web/templates/deploy.yaml": "kind: Deployment\n",
+	})
+	c := e.publish(r, &core.Component{Name: "web", Version: "1.0.0", Attributes: map[string]any{"chart": map[string]any{
+		"name": "web", "version": "1.0.0", "description": "Web chart", "home": "https://web.example.org",
+		"sources": []any{"https://github.com/acme/web"}, "keywords": []any{"web", "http"},
+		"icon": "https://web.example.org/icon.png", "annotations": map[string]any{"artifacthub.io/license": "MIT"},
+	}}}, file{"web/1.0.0/web-1.0.0.tgz", archive})
+	i := e.info(r, c)
+	if i.Description != "Web chart" || i.Homepage != "https://web.example.org" || !reflect.DeepEqual(i.Licenses, []string{"MIT"}) ||
+		!reflect.DeepEqual(i.Keywords, []string{"web", "http"}) || i.Icon == nil || i.Icon.URL != "https://web.example.org/icon.png" {
+		t.Fatalf("info = %+v", i)
+	}
+	if i.Readme == nil || !strings.HasPrefix(i.Readme.Content, "# Web") || !strings.Contains(i.Readme.Source, "chart archive") {
+		t.Fatalf("readme = %+v", i.Readme)
+	}
+	if img := i.Readme.Images["docs/logo.png"]; img.Member != "web/docs/logo.png" {
+		t.Fatalf("images = %+v", i.Readme.Images)
+	}
+	b, err := e.svc.Member(context.Background(), r, c, "web/docs/logo.png", 1024)
+	if err != nil || string(b) != "png" {
+		t.Fatalf("member = %q %v", b, err)
+	}
+	// Without stored metadata, Chart.yaml in the archive is read.
+	c2 := e.publish(r, &core.Component{Name: "bare", Version: "0.1.0"}, file{"bare/0.1.0/bare-0.1.0.tgz",
+		tgz(t, map[string]string{"bare/Chart.yaml": "apiVersion: v2\nname: bare\nversion: 0.1.0\ndescription: Bare chart\n"})})
+	if i := e.info(r, c2); i.Description != "Bare chart" {
+		t.Fatalf("bare = %+v", i)
+	}
+}
