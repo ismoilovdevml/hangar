@@ -276,10 +276,14 @@ func (h *handler) publish(w http.ResponseWriter, ctx context.Context, repo *core
 		state.DistTags["latest"] = v
 	}
 	now := h.nowString()
-	state.Time[v] = now
+	published := now
+	if at, ok := core.PublishedAtFrom(ctx); ok { // an import keeps the source's date
+		published = at.Format(timeFormat)
+	}
+	state.Time[v] = published
 	state.Time["modified"] = now
-	if state.Time["created"] == "" {
-		state.Time["created"] = now
+	if c := state.Time["created"]; c == "" || published < c {
+		state.Time["created"] = published
 	}
 	if err := h.writeMetadata(ctx, repo, bs, statePath(name), state, nil); err != nil {
 		return err
