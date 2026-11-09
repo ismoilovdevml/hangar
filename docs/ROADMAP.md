@@ -10,7 +10,7 @@ named) or **planned** (not implemented; API operations for it are marked
 
 | # | Milestone | Done when | Status |
 |---|---|---|---|
-| M0 | Skeleton | Repo layout, Makefile, docker-compose (postgres, minio, nats, trivy), config loading, migrations, `/healthz`, CI pipeline, ADRs for stack choices. | Partial: everything exists; the CI workflow is switched off while development is fast, so the release workflow runs the full test suite itself before it publishes. |
+| M0 | Skeleton | Repo layout, Makefile, docker-compose (postgres, minio, nats, trivy), config loading, migrations, `/healthz`, CI pipeline, ADRs for stack choices. | Partial: everything exists; the CI workflow is switched off while development is fast; the release workflow runs the full test suite before it publishes when the `RELEASE_TESTS` repository variable is `true`. |
 | M1 | Core + first formats | Blob stores (fs, s3) with dedup, repositories (hosted/proxy/group), local auth + tokens + RBAC, audit log; Docker, npm, Maven, Raw pass their e2e checklists. | Done. The S3 driver's conformance tests run against a fake S3 server everywhere and against MinIO in the CI workflow. |
 | M2 | UI v1 | Login, Overview, Repositories, New repository, Package detail, Search, Blob stores match the approved design; live feed via SSE. | Done. The Overview has no recent-publications list, so it fits one screen; live updates arrive over `GET /api/v1/events`. |
 | M3 | Policies & jobs | Scheduler, cleanup policies with preview, compaction, Docker GC, reindex, backup; Tasks and Cleanup screens. | Partial: reindex is planned; backups are the `deploy/scripts/backup.sh` script, not a scheduled task. |

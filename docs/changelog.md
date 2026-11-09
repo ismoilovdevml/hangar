@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Release checks are opt-in**: the test, lint and deploy-check jobs of the
+  release workflow run only when the repository variable `RELEASE_TESTS` is
+  `true`. When they run, images, binaries and the release wait for them and
+  stop if one fails.
+
 ## v0.1.7 (2026-11-09)
 
 - **Releases are tested before they are published**: the release workflow

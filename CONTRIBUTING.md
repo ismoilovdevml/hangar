@@ -9,8 +9,9 @@ make help    # every target
 ```
 
 Changes come in small pull requests with tests. Before you open one, run the
-checks below; the release workflow runs the same ones on every tagged
-commit and publishes nothing unless all of them pass.
+checks below. The release workflow can run the same ones on the tagged
+commit (repository variable `RELEASE_TESTS=true`) and then publishes
+nothing unless all of them pass.
 
 ## Unit and integration tests
 
