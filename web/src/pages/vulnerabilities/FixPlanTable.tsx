@@ -44,7 +44,7 @@ function Chevron() {
 /** One row per package, expandable into its findings. */
 export function FixPlanTable({ items, tab, windowDays, inUseDays, expanded, onToggle, onOpenFinding, onWaive, onAssign, canWrite, busy, empty }: FixPlanTableProps) {
   return (
-    <div className="table-scroll" tabIndex={0} role="region" aria-label="Fix plan">
+    <div className="table-scroll" tabIndex={0} role="region" aria-label="Fix plan table">
       <table className="data-table vplan" aria-busy={busy || undefined}>
         <caption className="visually-hidden">Fix plan by package</caption>
         <thead>

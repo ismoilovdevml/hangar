@@ -7,7 +7,7 @@
  * for them (same-origin by default), lazily and without a referrer; any
  * other image, or one that fails to load, shows its alternative text.
  */
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { safeHref, safeImageSrc } from './urlPolicy';
 
 /* ---------------------------------------------------------------- raw HTML */
@@ -130,9 +130,9 @@ function blocks(lines: string[], ctx: Ctx, key: string): ReactNode[] {
       }
       i++;
       out.push(
-        <pre key={k()} className="md-code">
+        <CodePre key={k()}>
           <code data-lang={lang || undefined}>{body.join('\n')}</code>
-        </pre>,
+        </CodePre>,
       );
       continue;
     }
@@ -143,9 +143,9 @@ function blocks(lines: string[], ctx: Ctx, key: string): ReactNode[] {
         i++;
       }
       out.push(
-        <pre key={k()} className="md-code">
+        <CodePre key={k()}>
           <code>{body.join('\n')}</code>
-        </pre>,
+        </CodePre>,
       );
       continue;
     }
@@ -301,6 +301,21 @@ function heading(level: number, shift: number, children: ReactNode, key: string)
     <Tag key={key} className={`md-h${level}`}>
       {children}
     </Tag>
+  );
+}
+
+/** A code block; one that scrolls is focusable, so keyboards can scroll it. */
+function CodePre({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLPreElement>(null);
+  const [scrolls, setScrolls] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el) setScrolls(el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1);
+  }, [children]);
+  return (
+    <pre ref={ref} className="md-code" tabIndex={scrolls ? 0 : undefined}>
+      {children}
+    </pre>
   );
 }
 

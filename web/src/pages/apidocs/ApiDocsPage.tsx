@@ -77,6 +77,7 @@ export function ApiDocsPage() {
   const shown = useMemo(() => filterOperations(ops, q), [ops, q]);
   const groups = useMemo(() => (doc ? groupByTag(doc, shown) : []), [doc, shown]);
   const auth: TryAuth = { mode, token, signedIn };
+  const Main = signedIn ? 'div' : 'main';
 
   return (
     // Signed in, the page sits in the app shell (sidebar and breadcrumb); signed out it stands alone.
@@ -141,7 +142,8 @@ export function ApiDocsPage() {
           </ul>
         </aside>
 
-        <main className="api-docs__main">
+        {/* Signed in, the app shell already provides the main landmark. */}
+        <Main className="api-docs__main">
           <section id="start" className="panel glass api-docs__intro" aria-labelledby="start-title">
             <h1 id="start-title" className="page-header__title">
               {doc?.info.title ?? 'Hangar API'}
@@ -265,7 +267,7 @@ export function ApiDocsPage() {
             ))}
 
           {doc && !q && <Schemas doc={doc} />}
-        </main>
+        </Main>
       </div>
     </div>
   );

@@ -59,7 +59,10 @@ function Totals({ data }: { data: BlobStoreList | undefined }) {
   const labels = ['Total used', 'Saved by deduplication', 'Growth', 'Reclaimable now'];
   if (!data) {
     return (
-      <section className="kpis" aria-label="Storage totals" aria-busy="true">
+      <section className="kpis" aria-labelledby="storage-totals-title" aria-busy="true">
+        <h2 id="storage-totals-title" className="visually-hidden">
+          Storage totals
+        </h2>
         {labels.map((l) => (
           <KpiCardSkeleton key={l} label={l} />
         ))}
@@ -75,7 +78,11 @@ function Totals({ data }: { data: BlobStoreList | undefined }) {
   const n = data.items.length;
   const capacity = t.capacity_bytes;
   return (
-    <section className="kpis" aria-label="Storage totals">
+    <section className="kpis" aria-labelledby="storage-totals-title">
+      {/* The cards' h3 labels need an h2 above them. */}
+      <h2 id="storage-totals-title" className="visually-hidden">
+        Storage totals
+      </h2>
       <KpiCard
         label="Total used"
         value={used.value}

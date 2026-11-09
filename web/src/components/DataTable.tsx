@@ -33,7 +33,8 @@ interface DataTableProps<T> {
 /** A table that lives inside a Panel and scrolls horizontally on narrow screens. */
 export function DataTable<T>({ caption, columns, rows, rowKey, minWidth = 640, empty, busy, sort, onSort }: DataTableProps<T>) {
   return (
-    <div className="table-scroll" tabIndex={0} role="region" aria-label={caption}>
+    // The scroll container is focusable so keyboards can scroll it; its name differs from the panel around it, which often shares the caption.
+    <div className="table-scroll" tabIndex={0} role="region" aria-label={`${caption} table`}>
       <table className="data-table" style={{ minWidth }} aria-busy={busy || undefined}>
         <caption className="visually-hidden">{caption}</caption>
         <thead>
