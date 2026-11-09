@@ -21,6 +21,9 @@ const (
 	MetricUpstreamDNSFailures = "hangar_proxy_upstream_dns_failures_total"
 	// MetricNegativeCacheEvictions counts remembered 404s evicted for space.
 	MetricNegativeCacheEvictions = "hangar_proxy_negative_cache_evictions_total"
+	// MetricIndexEntriesSkipped counts malformed entries of a remote's
+	// repository-wide index that a proxy left out instead of failing.
+	MetricIndexEntriesSkipped = "hangar_proxy_index_entries_skipped_total"
 )
 
 // Cache results recorded by CacheHit and CacheMiss.
@@ -38,7 +41,19 @@ var (
 		Name: MetricCacheHitBytes,
 		Help: "Bytes served from the proxy cache without contacting the remote.",
 	}, []string{"format"})
+	indexEntriesSkipped = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: MetricIndexEntriesSkipped,
+		Help: "Malformed entries of a remote index (a Helm index.yaml) left out of the proxy's index instead of failing it, counted each time the index is parsed.",
+	}, []string{"format", "repository"})
 )
+
+// SkippedIndexEntries records n malformed entries that format left out of
+// the remote index of proxy repository repo.
+func SkippedIndexEntries(format, repo string, n int) {
+	if n > 0 {
+		indexEntriesSkipped.WithLabelValues(format, repo).Add(float64(n))
+	}
+}
 
 // Results of hangar_proxy_upstream_requests_total besides status classes
 // ("2xx" ... "5xx").
@@ -95,7 +110,7 @@ var (
 // RegisterMetrics registers the proxy cache and upstream metrics on r.
 // Registering on a registry that already has them is not an error.
 func RegisterMetrics(r prometheus.Registerer) error {
-	for _, c := range []prometheus.Collector{cacheRequests, cacheHitBytes, requestsTotal, requestDuration, retriesTotal, resumesTotal, upstreamDNSFailures, inflight, negativeEvictions} {
+	for _, c := range []prometheus.Collector{cacheRequests, cacheHitBytes, requestsTotal, requestDuration, retriesTotal, resumesTotal, upstreamDNSFailures, inflight, negativeEvictions, indexEntriesSkipped} {
 		if err := r.Register(c); err != nil {
 			var are prometheus.AlreadyRegisteredError
 			if !errors.As(err, &are) {

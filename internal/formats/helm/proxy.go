@@ -145,7 +145,7 @@ func (h *handler) refreshIndex(ctx context.Context, repo *core.Repository, cache
 	if err != nil {
 		return stale(fmt.Errorf("store remote index.yaml: %w", err))
 	}
-	idx, err := parseUpstream(repo, body, d)
+	idx, err := h.parseUpstream(ctx, repo, body, d)
 	if err != nil {
 		return stale(err)
 	}
@@ -172,11 +172,15 @@ func (h *handler) refreshIndex(ctx context.Context, repo *core.Repository, cache
 }
 
 // parseUpstream reads a remote index.yaml. Entries without a valid name,
-// version or URL are left out, as Helm skips them too.
-func parseUpstream(repo *core.Repository, body []byte, d core.Digest) (*parsedIndex, error) {
+// version or URL are left out, as Helm skips them too, and so are entries
+// that do not decode (a malformed date, a string where a list belongs): one
+// bad entry must not take every other chart of the remote down with it.
+// Skipped entries are logged once per parse and counted in
+// hangar_proxy_index_entries_skipped_total.
+func (h *handler) parseUpstream(ctx context.Context, repo *core.Repository, body []byte, d core.Digest) (*parsedIndex, error) {
 	var doc struct {
-		APIVersion string              `yaml:"apiVersion"`
-		Entries    map[string][]*entry `yaml:"entries"`
+		APIVersion string               `yaml:"apiVersion"`
+		Entries    map[string]yaml.Node `yaml:"entries"`
 	}
 	if err := yaml.Unmarshal(body, &doc); err != nil {
 		return nil, fmt.Errorf("remote index.yaml is not valid YAML: %w: %w", err, core.ErrUpstream)
@@ -190,9 +194,31 @@ func parseUpstream(repo *core.Repository, body []byte, d core.Digest) (*parsedIn
 		return nil, fmt.Errorf("remote URL: %w: %w", err, core.ErrInvalid)
 	}
 	idx := &parsedIndex{digest: d}
+	skipped, example := 0, ""
+	skip := func(key string, line int, why string) {
+		skipped++
+		if example == "" {
+			example = fmt.Sprintf("entries.%s (line %d): %s", key, line, why)
+		}
+	}
 	for key, list := range doc.Entries {
-		for _, e := range list {
-			if e == nil || len(e.URLs) == 0 {
+		if list.Kind != yaml.SequenceNode {
+			if list.Kind != 0 && !(list.Kind == yaml.ScalarNode && list.Tag == "!!null") {
+				skip(key, list.Line, "not a list of chart versions")
+			}
+			continue
+		}
+		for _, node := range list.Content {
+			var e *entry
+			if err := node.Decode(&e); err != nil {
+				skip(key, node.Line, err.Error())
+				continue
+			}
+			if e == nil {
+				continue
+			}
+			if len(e.URLs) == 0 {
+				skip(key, node.Line, "no urls")
 				continue
 			}
 			if e.Name == "" {
@@ -203,10 +229,12 @@ func parseUpstream(repo *core.Repository, body []byte, d core.Digest) (*parsedIn
 			}
 			v, err := ParseVersion(e.Version)
 			if err != nil || !ValidName(e.Name) {
+				skip(key, node.Line, fmt.Sprintf("invalid name %q or version %q", e.Name, e.Version))
 				continue
 			}
 			u, err := base.Parse(e.URLs[0])
 			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+				skip(key, node.Line, "invalid url")
 				continue
 			}
 			u.Fragment = ""
@@ -219,6 +247,11 @@ func parseUpstream(repo *core.Repository, body []byte, d core.Digest) (*parsedIn
 			}
 			idx.entries = append(idx.entries, e)
 		}
+	}
+	if skipped > 0 {
+		proxy.SkippedIndexEntries(Name, repo.Name, skipped)
+		h.log.WarnContext(ctx, "helm proxy left malformed entries of the remote index.yaml out", "repo", repo.Name,
+			"skipped", skipped, "kept", len(idx.entries), "first", example)
 	}
 	return idx, nil
 }
@@ -250,7 +283,7 @@ func (h *handler) parsedFor(ctx context.Context, repo *core.Repository, a *core.
 		if err != nil {
 			return nil, err
 		}
-		p, err := parseUpstream(repo, body, a.BlobDigest)
+		p, err := h.parseUpstream(ctx, repo, body, a.BlobDigest)
 		if err != nil {
 			return nil, err
 		}
