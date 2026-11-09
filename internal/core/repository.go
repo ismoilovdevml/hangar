@@ -84,6 +84,8 @@ type RepoConfig struct {
 	ScanOnArrival bool `json:"scan_on_arrival" yaml:"scan_on_arrival"`
 	// QuarantineCritical blocks components with critical findings.
 	QuarantineCritical bool `json:"quarantine_critical" yaml:"quarantine_critical"`
+	// Scanning holds further vulnerability scanning settings.
+	Scanning *ScanningConfig `json:"scanning,omitempty" yaml:"scanning,omitempty"`
 	// Connector optionally exposes the repository on its own host name or port.
 	Connector *ConnectorConfig `json:"connector,omitempty" yaml:"connector,omitempty"`
 	// CleanupPolicies lists cleanup policy names applied to this repository.
@@ -421,6 +423,9 @@ func (r *Repository) Validate() error {
 		if r.Config.Group == nil || len(r.Config.Group.Members) == 0 {
 			return fmt.Errorf("repository %q: group requires at least one member: %w", r.Name, ErrInvalid)
 		}
+	}
+	if err := r.Config.Scanning.validate(r.Format); err != nil {
+		return fmt.Errorf("repository %q: %w", r.Name, err)
 	}
 	if c := r.Config.Connector; c != nil && (c.HTTPPort < 0 || c.HTTPPort > 65535) {
 		return fmt.Errorf("repository %q: connector httpPort out of range: %w", r.Name, ErrInvalid)
