@@ -89,6 +89,10 @@ curl -X POST https://hangar.example.com/api/v1/repositories \
 - `@latest` is the best answer across members (releases before pre-releases
   before pseudo-versions).
 - Uploads to the group go to `write_member`; without one they get `405`.
+- Version lists and `@latest` ask every member, so the path of a private
+  module listed through a group that also holds a proxy reaches that proxy's
+  remote (as a request that answers `404`). Where module paths themselves are
+  confidential, serve private modules from a group without the public proxy.
 
 ## Using it from the go command
 
