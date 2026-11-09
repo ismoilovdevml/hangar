@@ -3,9 +3,9 @@ package api
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"slices"
@@ -30,6 +30,8 @@ type repositoryInput struct {
 	BlobStore   string          `json:"blob_store,omitempty" yaml:"blob_store,omitempty"`
 	Online      *bool           `json:"online,omitempty" yaml:"online,omitempty"`
 	Config      core.RepoConfig `json:"config" yaml:"config"`
+	// auth is how the body carried config.proxy.auth (decode only).
+	auth authPresence
 }
 
 // repositoryJSON is schema Repository.
@@ -321,21 +323,26 @@ func (a *API) getRepository(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, a.toRepositoryJSON(repo, stats, up))
 }
 
-// decodeRepositoryInput reads a JSON or YAML RepositoryInput.
+// decodeRepositoryInput reads a JSON or YAML RepositoryInput and notes
+// whether it carries config.proxy.auth (see authPresence).
 func decodeRepositoryInput(w http.ResponseWriter, r *http.Request) (repositoryInput, error) {
 	var in repositoryInput
-	ct := r.Header.Get("Content-Type")
-	if strings.Contains(ct, "yaml") {
-		b, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
-		if err != nil {
-			return in, fmt.Errorf("read body: %s: %w", err.Error(), core.ErrInvalid)
-		}
+	b, err := readBody(w, r)
+	if err != nil {
+		return in, err
+	}
+	if strings.Contains(r.Header.Get("Content-Type"), "yaml") {
 		if err := yaml.Unmarshal(b, &in); err != nil {
 			return in, fmt.Errorf("decode YAML body: %s: %w", err.Error(), core.ErrInvalid)
 		}
+		in.auth = yamlAuthPresence(b)
 		return in, nil
 	}
-	return in, decodeJSON(w, r, &in)
+	if err := json.Unmarshal(b, &in); err != nil {
+		return in, fmt.Errorf("decode JSON body: %s: %w", err.Error(), core.ErrInvalid)
+	}
+	in.auth = jsonAuthPresence(b)
+	return in, nil
 }
 
 func (in repositoryInput) repository() *core.Repository {
@@ -374,29 +381,6 @@ func (a *API) createRepository(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusCreated, a.toRepositoryJSON(repo, nil, nil))
 }
 
-// keepSecrets carries write-only secrets over from old when the client sent
-// the redacted form back unchanged.
-func keepSecrets(next, old *core.RepoConfig) {
-	if next.Proxy == nil || old.Proxy == nil {
-		return
-	}
-	if na, oa := next.Proxy.Auth, old.Proxy.Auth; na != nil && oa != nil && na.Kind == oa.Kind &&
-		na.Username == oa.Username && na.HeaderName == oa.HeaderName {
-		if na.Password == "" {
-			na.Password = oa.Password
-		}
-		if na.Token == "" {
-			na.Token = oa.Token
-		}
-	}
-	if next.Proxy.HTTP.Proxy != "" && next.Proxy.HTTP.Proxy == core.RedactURL(old.Proxy.HTTP.Proxy) {
-		next.Proxy.HTTP.Proxy = old.Proxy.HTTP.Proxy
-	}
-	if next.Proxy.RemoteURL == core.RedactURL(old.Proxy.RemoteURL) {
-		next.Proxy.RemoteURL = old.Proxy.RemoteURL
-	}
-}
-
 func (a *API) updateRepository(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
@@ -430,7 +414,10 @@ func (a *API) updateRepository(w http.ResponseWriter, r *http.Request) {
 	in.Format, in.Type = old.Format, old.Type
 	next := in.repository()
 	next.ID = old.ID
-	keepSecrets(&next.Config, &old.Config)
+	if err := keepSecrets(&next.Config, &old.Config, in.auth); err != nil {
+		a.writeErr(w, r, err)
+		return
+	}
 	repo, err := a.Deps.Repos.Update(ctx, next)
 	if err != nil {
 		a.writeErr(w, r, err)

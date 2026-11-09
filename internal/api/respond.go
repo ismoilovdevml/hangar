@@ -155,17 +155,25 @@ func paginate[T any](all []T, cursor string, limit int) ([]T, string, error) {
 
 // decodeJSON reads a bounded JSON body into v.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
-	body := http.MaxBytesReader(w, r.Body, maxBody)
-	b, err := io.ReadAll(body)
+	b, err := readBody(w, r)
 	if err != nil {
-		var mbe *http.MaxBytesError
-		if errors.As(err, &mbe) {
-			return fmt.Errorf("request body larger than %d bytes: %w", maxBody, core.ErrInvalid)
-		}
-		return fmt.Errorf("read body: %w", err)
+		return err
 	}
 	if err := json.Unmarshal(b, v); err != nil {
 		return fmt.Errorf("decode JSON body: %s: %w", err.Error(), core.ErrInvalid)
 	}
 	return nil
+}
+
+// readBody reads a request body of at most maxBody bytes.
+func readBody(w http.ResponseWriter, r *http.Request) ([]byte, error) {
+	b, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
+	if err != nil {
+		var mbe *http.MaxBytesError
+		if errors.As(err, &mbe) {
+			return nil, fmt.Errorf("request body larger than %d bytes: %w", maxBody, core.ErrInvalid)
+		}
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+	return b, nil
 }
