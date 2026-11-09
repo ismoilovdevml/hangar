@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -401,5 +402,34 @@ func TestHumanBytes(t *testing.T) {
 		if got := HumanBytes(n); got != want {
 			t.Errorf("HumanBytes(%d) = %q, want %q", n, got, want)
 		}
+	}
+}
+
+func TestUpstreamsCheckCredentialFailures(t *testing.T) {
+	items := []proxy.HealthItem{
+		{Name: "nuget-gitlab", URL: "https://gitlab.example.com/api/v4/projects/7/packages/nuget/index.json", State: proxy.StateBlocked, Reason: proxy.ReasonAuthFailed},
+		{Name: "npm-gitlab", URL: "https://gitlab.example.com/api/v4/packages/npm/", State: proxy.StateBlocked, Reason: proxy.ReasonAccessDenied},
+		{Name: "internal-raw", URL: "http://10.0.0.5/raw/", State: proxy.StateBlocked, Reason: proxy.ReasonAddressBlocked},
+		{Name: "nuget-proxy", URL: "https://api.nuget.org/v3/index.json", State: proxy.StateHealthy},
+	}
+	list := func(context.Context, string, int) (core.Page[proxy.HealthItem], error) {
+		return core.Page[proxy.HealthItem]{Items: items}, nil
+	}
+	r := UpstreamsCheck(list).Run(context.Background())
+	want := "1 of 4 healthy · 1 blocked, 1 authentication failed (401), 1 access denied (403) · check the proxy credentials"
+	if r.Status != StatusDegraded || r.Detail != want {
+		t.Fatalf("result = %+v", r)
+	}
+	for _, f := range []Fact{{"Blocked remotes", "internal-raw"}, {"Authentication failed (401)", "nuget-gitlab"}, {"Access denied (403)", "npm-gitlab"}} {
+		if !slices.Contains(r.Facts, f) {
+			t.Errorf("missing fact %+v in %+v", f, r.Facts)
+		}
+	}
+	// Only a credential failure: no "blocked" wording.
+	only := func(context.Context, string, int) (core.Page[proxy.HealthItem], error) {
+		return core.Page[proxy.HealthItem]{Items: items[:1]}, nil
+	}
+	if r = UpstreamsCheck(only).Run(context.Background()); r.Detail != "0 of 1 healthy · 1 authentication failed (401) · gitlab.example.com · check the proxy credentials" {
+		t.Errorf("only auth = %q", r.Detail)
 	}
 }

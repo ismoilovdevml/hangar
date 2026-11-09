@@ -73,7 +73,8 @@ function formatFields(fmt: Record<string, unknown>): Partial<RepoForm> {
  * settings this form does not edit (connector, format-specific options, TLS
  * and timeout overrides, circuit breaker, extra cleanup policies) survive.
  * Name, format, type and blob store are immutable and always sent as stored.
- * Empty secrets are left out: the server keeps the stored ones.
+ * Empty secrets are left out: the server keeps the stored ones. Choosing no
+ * authentication sends auth: null, which removes stored credentials.
  */
 export function toRepositoryUpdate(f: RepoForm, r: Repository, online: boolean = r.online ?? true): RepositoryInput {
   const base = toRepositoryInput({ ...f, name: r.name, format: r.format, type: r.type, blobStore: r.blob_store ?? '' });
@@ -124,6 +125,9 @@ export function toRepositoryUpdate(f: RepoForm, r: Repository, online: boolean =
       if (!a.password) delete a.password;
       if (!a.token) delete a.token;
       p.auth = a;
+    } else if (op?.auth) {
+      // A left-out auth keeps the stored credentials; null removes them.
+      p.auth = null;
     }
     config.proxy = p;
   }

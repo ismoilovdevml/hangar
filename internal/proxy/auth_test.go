@@ -148,8 +148,8 @@ func TestTokenChallengeAnonymousAndDenied(t *testing.T) {
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("denied: status %d", resp.StatusCode)
 	}
-	if st := m.Health(repo).State; st != StateBlocked {
-		t.Fatalf("denied: state %s, want blocked", st)
+	if h := m.Health(repo); h.State != StateBlocked || h.Reason != ReasonAuthFailed {
+		t.Fatalf("denied: %+v, want blocked by auth_failed", h)
 	}
 }
 

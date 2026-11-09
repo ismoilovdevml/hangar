@@ -11,6 +11,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/ismoilovdevml/hangar/internal/httpclient"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
@@ -24,7 +25,8 @@ const (
 // knownMetrics is every hangar_* metric a node can export: this package's
 // plus the proxy cache counters.
 func knownMetrics() []string {
-	return append(allHangarMetrics(), proxy.MetricCacheRequests, proxy.MetricCacheHitBytes, proxy.MetricNegativeCacheEvictions)
+	return append(allHangarMetrics(), proxy.MetricCacheRequests, proxy.MetricCacheHitBytes, proxy.MetricNegativeCacheEvictions,
+		proxy.MetricUpstreamDNSFailures, httpclient.MetricDNSCacheRequests, httpclient.MetricDNSErrors)
 }
 
 var reMetricRef = regexp.MustCompile(`hangar_[a-z0-9_]+`)

@@ -209,6 +209,23 @@
             },
             "allow_private_networks": {
               "$ref": "#/definitions/stringList"
+            },
+            "dns": {
+              "type": "object",
+              "properties": {
+                "cache": {
+                  "type": "boolean"
+                },
+                "ttl": {
+                  "$ref": "#/definitions/duration"
+                },
+                "negative_ttl": {
+                  "$ref": "#/definitions/duration"
+                },
+                "stale_ttl": {
+                  "$ref": "#/definitions/duration"
+                }
+              }
             }
           }
         },

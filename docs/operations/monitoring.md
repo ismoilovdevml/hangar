@@ -208,6 +208,9 @@ run finishes after start the usage gauges are absent.
 | `hangar_upstream_fetches_total` | counter | `format`, `result` | Requests to remotes. `result`: `ok`, `not_modified`, `not_found`, `client_error`, `server_error`, `circuit_open` (refused by the open breaker without contacting the remote), `blocked` (outbound address policy), `canceled`, `error` (connection, TLS, timeout). |
 | `hangar_upstream_fetch_duration_seconds` | histogram | `format` | Time to the remote's response headers (fast `circuit_open` and `canceled` results are not observed). |
 | `hangar_upstream_state` | gauge | `repository`, `state` | 1 for the current state of each proxy repository's remote on this node: `healthy`, `slow`, `blocked` (401/403 or address policy) or `offline` (circuit breaker open). Refreshed at most every 15 seconds. |
+| `hangar_upstream_dns_cache_requests_total` | counter | `result` | Remote host name lookups by DNS cache result: `hit`, `miss` (asked the resolver), `stale` (the resolver failed; the last answer was used), `negative` (a remembered failure). |
+| `hangar_upstream_dns_errors_total` | counter | `kind` | Failed queries to the system resolver for remote host names: `timeout`, `temporary`, `not_found`, `other`. Retries count. A rising `timeout` rate points at overloaded DNS servers. |
+| `hangar_proxy_upstream_dns_failures_total` | counter | `repository` | Remote requests that failed on a DNS timeout or temporary error. They count towards the circuit breaker at most once per second. |
 
 ### Database
 

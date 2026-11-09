@@ -504,7 +504,24 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getRepository"];
-        /** @description Replaces the settings. `name`, `format` and `type` are immutable. */
+        /**
+         * @description Replaces the settings. `name`, `format` and `type` are immutable.
+         *
+         *     Upstream credentials of a proxy repository (`config.proxy.auth`) are
+         *     write-only and follow these rules:
+         *
+         *     - `auth` left out: the stored credentials are kept.
+         *     - `"auth": null`: the credentials are removed.
+         *     - `auth` sent with an empty `password` or `token` and the same
+         *       `kind`, `username` and `header_name`: the stored secret is kept
+         *       (send back what GET returns).
+         *     - When `remote_url` moves to another scheme, host or port, stored
+         *       secrets are never carried over: unless the request resends the
+         *       password or token, or sets `"auth": null`, it is refused with 400.
+         *
+         *     The audit record (`repository.update`) notes `upstream_auth`
+         *     (`added`, `removed`, `replaced` or `unchanged`), never the secret.
+         */
         put: operations["updateRepository"];
         post?: never;
         delete: operations["deleteRepository"];
@@ -2595,11 +2612,21 @@ export interface components {
          * @enum {string}
          */
         UpstreamState: "healthy" | "slow" | "blocked" | "offline" | "unknown";
+        /**
+         * @description Why a remote is `blocked`: `auth_failed` (it answered 401: the
+         *     upstream credentials are missing, wrong or expired), `access_denied`
+         *     (403: the credentials lack access), `address_blocked` (the outbound
+         *     address policy refused the address).
+         * @enum {string}
+         */
+        UpstreamBlockedReason: "auth_failed" | "access_denied" | "address_blocked";
         UpstreamHealth: {
             /** @description Proxy repository name */
             name: string;
             url: string;
             state: components["schemas"]["UpstreamState"];
+            /** @description Set when state is blocked */
+            reason?: components["schemas"]["UpstreamBlockedReason"];
             /**
              * @description Median time to response headers of the remote requests recorded
              *     over the range (estimated from a histogram); null without remote
@@ -2672,7 +2699,8 @@ export interface components {
                 metadata_ttl?: components["schemas"]["Duration"];
                 content_ttl?: components["schemas"]["Duration"];
                 negative_cache_ttl?: components["schemas"]["Duration"];
-                auth?: components["schemas"]["UpstreamAuth"];
+                /** @description Credentials for the remote. On update: left out keeps the stored credentials, null removes them (see updateRepository). */
+                auth?: components["schemas"]["UpstreamAuth"] | null;
                 http?: components["schemas"]["UpstreamHTTP"];
                 circuit_failures?: number;
                 circuit_open_for?: components["schemas"]["Duration"];
@@ -2920,6 +2948,8 @@ export interface components {
             /** @description Client URL built from server.base_url */
             url: string;
             status: components["schemas"]["RepositoryStatus"];
+            /** @description Proxy repositories with status blocked only */
+            status_reason?: components["schemas"]["UpstreamBlockedReason"];
             /**
              * @description Hosted and proxy: the total size of the repository's assets.
              *     Group: what the group serves; every blob stored by its

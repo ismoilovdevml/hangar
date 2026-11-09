@@ -29,11 +29,29 @@ const (
 	StateOffline State = "offline"
 )
 
+// Reason says why a remote is StateBlocked (HealthItem.Reason).
+type Reason string
+
+// Blocked reasons. Credentials problems are told apart from the address
+// policy, so the UI can point at the proxy credentials instead of the network.
+const (
+	// ReasonAuthFailed: the remote answered 401; the upstream credentials
+	// are missing, wrong or expired.
+	ReasonAuthFailed Reason = "auth_failed"
+	// ReasonAccessDenied: the remote answered 403; the credentials are
+	// accepted but lack access.
+	ReasonAccessDenied Reason = "access_denied"
+	// ReasonAddressBlocked: the outbound address policy refused the address.
+	ReasonAddressBlocked Reason = "address_blocked"
+)
+
 // HealthItem is one entry of /api/v1/upstreams/health (schema UpstreamHealth).
 type HealthItem struct {
 	Name  string `json:"name"`
 	URL   string `json:"url"`
 	State State  `json:"state"`
+	// Reason is set when State is StateBlocked.
+	Reason Reason `json:"reason,omitempty"`
 	// LatencyMS is the smoothed time to response headers; nil without
 	// traffic in the last LatencyWindow.
 	LatencyMS *int64 `json:"latency_ms"`
@@ -50,7 +68,7 @@ type stats struct {
 	mu         sync.Mutex
 	ewma       float64 // nanoseconds
 	lastSample time.Time
-	blocked    bool
+	blocked    Reason // "" = not blocked
 	reported   State
 }
 
@@ -65,10 +83,17 @@ func (s *stats) observe(d time.Duration, now time.Time) {
 	s.lastSample = now
 }
 
-func (s *stats) setBlocked(b bool) {
+// setBlocked records why the remote refuses us; "" clears it.
+func (s *stats) setBlocked(r Reason) {
 	s.mu.Lock()
-	s.blocked = b
+	s.blocked = r
 	s.mu.Unlock()
+}
+
+func (s *stats) blockReason() Reason {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.blocked
 }
 
 // latency returns the smoothed latency, or false without recent samples.
@@ -86,10 +111,7 @@ func (u *upstream) state(now time.Time) State {
 	if st := u.breaker.State(); st == gobreaker.StateOpen || st == gobreaker.StateHalfOpen {
 		return StateOffline
 	}
-	u.stats.mu.Lock()
-	blocked := u.stats.blocked
-	u.stats.mu.Unlock()
-	if blocked {
+	if u.stats.blockReason() != "" {
 		return StateBlocked
 	}
 	if l, ok := u.stats.latency(now); ok && l > u.slow {
@@ -105,6 +127,9 @@ func (u *upstream) state(now time.Time) State {
 func (u *upstream) health() HealthItem {
 	now := u.now()
 	it := HealthItem{Name: u.name, URL: core.RedactURL(u.remoteRaw), State: u.state(now)}
+	if it.State == StateBlocked {
+		it.Reason = u.stats.blockReason()
+	}
 	if l, ok := u.stats.latency(now); ok {
 		ms := l.Milliseconds()
 		it.LatencyMS = &ms

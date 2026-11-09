@@ -129,6 +129,10 @@ http:
 | `http.use_environment` | `HANGAR_HTTP_USE_ENVIRONMENT` | When `http.proxy` is empty, use the standard `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` variables. |
 | `http.ca_file` | `HANGAR_HTTP_CA_FILE` | PEM bundle trusted in addition to the system roots: the root of a TLS-inspecting proxy, or a private CA of an internal mirror. |
 | `http.allow_private_networks` | `HANGAR_HTTP_ALLOW_PRIVATE_NETWORKS` | Internal addresses proxy repositories may reach (see below). |
+| `http.dns.cache` | `HANGAR_HTTP_DNS_CACHE` | Cache remote host name lookups in process (default `true`; see [DNS cache](#dns-cache)). |
+| `http.dns.ttl` | `HANGAR_HTTP_DNS_TTL` | How long an answer is used: `1s` to `1h`, default `60s`. |
+| `http.dns.negative_ttl` | `HANGAR_HTTP_DNS_NEGATIVE_TTL` | How long a failed lookup is remembered: `0` (off) to `5m`, default `5s`. |
+| `http.dns.stale_ttl` | `HANGAR_HTTP_DNS_STALE_TTL` | How long past `ttl` the last answer is still used while the DNS servers time out or fail: `0` (off) to `24h`, default `10m`. |
 
 Where to set them:
 
@@ -142,6 +146,32 @@ Where to set them:
   Add the cluster's internal domains (`.svc`, `.cluster.local`) to `no_proxy`.
 - systemd: `/etc/hangar/hangar.yaml` and `HANGAR_HTTP_PROXY_PASSWORD` in
   `/etc/hangar/hangar.env`.
+
+### DNS cache
+
+Every connection to a remote (and to an outbound proxy) resolves its host
+name through an in-process cache shared by all proxy repositories. During
+CI bursts this keeps hundreds of requests a minute from each asking the
+DNS servers, which corporate DNS servers may answer with timeouts:
+
+- an answer is used for `http.dns.ttl`; concurrent lookups of one name
+  share one query;
+- a lookup that times out or fails temporarily (SERVFAIL) is retried once
+  after 200 ms; when that fails too, the last answer is used for up to
+  `http.dns.stale_ttl` and DNS is asked again every `http.dns.negative_ttl`;
+- `no such host` (NXDOMAIN) is a real answer: no stale fallback;
+- every address, cached or not, is checked against the address policy
+  when the URL is checked and again when it is dialled, so the cache does
+  not let a name reach internal addresses.
+
+Timeouts and temporary DNS failures count towards a remote's circuit
+breaker at most once per second: a burst of requests failing on one
+unanswered lookup does not take the remote (and the groups it is a member
+of) offline, while a DNS outage that lasts still trips the breaker after
+the usual number of failures. `hangar_upstream_dns_errors_total` and
+`hangar_upstream_dns_cache_requests_total` show the resolver's behaviour
+([monitoring.md](../operations/monitoring.md#proxy-remotes)). Set
+`http.dns.cache: false` to resolve on every connection, as before.
 
 ## Per repository
 

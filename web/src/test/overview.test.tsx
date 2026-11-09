@@ -34,7 +34,7 @@ describe('overview', () => {
     const upstream = await waitFor(() => card(/^Upstream/));
     expect(upstream).toHaveAttribute('href', '/repositories?type=proxy');
     expect(within(upstream).getByText('ghcr.io')).toBeInTheDocument();
-    expect(within(upstream).getByText('blocked · cache hit 94% · 2 of 5 healthy')).toBeInTheDocument();
+    expect(within(upstream).getByText('authentication failed (401) · cache hit 94% · 2 of 5 healthy')).toBeInTheDocument();
   });
 
   it('lists what needs attention, most urgent first, linking to where it is fixed', async () => {
@@ -42,7 +42,7 @@ describe('overview', () => {
     const todo = await screen.findByRole('region', { name: 'To do' });
     const items = await within(todo).findAllByRole('link');
     expect(items.map((a) => a.querySelector('.todo__item-title')?.textContent)).toEqual([
-      'ghcr-proxy is blocked',
+      'ghcr-proxy: authentication failed (401)',
       '4 pushes rejected',
       'Review 7 critical vulnerabilities',
       'Renew the laptop CLI token',

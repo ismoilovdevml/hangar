@@ -35,6 +35,7 @@ export type ScanSummary = Schemas['ScanSummary'];
 export type Publisher = Schemas['Publisher'];
 export type PublishedComponent = Schemas['PublishedComponent'];
 export type UpstreamState = Schemas['UpstreamState'];
+export type UpstreamBlockedReason = Schemas['UpstreamBlockedReason'];
 export type UpstreamHealth = Schemas['UpstreamHealth'];
 export type SearchHit = Schemas['SearchHit'];
 

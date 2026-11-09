@@ -168,6 +168,14 @@ http:
   allow_private_networks: []
   #  - 10.20.0.0/16
   #  - .corp.example
+  # In-process cache of remote host name lookups, so bursts of proxy
+  # requests do not each ask the DNS servers. Resolved addresses are still
+  # checked against the address policy on every connection.
+  dns:
+    cache: true
+    ttl: 60s          # how long an answer is used (1s to 1h)
+    negative_ttl: 5s  # how long a failed lookup is remembered (0 = off, max 5m)
+    stale_ttl: 10m    # keep using the last answer while DNS fails (0 = off, max 24h)
 
 # Local authentication.
 auth:

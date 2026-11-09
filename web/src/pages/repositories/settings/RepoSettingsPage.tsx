@@ -22,8 +22,8 @@ import {
   isFormat,
   repositoryYaml,
   SIGNED_FORMATS,
+  repoStatusMeta,
   secretStored,
-  STATUS_META,
   TYPE_META,
   validateRepoForm,
   type RepoForm,
@@ -101,8 +101,9 @@ function SettingsForm({ repo }: { repo: Repository }) {
   const blur = (f: RepoFormField) => () => setBlurred((b) => ({ ...b, [f]: true }));
 
   const storedAuth = repo.config.proxy?.auth;
+  const storedRemoteUrl = repo.config.proxy?.remote_url;
   const memberTypes = useMemo(() => new Map((members.data ?? []).map((r) => [r.name, r.type] as const)), [members.data]);
-  const errors = validateRepoForm(form, { memberTypes, storedAuth });
+  const errors = validateRepoForm(form, { memberTypes, storedAuth, storedRemoteUrl });
   const visible: RepoFormErrors = Object.fromEntries(
     Object.entries(errors).filter(([k]) => submitted || blurred[k as RepoFormField]),
   );
@@ -110,7 +111,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
   const body = toRepositoryUpdate(form, repo);
   const yaml = repositoryYaml(body);
   const online = repo.online ?? true;
-  const status = STATUS_META[repo.status];
+  const status = repoStatusMeta(repo);
   const formatLabel = isFormat(repo.format) ? FORMAT_META[repo.format].label : repo.format;
 
   const onSubmit = (e: FormEvent) => {
@@ -209,7 +210,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
               errors={visible}
               blur={blur}
               identity={identity}
-              secretKept={secretStored(form, storedAuth)}
+              secretKept={secretStored(form, storedAuth, storedRemoteUrl)}
               disabled={!canAdmin}
             />
           </Panel>
@@ -253,7 +254,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
               </dd>
               <dt>Status</dt>
               <dd>
-                <StatusDot tone={status.tone} label={status.label} />
+                <StatusDot tone={status.tone} label={status.hint ? `${status.label} · ${status.hint}` : status.label} />
               </dd>
               {repo.type !== 'group' && (
                 <>

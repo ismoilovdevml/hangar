@@ -636,7 +636,23 @@ paths:
     put:
       tags: [repositories]
       operationId: updateRepository
-      description: Replaces the settings. `name`, `format` and `type` are immutable.
+      description: |
+        Replaces the settings. `name`, `format` and `type` are immutable.
+
+        Upstream credentials of a proxy repository (`config.proxy.auth`) are
+        write-only and follow these rules:
+
+        - `auth` left out: the stored credentials are kept.
+        - `"auth": null`: the credentials are removed.
+        - `auth` sent with an empty `password` or `token` and the same
+          `kind`, `username` and `header_name`: the stored secret is kept
+          (send back what GET returns).
+        - When `remote_url` moves to another scheme, host or port, stored
+          secrets are never carried over: unless the request resends the
+          password or token, or sets `"auth": null`, it is refused with 400.
+
+        The audit record (`repository.update`) notes `upstream_auth`
+        (`added`, `removed`, `replaced` or `unchanged`), never the secret.
       requestBody:
         required: true
         content:
@@ -3602,6 +3618,14 @@ components:
       type: string
       enum: [healthy, slow, blocked, offline, unknown]
       description: unknown = no health data for the remote
+    UpstreamBlockedReason:
+      type: string
+      enum: [auth_failed, access_denied, address_blocked]
+      description: |
+        Why a remote is `blocked`: `auth_failed` (it answered 401: the
+        upstream credentials are missing, wrong or expired), `access_denied`
+        (403: the credentials lack access), `address_blocked` (the outbound
+        address policy refused the address).
     UpstreamHealth:
       type: object
       required: [name, url, state, latency_ms, requests]
@@ -3611,6 +3635,9 @@ components:
           description: Proxy repository name
         url: { type: string }
         state: { $ref: "#/components/schemas/UpstreamState" }
+        reason:
+          $ref: "#/components/schemas/UpstreamBlockedReason"
+          description: Set when state is blocked
         latency_ms:
           type: [integer, "null"]
           description: |
@@ -3721,7 +3748,13 @@ components:
             metadata_ttl: { $ref: "#/components/schemas/Duration" }
             content_ttl: { $ref: "#/components/schemas/Duration" }
             negative_cache_ttl: { $ref: "#/components/schemas/Duration" }
-            auth: { $ref: "#/components/schemas/UpstreamAuth" }
+            auth:
+              description: >-
+                Credentials for the remote. On update: left out keeps the
+                stored credentials, null removes them (see updateRepository).
+              oneOf:
+                - $ref: "#/components/schemas/UpstreamAuth"
+                - type: "null"
             http: { $ref: "#/components/schemas/UpstreamHTTP" }
             circuit_failures: { type: integer, minimum: 0 }
             circuit_open_for: { $ref: "#/components/schemas/Duration" }
@@ -4072,6 +4105,9 @@ components:
               type: string
               description: Client URL built from server.base_url
             status: { $ref: "#/components/schemas/RepositoryStatus" }
+            status_reason:
+              $ref: "#/components/schemas/UpstreamBlockedReason"
+              description: Proxy repositories with status blocked only
             size_bytes:
               allOf: [{ $ref: "#/components/schemas/Bytes" }]
               description: |

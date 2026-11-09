@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { initialRepoForm, repositoryYaml, toRepositoryInput, validateRepoForm, type RepoForm } from './repositories';
+import { initialRepoForm, repoStatusMeta, repositoryYaml, toRepositoryInput, validateRepoForm, type RepoForm } from './repositories';
 import { toYaml, YamlComment } from './yaml';
 
 const form = (patch: Partial<RepoForm>): RepoForm => ({ ...initialRepoForm('npm', 'hosted'), name: 'npm-internal', blobStore: 'fs-local', ...patch });
@@ -69,5 +69,20 @@ describe('YAML preview', () => {
     expect(y).toContain('  proxy:\n    remote_url: https://xxxxx:xxxxx@registry.example/npm\n');
     expect(y).toContain('      kind: basic\n      username: ci\n      # password: write-only, not shown\n');
     expect(y.startsWith('name: npm-proxy\nformat: npm\ntype: proxy\nblob_store: fs-local\nonline: true\nconfig:\n')).toBe(true);
+  });
+});
+
+describe('repoStatusMeta', () => {
+  it('names credential failures of a proxy and keeps the other states', () => {
+    expect(repoStatusMeta({ status: 'blocked', status_reason: 'auth_failed' })).toEqual({
+      label: 'Authentication failed (401)',
+      tone: 'bad',
+      hint: 'Check the proxy credentials.',
+    });
+    expect(repoStatusMeta({ status: 'blocked', status_reason: 'access_denied' }).label).toBe('Access denied (403)');
+    expect(repoStatusMeta({ status: 'blocked', status_reason: 'address_blocked' })).toEqual({ label: 'Blocked by policy', tone: 'bad' });
+    expect(repoStatusMeta({ status: 'blocked' }).label).toBe('Blocked by policy');
+    expect(repoStatusMeta({ status: 'slow_upstream' }).label).toBe('Slow upstream');
+    expect(repoStatusMeta({ status: 'online', status_reason: 'auth_failed' }).label).toBe('Online');
   });
 });

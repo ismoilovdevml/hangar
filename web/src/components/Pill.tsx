@@ -6,9 +6,9 @@ export function Pill({ tone = 'neutral', children, className }: { tone?: Tone; c
 }
 
 /** A coloured dot with its meaning always spelled out next to it. */
-export function StatusDot({ tone, label, halo }: { tone: 'ok' | 'warn' | 'bad' | 'neutral'; label?: ReactNode; halo?: boolean }) {
+export function StatusDot({ tone, label, halo, title }: { tone: 'ok' | 'warn' | 'bad' | 'neutral'; label?: ReactNode; halo?: boolean; title?: string }) {
   return (
-    <span className="status">
+    <span className="status" title={title}>
       <span className={['status__dot', `dot-${tone}`, halo ? 'status__dot--halo' : ''].join(' ')} aria-hidden="true" />
       {label}
     </span>

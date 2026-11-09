@@ -214,7 +214,8 @@ export const upstreams: UpstreamHealth[] = [
   { name: 'npmjs-proxy', url: 'https://registry.npmjs.org', state: 'slow', latency_ms: 412, requests: 860 },
   { name: 'maven-central', url: 'https://repo1.maven.org/maven2/', state: 'healthy', latency_ms: 64, requests: 312 },
   { name: 'pypi-proxy', url: 'https://pypi.org', state: 'unknown', latency_ms: null, requests: 0 },
-  { name: 'ghcr-proxy', url: 'https://ghcr.io', state: 'blocked', latency_ms: null, requests: 0 },
+  // The remote refuses the configured credentials (401).
+  { name: 'ghcr-proxy', url: 'https://ghcr.io', state: 'blocked', reason: 'auth_failed', latency_ms: null, requests: 0 },
 ];
 
 /** Fewer remote requests in shorter ranges; the hour may have none. */
@@ -311,6 +312,7 @@ export function repositories(): Repository[] {
     },
     url: repositoryUrl(format, name),
     status,
+    ...(status === 'blocked' ? { status_reason: upstreams.find((u) => u.name === name)?.reason } : {}),
     size_bytes: Math.round(bytes),
     component_count: Math.round(bytes / (40 * 1e6)),
     created_at: created,

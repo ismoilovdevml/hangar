@@ -412,10 +412,12 @@ func (m *Manager) build(name string, cfg *core.ProxyConfig, fp string) (*upstrea
 			MaxRequests: 1,
 			Timeout:     openFor,
 			ReadyToTrip: func(c gobreaker.Counts) bool { return int64(c.ConsecutiveFailures) >= int64(failures) },
-			// A caller giving up, a blocked address or a rate limit says
-			// nothing about the remote being down.
+			// A caller giving up, a blocked address, a rate limit or a
+			// repeat of a DNS failure already counted says nothing (new)
+			// about the remote being down.
 			IsExcluded: func(err error) bool {
-				return errors.Is(err, context.Canceled) || errors.Is(err, ErrBlocked) || errors.Is(err, errThrottled)
+				return errors.Is(err, context.Canceled) || errors.Is(err, ErrBlocked) || errors.Is(err, errThrottled) ||
+					errors.Is(err, errDNSBurst)
 			},
 		})
 	}

@@ -83,6 +83,10 @@ type Options struct {
 	// DialAllowHost, when set, exempts host names from DialGuard (allow-listed
 	// internal mirrors, which resolve to internal addresses by design).
 	DialAllowHost func(host string) bool
+	// DNS, when set, resolves the host names of every connection (remotes
+	// and outbound proxies) through this cache instead of asking the system
+	// resolver on each dial. DialGuard still checks each address dialled.
+	DNS *DNSCache
 
 	// environ overrides os.Getenv for tests.
 	environ func(string) string
@@ -550,11 +554,20 @@ func (f *Factory) transport(cfg core.UpstreamHTTP, remoteHost string) (*http.Tra
 }
 
 // dialContext returns the transport's dial function: plain for connections to
-// a configured proxy, guarded by DialGuard for everything else.
+// a configured proxy, guarded by DialGuard for everything else. With
+// Options.DNS, host names are resolved through the cache.
 func (f *Factory) dialContext(timeout time.Duration) func(ctx context.Context, network, addr string) (net.Conn, error) {
 	plain := &net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second}
+	dial := func(ctx context.Context, d *net.Dialer, network, addr string) (net.Conn, error) {
+		if f.opts.DNS == nil {
+			return d.DialContext(ctx, network, addr)
+		}
+		return dialCached(ctx, d, f.opts.DNS, timeout, network, addr)
+	}
 	if f.opts.DialGuard == nil {
-		return plain.DialContext
+		return func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return dial(ctx, plain, network, addr)
+		}
 	}
 	guard := f.opts.DialGuard
 	guarded := &net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second,
@@ -575,9 +588,9 @@ func (f *Factory) dialContext(timeout time.Duration) func(ctx context.Context, n
 		toProxy := f.proxyAddrs[strings.ToLower(addr)]
 		f.mu.Unlock()
 		if toProxy || (f.opts.DialAllowHost != nil && f.opts.DialAllowHost(strings.ToLower(strings.TrimSuffix(host, ".")))) {
-			return plain.DialContext(ctx, network, addr)
+			return dial(ctx, plain, network, addr)
 		}
-		return guarded.DialContext(ctx, network, addr)
+		return dial(ctx, guarded, network, addr)
 	}
 }
 

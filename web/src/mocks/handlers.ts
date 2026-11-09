@@ -337,6 +337,21 @@ export const handlers = [
     const invalid = validateRepository(body);
     if (invalid) return error(400, { code: 'invalid_argument', message: invalid });
     const config = structuredClone(body.config);
+    // Upstream auth: left out keeps the stored credentials, null removes them,
+    // and they never follow the remote to another host unless resent.
+    const oldAuth = old.config.proxy?.auth;
+    if (config.proxy && oldAuth) {
+      const sent = config.proxy.auth;
+      const moved = new URL(config.proxy.remote_url).origin !== new URL(old.config.proxy?.remote_url ?? '').origin;
+      if (moved && sent !== null && !sent?.password && !sent?.token) {
+        return error(400, {
+          code: 'invalid_argument',
+          message: 'config.proxy.remote_url moves to another host: resend config.proxy.auth with its password or token, or set "auth": null',
+        });
+      }
+      if (sent === undefined) config.proxy.auth = oldAuth;
+      if (sent === null) delete config.proxy.auth;
+    }
     if (config.proxy?.auth) config.proxy.auth = { ...config.proxy.auth, password: undefined, token: undefined };
     const online = body.online ?? true;
     const repo: Repository = {

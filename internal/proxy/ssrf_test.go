@@ -140,8 +140,8 @@ func TestFetchBlocksInternalRemotes(t *testing.T) {
 		if !errors.Is(err, ErrBlocked) || !errors.Is(err, core.ErrUpstream) {
 			t.Errorf("%s: want ErrBlocked+ErrUpstream, got %v", remote, err)
 		}
-		if st := m.Health(repo).State; st != StateBlocked {
-			t.Errorf("%s: state %s, want blocked", remote, st)
+		if h := m.Health(repo); h.State != StateBlocked || h.Reason != ReasonAddressBlocked {
+			t.Errorf("%s: %+v, want blocked by address_blocked", remote, h)
 		}
 	}
 	if hits.Load() != 0 {

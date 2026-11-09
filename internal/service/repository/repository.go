@@ -333,6 +333,7 @@ func (s *Service) Update(ctx context.Context, in *core.Repository) (*core.Reposi
 	if err != nil {
 		return nil, err
 	}
+	var details map[string]any
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := lockGroups(ctx, tx, r); err != nil {
 			return err
@@ -370,6 +371,7 @@ SELECT r.id::text, r.format, r.type, coalesce(bs.name, ''), r.config
 		if err != nil {
 			return err
 		}
+		details = authChange(oldCfg, r.Config)
 		if _, err := tx.Exec(ctx, `
 UPDATE repositories SET description = $2, config = $3, online = $4, updated_at = now() WHERE id = $1`,
 			id, r.Description, cfg, r.Online); err != nil {
@@ -394,7 +396,7 @@ UPDATE repositories SET description = $2, config = $3, online = $4, updated_at =
 	if err != nil {
 		return nil, err
 	}
-	s.record(ctx, "repository.update", r.Name, core.OutcomeSuccess, nil)
+	s.record(ctx, "repository.update", r.Name, core.OutcomeSuccess, details)
 	s.publish(ctx, core.EventRepositoryUpdated, out)
 	return out, nil
 }
@@ -734,6 +736,35 @@ func (s *Service) authorize(ctx context.Context, action, name string) error {
 		s.record(ctx, action, name, core.OutcomeDenied, nil)
 	}
 	return err
+}
+
+// authChange summarises for the audit log, without any secret, what an
+// update does to a proxy repository's upstream credentials: added, removed,
+// replaced or unchanged. Nil when there are none before or after.
+func authChange(oldCfg []byte, next core.RepoConfig) map[string]any {
+	var old core.RepoConfig
+	_ = json.Unmarshal(oldCfg, &old)
+	var before, after *core.UpstreamAuth
+	if old.Proxy != nil {
+		before = old.Proxy.Auth
+	}
+	if next.Proxy != nil {
+		after = next.Proxy.Auth
+	}
+	var change string
+	switch {
+	case before == nil && after == nil:
+		return nil
+	case before == nil:
+		change = "added"
+	case after == nil:
+		change = "removed"
+	case *before == *after: // sealed secrets sent back unchanged stay byte-identical
+		change = "unchanged"
+	default:
+		change = "replaced"
+	}
+	return map[string]any{"upstream_auth": change}
 }
 
 func (s *Service) record(ctx context.Context, action, name, outcome string, details map[string]any) {
