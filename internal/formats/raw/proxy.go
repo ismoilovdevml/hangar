@@ -100,7 +100,7 @@ func (h *handler) fetch(ctx context.Context, repo *core.Repository, clean string
 	if err != nil {
 		return fillResult{}, err
 	}
-	req := core.UpstreamRequest{Method: http.MethodGet, Path: escapePath(clean)}
+	req := core.UpstreamRequest{Method: http.MethodGet, Path: escapePath(clean), Package: clean}
 	if cached != nil {
 		req.Conditional.ETag = attrString(cached, attrUpstreamETag)
 		req.Conditional.LastModified, _ = attrTime(cached, attrUpstreamLastModified)

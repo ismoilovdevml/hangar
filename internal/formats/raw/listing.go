@@ -88,6 +88,7 @@ type dirEntry struct {
 type dirIter struct {
 	svc     core.ComponentService
 	repo    *core.Repository
+	allow   func(path string) bool // routing rules; nil allows every entry
 	prefix  string
 	floor   string // keys <= floor are skipped
 	cursor  string // store cursor of the page in items
@@ -139,7 +140,7 @@ func (it *dirIter) peek(ctx context.Context) (*dirEntry, error) {
 			it.log = nil // once per iterator
 		}
 		it.seen = max(it.seen, key)
-		if !ok || key == "" || key == "/" || key <= it.floor {
+		if !ok || key == "" || key == "/" || key <= it.floor || (it.allow != nil && !it.allow(it.prefix+key)) {
 			it.idx++
 			continue
 		}
@@ -157,13 +158,16 @@ func (it *dirIter) state() iterState {
 
 // collect returns up to limit entries of directory prefix merged across
 // leaves, and the cursor of the next page ("" when there is none).
-func (h *handler) collect(ctx context.Context, leaves []*core.Repository, prefix string, cur listCursor, limit int) ([]dirEntry, string, error) {
+// Entries the routing rules keep from a leaf are left out of its listing (a
+// directory entry is checked as "dir/").
+func (h *handler) collect(ctx context.Context, leaves []leaf, prefix string, cur listCursor, limit int) ([]dirEntry, string, error) {
 	scanned := 0
 	iters := make([]*dirIter, len(leaves))
 	for i, leaf := range leaves {
 		st := cur.Members[leaf.ID]
 		iters[i] = &dirIter{
-			svc: h.deps.Components, repo: leaf, prefix: prefix, floor: cur.Key,
+			svc: h.deps.Components, repo: leaf.Repository, prefix: prefix, floor: cur.Key,
+			allow: func(path string) bool { return leaf.serves(ctx, path) == nil },
 			// The first fetch re-reads the page the previous request stopped in.
 			next: st.Cursor, done: st.Done, scanned: &scanned, log: h.deps.Logger,
 		}
