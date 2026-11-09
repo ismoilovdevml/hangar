@@ -100,7 +100,7 @@ type UpstreamRequest struct {
 	// addition to ProxyConfig.RelatedHosts: format defaults (PyPI's
 	// file_hosts) or hosts the remote itself declared (a NuGet service index).
 	RelatedHosts []string
-	// Body is the request body of a POST.
+	// Body is the request body of a POST (required there, refused elsewhere).
 	Body []byte
 	// Header is added to the outgoing request (e.g. Accept for OCI manifests).
 	Header      http.Header

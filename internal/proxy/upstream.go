@@ -135,8 +135,8 @@ func (u *upstream) Fetch(ctx context.Context, req core.UpstreamRequest) (*core.U
 	if method != http.MethodGet && method != http.MethodHead && !post {
 		return nil, fmt.Errorf("upstream method %q: want GET, HEAD or POST: %w", method, core.ErrInvalid)
 	}
-	if req.Body != nil && !post {
-		return nil, fmt.Errorf("upstream %s request with a body: %w", method, core.ErrInvalid)
+	if (req.Body != nil) != post {
+		return nil, fmt.Errorf("upstream %s request: only POST carries a body, and always: %w", method, core.ErrInvalid)
 	}
 	target, primary, err := u.target(req)
 	if err != nil {
