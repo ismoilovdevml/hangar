@@ -22,6 +22,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/quarantine"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 	"github.com/ismoilovdevml/hangar/internal/routing"
 )
@@ -226,6 +227,9 @@ func (h *handler) resolve(ctx context.Context, repo *core.Repository, mp *mavenP
 	switch repo.Type {
 	case core.RepoHosted:
 		if mp.kind == kindMetadata {
+			if err := h.checkVersionQuarantine(ctx, repo, mp); err != nil {
+				return nil, err
+			}
 			return h.hostedMetadata(ctx, repo, mp)
 		}
 		a, err := h.deps.Components.GetAsset(ctx, repo.ID, mp.path)
@@ -234,7 +238,16 @@ func (h *handler) resolve(ctx context.Context, repo *core.Repository, mp *mavenP
 		}
 		return assetEntity(repo, a), nil
 	case core.RepoProxy:
-		return h.resolveProxy(ctx, repo, mp)
+		if mp.kind == kindMetadata {
+			if err := h.checkVersionQuarantine(ctx, repo, mp); err != nil {
+				return nil, err
+			}
+		}
+		e, err := h.resolveProxy(ctx, repo, mp)
+		if err != nil || mp.kind != kindMetadata || mp.version != "" || mp.artifactID == "" {
+			return e, err
+		}
+		return h.withoutQuarantined(ctx, repo, mp, e)
 	case core.RepoGroup:
 		return h.resolveGroup(ctx, repo, mp, depth)
 	}
@@ -348,6 +361,53 @@ func (h *handler) versions(ctx context.Context, repo *core.Repository, groupID, 
 		}
 		q.Cursor = page.NextCursor
 	}
+}
+
+// checkVersionQuarantine refuses the version-level maven-metadata.xml of a
+// quarantined version (the SNAPSHOT build list): it would only lead the
+// client to files it cannot download.
+func (h *handler) checkVersionQuarantine(ctx context.Context, repo *core.Repository, mp *mavenPath) error {
+	if mp.version == "" {
+		return nil
+	}
+	c, err := h.deps.Components.GetComponent(ctx, repo.ID, mp.groupID, mp.artifactID, mp.version)
+	if err == nil && c.Quarantined {
+		return fmt.Errorf("%s:%s:%s is quarantined by a security policy: %w", c.Namespace, c.Name, c.Version, core.ErrQuarantined)
+	}
+	if err != nil && !errors.Is(err, core.ErrNotFound) {
+		return err
+	}
+	return nil
+}
+
+// withoutQuarantined removes the versions quarantined in a proxy repository
+// from the remote's artifact-level maven-metadata.xml, so version ranges,
+// LATEST and RELEASE resolve to versions that can be downloaded. The
+// document is served unchanged when nothing in it is quarantined.
+func (h *handler) withoutQuarantined(ctx context.Context, repo *core.Repository, mp *mavenPath, e *entity) (*entity, error) {
+	blocked, err := quarantine.Versions(ctx, h.deps.Components, repo.ID, &mp.groupID, mp.artifactID)
+	if err != nil || len(blocked) == 0 {
+		return e, err
+	}
+	doc, err := h.readMetadata(ctx, e)
+	if err != nil || doc.Versioning == nil {
+		return e, nil //nolint:nilerr // not a version list: nothing to filter
+	}
+	v := doc.Versioning
+	kept := v.Versions[:0:0]
+	for _, ver := range v.Versions {
+		if !blocked[ver] {
+			kept = append(kept, ver)
+		}
+	}
+	if len(kept) == len(v.Versions) && !blocked[v.Latest] && !blocked[v.Release] {
+		return e, nil
+	}
+	v.Versions = kept
+	sorted := append([]string(nil), kept...)
+	sortVersions(sorted)
+	v.Latest, v.Release = latestAndRelease(sorted)
+	return dataEntity(doc.Marshal(), contentType(metadataFile), e.lastModified()), nil
 }
 
 // readMetadata parses the metadata document e holds.
