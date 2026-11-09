@@ -61,6 +61,8 @@ During shutdown a node answers 503 on purpose (draining).
 | `501` when saving a proxy repository with credentials or a blob store with keys | No `security.secret_key`. | Set `HANGAR_SECRET_KEY` on every node and restart ([security.md](../security.md)). |
 | Proxy repository shows offline; logs `x509: certificate signed by unknown authority` | TLS-inspecting corporate proxy or private CA. | `http.ca_file` ([corporate-proxy.md](corporate-proxy.md)). |
 | Proxy repository to an internal host is refused | Outbound address policy (SSRF guard). | `http.allow_private_networks`. |
+| Proxy repository shows *authentication failed (401)* or *access denied (403)* | The remote refuses the repository's upstream credentials (wrong, expired or missing token; too few rights). | Update the credentials in the repository's settings. |
+| Groups answer 502 during CI bursts; logs show DNS `i/o timeout` | The DNS servers time out under the load. | Keep `http.dns.cache` on (default) and watch `hangar_upstream_dns_errors_total` ([corporate-proxy.md](corporate-proxy.md#dns-cache)). |
 | `/metrics` reachable from the Internet | The public host routes everything to Hangar. | Block it at the proxy (the shipped Caddy, Traefik and Helm examples do). |
 
 ## Storage
