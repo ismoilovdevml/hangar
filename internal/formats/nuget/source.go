@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/quarantine"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 	"github.com/ismoilovdevml/hangar/internal/routing"
 )
@@ -52,8 +53,12 @@ func (h *handler) entries(ctx context.Context, repo *core.Repository, lid string
 		if err != nil {
 			return nil, err
 		}
+		blocked, err := h.blockedVersions(ctx, repo, lid)
+		if err != nil {
+			return nil, err
+		}
 		for _, c := range cats {
-			if e, ok := catalogEntry(c); ok {
+			if e, ok := catalogEntry(c); ok && !blocked[e.ver.Lower()] {
 				out = append(out, e)
 			}
 		}
@@ -103,7 +108,15 @@ func (h *handler) versions(ctx context.Context, repo *core.Repository, lid strin
 		if err != nil {
 			return nil, err
 		}
-		out = vs
+		blocked, err := h.blockedVersions(ctx, repo, lid)
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range vs {
+			if !blocked[v.Lower()] {
+				out = append(out, v)
+			}
+		}
 	case core.RepoGroup:
 		err := h.eachMember(ctx, repo, depth, lid, func(m *core.Repository) error {
 			vs, err := h.versions(ctx, m, lid, depth+1)
@@ -220,9 +233,19 @@ func (h *handler) eachMember(ctx context.Context, group *core.Repository, depth 
 	return first
 }
 
-// components lists the versions of lid in a hosted (or proxy cache) repository.
+// components lists the versions of lid in a hosted (or proxy cache)
+// repository, without quarantined ones: a version a client cannot download
+// is not advertised either.
 func (h *handler) components(ctx context.Context, repo *core.Repository, lid string) ([]*core.Component, error) {
-	return h.listComponents(ctx, core.ComponentQuery{RepositoryID: repo.ID, Name: lid})
+	comps, err := h.listComponents(ctx, core.ComponentQuery{RepositoryID: repo.ID, Name: lid})
+	return quarantine.Drop(comps), err
+}
+
+// blockedVersions returns the quarantined versions of lid cached in a proxy
+// repository; they are left out of the upstream's lists.
+func (h *handler) blockedVersions(ctx context.Context, repo *core.Repository, lid string) (map[string]bool, error) {
+	empty := ""
+	return quarantine.Versions(ctx, h.deps.Components, repo.ID, &empty, lid)
 }
 
 func (h *handler) listComponents(ctx context.Context, q core.ComponentQuery) ([]*core.Component, error) {

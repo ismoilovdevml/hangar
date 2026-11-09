@@ -356,3 +356,15 @@ func (s *Components) Downloads() int {
 	defer s.mu.RUnlock()
 	return s.downloads
 }
+
+// SetQuarantined sets the quarantine flag of a stored component, as the
+// scanner does. It reports whether the component exists.
+func (s *Components) SetQuarantined(id string, quarantined bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.components[id]
+	if ok {
+		c.Quarantined = quarantined
+	}
+	return ok
+}

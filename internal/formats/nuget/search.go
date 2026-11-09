@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/quarantine"
 	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
@@ -180,7 +181,8 @@ func (h *handler) searchHosted(ctx context.Context, repo *core.Repository, q sea
 func (h *handler) searchCandidates(ctx context.Context, repo *core.Repository, q searchQuery) ([]*core.Component, error) {
 	searcher, ok := h.deps.Components.(core.ComponentSearcher)
 	if !ok || strings.TrimSpace(q.q) == "" {
-		return h.listComponents(ctx, core.ComponentQuery{RepositoryID: repo.ID})
+		comps, err := h.listComponents(ctx, core.ComponentQuery{RepositoryID: repo.ID})
+		return quarantine.Drop(comps), err
 	}
 	empty := ""
 	comps, truncated, err := searcher.SearchComponents(ctx, core.ComponentTextQuery{
@@ -193,7 +195,7 @@ func (h *handler) searchCandidates(ctx context.Context, repo *core.Repository, q
 		h.log().WarnContext(ctx, "nuget search matched too many packages; results truncated",
 			"repository", repo.Name, "query", q.q, "limit", maxSearchPackages)
 	}
-	return comps, nil
+	return quarantine.Drop(comps), nil
 }
 
 // matchTerms reports whether every term matches the package. Terms may be
@@ -454,6 +456,12 @@ func (h *handler) searchProxy(ctx context.Context, repo *core.Repository, q sear
 	}
 	hits := make([]hit, 0, len(res.Data))
 	total := res.TotalHits
+	var blocked map[string]map[string]bool // lid -> quarantined versions cached here
+	if len(res.Data) > 0 {
+		if blocked, err = h.quarantinedByID(ctx, repo); err != nil {
+			return 0, nil, err
+		}
+	}
 	for _, d := range res.Data {
 		id, _ := d["id"].(string)
 		if id == "" {
@@ -463,7 +471,67 @@ func (h *handler) searchProxy(ctx context.Context, repo *core.Repository, q sear
 			total--
 			continue
 		}
-		hits = append(hits, hit{lid: lowerID(id), doc: d})
+		lid := lowerID(id)
+		if b := blocked[lid]; len(b) > 0 {
+			var ok bool
+			if d, ok = dropVersions(d, b); !ok {
+				total--
+				continue
+			}
+		}
+		hits = append(hits, hit{lid: lid, doc: d})
 	}
 	return total, hits, nil
+}
+
+// quarantinedByID returns the quarantined versions cached in a proxy
+// repository, by package id.
+func (h *handler) quarantinedByID(ctx context.Context, repo *core.Repository) (map[string]map[string]bool, error) {
+	comps, err := quarantine.Components(ctx, h.deps.Components, repo.ID)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]map[string]bool{}
+	for _, c := range comps {
+		if out[c.Name] == nil {
+			out[c.Name] = map[string]bool{}
+		}
+		out[c.Name][c.Version] = true
+	}
+	return out, nil
+}
+
+// dropVersions removes the blocked versions from an upstream search result
+// and points "version" at the newest remaining one. It reports false when
+// no version remains.
+func dropVersions(doc map[string]any, blocked map[string]bool) (map[string]any, bool) {
+	vs, _ := doc["versions"].([]any)
+	kept := make([]any, 0, len(vs))
+	var best Version
+	hasBest := false
+	for _, v := range vs {
+		vm, ok := v.(map[string]any)
+		if !ok {
+			continue
+		}
+		s, _ := vm["version"].(string)
+		pv, err := ParseVersion(s)
+		if err != nil || blocked[pv.Lower()] {
+			continue
+		}
+		kept = append(kept, vm)
+		if !hasBest || pv.Compare(best) > 0 {
+			best, hasBest = pv, true
+		}
+	}
+	if !hasBest {
+		return nil, false
+	}
+	out := make(map[string]any, len(doc))
+	for k, v := range doc {
+		out[k] = v
+	}
+	out["versions"] = kept
+	out["version"] = best.Full()
+	return out, true
 }
