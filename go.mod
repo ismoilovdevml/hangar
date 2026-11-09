@@ -72,6 +72,7 @@ require (
 	github.com/sethvargo/go-retry v0.5.0 // indirect
 	github.com/sirupsen/logrus v1.10.2 // indirect
 	github.com/tinylib/msgp v1.6.4 // indirect
+	github.com/ulikunitz/xz v0.5.15 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.47.0 // indirect
