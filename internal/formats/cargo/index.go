@@ -17,6 +17,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // indexDep is one dependency of an index entry.
@@ -199,7 +200,7 @@ func (h *handler) groupIndex(ctx context.Context, repo *core.Repository, name st
 	seen := map[string]bool{}
 	found := false
 	var lastErr error
-	err := h.eachMember(ctx, repo, depth, func(m *core.Repository) error {
+	err := h.eachMember(ctx, repo, depth, name, func(m *core.Repository) error {
 		f, err := h.indexOf(ctx, m, name, depth+1)
 		if errors.Is(err, core.ErrNotFound) {
 			return nil
@@ -229,12 +230,23 @@ func (h *handler) groupIndex(ctx context.Context, repo *core.Repository, name st
 	return out, nil
 }
 
-// eachMember calls fn for every online cargo member of group, in order.
-func (h *handler) eachMember(ctx context.Context, group *core.Repository, depth int, fn func(*core.Repository) error) error {
+// eachMember calls fn for every online cargo member of group, in order,
+// that the group's routing rules let serve crate ("" for every member:
+// callers merging many crates filter with routing.Allows). When the rules
+// exclude every member the error is the *core.RoutingBlock.
+func (h *handler) eachMember(ctx context.Context, group *core.Repository, depth int, crate string, fn func(*core.Repository) error) error {
 	if depth >= maxGroupDepth {
 		return fmt.Errorf("group %q nests deeper than %d levels: %w", group.Name, maxGroupDepth, core.ErrInvalid)
 	}
-	members, err := h.deps.Repos.Members(ctx, group)
+	var (
+		members []*core.Repository
+		err     error
+	)
+	if crate == "" {
+		members, err = h.deps.Repos.Members(ctx, group)
+	} else {
+		members, err = routing.Members(ctx, h.deps.Repos, group, crate)
+	}
 	if err != nil {
 		return err
 	}
