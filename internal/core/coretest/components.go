@@ -116,6 +116,9 @@ func (s *Components) Publish(ctx context.Context, repo *core.Repository, req cor
 			comp.ID = newID()
 			comp.RepositoryID = repo.ID
 			comp.CreatedAt = now
+			if at, ok := core.PublishedAtFrom(ctx); ok {
+				comp.CreatedAt = at
+			}
 			comp.PublishedBy = principal
 			s.components[comp.ID] = comp
 		} else if len(req.Component.Attributes) > 0 {

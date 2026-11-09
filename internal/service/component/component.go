@@ -380,15 +380,23 @@ func upsertComponent(ctx context.Context, tx pgx.Tx, repo *core.Repository, in *
 		attrs = map[string]any{}
 	}
 	c, err := scanComponent(tx.QueryRow(ctx, `
-INSERT INTO components AS c (repo_id, namespace, name, version, published_by, attributes)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO components AS c (repo_id, namespace, name, version, published_by, attributes, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, coalesce($7, now()))
 ON CONFLICT (repo_id, namespace, name, version)
 DO UPDATE SET attributes = c.attributes || EXCLUDED.attributes
-RETURNING `+componentCols, repo.ID, in.Namespace, in.Name, in.Version, principal, attrs))
+RETURNING `+componentCols, repo.ID, in.Namespace, in.Name, in.Version, principal, attrs, publishedAt(ctx)))
 	if err != nil {
 		return nil, mapErr(fmt.Sprintf("component %s", componentTarget(repo, in)), err)
 	}
 	return c, nil
+}
+
+// publishedAt is the creation time core.WithPublishedAt asks for, or nil (now).
+func publishedAt(ctx context.Context) *time.Time {
+	if t, ok := core.PublishedAtFrom(ctx); ok {
+		return &t
+	}
+	return nil
 }
 
 func checkComponent(ctx context.Context, tx pgx.Tx, repoID, id string) error {
