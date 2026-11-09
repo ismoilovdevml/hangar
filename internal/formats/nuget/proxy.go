@@ -30,6 +30,8 @@ type upstreamResources struct {
 	Flat         string // PackageBaseAddress/3.0.0, trailing slash
 	Registration string // best registrations hive, trailing slash
 	Search       string // SearchQueryService
+	// Vulnerability is the VulnerabilityInfo index ("" when the remote has none).
+	Vulnerability string
 	// Hosts are the hosts of every resource in the service index. The remote
 	// declares them, so they are trusted as related hosts of the repository
 	// (nuget.org serves search from azuresearch-*.nuget.org).
@@ -76,9 +78,10 @@ func parseServiceIndex(b []byte) (*upstreamResources, error) {
 		return s
 	}
 	res := &upstreamResources{
-		Flat:         slash(find("PackageBaseAddress/3.0.0")),
-		Registration: slash(find(registrationTypes...)),
-		Search:       find(searchTypes...),
+		Flat:          slash(find("PackageBaseAddress/3.0.0")),
+		Registration:  slash(find(registrationTypes...)),
+		Search:        find(searchTypes...),
+		Vulnerability: find(vulnerabilityType),
 	}
 	if res.Flat == "" {
 		return nil, fmt.Errorf("upstream service index has no PackageBaseAddress/3.0.0: %w", core.ErrUpstream)

@@ -58,7 +58,9 @@ func TestSnapshotReplaceAtomic(t *testing.T) {
 }
 
 // get and put are goroutine-safe variants of fixture.do.
-func (f *fixture) get(repoPath, auth string) (int, string) { return f.send(http.MethodGet, repoPath, auth, "") }
+func (f *fixture) get(repoPath, auth string) (int, string) {
+	return f.send(http.MethodGet, repoPath, auth, "")
+}
 
 func (f *fixture) put(repoPath, auth, body string) (int, string) {
 	return f.send(http.MethodPut, repoPath, auth, body)

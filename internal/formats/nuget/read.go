@@ -71,6 +71,9 @@ func (h *handler) serviceIndex(w http.ResponseWriter, r *http.Request) {
 	add(base+"v3/"+hiveGzSemVer2+"/", "Package metadata, gzip, SemVer 2.0.0 versions included", "RegistrationsBaseUrl/3.6.0")
 	add(base+"query", "Search",
 		"SearchQueryService", "SearchQueryService/3.0.0-beta", "SearchQueryService/3.0.0-rc", "SearchQueryService/3.5.0")
+	if h.hasVulnerabilities(repo) {
+		add(base+"vulnerabilities/index.json", "Known vulnerabilities, for NuGet Audit", vulnerabilityType)
+	}
 	if _, err := h.writeTarget(r.Context(), repo); err == nil {
 		add(base+"api/v2/package", "Push, unlist and relist", "PackagePublish/2.0.0")
 		add(base+"api/v2/symbolpackage", "Symbol package push", "SymbolPackagePublish/4.9.0")

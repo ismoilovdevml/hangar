@@ -29,6 +29,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/events"
 	"github.com/ismoilovdevml/hangar/internal/formats/builtin"
 	"github.com/ismoilovdevml/hangar/internal/formats/docker"
+	"github.com/ismoilovdevml/hangar/internal/formats/nuget"
 	"github.com/ismoilovdevml/hangar/internal/health"
 	"github.com/ismoilovdevml/hangar/internal/httpclient"
 	"github.com/ismoilovdevml/hangar/internal/observability"
@@ -609,6 +610,11 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	go func() { scanner.Run(sweepCtx); close(sweepDone) }()
 	a.onClose(func() { stopSweep(); <-sweepDone })
 	restAPI.Scanning = scanner
+	if f, ok := reg.Get(nuget.Name); ok && scanner.Enabled() {
+		if nf, ok := f.(*nuget.Format); ok {
+			nf.SetAdvisories(nugetAdvisories{scanner: scanner})
+		}
+	}
 
 	// Tasks: scheduled maintenance, cleanup policies and docker GC, executed
 	// as task runs on any node. Close hands running runs back to the queue
