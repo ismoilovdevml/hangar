@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.7 (2026-11-09)
+
 - **Releases are tested before they are published**: the release workflow
   runs `go test -race` against PostgreSQL, golangci-lint, the web lint,
   typecheck, unit tests and build, the installer tests and `helm lint` on
