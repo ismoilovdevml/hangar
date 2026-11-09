@@ -193,6 +193,10 @@ fails, and npm prints `audit endpoint returned an error`, when:
   request names a version Hangar stores (503);
 - a proxy's remote cannot answer the audit (502).
 
+npm 10 and earlier hide audit endpoint errors and print `found 0
+vulnerabilities` whatever the registry answers. Use npm 11 or later (or
+pnpm) where the audit result matters.
+
 ### `npm search`
 
 `npm search <text>` works on every repository type: hosted repositories search

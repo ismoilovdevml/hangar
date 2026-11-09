@@ -175,9 +175,14 @@ func TestHelmClientHosted(t *testing.T) {
 	if !strings.Contains(out, "kind: Deployment") || !strings.Contains(out, "rel-demo") {
 		t.Fatalf("template:\n%s", out)
 	}
-	out = c.run("install", "rel", "hangar/demo", "--dry-run=client", "--version", "0.2.0")
-	if !strings.Contains(out, "kind: Deployment") {
-		t.Fatalf("install --dry-run:\n%s", out)
+	// Helm 3 contacts the cluster even for a client dry run; Helm 4 does not.
+	if v, _ := c.try("version", "--short"); strings.HasPrefix(strings.TrimSpace(v), "v3.") {
+		t.Logf("helm %s: install --dry-run=client needs a cluster, checked with helm template only", strings.TrimSpace(v))
+	} else {
+		out = c.run("install", "rel", "hangar/demo", "--dry-run=client", "--version", "0.2.0")
+		if !strings.Contains(out, "kind: Deployment") {
+			t.Fatalf("install --dry-run:\n%s", out)
+		}
 	}
 
 	// A new version shows up after helm repo update.

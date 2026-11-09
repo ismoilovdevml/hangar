@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -340,14 +341,39 @@ func TestRealNpmAudit(t *testing.T) {
 		}
 	}
 
-	// Not scanned: npm says the audit failed, never "found 0".
+	// Not scanned: Hangar refuses the audit, and npm 11 says the audit
+	// failed. npm 10 and earlier swallow audit endpoint errors and print
+	// "found 0 vulnerabilities" whatever the registry answers.
 	sc.mu.Lock()
 	sc.status["@acme/ui@1.0.0"] = ""
 	sc.mu.Unlock()
+	if r := ts.do(t, http.MethodPost, "/repository/npm-all/-/npm/v1/security/advisories/bulk", "alice",
+		strings.NewReader(`{"@acme/ui":["1.0.0"]}`)); r.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("bulk audit of an unscanned hosted version = %d, want 503", r.StatusCode)
+	}
+	if npmMajor(t, npmBin) < 11 {
+		t.Logf("npm %d hides audit endpoint errors; the 503 above is the check", npmMajor(t, npmBin))
+		return
+	}
 	out, err = c.run(t, dir, npmBin, "audit", "--registry", group)
 	if err == nil || strings.Contains(out, "found 0 vulnerabilities") || !strings.Contains(out, "audit endpoint returned an error") {
 		t.Fatalf("npm audit with an unscanned hosted version:\n%s", out)
 	}
+}
+
+// npmMajor is the major version of the npm client at bin.
+func npmMajor(t *testing.T, bin string) int {
+	t.Helper()
+	out, err := exec.Command(bin, "--version").Output()
+	if err != nil {
+		t.Fatalf("npm --version: %v", err)
+	}
+	major, _, _ := strings.Cut(strings.TrimSpace(string(out)), ".")
+	n, err := strconv.Atoi(major)
+	if err != nil {
+		t.Fatalf("npm --version = %q", out)
+	}
+	return n
 }
 
 func sha1Hex(b []byte) string {
