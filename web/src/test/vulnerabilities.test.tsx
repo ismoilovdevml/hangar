@@ -268,6 +268,55 @@ describe('vulnerabilities', () => {
     expect(within(screen.getByRole('region', { name: 'Version' })).getByText('Image scanning not configured')).toBeInTheDocument();
   });
 
+  it('shows image findings from Trivy with rebuild advice', async () => {
+    findingsState.images = true;
+    const user = userEvent.setup();
+    renderApp('/vulnerabilities');
+    expect(await screen.findByText(/9 scanned · OSV \+ Trivy · checked 40 min ago/)).toBeInTheDocument();
+    const table = await plan();
+    const image = await waitFor(() => row('auth-gateway'));
+    expect(within(image).getByText('3.2.0')).toBeInTheDocument();
+    expect(within(image).getByText('Rebuild · 3 packages')).toBeInTheDocument();
+    expect(within(image).getByText('1 without a fix')).toBeInTheDocument();
+    await user.click(within(image).getByRole('button', { name: 'Copy the Dockerfile line for auth-gateway' }));
+    expect(await navigator.clipboard.readText()).toBe('RUN apk upgrade --no-cache libcrypto3 libssl3');
+
+    await user.click(within(table).getByRole('button', { name: 'Show the 4 findings of auth-gateway' }));
+    const list = within(table).getByRole('list', { name: 'Findings of auth-gateway' });
+    expect(within(list).getByText('stdlib@1.22.3')).toBeInTheDocument();
+    expect(within(list).getByText('usr/local/bin/auth-gateway · layer 7e1f2c3d4b5a · linux/amd64, linux/arm64')).toBeInTheDocument();
+    expect(within(list).getAllByText('docker-prod · 3.2.0')).toHaveLength(4);
+    expect(
+      within(table).getByText(
+        'Rebuild on an updated alpine 3.20.2 image, or upgrade in the Dockerfile: libcrypto3 3.3.2-r0 · libssl3 3.3.2-r0. Upgrade in the application, then rebuild: stdlib 1.22.4.',
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(within(list).getByText('libssl3@3.3.1-r0').closest('button')!);
+    const drawer = await screen.findByRole('dialog', { name: 'openssl: Possible denial of service in X.509 name checks' });
+    const fix = within(drawer).getByRole('note', { name: 'How to fix' });
+    expect(fix).toHaveTextContent('Rebuild auth-gateway:3.2.0 on a base image that ships libssl3 3.3.2-r0 or later, or upgrade it in the Dockerfile.');
+    expect(within(fix).getByText('RUN apk upgrade --no-cache libssl3')).toBeInTheDocument();
+    expect(within(drawer).getByText('alpine 3.20.2 · layer 396c31837116 · linux/amd64, linux/arm64')).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: 'auth-gateway:3.2.0' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: /Full advisory/ })).toHaveAttribute('href', 'https://avd.aquasec.com/nvd/cve-2024-6119');
+  });
+
+  it('explains image findings without a fix and lists them on the image page', async () => {
+    findingsState.images = true;
+    const user = userEvent.setup();
+    renderApp('/vulnerabilities?finding=f_i3');
+    const drawer = await screen.findByRole('dialog', { name: 'busybox: use-after-free in awk' });
+    expect(within(drawer).getByRole('note', { name: 'How to fix' })).toHaveTextContent('alpine 3.20.2 has no fixed busybox yet.');
+    await user.keyboard('{Escape}');
+
+    renderApp('/browse?repo=docker-prod&name=auth-gateway&version=3.2.0');
+    await user.click(await screen.findByRole('tab', { name: 'Vulnerabilities' }));
+    const vulns = screen.getByRole('table', { name: 'Vulnerabilities' });
+    expect(within(vulns).getByText('stdlib@1.22.3')).toBeInTheDocument();
+    expect(within(vulns).getByText('usr/local/bin/auth-gateway · layer 7e1f2c3d4b5a · linux/amd64, linux/arm64')).toBeInTheDocument();
+  });
+
   it('shows the findings of a scanned package', async () => {
     const user = userEvent.setup();
     renderApp('/browse?repo=npm-internal&ns=%40acme&name=ui-kit&version=5.3.0');
