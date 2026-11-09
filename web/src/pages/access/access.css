@@ -116,7 +116,10 @@ select.input--sm { padding-right: 32px; background-position: right 10px center; 
   background: var(--code-bg); color: var(--code-ink);
 }
 .secret-box__value { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 13.5px; overflow-wrap: anywhere; user-select: all; }
-.secret-box .copy-button { color: var(--code-ink); }
+.secret-box .copy-button {
+  flex: none; border-color: rgba(255, 255, 255, .28); background: rgba(255, 255, 255, .1); color: var(--code-ink);
+}
+.secret-box .copy-button:hover, .secret-box .copy-button:focus-visible { background: rgba(255, 255, 255, .2); color: var(--ink-inverse); }
 
 .option.is-disabled, .checkbox.is-disabled { opacity: .55; cursor: not-allowed; }
 .option.is-disabled input, .checkbox.is-disabled input { cursor: not-allowed; }
