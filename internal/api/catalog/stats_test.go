@@ -386,6 +386,19 @@ func TestRepositoryStatsReconcile(t *testing.T) {
 	if n, err := c.ReconcileRepositoryStats(context.Background()); err != nil || n != 0 {
 		t.Fatalf("second reconcile = %d, %v", n, err)
 	}
+
+	// An asset added behind the log, then deleted through it: the group's
+	// reference count would go negative, so the next fold recounts
+	// everything, the member's total included.
+	w.exec(`INSERT INTO group_members (group_id, member_id, position) VALUES ($1, $2, 99)
+		ON CONFLICT (group_id, member_id) DO NOTHING`,
+		w.groups[0], w.leaves[2])
+	assertMatchesLegacy(t, c, pool, "member added")
+	w.exec(`ALTER TABLE assets DISABLE TRIGGER repo_stats_assets_added`)
+	w.exec(`INSERT INTO assets (repo_id, path, blob_digest, size) VALUES ($1, 'hidden/file', $2, 1)`, w.leaves[2], apitest.Digest("hidden"))
+	w.exec(`ALTER TABLE assets ENABLE TRIGGER repo_stats_assets_added`)
+	w.exec(`DELETE FROM assets WHERE path = 'hidden/file'`)
+	assertMatchesLegacy(t, c, pool, "after a hidden insert")
 }
 
 // TestRepositoryStatsBusyFold answers from the stored totals when another

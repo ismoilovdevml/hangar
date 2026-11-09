@@ -326,7 +326,7 @@ func (c *Catalog) foldStats(ctx context.Context, wait time.Duration, verify bool
 			return e
 		})
 		if err == nil && drift > 0 {
-			c.log().WarnContext(ctx, "repository statistics drifted; recounted", "repositories", drift)
+			c.log().WarnContext(ctx, "repository statistics drifted; recounted", "totals", drift)
 		}
 		if err == nil || attempt == 2 || !retryable(err) {
 			return drift, err
@@ -382,9 +382,9 @@ func retryable(err error) bool {
 
 // foldTx applies the log visible in tx's snapshot, then deletes exactly those
 // rows (a REPEATABLE READ delete leaves rows committed later alone). It
-// returns how many totals had drifted: counts that would go negative, and
-// with verify, totals that differ from a recount. Drifted totals are
-// recounted.
+// returns how many numbers had drifted: totals or reference counts that
+// would go negative, and with verify, totals that differ from a recount. Any
+// drift recounts everything.
 func foldTx(ctx context.Context, tx pgx.Tx, verify bool) (int, error) {
 	var all, groups bool
 	if err := tx.QueryRow(ctx, `SELECT COALESCE(bool_or(kind = 'r'), false), COALESCE(bool_or(kind = 'g'), false)
@@ -412,7 +412,14 @@ func foldTx(ctx context.Context, tx pgx.Tx, verify bool) (int, error) {
 			}
 			drift += negative
 		}
-		groups = drift > 0
+		if drift > 0 {
+			// Something bypassed the log; the members' own totals may be off
+			// too, without having gone negative.
+			if _, err := tx.Exec(ctx, rebuildLeavesSQL); err != nil {
+				return 0, fmt.Errorf("recount: %w", err)
+			}
+			groups = true
+		}
 	}
 	if groups {
 		if err := rebuildGroups(ctx, tx); err != nil {
