@@ -113,7 +113,18 @@ func Sweep(ctx context.Context, pool *pgxpool.Pool, k *Keyring, opts SweepOption
 				return mapFields(doc, visit(where), "private_key")
 			}},
 	}
+	// Tables of later migrations are skipped when absent (schemas migrated in part).
+	optional := map[string]bool{"signing_keys": true}
 	for _, t := range tables {
+		if optional[t.table] {
+			var present bool
+			if err := tx.QueryRow(ctx, `SELECT to_regclass($1) IS NOT NULL`, t.table).Scan(&present); err != nil {
+				return rep, fmt.Errorf("secrets sweep: %s: %w", t.table, err)
+			}
+			if !present {
+				continue
+			}
+		}
 		updates, err := sweepTable(ctx, tx, t.table, t.query, t.apply)
 		if err != nil {
 			return rep, err
