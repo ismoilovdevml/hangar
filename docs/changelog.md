@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+- **Releases are tested before they are published**: the release workflow
+  runs `go test -race` against PostgreSQL, golangci-lint, the web lint,
+  typecheck, unit tests and build, the installer tests and `helm lint` on
+  the tagged commit, in parallel; images, binaries and the GitHub release
+  wait for all of them.
+- **CI workflow, ready to switch on**: the real-client e2e suite with every
+  client in containers (`test/e2e/run-docker.sh`, `make e2e-docker`, image
+  `test/e2e/runner/Dockerfile`) under `HANGAR_E2E_STRICT=1`, the S3 driver
+  against MinIO, `make deploy-check`, Playwright against the mock build and a
+  Playwright smoke test against a real server (`web/e2e/live`,
+  `make web-e2e-live`), plus the image-scanning and LDAP e2e runners.
+- **e2e suite**: works with Helm 4 (and still Helm 3) and on arm64 (the RPM
+  proxy test picks the mirror for the machine's architecture);
+  `HANGAR_E2E_STRICT=1` turns a missing client, credential or Docker daemon
+  into a failure, `HANGAR_E2E_ALLOW_MISSING` names exceptions, and optional
+  clients (buildx, crane, cosign, helm OCI) run as subtests that report a
+  skip. Stronger checks: Maven artifacts are compared with what the client
+  built and with Maven Central, a forced Helm overwrite on `allow_once` must
+  answer 409 and leave the chart unchanged, and a raw proxy answering 502
+  fails (the requirement on `http.allow_private_networks` is documented).
+- **`make test` needs a test database**: without `HANGAR_TEST_DATABASE_URL`
+  it stops instead of skipping a quarter of the Go tests;
+  `HANGAR_TEST_SKIP_DB=1` runs anyway and reports the skip count.
+- **API contract**: the six operations that answer 501 (`sbom`, `dependents`,
+  `move-repositories`, replication targets) are marked `x-status: planned`
+  with a documented 501 `not_implemented` answer; `docker_upload_cleanup`
+  is in the `TaskType` enum. Tests check routes against `api/openapi.yaml`
+  in both directions (including the sign-in, settings and signing-key
+  routes) and that the web UI's mock server mocks only documented
+  operations.
+- **Test robustness**: queue, scheduler and task takeover tests assert on
+  state instead of sleeping; web page tests allow for loaded CI runners.
+- **Docs**: README lists the 11 formats; the roadmap, architecture and
+  product spec say what is done, partial and planned; `CONTRIBUTING.md`
+  explains the test suites; the changelog is split by release.
 - **Security fixes** (see `docs/security.md`, privilege escalation model and
   sign-in lockout):
   - Groups expose only what their author may read: adding a member needs
@@ -93,7 +128,6 @@
   - UI: **Scheduled tasks → New task** (import or pre-warm, lockfile upload),
     **Import** / **Pre-warm** on repository pages, run results with conflict
     and failure lists.
-
 - **Blob storage integrity**:
   - A publish can no longer reference bytes that blob GC deleted. A publish
     that takes the first reference of a blob confirms, under the blob row
@@ -119,7 +153,6 @@
   `hangar_proxy_negative_cache_evictions_total{repository}`.
 - **Docs**: `docs/security.md` explains that other cluster nodes keep
   accepting an old password for up to `auth.basic_cache_ttl` after a change.
-
 - **Routing rules against dependency confusion** (issue #73):
   - Proxy repositories take `config.routing.block` and `allow` name patterns:
     a blocked name is never requested from the remote nor served from the
@@ -174,7 +207,6 @@
     `@scope/name/-/@scope/name-<version>.tgz`; that form is still served, so
     existing lockfiles keep installing, and tarballs a proxy cached under it
     are reused.
-
 - **Container image scanning with Trivy.** Docker and OCI images are scanned
   with a Trivy server in client/server mode when `scanner.trivy_url` is set;
   otherwise they still show *Image scanning not configured*.
@@ -288,6 +320,8 @@
   StartTLS and ldaps with certificate checks, wrong passwords, lockout, Basic
   auth from a package client and the settings *Test* endpoint.
 
+## v0.1.6 (2026-11-09)
+
 - **Web UI: format settings and signing keys.** The repository form edits
   APT `architectures`, RPM `repodata_depth`, the APT/RPM `signing_key`, Go
   proxy `sumdbs` and `sumdb_via`, Cargo proxy `download_url` and Helm proxy
@@ -339,6 +373,9 @@
   repositories announce `auth-required`, cargo's raw token and `Bearer` are
   accepted. README, licence and repository come from the `.crate`; crates are
   scanned against OSV `crates.io`. Guide: `docs/guides/cargo.md`.
+
+## v0.1.5 (2026-11-05)
+
 - **Automation-friendly API**: the OpenAPI document is public at
   `/api/v1/openapi.yaml` and `/api/v1/openapi.json`; `/api/v1/automation-guide.md`
   and `/llms.txt` give scripts and automated clients a short guide with the
@@ -438,6 +475,8 @@
   The installer flags `--dir`, `--storage`, `--s3-endpoint` and
   `--admin-user` are gone.
 
+## v0.1.4 (2026-11-05)
+
 - **README images**: badges, logos and screenshots in package READMEs now
   load. The package info API returns, for every image of a README, a
   same-origin URL signed by the server (`readme.images`); Hangar fetches
@@ -516,20 +555,10 @@
 - The trend chart, the scanner panel and the per-repository *Scan now*
   button left the Vulnerabilities screen; `GET /findings/trend` and
   `POST /repositories/{name}:scan` are unchanged.
-
 - **Fewer release files**: the compose stack ships as one `hangar-compose.tar.gz`
   and only Linux binaries are published (`hangar-linux-amd64`,
   `hangar-linux-arm64`), next to `install.sh` and `SHA256SUMS`. The installer
   still reads releases that publish each compose file separately.
-- **System status** (Operations → System status, `system:cluster:read`): every
-  node with its URL, version and commit, uptime, last heartbeat and scheduler
-  role, and the health of PostgreSQL, blob stores, NATS / JetStream, the task
-  scheduler, the search index, external sign-in and upstream proxies, each
-  healthy, degraded or down with details. Nodes publish their checks every
-  15 s into `system_nodes` (migration `00140`); a silent node shows as not
-  responding. New endpoints `GET /system/nodes` and `GET /system/health`;
-  `GET /nodes` is implemented from the same heartbeats and
-  `/system/status` reports real `nodes_up` / `nodes_total`.
 - **System status redesign**: the page leads with one headline ("Everything
   is working", "1 check needs attention") and the share of checks passing,
   then a checklist per node: one row per subsystem with its summary and a
@@ -541,6 +570,18 @@
   `since` and `last_incident`; subsystem labels are now Database, Blob
   storage, Event bus, Task scheduler, Search index, Sign-in (with the enabled
   providers) and Upstream proxies.
+
+## v0.1.3 (2026-11-04)
+
+- **System status** (Operations → System status, `system:cluster:read`): every
+  node with its URL, version and commit, uptime, last heartbeat and scheduler
+  role, and the health of PostgreSQL, blob stores, NATS / JetStream, the task
+  scheduler, the search index, external sign-in and upstream proxies, each
+  healthy, degraded or down with details. Nodes publish their checks every
+  15 s into `system_nodes` (migration `00140`); a silent node shows as not
+  responding. New endpoints `GET /system/nodes` and `GET /system/health`;
+  `GET /nodes` is implemented from the same heartbeats and
+  `/system/status` reports real `nodes_up` / `nodes_total`.
 - **System logs** (Operations → System logs, `system:cluster:admin`): each
   node keeps its newest `log.buffer_size` records (default 5000) in memory,
   scrubbed like stderr. Filter by node, level and text, follow with pause and
@@ -549,7 +590,6 @@
   over NATS. New setting `server.node_id`.
 - **Log redaction** also covers headers and query values logged as maps
   (`Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key`, ...).
-
 - **Settings → Authentication**: administrators configure OIDC and LDAP
   sign-in in the web UI or with `GET/PUT /identity-providers/oidc` and
   `/identity-providers/ldap`, without a restart: changes apply on every node
@@ -570,6 +610,69 @@
   re-wrapped by `hangar admin rotate-secrets`. Changes are audited without
   secret values. Migration `00090` adds `settings`, `outbound_proxies` and
   `settings_revision`.
+- **Repository browser**: the Packages page is a tree of repositories with
+  each one's content laid out as clients see it (npm scopes and packages,
+  Maven coordinates, NuGet ids and versions, PyPI projects, Docker images and
+  tags, raw directories), loaded folder by folder, keyboard navigable, with a
+  filter box and links that keep the selected node. Groups merge their
+  readable members and name the member that holds each entry. The version
+  picker is a versions table; no native selects remain.
+- **Package page**: version card (newest, published or cached, downloads for
+  the version and in total, size, vulnerability status, licences, home page,
+  keywords), a "Set me up" panel with install commands per client, a Download
+  button, and Readme, Versions, Files and Repositories tabs. READMEs are
+  rendered as restricted Markdown (no raw HTML, http(s)/mailto links only,
+  https images without a referrer).
+- **File page**: path, repository (and the group it was reached through),
+  package, content type, size, checksums, blob and file dates, downloads,
+  the upstream of cached proxy files, a download link and **Delete file**.
+- API: `GET /repositories/{name}/browse` (direct children of a folder,
+  cursor-paged, one index seek per child), `GET /assets/{id}`,
+  `DELETE /assets/{id}` (`repo:<name>:delete`, audited as `asset.delete`, the
+  blob becomes eligible for compaction) and `GET /components/{id}/info`
+  (README, description, licences, keywords and home page, read from the
+  npm manifest or tarball, the `.nupkg`'s nuspec and README, PyPI core
+  metadata or the Maven POM). The versions listing reports `size_bytes`.
+- Migration `00110` adds `component_info`, the cache of extracted package
+  facts (dropped with the version).
+- **Vulnerability scanning** of npm, Maven, PyPI, NuGet and Go packages
+  against the OSV advisory database (`scanning.osv.url`, default
+  `https://api.osv.dev`, or a mirror) through the shared outbound HTTP client:
+  batched `querybatch` requests with pagination, advisory details cached by
+  modification time, rate limiting and retries with backoff. Severity from
+  CVSS v4.0 / v3.x / v2 vectors or the database's own rating; *fixed in* from
+  the affected ranges. Scans on arrival (hosted publish or proxy caching, in
+  repositories with `scan_on_arrival`), on demand
+  (`POST /components/{id}:scan`, `POST /repositories/{name}:scan`) and in the
+  hourly built-in task `vulnerability-rescan`, which rechecks versions older
+  than `scanning.rescan_interval` (default 24h). `scanning.enabled` turns it
+  off. Docker images are labelled *image scanning not configured*.
+- **Findings**: advisory id and aliases (CVE, GHSA), summary and text, CVSS
+  score and vector, affected and fixed versions, references, first and last
+  seen; findings no longer reported become *fixed* and re-open if they come
+  back. Per-component scan status (never, ok, failed with the error, last
+  scan time) in `ScanSummary` and new scan states `failed` and `unsupported`
+  (also in search: `security:failed`; `cve:` now matches aliases).
+- **Waivers** need a reason and an end date at most a year ahead
+  (`system:security:write`), are audited, and re-open the finding when they
+  expire. **Quarantine critical** (repository setting, off by default) blocks
+  downloads of versions with an open critical finding and lifts the block
+  when it is fixed, waived or the setting is turned off.
+- New endpoints `GET /findings/{id}`, `GET /findings/trend`,
+  `GET /scanning/status`; `GET /findings` gains `repository`, `q`,
+  multi-value `severity`/`status`, `total`, `fixable`, `waived` and
+  `components`; `GET /components/{id}/findings` reports the scan state.
+- **Web: Vulnerabilities** replaces the placeholder: severity cards, 30-day
+  trend, scanner coverage with *Scan repository now*, findings table with
+  severity, status, fix and repository filters and search, and a finding
+  drawer with references, waiver form, revoke and rescan. The Overview
+  *Critical issues* card says when nothing has been scanned yet or scanning
+  is off instead of showing *Clear*.
+- Migration `00100` adds `component_scans` and the advisory columns of
+  `findings`. Guide: [docs/guides/vulnerabilities.md](guides/vulnerabilities.md).
+
+## v0.1.2 (2026-11-04)
+
 - **Overview traffic survives restarts and covers the cluster**: requests,
   downloads, response time, proxy cache hits and misses and proxy remote
   latency are added every 15 seconds by each node to per-minute rows in
@@ -613,67 +716,8 @@
 - **Repositories list**: a "Last activity" column (`last_activity_at`, from
   existing upload and download timestamps, no extra writes), type icons, and
   sorting by name, type, format or last activity (`GET /repositories?sort=`).
-- **Repository browser**: the Packages page is a tree of repositories with
-  each one's content laid out as clients see it (npm scopes and packages,
-  Maven coordinates, NuGet ids and versions, PyPI projects, Docker images and
-  tags, raw directories), loaded folder by folder, keyboard navigable, with a
-  filter box and links that keep the selected node. Groups merge their
-  readable members and name the member that holds each entry. The version
-  picker is a versions table; no native selects remain.
-- **Package page**: version card (newest, published or cached, downloads for
-  the version and in total, size, vulnerability status, licences, home page,
-  keywords), a "Set me up" panel with install commands per client, a Download
-  button, and Readme, Versions, Files and Repositories tabs. READMEs are
-  rendered as restricted Markdown (no raw HTML, http(s)/mailto links only,
-  https images without a referrer).
-- **File page**: path, repository (and the group it was reached through),
-  package, content type, size, checksums, blob and file dates, downloads,
-  the upstream of cached proxy files, a download link and **Delete file**.
-- API: `GET /repositories/{name}/browse` (direct children of a folder,
-  cursor-paged, one index seek per child), `GET /assets/{id}`,
-  `DELETE /assets/{id}` (`repo:<name>:delete`, audited as `asset.delete`, the
-  blob becomes eligible for compaction) and `GET /components/{id}/info`
-  (README, description, licences, keywords and home page, read from the
-  npm manifest or tarball, the `.nupkg`'s nuspec and README, PyPI core
-  metadata or the Maven POM). The versions listing reports `size_bytes`.
-- Migration `00110` adds `component_info`, the cache of extracted package
-  facts (dropped with the version).
 
-- **Vulnerability scanning** of npm, Maven, PyPI, NuGet and Go packages
-  against the OSV advisory database (`scanning.osv.url`, default
-  `https://api.osv.dev`, or a mirror) through the shared outbound HTTP client:
-  batched `querybatch` requests with pagination, advisory details cached by
-  modification time, rate limiting and retries with backoff. Severity from
-  CVSS v4.0 / v3.x / v2 vectors or the database's own rating; *fixed in* from
-  the affected ranges. Scans on arrival (hosted publish or proxy caching, in
-  repositories with `scan_on_arrival`), on demand
-  (`POST /components/{id}:scan`, `POST /repositories/{name}:scan`) and in the
-  hourly built-in task `vulnerability-rescan`, which rechecks versions older
-  than `scanning.rescan_interval` (default 24h). `scanning.enabled` turns it
-  off. Docker images are labelled *image scanning not configured*.
-- **Findings**: advisory id and aliases (CVE, GHSA), summary and text, CVSS
-  score and vector, affected and fixed versions, references, first and last
-  seen; findings no longer reported become *fixed* and re-open if they come
-  back. Per-component scan status (never, ok, failed with the error, last
-  scan time) in `ScanSummary` and new scan states `failed` and `unsupported`
-  (also in search: `security:failed`; `cve:` now matches aliases).
-- **Waivers** need a reason and an end date at most a year ahead
-  (`system:security:write`), are audited, and re-open the finding when they
-  expire. **Quarantine critical** (repository setting, off by default) blocks
-  downloads of versions with an open critical finding and lifts the block
-  when it is fixed, waived or the setting is turned off.
-- New endpoints `GET /findings/{id}`, `GET /findings/trend`,
-  `GET /scanning/status`; `GET /findings` gains `repository`, `q`,
-  multi-value `severity`/`status`, `total`, `fixable`, `waived` and
-  `components`; `GET /components/{id}/findings` reports the scan state.
-- **Web: Vulnerabilities** replaces the placeholder: severity cards, 30-day
-  trend, scanner coverage with *Scan repository now*, findings table with
-  severity, status, fix and repository filters and search, and a finding
-  drawer with references, waiver form, revoke and rescan. The Overview
-  *Critical issues* card says when nothing has been scanned yet or scanning
-  is off instead of showing *Clear*.
-- Migration `00100` adds `component_scans` and the advisory columns of
-  `findings`. Guide: [docs/guides/vulnerabilities.md](guides/vulnerabilities.md).
+## v0.1.1 (2026-11-04)
 
 - **Single sign-on (OIDC)**: "Continue with SSO" through any OpenID Connect
   provider (`auth.oidc`): authorization code flow with PKCE (S256),
@@ -697,6 +741,8 @@
   `GET /identity-providers` lists both providers and their state.
 - Migration `00080` adds `users.external_issuer` and
   `role_bindings.mapped_from`. Guide: [docs/guides/sso.md](guides/sso.md).
+
+## v0.1.0 (2026-11-04)
 
 - **Releases**: version tags publish a multi-arch image
   (`ghcr.io/ismoilovdevml/hangar`, linux/amd64 and linux/arm64, smoke-tested
@@ -726,7 +772,6 @@
 - **Web: Repository settings** (`/repositories/<name>/settings`, opened from a
   repository row): the New repository form pre-filled, online/offline switch,
   delete with typed confirmation and copyable client configuration.
-
 - **Secrets at rest**: proxy upstream passwords, tokens and header values,
   passwords in proxy remote and outbound proxy URLs, and S3 keys of blob
   stores are encrypted in the database (AES-256-GCM envelope encryption,
