@@ -218,13 +218,28 @@ func (s *Service) Search(ctx context.Context, q Query) (*Result, error) {
 		`SELECT id::text, repo, format, namespace, name, version, created_at, security, versions, downloads
 		FROM g ORDER BY ` + order + ` LIMIT ` + main.arg(limit+1) + ` OFFSET ` + main.arg(offset)
 	batch.Queue(sql, main.args...)
-	total := &builder{}
-	batch.Queue(s.matchCTE(total, p, q, dimNone)+`SELECT count(*) FROM g`, total.args...)
+	// The total and the facets of every dimension the query does not filter
+	// on come from the same matches: one statement counts them all. A
+	// filtered dimension's facet leaves its own filter out, so it needs its
+	// own statement.
 	dims := []string{dimFormat, dimSecurity, dimRepository}
+	var shared, separate []string
 	for _, d := range dims {
-		col := map[string]string{dimFormat: "format", dimSecurity: "security", dimRepository: "repo"}[d]
+		if filtered(p, d) {
+			separate = append(separate, d)
+		} else {
+			shared = append(shared, d)
+		}
+	}
+	total := &builder{}
+	agg := `SELECT 0 AS dim, ''::text AS value, count(*) AS n FROM g`
+	for i, d := range shared {
+		agg += fmt.Sprintf(` UNION ALL (SELECT %d, %s, count(*) FROM g GROUP BY 2 ORDER BY 3 DESC, 2 LIMIT 50)`, i+1, facetColumn[d])
+	}
+	batch.Queue(s.matchCTE(total, p, q, dimNone)+agg+` ORDER BY 1, 3 DESC, 2`, total.args...)
+	for _, d := range separate {
 		fb := &builder{}
-		batch.Queue(s.matchCTE(fb, p, q, d)+`SELECT `+col+`, count(*) FROM g GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 50`, fb.args...)
+		batch.Queue(s.matchCTE(fb, p, q, d)+`SELECT `+facetColumn[d]+`, count(*) FROM g GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 50`, fb.args...)
 	}
 
 	br := s.pool.SendBatch(ctx, batch)
@@ -254,24 +269,60 @@ func (s *Service) Search(ctx context.Context, q Query) (*Result, error) {
 		res.Items = res.Items[:limit]
 		res.NextCursor = encodeOffset(offset + limit)
 	}
-	if err := br.QueryRow().Scan(&res.Total); err != nil {
+	facets := map[string][]FacetValue{}
+	rows, err = br.Query()
+	if err != nil {
 		return nil, fmt.Errorf("search: count: %w", err)
 	}
-	for _, d := range dims {
+	for rows.Next() {
+		var dim int
+		var f FacetValue
+		if err := rows.Scan(&dim, &f.Value, &f.Count); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("search: count: %w", err)
+		}
+		if dim == 0 {
+			res.Total = int(f.Count)
+		} else {
+			facets[shared[dim-1]] = append(facets[shared[dim-1]], f)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("search: count: %w", err)
+	}
+	for _, d := range separate {
 		vals, err := facetRows(br)
 		if err != nil {
 			return nil, err
 		}
-		switch d {
-		case dimFormat:
-			res.Facets.Format = vals
-		case dimSecurity:
-			res.Facets.Security = vals
-		case dimRepository:
-			res.Facets.Repository = vals
-		}
+		facets[d] = vals
 	}
+	res.Facets = Facets{Format: orEmpty(facets[dimFormat]), Security: orEmpty(facets[dimSecurity]),
+		Repository: orEmpty(facets[dimRepository])}
 	return res, nil
+}
+
+// facetColumn is the column of g each facet counts.
+var facetColumn = map[string]string{dimFormat: "format", dimSecurity: "security", dimRepository: "repo"}
+
+// filtered reports whether p filters on dimension d.
+func filtered(p Parsed, d string) bool {
+	switch d {
+	case dimFormat:
+		return len(p.Formats) > 0
+	case dimRepository:
+		return len(p.Repos) > 0
+	default:
+		return len(p.Security) > 0
+	}
+}
+
+func orEmpty(v []FacetValue) []FacetValue {
+	if v == nil {
+		return []FacetValue{}
+	}
+	return v
 }
 
 func facetRows(br pgx.BatchResults) ([]FacetValue, error) {

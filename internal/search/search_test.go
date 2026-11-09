@@ -128,6 +128,7 @@ func TestSearchIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Search(%+v): %v", q, err)
 		}
+		assertSeparateCounts(t, svc, q, r)
 		return r
 	}
 
@@ -211,4 +212,42 @@ func hasFacet(vals []FacetValue, v string, n int) bool {
 		}
 	}
 	return false
+}
+
+// assertSeparateCounts checks the total and facets of r against one
+// statement per number, each facet leaving out its own filter.
+func assertSeparateCounts(t *testing.T, svc *Service, q Query, r *Result) {
+	t.Helper()
+	p, err := Parse(q.Q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	b := &builder{}
+	var total int
+	if err := svc.pool.QueryRow(ctx, svc.matchCTE(b, p, q, dimNone)+`SELECT count(*) FROM g`, b.args...).Scan(&total); err != nil {
+		t.Fatal(err)
+	}
+	if r.Total != total {
+		t.Errorf("%q: total %d, want %d", q.Q, r.Total, total)
+	}
+	for d, got := range map[string][]FacetValue{dimFormat: r.Facets.Format, dimSecurity: r.Facets.Security, dimRepository: r.Facets.Repository} {
+		b := &builder{}
+		rows, err := svc.pool.Query(ctx, svc.matchCTE(b, p, q, d)+`SELECT `+facetColumn[d]+`, count(*) FROM g GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 50`, b.args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []FacetValue{}
+		for rows.Next() {
+			var f FacetValue
+			if err := rows.Scan(&f.Value, &f.Count); err != nil {
+				t.Fatal(err)
+			}
+			want = append(want, f)
+		}
+		rows.Close()
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%q: %s facet = %+v, want %+v", q.Q, d, got, want)
+		}
+	}
 }
