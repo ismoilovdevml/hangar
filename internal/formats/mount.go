@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // RepositoryPrefix is where path-addressed repositories are served.
@@ -24,9 +25,10 @@ func Mount(r chi.Router, reg *Registry, deps core.Deps) {
 	}
 	subs := map[string]http.Handler{}
 	all := map[string]core.Format{}
+	scoped := r.With(routingScope(deps))
 	for _, f := range reg.All() {
 		if rm, ok := f.(core.RootMounter); ok {
-			rm.MountRoot(r, fdeps)
+			rm.MountRoot(scoped, fdeps)
 		}
 		sub := chi.NewRouter()
 		sub.NotFound(notFound)
@@ -43,7 +45,17 @@ func Mount(r chi.Router, reg *Registry, deps core.Deps) {
 	}
 	d := &dispatcher{repos: deps.Repos, subs: subs, formats: all, auth: deps.Auth, deps: deps}
 	r.Handle(RepositoryPrefix+"/{repo}", http.HandlerFunc(d.redirectSlash))
-	r.Handle(RepositoryPrefix+"/{repo}/*", d)
+	scoped.Handle(RepositoryPrefix+"/{repo}/*", d)
+}
+
+// routingScope lets routing-rule exclusions of a format request be audited,
+// logged and explained in the X-Hangar-Routing response header.
+func routingScope(deps core.Deps) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, r.WithContext(routing.WithScope(r.Context(), deps.Audit, deps.Logger, w.Header())))
+		})
+	}
 }
 
 // NewHandler returns a router serving only fs, mounted exactly as in
