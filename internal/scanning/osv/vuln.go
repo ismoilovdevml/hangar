@@ -267,6 +267,7 @@ func (v *Vuln) affectedFor(pkg Package) []Affected {
 // that contain installed ("" when those ranges have no fix). Only when no
 // range is known to contain it, the lowest fix above it is used.
 func (v *Vuln) Remedy(pkg Package, installed string) (affected string, fixed []string, fixedIn string) {
+	cmp := Comparer(SchemeOf(pkg.Ecosystem))
 	var ranges, containing []string
 	contained := false
 	for _, a := range v.affectedFor(pkg) {
@@ -280,7 +281,7 @@ func (v *Vuln) Remedy(pkg Package, installed string) (affected string, fixed []s
 				if iv.fixed != "" && !slices.Contains(fixed, iv.fixed) {
 					fixed = append(fixed, iv.fixed)
 				}
-				if listed || iv.contains(installed) {
+				if listed || iv.contains(installed, cmp) {
 					contained = true
 					if iv.fixed != "" {
 						containing = append(containing, iv.fixed)
@@ -289,14 +290,14 @@ func (v *Vuln) Remedy(pkg Package, installed string) (affected string, fixed []s
 			}
 		}
 	}
-	slices.SortFunc(fixed, CompareVersions)
-	slices.SortFunc(containing, CompareVersions)
+	slices.SortFunc(fixed, cmp)
+	slices.SortFunc(containing, cmp)
 	candidates := fixed
 	if contained {
 		candidates = containing
 	}
 	for _, f := range candidates {
-		if CompareVersions(f, installed) > 0 {
+		if cmp(f, installed) > 0 {
 			fixedIn = f
 			break
 		}
@@ -360,17 +361,17 @@ func (iv interval) String() string {
 	return strings.Join(parts, ", ")
 }
 
-// contains reports whether version falls in the interval, by the generic
-// version order of CompareVersions.
-func (iv interval) contains(version string) bool {
-	if iv.introduced != "" && iv.introduced != "0" && CompareVersions(version, iv.introduced) < 0 {
+// contains reports whether version falls in the interval, by the version
+// order cmp.
+func (iv interval) contains(version string, cmp func(a, b string) int) bool {
+	if iv.introduced != "" && iv.introduced != "0" && cmp(version, iv.introduced) < 0 {
 		return false
 	}
 	switch {
 	case iv.fixed != "":
-		return CompareVersions(version, iv.fixed) < 0
+		return cmp(version, iv.fixed) < 0
 	case iv.lastAffected != "":
-		return CompareVersions(version, iv.lastAffected) <= 0
+		return cmp(version, iv.lastAffected) <= 0
 	}
 	return true
 }
