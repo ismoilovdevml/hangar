@@ -26,6 +26,11 @@ func UnsupportedReason(format string) string {
 	if format == "docker" {
 		return "image scanning not configured"
 	}
+	// Distribution advisories (OSV "Debian:12", "Rocky Linux:9", ...) only
+	// apply to a known release; hosted custom packages have none.
+	if format == "apt" || format == "rpm" {
+		return "no advisory source: the distribution release of these packages is unknown"
+	}
 	return "no advisory database for " + format + " packages"
 }
 

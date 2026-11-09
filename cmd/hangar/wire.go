@@ -45,6 +45,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/service/lock"
 	"github.com/ismoilovdevml/hangar/internal/service/repository"
 	"github.com/ismoilovdevml/hangar/internal/settings"
+	"github.com/ismoilovdevml/hangar/internal/signing"
 	"github.com/ismoilovdevml/hangar/internal/storage"
 	"github.com/ismoilovdevml/hangar/internal/storage/fs"
 	"github.com/ismoilovdevml/hangar/internal/storage/registry"
@@ -263,8 +264,17 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	// Request-path blob access is timed per driver; GC uses the stores directly.
 	observedBlobs := observability.InstrumentBlobStores(blobs, metrics, blobDriver)
 
+	// Repository metadata signing keys (apt, rpm), sealed with the keyring.
+	signer := signing.New(signing.Options{Store: signing.NewPGStore(pool), Secrets: signingSealer(keyring), Events: bus,
+		Audit: auditLog, BaseURL: cfg.Server.BaseURL, Formats: []string{"apt", "rpm"}, Logger: log})
+	signWatch, err := signer.Watch(ctx, bus)
+	if err != nil {
+		return nil, err
+	}
+	a.onClose(func() { _ = signWatch.Unsubscribe() })
+
 	// Formats (repositories validate against them).
-	reg, err := builtin.RegistryWith(builtin.Options{Docker: docker.Options{TokenKey: []byte(cfg.Docker.TokenKey)}})
+	reg, err := builtin.RegistryWith(builtin.Options{Docker: docker.Options{TokenKey: []byte(cfg.Docker.TokenKey)}, Signing: signer})
 	if err != nil {
 		return nil, err
 	}
@@ -352,6 +362,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		return nil, err
 	}
 	a.onClose(locks.Close)
+	signer.SetServices(repos, authz, locks)
 
 	deps := core.Deps{
 		Repos:       repos,
@@ -480,7 +491,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Monitor:        mon,
 		Logs:           sysLogs,
 		AuthRoutes:     api.RouteFunc(func(r chi.Router) { httpapi.Register(r, authSvc, authOpts) }),
-		ExtraRoutes:    []api.RouteRegistrar{settingsSvc},
+		ExtraRoutes:    []api.RouteRegistrar{settingsSvc, signer},
 	}
 	a.onClose(restAPI.Close)
 

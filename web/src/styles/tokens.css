@@ -55,6 +55,7 @@
   --fmt-nuget: #8E7BB8;
   --fmt-cargo: #C9805A;
   --fmt-apt: #A08D6B;
+  --fmt-rpm: #B07A7A;
   --fmt-raw: #A3AFBC;
 
   /* status: always paired with a text label */

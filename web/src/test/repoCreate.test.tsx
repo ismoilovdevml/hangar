@@ -1,6 +1,7 @@
 import { choose, valueOf } from './choose';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { http, HttpResponse } from 'msw';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RepositoryInput } from '../api/types';
 import { mockState } from '../mocks/handlers';
@@ -35,11 +36,22 @@ describe('new repository form', () => {
   });
 
   it('marks formats this server does not speak', async () => {
+    // A build without the Linux package formats.
+    server.use(http.get('*/api/v1/formats', () => HttpResponse.json({ items: [{ name: 'npm' }, { name: 'cargo' }] })));
     renderApp('/repositories/new');
     const formats = await screen.findByRole('region', { name: /What will it store/ });
     await waitFor(() => expect(within(formats).getByRole('radio', { name: /APT/ })).toBeDisabled());
+    expect(within(formats).getByRole('radio', { name: /RPM/ })).toBeDisabled();
     expect(within(formats).getByRole('radio', { name: /npm/ })).toBeEnabled();
     expect(within(formats).getByRole('radio', { name: /Cargo/ })).toBeEnabled();
+  });
+
+  it('offers APT and RPM with their distribution hints', async () => {
+    renderApp('/repositories/new');
+    const formats = await screen.findByRole('region', { name: /What will it store/ });
+    await waitFor(() => expect(within(formats).getByRole('radio', { name: /APT/ })).toBeEnabled());
+    expect(within(formats).getByRole('radio', { name: /APT/ })).toHaveAccessibleName(/Debian, Ubuntu/);
+    expect(within(formats).getByRole('radio', { name: /RPM/ })).toHaveAccessibleName(/RHEL, Rocky, Fedora/);
   });
 
   it('validates the name, the remote URL and the cache durations of a proxy', async () => {

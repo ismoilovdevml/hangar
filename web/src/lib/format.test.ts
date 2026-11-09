@@ -73,5 +73,32 @@ describe('format helpers', () => {
     const crateHost = clientSetup({ format: 'cargo', repository: 'cargo-hosted', url: 'https://hangar.example.com/repository/cargo-hosted', type: 'hosted', publishes: true });
     expect(text(crateHost.setup).join('\n')).not.toContain('replace-with');
     expect(text(crateHost.publish)).toEqual(['cargo publish --registry cargo-hosted']);
+
+    const deb = clientSetup({ format: 'apt', repository: 'apt-hosted', url: 'https://hangar.example.com/repository/apt-hosted/', type: 'hosted', publishes: true });
+    expect(text(deb.setup)).toEqual(
+      expect.arrayContaining([
+        'curl -fsSL -u <username>:<token> https://hangar.example.com/repository/apt-hosted/public.gpg | sudo tee /etc/apt/keyrings/apt-hosted.gpg > /dev/null',
+        'URIs: https://hangar.example.com/repository/apt-hosted/',
+        'Signed-By: /etc/apt/keyrings/apt-hosted.gpg',
+        "echo 'machine hangar.example.com login <username> password <token>' | sudo tee /etc/apt/auth.conf.d/apt-hosted.conf > /dev/null",
+      ]),
+    );
+    expect(text(deb.publish).join('\n')).toContain('--upload-file ./<package>.deb "https://hangar.example.com/repository/apt-hosted/upload?distribution=stable&component=main"');
+    const debProxy = clientSetup({ format: 'apt', repository: 'apt-proxy', url: 'https://hangar.example.com/repository/apt-proxy/', type: 'proxy' });
+    expect(text(debProxy.setup).join('\n')).toContain('Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg');
+    expect(text(debProxy.setup).join('\n')).not.toContain('public.gpg');
+
+    const rpmHosted = clientSetup({ format: 'rpm', repository: 'rpm-hosted', url: 'https://hangar.example.com/repository/rpm-hosted/', type: 'hosted', publishes: true });
+    expect(text(rpmHosted.setup)).toEqual(
+      expect.arrayContaining([
+        '[rpm-hosted]',
+        'baseurl=https://hangar.example.com/repository/rpm-hosted/',
+        'repo_gpgcheck=1',
+        'gpgkey=https://hangar.example.com/repository/rpm-hosted/public.key',
+        'username=<username>',
+        'password=<token>',
+      ]),
+    );
+    expect(text(rpmHosted.publish)).toEqual(['curl -u <username>:<token> --upload-file ./<package>.rpm https://hangar.example.com/repository/rpm-hosted/<package>.rpm']);
   });
 });

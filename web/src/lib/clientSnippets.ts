@@ -162,8 +162,59 @@ export function clientSetup(t: ClientTarget): ClientSetup {
         publish: t.publishes ? [l(`cargo publish --registry ${repo}`)] : [],
       };
     }
-    case 'apt':
-      return { setup: [l(`echo "deb ${url} stable main" | sudo tee /etc/apt/sources.list.d/${repo}.list`)], publish: [] };
+    case 'apt': {
+      // A proxy passes the remote's signed metadata through: trust the remote's archive key.
+      const proxy = t.type === 'proxy';
+      const keyring = proxy ? '/usr/share/keyrings/debian-archive-keyring.gpg' : `/etc/apt/keyrings/${repo}.gpg`;
+      // apt sends auth.conf credentials over plain http only when the entry names the scheme.
+      const machine = url.startsWith('http://') ? `http://${dockerHost(url)}` : dockerHost(url);
+      return {
+        setup: [
+          ...(proxy
+            ? [c("# Signed by the remote archive: use its keyring (Ubuntu: ubuntu-archive-keyring.gpg)")]
+            : [l(`curl -fsSL -u ${user}:${tok} ${url}public.gpg | sudo tee ${keyring} > /dev/null`)]),
+          l(`sudo tee /etc/apt/sources.list.d/${repo}.sources <<'EOF'`),
+          l('Types: deb'),
+          l(`URIs: ${url}`),
+          l(`Suites: ${proxy ? 'bookworm' : 'stable'}`),
+          l('Components: main'),
+          l(`Signed-By: ${keyring}`),
+          l('EOF'),
+          c('# Private repositories: credentials for apt (mode 0600)'),
+          l(`echo 'machine ${machine} login ${user} password ${tok}' | sudo tee /etc/apt/auth.conf.d/${repo}.conf > /dev/null`),
+          l(`sudo chmod 600 /etc/apt/auth.conf.d/${repo}.conf && sudo apt-get update`),
+        ],
+        publish: t.publishes
+          ? [l(`curl -u ${user}:${tok} --upload-file ./<package>.deb "${url}upload?distribution=stable&component=main"`)]
+          : [],
+      };
+    }
+    case 'rpm': {
+      // A proxy serves the remote's metadata and packages, signed (if at all) by the remote.
+      const proxy = t.type === 'proxy';
+      return {
+        setup: [
+          l(`sudo tee /etc/yum.repos.d/${repo}.repo <<'EOF'`),
+          l(`[${repo}]`),
+          l(`name=${repo}`),
+          l(`baseurl=${url}`),
+          l('enabled=1'),
+          ...(proxy
+            ? [l('gpgcheck=1'), l('repo_gpgcheck=0'), l('gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9')]
+            : [
+                c('# repomd.xml is signed by Hangar; set gpgcheck=1 when your packages are signed'),
+                l('gpgcheck=0'),
+                l('repo_gpgcheck=1'),
+                l(`gpgkey=${url}public.key`),
+              ]),
+          l(`username=${user}`),
+          l(`password=${tok}`),
+          l('EOF'),
+          l(`sudo dnf makecache --repo ${repo}`),
+        ],
+        publish: t.publishes ? [l(`curl -u ${user}:${tok} --upload-file ./<package>.rpm ${url}<package>.rpm`)] : [],
+      };
+    }
   }
 }
 
@@ -255,6 +306,10 @@ export function installCommands(t: Pick<ClientTarget, 'format' | 'url'> & { repo
         { id: 'cargo', label: 'cargo add', lines: [l(`cargo add ${p.name}@${v} --registry ${t.repository ?? '<registry>'}`)] },
         { id: 'toml', label: 'Cargo.toml', lines: [c('# [dependencies]'), l(`${p.name} = { version = "${v}", registry = "${t.repository ?? '<registry>'}" }`)] },
       ];
+    case 'apt':
+      return [{ id: 'apt', label: 'apt', lines: [l(`sudo apt-get install ${p.name}=${v}`)] }];
+    case 'rpm':
+      return [{ id: 'dnf', label: 'dnf', lines: [l(`sudo dnf install ${p.name}-${v}`)] }];
     case 'raw':
       return [{ id: 'curl', label: 'curl', lines: [l(`curl -u <username>:${TOKEN} -fLO ${url}${full.replace(/^\/+/, '')}`)] }];
     case 'helm': {

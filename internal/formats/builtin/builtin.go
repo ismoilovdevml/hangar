@@ -5,6 +5,7 @@ package builtin
 import (
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/formats"
+	"github.com/ismoilovdevml/hangar/internal/formats/apt"
 	"github.com/ismoilovdevml/hangar/internal/formats/cargo"
 	"github.com/ismoilovdevml/hangar/internal/formats/docker"
 	"github.com/ismoilovdevml/hangar/internal/formats/gomod"
@@ -14,11 +15,15 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/formats/nuget"
 	"github.com/ismoilovdevml/hangar/internal/formats/pypi"
 	"github.com/ismoilovdevml/hangar/internal/formats/raw"
+	"github.com/ismoilovdevml/hangar/internal/formats/rpm"
+	"github.com/ismoilovdevml/hangar/internal/signing"
 )
 
 // Options carries server configuration for the formats that take any.
 type Options struct {
 	Docker docker.Options
+	// Signing provides the metadata signing keys of apt and rpm repositories.
+	Signing signing.Signer
 }
 
 // Formats returns a new instance of every built-in format with default options.
@@ -27,6 +32,7 @@ func Formats() []core.Format { return FormatsWith(Options{}) }
 // FormatsWith returns a new instance of every built-in format configured by o.
 func FormatsWith(o Options) []core.Format {
 	return []core.Format{
+		apt.New(o.Signing),
 		cargo.New(),
 		docker.NewWithOptions(o.Docker),
 		gomod.New(),
@@ -36,6 +42,7 @@ func FormatsWith(o Options) []core.Format {
 		nuget.New(),
 		pypi.New(),
 		raw.New(),
+		rpm.New(o.Signing),
 	}
 }
 

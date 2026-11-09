@@ -21,6 +21,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/secrets"
 	"github.com/ismoilovdevml/hangar/internal/server"
 	"github.com/ismoilovdevml/hangar/internal/service/repository"
+	"github.com/ismoilovdevml/hangar/internal/signing"
 )
 
 // openSecrets builds the keyring from security.secret_key and seals stored
@@ -57,6 +58,15 @@ func openSecrets(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log
 // repoSealer is the keyring as a repository.ConfigSealer; nil without a
 // key, so the service refuses configurations that carry secrets.
 func repoSealer(k *secrets.Keyring) repository.ConfigSealer {
+	if k == nil {
+		return nil
+	}
+	return k
+}
+
+// signingSealer is the keyring as a signing.Sealer; nil without a key, so
+// repository signing keys are refused (501) rather than stored in clear.
+func signingSealer(k *secrets.Keyring) signing.Sealer {
 	if k == nil {
 		return nil
 	}

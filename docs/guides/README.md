@@ -13,6 +13,8 @@ Practical, copy-paste guides for running Hangar and connecting package clients t
 | [NuGet](nuget.md) | `dotnet nuget`, `nuget.config`, push, restore through a group |
 | [Helm](helm.md) | `helm repo add`, `helm install`, `helm cm-push` and curl uploads, chart provenance |
 | [Cargo](cargo.md) | Sparse registry: `.cargo/config.toml`, `cargo login`, publish, yank, crates.io proxy |
+| [APT](apt.md) | Debian and Ubuntu: signed `InRelease`, deb822 `.sources` with `Signed-By`, `auth.conf.d`, `.deb` upload, Debian/Ubuntu mirror proxy |
+| [RPM](rpm.md) | RHEL, Rocky, AlmaLinux, Fedora: `.repo` files with `repo_gpgcheck`, `.rpm` upload, per-directory repodata, Rocky/EPEL mirror proxy |
 | [Raw](raw.md) | Arbitrary files with curl and wget, directory listings |
 | [CI integration](ci.md) | GitLab CI, GitHub Actions, Jenkins and Gitea Actions with tokens |
 | [REST API](api.md) | Authentication, common calls, pagination, errors |
@@ -24,7 +26,7 @@ Operators also need [docs/security.md](../security.md) (secret key, hardening,
 rate limits) and [docs/operations/monitoring.md](../operations/monitoring.md)
 (metrics, logs, tracing).
 
-Formats compiled into the server today: `cargo`, `docker`, `go`, `helm`, `maven`, `npm`, `nuget`, `pypi` and `raw`
+Formats compiled into the server today: `apt`, `cargo`, `docker`, `go`, `helm`, `maven`, `npm`, `nuget`, `pypi`, `raw` and `rpm`
 (`GET /api/v1/formats` lists them). Other formats are not supported yet.
 
 ## Concepts in one minute
@@ -35,7 +37,7 @@ Formats compiled into the server today: `cargo`, `docker`, `go`, `helm`, `maven`
   - `hosted`: clients publish into it.
   - `proxy`: fetches from a remote registry on demand and caches what it fetched.
   - `group`: an ordered list of repositories of the same format behind one URL.
-    Reads try the members in order. Docker, npm, NuGet, PyPI, Go and Cargo groups can forward
+    Reads try the members in order. Docker, npm, NuGet, PyPI, Go, Cargo, APT and RPM groups can forward
     writes to one hosted member (`write_member`). Maven and raw groups are read-only.
 - **URLs**: every format except Docker is served at
   `<base_url>/repository/<repo>/...`. Docker/OCI is served at `<base_url>/v2/`,

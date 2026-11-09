@@ -34,7 +34,7 @@ const (
 )
 
 // formatsUnderTest are the package formats the server ships.
-var formatsUnderTest = []string{"docker", "npm", "maven", "raw", "pypi", "nuget", "helm", "go", "cargo"}
+var formatsUnderTest = []string{"docker", "npm", "maven", "raw", "pypi", "nuget", "helm", "go", "cargo", "apt", "rpm"}
 
 // harness is the running server and the fixtures created in it.
 type harness struct {

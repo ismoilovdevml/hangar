@@ -89,5 +89,6 @@ export const FORMAT_META: Record<Format, { label: string; code: string; tone: To
   nuget: { label: 'NuGet', code: 'NUGET', tone: 'violet', bar: 'var(--fmt-nuget)' },
   cargo: { label: 'Cargo', code: 'CRATE', tone: 'peach', bar: 'var(--fmt-cargo)' },
   apt: { label: 'APT', code: 'APT', tone: 'neutral', bar: 'var(--fmt-apt)' },
+  rpm: { label: 'RPM', code: 'RPM', tone: 'neutral', bar: 'var(--fmt-rpm)' },
   raw: { label: 'Raw', code: 'RAW', tone: 'neutral', bar: 'var(--fmt-raw)' },
 };

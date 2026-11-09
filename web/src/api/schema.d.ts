@@ -541,6 +541,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repositories/{name}/signing-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        /** @description The OpenPGP key that signs the metadata of an apt or rpm hosted or group repository (APT InRelease and Release.gpg, RPM repomd.xml.asc), generated on first use. The private key never leaves the server. Clients download the public key from /repository/{name}/public.key (armored) or public.gpg (binary). Requires read access. */
+        get: operations["getSigningKey"];
+        /** @description Replaces the key with an existing private key (ASCII-armored or binary, optionally passphrase-protected). Metadata is signed with it at once; clients need the new public key. Requires repository administration, or `system:repos:admin` for the shared key; audited as `signing_key.import`. */
+        put: operations["importSigningKey"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repositories/{name}/signing-key:rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Generates a new key (RSA 4096 by default, or Ed25519) and signs the metadata with it from now on; clients need the new public key. Requires repository administration, or `system:repos:admin` for the shared key; audited as `signing_key.rotate`. */
+        post: operations["rotateSigningKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repositories/{name}/browse": {
         parameters: {
             query?: never;
@@ -2066,7 +2105,29 @@ export interface components {
         /** @description Cursor for the next page; null or absent on the last page */
         NextCursor: string | null;
         /** @enum {string} */
-        Format: "docker" | "npm" | "maven" | "pypi" | "go" | "helm" | "nuget" | "cargo" | "apt" | "raw";
+        Format: "docker" | "npm" | "maven" | "pypi" | "go" | "helm" | "nuget" | "cargo" | "apt" | "rpm" | "raw";
+        SigningKey: {
+            repository: string;
+            /**
+             * @description The repository's own key or the server-wide shared key (format setting signing_key)
+             * @enum {string}
+             */
+            key: "repository" | "shared";
+            /**
+             * @example rsa4096
+             * @example ed25519
+             */
+            algorithm: string;
+            /** @description Upper-case hex fingerprint */
+            fingerprint: string;
+            /** @description Long key id */
+            key_id: string;
+            user_id?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** @description ASCII-armored public key */
+            public_key: string;
+        };
         FormatInfo: {
             name: components["schemas"]["Format"];
         };
@@ -4876,6 +4937,104 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    getSigningKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Key details and the armored public key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SigningKey"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description No `security.secret_key` is configured, so keys cannot be stored */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    importSigningKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The private key */
+                    private_key: string;
+                    passphrase?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The imported key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SigningKey"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    rotateSigningKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    algorithm?: "rsa4096" | "ed25519";
+                };
+            };
+        };
+        responses: {
+            /** @description The new key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SigningKey"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     browseRepository: {
