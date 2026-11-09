@@ -12,6 +12,9 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -651,6 +654,39 @@ func TestValidate(t *testing.T) {
 	for i := range bad {
 		if err := f.Validate(&bad[i]); err == nil {
 			t.Errorf("%s accepted", bad[i].Name)
+		}
+	}
+}
+
+// TestGPGVVerifiesInRelease checks InRelease and Release.gpg with the real
+// gpgv, which apt runs with the Signed-By keyring, when it is installed.
+func TestGPGVVerifiesInRelease(t *testing.T) {
+	gpgv, err := exec.LookPath("gpgv")
+	if err != nil {
+		t.Skip("gpgv not installed")
+	}
+	f := newFixture(t)
+	f.upload(t, "apt-hosted", "", apttest.Package{Name: "hello", Version: "1.0", Architecture: "amd64"})
+	dir := t.TempDir()
+	files := map[string][]byte{
+		"key.gpg":     f.get(t, "/repository/apt-hosted/public.gpg"),
+		"InRelease":   f.get(t, "/repository/apt-hosted/dists/stable/InRelease"),
+		"Release":     f.get(t, "/repository/apt-hosted/dists/stable/Release"),
+		"Release.gpg": f.get(t, "/repository/apt-hosted/dists/stable/Release.gpg"),
+	}
+	for n, b := range files {
+		if err := os.WriteFile(filepath.Join(dir, n), b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	key := filepath.Join(dir, "key.gpg")
+	for _, args := range [][]string{
+		{"--keyring", key, filepath.Join(dir, "InRelease")},
+		{"--keyring", key, filepath.Join(dir, "Release.gpg"), filepath.Join(dir, "Release")},
+	} {
+		out, err := exec.CommandContext(t.Context(), gpgv, args...).CombinedOutput()
+		if err != nil || !strings.Contains(string(out), "Good signature") {
+			t.Fatalf("gpgv %v: %v\n%s", args, err, out)
 		}
 	}
 }

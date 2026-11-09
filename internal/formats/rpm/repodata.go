@@ -261,8 +261,10 @@ type repomdDoc struct {
 }
 
 func parseRepomd(b []byte) (*repomdDoc, error) {
+	// Into a fixed struct with a bounded input (maxRepomdBytes): no types
+	// are chosen by the document.
 	var d repomdDoc
-	if err := xml.Unmarshal(b, &d); err != nil {
+	if err := xml.NewDecoder(bytes.NewReader(b)).Decode(&d); err != nil { //nolint:gosec // fixed struct, bounded input
 		return nil, err
 	}
 	return &d, nil
