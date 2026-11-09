@@ -484,7 +484,10 @@ func (s *Service) prepare(ctx context.Context, in *core.Repository) (*core.Repos
 			return nil, fmt.Errorf("repository %q: group repositories take only group config: %w", r.Name, core.ErrInvalid)
 		}
 		if r.BlobStore != "" {
-			return nil, fmt.Errorf("repository %q: groups have no blob store: %w", r.Name, core.ErrInvalid)
+			// Groups store nothing; scripts that set a blob store on every
+			// repository should not fail on the groups.
+			s.log.DebugContext(ctx, "ignoring blob store of a group repository", "repository", r.Name, "blob_store", r.BlobStore)
+			r.BlobStore = ""
 		}
 	}
 	if err := r.Validate(); err != nil {

@@ -3644,7 +3644,9 @@ components:
         description: { type: string }
         blob_store:
           type: string
-          description: Required for hosted and proxy repositories
+          description: |
+            Required for hosted and proxy repositories. Ignored for groups,
+            which store nothing; their responses leave it out.
         online:
           type: boolean
           description: Optional; true when omitted
