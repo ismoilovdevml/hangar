@@ -3,6 +3,7 @@ module github.com/ismoilovdevml/hangar
 go 1.27.3
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-ldap/ldap/v3 v3.4.15

@@ -5,6 +5,7 @@ package builtin
 import (
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/formats"
+	"github.com/ismoilovdevml/hangar/internal/formats/cargo"
 	"github.com/ismoilovdevml/hangar/internal/formats/docker"
 	"github.com/ismoilovdevml/hangar/internal/formats/gomod"
 	"github.com/ismoilovdevml/hangar/internal/formats/helm"
@@ -26,6 +27,7 @@ func Formats() []core.Format { return FormatsWith(Options{}) }
 // FormatsWith returns a new instance of every built-in format configured by o.
 func FormatsWith(o Options) []core.Format {
 	return []core.Format{
+		cargo.New(),
 		docker.NewWithOptions(o.Docker),
 		gomod.New(),
 		helm.New(),
