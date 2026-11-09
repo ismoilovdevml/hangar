@@ -39,7 +39,7 @@ func readControl(r io.Reader) ([]byte, error) {
 		var hdr [60]byte
 		if _, err := io.ReadFull(br, hdr[:]); err != nil {
 			if errors.Is(err, io.EOF) {
-				return nil, fmt.Errorf("Debian package has no control.tar member: %w", core.ErrInvalid)
+				return nil, fmt.Errorf("the .deb has no control.tar member: %w", core.ErrInvalid)
 			}
 			return nil, fmt.Errorf("truncated ar archive: %w", core.ErrInvalid)
 		}
@@ -61,7 +61,7 @@ func readControl(r io.Reader) ([]byte, error) {
 			sawBinary = true
 		case strings.HasPrefix(name, "control.tar"):
 			if !sawBinary {
-				return nil, fmt.Errorf("Debian package does not start with debian-binary: %w", core.ErrInvalid)
+				return nil, fmt.Errorf("the .deb does not start with debian-binary: %w", core.ErrInvalid)
 			}
 			if size > maxControlTar {
 				return nil, fmt.Errorf("control archive larger than %d bytes: %w", maxControlTar, core.ErrInvalid)
