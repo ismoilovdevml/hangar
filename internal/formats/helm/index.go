@@ -16,6 +16,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // maxGroupDepth bounds group nesting (and breaks accidental cycles).
@@ -38,6 +39,9 @@ type entry struct {
 type view struct {
 	charts map[string][]*entry
 	at     time.Time
+	// blocks are the routing exclusions applied while building the view
+	// (and the views it merges), one per rule; recorded on every serve.
+	blocks []*core.RoutingBlock
 
 	once sync.Once
 	doc  []byte
@@ -116,6 +120,52 @@ func (v *view) render(contextPath string) ([]byte, string, error) {
 		v.etag = `"` + hex.EncodeToString(sum[:16]) + `"`
 	})
 	return v.doc, v.etag, v.err
+}
+
+// exclusions collects the routing blocks applied to a view, keeping one per
+// rule (repository, member, rule, pattern) so an allow list excluding
+// thousands of remote charts reports once, not once per chart.
+type exclusions struct {
+	seen   map[[4]string]bool
+	blocks []*core.RoutingBlock
+}
+
+func (x *exclusions) add(b *core.RoutingBlock) {
+	k := [4]string{b.Repository, b.Member, b.Rule, b.Pattern}
+	if x.seen == nil {
+		x.seen = map[[4]string]bool{}
+	}
+	if !x.seen[k] {
+		x.seen[k] = true
+		x.blocks = append(x.blocks, b)
+	}
+}
+
+// rulesKey fingerprints repo's routing rules for view cache keys, so a rule
+// change takes effect on the next request.
+func rulesKey(repo *core.Repository) string {
+	if repo.Config.Routing.Empty() {
+		return ""
+	}
+	b, err := json.Marshal(repo.Config.Routing)
+	if err != nil {
+		return "rules:?"
+	}
+	sum := sha256.Sum256(b)
+	return "rules:" + hex.EncodeToString(sum[:8]) + ";"
+}
+
+// servedView returns repo's view and records the routing exclusions it
+// applied (metric, X-Hangar-Routing header, audit).
+func (h *handler) servedView(ctx context.Context, repo *core.Repository) (*view, error) {
+	v, err := h.view(ctx, repo, 0)
+	if err != nil {
+		return nil, err
+	}
+	for _, b := range v.blocks {
+		routing.Record(ctx, Name, b)
+	}
+	return v, nil
 }
 
 // view returns the chart versions repo serves. depth guards group nesting.
@@ -230,10 +280,12 @@ func (h *handler) groupView(ctx context.Context, group *core.Repository, depth i
 	}
 	var (
 		views []*view
+		names []string
 		key   strings.Builder
 		first error
 		ok    int
 	)
+	key.WriteString(rulesKey(group))
 	for _, m := range members {
 		if m.Format != Name || !m.Online {
 			continue
@@ -248,6 +300,7 @@ func (h *handler) groupView(ctx context.Context, group *core.Repository, depth i
 		}
 		ok++
 		views = append(views, v)
+		names = append(names, m.Name)
 		fmt.Fprintf(&key, "%p;", v)
 	}
 	if ok == 0 && first != nil {
@@ -257,11 +310,24 @@ func (h *handler) groupView(ctx context.Context, group *core.Repository, depth i
 		return v, nil
 	}
 	gen := h.views.generation(group.Name)
-	var es []*entry
-	for _, v := range views {
-		es = append(es, v.all()...)
+	var (
+		es []*entry
+		ex exclusions
+	)
+	for i, v := range views {
+		for _, b := range v.blocks {
+			ex.add(b)
+		}
+		for _, e := range v.all() {
+			if b := group.MemberRoutingBlock(names[i], e.Name); b != nil {
+				ex.add(b)
+				continue
+			}
+			es = append(es, e)
+		}
 	}
 	v := newView(es, h.now())
+	v.blocks = ex.blocks
 	if first == nil {
 		h.views.put(gen, group, key.String(), v)
 	}
@@ -281,13 +347,16 @@ func (h *handler) locate(ctx context.Context, repo *core.Repository, name, versi
 		a, err := h.deps.Components.GetAsset(ctx, repo.ID, path)
 		return repo, a, err
 	case core.RepoProxy:
+		if err := routing.Check(ctx, repo, name); err != nil {
+			return nil, nil, err
+		}
 		a, err := h.proxyAsset(ctx, repo, name, version, prov)
 		return repo, a, err
 	case core.RepoGroup:
 		if depth >= maxGroupDepth {
 			return nil, nil, fmt.Errorf("group %q nested too deeply: %w", repo.Name, core.ErrInvalid)
 		}
-		members, err := h.deps.Repos.Members(ctx, repo)
+		members, err := routing.Members(ctx, h.deps.Repos, repo, name)
 		if err != nil {
 			return nil, nil, err
 		}

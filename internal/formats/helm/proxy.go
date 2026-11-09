@@ -109,7 +109,7 @@ func (h *handler) refreshIndex(ctx context.Context, repo *core.Repository, cache
 		return nil, err
 	}
 	_, indexURL := remoteIndex(repo)
-	req := core.UpstreamRequest{URL: indexURL, Header: http.Header{"Accept": {"application/x-yaml, application/yaml, text/yaml, */*"}}}
+	req := core.UpstreamRequest{URL: indexURL, Index: true, Header: http.Header{"Accept": {"application/x-yaml, application/yaml, text/yaml, */*"}}}
 	if cached != nil {
 		req.Conditional.ETag = attrString(cached, attrETag)
 		req.Conditional.LastModified, _ = time.Parse(time.RFC3339Nano, attrString(cached, attrLastModified))
@@ -266,13 +266,13 @@ func (h *handler) parsedFor(ctx context.Context, repo *core.Repository, a *core.
 }
 
 // proxyView is the remote's index minus the cached versions that are
-// quarantined here.
+// quarantined here and the charts the repository's routing rules exclude.
 func (h *handler) proxyView(ctx context.Context, repo *core.Repository) (*view, error) {
 	a, err := h.upstreamIndex(ctx, repo)
 	if err != nil {
 		return nil, err
 	}
-	key := string(a.BlobDigest)
+	key := rulesKey(repo) + string(a.BlobDigest)
 	if v, ok := h.views.get(repo, key); ok {
 		return v, nil
 	}
@@ -294,15 +294,21 @@ func (h *handler) proxyView(ctx context.Context, repo *core.Repository) (*view, 
 			}
 		}
 		es := p.entries
-		if len(blocked) > 0 {
+		var ex exclusions
+		if len(blocked) > 0 || !repo.Config.Routing.Empty() {
 			es = make([]*entry, 0, len(p.entries))
 			for _, e := range p.entries {
+				if b := repo.RoutingBlock(e.Name); b != nil {
+					ex.add(b)
+					continue
+				}
 				if !blocked[[2]string{e.Name, e.Version}] {
 					es = append(es, e)
 				}
 			}
 		}
 		v := newView(es, h.now())
+		v.blocks = ex.blocks
 		h.views.put(gen, repo, key, v)
 		return v, nil
 	})
@@ -354,7 +360,7 @@ func (h *handler) fetchFile(ctx context.Context, repo *core.Repository, e *entry
 	if prov {
 		src += provSuffix
 	}
-	body, err := h.fetchURL(ctx, repo, src)
+	body, err := h.fetchURL(ctx, repo, src, e.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -409,13 +415,14 @@ func (h *handler) fetchFile(ctx context.Context, repo *core.Repository, e *entry
 // repository's Upstream, which applies the SSRF guard, breaker, request
 // collapsing, outbound proxy and rate limits, and sends the remote's
 // credentials only to the remote's own origin. URLs on other hosts must be
-// on DefaultChartHosts or the repository's related_hosts.
-func (h *handler) fetchURL(ctx context.Context, repo *core.Repository, raw string) (io.ReadCloser, error) {
+// on DefaultChartHosts or the repository's related_hosts. chart is the
+// routing identity of the file.
+func (h *handler) fetchURL(ctx context.Context, repo *core.Repository, raw, chart string) (io.ReadCloser, error) {
 	up, err := h.deps.Upstreams.ForRepository(ctx, repo)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := up.Fetch(ctx, core.UpstreamRequest{URL: raw, RelatedHosts: DefaultChartHosts})
+	resp, err := up.Fetch(ctx, core.UpstreamRequest{URL: raw, RelatedHosts: DefaultChartHosts, Package: chart})
 	if err != nil {
 		if errors.Is(err, core.ErrInvalid) {
 			host := raw

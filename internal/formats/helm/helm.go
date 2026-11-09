@@ -55,6 +55,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // Name is the format identifier stored in repositories.format.
@@ -281,6 +282,7 @@ func (h *handler) prepareWrite(w http.ResponseWriter, r *http.Request, action co
 // ({"error": "..."}), which `helm cm-push` prints. 401 carries a Basic
 // challenge.
 func (h *handler) fail(w http.ResponseWriter, r *http.Request, err error) {
+	err = routing.Annotate(r.Context(), err)
 	code := core.HTTPStatus(err)
 	msg := err.Error()
 	switch {
