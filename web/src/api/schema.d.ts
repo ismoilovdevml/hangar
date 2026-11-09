@@ -504,7 +504,24 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getRepository"];
-        /** @description Replaces the settings. `name`, `format` and `type` are immutable. */
+        /**
+         * @description Replaces the settings. `name`, `format` and `type` are immutable.
+         *
+         *     Upstream credentials of a proxy repository (`config.proxy.auth`) are
+         *     write-only and follow these rules:
+         *
+         *     - `auth` left out: the stored credentials are kept.
+         *     - `"auth": null`: the credentials are removed.
+         *     - `auth` sent with an empty `password` or `token` and the same
+         *       `kind`, `username` and `header_name`: the stored secret is kept
+         *       (send back what GET returns).
+         *     - When `remote_url` moves to another scheme, host or port, stored
+         *       secrets are never carried over: unless the request resends the
+         *       password or token, or sets `"auth": null`, it is refused with 400.
+         *
+         *     The audit record (`repository.update`) notes `upstream_auth`
+         *     (`added`, `removed`, `replaced` or `unchanged`), never the secret.
+         */
         put: operations["updateRepository"];
         post?: never;
         delete: operations["deleteRepository"];
@@ -2672,7 +2689,8 @@ export interface components {
                 metadata_ttl?: components["schemas"]["Duration"];
                 content_ttl?: components["schemas"]["Duration"];
                 negative_cache_ttl?: components["schemas"]["Duration"];
-                auth?: components["schemas"]["UpstreamAuth"];
+                /** @description Credentials for the remote. On update: left out keeps the stored credentials, null removes them (see updateRepository). */
+                auth?: components["schemas"]["UpstreamAuth"] | null;
                 http?: components["schemas"]["UpstreamHTTP"];
                 circuit_failures?: number;
                 circuit_open_for?: components["schemas"]["Duration"];
