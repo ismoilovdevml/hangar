@@ -312,6 +312,14 @@ export function installCommands(t: Pick<ClientTarget, 'format' | 'url'> & { repo
       return [{ id: 'dnf', label: 'dnf', lines: [l(`sudo dnf install ${p.name}-${v}`)] }];
     case 'raw':
       return [{ id: 'curl', label: 'curl', lines: [l(`curl -u <username>:${TOKEN} -fLO ${url}${full.replace(/^\/+/, '')}`)] }];
+    case 'go': {
+      // Go components are named by module path; versions carry the leading "v".
+      const proxy = url.replace(/\/+$/, '');
+      return [
+        { id: 'go', label: 'go get', lines: [l(`GOPROXY=${proxy},direct go get ${p.name}@${v}`)] },
+        { id: 'gomod', label: 'go.mod', lines: [c('// go.mod'), l(`require ${p.name} ${v}`)] },
+      ];
+    }
     case 'helm': {
       // `helm repo add` names the repository after the Hangar repository (see the set-up snippet).
       const repo = url.replace(/\/+$/, '').split('/').pop() ?? '<repo>';
