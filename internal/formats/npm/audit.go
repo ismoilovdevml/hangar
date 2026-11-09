@@ -61,7 +61,6 @@ func (f *Format) advisoryDB() Advisories {
 	return nil
 }
 
-
 // errAuditUnavailable answers 503: Hangar cannot vouch for the answer.
 var errAuditUnavailable = errors.New("npm audit unavailable")
 
@@ -111,7 +110,7 @@ func (h *handler) audit(w http.ResponseWriter, r *http.Request, repo *core.Repos
 	if err != nil {
 		return err
 	}
-		q := &auditRequest{pkgs: map[string][]string{}, paths: map[string][]string{}}
+	q := &auditRequest{pkgs: map[string][]string{}, paths: map[string][]string{}}
 	if full {
 		err = parseAuditTree(body, q)
 	} else {
@@ -200,9 +199,9 @@ func parseAuditTree(body []byte, q *auditRequest) error {
 
 // auditPlan says who answers for which package versions.
 type auditPlan struct {
-	hosted  map[string]*core.Repository     // by id
+	hosted  map[string]*core.Repository    // by id
 	hostedQ map[string]map[string][]string // repo id -> package -> versions
-	proxies map[string]*core.Repository     // by id
+	proxies map[string]*core.Repository    // by id
 	proxyQ  map[string]map[string][]string
 }
 
@@ -684,4 +683,3 @@ func comparatorMatches(v semver, c string) (bool, bool) {
 	}
 	return false, false
 }
-
