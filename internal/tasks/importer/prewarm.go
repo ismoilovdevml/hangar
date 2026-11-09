@@ -14,7 +14,14 @@ import (
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
+
+// routingBlocked is a fetch a routing rule of the repository refused: the
+// name is kept from the remote (or from a group member) on purpose.
+type routingBlocked struct{ reason string }
+
+func (e *routingBlocked) Error() string { return e.reason }
 
 // coord is a parsed pre-warm coordinate.
 type coord struct {
@@ -129,6 +136,9 @@ func (w *warmJob) getPath(ctx context.Context, path string, hdr http.Header, kee
 		return nil, err
 	}
 	if !r.ok() {
+		if note := r.Header.Get(routing.Header); note != "" && r.Status == http.StatusNotFound {
+			return nil, &routingBlocked{reason: note}
+		}
 		return nil, fmt.Errorf("GET %s: %s", path, r.message())
 	}
 	w.bytes.Add(r.Size)
@@ -163,11 +173,13 @@ type PrewarmResult struct {
 	Done        int   `json:"done"`
 	Cached      int64 `json:"cached"`
 	Failed      int64 `json:"failed"`
-	// Skipped counts lockfile entries left out (not from a registry:
-	// workspace, path, git or link dependencies).
-	Skipped     int64    `json:"skipped"`
-	Bytes       int64    `json:"bytes"`
-	FailedItems []string `json:"failed_items,omitempty"`
+	// Skipped counts coordinates a routing rule of the repository keeps
+	// from its remote (or group member), and lockfile entries left out (not
+	// from a registry: workspace, path, git or link dependencies).
+	Skipped      int64    `json:"skipped"`
+	Bytes        int64    `json:"bytes"`
+	FailedItems  []string `json:"failed_items,omitempty"`
+	SkippedItems []string `json:"skipped_items,omitempty"`
 }
 
 type prewarmState struct {
@@ -248,11 +260,17 @@ func (s *Service) runPrewarm(ctx context.Context, x reporter, cfg *PrewarmConfig
 		if werr != nil && ctx.Err() != nil {
 			return context.Cause(ctx)
 		}
+		var blocked *routingBlocked
+		isBlocked := errors.As(werr, &blocked)
 		mu.Lock()
-		if werr != nil {
+		switch {
+		case isBlocked:
+			res.Skipped++
+			res.SkippedItems = appendCapped(res.SkippedItems, c.raw+": "+blocked.reason)
+		case werr != nil:
 			res.Failed++
 			res.FailedItems = appendCapped(res.FailedItems, c.raw+": "+werr.Error())
-		} else {
+		default:
 			res.Cached++
 		}
 		res.Done++
@@ -266,13 +284,16 @@ func (s *Service) runPrewarm(ctx context.Context, x reporter, cfg *PrewarmConfig
 			state.At = coords[next]
 		}
 		frac := float64(res.Done) / float64(max(len(parsed), 1))
-		msg := fmt.Sprintf("%d of %d · %d cached, %d failed", res.Done, len(parsed), res.Cached, res.Failed)
+		msg := fmt.Sprintf("%d of %d · %d cached, %d failed, %d skipped", res.Done, len(parsed), res.Cached, res.Failed, res.Skipped)
 		save := time.Since(lastSave) > s.opts.CheckpointEvery || next == len(parsed)
 		if save {
 			lastSave = time.Now()
 		}
 		mu.Unlock()
-		if werr != nil {
+		switch {
+		case isBlocked:
+			x.Logf("Skipped %s: %s", c.raw, blocked.reason)
+		case werr != nil:
 			x.Warnf("Failed %s: %v", c.raw, werr)
 		}
 		x.Progress(frac, msg)

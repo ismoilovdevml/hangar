@@ -142,3 +142,21 @@ func TestPrewarmFromInventory(t *testing.T) {
 		t.Fatalf("result JSON %s", b)
 	}
 }
+
+// TestPrewarmRoutingBlocked: names a routing rule keeps from the remote are
+// skipped, not failed, and never reach the remote.
+func TestPrewarmRoutingBlocked(t *testing.T) {
+	h := newHangar(t)
+	src := npmSource(t, map[string][]string{"left-pad": {"1.2.0"}, "@acme/ui": {"0.2.0"}})
+	h.env.AddRepo(t, &core.Repository{Name: "npm-proxy", Format: "npm", Type: core.RepoProxy, Config: core.RepoConfig{
+		Proxy:   &core.ProxyConfig{RemoteURL: src.URL()},
+		Routing: &core.RoutingRules{Block: []string{"@acme/*"}},
+	}})
+	rep, res, err := h.runPrewarm(t, PrewarmConfig{Repository: "npm-proxy", Coordinates: []string{"left-pad@1.2.0", "@acme/ui@0.2.0"}})
+	if err != nil || res.Cached != 1 || res.Skipped != 1 || res.Failed != 0 || len(res.SkippedItems) != 1 {
+		t.Fatalf("pre-warm: %+v %v\n%s", res, err, rep.log())
+	}
+	if n := src.count("/@acme%2fui") + src.count("/@acme/ui"); n != 0 {
+		t.Fatalf("blocked name reached the remote %d times", n)
+	}
+}

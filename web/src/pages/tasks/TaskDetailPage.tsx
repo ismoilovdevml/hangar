@@ -171,7 +171,7 @@ function ImportSummary({ run }: { run: TaskRun }) {
           </div>
           <div>
             <dt>Skipped</dt>
-            <dd title="Lockfile entries no registry serves (workspace, path, git, link)">{count(r.skipped)}</dd>
+            <dd title="Blocked by a routing rule, or lockfile entries no registry serves (workspace, path, git, link)">{count(r.skipped)}</dd>
           </div>
           <div>
             <dt>Coordinates</dt>
@@ -185,6 +185,7 @@ function ImportSummary({ run }: { run: TaskRun }) {
           </div>
         </dl>
         <ItemList title="Failed" items={r.failed_items} />
+        <ItemList title="Skipped by routing rules" items={r.skipped_items} />
       </div>
     );
   }

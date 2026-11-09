@@ -3939,10 +3939,12 @@ export interface components {
             /** @description Coordinates fetched through the proxy (now in its cache) */
             cached?: number;
             failed?: number;
-            /** @description Lockfile entries left out (workspace */
+            /** @description Coordinates a routing rule of the repository keeps from its remote or member, and lockfile entries left out (workspace, path, git, link) */
             skipped?: number;
             bytes?: components["schemas"]["Bytes"];
             failed_items?: string[];
+            /** @description The first 100 routing exclusions */
+            skipped_items?: string[];
         };
         LockfileResult: {
             /** @description The parser used */

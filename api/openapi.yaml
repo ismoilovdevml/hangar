@@ -5280,9 +5280,12 @@ components:
         done: { type: integer }
         cached: { type: integer, description: Coordinates fetched through the proxy (now in its cache) }
         failed: { type: integer }
-        skipped: { type: integer, description: Lockfile entries left out (workspace, path, git, link) }
+        skipped:
+          type: integer
+          description: Coordinates a routing rule of the repository keeps from its remote or member, and lockfile entries left out (workspace, path, git, link)
         bytes: { $ref: "#/components/schemas/Bytes" }
         failed_items: { type: array, items: { type: string } }
+        skipped_items: { type: array, items: { type: string }, description: The first 100 routing exclusions, with the rule }
     LockfileResult:
       type: object
       required: [kind, coordinates, skipped]
