@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/formats/internal/repokit"
@@ -80,7 +81,11 @@ func (h *handler) packagesUnder(ctx context.Context, repo *core.Repository, root
 	if err != nil {
 		return nil, err
 	}
-	var out []pkgFile
+	var (
+		out     []pkgFile
+		stored  []time.Time // UpdatedAt of out[i]
+		byNEVRA = map[string]int{}
+	)
 	for _, a := range assets {
 		if a.Kind != core.AssetContent || !strings.HasSuffix(a.Path, ".rpm") || blocked[a.ComponentID] {
 			continue
@@ -93,10 +98,51 @@ func (h *handler) packagesUnder(ctx context.Context, repo *core.Repository, root
 			h.Log.WarnContext(ctx, "skipping unreadable package", "repository", repo.Name, "path", a.Path, "err", err)
 			continue
 		}
-		out = append(out, pkgFile{Href: strings.TrimPrefix(a.Path, root), SHA256: a.BlobDigest.Hex(), Size: a.Size,
-			Time: a.CreatedAt.Unix(), Header: hd})
+		f := pkgFile{Href: strings.TrimPrefix(a.Path, root), SHA256: a.BlobDigest.Hex(), Size: a.Size,
+			Time: a.CreatedAt.Unix(), Header: hd}
+		// The same name-epoch-version-release.arch at two paths would be
+		// listed twice in primary.xml; the most recently stored copy wins.
+		id := hd.NEVRA()
+		if i, dup := byNEVRA[id]; dup {
+			if a.UpdatedAt.After(stored[i]) {
+				out[i], stored[i] = f, a.UpdatedAt
+			}
+			continue
+		}
+		byNEVRA[id] = len(out)
+		out = append(out, f)
+		stored = append(stored, a.UpdatedAt)
 	}
 	return out, nil
+}
+
+// checkDuplicate refuses, unless the write policy is allow, a package
+// whose name-epoch-version-release.arch is already stored at another path
+// of the same repodata root: a release cannot change under its NEVRA.
+func (h *handler) checkDuplicate(ctx context.Context, repo *core.Repository, hd *pkgHeader, target, root string, depth int) error {
+	if repo.WritePolicy() == core.WriteAllow {
+		return nil
+	}
+	c, err := h.Deps.Components.GetComponent(ctx, repo.ID, "", hd.Name, hd.EVR())
+	if errors.Is(err, core.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	page, err := h.Deps.Components.ListAssets(ctx, core.AssetQuery{RepositoryID: repo.ID, ComponentID: c.ID, Limit: core.MaxPageSize})
+	if err != nil {
+		return err
+	}
+	for _, a := range page.Items {
+		if a.Path == target || !strings.HasSuffix(a.Path, ".rpm") || repokit.AttrString(a.Attributes, attrArch) != hd.Arch {
+			continue
+		}
+		if r, ok := rootOf(a.Path, depth); ok && r == root {
+			return fmt.Errorf("%s is already stored at %s (write policy %s): %w", hd.NEVRA(), a.Path, repo.WritePolicy(), core.ErrWriteDenied)
+		}
+	}
+	return nil
 }
 
 // reindex regenerates root's repodata in a hosted repository. Nothing is
@@ -246,6 +292,10 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request, target, mode s
 		}
 	}
 	root, _ := rootOf(target, depth)
+	if err := h.checkDuplicate(ctx, dest, hd, target, root, depth); err != nil {
+		h.Fail(w, r, err)
+		return
+	}
 	attrs := map[string]any{
 		attrName: hd.Name, attrEVR: hd.EVR(), attrArch: hd.Arch, "epoch": hd.Epoch, "version": hd.Version, "release": hd.Release,
 		attrHeaderStart: hd.HeaderStart, attrHeaderEnd: hd.HeaderEnd, "filename": path.Base(target),
@@ -379,7 +429,9 @@ func (h *handler) serveHosted(w http.ResponseWriter, r *http.Request, repo *core
 			var doc []byte
 			switch {
 			case err == nil:
-				doc, err = h.ReadAsset(ctx, repo, a, maxRepomdBytes)
+				if doc, err = h.ReadAsset(ctx, repo, a, maxRepomdBytes); err == nil {
+					doc = h.pins.document(pinKey(r, repo, root), doc, a.UpdatedAt, time.Now())
+				}
 			case errors.Is(err, core.ErrNotFound) && root == "" && formatConfig(repo).RepodataDepth == 0:
 				doc, err = emptyRepodata().Files["repodata/repomd.xml"].Data, nil
 			}
@@ -400,6 +452,17 @@ func (h *handler) serveHosted(w http.ResponseWriter, r *http.Request, repo *core
 			h.ServeBytes(w, r, f.Data, f.ContentType, h.Now())
 			return
 		}
+	}
+	if err == nil && isMeta && file == "repomd.xml" {
+		// Remember which document this client got, for its signature request.
+		doc, rerr := h.ReadAsset(ctx, repo, a, maxRepomdBytes)
+		if rerr != nil {
+			h.Fail(w, r, rerr)
+			return
+		}
+		h.pins.served(pinKey(r, repo, root), doc, time.Now())
+		h.ServeBytes(w, r, doc, a.ContentType, a.UpdatedAt)
+		return
 	}
 	if err == nil {
 		err = h.CheckQuarantine(ctx, a)
