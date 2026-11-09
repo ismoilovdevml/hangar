@@ -31,6 +31,36 @@
     listener closes, for load balancers that poll `/readyz`.
     `server.shutdown_timeout` is now validated (1s to 24h). Kubernetes
     guidance: `docs/deploy/high-availability.md#draining-nodes`.
+- **Vulnerability scanning of APT and RPM packages by distribution release.**
+  A repository's `config.scanning.distro` (an OSV ecosystem such as
+  `Debian:12`, `Ubuntu:22.04:LTS`, `Rocky Linux:9`, `AlmaLinux:9`,
+  `Red Hat:enterprise_linux:9::baseos`; **Distribution release** in the
+  repository settings, a picker with the common releases plus free text)
+  names the release whose advisories apply. Proxies of Debian and Ubuntu
+  archives detect it from the suites clients fetch, Rocky Linux, AlmaLinux and
+  Red Hat proxies from the remote URL; the setting wins. Packages are checked
+  by source package (Debian `Source:`, with the source version of binNMUs) or
+  source RPM, versions are ordered like dpkg and rpm do, and the fix plan
+  suggests `apt-get install --only-upgrade` / `dnf upgrade` for the installed
+  binaries. A repository whose release is set or changes is rescanned.
+  Migration `00265` adds `repository_distros`.
+- **OIDC sign-out ends the provider session too** (RP-Initiated Logout).
+  `auth.oidc.logout: provider` (default; *Sign out* in Settings →
+  Authentication) sends the browser to the provider's `end_session_endpoint`
+  with `id_token_hint`, `client_id` and `post_logout_redirect_uri` =
+  `<base_url>/login`; `local` ends the Hangar session only, as does a provider
+  without the endpoint. The ID token is stored with the session, sealed with a
+  key derived from the session cookie (migration `00266`). `POST
+  /api/v1/auth/logout` answers `200 {"logout_url"}` for a provider sign-out,
+  `204` otherwise. Register `<base_url>/login` as a post-logout redirect URI
+  (Keycloak: *Valid post logout redirect URIs*). Back-channel logout is not
+  supported.
+- **LDAP / Active Directory acceptance test.** `test/e2e/ldap/run.sh` runs
+  `TestLDAP` (build tag `e2e`) against OpenLDAP and a Samba AD domain
+  controller in Docker: sign-in, group mapping with AD nested groups,
+  StartTLS and ldaps with certificate checks, wrong passwords, lockout, Basic
+  auth from a package client and the settings *Test* endpoint.
+
 - **Web UI: format settings and signing keys.** The repository form edits
   APT `architectures`, RPM `repodata_depth`, the APT/RPM `signing_key`, Go
   proxy `sumdbs` and `sumdb_via`, Cargo proxy `download_url` and Helm proxy

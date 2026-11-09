@@ -128,6 +128,7 @@ type PlanFinding struct {
 	affected      string
 	fixedVersions []string
 	lastDownload  *time.Time
+	binary        string // the component's own name (an APT or RPM binary package of a source package)
 }
 
 // PackagePlan is schema PackagePlan: one package and what upgrading it fixes.
@@ -183,7 +184,7 @@ func (s *store) planFindings(ctx context.Context, q FixPlanQuery) ([]*PlanFindin
 	}
 	rows, err := s.pool.Query(ctx, `SELECT f.id::text, f.advisory_id, f.aliases, f.title, f.severity, f.cvss::float8, f.status,
 		f.package, f.installed, f.fixed_in, f.fixed_versions, f.affected, f.assignee, f.waiver_until,
-		c.id::text, c.last_downloaded_at, r.name, r.format`+findingFrom+` WHERE `+strings.Join(where, " AND ")+
+		c.id::text, c.last_downloaded_at, r.name, r.format, c.name`+findingFrom+` WHERE `+strings.Join(where, " AND ")+
 		` ORDER BY f.package, f.id`, b.args...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("fix plan: %w", err)
@@ -194,7 +195,7 @@ func (s *store) planFindings(ctx context.Context, q FixPlanQuery) ([]*PlanFindin
 		var pkg, format string
 		err := r.Scan(&f.ID, &f.AdvisoryID, &f.Aliases, &f.Title, &f.Severity, &f.CVSS, &f.Status, &pkg, &f.Installed,
 			&f.FixedIn, &f.fixedVersions, &f.affected, &f.Assignee, &f.WaiverUntil, &f.ComponentID, &f.lastDownload,
-			&f.Repository, &format)
+			&f.Repository, &format, &f.binary)
 		if err != nil {
 			return nil, err
 		}
@@ -453,7 +454,8 @@ func packagePlan(key string, list []*PlanFinding, byComp map[string]*pullAgg) *P
 	}
 	p.AssigneeMixed = len(assignees) > 1 || (len(assignees) == 1 && unassigned)
 	p.Repositories = slices.Sorted(maps.Keys(repos))
-	p.Versions = slices.SortedFunc(maps.Keys(versions), osv.CompareVersions)
+	order := versionOrder(format)
+	p.Versions = slices.SortedFunc(maps.Keys(versions), order)
 	p.Advisories = make([]Advisory, 0, len(advisories))
 	for _, a := range advisories {
 		p.Advisories = append(p.Advisories, *a)
@@ -464,7 +466,7 @@ func packagePlan(key string, list []*PlanFinding, byComp map[string]*pullAgg) *P
 	})
 	slices.SortFunc(p.Items, func(a, b *PlanFinding) int {
 		return cmp.Or(cmp.Compare(severityOrder(a.Severity), severityOrder(b.Severity)), -cmp.Compare(cvssOf(a.CVSS), cvssOf(b.CVSS)),
-			osv.CompareVersions(a.Installed, b.Installed), strings.Compare(a.AdvisoryID, b.AdvisoryID), strings.Compare(a.ID, b.ID))
+			order(a.Installed, b.Installed), strings.Compare(a.AdvisoryID, b.AdvisoryID), strings.Compare(a.ID, b.ID))
 	})
 	p.Upgrades = Upgrades(format, pkg, list)
 	for _, u := range p.Upgrades {
@@ -493,10 +495,12 @@ func (t *Totals) add(severity string) {
 // fix at all. Candidates are the fixing versions the advisories name; one is
 // accepted when no finding's affected ranges contain it (or, when an
 // advisory's ranges are unknown, when it is at least that finding's fix).
+// Versions are ordered the way the format's package manager orders them.
 func Upgrades(format, pkg string, findings []*PlanFinding) []UpgradeLine {
+	order, scheme := versionOrder(format), versionScheme(format)
 	byLine := map[string][]*PlanFinding{}
 	for _, f := range findings {
-		line := osv.Major(f.Installed)
+		line := osv.MajorFor(scheme, f.Installed)
 		byLine[line] = append(byLine[line], f)
 	}
 	lines := slices.SortedFunc(maps.Keys(byLine), osv.CompareVersions)
@@ -510,7 +514,7 @@ func Upgrades(format, pkg string, findings []*PlanFinding) []UpgradeLine {
 		var fixable []*PlanFinding
 		for _, f := range list {
 			from[f.Installed] = true
-			if highest == "" || osv.CompareVersions(f.Installed, highest) > 0 {
+			if highest == "" || order(f.Installed, highest) > 0 {
 				highest = f.Installed
 			}
 			if f.FixedIn == nil {
@@ -523,13 +527,16 @@ func Upgrades(format, pkg string, findings []*PlanFinding) []UpgradeLine {
 				cands[v] = true
 			}
 		}
-		u.From = slices.SortedFunc(maps.Keys(from), osv.CompareVersions)
-		for _, c := range slices.SortedFunc(maps.Keys(cands), osv.CompareVersions) {
-			if osv.CompareVersions(c, highest) <= 0 || !fixesAll(c, fixable) {
+		u.From = slices.SortedFunc(maps.Keys(from), order)
+		for _, c := range slices.SortedFunc(maps.Keys(cands), order) {
+			if order(c, highest) <= 0 || !fixesAll(c, fixable, order) {
 				continue
 			}
 			to := c
 			cmd := UpgradeCommand(format, pkg, c)
+			if IsDistroFormat(format) {
+				cmd = distroUpgradeCommand(format, pkg, list)
+			}
 			u.To, u.Fixes = &to, len(fixable)
 			if cmd != "" {
 				u.Command = &cmd
@@ -541,25 +548,57 @@ func Upgrades(format, pkg string, findings []*PlanFinding) []UpgradeLine {
 	return out
 }
 
-func fixesAll(version string, findings []*PlanFinding) bool {
+func fixesAll(version string, findings []*PlanFinding, order func(a, b string) int) bool {
 	for _, f := range findings {
-		if affected, known := osv.Affects(f.affected, version); known {
+		if affected, known := osv.AffectsBy(f.affected, version, order); known {
 			if affected {
 				return false
 			}
 			continue
 		}
-		if f.FixedIn == nil || osv.CompareVersions(version, *f.FixedIn) < 0 {
+		if f.FixedIn == nil || order(version, *f.FixedIn) < 0 {
 			return false
 		}
 	}
 	return true
 }
 
+// distroUpgradeCommand upgrades the installed binary packages of a source
+// package: the advisories name the source (openssl), hosts install its
+// binaries (libssl3, openssl). The package manager picks the fixed build
+// from the configured repositories.
+func distroUpgradeCommand(format, source string, findings []*PlanFinding) string {
+	var names []string
+	for _, f := range findings {
+		if f.binary != "" && !slices.Contains(names, f.binary) {
+			names = append(names, f.binary)
+		}
+	}
+	if len(names) == 0 {
+		names = []string{source}
+	}
+	slices.Sort(names)
+	words := make([]string, len(names))
+	for i, n := range names {
+		words[i] = shellWord(n)
+	}
+	switch format {
+	case "apt":
+		return "apt-get install --only-upgrade " + strings.Join(words, " ")
+	case "rpm":
+		return "dnf upgrade " + strings.Join(words, " ")
+	}
+	return ""
+}
+
 // UpgradeCommand is the command that moves a project to version of pkg in
 // the format's usual tool ("" for formats without one).
 func UpgradeCommand(format, pkg, version string) string {
 	switch format {
+	case "apt":
+		return "apt-get install --only-upgrade " + shellWord(pkg)
+	case "rpm":
+		return "dnf upgrade " + shellWord(pkg)
 	case "nuget":
 		return "dotnet add package " + shellWord(pkg) + " --version " + shellWord(version)
 	case "npm":

@@ -2,7 +2,7 @@ import { useId, useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, useRouter } from '@tanstack/react-router';
 import { ApiRequestError, apiFetch } from '../api/client';
-import { queryKeys, useLogout, useSession, useSystemStatus } from '../api/hooks';
+import { leaveAfterLogout, queryKeys, useLogout, useSession, useSystemStatus } from '../api/hooks';
 import { IconCheck, IconLogo } from '../components/icons';
 import { DEFAULT_PASSWORD_POLICY, passwordChecks } from '../lib/passwordPolicy';
 import { safeRedirect } from '../lib/redirect';
@@ -67,7 +67,7 @@ export function ChangePasswordPage() {
   };
 
   const signOut = () =>
-    logout.mutate(undefined, { onSettled: () => void router.navigate({ to: '/login', replace: true }) });
+    logout.mutate(undefined, { onSettled: (res) => leaveAfterLogout(res, () => void router.navigate({ to: '/login', replace: true })) });
 
   const currentMissing = submitted && !current;
   const nextInvalid = submitted && unmet.some((c) => c.id !== 'match');

@@ -133,6 +133,7 @@ type discoveryDoc struct {
 	Authorization string `json:"authorization_endpoint"`
 	Token         string `json:"token_endpoint"`
 	JWKS          string `json:"jwks_uri"`
+	EndSession    string `json:"end_session_endpoint"`
 }
 
 func probeOIDC(ctx context.Context, cfg auth.OIDCConfig) *TestResult {
@@ -183,6 +184,16 @@ func probeOIDC(ctx context.Context, cfg auth.OIDCConfig) *TestResult {
 	t = time.Now()
 	status, msg := clientCredentials(ctx, client, cfg, doc.Token)
 	res.step("client_credentials", status, msg, t)
+
+	t = time.Now()
+	switch {
+	case cfg.Logout == auth.OIDCLogoutLocal:
+		res.step("logout", StepSkipped, "logout is local: signing out ends the Hangar session only", t)
+	case doc.EndSession != "":
+		res.step("logout", StepOK, "end_session_endpoint found: signing out also ends the provider session", t)
+	default:
+		res.step("logout", StepSkipped, "the provider has no end_session_endpoint: signing out ends the Hangar session only", t)
+	}
 	switch status {
 	case StepOK:
 		res.finish("Discovery and client credentials verified")

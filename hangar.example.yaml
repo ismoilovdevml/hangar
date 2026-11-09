@@ -237,6 +237,11 @@ auth:
     # How the secret reaches the token endpoint: basic (client_secret_basic)
     # or post (client_secret_post).
     client_auth: basic
+    # Sign out: provider also ends the provider session (OpenID Connect
+    # RP-Initiated Logout, when discovery lists an end_session_endpoint);
+    # local ends the Hangar session only. Register the post-logout redirect
+    # URI <server.base_url>/login at the provider.
+    logout: provider
     display_name: SSO # "Continue with SSO"
     # Do not add "groups": groups arrive through a claim mapper, and some
     # providers reject unknown scopes.

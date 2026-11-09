@@ -19,7 +19,7 @@ import { authProviders } from './data';
 
 const api = (path: string) => `*/api/v1${path}`;
 const ROLES = ['Admin', 'Publisher', 'Reader', 'CI deployer'];
-const OIDC_FIELDS = ['enabled', 'issuer_url', 'client_id', 'client_secret', 'client_auth', 'display_name', 'scopes', 'username_claim', 'email_claim', 'name_claim', 'groups_claim', 'ca_pem', 'group_roles', 'default_roles', 'allowed_groups', 'auto_create'];
+const OIDC_FIELDS = ['enabled', 'issuer_url', 'client_id', 'client_secret', 'client_auth', 'logout', 'display_name', 'scopes', 'username_claim', 'email_claim', 'name_claim', 'groups_claim', 'ca_pem', 'group_roles', 'default_roles', 'allowed_groups', 'auto_create'];
 export const LDAP_FILE_FIELDS = ['enabled', 'url', 'start_tls', 'ca_pem', 'bind_dn', 'bind_password', 'user_base_dn', 'user_filter', 'username_attribute', 'email_attribute', 'name_attribute', 'group_attribute', 'group_base_dn', 'group_filter', 'group_name_attribute', 'nested_groups', 'group_roles', 'default_roles', 'allowed_groups', 'auto_create'];
 const PROXY_FILE_FIELDS = ['scheme', 'host', 'port', 'username', 'password', 'no_proxy', 'redirect_hosts', 'ca_pem', 'default'];
 const iso = (offsetMs = 0) => new Date(Date.now() + offsetMs).toISOString();
@@ -31,6 +31,7 @@ function seed() {
     client_id: 'hangar',
     client_secret_configured: true,
     client_auth: 'basic',
+    logout: 'provider',
     display_name: 'company SSO',
     scopes: ['openid', 'profile', 'email'],
     username_claim: 'preferred_username',

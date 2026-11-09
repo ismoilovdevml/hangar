@@ -40,14 +40,20 @@ func parseAffected(s string) ([]interval, bool) {
 }
 
 // Affects reports whether version falls in one of the affected ranges
-// described by s (as Remedy writes them). known is false when s cannot be read.
+// described by s (as Remedy writes them), by the generic version order.
+// known is false when s cannot be read.
 func Affects(s, version string) (affected, known bool) {
+	return AffectsBy(s, version, CompareVersions)
+}
+
+// AffectsBy is Affects with the version order cmp.
+func AffectsBy(s, version string, cmp func(a, b string) int) (affected, known bool) {
 	ivs, ok := parseAffected(s)
 	if !ok {
 		return false, false
 	}
 	for _, iv := range ivs {
-		if iv.contains(version) {
+		if iv.contains(version, cmp) {
 			return true, true
 		}
 	}

@@ -346,7 +346,7 @@ func (s *Service) RescanAll(ctx context.Context) (*Rescan, bool, error) {
 			return nil
 		}
 		rows, err := tx.Query(ctx, `SELECT r.id::text FROM repositories r
-			WHERE r.format = ANY($1) AND EXISTS (SELECT 1 FROM components c WHERE c.repo_id = r.id) ORDER BY r.name`, SupportedFormats())
+			WHERE `+ScannableSQL("r")+` AND EXISTS (SELECT 1 FROM components c WHERE c.repo_id = r.id) ORDER BY r.name`)
 		if err != nil {
 			return err
 		}
@@ -397,10 +397,10 @@ func latestRescan(ctx context.Context, q querier, now time.Time) (*Rescan, error
 	var r Rescan
 	err := q.QueryRow(ctx, `SELECT v.id::text, v.started_at, v.started_by, v.repositories,
 		(SELECT count(*) FROM components c JOIN repositories r ON r.id = c.repo_id
-			WHERE r.format = ANY($1) AND c.created_at <= v.started_at),
+			WHERE `+ScannableSQL("r")+` AND c.created_at <= v.started_at),
 		(SELECT count(*) FROM components c JOIN repositories r ON r.id = c.repo_id JOIN component_scans s ON s.component_id = c.id
-			WHERE r.format = ANY($1) AND c.created_at <= v.started_at AND s.scanned_at >= v.started_at)
-		FROM vulnerability_rescans v ORDER BY v.started_at DESC LIMIT 1`, SupportedFormats()).
+			WHERE `+ScannableSQL("r")+` AND c.created_at <= v.started_at AND s.scanned_at >= v.started_at)
+		FROM vulnerability_rescans v ORDER BY v.started_at DESC LIMIT 1`).
 		Scan(&r.ID, &r.StartedAt, &r.StartedBy, &r.Repositories, &r.Total, &r.Done)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

@@ -113,6 +113,9 @@ func (h *handler) upload(w http.ResponseWriter, r *http.Request) {
 // facts the UI and package info show.
 func componentOf(c *control) *core.Component {
 	attrs := map[string]any{"source": c.Source}
+	if c.SourceVersion != "" {
+		attrs["source_version"] = c.SourceVersion
+	}
 	desc := c.Para.Get("Description")
 	if summary, long, ok := strings.Cut(desc, "\n"); ok {
 		attrs["summary"] = strings.TrimSpace(summary)

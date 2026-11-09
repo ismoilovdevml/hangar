@@ -54,7 +54,18 @@ type OIDCConfig struct {
 	CAPEM string `yaml:"-"`
 	// Timeout bounds each request to the provider.
 	Timeout time.Duration `yaml:"timeout"`
+	// Logout is what signing out of Hangar does: OIDCLogoutProvider (the
+	// default) also ends the provider session through OpenID Connect
+	// RP-Initiated Logout when the provider advertises an
+	// end_session_endpoint; OIDCLogoutLocal ends the Hangar session only.
+	Logout string `yaml:"logout"`
 }
+
+// Values of OIDCConfig.Logout.
+const (
+	OIDCLogoutProvider = "provider"
+	OIDCLogoutLocal    = "local"
+)
 
 // LDAPConfig configures username/password sign-in against an LDAP directory
 // or Active Directory, on the login form (realm "ldap") and with HTTP Basic.
@@ -241,6 +252,9 @@ func (c OIDCConfig) WithDefaults() OIDCConfig {
 	if c.ClientAuth == "" {
 		c.ClientAuth = "basic"
 	}
+	if c.Logout == "" {
+		c.Logout = OIDCLogoutProvider
+	}
 	if len(c.Scopes) == 0 {
 		c.Scopes = []string{"openid", "profile", "email"}
 	}
@@ -316,6 +330,9 @@ func (c OIDCConfig) Problems() []FieldError {
 	}
 	if c.ClientAuth != "basic" && c.ClientAuth != "post" {
 		add("client_auth", fmt.Sprintf("%q: want basic or post", c.ClientAuth))
+	}
+	if c.Logout != OIDCLogoutProvider && c.Logout != OIDCLogoutLocal {
+		add("logout", fmt.Sprintf("%q: want provider or local", c.Logout))
 	}
 	if !slices.Contains(c.Scopes, "openid") {
 		add("scopes", "must include openid")

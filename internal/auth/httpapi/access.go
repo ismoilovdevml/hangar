@@ -164,7 +164,7 @@ func (h *handler) changePassword(w http.ResponseWriter, r *http.Request) {
 	// A new credential gets a new session id (session fixation); for a user
 	// who had to change their password, the new session is unrestricted.
 	if ra := authFrom(r.Context()); ra != nil && ra.session != nil {
-		if err := h.startSession(w, r, core.PrincipalFrom(r.Context()), ra.session.Remember); err != nil {
+		if _, err := h.startSession(w, r, core.PrincipalFrom(r.Context()), ra.session.Remember); err != nil {
 			h.writeError(w, r, err)
 			return
 		}

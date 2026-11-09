@@ -120,7 +120,10 @@ var (
 // control is the identity of a binary package taken from its control file.
 type control struct {
 	Package, Version, Architecture, Source string
-	Para                                   paragraph
+	// SourceVersion is the source package version when the control file
+	// names one that differs from Version ("Source: name (version)").
+	SourceVersion string
+	Para          paragraph
 }
 
 func parseControl(b []byte) (*control, error) {
@@ -139,9 +142,14 @@ func parseControl(b []byte) (*control, error) {
 	}
 	c.Source = c.Package
 	if s := p.Get("Source"); s != "" {
-		name, _, _ := strings.Cut(s, " ") // "Source: name (version)"
+		name, rest, _ := strings.Cut(s, " ") // "Source: name (version)"
 		if packageNameRE.MatchString(name) {
 			c.Source = name
+			if v := strings.TrimSpace(rest); strings.HasPrefix(v, "(") && strings.HasSuffix(v, ")") {
+				if v = strings.TrimSpace(v[1 : len(v)-1]); versionRE.MatchString(v) && v != c.Version {
+					c.SourceVersion = v
+				}
+			}
 		}
 	}
 	return c, nil

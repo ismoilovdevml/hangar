@@ -52,19 +52,39 @@ type Target struct {
 	QuarantineCritical bool
 	// LastOK is the last successful scan (nil if none).
 	LastOK *time.Time
+	// Distro is the repository's scanning.distro setting and Detected the
+	// release detected from its remote (APT and RPM).
+	Distro   string
+	Detected string
+}
+
+// Ecosystem is the OSV ecosystem the target is checked in; false when its
+// format has none or, for APT and RPM, its distribution release is unknown.
+func (t *Target) Ecosystem() (string, bool) {
+	if e, ok := Ecosystem(t.Format); ok {
+		return e, true
+	}
+	if !IsDistroFormat(t.Format) {
+		return "", false
+	}
+	if t.Distro != "" {
+		return t.Distro, true
+	}
+	return t.Detected, t.Detected != ""
 }
 
 const targetCols = `c.id::text, c.repo_id::text, r.name, r.format, c.namespace, c.name, c.version, c.attributes,
 	COALESCE((r.config->>'scan_on_arrival')::boolean, false), COALESCE((r.config->>'quarantine_critical')::boolean, false),
-	s.ok_at`
+	s.ok_at, COALESCE(r.config->'scanning'->>'distro', ''), COALESCE(d.ecosystem, '')`
 
 const targetFrom = ` FROM components c JOIN repositories r ON r.id = c.repo_id
-	LEFT JOIN component_scans s ON s.component_id = c.id`
+	LEFT JOIN component_scans s ON s.component_id = c.id
+	LEFT JOIN repository_distros d ON d.repo_id = r.id AND d.source = '` + DistroFromRemote + `'`
 
 func scanTarget(row pgx.Row) (*Target, error) {
 	var t Target
 	if err := row.Scan(&t.ComponentID, &t.RepositoryID, &t.Repository, &t.Format, &t.Namespace, &t.Name, &t.Version,
-		&t.Attributes, &t.ScanOnArrival, &t.QuarantineCritical, &t.LastOK); err != nil {
+		&t.Attributes, &t.ScanOnArrival, &t.QuarantineCritical, &t.LastOK, &t.Distro, &t.Detected); err != nil {
 		return nil, err
 	}
 	return &t, nil
@@ -99,8 +119,8 @@ func (s *store) target(ctx context.Context, componentID string) (*Target, error)
 // repoTargets pages through the scannable components of one repository by id.
 func (s *store) repoTargets(ctx context.Context, repoID, after string, limit int) ([]*Target, error) {
 	return collectTargets(s.pool.Query(ctx, `SELECT `+targetCols+targetFrom+`
-		WHERE c.repo_id = $1 AND r.format = ANY($2) AND c.id > $3::uuid ORDER BY c.id LIMIT $4`,
-		repoID, SupportedFormats(), afterID(after), limit))
+		WHERE c.repo_id = $1 AND `+ScannableSQL("r")+` AND c.id > $2::uuid ORDER BY c.id LIMIT $3`,
+		repoID, afterID(after), limit))
 }
 
 // dueTargets pages through the components that need a scan: never scanned,
@@ -108,21 +128,21 @@ func (s *store) repoTargets(ctx context.Context, repoID, after string, limit int
 // interval ago.
 func (s *store) dueTargets(ctx context.Context, interval, retryAfter time.Duration, after string, limit int) ([]*Target, error) {
 	return collectTargets(s.pool.Query(ctx, `SELECT `+targetCols+targetFrom+`
-		WHERE r.format = ANY($1) AND c.id > $2::uuid AND (s.component_id IS NULL
-			OR (s.status = 'failed' AND s.scanned_at < now() - $3::interval)
-			OR (s.status = 'ok' AND s.ok_at < now() - $4::interval))
-		ORDER BY c.id LIMIT $5`,
-		SupportedFormats(), afterID(after), pgInterval(retryAfter), pgInterval(interval), limit))
+		WHERE `+ScannableSQL("r")+` AND c.id > $1::uuid AND (s.component_id IS NULL
+			OR (s.status = 'failed' AND s.scanned_at < now() - $2::interval)
+			OR (s.status = 'ok' AND s.ok_at < now() - $3::interval))
+		ORDER BY c.id LIMIT $4`,
+		afterID(after), pgInterval(retryAfter), pgInterval(interval), limit))
 }
 
 // countDue counts what dueTargets would return in total.
 func (s *store) countDue(ctx context.Context, interval, retryAfter time.Duration) (int64, error) {
 	var n int64
 	err := s.pool.QueryRow(ctx, `SELECT count(*)`+targetFrom+`
-		WHERE r.format = ANY($1) AND (s.component_id IS NULL
-			OR (s.status = 'failed' AND s.scanned_at < now() - $2::interval)
-			OR (s.status = 'ok' AND s.ok_at < now() - $3::interval))`,
-		SupportedFormats(), pgInterval(retryAfter), pgInterval(interval)).Scan(&n)
+		WHERE `+ScannableSQL("r")+` AND (s.component_id IS NULL
+			OR (s.status = 'failed' AND s.scanned_at < now() - $1::interval)
+			OR (s.status = 'ok' AND s.ok_at < now() - $2::interval))`,
+		pgInterval(retryAfter), pgInterval(interval)).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("count components due for a scan: %w", err)
 	}
@@ -742,17 +762,17 @@ type Coverage struct {
 // coverage counts the components of the allowed repositories by scan status.
 func (s *store) coverage(ctx context.Context, repoIDs []string) (*Coverage, error) {
 	var b builder
-	supported := b.arg(SupportedFormats())
+	scannable := ScannableSQL("r")
 	cond := ""
 	if repoIDs != nil {
 		cond = " WHERE c.repo_id = ANY(" + b.arg(repoIDs) + "::uuid[])"
 	}
 	var c Coverage
 	err := s.pool.QueryRow(ctx, `SELECT
-		count(*) FILTER (WHERE r.format = ANY(`+supported+`) AND s.status = 'ok'),
-		count(*) FILTER (WHERE r.format = ANY(`+supported+`) AND s.status = 'failed'),
-		count(*) FILTER (WHERE r.format = ANY(`+supported+`) AND s.component_id IS NULL),
-		count(*) FILTER (WHERE NOT (r.format = ANY(`+supported+`))),
+		count(*) FILTER (WHERE `+scannable+` AND s.status = 'ok'),
+		count(*) FILTER (WHERE `+scannable+` AND s.status = 'failed'),
+		count(*) FILTER (WHERE `+scannable+` AND s.component_id IS NULL),
+		count(*) FILTER (WHERE NOT `+scannable+`),
 		max(s.ok_at)`+targetFrom+cond, b.args...).Scan(&c.Scanned, &c.Failed, &c.Never, &c.Unsupported, &c.LastScanAt)
 	if err != nil {
 		return nil, fmt.Errorf("scan coverage: %w", err)
@@ -773,7 +793,17 @@ type ComponentScan struct {
 
 // componentScan reads the scan row of a component of format.
 func (s *store) componentScan(ctx context.Context, componentID, format string) (*ComponentScan, error) {
-	if _, ok := Ecosystem(format); !ok {
+	scanned := false
+	if _, ok := Ecosystem(format); ok {
+		scanned = true
+	} else if IsDistroFormat(format) {
+		t, err := s.target(ctx, componentID)
+		if err != nil {
+			return nil, err
+		}
+		_, scanned = t.Ecosystem()
+	}
+	if !scanned {
 		return &ComponentScan{Status: StatusUnsupported, Error: UnsupportedReason(format)}, nil
 	}
 	var cs ComponentScan

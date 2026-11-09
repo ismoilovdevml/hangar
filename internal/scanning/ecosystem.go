@@ -12,8 +12,20 @@ var ecosystems = map[string]string{
 	"cargo": "crates.io",
 }
 
-// SupportedFormats are the formats whose components are scanned.
+// SupportedFormats are the formats whose components are scanned. APT and
+// RPM repositories are scanned too once their distribution release is
+// known (IsDistroFormat, ScannableSQL).
 func SupportedFormats() []string { return []string{"cargo", "go", "maven", "npm", "nuget", "pypi"} }
+
+// ScannableSQL is the SQL condition that a repository (alias r) is
+// scanned: a format with an advisory database, or an APT or RPM repository
+// with a known distribution release (scanning.distro, or detected and
+// recorded in repository_distros).
+func ScannableSQL(r string) string {
+	return `(` + r + `.format IN ('` + strings.Join(SupportedFormats(), "', '") + `') OR (` + r + `.format IN ('` +
+		strings.Join(distroFormats, "', '") + `') AND (COALESCE(` + r + `.config->'scanning'->>'distro', '') <> ''
+		OR EXISTS (SELECT 1 FROM repository_distros rd WHERE rd.repo_id = ` + r + `.id AND rd.source = '` + DistroFromRemote + `'))))`
+}
 
 // Ecosystem returns the OSV ecosystem of a format.
 func Ecosystem(format string) (string, bool) {
@@ -27,9 +39,9 @@ func UnsupportedReason(format string) string {
 		return "image scanning not configured"
 	}
 	// Distribution advisories (OSV "Debian:12", "Rocky Linux:9", ...) only
-	// apply to a known release; hosted custom packages have none.
-	if format == "apt" || format == "rpm" {
-		return "no advisory source: the distribution release of these packages is unknown"
+	// apply to a known release.
+	if IsDistroFormat(format) {
+		return "no advisory source: set the distribution release (scanning.distro) in the repository settings"
 	}
 	return "no advisory database for " + format + " packages"
 }
@@ -37,9 +49,12 @@ func UnsupportedReason(format string) string {
 // PackageName renders a component's package name the way its ecosystem's
 // advisories name it: npm "@scope/name", Maven "groupId:artifactId", NuGet
 // the original-case id when known, Go the module path, PyPI and crates.io
-// the published spelling.
+// the published spelling, APT the source package and RPM the source RPM.
 func PackageName(format, namespace, name string, attrs map[string]any) string {
 	switch format {
+	case "apt", "rpm":
+		n, _ := distroPackage(format, name, "", attrs)
+		return n
 	case "npm":
 		if namespace != "" {
 			if !strings.HasPrefix(namespace, "@") {
@@ -65,4 +80,15 @@ func PackageName(format, namespace, name string, attrs map[string]any) string {
 		}
 	}
 	return name
+}
+
+// PackageVersion is the version advisories compare for a component: the
+// source package version of a Debian binary built from a differently
+// versioned source, the component version otherwise.
+func PackageVersion(format, version string, attrs map[string]any) string {
+	if format == "apt" {
+		_, v := distroPackage(format, "", version, attrs)
+		return v
+	}
+	return version
 }

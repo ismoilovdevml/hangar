@@ -5,7 +5,9 @@
 import { Select } from '../../components/Select';
 import {
   APT_DEFAULT_ARCHITECTURES,
+  DISTRO_RELEASES,
   formatSettingKeys,
+  hasDistroSetting,
   RELATED_HOSTS_FORMATS,
   RPM_MAX_REPODATA_DEPTH,
   type RepoForm,
@@ -33,10 +35,44 @@ const describedBy = (field: RepoFormField, errors: RepoFormErrors, hint: string)
 export function FormatSettings({ form, set, errors, blur }: { form: RepoForm; set: Setter; errors: RepoFormErrors; blur: (f: RepoFormField) => () => void }) {
   const keys = formatSettingKeys(form.format, form.type);
   const relatedHosts = form.type === 'proxy' && !!form.format && RELATED_HOSTS_FORMATS.includes(form.format);
-  if (keys.length === 0 && !relatedHosts) return null;
+  const distro = hasDistroSetting(form.format, form.type);
+  if (keys.length === 0 && !relatedHosts && !distro) return null;
 
   return (
     <>
+      {distro && (
+        <div className="field">
+          <label htmlFor={fieldId('distro')} className="field__label">
+            Distribution release <span className="field__optional">optional</span>
+          </label>
+          <input
+            className="input input--mono"
+            type="text"
+            list="repo-distro-releases"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={form.type === 'proxy' ? 'Detect from the remote' : form.format === 'apt' ? 'Debian:12' : 'Rocky Linux:9'}
+            value={form.distro}
+            onChange={(e) => set('distro', e.target.value)}
+            onBlur={blur('distro')}
+            {...invalidProps('distro', errors, 'repo-distro-hint')}
+          />
+          <datalist id="repo-distro-releases">
+            {(form.format ? (DISTRO_RELEASES[form.format] ?? []) : []).map((r) => (
+              <option key={r} value={r} />
+            ))}
+          </datalist>
+          {!errors.distro && (
+            <span id="repo-distro-hint" className="field__hint">
+              {form.type === 'proxy'
+                ? 'Vulnerability advisories apply to one release. Empty: detected for Debian, Ubuntu, Rocky Linux and AlmaLinux mirrors'
+                : 'Vulnerability advisories apply to one release. Empty: packages are not scanned'}
+            </span>
+          )}
+          <FieldError field="distro" errors={errors} />
+        </div>
+      )}
+
       {keys.includes('architectures') && (
         <div className="field">
           <label htmlFor={fieldId('aptArchitectures')} className="field__label">

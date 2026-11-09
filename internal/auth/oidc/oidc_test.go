@@ -92,7 +92,14 @@ func signIn(t *testing.T, p *oidc.Provider, is *oidctest.Issuer, redirect string
 		t.Fatalf("begin: %v", err)
 	}
 	q := authorize(t, authURL)
-	return p.Complete(context.Background(), cookie, q.Get("state"), q.Get("code"))
+	res, err := p.Complete(context.Background(), cookie, q.Get("state"), q.Get("code"))
+	if err != nil {
+		return nil, "", err
+	}
+	if res.IDToken == "" {
+		t.Fatal("no raw ID token in the result")
+	}
+	return res.Identity, res.Redirect, nil
 }
 
 func wantCode(t *testing.T, err error, code, reason string) {
@@ -149,11 +156,11 @@ func TestBadState(t *testing.T) {
 	q := authorize(t, authURL)
 	ctx := context.Background()
 
-	_, _, err = p.Complete(ctx, cookie, "forged-state", q.Get("code"))
+	_, err = p.Complete(ctx, cookie, "forged-state", q.Get("code"))
 	wantCode(t, err, oidc.CodeState, "state_mismatch")
-	_, _, err = p.Complete(ctx, "", q.Get("state"), q.Get("code"))
+	_, err = p.Complete(ctx, "", q.Get("state"), q.Get("code"))
 	wantCode(t, err, oidc.CodeState, "bad_state_cookie")
-	_, _, err = p.Complete(ctx, cookie[:len(cookie)-2]+"AA", q.Get("state"), q.Get("code"))
+	_, err = p.Complete(ctx, cookie[:len(cookie)-2]+"AA", q.Get("state"), q.Get("code"))
 	wantCode(t, err, oidc.CodeState, "bad_state_cookie")
 
 	// A cookie sealed by another server (other key) is rejected.
@@ -162,7 +169,7 @@ func TestBadState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = p2.Complete(ctx, cookie, q.Get("state"), q.Get("code"))
+	_, err = p2.Complete(ctx, cookie, q.Get("state"), q.Get("code"))
 	wantCode(t, err, oidc.CodeState, "bad_state_cookie")
 }
 
@@ -177,7 +184,7 @@ func TestStateExpires(t *testing.T) {
 	}
 	q := authorize(t, authURL)
 	c.Advance(oidc.StateTTL + time.Second)
-	_, _, err = p.Complete(context.Background(), cookie, q.Get("state"), q.Get("code"))
+	_, err = p.Complete(context.Background(), cookie, q.Get("state"), q.Get("code"))
 	wantCode(t, err, oidc.CodeState, "state_expired")
 }
 
@@ -324,4 +331,88 @@ func TestDeriveStateKey(t *testing.T) {
 	if string(a) != string(b) || string(a) == string(c) {
 		t.Fatal("derivation is not deterministic per secret")
 	}
+}
+
+func TestLogoutURL(t *testing.T) {
+	is := oidctest.New(t)
+	is.Set(func(is *oidctest.Issuer) { is.User = user("u-1") })
+	cfg := config(is)
+	opts := oidc.Options{RedirectURL: redirectURL, PostLogoutRedirectURL: "https://hangar.example.com/login",
+		StateKey: []byte("0123456789abcdef0123456789abcdef")}
+	p, err := oidc.New(cfg, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	got := p.LogoutURL(ctx, "the-id-token")
+	u, err := url.Parse(got)
+	if err != nil || u.Scheme+"://"+u.Host+u.Path != is.URL+"/logout" {
+		t.Fatalf("logout URL = %q", got)
+	}
+	q := u.Query()
+	if q.Get("id_token_hint") != "the-id-token" || q.Get("client_id") != oidctest.ClientID ||
+		q.Get("post_logout_redirect_uri") != "https://hangar.example.com/login" {
+		t.Fatalf("logout query = %v", q)
+	}
+	if p.EndSessionEndpoint() != is.URL+"/logout" {
+		t.Fatalf("end_session_endpoint = %q", p.EndSessionEndpoint())
+	}
+	// Without the hint the URL still names the client.
+	if q := mustQuery(t, p.LogoutURL(ctx, "")); q.Has("id_token_hint") || q.Get("client_id") != oidctest.ClientID {
+		t.Fatalf("hintless logout query = %v", q)
+	}
+
+	// auth.oidc.logout: local ends the Hangar session only.
+	cfg.Logout = auth.OIDCLogoutLocal
+	local, err := oidc.New(cfg, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := local.LogoutURL(ctx, "the-id-token"); got != "" {
+		t.Fatalf("local logout URL = %q", got)
+	}
+
+	// A provider without end_session_endpoint, or one that is down: local only.
+	plain := oidctest.New(t)
+	plain.Set(func(is *oidctest.Issuer) { is.NoEndSession = true })
+	np, err := oidc.New(config(plain), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := np.LogoutURL(ctx, "x"); got != "" || np.EndSessionEndpoint() != "" {
+		t.Fatalf("logout URL without endpoint = %q", got)
+	}
+	down := oidctest.New(t)
+	down.Set(func(is *oidctest.Issuer) { is.Down = true })
+	dp, err := oidc.New(config(down), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := dp.LogoutURL(ctx, "x"); got != "" {
+		t.Fatalf("logout URL with the provider down = %q", got)
+	}
+}
+
+func TestConfigLogoutSetting(t *testing.T) {
+	cfg := auth.OIDCConfig{IssuerURL: "https://sso.example.com", ClientID: "c"}.WithDefaults()
+	if cfg.Logout != auth.OIDCLogoutProvider {
+		t.Fatalf("default logout = %q", cfg.Logout)
+	}
+	cfg.Logout = "everywhere"
+	found := false
+	for _, p := range cfg.Problems() {
+		found = found || p.Field == "logout"
+	}
+	if !found {
+		t.Fatalf("problems = %v", cfg.Problems())
+	}
+}
+
+func mustQuery(t *testing.T, s string) url.Values {
+	t.Helper()
+	u, err := url.Parse(s)
+	if err != nil || s == "" {
+		t.Fatalf("URL %q: %v", s, err)
+	}
+	return u.Query()
 }

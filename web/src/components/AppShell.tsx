@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { Outlet, useNavigate } from '@tanstack/react-router';
 import { signalUnauthorized } from '../api/client';
 import { LiveStatusContext, useLiveEvents } from '../api/events';
-import { useLogout } from '../api/hooks';
+import { leaveAfterLogout, useLogout } from '../api/hooks';
 import { CommandPaletteProvider } from './CommandPalette';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
@@ -13,7 +13,7 @@ export function AppShell() {
   const live = useLiveEvents(signalUnauthorized);
 
   const signOut = useCallback(() => {
-    logout(undefined, { onSettled: () => void navigate({ to: '/login', replace: true }) });
+    logout(undefined, { onSettled: (res) => leaveAfterLogout(res, () => void navigate({ to: '/login', replace: true })) });
   }, [logout, navigate]);
 
   return (

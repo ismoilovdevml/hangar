@@ -164,16 +164,18 @@ func (s *Summary) add(o Summary) {
 // findings are kept and their status records the error.
 func (s *Service) scan(ctx context.Context, targets []*Target) (Summary, error) {
 	var sum Summary
-	targets = slices.DeleteFunc(slices.Clone(targets), func(t *Target) bool { _, ok := Ecosystem(t.Format); return !ok })
+	targets = slices.DeleteFunc(slices.Clone(targets), func(t *Target) bool { _, ok := t.Ecosystem(); return !ok })
 	if len(targets) == 0 {
 		return sum, nil
 	}
 	pkgs := make([]osv.Package, len(targets))
 	queries := make([]osv.Query, len(targets))
+	versions := make([]string, len(targets))
 	for i, t := range targets {
-		eco, _ := Ecosystem(t.Format)
+		eco, _ := t.Ecosystem()
 		pkgs[i] = osv.Package{Name: PackageName(t.Format, t.Namespace, t.Name, t.Attributes), Ecosystem: eco}
-		queries[i] = osv.Query{Package: pkgs[i], Version: t.Version}
+		versions[i] = PackageVersion(t.Format, t.Version, t.Attributes)
+		queries[i] = osv.Query{Package: pkgs[i], Version: versions[i]}
 	}
 	refs, err := s.opts.Advisories.QueryBatch(ctx, queries)
 	if err != nil {
@@ -193,7 +195,7 @@ func (s *Service) scan(ctx context.Context, targets []*Target) (Summary, error) 
 			if v == nil || v.Withdrawn != "" {
 				continue
 			}
-			found = append(found, s.detect(v, pkgs[i], t.Version))
+			found = append(found, s.detect(v, pkgs[i], versions[i]))
 		}
 		if missing != nil {
 			if err := s.store.saveFailure(ctx, []string{t.ComponentID}, "advisory details: "+missing.Error()); err != nil {
@@ -409,7 +411,7 @@ func (s *Service) ScanComponent(ctx context.Context, componentID string) (*ScanR
 		return nil, err
 	}
 	res := &ScanResult{ComponentID: t.ComponentID}
-	if _, ok := Ecosystem(t.Format); ok {
+	if _, ok := t.Ecosystem(); ok {
 		if !s.opts.Enabled {
 			return nil, ErrDisabled
 		}
@@ -435,7 +437,11 @@ func (s *Service) ComponentScan(ctx context.Context, componentID, format string)
 // QueueRepositoryScan enqueues a scan of every component of repo and
 // returns how many components it covers.
 func (s *Service) QueueRepositoryScan(ctx context.Context, repo *core.Repository) (int, error) {
-	if _, ok := Ecosystem(repo.Format); !ok {
+	ok, err := s.scannable(ctx, repo)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
 		return 0, fmt.Errorf("repository %q: %s: %w", repo.Name, UnsupportedReason(repo.Format), core.ErrInvalid)
 	}
 	if !s.opts.Enabled {
@@ -536,7 +542,7 @@ func (s *Service) handleComponentJob(ctx context.Context, j core.Job) error {
 	if err != nil {
 		return err
 	}
-	if _, ok := Ecosystem(t.Format); !ok {
+	if _, ok := t.Ecosystem(); !ok {
 		return nil
 	}
 	if p.Reason == ReasonArrival {
@@ -587,14 +593,34 @@ func (s *Service) handlePolicyJob(ctx context.Context, j core.Job) error {
 // check for every repository whose settings change. Every node receives
 // the events; the job keys make the queue store each job once.
 func (s *Service) Subscribe(ctx context.Context, bus core.EventBus) (func(), error) {
-	if s.opts.Jobs == nil {
-		return func() {}, nil
-	}
 	var subs []core.Subscription
 	stop := func() {
 		for _, sub := range subs {
 			_ = sub.Unsubscribe()
 		}
+	}
+	// The distribution release of APT and RPM repositories follows their settings.
+	for _, typ := range []string{core.EventRepositoryCreated, core.EventRepositoryUpdated} {
+		sub, err := bus.Subscribe(ctx, typ, func(ctx context.Context, e core.Event) {
+			var r struct {
+				ID     string `json:"id"`
+				Format string `json:"format"`
+			}
+			if json.Unmarshal(e.Data, &r) != nil || !isUUID(r.ID) || (r.Format != "" && !IsDistroFormat(r.Format)) {
+				return
+			}
+			if err := s.SyncDistros(ctx, r.ID); err != nil {
+				s.log.WarnContext(ctx, "scanning: distribution release sync failed", "repository", e.Repository, "error", err)
+			}
+		})
+		if err != nil {
+			stop()
+			return nil, err
+		}
+		subs = append(subs, sub)
+	}
+	if s.opts.Jobs == nil {
+		return stop, nil
 	}
 	sub, err := bus.Subscribe(ctx, core.EventComponentPublished, func(ctx context.Context, e core.Event) {
 		if !s.opts.Enabled {
@@ -612,6 +638,7 @@ func (s *Service) Subscribe(ctx context.Context, bus core.EventBus) (func(), err
 		}
 	})
 	if err != nil {
+		stop()
 		return nil, err
 	}
 	subs = append(subs, sub)
@@ -716,17 +743,25 @@ func (s *Service) ReopenExpired(ctx context.Context) (int, error) {
 	return len(list), err
 }
 
-// Run re-opens expired waivers every SweepInterval until ctx is done. Every
-// node may run it: the statement is idempotent and only the node whose
-// update changes a row audits it.
+// Run re-opens expired waivers every SweepInterval and refreshes the
+// distribution releases of APT and RPM repositories every ten minutes,
+// until ctx is done. Every node may run it: the statements are idempotent
+// and only the node whose update changes a row audits it or queues a scan.
 func (s *Service) Run(ctx context.Context) {
 	t := time.NewTicker(s.opts.SweepInterval)
 	defer t.Stop()
+	var synced time.Time
 	for {
 		if n, err := s.ReopenExpired(ctx); err != nil && ctx.Err() == nil {
 			s.log.WarnContext(ctx, "scanning: re-opening expired waivers failed", "error", err)
 		} else if n > 0 {
 			s.log.InfoContext(ctx, "scanning: waivers expired, findings re-opened", "count", n)
+		}
+		if time.Since(synced) >= distroSyncInterval {
+			if err := s.SyncDistros(ctx, ""); err != nil && ctx.Err() == nil {
+				s.log.WarnContext(ctx, "scanning: distribution release sync failed", "error", err)
+			}
+			synced = time.Now()
 		}
 		select {
 		case <-ctx.Done():
