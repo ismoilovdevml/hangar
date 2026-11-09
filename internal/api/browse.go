@@ -133,6 +133,8 @@ func componentFolders(format string, c *catalog.BrowseComponent) (pkg, version s
 		return c.Name + "/", c.Name + "/" + c.Version + "/"
 	case "pypi":
 		return pypiSeparators.ReplaceAllString(strings.ToLower(c.Name), "-") + "/", ""
+	case "go": // module path segments, the module, @v, versions, files
+		return c.Name + "/", c.Name + "/@v/" + c.Version + "/"
 	}
 	return "", ""
 }
@@ -159,7 +161,7 @@ func folderKind(format, tree string, c *catalog.BrowseComponent) string {
 // browseFormatsWithPackages are the formats whose folders can be packages
 // or versions; raw folders are plain directories and are not annotated.
 var browseFormatsWithPackages = map[string]bool{"npm": true, "maven": true, "nuget": true, "pypi": true, "docker": true,
-	"helm": true}
+	"helm": true, "go": true}
 
 type browseCursor struct {
 	K string `json:"k"`

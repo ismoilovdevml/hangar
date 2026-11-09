@@ -129,11 +129,21 @@ export function clientSetup(t: ClientTarget): ClientSetup {
             ]
           : [],
       };
-    case 'go':
+    case 'go': {
+      const proxy = url.replace(/\/+$/, '');
       return {
-        setup: [l(`go env -w GOPROXY=${url},direct`), c(`# ~/.netrc: machine ${dockerHost(url)} login ${user} password ${tok}`)],
-        publish: [],
+        setup: [
+          l(`go env -w GOPROXY=${proxy},direct`),
+          c('# Private modules: fetch them through Hangar, never ask sum.golang.org'),
+          l('go env -w GOPRIVATE=<module prefix> GONOPROXY=none GONOSUMDB=<module prefix>'),
+          c('# ~/.netrc (the go command sends it over HTTPS only)'),
+          l(`machine ${dockerHost(url)} login token password ${tok}`),
+        ],
+        publish: t.publishes
+          ? [c('# A module zip built with golang.org/x/mod/zip (see the Go guide)'), l(`curl -u token:${tok} --upload-file <version>.zip ${url}<module>/@v/<version>.zip`)]
+          : [],
       };
+    }
     case 'cargo':
       return {
         setup: [c(`# ~/.cargo/config.toml: [registries.${repo}]`), l(`index = "sparse+${url}"`)],

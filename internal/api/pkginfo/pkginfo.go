@@ -160,6 +160,8 @@ func (x *extraction) run(ctx context.Context) {
 		x.maven(ctx)
 	case "helm":
 		x.helm(ctx)
+	case "go":
+		x.gomod(ctx)
 	}
 	x.resolveImages(ctx)
 }
@@ -361,8 +363,8 @@ func (s *Service) Member(ctx context.Context, repo *core.Repository, c *core.Com
 		found bool
 	)
 	switch repo.Format {
-	case "nuget":
-		pkg := x.assetBySuffix(ctx, ".nupkg")
+	case "nuget", "go":
+		pkg := x.assetBySuffix(ctx, ".nupkg", ".zip")
 		if pkg == nil {
 			return nil, notFound
 		}

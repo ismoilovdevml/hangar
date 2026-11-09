@@ -9,6 +9,7 @@ Practical, copy-paste guides for running Hangar and connecting package clients t
 | [npm](npm.md) | npm, pnpm and yarn: `.npmrc`, `.yarnrc.yml`, publish, dist-tags, deprecate, unpublish |
 | [Maven](maven.md) | Maven `settings.xml`, Gradle Kotlin and Groovy DSL, `maven-publish` |
 | [PyPI](pypi.md) | pip, uv, poetry and twine |
+| [Go modules](go.md) | `GOPROXY`, private modules with `GOPRIVATE` and `.netrc`, publishing module zips, checksum database |
 | [NuGet](nuget.md) | `dotnet nuget`, `nuget.config`, push, restore through a group |
 | [Helm](helm.md) | `helm repo add`, `helm install`, `helm cm-push` and curl uploads, chart provenance |
 | [Raw](raw.md) | Arbitrary files with curl and wget, directory listings |
@@ -22,7 +23,7 @@ Operators also need [docs/security.md](../security.md) (secret key, hardening,
 rate limits) and [docs/operations/monitoring.md](../operations/monitoring.md)
 (metrics, logs, tracing).
 
-Formats compiled into the server today: `docker`, `helm`, `maven`, `npm`, `nuget`, `pypi` and `raw`
+Formats compiled into the server today: `docker`, `go`, `helm`, `maven`, `npm`, `nuget`, `pypi` and `raw`
 (`GET /api/v1/formats` lists them). Other formats are not supported yet.
 
 ## Concepts in one minute
@@ -33,7 +34,7 @@ Formats compiled into the server today: `docker`, `helm`, `maven`, `npm`, `nuget
   - `hosted`: clients publish into it.
   - `proxy`: fetches from a remote registry on demand and caches what it fetched.
   - `group`: an ordered list of repositories of the same format behind one URL.
-    Reads try the members in order. Docker, npm, NuGet and PyPI groups can forward
+    Reads try the members in order. Docker, npm, NuGet, PyPI and Go groups can forward
     writes to one hosted member (`write_member`). Maven and raw groups are read-only.
 - **URLs**: every format except Docker is served at
   `<base_url>/repository/<repo>/...`. Docker/OCI is served at `<base_url>/v2/`,
@@ -93,6 +94,7 @@ repository to see its content the way clients see it:
 | Maven | groupId segments, artifactId, version, files |
 | NuGet | package id, version, `.nupkg` / `.nuspec` / `.snupkg` |
 | PyPI | project, files |
+| Go | module path segments, module, `@v`, version, `.info` / `.mod` / `.zip` |
 | Docker | image path, then `manifests` (tags and digests) and `blobs` |
 | Helm | chart, version, `.tgz` / `.prov` |
 | raw | directories and files |

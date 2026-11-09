@@ -52,5 +52,11 @@ describe('format helpers', () => {
 
     const raw = clientSetup({ format: 'raw', repository: 'raw-hosted', url: 'https://hangar.example.com/repository/raw-hosted/', publishes: true, username: 'u' });
     expect(text(raw.publish)).toEqual(['curl -u u:<token> --upload-file ./<file> https://hangar.example.com/repository/raw-hosted/<path>/<file>']);
+
+    const gomod = clientSetup({ format: 'go', repository: 'go-hosted', url: 'https://hangar.example.com/repository/go-hosted/', publishes: true });
+    expect(text(gomod.setup)).toEqual(
+      expect.arrayContaining(['go env -w GOPROXY=https://hangar.example.com/repository/go-hosted,direct', 'machine hangar.example.com login token password <token>']),
+    );
+    expect(text(gomod.publish).join('\n')).toContain('--upload-file <version>.zip https://hangar.example.com/repository/go-hosted/<module>/@v/<version>.zip');
   });
 });
