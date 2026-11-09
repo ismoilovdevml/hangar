@@ -165,15 +165,15 @@ func CompareRPM(a, b string) int {
 	if c := cmpInt64(ea, eb); c != 0 {
 		return c
 	}
-	va, rela := splitRevision(ra)
-	vb, relb := splitRevision(rb)
+	va, releaseA := splitRevision(ra)
+	vb, releaseB := splitRevision(rb)
 	if c := rpmvercmp(va, vb); c != 0 {
 		return c
 	}
-	if rela == "" || relb == "" {
+	if releaseA == "" || releaseB == "" {
 		return 0 // a version without release matches every release
 	}
-	return rpmvercmp(rela, relb)
+	return rpmvercmp(releaseA, releaseB)
 }
 
 func isAlnum(c byte) bool { return isDigit(c) || isAlpha(c) }
