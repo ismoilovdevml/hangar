@@ -13,8 +13,8 @@ import (
 // secrets opened by anyone; only a server with server.dev_mode may start
 // with them.
 const (
-	devSecretKey = "ZGV2LW9ubHktc2VjcmV0LWtleS0zMi1ieXRlcy0hISE="
-	devTokenKey  = "dev-only-token-key-change-me-0123456789abcdef"
+	devSecretKey = "ZGV2LW9ubHktc2VjcmV0LWtleS0zMi1ieXRlcy0hISE="  //nolint:gosec // G101: a published key, refused here
+	devTokenKey  = "dev-only-token-key-change-me-0123456789abcdef" //nolint:gosec // G101: a published key, refused here
 )
 
 // devKeys refuses the published development keys outside server.dev_mode.
