@@ -264,3 +264,29 @@ export function advisoryLink(f: Pick<Finding, 'advisory_id' | 'image'>): { href:
   if (f.image?.primary_url) return { href: f.image.primary_url, label: 'Full advisory ↗' };
   return { href: advisoryUrl(f.advisory_id), label: 'Full advisory on osv.dev ↗' };
 }
+
+/** Lines of advisory text the finding drawer shows before "Show full advisory". */
+export const ADVISORY_EXCERPT_LINES = 8;
+
+/**
+ * The opening of an advisory's Markdown: its first section, at most `lines`
+ * lines of text, and never a code block (proof-of-concept scripts stay behind
+ * "Show full advisory"). Null when the whole text is that short already.
+ */
+export function advisoryExcerpt(source: string, lines = ADVISORY_EXCERPT_LINES): string | null {
+  const all = source.replace(/\r\n?/g, '\n').trim().split('\n');
+  const out: string[] = [];
+  let text = 0;
+  for (const line of all) {
+    const isHeading = /^ {0,3}#{1,6}(\s|$)/.test(line);
+    const isFence = /^ {0,3}(`{3,}|~{3,})/.test(line);
+    if (text > 0 && (isHeading || isFence)) break;
+    if (isFence) break;
+    if (text >= lines && line.trim()) break;
+    out.push(line);
+    if (line.trim() && !isHeading) text++;
+  }
+  // Drop trailing blank lines.
+  while (out.length && !out[out.length - 1]!.trim()) out.pop();
+  return out.length < all.length ? out.join('\n') : null;
+}

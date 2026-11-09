@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from 'react';
 import type { PackagePlan, PlanFinding } from '../../api/types';
+import { MarkdownInline } from '../../components/Markdown';
 import { Pill } from '../../components/Pill';
 import { plural } from '../../lib/overview';
 import {
@@ -242,7 +243,7 @@ function FindingRow({ f, pkg, image, onOpen }: { f: PlanFinding; pkg: string; im
   return (
     <button type="button" className="vfrow" onClick={onOpen} aria-haspopup="dialog">
       <span className="vfrow__main">
-        <span className="vfrow__title">{f.title || f.advisory_id}</span>
+        <span className="vfrow__title">{f.title ? <MarkdownInline source={f.title} /> : f.advisory_id}</span>
         <span className="vfrow__meta">
           <span className="vfrow__id">{f.advisory_id}</span>
           {cve && cve !== f.advisory_id && <span className="vfrow__id">{cve}</span>}

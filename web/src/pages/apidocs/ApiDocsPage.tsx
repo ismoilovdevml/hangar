@@ -24,7 +24,7 @@ import {
   type Operation,
   type PropertyRow,
 } from '../../lib/openapi';
-import { Markdown } from '../browse/Markdown';
+import { Markdown } from '../../components/Markdown';
 import { serverBaseUrl } from '../access/tokenSnippets';
 import './apidocs.css';
 

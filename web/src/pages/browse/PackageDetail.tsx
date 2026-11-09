@@ -35,8 +35,8 @@ import { imageWhere, packageAt } from '../../lib/vulnerabilities';
 import { Fact } from './AssetDetail';
 import { dateTime, deleteMessage, shortDigest } from './detailUtil';
 import { FormatIcon } from '../../components/FormatIcon';
-import { Markdown } from './Markdown';
-import { safeHref, safeImageSrc } from './urlPolicy';
+import { Markdown, MarkdownInline } from '../../components/Markdown';
+import { safeHref, safeImageSrc } from '../../components/urlPolicy';
 
 const route = getRouteApi('/app/browse');
 
@@ -697,7 +697,7 @@ function FindingsTable({ items }: { items: Finding[] }) {
       cell: (f) => (
         <div className="asset-path">
           <span className="link-strong">{f.advisory_id}</span>
-          <span className="meta">{f.title}</span>
+          <span className="meta">{f.title && <MarkdownInline source={f.title} />}</span>
         </div>
       ),
     },
