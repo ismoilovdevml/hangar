@@ -3,12 +3,12 @@ import { getRouteApi, useRouter } from '@tanstack/react-router';
 import { ApiRequestError } from '../api/client';
 import { useAuthProviders, useLogin, useSystemStatus } from '../api/hooks';
 import { IconLogo } from '../components/icons';
-import { instanceName } from '../lib/format';
+import { DOCS } from '../lib/docs';
+import { instanceName, versionText } from '../lib/format';
 import { useNow } from '../lib/useNow';
 
 const route = getRouteApi('/login');
 
-const DOCS_URL = 'https://github.com/ismoilovdevml/hangar/tree/main/docs/guides';
 const API_URL = '/api-docs';
 
 /** Messages for `?error=` set by the single sign-on callback. */
@@ -34,13 +34,23 @@ function waitText(secs: number): string {
  * What went wrong. The text stays the same while a lockout or rate limit runs
  * (it is announced once); the submit button carries the live countdown.
  */
+/** An API message as a sentence: "too many x; try again later" -> "Too many x. Try again later." */
+function sentence(message: string | undefined): string | null {
+  const m = message?.trim();
+  if (!m) return null;
+  const text = m.replace(/;\s+(\w)/g, (_, c: string) => `. ${c.toUpperCase()}`);
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}${/[.!?]$/.test(text) ? '' : '.'}`;
+}
+
 function loginError(err: unknown, expired: boolean): string {
   if (err instanceof ApiRequestError) {
     const wait = err.retryAfter;
     if (err.status === 401) return 'Wrong username or password.';
     if (err.status === 423) {
       if (expired) return 'The lock has expired. You can try again.';
-      return `This account is locked after repeated failed sign-ins. ${wait ? `Try again ${waitText(wait)}` : 'Try again later'}, or ask an administrator to unlock it.`;
+      // Lockout is per username and address, and unknown accounts get the same answer: never claim "this account".
+      const said = sentence(err.body?.message) ?? 'Too many failed sign-ins from this address. Try again later.';
+      return wait ? `${said.replace(/\s*Try again later\.$/i, '')} Try again ${waitText(wait)}.` : said;
     }
     if (err.status === 429) {
       if (expired) return 'You can try again now.';
@@ -211,8 +221,8 @@ export function LoginPage() {
       </main>
 
       <footer className="login__footer">
-        <span>{sys ? `Hangar ${sys.version}` : 'Hangar'}</span>
-        <a href={DOCS_URL} target="_blank" rel="noreferrer">
+        <span>{sys ? `Hangar ${versionText(sys.version)}` : 'Hangar'}</span>
+        <a href={DOCS.guides} target="_blank" rel="noreferrer">
           Documentation
         </a>
         <a href={API_URL}>API reference</a>

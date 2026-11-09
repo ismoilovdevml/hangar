@@ -15,7 +15,6 @@ import type {
   CleanupRun,
   ClusterStatus,
   ListAuditQuery,
-  SystemConfig,
   Task,
   TaskList,
   TaskLogPage,
@@ -38,7 +37,6 @@ export const opsKeys = {
   taskLog: (id: string, runId: string) => ['tasks', 'log', id, runId] as const,
   audit: (q: ListAuditQuery) => ['audit', q] as const,
   cluster: ['nodes'] as const,
-  systemConfig: ['system', 'config'] as const,
 };
 
 /** True when the server has no such endpoint yet (older build). */
@@ -320,16 +318,6 @@ export function useClusterStatus() {
     queryFn: ({ signal }) => apiFetch<ClusterStatus>('/nodes', { signal }),
     retry: false,
     refetchInterval: 30_000,
-  });
-}
-
-export function useSystemConfig(enabled: boolean) {
-  return useQuery({
-    queryKey: opsKeys.systemConfig,
-    enabled,
-    queryFn: ({ signal }) => apiFetch<SystemConfig>('/system/config', { signal }),
-    retry: false,
-    staleTime: 5 * 60_000,
   });
 }
 

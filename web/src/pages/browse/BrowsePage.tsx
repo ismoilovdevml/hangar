@@ -65,7 +65,7 @@ function ResolvedPackage({ repo, ns, name, version }: { repo: string; ns?: strin
   if (lookup.isError) {
     return (
       <Panel>
-        <ErrorNote what="the package" onRetry={() => void lookup.refetch()} />
+        <ErrorNote what="the package" error={lookup.error} onRetry={() => void lookup.refetch()} />
       </Panel>
     );
   }

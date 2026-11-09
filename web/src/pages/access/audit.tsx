@@ -79,7 +79,7 @@ export function AuditTab({ category, onCategory }: { category: string; onCategor
         </div>
       </div>
       {pages.isError ? (
-        <ErrorNote what="the audit log" onRetry={() => void pages.refetch()} />
+        <ErrorNote what="the audit log" error={pages.error} privilege="system:audit:read" onRetry={() => void pages.refetch()} />
       ) : (
         <DataTable
           caption="Access audit log"

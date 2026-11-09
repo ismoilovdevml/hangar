@@ -402,3 +402,40 @@ export function generatePassword(): string {
   }
   return `${out.slice(0, 5)}-${out.slice(5, 10)}-${out.slice(10, 15)}-${out.slice(15)}`;
 }
+
+/** One repository in the effective-permissions report, as far as grouping needs. */
+export interface RepoAccess {
+  name: string;
+  actions: string[];
+  grants: { action: string; source: string; role?: string; privilege?: string }[];
+}
+
+export interface RepoAccessGroup<T extends RepoAccess> {
+  /** Same actions, granted the same way. */
+  actions: string[];
+  grants: T['grants'];
+  repos: T[];
+}
+
+/**
+ * Repositories that grant the same actions through the same roles, largest
+ * group first: a role like `repo:*:admin` makes one row of what would be a
+ * row per repository; repositories that differ are the exceptions.
+ */
+export function groupRepoAccess<T extends RepoAccess>(repos: readonly T[]): RepoAccessGroup<T>[] {
+  const groups = new Map<string, RepoAccessGroup<T>>();
+  for (const r of repos) {
+    const grants = [...r.grants].sort((a, b) => `${a.action}${a.source}${a.privilege ?? ''}`.localeCompare(`${b.action}${b.source}${b.privilege ?? ''}`));
+    const key = JSON.stringify([r.actions, grants.map((g) => [g.action, g.source, g.role, g.privilege])]);
+    const g: RepoAccessGroup<T> = groups.get(key) ?? { actions: r.actions, grants: r.grants, repos: [] };
+    g.repos.push(r);
+    groups.set(key, g);
+  }
+  return [...groups.values()].sort((a, b) => b.repos.length - a.repos.length);
+}
+
+/** "npm-a, npm-b and 3 more" */
+export function nameList(names: readonly string[], shown = 3): string {
+  if (names.length <= shown) return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : (names[0] ?? '');
+  return `${names.slice(0, shown).join(', ')} and ${names.length - shown} more`;
+}

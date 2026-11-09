@@ -50,7 +50,7 @@ function RunLog({ taskId, run }: { taskId: string; run: TaskRun }) {
     return isMissingEndpoint(log.error) ? (
       <p className="meta">This server does not keep run logs yet. The progress message above is the latest the run reported.</p>
     ) : (
-      <ErrorNote what="the run log" onRetry={() => void log.refetch()} />
+      <ErrorNote what="the run log" error={log.error} privilege="system:tasks:read" onRetry={() => void log.refetch()} />
     );
   }
   return (
@@ -321,7 +321,7 @@ export function TaskDetailPage() {
             <p>There is no task with id {taskId}. It may have been deleted.</p>
           </Panel>
         ) : (
-          <ErrorNote what="this task" onRetry={() => void task.refetch()} />
+          <ErrorNote what="this task" error={task.error} privilege="system:tasks:read" onRetry={() => void task.refetch()} />
         )}
       </div>
     );
@@ -409,7 +409,7 @@ export function TaskDetailPage() {
       <div className="task-detail">
         <Panel flush title="Runs" titleId="task-runs-title" className="task-detail__runs">
           {runs.isError ? (
-            <ErrorNote what="runs" onRetry={() => void runs.refetch()} />
+            <ErrorNote what="runs" error={runs.error} privilege="system:tasks:read" onRetry={() => void runs.refetch()} />
           ) : (
             <DataTable
               caption="Runs, newest first"

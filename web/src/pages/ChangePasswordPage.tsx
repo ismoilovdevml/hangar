@@ -1,4 +1,5 @@
 import { useId, useMemo, useState, type FormEvent } from 'react';
+import { versionText } from '../lib/format';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, useRouter } from '@tanstack/react-router';
 import { ApiRequestError, apiFetch } from '../api/client';
@@ -176,7 +177,7 @@ export function ChangePasswordPage() {
       </main>
 
       <footer className="login__footer">
-        <span>{status.data ? `Hangar ${status.data.version}` : 'Hangar'}</span>
+        <span>{status.data ? `Hangar ${versionText(status.data.version)}` : 'Hangar'}</span>
       </footer>
     </div>
   );

@@ -251,7 +251,7 @@ export function TasksPage() {
         {tasks.isError && isMissingEndpoint(tasks.error) ? (
           <p className="meta panel-note">This server does not report scheduled tasks yet. Upgrade Hangar to see and run them here.</p>
         ) : tasks.isError ? (
-          <ErrorNote what="scheduled tasks" onRetry={() => void tasks.refetch()} />
+          <ErrorNote what="scheduled tasks" error={tasks.error} privilege="system:tasks:read" onRetry={() => void tasks.refetch()} />
         ) : (
           <DataTable
             caption="Scheduled tasks"

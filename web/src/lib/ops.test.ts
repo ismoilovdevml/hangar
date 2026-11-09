@@ -12,7 +12,7 @@ import {
   summarizeCriteria,
   validateDraft,
 } from './cleanup';
-import { configValue, flattenConfig, formatUptime, hostOf, isSecretKey, maskUrlPassword } from './system';
+import { formatUptime, hostOf } from './system';
 import {
   applyTaskFinished,
   applyTaskProgress,
@@ -245,36 +245,8 @@ describe('system helpers', () => {
     expect(formatUptime(93_784)).toBe('1 d 2 h');
   });
 
-  it('masks secrets even when the server did not', () => {
-    expect(isSecretKey('secret_access_key')).toBe(true);
-    expect(isSecretKey('token_key')).toBe(true);
-    expect(isSecretKey('session_token_ttl')).toBe(false);
-    expect(isSecretKey('max_token_lifetime')).toBe(false);
-    expect(maskUrlPassword('postgres://hangar:s3cret@db:5432/hangar')).toBe('postgres://hangar:••••••@db:5432/hangar');
-    expect(maskUrlPassword('https://example.com/x')).toBe('https://example.com/x');
-
-    const sections = flattenConfig({
-      config: {
-        server: { base_url: 'https://hangar.acme.example', trusted_proxies: ['10.0.0.0/8'] },
-        database: { url: 'postgres://hangar:REDACTED@db/hangar', max_conns: 20 },
-        storage: { s3: { bucket: 'b', secret_access_key: 'leaked' } },
-        docker: { token_key: 'REDACTED' },
-      },
-      sources: { 'server.base_url': 'env' },
-    });
-    const all = Object.fromEntries(sections.flatMap((s) => s.entries.map((e) => [e.key, e])));
-    expect(sections.map((s) => s.name)).toEqual(['server', 'database', 'storage', 'docker']);
-    expect(all['server.base_url']).toMatchObject({ value: 'https://hangar.acme.example', secret: false, source: 'env' });
-    expect(all['server.trusted_proxies']!.value).toBe('10.0.0.0/8');
-    expect(all['database.url']).toMatchObject({ value: 'postgres://hangar:••••••@db/hangar', secret: true });
-    expect(all['storage.s3.secret_access_key']).toMatchObject({ value: '••••••', secret: true });
-    expect(all['docker.token_key']).toMatchObject({ value: '••••••', secret: true });
-  });
-
-  it('reads hosts and dotted config values', () => {
+  it('reads hosts', () => {
     expect(hostOf('https://hangar.acme.example:8443/')).toBe('hangar.acme.example:8443');
     expect(hostOf('not a url')).toBeUndefined();
-    expect(configValue({ config: { server: { base_url: 'x' } } }, 'server.base_url')).toBe('x');
-    expect(configValue(undefined, 'server.base_url')).toBeUndefined();
   });
 });

@@ -1,5 +1,6 @@
 import type { Task } from '../api/opsTypes';
 import type { components } from '../api/schema';
+import { DOCS } from './docs';
 import type { Format, OverviewMetrics, OverviewRange, ScanSummary, TrafficBucket, UpstreamHealth } from '../api/types';
 
 type Token = components['schemas']['Token'];
@@ -132,6 +133,39 @@ export function headlineUpstream(items: UpstreamHealth[]): UpstreamHealth | null
   );
 }
 
+const RANGE_WORDS: Record<OverviewRange, string> = { '1h': 'in the last hour', today: 'today', '7d': 'in 7 days', '30d': 'in 30 days' };
+
+export interface OverallStatus {
+  tone: 'ok' | 'warn' | 'bad';
+  text: string;
+}
+
+/**
+ * The Overview's one-line state, from the same signals as its cards and
+ * to-do list: node health, unreachable upstreams and server errors in the
+ * range. It never reads "All systems normal" while any of them is red.
+ */
+export function overallStatus(input: {
+  system: { state: 'ok' | 'degraded' | 'down'; message: string };
+  upstreams?: UpstreamHealth[];
+  metrics?: OverviewMetrics;
+}): OverallStatus {
+  const { system, upstreams = [], metrics } = input;
+  if (system.state === 'down') return { tone: 'bad', text: system.message };
+  const unreachable = upstreams.filter((u) => u.state === 'offline' || u.state === 'blocked');
+  if (unreachable.length === 1) {
+    const u = unreachable[0]!;
+    // Worded like the to-do item: a refused credential is named as such.
+    const auth = u.state === 'blocked' ? upstreamAuthProblem(u.reason) : null;
+    return { tone: 'bad', text: auth ? `${u.name} upstream: ${auth.label}` : `${u.name} upstream is ${u.state}` };
+  }
+  if (unreachable.length > 1) return { tone: 'bad', text: `${unreachable.length} upstreams unreachable` };
+  if (system.state === 'degraded') return { tone: 'warn', text: system.message };
+  const errors = metrics?.requests.server_errors ?? 0;
+  if (errors > 0) return { tone: 'warn', text: `${plural(errors, 'server error')} ${RANGE_WORDS[metrics!.range]}` };
+  return { tone: 'ok', text: system.message };
+}
+
 /** Where a to-do item leads. */
 export type TodoLink =
   | { kind: 'account-tokens' }
@@ -142,7 +176,9 @@ export type TodoLink =
   | { kind: 'tasks' }
   | { kind: 'task'; id: string }
   | { kind: 'blob-stores' }
-  | { kind: 'repository'; name: string };
+  | { kind: 'repository'; name: string }
+  /** Documentation outside the app (opens in a new tab). */
+  | { kind: 'docs'; href: string };
 
 export interface TodoItem {
   id: string;
@@ -152,6 +188,8 @@ export interface TodoItem {
   title: string;
   detail: string;
   link: TodoLink;
+  /** A reminder the user may dismiss for good: nothing in the app can tell when it is done. */
+  dismissible?: boolean;
 }
 
 export interface TodoInput {
@@ -250,7 +288,19 @@ export function todoItems(input: TodoInput): TodoItem[] {
     const backups = input.tasks.filter((t) => t.type === 'db_backup');
     const scheduled = backups.filter((t) => t.enabled && t.schedule);
     const failed = backups.find((t) => t.last_run?.status === 'failed');
-    if (failed) {
+    if (backups.length === 0) {
+      // The server has no backup task to schedule: backups run outside it (deploy/scripts/backup.sh),
+      // so the reminder points at how, and can be dismissed once they are set up.
+      out.push({
+        id: 'backup-outside',
+        tone: 'info',
+        tag: 'RECOMMENDED',
+        title: 'Back up the database',
+        detail: 'Hangar does not back itself up: schedule the backup script',
+        link: { kind: 'docs', href: DOCS.backups },
+        dismissible: true,
+      });
+    } else if (failed) {
       out.push({
         id: 'backup-failed',
         tone: 'bad',

@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
 import { server } from '../mocks/node';
-import { opsMockState } from '../mocks/ops';
 import { renderApp } from './render';
 
 const search = (h: { location: { search: string } }) => new URLSearchParams(h.location.search);
@@ -88,7 +87,7 @@ describe('audit log', () => {
 });
 
 describe('system', () => {
-  it('shows status, endpoints, dependencies, nodes and redacted configuration', async () => {
+  it('shows status, endpoints, dependencies, nodes and where configuration lives', async () => {
     renderApp('/settings/system');
     expect(await screen.findByText('Operational')).toBeInTheDocument();
     expect(screen.getByText('All systems normal', { selector: '.meta' })).toBeInTheDocument();
@@ -110,28 +109,18 @@ describe('system', () => {
     expect(await within(nodes).findByText('hangar-1')).toBeInTheDocument();
     expect(within(nodes).getByText('leader')).toBeInTheDocument();
 
-    const config = await screen.findByRole('region', { name: 'database settings' });
-    expect(within(config).getByText('postgres://hangar:••••••@db.acme.internal:5432/hangar')).toBeInTheDocument();
-    const storage = screen.getByRole('region', { name: 'storage settings' });
-    expect(within(storage).getAllByText('secret').length).toBe(2);
-    expect(document.body.textContent).not.toContain('REDACTED');
+    const config = screen.getByRole('region', { name: 'Configuration' });
+    expect(within(config).getByRole('link', { name: 'Configuration reference' })).toHaveAttribute('href', expect.stringContaining('docs/deploy'));
   });
 
-  it('filters configuration keys', async () => {
-    const user = userEvent.setup();
-    renderApp('/settings/system');
-    await screen.findByRole('region', { name: 'server settings' });
-    await user.type(screen.getByLabelText('Filter settings'), 'base_url');
-    await waitFor(() => expect(screen.queryByRole('region', { name: 'database settings' })).not.toBeInTheDocument());
-    expect(screen.getByText('server.base_url')).toBeInTheDocument();
-  });
-
-  it('copes with a server that does not expose configuration or nodes', async () => {
-    opsMockState.configAvailable = false;
+  it('copes with a server that does not list nodes, and never asks for a configuration endpoint', async () => {
+    const asked: string[] = [];
+    server.events.on('request:start', ({ request }) => void asked.push(new URL(request.url).pathname));
     server.use(http.get('*/api/v1/nodes', () => HttpResponse.json({ code: 'not_implemented', message: 'cluster' }, { status: 501 })));
     renderApp('/settings/system');
-    expect(await screen.findByText(/does not expose its effective configuration/)).toBeInTheDocument();
     expect(await screen.findByText(/does not list cluster nodes yet; it reports 3 of 3 up/)).toBeInTheDocument();
+    expect(asked).not.toContain('/api/v1/system/config');
+    server.events.removeAllListeners();
   });
 });
 

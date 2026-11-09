@@ -1,6 +1,8 @@
 import type { CSSProperties } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { OverviewMetrics, UpstreamHealth } from '../../api/types';
+import { useGate } from '../../api/permissions';
+import { GATES } from '../../lib/gates';
 import { ErrorNote } from '../../components/ErrorNote';
 import { FORMAT_META, formatBytes, formatCompact, formatPercent } from '../../lib/format';
 import { upstreamAuthProblem } from '../../lib/repositories';
@@ -152,6 +154,7 @@ interface UpstreamCardProps {
 }
 
 export function UpstreamCard({ items, error, onRetry, m }: UpstreamCardProps) {
+  const canCreateRepo = useGate(GATES.createRepository);
   if (!items) {
     return (
       <div className="ov-card ov-stat glass">
@@ -162,6 +165,15 @@ export function UpstreamCard({ items, error, onRetry, m }: UpstreamCardProps) {
   }
   const u = headlineUpstream(items);
   if (!u) {
+    if (!canCreateRepo) {
+      return (
+        <div className="ov-card ov-stat glass">
+          <span className="ov-card__label">Upstream</span>
+          <span className="ov-stat__value ov-stat__value--sm">No proxy yet</span>
+          <span className="ov-stat__note">No proxy repository you can read caches a public registry</span>
+        </div>
+      );
+    }
     return (
       <Link to="/repositories/new" search={{ type: 'proxy' }} className="ov-card ov-stat ov-link glass">
         <span className="ov-card__label">Upstream</span>

@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useState, type FormEvent } from 'react';
+import { versionText } from '../../lib/format';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { csrfToken, CSRF_HEADER } from '../../api/client';
@@ -23,7 +24,7 @@ import {
   type Operation,
   type PropertyRow,
 } from '../../lib/openapi';
-import { Markdown } from '../browse/Markdown';
+import { Markdown } from '../../components/Markdown';
 import { serverBaseUrl } from '../access/tokenSnippets';
 import './apidocs.css';
 
@@ -76,6 +77,7 @@ export function ApiDocsPage() {
   const shown = useMemo(() => filterOperations(ops, q), [ops, q]);
   const groups = useMemo(() => (doc ? groupByTag(doc, shown) : []), [doc, shown]);
   const auth: TryAuth = { mode, token, signedIn };
+  const Main = signedIn ? 'div' : 'main';
 
   return (
     // Signed in, the page sits in the app shell (sidebar and breadcrumb); signed out it stands alone.
@@ -88,7 +90,7 @@ export function ApiDocsPage() {
             </span>
             <span className="brand__text">
               <span className="brand__name">Hangar</span>
-              <span className="brand__sub">API reference{doc ? ` · v${doc.info.version}` : ''}</span>
+              <span className="brand__sub">API reference{doc ? ` · ${versionText(doc.info.version)}` : ''}</span>
             </span>
           </span>
           <nav className="api-docs__links" aria-label="API documents">
@@ -140,7 +142,8 @@ export function ApiDocsPage() {
           </ul>
         </aside>
 
-        <main className="api-docs__main">
+        {/* Signed in, the app shell already provides the main landmark. */}
+        <Main className="api-docs__main">
           <section id="start" className="panel glass api-docs__intro" aria-labelledby="start-title">
             <h1 id="start-title" className="page-header__title">
               {doc?.info.title ?? 'Hangar API'}
@@ -264,7 +267,7 @@ export function ApiDocsPage() {
             ))}
 
           {doc && !q && <Schemas doc={doc} />}
-        </main>
+        </Main>
       </div>
     </div>
   );

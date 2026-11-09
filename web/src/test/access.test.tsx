@@ -392,7 +392,7 @@ describe('access & audit: roles and audit', () => {
       ),
     );
     renderApp('/access');
-    expect(await screen.findByText(/needs an administrator role/)).toBeInTheDocument();
+    expect(await screen.findByText(/You don’t have access to people, tokens and roles/)).toBeInTheDocument();
     expect(within(screen.getByRole('main')).getByRole('link', { name: 'My account' })).toHaveAttribute('href', '/account');
     expect(screen.queryByRole('table', { name: 'Members' })).not.toBeInTheDocument();
   });
@@ -441,5 +441,57 @@ describe('my account', () => {
     expect(await within(tokens).findByText('release script')).toBeInTheDocument();
     expect(within(tokens).queryByText('gitea deploy')).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'What you can do' })).toBeInTheDocument();
+  });
+});
+
+describe('my account: what you can do', () => {
+  const admin = (name: string, anonymous = false) => ({
+    resource: `repo:${name}`,
+    name,
+    format: 'raw',
+    type: 'hosted',
+    anonymous_read: anonymous,
+    actions: ['read', 'write', 'delete', 'admin'],
+    grants: [
+      ...(['read', 'write', 'delete', 'admin'] as const).map((action) => ({ action, source: 'role', role: 'Admin', privilege: 'repo:*:admin' })),
+      ...(anonymous ? [{ action: 'read', source: 'anonymous' }] : []),
+    ],
+  });
+
+  it('summarises repositories with the same rights in one row, exceptions apart, the full list on request', async () => {
+    const repos = [...Array.from({ length: 54 }, (_, i) => admin(`qa-raw-${String(i).padStart(2, '0')}`)), admin('public-raw', true)];
+    server.use(
+      http.get('*/api/v1/users/:id/permissions', ({ params }) =>
+        HttpResponse.json({ user_id: params.id, username: 'd.ismoilov', kind: 'user', disabled: false, locked: false, roles: [], repositories: repos, system: [], notes: [] }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp('/account');
+    const panel = await screen.findByRole('region', { name: 'What you can do' });
+    const summary = await within(panel).findByRole('list', { name: 'Repository access, summarised' });
+    const rows = within(summary).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('54 repositories');
+    expect(rows[0]).toHaveTextContent('Every repository not listed below');
+    expect(rows[0]).toHaveTextContent('Admin (repo:*:admin)');
+    expect(rows[1]).toHaveTextContent('public-raw');
+    expect(rows[1]).toHaveTextContent('anonymous read');
+    expect(within(panel).queryByRole('list', { name: 'Repository access, one by one' })).not.toBeInTheDocument();
+
+    const toggle = within(panel).getByRole('button', { name: 'Show all 55 repositories' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const all = within(panel).getByRole('list', { name: 'Repository access, one by one' });
+    expect(within(all).getAllByRole('listitem')).toHaveLength(55);
+    await user.type(within(panel).getByLabelText('Filter repositories'), 'public');
+    expect(within(all).getAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('lists a handful of repositories one by one', async () => {
+    renderApp('/account');
+    const panel = await screen.findByRole('region', { name: 'What you can do' });
+    await within(panel).findByRole('list', { name: 'Repository access, one by one' });
+    expect(within(panel).queryByRole('button', { name: /^Show all/ })).not.toBeInTheDocument();
   });
 });

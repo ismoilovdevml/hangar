@@ -26,7 +26,7 @@ export function FolderDetail({ repo, path, onOpen }: FolderDetailProps) {
     const notFound = q.error instanceof ApiRequestError && q.error.status === 404;
     return (
       <Panel className="browse-empty" role="status">
-        {notFound ? <p>Repository {repo} does not exist, or you cannot see it.</p> : <ErrorNote what="the folder" onRetry={() => void q.refetch()} />}
+        {notFound ? <p>Repository {repo} does not exist, or you cannot see it.</p> : <ErrorNote what="the folder" error={q.error} onRetry={() => void q.refetch()} />}
       </Panel>
     );
   }

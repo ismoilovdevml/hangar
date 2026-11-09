@@ -7,7 +7,6 @@ import {
   useAllRepositories,
   useComponent,
   useComponentAssets,
-  useComponentDependents,
   useComponentFindings,
   useComponentVersions,
   useDeleteComponent,
@@ -36,8 +35,8 @@ import { imageWhere, packageAt } from '../../lib/vulnerabilities';
 import { Fact } from './AssetDetail';
 import { dateTime, deleteMessage, shortDigest } from './detailUtil';
 import { FormatIcon } from '../../components/FormatIcon';
-import { Markdown } from './Markdown';
-import { safeHref, safeImageSrc } from './urlPolicy';
+import { Markdown, MarkdownInline } from '../../components/Markdown';
+import { safeHref, safeImageSrc } from '../../components/urlPolicy';
 
 const route = getRouteApi('/app/browse');
 
@@ -57,7 +56,6 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
   const detail = useComponent(id);
   const c = detail.data && detail.data.id === id ? detail.data : undefined;
   const repo = useRepository(c?.repository);
-  const dependents = useComponentDependents(c?.id);
   const findings = useComponentFindings(c?.id);
   const info = useComponentInfo(c?.id);
   const assets = useComponentAssets(c?.id);
@@ -70,7 +68,7 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
   if (detail.isError) {
     return (
       <Panel>
-        <ErrorNote what="the package" onRetry={() => void detail.refetch()} />
+        <ErrorNote what="the package" error={detail.error} onRetry={() => void detail.refetch()} />
       </Panel>
     );
   }
@@ -88,14 +86,12 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
   const newest = versions[0]?.id === c.id;
   const cached = repo.data?.type === 'proxy';
   const base = { repo: search.repo ?? c.repository, path: search.path, member: search.member, ns: c.namespace || undefined, name: c.name };
-  const hasDependents = !!dependents.data;
   const hasFindings = !!findings.data;
   const available: BrowseTab[] = [
     'readme',
     'versions',
     'files',
     'repositories',
-    ...(hasDependents ? (['dependents'] as const) : []),
     ...(hasFindings ? (['security'] as const) : []),
   ];
   const tab: BrowseTab = search.tab && available.includes(search.tab) ? search.tab : 'readme';
@@ -189,7 +185,6 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
           {tab === 'versions' && <VersionsTable c={c} newestId={versions[0]?.id} cached={cached} canDelete={canDelete} onDelete={askDelete} versionSearch={versionSearch} now={now} />}
           {tab === 'files' && <FilesTable c={c} now={now} />}
           {tab === 'repositories' && <RepositoriesTab c={c} now={now} />}
-          {tab === 'dependents' && dependents.data && <DependentsTable items={dependents.data.items} />}
           {tab === 'security' && findings.data && <FindingsTable items={findings.data.items} />}
         </div>
       </Panel>
@@ -232,7 +227,6 @@ const TAB_LABEL: Record<BrowseTab, string> = {
   versions: 'Versions',
   files: 'Files',
   repositories: 'Repositories',
-  dependents: 'Dependents',
   security: 'Vulnerabilities',
 };
 
@@ -444,7 +438,7 @@ function PackageMark({ format, iconUrl }: { format: string; iconUrl?: string }) 
 function ReadmeTab({ c, q }: { c: ComponentDetail; q: ReturnType<typeof useComponentInfo> }) {
   if (q.isError) {
     if (q.error instanceof ApiRequestError && q.error.status === 501) return <p className="meta">This server does not read package READMEs.</p>;
-    return <ErrorNote what="the README" onRetry={() => void q.refetch()} />;
+    return <ErrorNote what="the README" error={q.error} onRetry={() => void q.refetch()} />;
   }
   if (!q.data) return <p className="meta" aria-busy="true">Reading the README…</p>;
   const r = q.data.readme;
@@ -552,7 +546,7 @@ function VersionsTable({ c, newestId, cached, canDelete, onDelete, versionSearch
       ),
     },
   ];
-  if (q.isError) return <ErrorNote what="versions" onRetry={() => void q.refetch()} />;
+  if (q.isError) return <ErrorNote what="versions" error={q.error} onRetry={() => void q.refetch()} />;
   return (
     <div className="pkg-table">
       <DataTable caption="Versions" columns={columns} rows={rows} rowKey={(v) => v.id} busy={q.isFetching} minWidth={640} empty={q.isPending ? 'Loading…' : 'No versions.'} />
@@ -625,7 +619,7 @@ function FilesTable({ c, now }: { c: ComponentDetail; now: Date }) {
       cell: (a) => (a.last_downloaded_at ? relativeTime(a.last_downloaded_at, now) : 'Never'),
     },
   ];
-  if (q.isError) return <ErrorNote what="files" onRetry={() => void q.refetch()} />;
+  if (q.isError) return <ErrorNote what="files" error={q.error} onRetry={() => void q.refetch()} />;
   return (
     <div className="pkg-table">
       <DataTable caption={layers ? 'Layers' : 'Files'} columns={columns} rows={rows} rowKey={(a) => a.id} busy={q.isFetching} minWidth={760} empty={q.isPending ? 'Loading…' : 'No files.'} />
@@ -638,7 +632,7 @@ function FilesTable({ c, now }: { c: ComponentDetail; now: Date }) {
 function RepositoriesTab({ c, now }: { c: ComponentDetail; now: Date }) {
   const q = usePackageHolders(c.name);
   const all = useAllRepositories();
-  if (q.isError) return <ErrorNote what="the repositories" onRetry={() => void q.refetch()} />;
+  if (q.isError) return <ErrorNote what="the repositories" error={q.error} onRetry={() => void q.refetch()} />;
   if (!q.data) return <p className="meta">Loading…</p>;
   const holders = q.data.items.filter((v) => v.format === c.format && (v.namespace ?? '') === (c.namespace ?? '') && v.version === c.version);
   const byName = new Map((all.data ?? []).map((r) => [r.name, r]));
@@ -692,23 +686,6 @@ function RepositoriesTab({ c, now }: { c: ComponentDetail; now: Date }) {
   );
 }
 
-function DependentsTable({ items }: { items: PublishedComponent[] }) {
-  const columns: Column<PublishedComponent>[] = [
-    {
-      key: 'pkg',
-      header: 'Package',
-      className: 'col-first',
-      cell: (d) => (
-        <Link to="/browse" search={{ repo: d.repository, ns: d.namespace || undefined, name: d.name, version: d.version }} className="link-strong">
-          {componentName(d)} {d.version}
-        </Link>
-      ),
-    },
-    { key: 'repo', header: 'Repository', className: 'muted col-last', cell: (d) => d.repository },
-  ];
-  return <DataTable caption="Dependents" columns={columns} rows={items} rowKey={(d) => d.id} empty="Nothing in this registry depends on this version." />;
-}
-
 const SEVERITY_TONE = { critical: 'bad', high: 'warn', medium: 'warn', low: 'neutral', unknown: 'neutral' } as const;
 
 function FindingsTable({ items }: { items: Finding[] }) {
@@ -720,7 +697,7 @@ function FindingsTable({ items }: { items: Finding[] }) {
       cell: (f) => (
         <div className="asset-path">
           <span className="link-strong">{f.advisory_id}</span>
-          <span className="meta">{f.title}</span>
+          <span className="meta">{f.title && <MarkdownInline source={f.title} />}</span>
         </div>
       ),
     },

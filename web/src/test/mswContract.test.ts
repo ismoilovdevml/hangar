@@ -17,10 +17,7 @@ const PREFIX = '/api/v1';
  * Mocked routes the server does not serve. Each entry needs a reason; the
  * test fails when an entry is no longer mocked, so the list cannot go stale.
  */
-const KNOWN_DRIFT: Record<string, string> = {
-  'GET /system/config':
-    'not in the contract and not served (404); the System and Settings pages should stop calling it',
-};
+const KNOWN_DRIFT: Record<string, string> = {};
 
 type Operation = { method: string; path: string };
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../api/opsTypes';
-import type { UpstreamHealth } from '../api/types';
 import { overview } from '../mocks/data';
-import { headlineUpstream, ratioPercent, storageNote, successRatio, todoItems, urlHost } from './overview';
+import type { OverviewMetrics, UpstreamHealth } from '../api/types';
+import { headlineUpstream, overallStatus, ratioPercent, storageNote, successRatio, todoItems, urlHost } from './overview';
 
 const NOW = new Date('2026-11-04T12:00:00Z');
 
@@ -135,8 +135,12 @@ describe('todoItems', () => {
 
   it('follows the backup tasks the user can see', () => {
     const m = calm();
-    expect(todoItems({ metrics: m, tasks: [], now: NOW })).toMatchObject([{ id: 'backup', detail: 'No backup has ever run' }]);
-    expect(todoItems({ metrics: m, tasks: [task({ enabled: false })], now: NOW })).toMatchObject([{ id: 'backup' }]);
+    // No backup task on the server: backups run outside it, so the reminder links the guide and can be dismissed.
+    expect(todoItems({ metrics: m, tasks: [], now: NOW })).toMatchObject([
+      { id: 'backup-outside', tone: 'info', title: 'Back up the database', dismissible: true, link: { kind: 'docs', href: expect.stringContaining('backup-restore.md') } },
+    ]);
+    expect(todoItems({ metrics: m, tasks: [task({ enabled: false })], now: NOW })).toMatchObject([{ id: 'backup', title: 'Schedule a database backup' }]);
+    expect(todoItems({ metrics: m, tasks: [task({ enabled: false, last_run: null })], now: NOW })[0]!.dismissible).toBeUndefined();
     expect(todoItems({ metrics: m, tasks: [task({})], now: NOW })).toEqual([]);
     const failed = task({
       last_run: { status: 'failed', message: 'disk full' } as Task['last_run'],
@@ -159,5 +163,35 @@ describe('todoItems', () => {
       now: NOW,
     });
     expect(items.map((t) => `${t.tag}: ${t.title}`)).toEqual(['UPSTREAM: nuget-proxy is offline', 'DEGRADED: Search index lagging']);
+  });
+});
+
+describe('overallStatus', () => {
+  const system = { state: 'ok' as const, message: 'All systems normal' };
+  const up = (name: string, state: UpstreamHealth['state']): UpstreamHealth => ({ name, url: `https://${name}.example`, state, latency_ms: 10, requests: 1 });
+  const metrics = (server_errors: number | null) =>
+    ({ range: 'today', requests: { server_errors } }) as unknown as OverviewMetrics;
+
+  it('is green only when nodes, upstreams and requests all are', () => {
+    expect(overallStatus({ system, upstreams: [up('a', 'healthy'), up('b', 'slow')], metrics: metrics(0) })).toEqual({ tone: 'ok', text: 'All systems normal' });
+  });
+
+  it('puts an unreachable upstream before server errors and a degraded node', () => {
+    expect(overallStatus({ system, upstreams: [up('ghcr', 'blocked')], metrics: metrics(13) })).toEqual({ tone: 'bad', text: 'ghcr upstream is blocked' });
+    expect(overallStatus({ system, upstreams: [up('a', 'offline'), up('b', 'blocked')] })).toEqual({ tone: 'bad', text: '2 upstreams unreachable' });
+    expect(overallStatus({ system: { state: 'degraded', message: 'Search degraded' }, metrics: metrics(13) })).toEqual({ tone: 'warn', text: 'Search degraded' });
+    expect(overallStatus({ system, metrics: metrics(13) })).toEqual({ tone: 'warn', text: '13 server errors today' });
+    expect(overallStatus({ system: { state: 'down', message: 'Database down' }, upstreams: [up('a', 'blocked')] })).toEqual({ tone: 'bad', text: 'Database down' });
+  });
+
+  it('names a refused credential the way the to-do list does', () => {
+    expect(overallStatus({ system, upstreams: [{ ...up('ghcr', 'blocked'), reason: 'auth_failed' }] })).toEqual({
+      tone: 'bad',
+      text: 'ghcr upstream: authentication failed (401)',
+    });
+  });
+
+  it('does not invent errors the server does not count', () => {
+    expect(overallStatus({ system, metrics: metrics(null) }).tone).toBe('ok');
   });
 });

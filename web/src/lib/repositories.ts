@@ -572,11 +572,11 @@ function redactUrl(s: string): string {
  * The same configuration as YAML, in the shape POST /repositories accepts with
  * Content-Type application/yaml. Write-only secrets are left out and marked.
  */
-export function repositoryYaml(input: RepositoryInput): string {
+export function repositoryYaml(input: RepositoryInput, chosen: { format: boolean; type: boolean } = { format: true, type: true }): string {
   const { config } = input;
   const cfg: { [k: string]: YamlValue | undefined } = {};
-  if (config.hosted) cfg.hosted = { write_policy: config.hosted.write_policy ?? 'allow' };
-  if (config.proxy) {
+  if (chosen.type && config.hosted) cfg.hosted = { write_policy: config.hosted.write_policy ?? 'allow' };
+  if (chosen.type && config.proxy) {
     const p = config.proxy;
     const proxy: { [k: string]: YamlValue | undefined } = {
       remote_url: redactUrl(p.remote_url),
@@ -599,7 +599,7 @@ export function repositoryYaml(input: RepositoryInput): string {
     if (p.related_hosts?.length) proxy.related_hosts = p.related_hosts;
     cfg.proxy = proxy;
   }
-  if (config.group) cfg.group = { members: config.group.members, write_member: config.group.write_member };
+  if (chosen.type && config.group) cfg.group = { members: config.group.members, write_member: config.group.write_member };
   cfg.anonymous_read = config.anonymous_read ?? false;
   cfg.scan_on_arrival = config.scan_on_arrival ?? false;
   cfg.quarantine_critical = config.quarantine_critical ?? false;
@@ -620,8 +620,8 @@ export function repositoryYaml(input: RepositoryInput): string {
 
   return toYaml({
     name: input.name || '<name>',
-    format: input.format,
-    type: input.type,
+    format: chosen.format ? input.format : '<format>',
+    type: chosen.type ? input.type : '<type>',
     description: input.description,
     blob_store: input.blob_store || undefined,
     online: input.online ?? true,

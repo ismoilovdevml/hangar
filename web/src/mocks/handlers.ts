@@ -96,12 +96,22 @@ function guard(request: Request, mutating = false): Response | null {
   return null;
 }
 
-/** GET /auth/session for the mock user; "admin" is the generated first administrator. */
+/**
+ * GET /auth/session for the mock user; "admin" is the generated first
+ * administrator and "reader" holds only repo:*:read (role-aware UI checks).
+ */
 function sessionBody() {
   const base =
     state.username === 'admin'
       ? { ...data.session, user: { ...data.session.user, username: 'admin', display_name: 'admin', email: '' } }
-      : data.session;
+      : state.username === 'reader'
+        ? {
+            ...data.session,
+            user: { ...data.session.user, username: 'reader', display_name: 'Read Only', email: 'reader@acme.example', roles: ['Reader'] },
+            privileges: ['repo:*:read'],
+            token_warnings: [],
+          }
+        : data.session;
   return state.passwordChangeRequired ? { ...base, privileges: [], token_warnings: [], password_change_required: true } : base;
 }
 
@@ -202,7 +212,7 @@ export const handlers = [
     if (state.failedLogins >= MAX_FAILED_LOGINS) {
       return error(
         423,
-        { code: 'locked', message: 'account is locked after repeated failed sign-ins', retry_after: LOCK_SECONDS },
+        { code: 'locked', message: 'too many failed sign-ins from this address; try again later', retry_after: LOCK_SECONDS },
         { 'Retry-After': String(LOCK_SECONDS) },
       );
     }

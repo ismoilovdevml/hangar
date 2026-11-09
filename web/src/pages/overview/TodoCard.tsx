@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ErrorNote } from '../../components/ErrorNote';
-import { IconCheck } from '../../components/icons';
+import { IconCheck, IconClose } from '../../components/icons';
 import type { TodoItem, TodoLink } from '../../lib/overview';
 
 function TodoAnchor({ link, className, children }: { link: TodoLink; className: string; children: ReactNode }) {
@@ -60,6 +60,12 @@ function TodoAnchor({ link, className, children }: { link: TodoLink; className: 
           {children}
         </Link>
       );
+    case 'docs':
+      return (
+        <a href={link.href} target="_blank" rel="noreferrer" className={className}>
+          {children}
+        </a>
+      );
   }
 }
 
@@ -67,10 +73,12 @@ interface TodoCardProps {
   items?: TodoItem[];
   error: boolean;
   onRetry: () => void;
+  /** Hides a dismissible item for good (in this browser). */
+  onDismiss: (id: string) => void;
 }
 
 /** What needs someone's attention, most urgent first. */
-export function TodoCard({ items, error, onRetry }: TodoCardProps) {
+export function TodoCard({ items, error, onRetry, onDismiss }: TodoCardProps) {
   const urgent = items?.some((t) => t.tone === 'bad');
   return (
     <section className="ov-card todo glass" aria-labelledby="todo-title">
@@ -106,12 +114,17 @@ export function TodoCard({ items, error, onRetry }: TodoCardProps) {
       ) : (
         <ul className="todo__list">
           {items.map((t) => (
-            <li key={t.id}>
+            <li key={t.id} className={t.dismissible ? 'todo__entry todo__entry--dismissible' : 'todo__entry'}>
               <TodoAnchor link={t.link} className={`todo__item todo__item--${t.tone}`}>
                 <span className="todo__tag">{t.tag}</span>
                 <span className="todo__item-title">{t.title}</span>
                 <span className="todo__detail">{t.detail}</span>
               </TodoAnchor>
+              {t.dismissible && (
+                <button type="button" className="todo__dismiss" aria-label={`Dismiss: ${t.title}`} title="Dismiss" onClick={() => onDismiss(t.id)}>
+                  <IconClose size={14} />
+                </button>
+              )}
             </li>
           ))}
         </ul>

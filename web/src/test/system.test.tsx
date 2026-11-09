@@ -137,7 +137,9 @@ describe('system status', () => {
   it('explains the missing privilege instead of loading', async () => {
     withPrivileges(['repo:*:read']);
     renderApp('/system/status');
-    expect(await screen.findByText(/needs the/)).toHaveTextContent('system:cluster:read');
+    expect(await screen.findByText(/You don’t have access to cluster nodes/)).toBeInTheDocument();
+    expect(screen.getByRole('note')).toHaveTextContent('Ask an administrator for system:cluster:read.');
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
     expect(systemMockState.nodesRequests).toBe(0);
   });
 
@@ -250,7 +252,8 @@ describe('system logs', () => {
   it('needs the cluster admin privilege', async () => {
     withPrivileges(['system:cluster:read']);
     renderApp('/system/logs');
-    expect(await screen.findByText(/System logs need the/)).toHaveTextContent('system:cluster:admin');
+    expect(await screen.findByText(/You don’t have access to system logs/)).toBeInTheDocument();
+    expect(screen.getByRole('note')).toHaveTextContent('system:cluster:admin');
   });
 });
 
@@ -309,5 +312,29 @@ describe('system model', () => {
     expect(period('2026-11-02T23:00:00Z', '2026-11-03T01:00:00Z', now)).toBe('2 Nov 23:00 – 01:00');
     expect(versionText('0.1.1')).toBe('v0.1.1');
     expect(versionText('dev')).toBe('dev');
+  });
+});
+
+describe('cluster & replication', () => {
+  it('lists the nodes from the server and says replication is planned', async () => {
+    renderApp('/cluster');
+    const nodes = await screen.findByRole('list', { name: 'Cluster nodes' });
+    const cards = await within(nodes).findAllByRole('listitem');
+    expect(cards).toHaveLength(3);
+    expect(cards[0]).toHaveTextContent('hangar-1');
+    expect(cards[0]).toHaveTextContent('Leader');
+    expect(cards[0]).toHaveTextContent('v1.0.0');
+    expect(screen.getByText('All 3 nodes are healthy')).toBeInTheDocument();
+    expect(screen.getByText(/Quorum held · hangar-1 runs scheduled tasks/)).toBeInTheDocument();
+    const replication = screen.getByRole('region', { name: /Replication/ });
+    expect(replication).toHaveTextContent('Planned');
+    expect(within(replication).getByRole('link', { name: 'High availability guide' })).toHaveAttribute('href', expect.stringContaining('high-availability.md'));
+    expect(screen.queryByText(/This screen is in progress/)).not.toBeInTheDocument();
+  });
+
+  it('says plainly when the server does not list nodes', async () => {
+    server.use(http.get('*/api/v1/nodes', () => HttpResponse.json({ code: 'not_implemented', message: 'nodes' }, { status: 501 })));
+    renderApp('/cluster');
+    expect(await screen.findByText(/does not list its nodes yet/)).toBeInTheDocument();
   });
 });

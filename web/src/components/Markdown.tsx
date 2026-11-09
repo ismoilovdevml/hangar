@@ -7,7 +7,7 @@
  * for them (same-origin by default), lazily and without a referrer; any
  * other image, or one that fails to load, shows its alternative text.
  */
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { safeHref, safeImageSrc } from './urlPolicy';
 
 /* ---------------------------------------------------------------- raw HTML */
@@ -80,6 +80,12 @@ interface Ctx {
   refs: Refs;
   /** Image source as written -> URL to load (from the package info API). */
   images: Readonly<Record<string, string>>;
+  /** No image is loaded at all (advisories): each shows its alternative text. */
+  noImages: boolean;
+  /** Added to a Markdown heading level ("#" is 1) to get the HTML heading level. */
+  headingShift: number;
+  /** Links are shown as their text (inside buttons and other links). */
+  noLinks?: boolean;
 }
 
 const BLANK = /^\s*$/;
@@ -124,9 +130,9 @@ function blocks(lines: string[], ctx: Ctx, key: string): ReactNode[] {
       }
       i++;
       out.push(
-        <pre key={k()} className="md-code">
+        <CodePre key={k()}>
           <code data-lang={lang || undefined}>{body.join('\n')}</code>
-        </pre>,
+        </CodePre>,
       );
       continue;
     }
@@ -137,14 +143,14 @@ function blocks(lines: string[], ctx: Ctx, key: string): ReactNode[] {
         i++;
       }
       out.push(
-        <pre key={k()} className="md-code">
+        <CodePre key={k()}>
           <code>{body.join('\n')}</code>
-        </pre>,
+        </CodePre>,
       );
       continue;
     }
     if ((m = HEADING.exec(line))) {
-      out.push(heading(m[1]!.length, inline(m[2] ?? '', ctx, k()), k()));
+      out.push(heading(m[1]!.length, ctx.headingShift, inline(m[2] ?? '', ctx, k()), k()));
       i++;
       continue;
     }
@@ -272,7 +278,7 @@ function blocks(lines: string[], ctx: Ctx, key: string): ReactNode[] {
     while (i < lines.length && !BLANK.test(lines[i]!) && (para.length === 0 || !isBlockStart(lines[i]!) || /^ {0,3}(=+|-+)\s*$/.test(lines[i]!))) {
       const setext = /^ {0,3}(=+|-+)\s*$/.exec(lines[i]!);
       if (setext && para.length > 0) {
-        out.push(heading(setext[1]![0] === '=' ? 1 : 2, inline(para.join('\n'), ctx, k()), k()));
+        out.push(heading(setext[1]![0] === '=' ? 1 : 2, ctx.headingShift, inline(para.join('\n'), ctx, k()), k()));
         para.length = 0;
         i++;
         break;
@@ -287,14 +293,29 @@ function blocks(lines: string[], ctx: Ctx, key: string): ReactNode[] {
 
 const isParagraph = (n: ReactNode) => typeof n === 'object' && n !== null && 'type' in n && n.type === 'p';
 
-function heading(level: number, children: ReactNode, key: string): ReactNode {
-  // README headings sit below the page's own headings.
-  const shifted = Math.min(6, level + 2);
+function heading(level: number, shift: number, children: ReactNode, key: string): ReactNode {
+  // Markdown headings sit below the page's own headings.
+  const shifted = Math.min(6, level + shift);
   const Tag = `h${shifted}` as 'h3';
   return (
     <Tag key={key} className={`md-h${level}`}>
       {children}
     </Tag>
+  );
+}
+
+/** A code block; one that scrolls is focusable, so keyboards can scroll it. */
+function CodePre({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLPreElement>(null);
+  const [scrolls, setScrolls] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el) setScrolls(el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1);
+  }, [children]);
+  return (
+    <pre ref={ref} className="md-code" tabIndex={scrolls ? 0 : undefined}>
+      {children}
+    </pre>
   );
 }
 
@@ -407,13 +428,15 @@ function inline(src: string, ctx: Ctx, key: string): ReactNode[] {
     if (ch === '[') {
       const l = parseLink(src, i, ctx);
       if (l) {
-        const href = safeHref(l.href);
+        const href = ctx.noLinks ? null : safeHref(l.href);
         const children = inline(l.text, ctx, `${key}.${out.length}l`);
         push(
           href ? (
             <a href={href} {...(href.startsWith('#') ? {} : { target: '_blank', rel: 'noopener noreferrer nofollow' })}>
               {children}
             </a>
+          ) : ctx.noLinks ? (
+            <span>{children}</span>
           ) : (
             <span className="md-link-blocked" title="Relative link: not available here">
               {children}
@@ -427,7 +450,7 @@ function inline(src: string, ctx: Ctx, key: string): ReactNode[] {
     if (ch === '<') {
       const m = /^<((?:https?|mailto):[^\s<>]+)>/i.exec(rest);
       if (m) {
-        const href = safeHref(m[1]!);
+        const href = ctx.noLinks ? null : safeHref(m[1]!);
         push(href ? <a href={href} target="_blank" rel="noopener noreferrer nofollow">{m[1]}</a> : m[1]);
         i += m[0].length;
         continue;
@@ -436,7 +459,7 @@ function inline(src: string, ctx: Ctx, key: string): ReactNode[] {
     if ((ch === 'h' || ch === 'H') && !/[\w/]$/.test(text)) {
       const m = BARE_URL.exec(rest);
       if (m) {
-        const href = safeHref(m[0]);
+        const href = ctx.noLinks ? null : safeHref(m[0]);
         push(href ? <a href={href} target="_blank" rel="noopener noreferrer nofollow">{m[0]}</a> : m[0]);
         i += m[0].length;
         continue;
@@ -481,6 +504,7 @@ function inline(src: string, ctx: Ctx, key: string): ReactNode[] {
  * or an inline data image. Anything else is never loaded from the browser.
  */
 function imageSource(href: string, ctx: Ctx): string | null {
+  if (ctx.noImages) return null;
   const h = href.trim();
   if (Object.hasOwn(ctx.images, h)) return safeImageSrc(ctx.images[h]!);
   return h.startsWith('data:') ? safeImageSrc(h) : null;
@@ -536,14 +560,38 @@ function ImageChip({ alt, failed }: { alt: string; failed: boolean }) {
 
 /* ---------------------------------------------------------------- entry */
 
+interface MarkdownProps {
+  source: string;
+  /** Image source as written -> URL to load; images without an entry show their alternative text. */
+  images?: Readonly<Record<string, string>>;
+  /** Load no image at all, not even inline data images. */
+  noImages?: boolean;
+  /** The HTML level the shallowest heading in `source` gets; by default "#" is an h3. */
+  topHeading?: number;
+}
+
+/** The shallowest ATX heading level in the source, outside code blocks. */
+function shallowestHeading(lines: string[]): number | null {
+  let fence = false;
+  let min: number | null = null;
+  for (const l of lines) {
+    if (FENCE.test(l)) fence = !fence;
+    const m = !fence ? HEADING.exec(l) : null;
+    if (m) min = Math.min(min ?? 6, m[1]!.length);
+  }
+  return min;
+}
+
 /**
  * Renders `source` as Markdown. `images` maps each image source as written
  * in the README to the URL to load (the package info API resolves and signs
  * them); images without an entry show their alternative text.
  */
-export function Markdown({ source, images }: { source: string; images?: Readonly<Record<string, string>> }) {
+export function Markdown({ source, images, noImages = false, topHeading }: MarkdownProps) {
   const lines = preprocess(source);
-  const ctx: Ctx = { refs: new Map(), images: images ?? {} };
+  const top = topHeading !== undefined ? shallowestHeading(lines) : null;
+  const headingShift = topHeading !== undefined && top !== null ? topHeading - top : 2;
+  const ctx: Ctx = { refs: new Map(), images: images ?? {}, noImages, headingShift };
   const body: string[] = [];
   let inFence = false;
   for (const l of lines) {
@@ -553,4 +601,13 @@ export function Markdown({ source, images }: { source: string; images?: Readonly
     else body.push(l);
   }
   return <div className="markdown">{blocks(body, ctx, 'md')}</div>;
+}
+
+/**
+ * One line of Markdown (an advisory title): code spans and emphasis only,
+ * links as plain text, so it can sit inside a button or a link.
+ */
+export function MarkdownInline({ source }: { source: string }) {
+  const ctx: Ctx = { refs: new Map(), images: {}, noImages: true, headingShift: 2, noLinks: true };
+  return <>{inline(preprocess(source).join(' '), ctx, 'mi')}</>;
 }

@@ -85,7 +85,9 @@ describe('blob stores', () => {
   it('hides creation from users without the blob store admin privilege', async () => {
     server.use(http.get('*/api/v1/auth/session', () => HttpResponse.json({ ...session, privileges: ['repo:*:read', 'system:blobstores:read'] })));
     renderApp('/blob-stores?add=true');
-    expect(await screen.findByRole('button', { name: 'Add blob store' })).toBeDisabled();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Blob stores' })).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Storage totals' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add blob store' })).not.toBeInTheDocument();
     expect(screen.queryByRole('form', { name: 'Add a blob store' })).not.toBeInTheDocument();
   });
 

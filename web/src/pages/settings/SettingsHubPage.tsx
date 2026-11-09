@@ -1,10 +1,8 @@
 import { Link, useRouter } from '@tanstack/react-router';
 import { useAuthProviders, useBlobStores, useSession, useSystemStatus } from '../../api/hooks';
-import { useSystemConfig } from '../../api/ops';
 import { IconChevronRight } from '../../components/opsIcons';
 import { canSee, visibleHub, type AppPath, type HubEntry, type HubEntryId } from '../../nav';
 import { formatBytes, instanceName } from '../../lib/format';
-import { configValue } from '../../lib/system';
 import { formatUtc } from '../../lib/tasks';
 import { useSystemNodes } from '../system/api';
 import { summarize, versionText } from '../system/model';
@@ -44,8 +42,6 @@ export function SettingsHubPage() {
 
   const status = useSystemStatus();
   const sys = status.data;
-  // Older servers leave the base URL out of the status; administrators can read it from the configuration.
-  const config = useSystemConfig(canSettings && !!sys && !sys.base_url);
   const providers = useAuthProviders();
   const idps = useIdentityProviders(canSettings);
   const proxies = useProxies(canSettings);
@@ -66,10 +62,7 @@ export function SettingsHubPage() {
     addresses: () => {
       if (sys?.base_url) return { text: sys.base_url, mono: true };
       if (!sys) return status.isError ? 'unavailable' : 'pending';
-      return lineFrom(config, (c) => {
-        const url = configValue(c, 'server.base_url');
-        return typeof url === 'string' && url ? { text: url, mono: true } : { text: 'Not set: clients see the address they used', attention: true };
-      });
+      return { text: 'Not set: clients see the address they used', attention: true };
     },
     instance: () => lineFrom(status, (s) => ({ text: s.instance_name || instanceName(session.data?.organization.name) })),
     'sign-in': () =>
@@ -111,7 +104,7 @@ export function SettingsHubPage() {
       }
       return lineFrom(status, (s) => ({ text: `${s.nodes_up} of ${s.nodes_total} up`, attention: s.nodes_up < s.nodes_total }));
     },
-    configuration: () => ({ text: 'hangar.yaml + HANGAR_* · view' }),
+    configuration: () => ({ text: 'hangar.yaml + HANGAR_* environment' }),
     status: () => {
       if (summary && summary.checks > 0) {
         return summary.passing === summary.checks

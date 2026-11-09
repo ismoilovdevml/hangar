@@ -1,26 +1,35 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useClientEndpoints, useSession } from '../../api/hooks';
+import { useClientEndpoints } from '../../api/hooks';
 import type { Format } from '../../api/types';
 import { ClientSetup } from '../../components/ClientSetup';
 import { ErrorNote } from '../../components/ErrorNote';
 import { IconKey, IconPackage, IconPlus, IconSearch, IconTerminal } from '../../components/icons';
 import { isMac } from '../../components/commandPaletteContext';
-import { allows } from '../../lib/can';
+import { useGate } from '../../api/permissions';
+import { GATES } from '../../lib/gates';
 import { Dialog } from '../access/ui';
 
 /** The client set-up snippets for the repositories the user can read, in a dialog. */
 function ConnectClientDialog({ onClose }: { onClose: () => void }) {
   const q = useClientEndpoints();
+  const canCreateRepo = useGate(GATES.createRepository);
   return (
     <Dialog title="Connect a client" description="Point your package manager at this registry." onClose={onClose} wide>
       {q.isError ? (
-        <ErrorNote what="client endpoints" onRetry={() => void q.refetch()} />
+        <ErrorNote what="client endpoints" error={q.error} onRetry={() => void q.refetch()} />
       ) : q.isPending ? (
         <p className="meta">Loading endpoints…</p>
       ) : q.data.items.length === 0 ? (
         <p className="meta">
-          No repositories you can read yet. <Link to="/repositories/new">Create one</Link> to get client settings.
+          No repositories you can read yet.{' '}
+          {canCreateRepo ? (
+            <>
+              <Link to="/repositories/new">Create one</Link> to get client settings.
+            </>
+          ) : (
+            'Ask an administrator for read access to one.'
+          )}
         </p>
       ) : (
         <ClientSetup
@@ -59,14 +68,10 @@ function ActionBody({ tone, icon, title, sub }: ActionProps) {
 /** Search box, qualifier examples and the four things people come here to do. */
 export function Hero({ topFormat }: { topFormat?: Format }) {
   const navigate = useNavigate();
-  const session = useSession();
   const inputId = useId();
   const [q, setQ] = useState('');
   const [connecting, setConnecting] = useState(false);
-  // Creating a repository takes system:repos:admin or admin on a repository name pattern.
-  const privileges = session.data?.privileges;
-  const canCreateRepo =
-    allows(privileges, 'system', 'repos', 'admin') || !!privileges?.some((p) => /^repo:[^:]+:(admin|\*)$/.test(p));
+  const canCreateRepo = useGate(GATES.createRepository);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();

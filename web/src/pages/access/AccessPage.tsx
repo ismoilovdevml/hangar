@@ -209,7 +209,7 @@ function AllTokens({ ownerKind, status, q, onChange }: AllTokensProps) {
         />
       </div>
       {tokens.isError ? (
-        <ErrorNote what="tokens" onRetry={() => void tokens.refetch()} />
+        <ErrorNote what="tokens" error={tokens.error} privilege="system:tokens:read" onRetry={() => void tokens.refetch()} />
       ) : (
         <TokenTable caption="All access tokens" tokens={tokens.data?.items ?? []} showOwner busy={tokens.isFetching} empty={tokens.isPending ? 'Loading…' : 'No tokens match.'} />
       )}

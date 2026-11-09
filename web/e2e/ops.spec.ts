@@ -140,7 +140,7 @@ test('system page at desktop and phone width', async ({ page }) => {
     await page.goto('/settings/system');
     await expect(page.getByText('Operational')).toBeVisible();
     await expect(page.getByRole('cell', { name: 'hangar-1' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'database settings' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Configuration' })).toContainText('hangar.yaml');
     await checkFrame(page, `system-${w}`);
   }
   expect(errors).toEqual([]);

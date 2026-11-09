@@ -126,7 +126,7 @@ export function SearchPage() {
                 {invalid.body?.message ?? 'The query is not valid.'}
               </p>
             ) : results.isError ? (
-              <ErrorNote what="search results" onRetry={() => void results.refetch()} />
+              <ErrorNote what="search results" error={results.error} onRetry={() => void results.refetch()} />
             ) : first && hits.length === 0 ? (
               <NoResults q={q} onClear={(next) => setQuery(next)} />
             ) : (

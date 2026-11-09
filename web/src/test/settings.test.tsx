@@ -43,8 +43,8 @@ describe('settings navigation', () => {
   it('hides it from other users and explains the page', async () => {
     server.use(http.get('*/api/v1/auth/session', () => HttpResponse.json({ ...session, privileges: ['repo:*:read'] })));
     renderApp('/settings/authentication');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Administrators only' })).toBeInTheDocument();
-    expect(screen.getByText(/system:settings:read/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Authentication' })).toBeInTheDocument();
+    expect(screen.getByRole('note')).toHaveTextContent('You don’t have access to these settings. Ask an administrator for system:settings:read.');
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     expect(within(nav).queryByRole('link', { name: 'Authentication' })).not.toBeInTheDocument();
   });

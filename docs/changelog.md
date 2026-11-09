@@ -102,6 +102,50 @@
   from an unreachable or policy-blocked remote, with a hint to check the
   proxy credentials; the Repositories list, repository pages and Overview
   show the same.
+- **Web UI follows the user's roles**:
+  - The sidebar, Settings and the command palette list only pages the user
+    can open; empty sections disappear. Pages a role does not open (tasks,
+    blob stores, cleanup, audit, access, cluster, system status and logs,
+    new repository, new task, sign-in and proxy settings) say "You don't have
+    access to … ask an administrator for `<privilege>`" without calling the
+    API. A refusal the session did not predict shows the same note instead of
+    "Could not load" and Retry.
+  - Actions a role cannot take are hidden: New repository, Add blob store and
+    blob store management, Take offline and Delete on repository settings.
+    Repository creation counts `repo:<pattern>:admin` as well as
+    `system:repos:admin`.
+- **Web UI fixes**:
+  - The token secret's copy button is readable (it was white on white).
+  - Versions show one "v" (`v0.1.6`, not `vv0.1.6`) in the sidebar, sign-in
+    page, Settings → System and the API reference.
+  - Advisory text in the finding drawer is rendered as Markdown with the
+    README renderer (no raw HTML, no images, restricted links), opens on its
+    first section with **Show full advisory**, and code blocks scroll. Advisory
+    titles render inline code and emphasis.
+  - The Overview's status pill weighs the same signals as its cards
+    (unreachable upstreams, server errors, node health); the sidebar card says
+    "All nodes healthy".
+  - The database backup reminder links the backup guide when the server has
+    no backup task, and can be dismissed.
+  - My account summarises repository rights (one row per distinct grant, with
+    exceptions) behind **Show all N repositories**.
+  - Repositories: cards on phones; the count cards stay totals under a name or
+    format filter; creating a repository opens its page with a confirmation
+    and **Connect a client**; the YAML preview shows `<format>` and `<type>`
+    until they are chosen.
+  - Cluster & replication shows the nodes from `GET /nodes`; replication is
+    marked planned.
+  - Most downloaded names the repository when a package repeats; avatars of
+    `qa-bob` and `qa-help` read "QB" and "QH".
+  - The UI no longer calls `GET /components/{id}/dependents` or
+    `GET /system/config` (neither exists); Settings → System says where
+    configuration lives.
+  - The sign-in card no longer moves when an error appears; a 423 says "Too
+    many failed sign-ins from this address" (or the server's message), not
+    "This account is locked".
+  - Accessibility: 24 px tap targets on phones, one `main` landmark on the API
+    reference, unique table landmarks, heading order on Blob stores, and
+    scrolling code blocks reachable by keyboard.
 
 - **Move to Hangar: import and pre-warm tasks** (issue #74, guide
   `docs/guides/migrate.md`):

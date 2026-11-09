@@ -13,15 +13,19 @@ describe('app shell', () => {
     for (const label of ['Overview', 'Packages', 'Search', 'Repositories', 'Blob stores', 'Cleanup policies', 'Vulnerabilities', 'Access & audit', 'Scheduled tasks', 'Cluster & replication']) {
       expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument();
     }
-    expect(await within(nav).findByText('All systems normal')).toBeInTheDocument();
+    expect(await within(nav).findByText('All nodes healthy')).toBeInTheDocument();
     expect(within(nav).getByText('3 of 3 nodes · v1.0.0')).toBeInTheDocument();
     const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' });
     expect(await within(crumbs).findByText('acme-platform')).toBeInTheDocument();
     expect(within(crumbs).getByText('Overview')).toHaveAttribute('aria-current', 'page');
     // One token expires soon: the bell says so.
     expect(screen.getByRole('button', { name: 'Notifications, 1 waiting' })).toBeInTheDocument();
-    // The Overview's header shows the system state instead of the search button.
-    expect(await screen.findByRole('link', { name: 'All systems normal' })).toHaveAttribute('href', '/system/status');
+    // The Overview's header shows the state instead of the search button, weighing the same
+    // signals as its cards: a blocked upstream is not "All systems normal".
+    const pill = await screen.findByRole('link', { name: 'ghcr-proxy upstream: authentication failed (401)' });
+    expect(pill).toHaveAttribute('href', '/system/status');
+    expect(pill).toHaveClass('status-pill--bad');
+    expect(screen.queryByText('All systems normal')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Search packages, digests, CVEs/ })).not.toBeInTheDocument();
   });
 
@@ -116,3 +120,35 @@ describe('app shell', () => {
     expect(history.location.pathname).toBe('/login');
   });
 });
+
+describe('versions', () => {
+  it('shows a server version that already starts with v once, everywhere', async () => {
+    server.use(http.get('*/api/v1/system/status', () => HttpResponse.json({ ...data.systemStatus, version: 'v0.1.6' })));
+    renderApp('/settings/system');
+    const nav = await screen.findByRole('navigation', { name: 'Primary' });
+    expect(await within(nav).findByText(/nodes · v0\.1\.6$/)).toBeInTheDocument();
+    const status = await screen.findByRole('region', { name: 'System status' });
+    expect(await within(status).findByText('v0.1.6')).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('vv0.1.6');
+  });
+
+  it('adds the v only where it is missing', async () => {
+    const { versionText } = await import('../lib/format');
+    expect(versionText('0.1.6')).toBe('v0.1.6');
+    expect(versionText('v0.1.6')).toBe('v0.1.6');
+    expect(versionText('V0.1.6')).toBe('v0.1.6');
+    expect(versionText('dev')).toBe('dev');
+    expect(versionText(' v1.0.0-rc.1 ')).toBe('v1.0.0-rc.1');
+  });
+});
+
+describe('avatars', () => {
+  it('tells prefixed usernames apart', async () => {
+    const { initials } = await import('../lib/format');
+    expect(['qa-bob', 'qa-help', 'qa-lead'].map(initials)).toEqual(['QB', 'QH', 'QL']);
+    expect(initials('Dilshod Ismoilov')).toBe('DI');
+    expect(initials('d.ismoilov@acme.example')).toBe('DI');
+    expect(initials('admin')).toBe('AD');
+  });
+});
+

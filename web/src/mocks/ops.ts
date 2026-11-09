@@ -13,7 +13,6 @@ import type {
   CleanupPreview,
   CleanupRun,
   ClusterStatus,
-  SystemConfig,
   Task,
   LockfileResult,
   TaskInput,
@@ -323,7 +322,6 @@ function initialState(now = Date.now()) {
     audit: auditSeed(now),
     /** Interval between progress steps of a started run. */
     stepMs: 1_200,
-    configAvailable: true,
   };
 }
 
@@ -350,9 +348,6 @@ export const opsMockState = {
   },
   set stepMs(ms: number) {
     state.stepMs = ms;
-  },
-  set configAvailable(v: boolean) {
-    state.configAvailable = v;
   },
   emit,
 };
@@ -754,13 +749,6 @@ export function opsHandlers(guard: Guard) {
       return HttpResponse.json(clusterStatus());
     }),
 
-    // Not in the contract yet.
-    http.get(api('/system/config'), ({ request }) => {
-      const denied = guard(request);
-      if (denied) return denied;
-      if (!state.configAvailable) return error(501, { code: 'not_implemented', message: 'effective configuration is not available' });
-      return HttpResponse.json(systemConfig);
-    }),
   ];
 }
 
@@ -800,19 +788,4 @@ function clusterStatus(): ClusterStatus {
   };
 }
 
-const systemConfig: SystemConfig = {
-  config: {
-    server: { addr: ':8080', base_url: 'https://pkg.acme.io', instance_name: 'acme-platform', trusted_proxies: ['10.0.0.0/8'], shutdown_timeout: '30s' },
-    log: { level: 'info', format: 'json' },
-    database: { url: 'postgres://hangar:REDACTED@db.acme.internal:5432/hangar', max_conns: 40, migrate_on_start: true },
-    storage: { kind: 's3', s3: { endpoint: 'https://minio.acme.internal', bucket: 'hangar', region: 'eu-central-1', access_key_id: 'REDACTED', secret_access_key: 'REDACTED', use_path_style: true } },
-    nats: { embedded: true, data_dir: '/var/lib/hangar/nats' },
-    http: { proxy: 'http://proxy.acme.internal:3128', no_proxy: ['.acme.internal', '10.0.0.0/8'], connect_timeout: '10s' },
-    auth: { session: { ttl: '12h0m0s', remember_ttl: '720h0m0s' }, lockout: { max_attempts: 5, window: '15m0s' }, max_token_lifetime: '8760h0m0s' },
-    docker: { token_key: 'REDACTED' },
-    scanner: { trivy_url: 'http://trivy.acme.internal:4954' },
-    metrics: { enabled: true, path: '/metrics' },
-  },
-  sources: { 'server.base_url': 'env', 'database.url': 'env', 'storage.s3.secret_access_key': 'env', 'docker.token_key': 'env', 'log.level': 'default' },
-};
 

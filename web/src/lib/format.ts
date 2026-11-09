@@ -60,10 +60,23 @@ export function instanceName(name: string | undefined | null): string {
   return n === '' || n.toLowerCase() === 'hangar' ? 'Hangar' : n;
 }
 
+/**
+ * Two letters for an avatar. Names are split on spaces and on the separators
+ * usernames use (`-`, `_`, `.`), so "qa-bob" and "qa-help" read "QB" and "QH"
+ * rather than both "QA"; an email address counts only up to the "@".
+ */
 export function initials(displayName: string): string {
-  const parts = displayName.trim().split(/\s+/).filter(Boolean);
+  const name = displayName.trim().replace(/@.*$/, '');
+  const parts = name.split(/[\s._-]+/).filter(Boolean);
   const letters = parts.length > 1 ? `${parts[0]![0]}${parts[parts.length - 1]![0]}` : (parts[0] ?? '?').slice(0, 2);
   return letters.toUpperCase();
+}
+
+/** "v0.1.6" for a release, whether or not the server already wrote the "v"; other builds ("dev") as they are. */
+export function versionText(v: string): string {
+  const t = v.trim();
+  if (/^[vV]\d/.test(t)) return `v${t.slice(1)}`;
+  return /^\d/.test(t) ? `v${t}` : t;
 }
 
 export const RANGES: { id: OverviewRange; label: string; title: string; requests: string }[] = [

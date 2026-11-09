@@ -4,6 +4,7 @@ import { ApiRequestError } from '../../api/client';
 import { useFinding, usePullers, useRevokeWaiver } from '../../api/findings';
 import type { Finding, PackagePlan } from '../../api/types';
 import { ErrorNote } from '../../components/ErrorNote';
+import { MarkdownInline } from '../../components/Markdown';
 import { Pill } from '../../components/Pill';
 import { plural } from '../../lib/overview';
 import {
@@ -22,6 +23,7 @@ import {
   shortDate,
   sortedAliases,
 } from '../../lib/vulnerabilities';
+import { AdvisoryText } from './AdvisoryText';
 import { CopyTextButton } from './CopyTextButton';
 import { Drawer } from './Drawer';
 import { AssignDialog, WaiveDialog } from './PlanDialogs';
@@ -49,7 +51,7 @@ export function FindingDrawer({ id, plan, onClose, canWrite, canSeePullers }: Fi
   return (
     <>
       <Drawer
-        title={f ? f.title || f.advisory_id : 'Finding'}
+        title={f ? f.title ? <MarkdownInline source={f.title} /> : f.advisory_id : 'Finding'}
         eyebrow={
           f &&
           sev &&
@@ -89,7 +91,7 @@ export function FindingDrawer({ id, plan, onClose, canWrite, canSeePullers }: Fi
           finding.error instanceof ApiRequestError && finding.error.status === 404 ? (
             <p className="meta">This finding no longer exists or is in a repository you cannot read.</p>
           ) : (
-            <ErrorNote what="the finding" onRetry={() => void finding.refetch()} />
+            <ErrorNote what="the finding" error={finding.error} onRetry={() => void finding.refetch()} />
           )
         ) : !f ? (
           <p className="meta" aria-busy="true">
@@ -200,7 +202,11 @@ function FindingBody({ f, plan, canWrite, canSeePullers }: { f: Finding; plan?: 
 
       <section className="vfinding__section" aria-label="Summary">
         <h3 className="vfinding__heading">Summary</h3>
-        <p className="vfinding__details">{f.details || f.title || 'The advisory has no description.'}</p>
+        {f.details ? (
+          <AdvisoryText source={f.details} />
+        ) : (
+          <p className="vfinding__details">{f.title || 'The advisory has no description.'}</p>
+        )}
         <a className="vfinding__osv" href={advisory.href} target="_blank" rel="noreferrer noopener">
           {advisory.label}
         </a>
@@ -294,7 +300,7 @@ function Pullers({ id }: { id: string }) {
     if (pullers.error instanceof ApiRequestError && pullers.error.status === 403) {
       return <p className="meta">Seeing who pulls a package needs the security read privilege.</p>;
     }
-    return <ErrorNote what="who pulls it" onRetry={() => void pullers.refetch()} />;
+    return <ErrorNote what="who pulls it" error={pullers.error} onRetry={() => void pullers.refetch()} />;
   }
   const p = pullers.data;
   if (!p) {

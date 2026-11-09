@@ -1,11 +1,15 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { http, HttpResponse } from 'msw';
+import { afterEach, describe, expect, it } from 'vitest';
+import { opsMockState } from '../mocks/ops';
+import { server } from '../mocks/node';
 import { renderApp } from './render';
 
 const card = (name: RegExp) => screen.getByRole('link', { name });
 
 describe('overview', () => {
+  afterEach(() => window.localStorage.clear());
   it('summarises the day from the metrics API', async () => {
     renderApp('/');
     const today = await screen.findByRole('region', { name: /^Today · / });
@@ -58,6 +62,27 @@ describe('overview', () => {
     expect(todo).not.toHaveTextContent(/backup|quota/i);
   });
 
+  it('points at the backup guide when the server has no backup task, until dismissed', async () => {
+    server.use(http.get('*/api/v1/tasks', () => HttpResponse.json({ items: opsMockState.tasks.filter((t) => t.type !== 'db_backup'), running: [] })));
+    const user = userEvent.setup();
+    const first = renderApp('/');
+    const todo = await screen.findByRole('region', { name: 'To do' });
+    const reminder = (await within(todo).findByText('Back up the database')).closest('a')!;
+    expect(reminder).toHaveAttribute('href', expect.stringContaining('docs/deploy/backup-restore.md'));
+    expect(reminder).toHaveAttribute('target', '_blank');
+    expect(within(todo).queryByText('Schedule a database backup')).not.toBeInTheDocument();
+
+    await user.click(within(todo).getByRole('button', { name: 'Dismiss: Back up the database' }));
+    expect(within(todo).queryByText('Back up the database')).not.toBeInTheDocument();
+
+    // Remembered in this browser.
+    first.unmount();
+    renderApp('/');
+    const again = await screen.findByRole('region', { name: 'To do' });
+    await within(again).findByText('ghcr-proxy: authentication failed (401)');
+    expect(within(again).queryByText('Back up the database')).not.toBeInTheDocument();
+  });
+
   it('shows the most downloaded packages and fits the overview on one screen', async () => {
     renderApp('/');
     const top = await screen.findByRole('region', { name: 'Most downloaded' });
@@ -67,6 +92,32 @@ describe('overview', () => {
 
     // Recent publications are on the Packages page; the overview stays one screen.
     expect(screen.queryByRole('table', { name: 'Recently published packages' })).not.toBeInTheDocument();
+  });
+
+  it('names the repository when the same package is popular in several', async () => {
+    const hit = (component_id: string, name: string, repository: string, downloads: number) => ({
+      component_id,
+      name,
+      coordinates: name,
+      repository,
+      format: 'helm',
+      version: '1.0.0',
+      downloads,
+    });
+    server.use(
+      http.get('*/api/v1/search', () =>
+        HttpResponse.json({
+          items: [hit('c1', 'qachart', 'helm-a', 9), hit('c2', 'qachart', 'helm-b', 7), hit('c3', 'alpine', 'docker-hub', 5)],
+          total: 3,
+          next_cursor: null,
+        }),
+      ),
+    );
+    renderApp('/');
+    const top = await screen.findByRole('region', { name: 'Most downloaded' });
+    const chips = await within(top).findAllByRole('link');
+    expect(chips.map((a) => a.textContent)).toEqual([' in helm-a9 downloads', ' in helm-b7 downloads', '5 downloads'].map((t, i) => `${i < 2 ? 'qachart' : 'alpine'}${t}`));
+    expect(chips[0]).toHaveAttribute('title', 'qachart in helm-a');
   });
 
   it('searches from the box and offers qualifier examples', async () => {

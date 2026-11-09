@@ -102,19 +102,34 @@ describe('sign-in against the API', () => {
     expect(await screen.findByText('dockerhub-proxy')).toBeInTheDocument();
   });
 
-  it('explains a lockout and keeps the form disabled while it lasts', async () => {
+  it('explains a lockout without blaming the account, and keeps the form disabled while it lasts', async () => {
     server.use(
       http.post('*/api/v1/auth/login', () =>
-        HttpResponse.json({ code: 'locked', message: 'account is locked', retry_after: 900 }, { status: 423 }),
+        HttpResponse.json({ code: 'locked', message: 'too many failed sign-ins from this address; try again later', retry_after: 900 }, { status: 423 }),
       ),
     );
     const user = userEvent.setup();
     renderApp('/login');
     await signIn(user);
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'This account is locked after repeated failed sign-ins. Try again in 15 min, or ask an administrator to unlock it.',
-    );
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Too many failed sign-ins from this address. Try again in 15 min.');
+    expect(alert).not.toHaveTextContent(/account is locked/i);
     expect(screen.getByRole('button', { name: 'Try again in 15 min' })).toBeDisabled();
+  });
+
+  it('uses the server’s lockout message, or a generic one', async () => {
+    let body: Record<string, unknown> = { code: 'locked', message: 'sign-in paused for this client; try again later' };
+    server.use(http.post('*/api/v1/auth/login', () => HttpResponse.json(body, { status: 423 })));
+    const user = userEvent.setup();
+    const first = renderApp('/login');
+    await signIn(user);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sign-in paused for this client. Try again later.');
+    first.unmount();
+
+    body = { code: 'locked' };
+    renderApp('/login');
+    await signIn(user);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Too many failed sign-ins from this address. Try again later.');
   });
 
   it('reads the rate-limit wait from Retry-After', async () => {

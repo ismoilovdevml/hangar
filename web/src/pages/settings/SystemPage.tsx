@@ -1,16 +1,16 @@
-import { useId, useState } from 'react';
+import { versionText } from '../../lib/format';
 import { useSystemStatus } from '../../api/hooks';
-import { isMissingEndpoint, useCanSystem, useClusterStatus, useSystemConfig } from '../../api/ops';
+import { isMissingEndpoint, useCanSystem, useClusterStatus } from '../../api/ops';
 import type { ClusterNode, DependencyStatus, SystemStatusDetail } from '../../api/opsTypes';
 import { CopyButton } from '../../components/CopyButton';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
-import { IconSearch } from '../../components/icons';
 import { NotAvailable } from '../../components/NotAvailable';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
-import { configValue, dependencyLabel, flattenConfig, formatUptime, hostOf } from '../../lib/system';
+import { DOCS } from '../../lib/docs';
+import { dependencyLabel, formatUptime, hostOf } from '../../lib/system';
 import { formatUtc } from '../../lib/tasks';
 
 const STATE_TONE = { ok: 'ok', degraded: 'warn', down: 'bad' } as const;
@@ -34,80 +34,17 @@ function Endpoint({ label, value, hint }: { label: string; value?: string; hint?
   );
 }
 
+/** Where the configuration lives: the server reads it at start-up and does not expose it over the API. */
 function ConfigPanel() {
-  const config = useSystemConfig(true);
-  const [filter, setFilter] = useState('');
-  const id = useId();
-  if (config.isError) {
-    return (
-      <Panel title="Effective configuration" titleId="config-title">
-        {isMissingEndpoint(config.error) ? (
-          <p className="meta">This server does not expose its effective configuration yet. Check hangar.yaml and the HANGAR_* environment on the host.</p>
-        ) : (
-          <ErrorNote what="the configuration" onRetry={() => void config.refetch()} />
-        )}
-      </Panel>
-    );
-  }
-  const q = filter.trim().toLowerCase();
-  const sections = config.data
-    ? flattenConfig(config.data)
-        .map((s) => ({ ...s, entries: s.entries.filter((e) => !q || e.key.toLowerCase().includes(q) || (!e.secret && e.value.toLowerCase().includes(q))) }))
-        .filter((s) => s.entries.length)
-    : [];
   return (
-    <Panel
-      title="Effective configuration"
-      titleId="config-title"
-      action={
-        <div className="filter-search">
-          <label htmlFor={id} className="visually-hidden">
-            Filter settings
-          </label>
-          <IconSearch size={16} />
-          <input
-            id={id}
-            className="filter-search__input"
-            type="search"
-            placeholder="Filter settings"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
-      }
-    >
-      <p className="meta">Read-only. Values come from hangar.yaml, HANGAR_* environment variables or built-in defaults. Secrets are never shown.</p>
-      {config.isPending && <p className="meta">Loading…</p>}
-      {config.data && sections.length === 0 && <p className="meta">No setting matches “{filter}”.</p>}
-      {sections.map((s) => (
-        <section key={s.name} className="config-section" aria-label={`${s.name} settings`}>
-          <h3 className="section-label">{s.name}</h3>
-          <dl className="config-list">
-            {s.entries.map((e) => (
-              <div key={e.key} className="config-list__row">
-                <dt>
-                  <code>{e.key}</code>
-                </dt>
-                <dd>
-                  {e.secret ? (
-                    <span className="config-secret">
-                      <span aria-hidden="true">{e.value}</span>
-                      <span className="visually-hidden">hidden</span> <Pill tone="neutral">secret</Pill>
-                    </span>
-                  ) : e.value ? (
-                    <code className="config-value">{e.value}</code>
-                  ) : (
-                    <span className="meta">empty</span>
-                  )}
-                  {e.source && <span className="config-source">{e.source === 'env' ? 'environment' : e.source}</span>}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-      ))}
+    <Panel title="Configuration" titleId="config-title">
+      <p className="meta">
+        Hangar reads <code className="inline-code">hangar.yaml</code> and <code className="inline-code">HANGAR_*</code> environment variables when it
+        starts; change them on the host and restart. Sign-in and outbound proxies are edited under Settings.{' '}
+        <a href={DOCS.configuration} target="_blank" rel="noreferrer">
+          Configuration reference
+        </a>
+      </p>
     </Panel>
   );
 }
@@ -116,11 +53,9 @@ export function SystemPage() {
   const status = useSystemStatus();
   const cluster = useClusterStatus();
   const canReadSettings = useCanSystem('settings', 'read');
-  // Base URL may come from the status or, for admins, from the configuration.
-  const config = useSystemConfig(canReadSettings);
   const sys = status.data as SystemStatusDetail | undefined;
 
-  const baseUrl = sys?.base_url ?? (configValue(config.data, 'server.base_url') as string | undefined);
+  const baseUrl = sys?.base_url || undefined;
   const registryHost = sys?.registry_host ?? hostOf(baseUrl);
 
   const depColumns: Column<DependencyStatus>[] = [
@@ -149,7 +84,7 @@ export function SystemPage() {
     },
     { key: 'role', header: 'Role', cell: (n) => <Pill tone={n.role === 'leader' ? 'info' : 'neutral'}>{n.role}</Pill> },
     { key: 'zone', header: 'Zone', className: 'muted', cell: (n) => n.zone ?? <NotAvailable /> },
-    { key: 'version', header: 'Version', className: 'muted', cell: (n) => n.version ?? <NotAvailable /> },
+    { key: 'version', header: 'Version', className: 'muted', cell: (n) => (n.version ? versionText(n.version) : <NotAvailable />) },
     {
       key: 'health',
       header: 'Health',
@@ -165,7 +100,7 @@ export function SystemPage() {
       <PageHeader title="System" description="Health, version and configuration of this Hangar installation." />
 
       {status.isError ? (
-        <ErrorNote what="system status" onRetry={() => void status.refetch()} />
+        <ErrorNote what="system status" error={status.error} onRetry={() => void status.refetch()} />
       ) : (
         <Panel className="system-status" aria-label="System status" aria-busy={status.isPending || undefined}>
           {sys ? (
@@ -182,7 +117,7 @@ export function SystemPage() {
                 <div>
                   <dt>Version</dt>
                   <dd>
-                    {sys.version}
+                    {versionText(sys.version)}
                     {sys.build?.commit && <span className="meta"> · {sys.build.commit.slice(0, 12)}</span>}
                   </dd>
                 </div>
@@ -218,7 +153,7 @@ export function SystemPage() {
       <div className="system-grid">
         <Panel title="Endpoints" titleId="endpoints-title">
           <dl className="endpoints">
-            <Endpoint label="Base URL" value={baseUrl} hint={canReadSettings ? undefined : 'Shown to administrators'} />
+            <Endpoint label="Base URL" value={baseUrl} hint={sys ? 'Not set: clients use the address they reached' : undefined} />
             <Endpoint label="Registry host" value={registryHost} hint="Derived from the base URL" />
             <Endpoint label="API" value={baseUrl ? `${baseUrl}/api/v1` : undefined} />
           </dl>
@@ -244,7 +179,7 @@ export function SystemPage() {
               This server does not list cluster nodes yet{sys ? `; it reports ${sys.nodes_up} of ${sys.nodes_total} up` : ''}.
             </p>
           ) : (
-            <ErrorNote what="cluster nodes" onRetry={() => void cluster.refetch()} />
+            <ErrorNote what="cluster nodes" error={cluster.error} privilege="system:cluster:read" onRetry={() => void cluster.refetch()} />
           )
         ) : (
           <DataTable

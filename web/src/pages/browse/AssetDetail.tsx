@@ -37,7 +37,7 @@ export function AssetDetail({ id, treeRepo, onDeleted }: AssetDetailProps) {
     const notFound = q.error instanceof ApiRequestError && q.error.status === 404;
     return (
       <Panel className="browse-empty" role="status">
-        {notFound ? <p>This file no longer exists, or you cannot see it.</p> : <ErrorNote what="the file" onRetry={() => void q.refetch()} />}
+        {notFound ? <p>This file no longer exists, or you cannot see it.</p> : <ErrorNote what="the file" error={q.error} onRetry={() => void q.refetch()} />}
       </Panel>
     );
   }

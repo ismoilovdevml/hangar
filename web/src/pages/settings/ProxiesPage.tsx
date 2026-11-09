@@ -64,7 +64,7 @@ export function ProxiesPage() {
       </Panel>
     );
   } else if (q.isError || !list) {
-    body = <ErrorNote what="the proxies" onRetry={() => void q.refetch()} />;
+    body = <ErrorNote what="the proxies" error={q.error} privilege="system:settings:read" onRetry={() => void q.refetch()} />;
   } else {
     body = (
       <>

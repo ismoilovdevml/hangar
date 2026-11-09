@@ -34,6 +34,8 @@ import {
   describeUserAgent,
   formatDate,
   generatePassword,
+  groupRepoAccess,
+  nameList,
   roleTone,
   type MemberFilters,
   SOURCE_LABEL,
@@ -174,7 +176,7 @@ export function MembersTab({ kind, filters, onFilters, onOpen }: MembersTabProps
         </div>
       </div>
       {list.isError ? (
-        <ErrorNote what={sa ? 'service accounts' : 'members'} onRetry={() => void list.refetch()} />
+        <ErrorNote what={sa ? 'service accounts' : 'members'} error={list.error} privilege="system:users:read" onRetry={() => void list.refetch()} />
       ) : (
         <DataTable
           caption={sa ? 'Service accounts' : 'Members'}
@@ -711,10 +713,15 @@ function UserSessions({ id, canWrite }: { id: string; canWrite: boolean }) {
 const ACTION_SHORT: Record<string, string> = Object.fromEntries(ACTIONS.map((a) => [a.id, a.label]));
 
 /** Effective permissions: per repository and area, the allowed actions and why. */
+/** Above this many repositories the report summarises them instead of listing each one. */
+const REPO_LIST_LIMIT = 6;
+
 export function PermissionsReport({ id }: { id: string }) {
   const report = usePermissions(id);
   const [filter, setFilter] = useState('');
+  const [showAll, setShowAll] = useState(false);
   const filterId = useId();
+  const listId = useId();
   if (report.isError) return <FormError error={report.error} />;
   const r = report.data;
   if (!r) return <p className="meta">Loading…</p>;
@@ -724,6 +731,18 @@ export function PermissionsReport({ id }: { id: string }) {
       .filter((g) => g.action === action)
       .map((g) => (g.source === 'anonymous' ? 'anonymous read' : `${g.role} (${g.privilege})`))
       .join(', ');
+  const actionPills = (actions: string[]) => (
+    <span className="pill-row">
+      {actions.map((a) => (
+        <Pill key={a} tone={a === 'read' ? 'neutral' : a === 'admin' ? 'violet' : 'info'}>
+          {ACTION_SHORT[a] ?? a}
+        </Pill>
+      ))}
+    </span>
+  );
+  const total = r.repositories.length;
+  const summarise = total > REPO_LIST_LIMIT;
+  const groups = summarise ? groupRepoAccess(r.repositories) : [];
   return (
     <div className="drawer__section">
       {(r.disabled || r.locked) && (
@@ -750,41 +769,67 @@ export function PermissionsReport({ id }: { id: string }) {
           ))}
         </ul>
       )}
-      <h3 className="dialog-section__title">Repositories ({r.repositories.length})</h3>
-      {r.repositories.length > 8 && (
-        <>
-          <label className="visually-hidden" htmlFor={filterId}>
-            Filter repositories
-          </label>
-          <input id={filterId} className="input input--sm" placeholder="Filter repositories" value={filter} onChange={(e) => setFilter(e.target.value)} />
-        </>
-      )}
-      {r.repositories.length === 0 ? (
+      <h3 className="dialog-section__title">Repositories ({total})</h3>
+      {total === 0 ? (
         <p className="meta">No access to any repository.</p>
       ) : (
-        <ul className="perm-list">
-          {repos.map((x) => (
-            <li key={x.resource} className="perm-list__row">
-              <span className="cell-stack">
-                <span className="cell-strong mono">{x.name}</span>
-                <span className="meta">
-                  {x.format} · {x.type}
-                  {x.anonymous_read ? ' · anonymous read' : ''}
-                </span>
-              </span>
-              <span className="cell-stack perm-list__grants">
-                <span className="pill-row">
-                  {x.actions.map((a) => (
-                    <Pill key={a} tone={a === 'read' ? 'neutral' : a === 'admin' ? 'violet' : 'info'}>
-                      {ACTION_SHORT[a] ?? a}
-                    </Pill>
-                  ))}
-                </span>
-                <span className="meta">{x.actions.map((a) => `${ACTION_SHORT[a]}: ${why(x.grants, a)}`).join(' · ')}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
+        <>
+          {summarise && (
+            <ul className="perm-list" aria-label="Repository access, summarised">
+              {groups.map((g, i) => {
+                const names = g.repos.map((x) => x.name);
+                return (
+                  <li key={names[0]} className="perm-list__row">
+                    <span className="cell-stack">
+                      <span className="cell-strong">
+                        {g.repos.length === total ? `All ${total} repositories` : i === 0 && g.repos.length > 1 ? `${g.repos.length} repositories` : nameList(names)}
+                      </span>
+                      {i === 0 && g.repos.length > 1 && g.repos.length < total && <span className="meta">Every repository not listed below</span>}
+                    </span>
+                    <span className="cell-stack perm-list__grants">
+                      {actionPills(g.actions)}
+                      <span className="meta">{g.actions.map((a) => `${ACTION_SHORT[a]}: ${why(g.grants, a)}`).join(' · ')}</span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {summarise && (
+            <button type="button" className="button button--secondary button--sm perm-list__toggle" aria-expanded={showAll} aria-controls={listId} onClick={() => setShowAll(!showAll)}>
+              {showAll ? 'Hide the per-repository list' : `Show all ${total} repositories`}
+            </button>
+          )}
+          {(!summarise || showAll) && (
+            <div id={listId} className="perm-list__all">
+              {summarise && (
+                <>
+                  <label className="visually-hidden" htmlFor={filterId}>
+                    Filter repositories
+                  </label>
+                  <input id={filterId} className="input input--sm" placeholder="Filter repositories" value={filter} onChange={(e) => setFilter(e.target.value)} />
+                </>
+              )}
+              <ul className="perm-list" aria-label="Repository access, one by one">
+                {repos.map((x) => (
+                  <li key={x.resource} className="perm-list__row">
+                    <span className="cell-stack">
+                      <span className="cell-strong mono">{x.name}</span>
+                      <span className="meta">
+                        {x.format} · {x.type}
+                        {x.anonymous_read ? ' · anonymous read' : ''}
+                      </span>
+                    </span>
+                    <span className="cell-stack perm-list__grants">
+                      {actionPills(x.actions)}
+                      <span className="meta">{x.actions.map((a) => `${ACTION_SHORT[a]}: ${why(x.grants, a)}`).join(' · ')}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
       )}
       {r.notes.map((n) => (
         <p key={n} className="meta">

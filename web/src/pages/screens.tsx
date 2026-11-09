@@ -1,19 +1,4 @@
 import { Link } from '@tanstack/react-router';
-import { ScreenSkeleton } from './ScreenSkeleton';
-
-export function ClusterPage() {
-  return (
-    <ScreenSkeleton
-      title="Cluster & replication"
-      description="Nodes that share the load, and edge nodes that keep a nearby copy for other regions."
-      planned={[
-        'Overall health and quorum.',
-        'One card per node with role, zone, CPU, memory and cache disk, requests per second and uptime.',
-        'Replication targets with lag or failures, and the health of PostgreSQL, object storage, the event bus, search and the scanner.',
-      ]}
-    />
-  );
-}
 
 export function NotFoundPage() {
   return (

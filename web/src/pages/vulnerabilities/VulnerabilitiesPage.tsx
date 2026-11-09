@@ -374,7 +374,7 @@ export function VulnerabilitiesPage() {
           plan.error instanceof ApiRequestError && plan.error.status === 401 ? (
             <p className="meta vplan-panel__note">Sign in again to see the fix plan.</p>
           ) : (
-            <ErrorNote what="the fix plan" onRetry={() => void plan.refetch()} />
+            <ErrorNote what="the fix plan" error={plan.error} privilege="system:security:read" onRetry={() => void plan.refetch()} />
           )
         ) : (
           <FixPlanTable

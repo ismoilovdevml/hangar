@@ -59,7 +59,7 @@ export function CleanupPage() {
           {policies.isError && isMissingEndpoint(policies.error) ? (
             <p className="meta">This server does not support cleanup policies yet. Upgrade Hangar to manage them here.</p>
           ) : policies.isError ? (
-            <ErrorNote what="cleanup policies" onRetry={() => void policies.refetch()} />
+            <ErrorNote what="cleanup policies" error={policies.error} privilege="system:cleanup:read" onRetry={() => void policies.refetch()} />
           ) : policies.isPending ? (
             <p className="meta">Loading policies…</p>
           ) : (

@@ -28,7 +28,7 @@ describe('repository settings', () => {
   it('opens from the repository list', async () => {
     const user = setupUser();
     const { history } = renderApp('/repositories');
-    await user.click(await screen.findByRole('link', { name: 'npmjs-proxy' }));
+    await user.click(await screen.findByRole('link', { name: 'npmjs-proxy' }, { timeout: 5000 }));
     await waitFor(() => expect(history.location.pathname).toBe('/repositories/npmjs-proxy/settings'));
     expect(await screen.findByRole('form', { name: 'Settings of npmjs-proxy' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Browse packages' })).toHaveAttribute('href', '/browse?repo=npmjs-proxy');
@@ -119,8 +119,9 @@ describe('repository settings', () => {
     renderApp('/repositories/docker-prod/settings');
     expect(await screen.findByText(/Changing them needs admin rights/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Take offline' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Delete docker-prod' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Take offline' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete docker-prod' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Delete repository' })).not.toBeInTheDocument();
     expect(screen.getByLabelText(/Description/)).toBeDisabled();
   });
 

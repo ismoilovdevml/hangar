@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState, type ComponentType, type SVGProps } from 'react';
+import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode, type SVGProps } from 'react';
 import { getRouteApi, Link, useRouterState } from '@tanstack/react-router';
 import { useRepositories } from '../../api/hooks';
+import { useGate } from '../../api/permissions';
 import type { Repository, RepositoryCounts, RepositoryType } from '../../api/types';
 import { CopyButton } from '../../components/CopyButton';
 import { DataTable, type Column, type TableSort } from '../../components/DataTable';
@@ -13,6 +14,8 @@ import { formatOptions } from '../../components/formatOptions';
 import { Select } from '../../components/Select';
 import { StatusDot } from '../../components/Pill';
 import { formatBytes, relativeTime } from '../../lib/format';
+import { GATES } from '../../lib/gates';
+import { PHONE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { plural } from '../../lib/overview';
 import { formatUtc } from '../../lib/tasks';
 import { useNow } from '../../lib/useNow';
@@ -49,6 +52,71 @@ function CountCards({ counts }: { counts: RepositoryCounts | undefined }) {
         );
       })}
     </section>
+  );
+}
+
+/**
+ * The list on a phone: one card per repository with what tells them apart
+ * (name, format, type, status, size), so nothing needs horizontal scrolling.
+ */
+function RepoCards({ rows, empty, busy }: { rows: Repository[]; empty: ReactNode; busy: boolean }) {
+  if (rows.length === 0) return <p className="repo-cards__empty">{empty}</p>;
+  return (
+    <ul className="repo-cards" aria-label="Repositories" aria-busy={busy || undefined}>
+      {rows.map((r) => {
+        const Icon = CARD_ICON[r.type];
+        // Same wording as the table: an upstream refusing credentials reads "authentication failed (401)".
+        const s = repoStatusMeta(r);
+        return (
+          <li key={r.id} className="repo-card">
+            <div className="repo-card__head">
+              <div className="repo-name">
+                <Link to="/repositories/$name/settings" params={{ name: r.name }} className="repo-name__link">
+                  {r.name}
+                </Link>
+                {repoSubtitle(r) && <span className="repo-name__sub">{repoSubtitle(r)}</span>}
+              </div>
+              <span className="row-actions">
+                <Link to="/browse" search={{ repo: r.name }} className="copy-button" aria-label={`Browse packages in ${r.name}`} title="Browse packages">
+                  <IconPackage size={16} />
+                </Link>
+                <CopyButton text={r.url} label={`Copy URL of ${r.name}`} />
+              </span>
+            </div>
+            <dl className="repo-card__facts">
+              <div>
+                <dt className="visually-hidden">Format</dt>
+                <dd>
+                  <FormatName format={r.format} />
+                </dd>
+              </div>
+              <div>
+                <dt className="visually-hidden">Type</dt>
+                <dd>
+                  <span className={`pill pill--icon tone-${TYPE_META[r.type].tone}`}>
+                    <Icon size={13} aria-hidden="true" />
+                    {TYPE_META[r.type].label}
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt className="visually-hidden">Status</dt>
+                <dd>
+                  <StatusDot tone={s.tone} label={s.label} title={s.hint} />
+                </dd>
+              </div>
+              <div className="repo-card__size">
+                <dt className="visually-hidden">Size</dt>
+                <dd>
+                  <RepoSize r={r} />
+                </dd>
+              </div>
+            </dl>
+            {s.hint && <p className="repo-card__hint">{s.hint}</p>}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -121,6 +189,11 @@ export function RepositoriesPage() {
   const pageCursors = useRouterState({ select: (s) => s.location.state.pageCursors });
   const { type, format, q, sort, cursor } = search;
   const list = useRepositories({ type, format, q, sort, cursor, limit: PAGE_SIZE });
+  // The count cards are totals: with a name or format filter they come from an unfiltered query.
+  const filtered = !!(format || q);
+  const totals = useRepositories({ limit: 1 }, filtered);
+  const canCreate = useGate(GATES.createRepository);
+  const phone = useMediaQuery(PHONE_QUERY);
   const now = useNow(60_000);
   const order: TableSort = { key: (sort ?? 'name').replace(/^-/, ''), desc: !!sort?.startsWith('-') };
   const onSort = (key: string) => {
@@ -152,7 +225,6 @@ export function RepositoriesPage() {
     });
   };
 
-  const filtered = !!(format || q);
   const tabTotal = data ? data.counts[type ?? 'all'] : 0;
 
   const columns: Column<Repository>[] = [
@@ -249,10 +321,12 @@ export function RepositoriesPage() {
         Show all
       </Link>
     </>
-  ) : (
+  ) : canCreate ? (
     <>
       No repositories yet. <Link to="/repositories/new">Create the first one</Link>.
     </>
+  ) : (
+    'No repositories you can read yet.'
   );
 
   return (
@@ -261,13 +335,15 @@ export function RepositoriesPage() {
         title="Repositories"
         description="Where packages live. Hosted stores your own, proxy caches the internet, group joins them under one URL."
         actions={
-          <Link to="/repositories/new" search={type ? { type } : {}} className="button button--primary">
-            <IconPlus size={16} /> New repository
-          </Link>
+          canCreate && (
+            <Link to="/repositories/new" search={type ? { type } : {}} className="button button--primary">
+              <IconPlus size={16} /> New repository
+            </Link>
+          )
         }
       />
 
-      <CountCards counts={data?.counts} />
+      <CountCards counts={filtered ? totals.data?.counts : data?.counts} />
 
       <Panel flush className="repo-panel" aria-label="Repository list">
         <div className="repo-toolbar">
@@ -307,7 +383,9 @@ export function RepositoriesPage() {
         </div>
 
         {list.isError ? (
-          <ErrorNote what="repositories" onRetry={() => void list.refetch()} />
+          <ErrorNote what="repositories" error={list.error} onRetry={() => void list.refetch()} />
+        ) : phone ? (
+          <RepoCards rows={data?.items ?? []} empty={empty} busy={list.isFetching} />
         ) : (
           <DataTable
             caption="Repositories"

@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from 'react';
 import type { PackagePlan, PlanFinding } from '../../api/types';
+import { MarkdownInline } from '../../components/Markdown';
 import { Pill } from '../../components/Pill';
 import { plural } from '../../lib/overview';
 import {
@@ -43,7 +44,7 @@ function Chevron() {
 /** One row per package, expandable into its findings. */
 export function FixPlanTable({ items, tab, windowDays, inUseDays, expanded, onToggle, onOpenFinding, onWaive, onAssign, canWrite, busy, empty }: FixPlanTableProps) {
   return (
-    <div className="table-scroll" tabIndex={0} role="region" aria-label="Fix plan">
+    <div className="table-scroll" tabIndex={0} role="region" aria-label="Fix plan table">
       <table className="data-table vplan" aria-busy={busy || undefined}>
         <caption className="visually-hidden">Fix plan by package</caption>
         <thead>
@@ -242,7 +243,7 @@ function FindingRow({ f, pkg, image, onOpen }: { f: PlanFinding; pkg: string; im
   return (
     <button type="button" className="vfrow" onClick={onOpen} aria-haspopup="dialog">
       <span className="vfrow__main">
-        <span className="vfrow__title">{f.title || f.advisory_id}</span>
+        <span className="vfrow__title">{f.title ? <MarkdownInline source={f.title} /> : f.advisory_id}</span>
         <span className="vfrow__meta">
           <span className="vfrow__id">{f.advisory_id}</span>
           {cve && cve !== f.advisory_id && <span className="vfrow__id">{cve}</span>}

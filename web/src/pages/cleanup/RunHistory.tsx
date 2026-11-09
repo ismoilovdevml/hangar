@@ -51,7 +51,7 @@ export function RunHistory({ policy }: { policy: string }) {
         isMissingEndpoint(runs.error) ? (
           <p className="meta panel-note">This server does not report cleanup run history yet. Runs also appear under Scheduled tasks.</p>
         ) : (
-          <ErrorNote what="run history" onRetry={() => void runs.refetch()} />
+          <ErrorNote what="run history" error={runs.error} privilege="system:cleanup:read" onRetry={() => void runs.refetch()} />
         )
       ) : (
         <DataTable

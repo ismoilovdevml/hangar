@@ -310,7 +310,7 @@ export function AuditPage() {
             Reading the audit log needs the <code className="inline-code">system:audit:read</code> privilege. Ask an administrator for it.
           </p>
         ) : events.isError ? (
-          <ErrorNote what="audit events" onRetry={() => void events.refetch()} />
+          <ErrorNote what="audit events" error={events.error} privilege="system:audit:read" onRetry={() => void events.refetch()} />
         ) : (
           <div className="table-scroll" tabIndex={0} role="region" aria-label="Audit events table">
             <table className="data-table audit-table" style={{ minWidth: 920 }} aria-busy={events.isFetching || undefined}>

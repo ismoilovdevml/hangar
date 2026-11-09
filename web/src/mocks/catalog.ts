@@ -1,7 +1,6 @@
 /**
  * Mock packages (components, assets), search and blob store management for
- * unit tests and offline UI work. Shapes follow api/openapi.yaml; the endpoints
- * the server does not implement yet (dependents) answer 501 as it does; findings
+ * unit tests and offline UI work. Shapes follow api/openapi.yaml; findings
  * live in findings.ts.
  */
 import { http, HttpResponse, type HttpResponseResolver } from 'msw';
@@ -193,7 +192,6 @@ export const catalogState = {
 };
 
 const error = (status: number, body: ApiError) => HttpResponse.json(body, { status });
-const notImplemented = (what: string) => error(501, { code: 'not_implemented', message: `${what} is not implemented yet` });
 
 const offsetOf = (cursor: string | null) => {
   const m = cursor ? /^o(\d+)$/.exec(cursor) : null;
@@ -696,7 +694,6 @@ export function catalogHandlers(guard: Guard, readableRepos: () => string[], rep
       }, true),
     ),
 
-    http.get(api('/components/:id/dependents'), withGuard(() => notImplemented('endpoint GET dependents'))),
 
     http.get(
       api('/search'),

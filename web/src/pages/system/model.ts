@@ -71,10 +71,7 @@ export function summarize(nodes: SystemNode[]): ClusterSummary {
   return { status, up, total: nodes.length, leader, versions, passing: subs.length - down - degraded, checks: subs.length, headline, notes };
 }
 
-/** "v1.0.0" for release versions, other builds ("dev") as they are. */
-export function versionText(v: string): string {
-  return /^\d/.test(v) ? `v${v}` : v;
-}
+export { versionText } from '../../lib/format';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

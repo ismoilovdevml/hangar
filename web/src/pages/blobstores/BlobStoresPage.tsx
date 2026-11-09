@@ -29,14 +29,9 @@ export function BlobStoresPage() {
         title="Blob stores"
         description="The disks and buckets behind your repositories. Identical files are stored once."
         actions={
-          (!add || !canCreate) && (
-            <button
-              type="button"
-              className="button button--primary"
-              disabled={!canCreate}
-              title={canCreate ? undefined : 'Needs the blob store admin privilege'}
-              onClick={() => setAdd(true)}
-            >
+          !add &&
+          canCreate && (
+            <button type="button" className="button button--primary" onClick={() => setAdd(true)}>
               <IconPlus size={16} /> Add blob store
             </button>
           )
@@ -46,7 +41,7 @@ export function BlobStoresPage() {
       {add && canCreate && <BlobStoreCreate onClose={() => setAdd(false)} />}
 
       {list.isError ? (
-        <ErrorNote what="blob stores" onRetry={() => void list.refetch()} />
+        <ErrorNote what="blob stores" error={list.error} privilege="system:blobstores:read" onRetry={() => void list.refetch()} />
       ) : (
         <>
           <Totals data={list.data} />
@@ -64,7 +59,10 @@ function Totals({ data }: { data: BlobStoreList | undefined }) {
   const labels = ['Total used', 'Saved by deduplication', 'Growth', 'Reclaimable now'];
   if (!data) {
     return (
-      <section className="kpis" aria-label="Storage totals" aria-busy="true">
+      <section className="kpis" aria-labelledby="storage-totals-title" aria-busy="true">
+        <h2 id="storage-totals-title" className="visually-hidden">
+          Storage totals
+        </h2>
         {labels.map((l) => (
           <KpiCardSkeleton key={l} label={l} />
         ))}
@@ -80,7 +78,11 @@ function Totals({ data }: { data: BlobStoreList | undefined }) {
   const n = data.items.length;
   const capacity = t.capacity_bytes;
   return (
-    <section className="kpis" aria-label="Storage totals">
+    <section className="kpis" aria-labelledby="storage-totals-title">
+      {/* The cards' h3 labels need an h2 above them. */}
+      <h2 id="storage-totals-title" className="visually-hidden">
+        Storage totals
+      </h2>
       <KpiCard
         label="Total used"
         value={used.value}
