@@ -506,15 +506,12 @@ func (h *handler) putFile(r *http.Request, repo *core.Repository, mp *mavenPath)
 		}
 		req.Component = comp
 	}
+	// SNAPSHOTs are always redeployable, also under allow_once. Timestamped
+	// files never collide; a non-unique SNAPSHOT file
+	// (artifactId-1.0-SNAPSHOT.jar) is replaced in the publish transaction,
+	// so a concurrent download sees the old file or the new one, never none.
+	req.Replace = mp.snapshot()
 	_, _, err = h.deps.Components.Publish(ctx, repo, req)
-	if errors.Is(err, core.ErrWriteDenied) && mp.snapshot() && repo.WritePolicy() == core.WriteAllowOnce {
-		// SNAPSHOTs are always redeployable. Timestamped files never collide;
-		// a non-unique SNAPSHOT file (artifactId-1.0-SNAPSHOT.jar) is replaced.
-		if derr := h.deps.Components.DeleteAsset(ctx, repo, mp.path); derr != nil {
-			return fmt.Errorf("replace snapshot %s: %w", mp.path, err)
-		}
-		_, _, err = h.deps.Components.Publish(ctx, repo, req)
-	}
 	return err
 }
 
