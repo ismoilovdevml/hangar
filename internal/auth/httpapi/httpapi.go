@@ -397,11 +397,19 @@ func (h *handler) writeError(w http.ResponseWriter, r *http.Request, err error) 
 		writeErrorBody(w, http.StatusBadRequest, "invalid_argument", err.Error(), 0)
 	case errors.Is(err, core.ErrNotImplemented):
 		writeErrorBody(w, http.StatusNotImplemented, "not_implemented", err.Error(), 0)
+	case errors.Is(err, context.Canceled) || errors.Is(r.Context().Err(), context.Canceled):
+		// The client went away (navigated off, closed the connection): not a
+		// server failure. 499 keeps it out of the server error counts.
+		h.log.DebugContext(r.Context(), "auth api: request canceled by the client", "path", r.URL.Path, "error", err)
+		writeErrorBody(w, statusClientClosedRequest, "canceled", "request canceled", 0)
 	default:
 		h.log.ErrorContext(r.Context(), "auth api: internal error", "path", r.URL.Path, "error", err)
 		writeErrorBody(w, http.StatusInternalServerError, "internal", "internal server error", 0)
 	}
 }
+
+// statusClientClosedRequest answers a request whose client went away first.
+const statusClientClosedRequest = 499
 
 const maxBody = 1 << 20
 
