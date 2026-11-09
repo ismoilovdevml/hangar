@@ -157,11 +157,12 @@ export function useClientEndpoints() {
 
 /* ---------------------------------------------------------------- repositories */
 
-export function useRepositories(query: ListRepositoriesQuery) {
+export function useRepositories(query: ListRepositoriesQuery, enabled = true) {
   return useQuery({
     queryKey: queryKeys.repositoryList(query),
     queryFn: ({ signal }) => apiFetch<RepositoryList>('/repositories', { query, signal }),
     placeholderData: keepPreviousData,
+    enabled,
   });
 }
 

@@ -9,6 +9,7 @@ import { Panel } from '../../components/Panel';
 import { FormatIcon, FormatName } from '../../components/FormatIcon';
 import { Select } from '../../components/Select';
 import { FORMAT_META } from '../../lib/format';
+import { isForbidden } from '../../lib/gates';
 import {
   ALL_FORMATS,
   blobStoreOption,
@@ -81,7 +82,8 @@ export function RepoCreatePage() {
     Object.entries(errors).filter(([k]) => submitted || blurred[k as RepoFormField]),
   );
   const input = toRepositoryInput(effective);
-  const yaml = repositoryYaml(input);
+  // Until a format and a type are chosen the preview says so, rather than showing the defaults the request would fall back to.
+  const yaml = repositoryYaml(input, { format: !!form.format, type: !!form.type });
   const origin = typeof location !== 'undefined' ? location.origin : 'http://localhost';
 
   const chooseFormat = (f: Format) =>
@@ -106,7 +108,8 @@ export function RepoCreatePage() {
     setSubmitted(true);
     if (focusFirstError(errors)) return;
     create.mutate(input, {
-      onSuccess: (repo) => void navigate({ to: '/repositories', search: { q: repo.name } }),
+      // The repository's page, where the next step (connecting a client) is waiting.
+      onSuccess: (repo) => void navigate({ to: '/repositories/$name/settings', params: { name: repo.name }, state: { created: repo.name } }),
     });
   };
 
@@ -157,7 +160,11 @@ export function RepoCreatePage() {
             {...invalidProps('blobStore', shownErrors, 'repo-blob-hint')}
           />
           <span id="repo-blob-hint" className="field__hint">
-            {stores.isError ? 'Could not load blob stores.' : 'Where the bytes are kept'}
+            {stores.isError
+              ? isForbidden(stores.error)
+                ? 'Listing blob stores needs the system:blobstores:read privilege.'
+                : 'Could not load blob stores.'
+              : 'Where the bytes are kept'}
           </span>
           <FieldError field="blobStore" errors={shownErrors} />
         </div>

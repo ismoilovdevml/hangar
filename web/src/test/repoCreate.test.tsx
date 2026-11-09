@@ -112,8 +112,11 @@ describe('new repository form', () => {
     expect(yaml).not.toContain('s3cret-token');
 
     await user.click(screen.getByRole('button', { name: 'Create repository' }));
-    await waitFor(() => expect(history.location.pathname).toBe('/repositories'));
-    expect(new URLSearchParams(history.location.search).get('q')).toBe('npm-mirror');
+    // The new repository's page, with a confirmation and the next step.
+    await waitFor(() => expect(history.location.pathname).toBe('/repositories/npm-mirror/settings'));
+    const toast = (await screen.findByText(/is ready/)).closest<HTMLElement>('[role="status"]')!;
+    expect(toast).toHaveTextContent('npm-mirror is ready.');
+    expect(within(toast).getByRole('button', { name: 'Connect a client' })).toBeInTheDocument();
 
     expect(posts).toHaveLength(1);
     expect(posts[0]!.csrf).toBe(mockState.csrf);
@@ -138,8 +141,8 @@ describe('new repository form', () => {
         },
       },
     });
-    expect(await screen.findByText('npm-mirror')).toBeInTheDocument();
-  });
+    expect(await screen.findByRole('heading', { level: 1, name: 'npm npm-mirror' })).toBeInTheDocument();
+  }, 15_000);
 
   it('builds an ordered group with a hosted write member', async () => {
     const posts = capturePosts();

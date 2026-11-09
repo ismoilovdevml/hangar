@@ -1,5 +1,5 @@
-import { useMemo, useState, type FormEvent } from 'react';
-import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
+import { useCallback, useMemo, useState, type FormEvent } from 'react';
+import { getRouteApi, Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { ApiRequestError } from '../../../api/client';
 import { useDeleteRepository, useRepository, useUpdateRepository } from '../../../api/catalog';
 import { useRepositoriesByFormat } from '../../../api/hooks';
@@ -16,6 +16,7 @@ import { FormatName } from '../../../components/FormatIcon';
 import { PageHeader } from '../../../components/PageHeader';
 import { Panel } from '../../../components/Panel';
 import { Pill, StatusDot } from '../../../components/Pill';
+import { Toast } from '../../../components/Toast';
 import { FORMAT_META, formatBytes } from '../../../lib/format';
 import { isDirty, repoClientTarget, repoToForm, storedInput, toRepositoryUpdate } from '../../../lib/repoSettings';
 import {
@@ -61,7 +62,7 @@ export function RepoSettingsPage() {
             <Link to="/repositories">Back to repositories</Link>
           </p>
         ) : (
-          <ErrorNote what="the repository" onRetry={() => void repo.refetch()} />
+          <ErrorNote what="the repository" error={repo.error} onRetry={() => void repo.refetch()} />
         )}
       </div>
     );
@@ -87,6 +88,17 @@ function SettingsForm({ repo }: { repo: Repository }) {
   const [submitted, setSubmitted] = useState(false);
   const [saved, setSaved] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const created = useRouterState({ select: (s) => s.location.state.created });
+  const dismissCreated = useCallback(
+    () => void navigate({ to: '/repositories/$name/settings', params: { name: repo.name }, replace: true, state: (s) => ({ ...s, created: undefined }) }),
+    [navigate, repo.name],
+  );
+  const connectClient = () => {
+    const el = document.getElementById('connect-client');
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el?.focus({ preventScroll: true });
+    dismissCreated();
+  };
 
   const update = useUpdateRepository(repo.name);
   const toggle = useUpdateRepository(repo.name);
@@ -151,6 +163,8 @@ function SettingsForm({ repo }: { repo: Repository }) {
             Repositories
           </Link>
         }
+        // Named in words: the badge's label and the name would otherwise run together ("Rawqa-raw-a").
+        titleLabel={`${formatLabel} ${repo.name}`}
         title={
           <span className="repo-settings__title">
             {isFormat(repo.format) && <FormatBadge format={repo.format} size={40} />}
@@ -172,16 +186,17 @@ function SettingsForm({ repo }: { repo: Repository }) {
                 {repo.type === 'hosted' ? 'Import' : 'Pre-warm'}
               </Link>
             )}
-            <button
-              type="button"
-              className="button button--secondary"
-              aria-pressed={!online}
-              disabled={!canAdmin || toggle.isPending}
-              title={canAdmin ? undefined : 'Needs admin rights on this repository'}
-              onClick={() => toggle.mutate(storedInput(repo, !online))}
-            >
-              {toggle.isPending ? 'Saving…' : online ? 'Take offline' : 'Bring online'}
-            </button>
+            {canAdmin && (
+              <button
+                type="button"
+                className="button button--secondary"
+                aria-pressed={!online}
+                disabled={toggle.isPending}
+                onClick={() => toggle.mutate(storedInput(repo, !online))}
+              >
+                {toggle.isPending ? 'Saving…' : online ? 'Take offline' : 'Bring online'}
+              </button>
+            )}
           </>
         }
       />
@@ -219,26 +234,26 @@ function SettingsForm({ repo }: { repo: Repository }) {
 
           {repo.type !== 'hosted' && <RoutingPanel repo={repo} memberTypes={memberTypes} />}
 
-          <Panel title="Delete repository" titleId="danger-title" className="danger-zone">
-            <p className="danger-zone__text">
-              Removes the repository and its {repo.component_count === 1 ? 'one package version' : `${repo.component_count} package versions`}.
-              Their files are released for compaction. Groups that list it must drop it first.
-            </p>
-            <div>
-              <button
-                type="button"
-                className="button button--danger-outline"
-                disabled={!canAdmin}
-                title={canAdmin ? undefined : 'Needs admin rights on this repository'}
-                onClick={() => {
-                  remove.reset();
-                  setConfirmDelete(true);
-                }}
-              >
-                Delete {repo.name}
-              </button>
-            </div>
-          </Panel>
+          {canAdmin && (
+            <Panel title="Delete repository" titleId="danger-title" className="danger-zone">
+              <p className="danger-zone__text">
+                Removes the repository and its {repo.component_count === 1 ? 'one package version' : `${repo.component_count} package versions`}.
+                Their files are released for compaction. Groups that list it must drop it first.
+              </p>
+              <div>
+                <button
+                  type="button"
+                  className="button button--danger-outline"
+                  onClick={() => {
+                    remove.reset();
+                    setConfirmDelete(true);
+                  }}
+                >
+                  Delete {repo.name}
+                </button>
+              </div>
+            </Panel>
+          )}
         </div>
 
         <aside className="repo-create__summary" aria-labelledby="summary-title">
@@ -270,7 +285,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
                 <CopyButton text={repo.url} label={`Copy URL of ${repo.name}`} />
               </dd>
             </dl>
-            <div className="summary__code repo-settings__client">
+            <div className="summary__code repo-settings__client" id="connect-client" tabIndex={-1}>
               <p className="summary__label">Connect a client</p>
               <ClientSetup targets={[repoClientTarget(repo)]} />
             </div>
@@ -315,6 +330,19 @@ function SettingsForm({ repo }: { repo: Repository }) {
           </Panel>
         </aside>
       </form>
+
+      {created === repo.name && (
+        <Toast onClose={dismissCreated}>
+          <p>
+            <strong>{repo.name}</strong> is ready.
+          </p>
+          <p>
+            <button type="button" className="button button--secondary button--sm" onClick={connectClient}>
+              Connect a client
+            </button>
+          </p>
+        </Toast>
+      )}
 
       {confirmDelete && (
         <ConfirmDialog
