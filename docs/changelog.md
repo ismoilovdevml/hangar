@@ -40,6 +40,33 @@
     do. Upgraded installations keep their `metrics.auth` (`none` unless you
     changed it). A server started with the development keys outside the
     development compose file must get its own keys, or `server.dev_mode`.
+- **Fix: updating a proxy repository no longer drops its upstream
+  credentials.** `PUT /repositories/{name}` without `config.proxy.auth`
+  keeps the stored credentials; `"auth": null` removes them; an empty
+  password or token with the same kind, username and header still keeps the
+  secret. When `remote_url` moves to another scheme, host or port, stored
+  secrets are not carried over: the request must resend them or set
+  `"auth": null` (400 otherwise). The `repository.update` audit record notes
+  `upstream_auth` (`added`, `removed`, `replaced`, `unchanged`), never the
+  secret. The settings form sends `"auth": null` when authentication is set
+  to none and asks for the secret again after a host change.
+- **Upstream DNS cache** (`http.dns`, on by default): remote host names are
+  resolved once per `ttl` (60s) with one shared query per name, a timeout or
+  SERVFAIL is retried once, the last answer is served for up to `stale_ttl`
+  (10m) while DNS fails, failures are remembered for `negative_ttl` (5s).
+  Every address is still checked against the outbound address policy at
+  check and dial time. Metrics `hangar_upstream_dns_cache_requests_total`,
+  `hangar_upstream_dns_errors_total`, `hangar_proxy_upstream_dns_failures_total`.
+- **Fix: DNS timeout bursts no longer open the circuit breaker.** Transient
+  DNS failures count towards a remote's breaker at most once per second, so
+  a CI burst failing on one lookup no longer turns a group into 502; a
+  lasting DNS outage and NXDOMAIN still trip it as before.
+- **Upstream 401/403 are named as credential problems.** Upstream health
+  (`reason`), repositories (`status_reason`) and the System status upstream
+  check tell `authentication failed (401)` and `access denied (403)` apart
+  from an unreachable or policy-blocked remote, with a hint to check the
+  proxy credentials; the Repositories list, repository pages and Overview
+  show the same.
 
 - **Move to Hangar: import and pre-warm tasks** (issue #74, guide
   `docs/guides/migrate.md`):
