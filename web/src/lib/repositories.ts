@@ -159,7 +159,48 @@ export interface RepoForm {
   scanOnArrival: boolean;
   quarantineCritical: boolean;
   anonymousRead: boolean;
+  /** Proxy: other hosts the remote links to (config.proxy.related_hosts). */
+  relatedHosts: string[];
+  /* Format settings (config.format); each applies to one format and type, see formatSettingKeys. */
+  /** APT hosted/group: architectures listed besides those of uploaded packages; empty = amd64, arm64. */
+  aptArchitectures: string[];
+  /** APT and RPM hosted/group: which key signs the metadata. */
+  signingKey: SigningKeyChoice;
+  /** RPM hosted/group: directory depth that holds repodata/ (0 to 4), as typed. */
+  rpmRepodataDepth: string;
+  /** Go proxy: checksum databases passed through under sumdb/; empty = off. */
+  goSumdbs: string[];
+  /** Go proxy: where checksum database requests are forwarded. */
+  goSumdbVia: SumdbVia;
+  /** Cargo proxy: crate download template; empty = the remote's config.json "dl". */
+  cargoDownloadUrl: string;
 }
+
+export type SigningKeyChoice = 'repository' | 'shared';
+export type SumdbVia = 'database' | 'remote';
+
+/** Server defaults (internal/formats/apt, gomod). */
+export const APT_DEFAULT_ARCHITECTURES = ['amd64', 'arm64'];
+export const GO_DEFAULT_SUMDBS = ['sum.golang.org'];
+/** internal/formats/rpm MaxRepodataDepth. */
+export const RPM_MAX_REPODATA_DEPTH = 4;
+/** Formats whose hosted and group repositories sign their metadata. */
+export const SIGNED_FORMATS: Format[] = ['apt', 'rpm'];
+
+/**
+ * The config.format keys the form edits for a format and type. Keys of other
+ * types (a stored sumdbs on a hosted Go repository) are left as stored.
+ */
+export function formatSettingKeys(format: Format | undefined, type: RepositoryType | undefined): string[] {
+  if (format === 'apt' && (type === 'hosted' || type === 'group')) return ['architectures', 'signing_key'];
+  if (format === 'rpm' && (type === 'hosted' || type === 'group')) return ['repodata_depth', 'signing_key'];
+  if (format === 'go' && type === 'proxy') return ['sumdbs', 'sumdb_via'];
+  if (format === 'cargo' && type === 'proxy') return ['download_url'];
+  return [];
+}
+
+/** Formats whose proxies get the related hosts field (the others keep what is stored). */
+export const RELATED_HOSTS_FORMATS: Format[] = ['helm'];
 
 export function initialRepoForm(format?: Format, type?: RepositoryType): RepoForm {
   return {
@@ -188,6 +229,13 @@ export function initialRepoForm(format?: Format, type?: RepositoryType): RepoFor
     scanOnArrival: true,
     quarantineCritical: true,
     anonymousRead: false,
+    relatedHosts: [],
+    aptArchitectures: [],
+    signingKey: 'repository',
+    rpmRepodataDepth: '0',
+    goSumdbs: [...GO_DEFAULT_SUMDBS],
+    goSumdbVia: 'database',
+    cargoDownloadUrl: '',
   };
 }
 
@@ -212,7 +260,12 @@ export type RepoFormField =
   | 'proxyUrl'
   | 'caBundle'
   | 'members'
-  | 'writeMember';
+  | 'writeMember'
+  | 'relatedHosts'
+  | 'aptArchitectures'
+  | 'rpmRepodataDepth'
+  | 'goSumdbs'
+  | 'cargoDownloadUrl';
 
 export type RepoFormErrors = Partial<Record<RepoFormField, string>>;
 
@@ -223,6 +276,37 @@ function isUrl(s: string, schemes: string[]): boolean {
   } catch {
     return false;
   }
+}
+
+/** Debian architecture names (internal/formats/apt archRE); "all" is not listed. */
+const DEBIAN_ARCH = /^[a-z0-9][a-z0-9-]*$/;
+
+/** A checksum database name as internal/formats/gomod validSumDBName accepts it. */
+function validSumdbName(s: string): boolean {
+  return s.length > 0 && s.length <= 253 && !s.startsWith('.') && !s.endsWith('.') && !s.includes('..') && /^[a-z0-9.-]+$/.test(s);
+}
+
+/** A related_hosts entry as core.ValidateHostPattern accepts it: host, host:port or .domain. */
+export function validHostPattern(p: string): boolean {
+  if (/[/?#@ *]/.test(p)) return false;
+  let h = p.replace(/^\./, '');
+  const m = /^(.*):([^:]*)$/.exec(h);
+  if (m && !p.startsWith('.')) {
+    const port = Number(m[2]);
+    if (!/^\d+$/.test(m[2]!) || port < 1 || port > 65535) return false;
+    h = m[1]!;
+  }
+  return h !== '' && !/[/?#@ *:]/.test(h) && !h.startsWith('.');
+}
+
+/** The cargo download_url markers (internal/formats/cargo dlMarkers). */
+const CARGO_MARKERS = ['{crate}', '{version}', '{prefix}', '{lowerprefix}', '{sha256-checksum}'];
+
+/** Whether a cargo download template expands to an absolute http(s) URL. */
+function validDownloadTemplate(t: string): boolean {
+  let probe = t;
+  for (const m of CARGO_MARKERS) probe = probe.split(m).join('probe');
+  return isUrl(probe, ['http:', 'https:']);
 }
 
 /**
@@ -278,6 +362,29 @@ export function validateRepoForm(
     }
   }
 
+  if (f.type === 'proxy' && f.relatedHosts.some((h) => !validHostPattern(h))) {
+    e.relatedHosts = 'Use host names, host:port or .domain (no scheme or path).';
+  }
+
+  const keys = formatSettingKeys(f.format, f.type);
+  if (keys.includes('architectures')) {
+    if (f.aptArchitectures.includes('all')) {
+      e.aptArchitectures = 'Leave out "all": Architecture: all packages are listed under every architecture.';
+    } else if (f.aptArchitectures.some((a) => !DEBIAN_ARCH.test(a))) {
+      e.aptArchitectures = 'Use Debian architecture names such as amd64, arm64 or i386.';
+    }
+  }
+  if (keys.includes('repodata_depth')) {
+    const d = f.rpmRepodataDepth.trim();
+    if (!/^\d+$/.test(d) || Number(d) > RPM_MAX_REPODATA_DEPTH) e.rpmRepodataDepth = `Enter a whole number from 0 to ${RPM_MAX_REPODATA_DEPTH}.`;
+  }
+  if (keys.includes('sumdbs') && f.goSumdbs.some((d) => !validSumdbName(d))) {
+    e.goSumdbs = 'Use host names in lowercase, such as sum.golang.org.';
+  }
+  if (keys.includes('download_url') && f.cargoDownloadUrl.trim() && !validDownloadTemplate(f.cargoDownloadUrl.trim())) {
+    e.cargoDownloadUrl = 'Use an absolute http:// or https:// address.';
+  }
+
   if (f.type === 'group') {
     if (f.members.length === 0) e.members = 'Add at least one member repository.';
     if (f.writeMember) {
@@ -288,6 +395,25 @@ export function validateRepoForm(
     }
   }
   return e;
+}
+
+/**
+ * The config.format values the form sets for its format and type; defaults are
+ * left out, so the server applies them (and an untouched form stays empty).
+ */
+export function formatSettings(f: RepoForm): Record<string, unknown> {
+  const keys = formatSettingKeys(f.format, f.type);
+  const out: Record<string, unknown> = {};
+  if (keys.includes('architectures') && f.aptArchitectures.length) out.architectures = [...f.aptArchitectures];
+  if (keys.includes('signing_key') && f.signingKey === 'shared') out.signing_key = 'shared';
+  if (keys.includes('repodata_depth')) {
+    const d = Number(f.rpmRepodataDepth.trim());
+    if (Number.isInteger(d) && d > 0) out.repodata_depth = d;
+  }
+  if (keys.includes('sumdbs') && JSON.stringify(f.goSumdbs) !== JSON.stringify(GO_DEFAULT_SUMDBS)) out.sumdbs = [...f.goSumdbs];
+  if (keys.includes('sumdb_via') && f.goSumdbVia === 'remote') out.sumdb_via = 'remote';
+  if (keys.includes('download_url') && f.cargoDownloadUrl.trim()) out.download_url = f.cargoDownloadUrl.trim();
+  return out;
 }
 
 /** The request body for POST /repositories. Secrets are included; never log it. */
@@ -324,12 +450,15 @@ export function toRepositoryInput(f: RepoForm): RepositoryInput {
     if (f.proxyMode === 'url') http.proxy = f.proxyUrl.trim();
     if (f.caBundle.trim()) http.ca_bundle = f.caBundle.trim() + '\n';
     if (Object.keys(http).length) proxy.http = http;
+    if (f.relatedHosts.length) proxy.related_hosts = [...f.relatedHosts];
     input.config.proxy = proxy;
   }
   if (type === 'group') {
     input.config.group = { members: [...f.members] };
     if (f.writeMember && GROUP_WRITE_FORMATS.includes(format)) input.config.group.write_member = f.writeMember;
   }
+  const settings = formatSettings(f);
+  if (Object.keys(settings).length) input.config.format = settings;
   return input;
 }
 
@@ -374,6 +503,7 @@ export function repositoryYaml(input: RepositoryInput): string {
     if (p.http) {
       proxy.http = { proxy: p.http.proxy ? redactUrl(p.http.proxy) : undefined, proxy_name: p.http.proxy_name, ca_bundle: p.http.ca_bundle };
     }
+    if (p.related_hosts?.length) proxy.related_hosts = p.related_hosts;
     cfg.proxy = proxy;
   }
   if (config.group) cfg.group = { members: config.group.members, write_member: config.group.write_member };
@@ -381,6 +511,7 @@ export function repositoryYaml(input: RepositoryInput): string {
   cfg.scan_on_arrival = config.scan_on_arrival ?? false;
   cfg.quarantine_critical = config.quarantine_critical ?? false;
   if (config.cleanup_policies?.length) cfg.cleanup_policies = config.cleanup_policies;
+  if (config.format && Object.keys(config.format).length) cfg.format = config.format as { [k: string]: YamlValue };
 
   return toYaml({
     name: input.name || '<name>',

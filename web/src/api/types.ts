@@ -55,6 +55,7 @@ export type RepositoryStatus = Schemas['RepositoryStatus'];
 export type Repository = Schemas['Repository'];
 export type RepositoryList = Schemas['RepositoryList'];
 export type RepositoryCounts = RepositoryList['counts'];
+export type SigningKey = Schemas['SigningKey'];
 export type ListRepositoriesQuery = NonNullable<operations['listRepositories']['parameters']['query']>;
 
 /* ---------- blob stores / cleanup ---------- */
