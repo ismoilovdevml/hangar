@@ -60,6 +60,8 @@ type tokenClaims struct {
 	Privileges []core.Privilege `json:"privs"`
 	Catalog    bool             `json:"catalog,omitempty"`
 	Principal  tokenPrincipal   `json:"hgr"`
+	// Scanner marks a token issued to the image scanner (ScanToken).
+	Scanner bool `json:"scan,omitempty"`
 }
 
 var jwtHeader = base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))

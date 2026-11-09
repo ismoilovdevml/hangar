@@ -554,7 +554,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	}
 	// Vulnerability scanning: arrival scans and repository scans run as jobs,
 	// the periodic rescan as a task.
-	scanner, err := buildScanner(cfg, pool, clients, deps)
+	scanner, err := buildScanner(cfg, pool, clients, deps, dockerFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -668,7 +668,7 @@ func buildTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, queu
 // buildScanner builds the vulnerability scanner. The OSV client goes
 // through the shared outbound HTTP client factory, so http.proxy,
 // http.ca_file and the address policy apply to it as to proxy remotes.
-func buildScanner(cfg config.Config, pool *pgxpool.Pool, clients *httpclient.Factory, deps core.Deps) (*scanning.Service, error) {
+func buildScanner(cfg config.Config, pool *pgxpool.Pool, clients *httpclient.Factory, deps core.Deps, df *docker.Format) (*scanning.Service, error) {
 	sc := cfg.Scanning
 	if sc.OSV.URL == "" {
 		sc.OSV.URL = osv.DefaultURL
@@ -684,10 +684,19 @@ func buildScanner(cfg config.Config, pool *pgxpool.Pool, clients *httpclient.Fac
 	if !sc.Enabled {
 		deps.Logger.Info("vulnerability scanning is turned off (scanning.enabled = false)")
 	}
-	return scanning.New(scanning.Options{
-		Pool: pool, Advisories: advisories, SourceURL: advisories.BaseURL(), Enabled: sc.Enabled,
-		RescanInterval: sc.RescanInterval, InUseWindow: sc.InUseWindow, Events: deps.Events, Jobs: deps.Jobs, Audit: deps.Audit, Logger: deps.Logger,
-	})
+	opts, err := imageScanning(cfg, df)
+	if err != nil {
+		return nil, err
+	}
+	scanning.SetImageScanning(opts.Images != nil)
+	if opts.Images != nil {
+		deps.Logger.Info("container image scanning with Trivy", "trivy_url", cfg.Scanner.TrivyURL, "adapter_url", cfg.Scanner.AdapterURL,
+			"registry_host", opts.RegistryHost, "platforms", opts.ImagePlatforms)
+	}
+	opts.Pool, opts.Advisories, opts.SourceURL, opts.Enabled = pool, advisories, advisories.BaseURL(), sc.Enabled
+	opts.RescanInterval, opts.InUseWindow = sc.RescanInterval, sc.InUseWindow
+	opts.Events, opts.Jobs, opts.Audit, opts.Logger = deps.Events, deps.Jobs, deps.Audit, deps.Logger
+	return scanning.New(opts)
 }
 
 // blobDriver names a blob store's driver for metrics.

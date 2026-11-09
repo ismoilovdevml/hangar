@@ -272,7 +272,7 @@ func (h *handler) proxyBlob(w http.ResponseWriter, r *http.Request, repo *core.R
 		return true, nil
 	}
 	a := h.cacheFill(fctx, repo, core.PublishRequest{Assets: []*core.Asset{blobAsset(image, d, stored, n)}})[0]
-	if a.ID != "" {
+	if a.ID != "" && !isScanner(ctx) {
 		h.deps.Components.RecordDownload(ctx, a)
 	}
 	return true, nil

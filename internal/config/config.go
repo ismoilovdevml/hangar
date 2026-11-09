@@ -250,12 +250,37 @@ type HTTP struct {
 	AllowPrivateNetworks []string `yaml:"allow_private_networks"`
 }
 
-// Scanner is reserved for container image scanning, which is not active
-// yet. Package scanning is configured in Scanning.
+// Scanner configures container image scanning with Trivy in client/server
+// mode. Package scanning is configured in Scanning. Guide:
+// docs/guides/vulnerabilities.md.
 type Scanner struct {
-	// TrivyURL is a Trivy server (client/server mode). Not used yet.
+	// TrivyURL is the Trivy server (trivy server --listen), e.g.
+	// http://trivy:4954. Empty: images are not scanned ("image scanning
+	// not configured").
 	TrivyURL string `yaml:"trivy_url"`
+	// TrivyToken is the server's --token, if it has one (secret).
+	TrivyToken string `yaml:"trivy_token"`
+	// AdapterURL is the scan adapter (the hangar-scanner image), which runs
+	// the Trivy client for Hangar. Required with TrivyURL.
+	AdapterURL string `yaml:"adapter_url"`
+	// AdapterToken authenticates Hangar to the adapter (secret, at least
+	// 16 characters; the adapter's HANGAR_SCANNER_TOKEN).
+	AdapterToken string `yaml:"adapter_token"`
+	// RegistryURL is where the adapter pulls images from Hangar: the main
+	// /v2/ endpoint as the adapter reaches it (e.g. http://hangar:8080).
+	// Default: server.base_url.
+	RegistryURL string `yaml:"registry_url"`
+	// Platforms of multi-platform images: "all" (default) scans every
+	// platform, "default" only linux/amd64 (or the first platform).
+	Platforms string `yaml:"platforms"`
+	// Timeout bounds the scan of one image (1m to 2h).
+	Timeout time.Duration `yaml:"timeout"`
+	// Workers is how many images are scanned at once (1 to 16).
+	Workers int `yaml:"workers"`
 }
+
+// ImageScanning reports whether container image scanning is configured.
+func (s Scanner) ImageScanning() bool { return s.TrivyURL != "" }
 
 // Scanning configures vulnerability scanning of package components (npm,
 // Maven, PyPI, NuGet, Go) against an OSV advisory database.
@@ -278,6 +303,44 @@ type OSV struct {
 	// outbound HTTP settings (http.proxy, http.ca_file); a mirror on a
 	// private address must be listed in http.allow_private_networks.
 	URL string `yaml:"url"`
+}
+
+func (s *Scanner) validate() []error {
+	if s.TrivyURL == "" {
+		return nil
+	}
+	var errs []error
+	httpURL := func(name, raw string) {
+		if u, err := url.Parse(raw); err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			errs = append(errs, fmt.Errorf("%s %q must be an http:// or https:// URL", name, redactURL(raw)))
+		}
+	}
+	httpURL("scanner.trivy_url", s.TrivyURL)
+	if s.AdapterURL == "" {
+		errs = append(errs, errors.New("scanner.adapter_url is required with scanner.trivy_url: the scan adapter runs the Trivy client"))
+	} else {
+		httpURL("scanner.adapter_url", s.AdapterURL)
+	}
+	if len(s.AdapterToken) < 16 {
+		errs = append(errs, errors.New("scanner.adapter_token must be at least 16 characters (the adapter's HANGAR_SCANNER_TOKEN)"))
+	}
+	if s.RegistryURL != "" {
+		httpURL("scanner.registry_url", s.RegistryURL)
+	}
+	switch s.Platforms = strings.ToLower(strings.TrimSpace(s.Platforms)); s.Platforms {
+	case "":
+		s.Platforms = "all"
+	case "all", "default":
+	default:
+		errs = append(errs, fmt.Errorf("scanner.platforms %q: want all or default", s.Platforms))
+	}
+	if s.Timeout < time.Minute || s.Timeout > 2*time.Hour {
+		errs = append(errs, fmt.Errorf("scanner.timeout %s must be between 1m and 2h", s.Timeout))
+	}
+	if s.Workers < 1 || s.Workers > 16 {
+		errs = append(errs, fmt.Errorf("scanner.workers %d: want 1 to 16", s.Workers))
+	}
+	return errs
 }
 
 // Metrics configures the Prometheus endpoint.
@@ -443,6 +506,7 @@ func Default() Config {
 		},
 		Metrics:  Metrics{Enabled: true, Path: "/metrics", Auth: MetricsAuthNone},
 		Scanning: Scanning{Enabled: true, RescanInterval: 24 * time.Hour, InUseWindow: 30 * 24 * time.Hour, OSV: OSV{URL: "https://api.osv.dev"}},
+		Scanner:  Scanner{Platforms: "all", Timeout: 15 * time.Minute, Workers: 2},
 		Security: DefaultSecurity(),
 		UI:       UI{ReadmeImages: "proxy"},
 		Observability: Observability{
@@ -605,6 +669,7 @@ func (c *Config) Validate() error {
 			errs = append(errs, fmt.Errorf("scanning.rescan_interval %s must be at least 1h", c.Scanning.RescanInterval))
 		}
 	}
+	errs = append(errs, c.Scanner.validate()...)
 	if t := c.Observability.Tracing; t.Enabled {
 		if u, err := url.Parse(t.Endpoint); err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 			errs = append(errs, fmt.Errorf("observability.tracing.endpoint %q must be an http:// or https:// URL when tracing is enabled",
@@ -736,7 +801,8 @@ func setValue(v reflect.Value, raw string) error {
 // Redacted returns a copy safe to log: secrets and URL passwords masked.
 func (c Config) Redacted() Config {
 	for _, p := range []*string{&c.Storage.S3.SecretAccessKey, &c.Storage.S3.SessionToken, &c.Docker.TokenKey, &c.Bootstrap.AdminPassword,
-		&c.Auth.OIDC.ClientSecret, &c.Auth.LDAP.BindPassword, &c.Metrics.BearerToken, &c.Metrics.Password} {
+		&c.Auth.OIDC.ClientSecret, &c.Auth.LDAP.BindPassword, &c.Metrics.BearerToken, &c.Metrics.Password,
+		&c.Scanner.TrivyToken, &c.Scanner.AdapterToken} {
 		if *p != "" {
 			*p = "REDACTED"
 		}

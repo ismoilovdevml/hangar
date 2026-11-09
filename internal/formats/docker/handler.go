@@ -88,6 +88,13 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := core.WithPrincipal(r.Context(), auth.p)
+	if auth.claims != nil && auth.claims.Scanner {
+		if action != core.ActionRead {
+			writeError(w, http.StatusForbidden, codeDenied, "scanner tokens only pull")
+			return
+		}
+		ctx = withScanner(ctx)
+	}
 	r = r.WithContext(ctx)
 	if err := h.deps.AuthZ.Authorize(ctx, auth.p, action, core.RepoResource(rt.repo)); err != nil {
 		h.deny(w, r, auth, err, rt.repo, rt.name, action)
