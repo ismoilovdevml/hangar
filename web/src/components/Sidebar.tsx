@@ -1,7 +1,8 @@
 import { useId, useState } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { useSession, useSystemStatus } from '../api/hooks';
-import { activeNav, canSee, NAV } from '../nav';
+import { versionText } from '../lib/format';
+import { activeNav, visibleNav } from '../nav';
 import { IconClose, IconLogo, IconMenu } from './icons';
 
 const STATUS_TONE = { ok: 'ok', degraded: 'warn', down: 'bad' } as const;
@@ -45,11 +46,11 @@ export function Sidebar() {
       <div className="sidebar__body" id={bodyId}>
 
         <div className="sidebar__nav">
-          {NAV.filter((section) => canSee(session.data?.privileges, section.requires)).map((section) => (
+          {visibleNav(session.data?.privileges).map((section) => (
             <div className="nav-section" key={section.title}>
               <h2 className="nav-section__title">{section.title}</h2>
               <ul className="nav-section__list">
-                {section.items.filter((item) => canSee(session.data?.privileges, item.requires)).map((item) => {
+                {section.items.map((item) => {
                   const on = active?.to === item.to;
                   return (
                     <li key={item.to}>
@@ -81,7 +82,7 @@ export function Sidebar() {
                   {sys.message}
                 </span>
                 <span className="system-card__meta">
-                  {sys.nodes_up} of {sys.nodes_total} nodes · v{sys.version}
+                  {sys.nodes_up} of {sys.nodes_total} nodes · {versionText(sys.version)}
                 </span>
               </>
             ) : status.isError ? (

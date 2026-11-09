@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useState, type FormEvent } from 'react';
+import { versionText } from '../../lib/format';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { csrfToken, CSRF_HEADER } from '../../api/client';
@@ -88,7 +89,7 @@ export function ApiDocsPage() {
             </span>
             <span className="brand__text">
               <span className="brand__name">Hangar</span>
-              <span className="brand__sub">API reference{doc ? ` · v${doc.info.version}` : ''}</span>
+              <span className="brand__sub">API reference{doc ? ` · ${versionText(doc.info.version)}` : ''}</span>
             </span>
           </span>
           <nav className="api-docs__links" aria-label="API documents">

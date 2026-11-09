@@ -3,12 +3,12 @@ import { getRouteApi, useRouter } from '@tanstack/react-router';
 import { ApiRequestError } from '../api/client';
 import { useAuthProviders, useLogin, useSystemStatus } from '../api/hooks';
 import { IconLogo } from '../components/icons';
-import { instanceName } from '../lib/format';
+import { DOCS } from '../lib/docs';
+import { instanceName, versionText } from '../lib/format';
 import { useNow } from '../lib/useNow';
 
 const route = getRouteApi('/login');
 
-const DOCS_URL = 'https://github.com/ismoilovdevml/hangar/tree/main/docs/guides';
 const API_URL = '/api-docs';
 
 /** Messages for `?error=` set by the single sign-on callback. */
@@ -211,8 +211,8 @@ export function LoginPage() {
       </main>
 
       <footer className="login__footer">
-        <span>{sys ? `Hangar ${sys.version}` : 'Hangar'}</span>
-        <a href={DOCS_URL} target="_blank" rel="noreferrer">
+        <span>{sys ? `Hangar ${versionText(sys.version)}` : 'Hangar'}</span>
+        <a href={DOCS.guides} target="_blank" rel="noreferrer">
           Documentation
         </a>
         <a href={API_URL}>API reference</a>
