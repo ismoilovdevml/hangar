@@ -12,6 +12,12 @@ directly.
 Nothing else in Hangar makes outbound requests (PostgreSQL, S3 and NATS
 connections do not use the HTTP proxy settings).
 
+With image scanning, the Trivy server and the scan adapter download
+vulnerability databases themselves (`mirror.gcr.io`, `ghcr.io`); they take
+`HTTPS_PROXY` from their own environment, not these settings:
+`install.sh --trivy-proxy URL`, or `imageScanning.httpsProxy` in the Helm
+chart ([vulnerabilities.md](../guides/vulnerabilities.md#corporate-proxy-and-offline-databases)).
+
 ## Named proxies (Settings → Internet access)
 
 Administrators (`system:settings:admin`) manage outbound proxies in

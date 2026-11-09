@@ -281,6 +281,38 @@ func TestScanningSettings(t *testing.T) {
 	}
 }
 
+func TestImageScannerSettings(t *testing.T) {
+	t.Setenv("HANGAR_DATABASE_URL", "postgres://localhost/hangar")
+	cfg, err := Load("")
+	if err != nil || cfg.Scanner.ImageScanning() || cfg.Scanner.Platforms != "all" || cfg.Scanner.Timeout != 15*time.Minute || cfg.Scanner.Workers != 2 {
+		t.Fatalf("defaults = %+v, %v", cfg.Scanner, err)
+	}
+	// A Trivy server alone is not enough: the adapter runs the client.
+	t.Setenv("HANGAR_SCANNER_TRIVY_URL", "http://trivy:4954")
+	_, err = Load("")
+	if err == nil || !strings.Contains(err.Error(), "scanner.adapter_url is required") || !strings.Contains(err.Error(), "scanner.adapter_token") {
+		t.Fatalf("validation = %v", err)
+	}
+	t.Setenv("HANGAR_SCANNER_ADAPTER_URL", "http://hangar-scanner:4955")
+	t.Setenv("HANGAR_SCANNER_ADAPTER_TOKEN", "0123456789abcdef")
+	t.Setenv("HANGAR_SCANNER_PLATFORMS", "Default")
+	if cfg, err = Load(""); err != nil || !cfg.Scanner.ImageScanning() || cfg.Scanner.Platforms != "default" {
+		t.Fatalf("configured = %+v, %v", cfg.Scanner, err)
+	}
+	if r := cfg.Redacted(); r.Scanner.AdapterToken != "REDACTED" {
+		t.Fatalf("adapter token not redacted: %q", r.Scanner.AdapterToken)
+	}
+	t.Setenv("HANGAR_SCANNER_PLATFORMS", "arm64")
+	t.Setenv("HANGAR_SCANNER_TIMEOUT", "10s")
+	t.Setenv("HANGAR_SCANNER_REGISTRY_URL", "hangar:8080")
+	_, err = Load("")
+	for _, want := range []string{"scanner.platforms", "scanner.timeout", "scanner.registry_url"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("validation = %v, want %s", err, want)
+		}
+	}
+}
+
 func TestBootstrapPasswordChangeSettings(t *testing.T) {
 	t.Setenv("HANGAR_CONFIG", "")
 	t.Setenv("HANGAR_DATABASE_URL", "postgres://x/y")

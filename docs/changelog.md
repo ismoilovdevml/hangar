@@ -32,6 +32,40 @@
     existing lockfiles keep installing, and tarballs a proxy cached under it
     are reused.
 
+- **Container image scanning with Trivy.** Docker and OCI images are scanned
+  with a Trivy server in client/server mode when `scanner.trivy_url` is set;
+  otherwise they still show *Image scanning not configured*.
+  - A new scan adapter (`cmd/hangar-scanner`, image
+    `ghcr.io/ismoilovdevml/hangar-scanner` built on the official Trivy image)
+    runs the Trivy client for each image. It pulls the image from Hangar by
+    digest with a registry token issued for that one repository: pull only,
+    valid for 15 minutes, not renewable, able to read quarantined content,
+    not counted as a download. The Hangar process runs no command.
+  - Every platform manifest of a multi-platform image is scanned
+    (`scanner.platforms: default` scans only `linux/amd64`); findings are
+    merged per advisory, package and file with their platforms. Helm charts
+    and other OCI artifacts are reported as *Not a container image*.
+  - OS packages and application libraries land in the same findings tables
+    (source `trivy`) with severity, CVSS, *fixed in*, the layer, the file of a
+    library and the distribution's verdict. Arrival scans, the hourly rescan,
+    `:scan`, waivers, assignment, quarantine, search and the Overview card
+    work for images.
+  - The fix plan has one row per image with its tags and **Rebuild · N
+    packages**; **Copy upgrade** copies a Dockerfile line for the image's
+    distribution (`RUN apk upgrade --no-cache ...`). The package page and the
+    drawer show where a package sits in the image.
+  - `GET /api/v1/scanning/status` reports the Trivy server version and its
+    database date (`images`).
+  - Settings: `scanner.trivy_url`, `trivy_token`, `adapter_url`,
+    `adapter_token`, `registry_url`, `platforms`, `timeout`, `workers`.
+    Migration `00250` adds `findings.location` and `findings.image`, widens
+    the finding key to the location and allows `unsupported` scan rows.
+  - `install.sh --with-trivy` (asked on a first interactive install) adds the
+    compose profile `trivy` with the database in `<data>/trivy/`, generates
+    `secrets/scanner.adapter_token` and wires `scanner.*`; `--trivy-proxy`
+    sends the database downloads through a corporate proxy and
+    `--without-trivy` turns it off. The Helm chart gets `imageScanning`.
+    Guide: `docs/guides/vulnerabilities.md#container-images`.
 - **Cluster operations** (issue #34):
   - `nats.replicas` (1 to 5, default 1) sets the replica count of the
     JetStream job stream. Every node creates or scales the stream on start,

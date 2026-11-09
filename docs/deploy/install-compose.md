@@ -54,7 +54,39 @@ the proxy reaches it.
 
 More flags (`--help`): `--version vX.Y.Z`, `--bind`, `--base-url`,
 `--acme-email`, `--registry-domain` (a separate host for Docker clients),
-`--image`.
+`--image`, and `--with-trivy` ([image scanning](#image-scanning)).
+
+## Image scanning
+
+`--with-trivy` scans Docker images for vulnerabilities. A first interactive
+install asks for it too (default no); upgrades keep the choice, and
+`--without-trivy` turns it off again.
+
+```bash
+curl -fsSL .../install.sh | sudo bash -s -- --data-dir /srv/hangar --with-trivy --yes
+
+# Behind a corporate proxy: the Trivy database downloads go through it
+curl -fsSL .../install.sh | sudo bash -s -- --data-dir /srv/hangar --with-trivy \
+  --trivy-proxy http://proxy.example.com:3128 --yes
+```
+
+It adds the compose profile `trivy` with two containers:
+
+- **trivy** (`aquasec/trivy`, pinned in `compose.yaml`): the Trivy server,
+  with its vulnerability database in `trivy/`. The first start downloads
+  several hundred MB (`docker compose logs -f trivy`); scans fail and are
+  retried until it is there.
+- **hangar-scanner** (`ghcr.io/ismoilovdevml/hangar-scanner:<version>`):
+  Hangar's scan adapter, which runs the Trivy client and pulls each image to
+  scan from `http://hangar:8080` by digest with a token valid for minutes.
+  Its cache (the Java index database) is `scanner/`.
+
+The installer generates `secrets/scanner.adapter_token` and writes Hangar's
+`scanner.*` settings into `scanner.env`. Leave `scanner.*` out of
+`config/hangar.yaml` while `--with-trivy` is on. Repositories scan on arrival
+when **Scan on arrival** is on; the hourly rescan covers the rest. Details,
+offline databases and troubleshooting:
+[vulnerabilities.md](../guides/vulnerabilities.md#container-images).
 
 ## The data directory
 
@@ -68,6 +100,9 @@ More flags (`--help`): `--version vX.Y.Z`, `--bind`, `--base-url`,
 | `blobs/` | Package files | 65532 |
 | `nats/` | Job queue state | 65532 |
 | `caddy/` | Caddyfile, `sites/`, certificates (with `--tls caddy`) | root |
+| `scanner.env` | Image scanning settings of the hangar service; empty without `--with-trivy`; managed by the installer | root |
+| `trivy/` | Trivy vulnerability database (with `--with-trivy`) | 65532 |
+| `scanner/` | Scan adapter cache (with `--with-trivy`) | 65532 |
 | `backups/` | Database dump taken before each upgrade (the three newest) | root |
 
 All are bind mounts with SELinux labels (`:Z`, or `:z` for `secrets/`, which
@@ -80,7 +115,8 @@ credentials stored in the database.
 The server reads `secrets/` through `secrets_dir`: a file named after a
 setting's path holds its value. The installer writes
 `security.secret_key`, `docker.token_key` and `database.url`, plus
-`postgres-password` for PostgreSQL; the server adds
+`postgres-password` for PostgreSQL (and `scanner.adapter_token` with
+`--with-trivy`, which the scan adapter reads too); the server adds
 `initial-admin-password` on its first start. To add one, for example an SSO client
 secret, create the file and restart:
 
@@ -189,7 +225,9 @@ type the directory's path (`--yes` without a terminal).
 - `--files-from hangar-compose.tar.gz` (or a directory with its files):
   no download at all.
 - Images: `docker load` them first; when a pull fails the installer uses the
-  local copies.
+  local copies. With `--with-trivy`: `aquasec/trivy` and `hangar-scanner`
+  too, and an offline vulnerability database
+  ([vulnerabilities.md](../guides/vulnerabilities.md#corporate-proxy-and-offline-databases)).
 
 Releases before this layout ship no `hangar-compose.tar.gz` with a secrets
 directory; install those with their own `install.sh`.
@@ -202,6 +240,8 @@ directory; install those with their own `install.sh`.
   database migrations on start; NATS runs embedded.
 - **postgres**: PostgreSQL 16 with data checksums, sized for an 8 GiB host,
   not published on the host.
+- **trivy**, **hangar-scanner** (`--with-trivy`): non-root (65532), all
+  capabilities dropped, `no-new-privileges`, not published on the host.
 - **caddy** (`--tls caddy`): certificates, HTTP to HTTPS redirect, HTTP/3,
   streaming without size limits, `/metrics` answered with 404 publicly.
   Hangar trusts `X-Forwarded-*` only from the stack's network and
