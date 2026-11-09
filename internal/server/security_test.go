@@ -320,3 +320,59 @@ func TestUIImageSources(t *testing.T) {
 		t.Errorf("API CSP = %q", got)
 	}
 }
+
+// Wrong credentials answer 401 on public endpoints too (a NuGet service
+// index, the API status) and count towards the failed authentication limit.
+func TestInvalidCredentialsOnPublicEndpoints(t *testing.T) {
+	clock := &fakeClock{t: time.Unix(1_700_000_000, 0)}
+	reg, err := builtin.Registry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := coretest.NewEnv(t)
+	token := env.Auth.AddToken("ci")
+	env.AddRepo(t, &core.Repository{Name: "nuget-public", Format: "nuget", Type: core.RepoHosted,
+		Config: core.RepoConfig{AnonymousRead: true}})
+	deps := env.Deps()
+	hc := health.New(time.Second)
+	h := NewRouter(RouterOptions{
+		Logger: discard(), Health: hc,
+		API:     &api.API{Deps: deps, Health: hc, Formats: reg.Names(), Started: time.Now()},
+		Formats: reg, Deps: deps,
+		Security: Security{FailedAuthRate: Rate{PerMinute: 6, Burst: 3}, Now: clock.now},
+	})
+	get := func(path, authz string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodGet, path, nil)
+		r.RemoteAddr = "198.51.100.8:1000"
+		if authz != "" {
+			r.Header.Set("Authorization", authz)
+		}
+		return serve(h, r)
+	}
+	for _, path := range []string{"/repository/nuget-public/index.json", "/api/v1/system/status"} {
+		if rec := get(path, ""); rec.Code != http.StatusOK {
+			t.Errorf("anonymous %s = %d", path, rec.Code)
+		}
+		if rec := get(path, "Bearer "+token); rec.Code != http.StatusOK {
+			t.Errorf("valid token %s = %d", path, rec.Code)
+		}
+	}
+	rec := get("/repository/nuget-public/index.json", "Bearer hgr_0000000000000000000000000000000000000000")
+	if rec.Code != http.StatusUnauthorized || rec.Header().Get("WWW-Authenticate") != `Basic realm="Hangar NuGet"` {
+		t.Errorf("service index with a wrong token = %d %q", rec.Code, rec.Header().Get("WWW-Authenticate"))
+	}
+	rec = get("/api/v1/system/status", "Basic "+"YWxpY2U6d3Jvbmc=")
+	if rec.Code != http.StatusUnauthorized || !strings.HasPrefix(rec.Header().Get("WWW-Authenticate"), "Bearer ") {
+		t.Errorf("API status with a wrong password = %d %q", rec.Code, rec.Header().Get("WWW-Authenticate"))
+	}
+	rec = get("/repository/nuget-public/index.json", "Bearer hgr_wrong")
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("third failure = %d", rec.Code)
+	}
+	if rec := get("/repository/nuget-public/index.json", "Bearer hgr_wrong"); rec.Code != http.StatusTooManyRequests {
+		t.Errorf("after the failed authentication budget = %d", rec.Code)
+	}
+	if rec := get("/repository/nuget-public/index.json", ""); rec.Code != http.StatusOK {
+		t.Errorf("anonymous after the budget = %d", rec.Code)
+	}
+}

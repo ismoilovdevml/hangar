@@ -28,6 +28,7 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 		p, err := a.Deps.Auth.Authenticate(r.Context(), creds)
 		if err != nil {
 			if errors.Is(err, core.ErrUnauthenticated) {
+				w.Header().Set("WWW-Authenticate", Challenge)
 				WriteError(w, http.StatusUnauthorized, "unauthenticated", "invalid credentials")
 				return
 			}
@@ -37,6 +38,11 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(core.WithPrincipal(r.Context(), p)))
 	})
 }
+
+// Challenge is the WWW-Authenticate value of 401 answers to requests whose
+// Authorization header failed. It names Bearer, not Basic, so browsers never
+// open a password dialog for the web UI's requests.
+const Challenge = `Bearer realm="Hangar API"`
 
 var errSignIn = fmt.Errorf("sign in required: %w", core.ErrUnauthenticated)
 

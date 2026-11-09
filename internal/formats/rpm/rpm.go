@@ -89,6 +89,12 @@ func New(signer signing.Signer) *Format { return &Format{signer: signer, now: ti
 // Name implements core.Format.
 func (f *Format) Name() string { return Name }
 
+// Challenge implements core.Challenger: the Basic challenge dnf answers
+// with the credentials of the .repo file.
+func (f *Format) Challenge(w http.ResponseWriter, r *http.Request, deps core.Deps, err error) {
+	repokit.NewBase(Name, deps, f.signer).Fail(w, r, err)
+}
+
 // Validate implements core.Format.
 func (f *Format) Validate(repo *core.Repository) error {
 	if repo.Format != Name {

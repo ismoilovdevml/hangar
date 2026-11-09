@@ -73,7 +73,12 @@ Every route requires sign-in except `GET /system/status`, `GET /system/version`,
 `GET /openapi.json` and `GET /automation-guide.md`; anonymous calls to anything else
 answer `401`. (Package endpoints are different: repositories with
 `anonymous_read` serve downloads without credentials.) Wrong, expired or revoked
-credentials answer `401`; a locked account answers `423`. Token-authenticated
+credentials answer `401` (with `WWW-Authenticate: Bearer realm="Hangar API"`) on
+every route, the public ones included, and so do package endpoints, a public
+service index or signing key included: a client with a bad token learns it on its
+first request. Leave the `Authorization` header out to call public routes
+anonymously. Failed attempts count towards the per-IP limit
+(`security.rate_limit.failed_auth`); a locked account answers `423`. Token-authenticated
 requests get the intersection of the owner's roles and the token's scopes.
 
 Browsers may call the API only from `server.base_url`'s origin; list other origins

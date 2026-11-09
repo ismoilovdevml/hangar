@@ -20,6 +20,7 @@ package raw
 import (
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sync"
 	"time"
 
@@ -56,6 +57,14 @@ func (f *Format) Mount(r chi.Router, deps core.Deps) {
 	}
 	h := &handler{deps: deps, now: now, neg: newNegativeCache(now)}
 	r.HandleFunc("/*", h.serveHTTP)
+}
+
+// Challenge implements core.Challenger: a Basic challenge.
+func (f *Format) Challenge(w http.ResponseWriter, r *http.Request, deps core.Deps, err error) {
+	if deps.Logger == nil {
+		deps.Logger = slog.New(slog.DiscardHandler)
+	}
+	(&handler{deps: deps}).fail(w, r, err)
 }
 
 // Validate implements core.Format. Raw repositories take no format settings.

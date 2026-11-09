@@ -24,6 +24,7 @@ package gomod
 import (
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -87,6 +88,12 @@ func (f *Format) Mount(r chi.Router, deps core.Deps) {
 	r.Head("/*", h.serve)
 	r.Put("/*", h.upload)
 	r.Delete("/*", h.deleteVersion)
+}
+
+// Challenge implements core.Challenger: the Basic challenge the go command
+// answers with ~/.netrc or GOAUTH credentials.
+func (f *Format) Challenge(w http.ResponseWriter, r *http.Request, deps core.Deps, err error) {
+	newHandler(deps).writeError(w, r, err)
 }
 
 // Validate implements core.Format.

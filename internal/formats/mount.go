@@ -16,16 +16,24 @@ const RepositoryPrefix = "/repository"
 // Mount registers every format of reg on r: RootMounter routes first, then the
 // /repository/{repo}/ dispatcher. deps.Repos must be set for the dispatcher.
 func Mount(r chi.Router, reg *Registry, deps core.Deps) {
+	// Formats see an authenticator that reuses the dispatcher's check of the
+	// request credentials (checkCredentials).
+	fdeps := deps
+	if deps.Auth != nil {
+		fdeps.Auth = rememberedAuth{next: deps.Auth}
+	}
 	subs := map[string]http.Handler{}
+	all := map[string]core.Format{}
 	for _, f := range reg.All() {
 		if rm, ok := f.(core.RootMounter); ok {
-			rm.MountRoot(r, deps)
+			rm.MountRoot(r, fdeps)
 		}
 		sub := chi.NewRouter()
 		sub.NotFound(notFound)
 		sub.MethodNotAllowed(methodNotAllowed)
-		f.Mount(sub, deps)
+		f.Mount(sub, fdeps)
 		subs[f.Name()] = sub
+		all[f.Name()] = f
 	}
 	if deps.Repos == nil {
 		if deps.Logger != nil {
@@ -33,7 +41,7 @@ func Mount(r chi.Router, reg *Registry, deps core.Deps) {
 		}
 		return
 	}
-	d := &dispatcher{repos: deps.Repos, subs: subs}
+	d := &dispatcher{repos: deps.Repos, subs: subs, formats: all, auth: deps.Auth, deps: deps}
 	r.Handle(RepositoryPrefix+"/{repo}", http.HandlerFunc(d.redirectSlash))
 	r.Handle(RepositoryPrefix+"/{repo}/*", d)
 }
@@ -67,8 +75,11 @@ func NewHandler(deps core.Deps, fs ...core.Format) http.Handler {
 }
 
 type dispatcher struct {
-	repos core.RepositoryService
-	subs  map[string]http.Handler
+	repos   core.RepositoryService
+	subs    map[string]http.Handler
+	formats map[string]core.Format
+	auth    core.Authenticator // nil checks no credentials
+	deps    core.Deps
 }
 
 func (d *dispatcher) redirectSlash(w http.ResponseWriter, r *http.Request) {
@@ -98,18 +109,22 @@ func (d *dispatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "format "+repo.Format+" is not supported by this server")
 		return
 	}
+	r, ok = d.checkCredentials(w, r, d.formats[repo.Format])
+	if !ok {
+		return
+	}
 	if !repo.Online {
 		writeError(w, http.StatusServiceUnavailable, "repository "+name+" is offline")
 		return
 	}
-	rctx := chi.RouteContext(ctx)
+	rctx := chi.RouteContext(r.Context())
 	rest := chi.URLParam(r, "*")
 	// Hand the remaining path to the format router, as chi's Mount does.
 	rctx.RoutePath = "/" + rest
 	if n := len(rctx.URLParams.Keys); n > 0 && rctx.URLParams.Keys[n-1] == "*" {
 		rctx.URLParams.Values[n-1] = ""
 	}
-	sub.ServeHTTP(w, r.WithContext(core.WithRepository(ctx, repo)))
+	sub.ServeHTTP(w, r.WithContext(core.WithRepository(r.Context(), repo)))
 }
 
 func notFound(w http.ResponseWriter, _ *http.Request) {

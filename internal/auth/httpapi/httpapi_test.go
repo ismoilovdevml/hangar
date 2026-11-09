@@ -200,12 +200,18 @@ func TestLoginSessionAndCSRF(t *testing.T) {
 	bad.header.Set("Authorization", "Bearer hgr_bogus")
 	resp, body = bad.do(http.MethodGet, "/auth/session", nil)
 	expect(t, resp, body, http.StatusUnauthorized, "unauthenticated")
+	if got := resp.Header.Get("WWW-Authenticate"); got != `Bearer realm="Hangar API"` {
+		t.Errorf("challenge = %q", got)
+	}
 
 	// Revoke through the cookie session.
 	id := items[0].(map[string]any)["id"].(string)
 	resp, body = c.do(http.MethodDelete, "/tokens/"+id, nil)
 	expect(t, resp, body, http.StatusNoContent, "")
 	resp, body = tc.do(http.MethodGet, "/tokens", nil)
+	expect(t, resp, body, http.StatusUnauthorized, "unauthenticated")
+	// A revoked token is refused on public routes too.
+	resp, body = tc.do(http.MethodGet, "/auth/providers", nil)
 	expect(t, resp, body, http.StatusUnauthorized, "unauthenticated")
 
 	// Logout ends the session.

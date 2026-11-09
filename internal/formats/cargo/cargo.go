@@ -26,6 +26,7 @@ package cargo
 import (
 	"fmt"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -91,6 +92,12 @@ func (f *Format) Mount(r chi.Router, deps core.Deps) {
 	r.Get("/api/v1/crates/{crate}/owners", h.listOwners)
 	r.Put("/api/v1/crates/{crate}/owners", h.changeOwners)
 	r.Delete("/api/v1/crates/{crate}/owners", h.changeOwners)
+}
+
+// Challenge implements core.Challenger: cargo's error document with the
+// Cargo login_url challenge.
+func (f *Format) Challenge(w http.ResponseWriter, r *http.Request, deps core.Deps, err error) {
+	newHandler(deps).writeError(w, r, err)
 }
 
 // Validate implements core.Format.

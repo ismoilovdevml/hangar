@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -101,6 +102,12 @@ func (f *Format) Mount(r chi.Router, deps core.Deps) {
 	h := &handler{f: f, deps: deps}
 	r.HandleFunc("/", h.serve)
 	r.HandleFunc("/*", h.serve)
+}
+
+// Challenge implements core.Challenger: npm's JSON error with a Basic
+// challenge.
+func (f *Format) Challenge(w http.ResponseWriter, _ *http.Request, _ core.Deps, err error) {
+	writeError(w, err)
 }
 
 // Validate implements core.Format.
