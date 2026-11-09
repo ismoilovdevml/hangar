@@ -409,7 +409,7 @@ func checkCrate(ctx context.Context, bs core.BlobStore, d core.Digest, m *publis
 		}
 		if name == root+"Cargo.toml" && hdr.Typeflag == tar.TypeReg {
 			if hdr.Size > maxManifestBytes {
-				return fmt.Errorf("Cargo.toml is larger than %d bytes: %w", maxManifestBytes, core.ErrInvalid)
+				return fmt.Errorf("manifest Cargo.toml is larger than %d bytes: %w", maxManifestBytes, core.ErrInvalid)
 			}
 			if manifest, err = io.ReadAll(io.LimitReader(tr, maxManifestBytes)); err != nil {
 				return fmt.Errorf("read Cargo.toml: %w", core.ErrInvalid)
@@ -421,13 +421,13 @@ func checkCrate(ctx context.Context, bs core.BlobStore, d core.Digest, m *publis
 	}
 	var cm cargoManifest
 	if _, err := toml.Decode(string(manifest), &cm); err != nil {
-		return fmt.Errorf("Cargo.toml in the .crate is not valid TOML: %w", core.ErrInvalid)
+		return fmt.Errorf("manifest Cargo.toml in the .crate is not valid TOML: %w", core.ErrInvalid)
 	}
 	if cm.Package.Name != m.Name {
-		return fmt.Errorf("Cargo.toml names the package %q, the metadata %q: %w", cm.Package.Name, m.Name, core.ErrInvalid)
+		return fmt.Errorf("manifest Cargo.toml names the package %q, the metadata %q: %w", cm.Package.Name, m.Name, core.ErrInvalid)
 	}
 	if v, ok := cm.Package.Version.(string); !ok || v != m.Vers {
-		return fmt.Errorf("Cargo.toml version %v does not match %s: %w", cm.Package.Version, m.Vers, core.ErrInvalid)
+		return fmt.Errorf("manifest Cargo.toml version %v does not match %s: %w", cm.Package.Version, m.Vers, core.ErrInvalid)
 	}
 	return nil
 }

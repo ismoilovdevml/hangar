@@ -75,9 +75,6 @@ func crateFromIndexPath(p string) (string, bool) {
 	return name, true
 }
 
-// crateDir is the directory under which a crate's versions are stored.
-func crateDir(name string) string { return "crates/" + strings.ToLower(name) + "/" }
-
 // cratePath is the asset path of a crate file:
 // crates/{name}/{version}/{name}-{version}.crate (name lowercased).
 func cratePath(name, version string) string {
