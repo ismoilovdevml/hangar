@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -43,6 +44,7 @@ type upstream struct {
 	tokens   tokenStore
 	tf       *tokenFetcher
 	stats    stats
+	dns      dnsFailures
 
 	retries        int
 	backoff        time.Duration
@@ -65,7 +67,41 @@ var _ core.Upstream = (*upstream)(nil)
 var (
 	errServerStatus = errors.New("remote answered 5xx")
 	errThrottled    = errors.New("remote answered 429")
+	// errDNSBurst stands for a transient DNS failure that is not counted
+	// because one was counted less than dnsFailureSpacing ago.
+	errDNSBurst = errors.New("name resolution failed again")
 )
+
+// dnsFailureSpacing: transient DNS failures (timeouts, SERVFAIL) count as
+// at most one breaker failure per spacing. A burst of requests failing on
+// the same unanswered lookup is one failure, not one per request; a DNS
+// outage that lasts trips the breaker after the usual number of failures.
+// "No such host" counts like any other connection error.
+const dnsFailureSpacing = time.Second
+
+// dnsFailures rate-limits the breaker failures of transient DNS errors.
+type dnsFailures struct {
+	mu      sync.Mutex
+	counted time.Time
+}
+
+// count reports whether a transient DNS failure at now counts.
+func (d *dnsFailures) count(now time.Time) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !d.counted.IsZero() && now.Sub(d.counted) < dnsFailureSpacing {
+		return false
+	}
+	d.counted = now
+	return true
+}
+
+// transientDNS reports a name-resolution failure that is not a definite
+// "no such host": a timeout, a temporary failure or a misbehaving server.
+func transientDNS(err error) bool {
+	var de *net.DNSError
+	return errors.As(err, &de) && !de.IsNotFound
+}
 
 // ErrOfflineMode is wrapped by Fetch errors of a repository in offline mode
 // (ProxyConfig.Offline), together with core.ErrNotFound and core.ErrUpstream.
@@ -213,6 +249,13 @@ func (u *upstream) fetch(ctx context.Context, method string, target *url.URL, re
 		case errors.Is(err, ErrBlocked):
 			done(err)
 			u.stats.setBlocked(true)
+		case transientDNS(err):
+			upstreamDNSFailures.WithLabelValues(u.name).Inc()
+			if u.dns.count(u.now()) {
+				done(err)
+			} else {
+				done(errDNSBurst)
+			}
 		default:
 			done(err)
 		}

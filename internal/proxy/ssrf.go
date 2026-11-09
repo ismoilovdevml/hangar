@@ -66,6 +66,16 @@ func NewGuard(allow []string) (*Guard, error) {
 	return g, nil
 }
 
+// UseResolver makes the guard resolve host names with r, typically the DNS
+// cache the outbound clients dial through, so a check and the connection
+// that follows see the same answer. Every address r returns is still checked.
+// Call it before the guard is used.
+func (g *Guard) UseResolver(r Resolver) {
+	if r != nil {
+		g.resolver = r
+	}
+}
+
 // ValidateRemote checks a proxy repository's remote URL at create/update time.
 // Errors wrap core.ErrInvalid so the API answers 400.
 func (g *Guard) ValidateRemote(ctx context.Context, remoteURL string, proxied bool) error {

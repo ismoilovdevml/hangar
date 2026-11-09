@@ -75,6 +75,10 @@ var (
 		Name: "hangar_proxy_upstream_resumes_total",
 		Help: "Interrupted proxy remote downloads continued with a Range request.",
 	}, []string{"repository"})
+	upstreamDNSFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "hangar_proxy_upstream_dns_failures_total",
+		Help: "Proxy remote requests that failed resolving a host name with a timeout or temporary error. They trip the circuit breaker at most once per second.",
+	}, []string{"repository"})
 	inflight = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "hangar_proxy_upstream_inflight_requests",
 		Help: "Proxy remote requests in flight (waiting for a slot, waiting for headers or streaming a body).",
@@ -88,7 +92,7 @@ var (
 // RegisterMetrics registers the proxy cache and upstream metrics on r.
 // Registering on a registry that already has them is not an error.
 func RegisterMetrics(r prometheus.Registerer) error {
-	for _, c := range []prometheus.Collector{cacheRequests, cacheHitBytes, requestsTotal, requestDuration, retriesTotal, resumesTotal, inflight, negativeEvictions} {
+	for _, c := range []prometheus.Collector{cacheRequests, cacheHitBytes, requestsTotal, requestDuration, retriesTotal, resumesTotal, upstreamDNSFailures, inflight, negativeEvictions} {
 		if err := r.Register(c); err != nil {
 			var are prometheus.AlreadyRegisteredError
 			if !errors.As(err, &are) {
