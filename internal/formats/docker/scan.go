@@ -188,7 +188,9 @@ func (f *Format) TokenTTL() time.Duration {
 type scannerKey struct{}
 
 // withScanner marks a request made with a scanner token.
-func withScanner(ctx context.Context) context.Context { return context.WithValue(ctx, scannerKey{}, true) }
+func withScanner(ctx context.Context) context.Context {
+	return context.WithValue(ctx, scannerKey{}, true)
+}
 
 // isScanner reports whether the request was made with a scanner token.
 func isScanner(ctx context.Context) bool { v, _ := ctx.Value(scannerKey{}).(bool); return v }

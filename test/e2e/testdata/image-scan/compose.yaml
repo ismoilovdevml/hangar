@@ -1,0 +1,77 @@
+# Stack for test/e2e/image_scan_test.go: Hangar with image scanning wired to
+# a Trivy server and the scan adapter, all built from this checkout. The test
+# starts and removes it itself (HANGAR_E2E_IMAGE_SCAN_STACK=1); throwaway
+# credentials only.
+name: hangar-image-scan-e2e
+
+services:
+  postgres:
+    image: postgres:16.15-alpine
+    environment:
+      POSTGRES_USER: hangar
+      POSTGRES_PASSWORD: hangar
+      POSTGRES_DB: hangar
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hangar -d hangar"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  trivy:
+    image: ${TRIVY_IMAGE:-aquasec/trivy:0.76.1}
+    command: ["server", "--listen", "0.0.0.0:4954", "--cache-dir", "/var/lib/trivy"]
+    environment:
+      TRIVY_DISABLE_TELEMETRY: "true"
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: localhost,127.0.0.1,hangar,trivy,hangar-scanner
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4954/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      # The first start downloads the vulnerability database.
+      start_period: 15m
+
+  hangar-scanner:
+    build:
+      context: ../../../..
+      dockerfile: deploy/scanner/Dockerfile
+    image: ${HANGAR_E2E_SCANNER_IMAGE:-hangar-scanner:e2e}
+    environment:
+      HANGAR_SCANNER_TOKEN: e2e-adapter-token-0123456789abcdef
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: localhost,127.0.0.1,hangar,trivy,hangar-scanner
+
+  hangar:
+    build:
+      context: ../../../..
+      dockerfile: Dockerfile
+    image: ${HANGAR_E2E_HANGAR_IMAGE:-hangar:e2e}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      trivy:
+        condition: service_healthy
+      hangar-scanner:
+        condition: service_healthy
+    environment:
+      HANGAR_SERVER_BASE_URL: http://localhost:${HANGAR_E2E_PORT:-18261}
+      HANGAR_AUTH_SESSION_INSECURE: "true"
+      HANGAR_DATABASE_URL: postgres://hangar:hangar@postgres:5432/hangar?sslmode=disable
+      HANGAR_DATABASE_MIGRATE_ON_START: "true"
+      HANGAR_SECRET_KEY: ZTJlLW9ubHktc2VjcmV0LWtleS0zMi1ieXRlcy0hISE=
+      HANGAR_DOCKER_TOKEN_KEY: e2e-only-docker-token-key-0123456789abcdef
+      HANGAR_BOOTSTRAP_ADMIN_USER: admin
+      HANGAR_BOOTSTRAP_ADMIN_PASSWORD: e2e-admin-password-0123
+      HANGAR_BOOTSTRAP_REQUIRE_PASSWORD_CHANGE: "false"
+      HANGAR_SCANNER_TRIVY_URL: http://trivy:4954
+      HANGAR_SCANNER_ADAPTER_URL: http://hangar-scanner:4955
+      HANGAR_SCANNER_ADAPTER_TOKEN: e2e-adapter-token-0123456789abcdef
+      HANGAR_SCANNER_REGISTRY_URL: http://hangar:8080
+    ports:
+      - "127.0.0.1:${HANGAR_E2E_PORT:-18261}:8080"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/hangar-healthcheck"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
