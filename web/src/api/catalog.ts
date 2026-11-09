@@ -25,6 +25,7 @@ import type {
   RepositoryList,
   SearchResult,
   SearchSort,
+  SigningKey,
 } from './types';
 
 export const catalogKeys = {
@@ -41,6 +42,8 @@ export const catalogKeys = {
   repository: (name: string) => ['repositories', 'detail', name] as const,
   allRepositories: ['repositories', 'all'] as const,
   blobStore: (name: string) => ['blob-stores', 'detail', name] as const,
+  /** Keyed by the stored signing_key setting too, so switching to the shared key loads it. */
+  signingKey: (name: string, key: string) => ['signing-key', name, key] as const,
 };
 
 /** Endpoints a server may not implement yet answer 501; those tabs are hidden, not faked. */
@@ -270,6 +273,35 @@ export function useDeleteRepository(name: string) {
       void qc.invalidateQueries({ queryKey: queryKeys.clientEndpoints });
       void qc.invalidateQueries({ queryKey: catalogKeys.search });
       void qc.invalidateQueries({ queryKey: catalogKeys.components });
+    },
+  });
+}
+
+/* ---------------------------------------------------------------- signing keys */
+
+/** The OpenPGP key that signs an apt or rpm hosted or group repository (generated on first use). */
+export function useSigningKey(name: string, key: string, enabled = true) {
+  return useQuery({
+    queryKey: catalogKeys.signingKey(name, key),
+    enabled,
+    queryFn: ({ signal }) => apiFetch<SigningKey>(`/repositories/${encodeURIComponent(name)}/signing-key`, { signal }),
+  });
+}
+
+/** Replaces the key: `rotate` generates a new one, `import` stores the given private key (write-only). */
+export function useChangeSigningKey(name: string, key: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (change: { kind: 'rotate' } | { kind: 'import'; private_key: string; passphrase?: string }) => {
+      const path = `/repositories/${encodeURIComponent(name)}/signing-key`;
+      if (change.kind === 'rotate') return apiFetch<SigningKey>(`${path}:rotate`, { method: 'POST' });
+      const body = { private_key: change.private_key, ...(change.passphrase ? { passphrase: change.passphrase } : {}) };
+      return apiFetch<SigningKey>(path, { method: 'PUT', body });
+    },
+    onSuccess: (info) => {
+      qc.setQueryData(catalogKeys.signingKey(name, key), info);
+      // Other repositories on the shared key show the new one too.
+      if (key === 'shared') void qc.invalidateQueries({ queryKey: ['signing-key'], predicate: (q) => q.queryKey[2] === 'shared' && q.queryKey[1] !== name });
     },
   });
 }

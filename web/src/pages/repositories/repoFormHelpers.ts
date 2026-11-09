@@ -9,6 +9,7 @@ export const errorId = (f: RepoFormField) => `repo-${f}-error`;
 export const FIELD_ORDER: RepoFormField[] = [
   'format', 'type', 'name', 'blobStore', 'remoteUrl', 'metadataTtl', 'contentTtl', 'negativeTtl',
   'authUsername', 'authPassword', 'authHeader', 'authToken', 'proxyName', 'proxyUrl', 'caBundle', 'members', 'writeMember',
+  'relatedHosts', 'aptArchitectures', 'rpmRepodataDepth', 'goSumdbs', 'cargoDownloadUrl',
 ];
 
 /** Focuses the first field with an error; returns whether there was one. */

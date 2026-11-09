@@ -41,6 +41,9 @@ Format settings (`config.format`):
 | `repodata_depth` | `0` | `0`: the whole repository is one yum repository. `N` (1 to 4): every directory `N` levels deep gets its own `repodata/`. With `2`, packages under `el9/x86_64/` and `el8/x86_64/` form two repositories, each with its own `baseurl`. |
 | `signing_key` | `repository` | `repository`: the repository has its own key. `shared`: it signs with the server-wide shared key. |
 
+In the web UI both settings are on the repository form (**Repodata depth**
+and **Sign with**) for hosted and group repositories; proxies have neither.
+
 For every package Hangar parses the RPM header in Go and keeps:
 
 - the name, epoch, version, release and arch;
@@ -184,6 +187,10 @@ the same admin API as APT repositories:
 See [apt.md](apt.md#signing-keys). After a rotation, clients must import the new
 key: `sudo rpm --import https://hangar.example.com/repository/rpm-hosted/public.key`,
 or `dnf` asks on the next `makecache`.
+
+In the web UI, the **Signing key** panel on the repository settings page shows
+the key and links to `public.key` and `public.gpg`, and rotates or imports it;
+see [apt.md](apt.md#signing-keys).
 
 ## Vulnerability scanning
 

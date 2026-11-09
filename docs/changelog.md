@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Web UI: format settings and signing keys.** The repository form edits
+  APT `architectures`, RPM `repodata_depth`, the APT/RPM `signing_key`, Go
+  proxy `sumdbs` and `sumdb_via`, Cargo proxy `download_url` and Helm proxy
+  `related_hosts`, each only for the format and type it applies to and checked
+  like the server does. APT and RPM settings pages get a **Signing key** panel:
+  fingerprint, algorithm, own or shared key, `public.gpg` / `public.key`
+  links, rotation with a confirmation, and a write-only key import. Saving a
+  proxy no longer drops its `related_hosts`, `offline` and
+  `max_concurrent_requests`.
 - **APT and RPM repositories** (`apt`, `rpm`): hosted, proxy and group repositories
   for Debian/Ubuntu and RHEL/Rocky/AlmaLinux/Fedora.
   - APT: `.deb` uploads (raw `PUT` or multipart), Packages/.gz/.xz per

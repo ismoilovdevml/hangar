@@ -12,6 +12,7 @@ import * as data from './data';
 import { onMockLiveEvent, opsHandlers, resetOpsMockState } from './ops';
 import { resetSystemMockState, systemHandlers } from './system';
 import { resetSettingsState, settingsHandlers } from './settings';
+import { resetSigningState, signingHandlers } from './signing';
 import { openAPIHandlers } from './openapi';
 import { allows } from '../lib/can';
 
@@ -46,6 +47,7 @@ export function resetMockState(): void {
   resetSystemMockState();
   resetSettingsState();
   resetFindingsState();
+  resetSigningState();
 }
 
 /** Test helpers: inspect or change the mock server's state. */
@@ -172,6 +174,7 @@ export const handlers = [
     () => state.repositories,
   ),
   ...settingsHandlers(guard, () => state.repositories, () => allows(data.session.privileges, 'system', 'settings', 'admin')),
+  ...signingHandlers(guard, () => state.repositories),
   ...findingsHandlers(
     guard,
     () => state.repositories.map((r) => r.name),

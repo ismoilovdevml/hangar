@@ -6,3 +6,13 @@
 .danger-zone { gap: 12px; }
 .danger-zone__text { font-size: 14px; color: var(--ink-2); line-height: 1.55; }
 .summary .repo-settings__client .code-block pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.note--warn { background: var(--warn-bg); color: var(--warn-ink); font-weight: 500; line-height: 1.5; }
+.signing-key { gap: 12px; }
+.signing-key__facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 18px; margin: 0; font-size: 14px; }
+.signing-key__facts dt { color: var(--ink-3); }
+.signing-key__facts dd { margin: 0; font-weight: 600; color: var(--ink); min-width: 0; }
+.signing-key__fp, .signing-key__file { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.signing-key__hex { font-family: var(--font-mono); font-size: 13px; overflow-wrap: anywhere; }
+.signing-key__files { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; }
+.signing-key__files .meta { font-weight: 400; }
+.signing-key__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }

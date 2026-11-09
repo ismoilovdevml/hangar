@@ -1,6 +1,16 @@
 import type { Repository, RepositoryInput } from '../api/types';
 import { clientLines, type ClientTarget, type CodeLine } from './clientSnippets';
-import { initialRepoForm, toRepositoryInput, type ProxyMode, type RepoForm } from './repositories';
+import {
+  formatSettingKeys,
+  GO_DEFAULT_SUMDBS,
+  initialRepoForm,
+  toRepositoryInput,
+  type ProxyMode,
+  type RepoForm,
+} from './repositories';
+
+const strings = (v: unknown): string[] | undefined =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : undefined;
 
 /** The settings form pre-filled from a repository as the API returns it (secrets are never returned). */
 export function repoToForm(r: Repository): RepoForm {
@@ -37,6 +47,22 @@ export function repoToForm(r: Repository): RepoForm {
     scanOnArrival: !!c.scan_on_arrival,
     quarantineCritical: !!c.quarantine_critical,
     anonymousRead: !!c.anonymous_read,
+    relatedHosts: p?.related_hosts ? [...p.related_hosts] : [],
+    ...formatFields(c.format ?? {}),
+  };
+}
+
+/** The form's format settings from a stored config.format; absent keys get the server defaults. */
+function formatFields(fmt: Record<string, unknown>): Partial<RepoForm> {
+  const depth = fmt.repodata_depth;
+  return {
+    aptArchitectures: strings(fmt.architectures) ?? [],
+    signingKey: fmt.signing_key === 'shared' ? 'shared' : 'repository',
+    rpmRepodataDepth: typeof depth === 'number' ? String(depth) : '0',
+    // Absent means the default database; an empty list means off.
+    goSumdbs: strings(fmt.sumdbs) ?? [...GO_DEFAULT_SUMDBS],
+    goSumdbVia: fmt.sumdb_via === 'remote' ? 'remote' : 'database',
+    cargoDownloadUrl: typeof fmt.download_url === 'string' ? fmt.download_url : '',
   };
 }
 
@@ -52,7 +78,13 @@ export function toRepositoryUpdate(f: RepoForm, r: Repository, online: boolean =
   const old = r.config;
   const config = { ...base.config };
   if (old.connector) config.connector = old.connector;
-  if (old.format) config.format = old.format;
+  // Keys the form edits for this format and type come from the form; the rest stay as stored.
+  const managed = formatSettingKeys(r.format, r.type);
+  const format: Record<string, unknown> = { ...(old.format ?? {}) };
+  for (const k of managed) delete format[k];
+  Object.assign(format, base.config.format ?? {});
+  if (Object.keys(format).length) config.format = format;
+  else delete config.format;
 
   const extraPolicies = (old.cleanup_policies ?? []).slice(1);
   const policies = [...new Set([...(f.cleanupPolicy ? [f.cleanupPolicy] : []), ...extraPolicies])];
@@ -64,6 +96,8 @@ export function toRepositoryUpdate(f: RepoForm, r: Repository, online: boolean =
     const op = old.proxy;
     if (op?.circuit_failures !== undefined) p.circuit_failures = op.circuit_failures;
     if (op?.circuit_open_for) p.circuit_open_for = op.circuit_open_for;
+    if (op?.offline !== undefined) p.offline = op.offline;
+    if (op?.max_concurrent_requests !== undefined) p.max_concurrent_requests = op.max_concurrent_requests;
     const oh = op?.http;
     if (oh && (oh.insecure_skip_verify !== undefined || oh.connect_timeout || oh.read_timeout)) {
       p.http = {
