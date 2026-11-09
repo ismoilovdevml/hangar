@@ -122,7 +122,7 @@ docker-scanner: ## Build the scan adapter image (hangar-scanner:dev)
 
 .PHONY: deploy-scripts-check
 deploy-scripts-check: ## shellcheck the deploy scripts and run the installer tests
-	shellcheck -x deploy/scripts/*.sh deploy/install.sh deploy/tests/*.sh
+	shellcheck -x deploy/scripts/*.sh deploy/install.sh deploy/tests/*.sh test/e2e/run-docker.sh test/e2e/ldap/run.sh
 	bash deploy/tests/install_test.sh
 
 ## ---- Quality -----------------------------------------------------------
@@ -160,9 +160,21 @@ cover: ## Go tests with coverage report (coverage.out)
 	$(GO) tool cover -func=coverage.out | tail -1
 
 .PHONY: e2e
-e2e: ## Real-client acceptance tests against HANGAR_E2E_URL (needs docker)
+e2e: ## Real-client acceptance tests against HANGAR_E2E_URL with the clients on PATH
 	@if [ -z "$$HANGAR_E2E_URL" ]; then echo "set HANGAR_E2E_URL (e.g. http://localhost:8080)"; exit 1; fi
 	$(GO) test -tags e2e -count=1 -v ./test/e2e/...
+
+.PHONY: e2e-docker
+e2e-docker: ## Real-client acceptance tests, all in containers, strict (Linux + docker)
+	test/e2e/run-docker.sh
+
+.PHONY: web-e2e
+web-e2e: ## Playwright against the mock (MSW) build
+	$(call web_guard,web-e2e) cd web && CI=1 npx playwright test
+
+.PHONY: web-e2e-live
+web-e2e-live: ## Playwright smoke test against a running server (E2E_LIVE_URL, E2E_LIVE_USER, E2E_LIVE_PASSWORD, E2E_LIVE_TOKEN)
+	$(call web_guard,web-e2e-live) cd web && CI=1 npx playwright test -c playwright.live.config.ts
 
 .PHONY: lint
 lint: lint-go lint-web ## golangci-lint, eslint and tsc
