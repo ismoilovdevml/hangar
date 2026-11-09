@@ -282,7 +282,7 @@ func (s *Service) Search(ctx context.Context, q Query) (*Result, error) {
 			return nil, fmt.Errorf("search: count: %w", err)
 		}
 		if dim == 0 {
-			res.Total = int(f.Count)
+			res.Total = f.Count
 		} else {
 			facets[shared[dim-1]] = append(facets[shared[dim-1]], f)
 		}

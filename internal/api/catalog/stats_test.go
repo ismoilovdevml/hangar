@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"sort"
@@ -420,7 +421,7 @@ func TestRepositoryStatsBusyFold(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := time.Now()
-	if _, err := c.foldStats(ctx, 50*time.Millisecond, false); err != errStatsBusy {
+	if _, err := c.foldStats(ctx, 50*time.Millisecond, false); !errors.Is(err, errStatsBusy) {
 		t.Fatalf("fold with the lock held = %v", err)
 	}
 	if _, err := c.RepositoryStats(ctx); err != nil { // stale but served
