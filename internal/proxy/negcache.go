@@ -21,7 +21,7 @@ const maxNegativeEntries = 10000
 // the remote again at once.
 type negCache struct {
 	mu      sync.Mutex
-	max     int // 0 = maxNegativeEntries
+	max     int       // 0 = maxNegativeEntries
 	order   list.List // front = most recently used; values are *negEntry
 	entries map[string]*list.Element
 	// evicted is called with the number of live entries evicted for space.
