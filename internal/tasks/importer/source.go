@@ -273,7 +273,7 @@ func (s *source) answerChallenge(ctx context.Context, resp *http.Response, scope
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, realm.String(), nil)
 	if err != nil {
-		return false, nil //nolint:nilerr // an unusable challenge: the 401 stands
+		return false, nil // an unusable challenge: the 401 stands
 	}
 	req.Header.Set("User-Agent", s.agent)
 	// The token service of a registry is often another host: it gets the

@@ -1,7 +1,7 @@
 package importer
 
 import (
-	"crypto/sha1" //nolint:gosec // npm shasum
+	"crypto/sha1"
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
@@ -29,7 +29,7 @@ func npmSource(t *testing.T, pkgs map[string][]string) *fakeSource {
 		for i, v := range versions {
 			pj, _ := json.Marshal(map[string]any{"name": name, "version": v, "main": "index.js"})
 			tb := tgz(t, map[string]string{"package/package.json": string(pj), "package/index.js": "module.exports = '" + v + "'\n"})
-			s1 := sha1.Sum(tb) //nolint:gosec // npm shasum
+			s1 := sha1.Sum(tb)
 			s512 := sha512.Sum512(tb)
 			tarPath := "/" + name + "/-/" + base + "-" + v + ".tgz"
 			src.add(tarPath, tb, "application/octet-stream")
@@ -135,7 +135,7 @@ func TestImportNpmConflict(t *testing.T) {
 	other.files = map[string]fakeFile{}
 	pj := `{"name":"tool","version":"1.0.0","description":"changed"}`
 	tb := tgz(t, map[string]string{"package/package.json": pj})
-	s1 := sha1.Sum(tb) //nolint:gosec // npm shasum
+	s1 := sha1.Sum(tb)
 	other.add("/tool/-/tool-1.0.0.tgz", tb, "")
 	other.addJSON("/tool", map[string]any{"versions": map[string]any{"1.0.0": map[string]any{"name": "tool", "version": "1.0.0",
 		"dist": map[string]any{"tarball": other.URL() + "/tool/-/tool-1.0.0.tgz", "shasum": hex.EncodeToString(s1[:])}}}})

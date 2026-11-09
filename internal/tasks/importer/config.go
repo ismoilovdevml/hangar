@@ -221,7 +221,7 @@ func validatePrewarm(raw json.RawMessage) (*PrewarmConfig, error) {
 		if err := inv.Source.validate(); err != nil {
 			return nil, err
 		}
-		if err := inv.Filters.validate(); err != nil {
+		if err := inv.validate(); err != nil {
 			return nil, err
 		}
 	}
@@ -230,7 +230,7 @@ func validatePrewarm(raw json.RawMessage) (*PrewarmConfig, error) {
 			return nil, fmt.Errorf("lockfile without a name: %w", core.ErrInvalid)
 		}
 	}
-	if err := c.Tuning.validate(); err != nil {
+	if err := c.validate(); err != nil {
 		return nil, err
 	}
 	if len(c.Coordinates) == 0 && len(c.Lockfiles) == 0 && c.Inventory == nil {

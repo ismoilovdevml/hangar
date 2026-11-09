@@ -309,7 +309,7 @@ func sortedKeys(m map[string]string) []string {
 // httpGet GETs u over the network and returns the body of a 200 answer.
 func httpGet(t *testing.T, u string) string {
 	t.Helper()
-	resp, err := http.Get(u) //nolint:gosec,noctx // test URL
+	resp, err := http.Get(u)
 	if err != nil {
 		t.Fatal(err)
 	}

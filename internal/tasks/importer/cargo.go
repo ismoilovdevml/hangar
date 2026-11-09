@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -17,6 +18,8 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/ismoilovdevml/hangar/internal/core"
 )
 
 // Cargo: the sparse index protocol. config.json names the download URL
@@ -307,10 +310,13 @@ func (a *cargoAdapter) copy(ctx context.Context, name string, v srcVersion) (out
 	if err != nil {
 		return 0, err
 	}
+	if len(mj) > math.MaxUint32 || dl.size > math.MaxUint32 {
+		return 0, fmt.Errorf("crate or metadata larger than the publish API allows: %w", core.ErrInvalid)
+	}
 	var head bytes.Buffer
-	_ = binary.Write(&head, binary.LittleEndian, uint32(len(mj)))
+	_ = binary.Write(&head, binary.LittleEndian, uint32(len(mj))) //nolint:gosec // bounded above
 	head.Write(mj)
-	_ = binary.Write(&head, binary.LittleEndian, uint32(dl.size))
+	_ = binary.Write(&head, binary.LittleEndian, uint32(dl.size)) //nolint:gosec // bounded above
 	size := int64(head.Len()) + dl.size
 	resp, err := a.j.put(ctx, http.MethodPut, "api/v1/crates/new", nil, io.MultiReader(&head, crate), size, v.Published)
 	if err != nil {

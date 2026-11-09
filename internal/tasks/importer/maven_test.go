@@ -1,7 +1,7 @@
 package importer
 
 import (
-	"crypto/sha1" //nolint:gosec // maven checksum files
+	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -38,7 +38,7 @@ func mavenSource(t *testing.T, listings bool, artifacts map[string][]string) *fa
 		src.mu.Lock()
 		src.files[path] = fakeFile{body: body, modified: at}
 		src.mu.Unlock()
-		sum := sha1.Sum(body) //nolint:gosec // maven checksum
+		sum := sha1.Sum(body)
 		src.add(path+".sha1", []byte(hex.EncodeToString(sum[:])), "text/plain")
 		addDir(path)
 	}
@@ -60,13 +60,11 @@ func mavenSource(t *testing.T, listings bool, artifacts map[string][]string) *fa
 		for dir, entries := range dirs {
 			var b strings.Builder
 			b.WriteString(`<html><body><a href="../">../</a>`)
-			for _, e := range sortedKeys(map[string]string(func() map[string]string {
-				m := map[string]string{}
-				for k := range entries {
-					m[k] = ""
-				}
-				return m
-			}())) {
+			names := map[string]string{}
+			for k := range entries {
+				names[k] = ""
+			}
+			for _, e := range sortedKeys(names) {
 				fmt.Fprintf(&b, `<a href="%s">%s</a>`, e, e)
 			}
 			b.WriteString("</body></html>")
