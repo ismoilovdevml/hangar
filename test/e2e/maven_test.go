@@ -103,18 +103,16 @@ type mavenE2E struct {
 	mvn, gradle      string
 	repoURL          func(name string) string
 	localRepoCounter int
+	lastLocal        string // local repository of the latest mvn run
 }
 
 func TestMaven(t *testing.T) {
 	base := baseURL(t)
-	token := os.Getenv("HANGAR_E2E_TOKEN")
-	if token == "" {
-		t.Skip("HANGAR_E2E_TOKEN not set")
-	}
+	token := requireEnv(t, "HANGAR_E2E_TOKEN")
 	mvn, _ := exec.LookPath("mvn")
 	gradle, _ := exec.LookPath("gradle")
 	if mvn == "" && gradle == "" {
-		t.Skip("neither mvn nor gradle installed")
+		unavailable(t, "neither mvn nor gradle installed")
 	}
 	store := os.Getenv("HANGAR_E2E_BLOB_STORE")
 	if store == "" {
@@ -135,7 +133,7 @@ func TestMaven(t *testing.T) {
 		{"name": e.snaps, "format": "maven", "type": "hosted", "blob_store": store, "config": map[string]any{
 			"hosted": map[string]any{"write_policy": "allow"}, "format": map[string]any{"version_policy": "snapshot"}}},
 		{"name": e.proxy, "format": "maven", "type": "proxy", "blob_store": store, "config": map[string]any{
-			"proxy":  map[string]any{"remote_url": "https://repo1.maven.org/maven2/"},
+			"proxy":  map[string]any{"remote_url": mavenE2ECentral},
 			"format": map[string]any{"version_policy": "release"}}},
 		{"name": e.group, "format": "maven", "type": "group", "config": map[string]any{
 			"group": map[string]any{"members": []string{e.releases, e.snaps, e.proxy}}}},
@@ -161,8 +159,10 @@ func TestMaven(t *testing.T) {
 		if m.Versioning.Release != "1.0" || !mavenE2EContains(m.Versioning.Versions, "1.0") {
 			t.Fatalf("release metadata %+v", m.Versioning)
 		}
-		e.verifyChecksum(e.releases, gpath+"1.0/greeter-1.0.jar")
-		e.verifyChecksum(e.releases, gpath+"1.0/greeter-1.0.pom")
+		e.verifyArtifact(e.releases, gpath+"1.0/greeter-1.0.jar", e.local(filepath.Join(lib, "target", "greeter-1.0.jar")))
+		// The POM as mvn deployed it (Maven 4 deploys a consumer POM, not
+		// pom.xml), from the local repository the same run installed into.
+		e.verifyArtifact(e.releases, gpath+"1.0/greeter-1.0.pom", e.local(filepath.Join(e.lastLocal, gpath, "1.0", "greeter-1.0.pom")))
 	})
 	t.Run("mvn deploy snapshot twice", func(t *testing.T) {
 		e.libProject(lib, "1.1-SNAPSHOT", "snap")
@@ -173,7 +173,7 @@ func TestMaven(t *testing.T) {
 			t.Fatalf("snapshot metadata %+v", m.Versioning)
 		}
 		v := m.Versioning.SnapshotVersions[0].Value
-		e.verifyChecksum(e.snaps, gpath+"1.1-SNAPSHOT/greeter-"+v+".jar")
+		e.verifyArtifact(e.snaps, gpath+"1.1-SNAPSHOT/greeter-"+v+".jar", e.local(filepath.Join(lib, "target", "greeter-1.1-SNAPSHOT.jar")))
 	})
 	t.Run("release redeploy rejected", func(t *testing.T) {
 		e.libProject(lib, "1.0", "changed")
@@ -190,7 +190,7 @@ func TestMaven(t *testing.T) {
 			" System.out.println(org.apache.commons.lang3.StringUtils.capitalize(com.acme.Greeter.hi())); } }\n")
 		e.mustMvn(t, app, "-B", "install")
 		// commons-lang3 came through the proxy and is now cached there.
-		e.verifyChecksum(e.proxy, "org/apache/commons/commons-lang3/3.17.0/commons-lang3-3.17.0.jar")
+		e.verifyUpstream("org/apache/commons/commons-lang3/3.17.0/commons-lang3-3.17.0.jar")
 	})
 	t.Run("mvn dependency:get via group", func(t *testing.T) {
 		e.mustMvn(t, e.work, "-B", "dependency:get", "-Dartifact="+e.groupID+":greeter:1.1-SNAPSHOT", "-Dtransitive=false")
@@ -198,7 +198,7 @@ func TestMaven(t *testing.T) {
 	})
 	t.Run("group metadata merged", func(t *testing.T) {
 		if e.mvn == "" {
-			t.Skip("mvn not installed (the versions are deployed with mvn)")
+			missingTool(t, "mvn") // the versions are deployed with mvn
 		}
 		m := e.metadata(e.group, gpath+"maven-metadata.xml")
 		if !mavenE2EContains(m.Versioning.Versions, "1.0") || !mavenE2EContains(m.Versioning.Versions, "1.1-SNAPSHOT") {
@@ -207,7 +207,7 @@ func TestMaven(t *testing.T) {
 	})
 	t.Run("gradle publish and build", func(t *testing.T) {
 		if e.gradle == "" {
-			t.Skip("gradle not installed")
+			missingTool(t, "gradle")
 		}
 		e.gradleRun(t)
 	})
@@ -266,14 +266,46 @@ func (e *mavenE2E) metadata(repo, p string) mavenE2EMetadata {
 	return m
 }
 
-// verifyChecksum checks that the served .sha1 matches the served file.
-func (e *mavenE2E) verifyChecksum(repo, p string) {
+// verifyArtifact checks that the served file is byte for byte the one the
+// client built and uploaded, and that the served .sha1 is that file's.
+func (e *mavenE2E) verifyArtifact(repo, p string, want []byte) {
 	e.t.Helper()
-	body := e.fetch(repo, p)
-	want := strings.TrimSpace(string(e.fetch(repo, p+".sha1")))
-	if got := mavenE2ESHA1(body); got != want {
-		e.t.Fatalf("%s/%s: sha1 %s, .sha1 says %s", repo, p, got, want)
+	if got := e.fetch(repo, p); !bytes.Equal(got, want) {
+		e.t.Fatalf("%s/%s: served %d bytes (sha1 %s), uploaded %d bytes (sha1 %s)",
+			repo, p, len(got), mavenE2ESHA1(got), len(want), mavenE2ESHA1(want))
 	}
+	if sum := strings.TrimSpace(string(e.fetch(repo, p+".sha1"))); sum != mavenE2ESHA1(want) {
+		e.t.Fatalf("%s/%s.sha1 = %s, uploaded file has %s", repo, p, sum, mavenE2ESHA1(want))
+	}
+}
+
+// verifyUpstream checks that the proxy serves path exactly as Maven Central
+// does.
+func (e *mavenE2E) verifyUpstream(p string) {
+	e.t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, mavenE2ECentral+p, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		e.t.Fatalf("GET %s from Maven Central: %v", p, err)
+	}
+	defer resp.Body.Close()
+	want, err := io.ReadAll(resp.Body)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		e.t.Fatalf("GET %s from Maven Central = %d %v", p, resp.StatusCode, err)
+	}
+	e.verifyArtifact(e.proxy, p, want)
+}
+
+// local reads a file the build produced.
+func (e *mavenE2E) local(p string) []byte {
+	e.t.Helper()
+	b, err := os.ReadFile(p)
+	if err != nil {
+		e.t.Fatalf("build output: %v", err)
+	}
+	return b
 }
 
 func (e *mavenE2E) write(p, body string) {
@@ -299,10 +331,11 @@ func (e *mavenE2E) libProject(dir, version, greeting string) {
 func (e *mavenE2E) runMvn(t *testing.T, dir string, args ...string) (string, error) {
 	t.Helper()
 	if e.mvn == "" {
-		t.Skip("mvn not installed")
+		missingTool(t, "mvn")
 	}
 	e.localRepoCounter++
 	local := filepath.Join(e.work, "m2", strings.Repeat("r", e.localRepoCounter))
+	e.lastLocal = local
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, e.mvn, append([]string{"-s", e.settings, "-Dmaven.repo.local=" + local, "--no-transfer-progress"}, args...)...)
@@ -366,8 +399,8 @@ dependencies {
 	if m := e.metadata(e.releases, gp+"maven-metadata.xml"); m.Versioning.Release != "2.0" {
 		t.Fatalf("gradle publish metadata %+v", m.Versioning)
 	}
-	e.verifyChecksum(e.releases, gp+"2.0/gradlelib-2.0.module")
-	e.verifyChecksum(e.proxy, "com/google/guava/guava/33.4.0-jre/guava-33.4.0-jre.jar")
+	e.verifyArtifact(e.releases, gp+"2.0/gradlelib-2.0.module", e.local(filepath.Join(dir, "build", "publications", "maven", "module.json")))
+	e.verifyUpstream("com/google/guava/guava/33.4.0-jre/guava-33.4.0-jre.jar")
 }
 
 func mavenE2EContains(vs []string, v string) bool {
@@ -383,3 +416,6 @@ func mavenE2ESHA1(b []byte) string {
 	s := sha1.Sum(b)
 	return hex.EncodeToString(s[:])
 }
+
+// mavenE2ECentral is the proxied remote, also fetched directly to compare.
+const mavenE2ECentral = "https://repo1.maven.org/maven2/"

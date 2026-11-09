@@ -25,23 +25,21 @@ import (
 // HANGAR_E2E_USER / HANGAR_E2E_PASSWORD (the password may be a token).
 // Repositories are created with a per-run suffix; the blob store is
 // HANGAR_E2E_BLOB_STORE (default "default").
+//
+// The proxy repository's remote is the server itself, so the server must be
+// allowed to reach its own address: start it with
+// HANGAR_HTTP_ALLOW_PRIVATE_NETWORKS covering that address (for a server on
+// the loopback, HANGAR_HTTP_ALLOW_PRIVATE_NETWORKS=127.0.0.0/8,::1/128,localhost).
+// Without it the proxy answers 502 and the test fails.
 
 func rawE2ECreds(t *testing.T) (string, string) {
 	t.Helper()
-	u, p := os.Getenv("HANGAR_E2E_USER"), os.Getenv("HANGAR_E2E_PASSWORD")
-	if u == "" || p == "" {
-		t.Skip("HANGAR_E2E_USER and HANGAR_E2E_PASSWORD not set")
-	}
-	return u, p
+	return requireEnvs(t, "HANGAR_E2E_USER", "HANGAR_E2E_PASSWORD")
 }
 
 func rawE2EClient(t *testing.T, name string) string {
 	t.Helper()
-	p, err := exec.LookPath(name)
-	if err != nil {
-		t.Skipf("%s not installed", name)
-	}
-	return p
+	return requireTool(t, name)
 }
 
 func rawE2ERun(t *testing.T, dir, bin string, args ...string) (string, error) {
@@ -176,7 +174,10 @@ func TestRawE2E(t *testing.T) {
 			out, err := rawE2ERun(t, dir, curl, "-sS", "-u", auth, "-o", "/dev/null", "-w", "%{http_code}",
 				base+"/repository/"+repo+"/tools/1.0/tool-1.0.tar.gz")
 			if out == "502" && repo == proxy {
-				t.Skip("proxy remote refused (outbound allow-list may block this server's own address)")
+				// Reported, and the group is still checked.
+				t.Errorf("GET via %s = 502: the proxy could not reach %s; start the server with "+
+					"HANGAR_HTTP_ALLOW_PRIVATE_NETWORKS covering its own address (see the comment on TestRawE2E)", repo, base)
+				continue
 			}
 			if err != nil || out != "200" {
 				t.Errorf("GET via %s = %s %v", repo, out, err)

@@ -29,14 +29,8 @@ import (
 // HANGAR_E2E_BLOB_STORE defaults to "default".
 func TestCargo(t *testing.T) {
 	base := baseURL(t)
-	token := os.Getenv("HANGAR_E2E_TOKEN")
-	if token == "" {
-		t.Skip("HANGAR_E2E_TOKEN not set")
-	}
-	bin, err := exec.LookPath("cargo")
-	if err != nil {
-		t.Skip("cargo not installed")
-	}
+	token := requireEnv(t, "HANGAR_E2E_TOKEN")
+	bin := requireTool(t, "cargo")
 	store := os.Getenv("HANGAR_E2E_BLOB_STORE")
 	if store == "" {
 		store = "default"
