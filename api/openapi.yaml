@@ -3618,6 +3618,14 @@ components:
       type: string
       enum: [healthy, slow, blocked, offline, unknown]
       description: unknown = no health data for the remote
+    UpstreamBlockedReason:
+      type: string
+      enum: [auth_failed, access_denied, address_blocked]
+      description: |
+        Why a remote is `blocked`: `auth_failed` (it answered 401: the
+        upstream credentials are missing, wrong or expired), `access_denied`
+        (403: the credentials lack access), `address_blocked` (the outbound
+        address policy refused the address).
     UpstreamHealth:
       type: object
       required: [name, url, state, latency_ms, requests]
@@ -3627,6 +3635,9 @@ components:
           description: Proxy repository name
         url: { type: string }
         state: { $ref: "#/components/schemas/UpstreamState" }
+        reason:
+          $ref: "#/components/schemas/UpstreamBlockedReason"
+          description: Set when state is blocked
         latency_ms:
           type: [integer, "null"]
           description: |
@@ -4094,6 +4105,9 @@ components:
               type: string
               description: Client URL built from server.base_url
             status: { $ref: "#/components/schemas/RepositoryStatus" }
+            status_reason:
+              $ref: "#/components/schemas/UpstreamBlockedReason"
+              description: Proxy repositories with status blocked only
             size_bytes:
               allOf: [{ $ref: "#/components/schemas/Bytes" }]
               description: |

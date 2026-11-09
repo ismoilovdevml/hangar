@@ -2612,11 +2612,21 @@ export interface components {
          * @enum {string}
          */
         UpstreamState: "healthy" | "slow" | "blocked" | "offline" | "unknown";
+        /**
+         * @description Why a remote is `blocked`: `auth_failed` (it answered 401: the
+         *     upstream credentials are missing, wrong or expired), `access_denied`
+         *     (403: the credentials lack access), `address_blocked` (the outbound
+         *     address policy refused the address).
+         * @enum {string}
+         */
+        UpstreamBlockedReason: "auth_failed" | "access_denied" | "address_blocked";
         UpstreamHealth: {
             /** @description Proxy repository name */
             name: string;
             url: string;
             state: components["schemas"]["UpstreamState"];
+            /** @description Set when state is blocked */
+            reason?: components["schemas"]["UpstreamBlockedReason"];
             /**
              * @description Median time to response headers of the remote requests recorded
              *     over the range (estimated from a histogram); null without remote
@@ -2938,6 +2948,8 @@ export interface components {
             /** @description Client URL built from server.base_url */
             url: string;
             status: components["schemas"]["RepositoryStatus"];
+            /** @description Proxy repositories with status blocked only */
+            status_reason?: components["schemas"]["UpstreamBlockedReason"];
             /**
              * @description Hosted and proxy: the total size of the repository's assets.
              *     Group: what the group serves; every blob stored by its
