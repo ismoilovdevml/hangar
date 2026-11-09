@@ -474,13 +474,20 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	if err != nil {
 		return nil, err
 	}
+	// Repository totals: triggers log every change, this loop folds the log
+	// into stored totals (reads fold too) and recounts them periodically.
+	cat := catalog.New(pool, catalog.Options{Sealer: storeSealer(keyring), ConfiguredStores: []string{DefaultBlobStore}, Logger: log})
+	catCtx, stopCat := context.WithCancel(context.WithoutCancel(ctx))
+	catDone := make(chan struct{})
+	go func() { cat.RunStats(catCtx); close(catDone) }()
+	a.onClose(func() { stopCat(); <-catDone })
 	restAPI := &api.API{
 		Deps:           deps,
 		InstanceName:   cfg.Server.InstanceName,
 		Health:         hc,
 		Formats:        reg.Names(),
 		Started:        started,
-		Catalog:        catalog.New(pool, catalog.Options{Sealer: storeSealer(keyring), ConfiguredStores: []string{DefaultBlobStore}}),
+		Catalog:        cat,
 		PackageInfo:    pkginfo.New(pool, deps.Components, deps.Blobs, log),
 		ReadmeImages:   readmeImages,
 		Search:         search.New(pool),
