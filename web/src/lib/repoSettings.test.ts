@@ -59,6 +59,23 @@ describe('repository settings round-trip', () => {
     expect(validateRepoForm({ ...f, authKind: 'header', authHeader: 'Private-Token' }, { storedAuth: proxy.config.proxy?.auth }).authToken).toBeDefined();
   });
 
+  it('asks for the secret again when the remote moves to another host', () => {
+    const f = repoToForm(proxy);
+    const ctx = { storedAuth: proxy.config.proxy?.auth, storedRemoteUrl: proxy.config.proxy?.remote_url };
+    expect(validateRepoForm({ ...f, remoteUrl: 'https://registry.npmjs.org:443/other/' }, ctx)).toEqual({});
+    expect(validateRepoForm({ ...f, remoteUrl: 'https://npm.mirror.example.net/' }, ctx).authToken).toBe(
+      'Enter the token again: it is not sent to a new host.',
+    );
+    expect(validateRepoForm({ ...f, remoteUrl: 'https://npm.mirror.example.net/', authToken: 't' }, ctx)).toEqual({});
+  });
+
+  it('removes stored credentials with auth: null and leaves them out otherwise', () => {
+    const none = toRepositoryUpdate({ ...repoToForm(proxy), authKind: 'none' }, proxy);
+    expect(none.config.proxy).toHaveProperty('auth', null);
+    const plain = { ...proxy, config: { ...proxy.config, proxy: { ...proxy.config.proxy!, auth: undefined } } };
+    expect(toRepositoryUpdate(repoToForm(plain), plain).config.proxy).not.toHaveProperty('auth');
+  });
+
   it('clears a description and replaces the first cleanup policy', () => {
     const r = { ...proxy, description: 'old' };
     const body = toRepositoryUpdate({ ...repoToForm(r), description: '', cleanupPolicy: 'other' }, r);

@@ -355,26 +355,48 @@ function validDownloadTemplate(t: string): boolean {
   return isUrl(probe, ['http:', 'https:']);
 }
 
+/** A URL's scheme, host and port (default port explicit); '' when it does not parse. */
+function urlOrigin(s: string): string {
+  try {
+    const u = new URL(s.trim());
+    return `${u.protocol}//${u.hostname}:${u.port || (u.protocol === 'https:' ? '443' : u.protocol === 'http:' ? '80' : '')}`;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Whether the remote address moves to another scheme, host or port than the
+ * stored one: the server then never reuses the stored secret.
+ */
+export function remoteMoved(f: RepoForm, storedRemoteUrl: string | undefined): boolean {
+  return !!storedRemoteUrl && urlOrigin(f.remoteUrl) !== urlOrigin(storedRemoteUrl);
+}
+
 /**
  * Whether the server already holds the upstream secret for the form's
  * credentials: it keeps a stored password or token when an update leaves it
- * empty and the kind, username and header name are unchanged.
+ * empty, the kind, username and header name are unchanged and the remote
+ * stays on the same host.
  */
-export function secretStored(f: RepoForm, stored: UpstreamAuth | undefined): boolean {
+export function secretStored(f: RepoForm, stored: UpstreamAuth | null | undefined, storedRemoteUrl?: string): boolean {
   return (
     !!stored &&
     stored.kind === f.authKind &&
     (stored.username ?? '') === f.authUsername.trim() &&
-    (stored.header_name ?? '') === f.authHeader.trim()
+    (stored.header_name ?? '') === f.authHeader.trim() &&
+    !remoteMoved(f, storedRemoteUrl)
   );
 }
 
 /** Client-side checks that mirror the server's; the server stays the authority. */
 export function validateRepoForm(
   f: RepoForm,
-  ctx: { memberTypes?: ReadonlyMap<string, RepositoryType>; storedAuth?: UpstreamAuth } = {},
+  ctx: { memberTypes?: ReadonlyMap<string, RepositoryType>; storedAuth?: UpstreamAuth | null; storedRemoteUrl?: string } = {},
 ): RepoFormErrors {
-  const keepSecret = secretStored(f, ctx.storedAuth);
+  const keepSecret = secretStored(f, ctx.storedAuth, ctx.storedRemoteUrl);
+  // A stored secret is not sent to a new host: it must be entered again.
+  const again = !!ctx.storedAuth && remoteMoved(f, ctx.storedRemoteUrl) ? ' again: it is not sent to a new host' : '';
   const e: RepoFormErrors = {};
   if (!f.format) e.format = 'Pick a format.';
   if (!f.type) e.type = 'Pick how the repository behaves.';
@@ -392,12 +414,12 @@ export function validateRepoForm(
     }
     if (f.authKind === 'basic') {
       if (!f.authUsername.trim()) e.authUsername = 'Enter the upstream username.';
-      if (!f.authPassword && !keepSecret) e.authPassword = 'Enter the upstream password.';
+      if (!f.authPassword && !keepSecret) e.authPassword = `Enter the upstream password${again}.`;
     }
-    if (f.authKind === 'bearer' && !f.authToken && !keepSecret) e.authToken = 'Enter the token.';
+    if (f.authKind === 'bearer' && !f.authToken && !keepSecret) e.authToken = `Enter the token${again}.`;
     if (f.authKind === 'header') {
       if (!/^[A-Za-z0-9-]+$/.test(f.authHeader.trim())) e.authHeader = 'Enter a header name such as Private-Token.';
-      if (!f.authToken && !keepSecret) e.authToken = 'Enter the header value.';
+      if (!f.authToken && !keepSecret) e.authToken = `Enter the header value${again}.`;
     }
     if (f.proxyMode === 'named' && !f.proxyName) e.proxyName = 'Pick a proxy.';
     if (f.proxyMode === 'url' && !isUrl(f.proxyUrl.trim(), ['http:', 'https:', 'socks5:'])) {

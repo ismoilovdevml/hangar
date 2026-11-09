@@ -101,8 +101,9 @@ function SettingsForm({ repo }: { repo: Repository }) {
   const blur = (f: RepoFormField) => () => setBlurred((b) => ({ ...b, [f]: true }));
 
   const storedAuth = repo.config.proxy?.auth;
+  const storedRemoteUrl = repo.config.proxy?.remote_url;
   const memberTypes = useMemo(() => new Map((members.data ?? []).map((r) => [r.name, r.type] as const)), [members.data]);
-  const errors = validateRepoForm(form, { memberTypes, storedAuth });
+  const errors = validateRepoForm(form, { memberTypes, storedAuth, storedRemoteUrl });
   const visible: RepoFormErrors = Object.fromEntries(
     Object.entries(errors).filter(([k]) => submitted || blurred[k as RepoFormField]),
   );
@@ -209,7 +210,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
               errors={visible}
               blur={blur}
               identity={identity}
-              secretKept={secretStored(form, storedAuth)}
+              secretKept={secretStored(form, storedAuth, storedRemoteUrl)}
               disabled={!canAdmin}
             />
           </Panel>
