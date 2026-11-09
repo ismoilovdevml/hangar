@@ -23,7 +23,7 @@ export function MostDownloaded() {
         Most downloaded
       </h2>
       {q.isError ? (
-        <ErrorNote what="the most downloaded packages" onRetry={() => void q.refetch()} />
+        <ErrorNote what="the most downloaded packages" error={q.error} onRetry={() => void q.refetch()} />
       ) : q.isPending ? (
         <span className="top__loading" aria-busy="true">
           {[140, 90, 120, 100].map((w) => (

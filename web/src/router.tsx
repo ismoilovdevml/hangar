@@ -14,6 +14,7 @@ import { isRange } from './lib/format';
 import { LoginPage } from './pages/LoginPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { safeRedirect } from './lib/redirect';
+import { GATES, type Gate } from './lib/gates';
 import { ApiDocsPage } from './pages/apidocs/ApiDocsPage';
 import { DocsShell } from './pages/apidocs/DocsShell';
 import { OverviewPage } from './pages/overview/OverviewPage';
@@ -57,10 +58,14 @@ declare module '@tanstack/react-router' {
     title?: string;
     /** The page sits under Settings: the breadcrumb reads "Settings / <title>". */
     inSettings?: boolean;
+    /** Users the gate turns away see who to ask for access instead of the page. */
+    gate?: Gate;
   }
   interface HistoryState {
     /** Cursors of the pages before the current one, so "Previous" works with opaque cursors. */
     pageCursors?: string[];
+    /** Set on the repository page right after "New repository" created it. */
+    created?: string;
   }
 }
 
@@ -144,8 +149,8 @@ const appRoute = createRoute({
   component: AppShell,
 });
 
-const page = <TPath extends string>(path: TPath, title: string, component: () => JSX.Element, inSettings?: boolean) =>
-  createRoute({ getParentRoute: () => appRoute, path, staticData: { title, inSettings }, component });
+const page = <TPath extends string>(path: TPath, title: string, component: () => JSX.Element, inSettings?: boolean, gate?: Gate) =>
+  createRoute({ getParentRoute: () => appRoute, path, staticData: { title, inSettings, gate }, component });
 
 const overviewRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -214,7 +219,7 @@ const repositoriesRoute = createRoute({
 const repoCreateRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/repositories/new',
-  staticData: { title: 'New repository' },
+  staticData: { title: 'New repository', gate: GATES.createRepository },
   validateSearch: (s: Record<string, unknown>): { format?: Format; type?: RepositoryType } => ({
     format: isFormat(s.format) ? s.format : undefined,
     type: isRepoType(s.type) ? s.type : undefined,
@@ -236,7 +241,7 @@ const searchRoute = createRoute({
 const cleanupRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/cleanup',
-  staticData: { title: 'Cleanup policies' },
+  staticData: { title: 'Cleanup policies', gate: GATES.cleanup },
   validateSearch: (s: Record<string, unknown>): CleanupSearch => ({
     policy: str(s.policy),
     create: s.create === true || s.create === 'true' ? true : undefined,
@@ -247,7 +252,7 @@ const cleanupRoute = createRoute({
 const tasksRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/tasks',
-  staticData: { title: 'Scheduled tasks' },
+  staticData: { title: 'Scheduled tasks', gate: GATES.tasks },
   validateSearch: (s: Record<string, unknown>): TasksSearch => ({
     type: isTaskType(s.type) ? s.type : undefined,
     status: isTaskStatusFilter(s.status) ? s.status : undefined,
@@ -270,7 +275,7 @@ const newTaskRoute = createRoute({
 const taskDetailRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/tasks/$taskId',
-  staticData: { title: 'Task' },
+  staticData: { title: 'Task', gate: GATES.tasks },
   validateSearch: (s: Record<string, unknown>): TaskDetailSearch => ({ run: str(s.run), cursor: str(s.cursor) }),
   component: TaskDetailPage,
 });
@@ -286,7 +291,7 @@ const vulnerabilitiesRoute = createRoute({
 const auditRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/audit',
-  staticData: { title: 'Audit log', inSettings: true },
+  staticData: { title: 'Audit log', inSettings: true, gate: GATES.audit },
   validateSearch: (s: Record<string, unknown>): AuditSearch => validateAuditSearch(s),
   component: AuditPage,
 });
@@ -298,7 +303,7 @@ const pick = <T extends string>(v: unknown, allowed: readonly T[]): T | undefine
 const accessRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/access',
-  staticData: { title: 'Access & audit' },
+  staticData: { title: 'Access & audit', gate: GATES.access },
   validateSearch: (s: Record<string, unknown>): AccessSearch => ({
     tab: isAccessTab(s.tab) ? s.tab : undefined,
     q: str(s.q),
@@ -330,7 +335,7 @@ const repoSettingsRoute = createRoute({
 const blobStoresRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/blob-stores',
-  staticData: { title: 'Blob stores' },
+  staticData: { title: 'Blob stores', gate: GATES.blobStores },
   validateSearch: (s: Record<string, unknown>): { add?: boolean } => ({ add: s.add === true || s.add === 'true' ? true : undefined }),
   component: BlobStoresPage,
 });
@@ -338,21 +343,21 @@ const blobStoresRoute = createRoute({
 const blobStoreRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/blob-stores/$name',
-  staticData: { title: 'Blob store' },
+  staticData: { title: 'Blob store', gate: GATES.blobStores },
   component: BlobStoreDetailPage,
 });
 
 const systemStatusRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/system/status',
-  staticData: { title: 'System status', inSettings: true },
+  staticData: { title: 'System status', inSettings: true, gate: GATES.cluster },
   component: SystemStatusPage,
 });
 
 const systemLogsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/system/logs',
-  staticData: { title: 'System logs', inSettings: true },
+  staticData: { title: 'System logs', inSettings: true, gate: GATES.logs },
   validateSearch: (s: Record<string, unknown>): SystemLogsSearch => validateLogsSearch(s),
   component: SystemLogsPage,
 });
@@ -377,15 +382,15 @@ const routeTree = rootRoute.addChildren([
     tasksRoute,
     newTaskRoute,
     taskDetailRoute,
-    page('/cluster', 'Cluster & replication', ClusterPage),
+    page('/cluster', 'Cluster & replication', ClusterPage, false, GATES.cluster),
     systemStatusRoute,
     systemLogsRoute,
     auditRoute,
     // Settings gathers configuration and personal pages; their old addresses stay as they were.
     page('/settings', 'Settings', SettingsHubPage),
     page('/settings/system', 'System', SystemPage, true),
-    page('/settings/authentication', 'Authentication', AuthenticationPage, true),
-    page('/settings/proxies', 'Proxies', ProxiesPage, true),
+    page('/settings/authentication', 'Authentication', AuthenticationPage, true, GATES.settings),
+    page('/settings/proxies', 'Proxies', ProxiesPage, true, GATES.settings),
   ]),
 ]);
 

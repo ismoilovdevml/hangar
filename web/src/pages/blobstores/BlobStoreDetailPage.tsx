@@ -1,6 +1,7 @@
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { ApiRequestError } from '../../api/client';
 import { useAllRepositories, useBlobStore } from '../../api/catalog';
+import { usePermissions } from '../../api/permissions';
 import type { BlobStore, Repository } from '../../api/types';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
@@ -21,13 +22,14 @@ const route = getRouteApi('/app/blob-stores/$name');
 export function BlobStoreDetailPage() {
   const { name } = route.useParams();
   const store = useBlobStore(name);
+  const canAdmin = usePermissions().can('admin', 'system', 'blobstores');
 
   if (store.isError) {
     const notFound = store.error instanceof ApiRequestError && store.error.status === 404;
     return (
       <div className="screen">
         <PageHeader title={name} description={notFound ? 'This blob store does not exist.' : undefined} eyebrow={<Link to="/blob-stores">Blob stores</Link>} />
-        {!notFound && <ErrorNote what="the blob store" onRetry={() => void store.refetch()} />}
+        {!notFound && <ErrorNote what="the blob store" error={store.error} privilege="system:blobstores:read" onRetry={() => void store.refetch()} />}
       </div>
     );
   }
@@ -60,7 +62,7 @@ export function BlobStoreDetailPage() {
         <Configuration s={s} />
       </div>
       <UsedBy s={s} />
-      <BlobStoreManage key={s.id} s={s} />
+      {canAdmin && <BlobStoreManage key={s.id} s={s} />}
     </div>
   );
 }
@@ -186,7 +188,7 @@ function UsedBy({ s }: { s: BlobStore }) {
   return (
     <Panel title={`Repositories using ${s.name}`} titleId="used-by-title" flush>
       {repos.isError ? (
-        <ErrorNote what="repositories" onRetry={() => void repos.refetch()} />
+        <ErrorNote what="repositories" error={repos.error} onRetry={() => void repos.refetch()} />
       ) : (
         <DataTable
           caption={`Repositories using ${s.name}`}

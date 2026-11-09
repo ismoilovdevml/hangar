@@ -245,7 +245,7 @@ export function BrowseTree({ repo, path, onSelect }: BrowseTreeProps) {
         />
       </div>
 
-      {repos.isError && <ErrorNote what="repositories" onRetry={() => void repos.refetch()} />}
+      {repos.isError && <ErrorNote what="repositories" error={repos.error} onRetry={() => void repos.refetch()} />}
       {repos.isPending && (
         <p className="meta tree-status" aria-live="polite">
           Loading repositories…

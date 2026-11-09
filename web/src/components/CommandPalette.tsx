@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type Keyboard
 import { createPortal } from 'react-dom';
 import { useNavigate } from '@tanstack/react-router';
 import { useSession } from '../api/hooks';
+import { GATES, passes } from '../lib/gates';
 import { canSee, NAV, SETTINGS_PAGES } from '../nav';
 import { CommandPaletteContext } from './commandPaletteContext';
 import { IconArrowRight, IconLogout, IconPlus, IconSearch } from './icons';
@@ -76,16 +77,17 @@ function CommandPaletteDialog({ onClose, onSignOut }: { onClose: () => void; onS
             run: () => void navigate({ to: item.to, hash: item.hash }),
           })),
       );
-    const actions: Command[] = [
-      {
+    const actions: Command[] = [];
+    if (passes(GATES.createRepository, privileges)) {
+      actions.push({
         id: 'action:new-repo',
         group: 'Actions',
         label: 'Create a repository',
         keywords: 'new add hosted proxy group',
         icon: <IconPlus size={16} />,
         run: () => void navigate({ to: '/repositories/new' }),
-      },
-    ];
+      });
+    }
     if (onSignOut) {
       actions.push({ id: 'action:sign-out', group: 'Actions', label: 'Sign out', keywords: 'logout log out', icon: <IconLogout size={16} />, run: onSignOut });
     }

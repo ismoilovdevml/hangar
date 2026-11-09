@@ -16,6 +16,7 @@ import {
 } from './components/icons';
 import { IconAudit, IconSettings } from './components/opsIcons';
 import { allows } from './lib/can';
+import { GATES, passes, type Gate } from './lib/gates';
 import { IconLogs, IconPulse } from './pages/system/icons';
 import { IconLock, IconRoute } from './pages/settings/icons';
 
@@ -54,7 +55,7 @@ export interface NavItem {
   label: string;
   icon: ComponentType<SVGProps<SVGSVGElement> & { size?: number }>;
   keywords?: string;
-  requires?: Requirement;
+  requires?: Requirement | Gate;
 }
 
 export interface NavSection {
@@ -64,8 +65,17 @@ export interface NavSection {
 }
 
 /** Whether the holder of `privileges` may see an entry with this requirement. */
-export function canSee(privileges: readonly string[] | undefined, requires: Requirement | undefined): boolean {
-  return !requires || allows(privileges, 'system', requires.area, requires.action);
+export function canSee(privileges: readonly string[] | undefined, requires: Requirement | Gate | undefined): boolean {
+  if (!requires) return true;
+  if ('allowed' in requires) return passes(requires, privileges);
+  return allows(privileges, 'system', requires.area, requires.action);
+}
+
+/** The sections and entries `privileges` may open; sections left empty are dropped. */
+export function visibleNav(privileges: readonly string[] | undefined): NavSection[] {
+  return NAV.filter((s) => canSee(privileges, s.requires))
+    .map((s) => ({ ...s, items: s.items.filter((i) => canSee(privileges, i.requires)) }))
+    .filter((s) => s.items.length > 0);
 }
 
 /** The sidebar. Personal pages (My account, tokens) live in Settings. */
@@ -82,15 +92,21 @@ export const NAV: NavSection[] = [
   {
     title: 'Storage',
     items: [
-      { to: '/blob-stores', label: 'Blob stores', icon: IconServer, keywords: 's3 minio disk bucket' },
-      { to: '/cleanup', label: 'Cleanup policies', icon: IconTrash, keywords: 'retention delete' },
+      { to: '/blob-stores', label: 'Blob stores', icon: IconServer, keywords: 's3 minio disk bucket', requires: GATES.blobStores },
+      { to: '/cleanup', label: 'Cleanup policies', icon: IconTrash, keywords: 'retention delete', requires: GATES.cleanup },
     ],
   },
   {
     title: 'Security',
     items: [
       { to: '/vulnerabilities', label: 'Vulnerabilities', icon: IconShield, keywords: 'cve scanning findings quarantine' },
-      { to: '/access', label: 'Access & audit', icon: IconUsers, keywords: 'users members service accounts roles permissions tokens' },
+      {
+        to: '/access',
+        label: 'Access & audit',
+        icon: IconUsers,
+        keywords: 'users members service accounts roles permissions tokens',
+        requires: GATES.access,
+      },
       {
         to: '/audit',
         label: 'Audit log',
@@ -103,8 +119,8 @@ export const NAV: NavSection[] = [
   {
     title: 'Operations',
     items: [
-      { to: '/tasks', label: 'Scheduled tasks', icon: IconClock, keywords: 'jobs cron' },
-      { to: '/cluster', label: 'Cluster & replication', icon: IconCluster, keywords: 'nodes edge ha' },
+      { to: '/tasks', label: 'Scheduled tasks', icon: IconClock, keywords: 'jobs cron', requires: GATES.tasks },
+      { to: '/cluster', label: 'Cluster & replication', icon: IconCluster, keywords: 'nodes edge ha', requires: GATES.cluster },
       {
         to: '/system/status',
         label: 'System status',

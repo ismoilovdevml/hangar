@@ -392,7 +392,7 @@ describe('access & audit: roles and audit', () => {
       ),
     );
     renderApp('/access');
-    expect(await screen.findByText(/needs an administrator role/)).toBeInTheDocument();
+    expect(await screen.findByText(/You don’t have access to people, tokens and roles/)).toBeInTheDocument();
     expect(within(screen.getByRole('main')).getByRole('link', { name: 'My account' })).toHaveAttribute('href', '/account');
     expect(screen.queryByRole('table', { name: 'Members' })).not.toBeInTheDocument();
   });

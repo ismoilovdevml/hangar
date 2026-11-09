@@ -29,14 +29,9 @@ export function BlobStoresPage() {
         title="Blob stores"
         description="The disks and buckets behind your repositories. Identical files are stored once."
         actions={
-          (!add || !canCreate) && (
-            <button
-              type="button"
-              className="button button--primary"
-              disabled={!canCreate}
-              title={canCreate ? undefined : 'Needs the blob store admin privilege'}
-              onClick={() => setAdd(true)}
-            >
+          !add &&
+          canCreate && (
+            <button type="button" className="button button--primary" onClick={() => setAdd(true)}>
               <IconPlus size={16} /> Add blob store
             </button>
           )
@@ -46,7 +41,7 @@ export function BlobStoresPage() {
       {add && canCreate && <BlobStoreCreate onClose={() => setAdd(false)} />}
 
       {list.isError ? (
-        <ErrorNote what="blob stores" onRetry={() => void list.refetch()} />
+        <ErrorNote what="blob stores" error={list.error} privilege="system:blobstores:read" onRetry={() => void list.refetch()} />
       ) : (
         <>
           <Totals data={list.data} />

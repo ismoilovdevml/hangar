@@ -379,7 +379,7 @@ export function SystemStatusPage() {
               <p className="meta">This server does not report node status yet. Upgrade Hangar to see it here.</p>
             </div>
           ) : (
-            <ErrorNote what="the system status" onRetry={() => void nodes.refetch()} />
+            <ErrorNote what="the system status" error={nodes.error} onRetry={() => void nodes.refetch()} />
           )}
         </div>
       );

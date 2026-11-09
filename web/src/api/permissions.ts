@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { passes, type Gate } from '../lib/gates';
 import { can, canAdminRepo, type Action, type Domain } from '../lib/privileges';
 import { useSession } from './hooks';
 
@@ -21,4 +22,9 @@ export function usePermissions(): Permissions {
       canAdminRepo: (repo) => canAdminRepo(privileges, repo),
     };
   }, [privileges]);
+}
+
+/** Whether the signed-in user passes `gate` (see lib/gates). */
+export function useGate(gate: Gate): boolean {
+  return passes(gate, useSession().data?.privileges);
 }

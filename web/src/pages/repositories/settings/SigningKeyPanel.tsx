@@ -81,7 +81,7 @@ export function SigningKeyPanel({ repo }: { repo: Repository }) {
       </p>
     );
   } else if (key.isError) {
-    body = <ErrorNote what="the signing key" onRetry={() => void key.refetch()} />;
+    body = <ErrorNote what="the signing key" error={key.error} onRetry={() => void key.refetch()} />;
   } else {
     const k = key.data;
     body = (

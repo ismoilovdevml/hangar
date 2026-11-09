@@ -149,7 +149,7 @@ export function RolesTab({ canWrite }: { canWrite: boolean }) {
       ) : undefined
     }>
       {roles.isError ? (
-        <ErrorNote what="roles" onRetry={() => void roles.refetch()} />
+        <ErrorNote what="roles" error={roles.error} privilege="system:users:read" onRetry={() => void roles.refetch()} />
       ) : (
         <DataTable caption="Roles" columns={columns} rows={roles.data?.items ?? []} rowKey={(r) => r.id} busy={roles.isFetching} minWidth={760} empty={roles.isPending ? 'Loading…' : 'No roles.'} />
       )}

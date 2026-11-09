@@ -174,7 +174,7 @@ export function MembersTab({ kind, filters, onFilters, onOpen }: MembersTabProps
         </div>
       </div>
       {list.isError ? (
-        <ErrorNote what={sa ? 'service accounts' : 'members'} onRetry={() => void list.refetch()} />
+        <ErrorNote what={sa ? 'service accounts' : 'members'} error={list.error} privilege="system:users:read" onRetry={() => void list.refetch()} />
       ) : (
         <DataTable
           caption={sa ? 'Service accounts' : 'Members'}

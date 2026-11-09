@@ -137,7 +137,9 @@ describe('system status', () => {
   it('explains the missing privilege instead of loading', async () => {
     withPrivileges(['repo:*:read']);
     renderApp('/system/status');
-    expect(await screen.findByText(/needs the/)).toHaveTextContent('system:cluster:read');
+    expect(await screen.findByText(/You don’t have access to cluster nodes/)).toBeInTheDocument();
+    expect(screen.getByRole('note')).toHaveTextContent('Ask an administrator for system:cluster:read.');
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
     expect(systemMockState.nodesRequests).toBe(0);
   });
 
@@ -250,7 +252,8 @@ describe('system logs', () => {
   it('needs the cluster admin privilege', async () => {
     withPrivileges(['system:cluster:read']);
     renderApp('/system/logs');
-    expect(await screen.findByText(/System logs need the/)).toHaveTextContent('system:cluster:admin');
+    expect(await screen.findByText(/You don’t have access to system logs/)).toBeInTheDocument();
+    expect(screen.getByRole('note')).toHaveTextContent('system:cluster:admin');
   });
 });
 

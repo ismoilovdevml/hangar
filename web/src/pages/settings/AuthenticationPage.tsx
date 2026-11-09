@@ -135,7 +135,7 @@ function Authentication({ canEdit }: { canEdit: boolean }) {
       ) : (
         <Panel className="auth-editor" aria-label="Single sign-on">
           {protocolSwitch}
-          <ErrorNote what="the single sign-on settings" onRetry={() => void oidcQ.refetch()} />
+          <ErrorNote what="the single sign-on settings" error={oidcQ.error} privilege="system:settings:read" onRetry={() => void oidcQ.refetch()} />
         </Panel>
       );
   } else {
@@ -154,7 +154,7 @@ function Authentication({ canEdit }: { canEdit: boolean }) {
       ) : (
         <Panel className="auth-editor" aria-label="Directory sign-in">
           {protocolSwitch}
-          <ErrorNote what="the LDAP settings" onRetry={() => void ldapQ.refetch()} />
+          <ErrorNote what="the LDAP settings" error={ldapQ.error} privilege="system:settings:read" onRetry={() => void ldapQ.refetch()} />
         </Panel>
       );
   }
@@ -206,7 +206,7 @@ function ProviderChips({ oidc, ldap }: { oidc?: OIDCSettings; ldap?: LDAPSetting
 /** Spells out why a provider that is on does not work. */
 function ProviderProblems({ oidc, ldap }: { oidc?: OIDCSettings; ldap?: LDAPSettings }) {
   const q = useIdentityProviders();
-  if (q.isError) return <ErrorNote what="the sign-in status" onRetry={() => void q.refetch()} />;
+  if (q.isError) return <ErrorNote what="the sign-in status" error={q.error} privilege="system:settings:read" onRetry={() => void q.refetch()} />;
   const failing = (q.data?.items ?? []).filter((p) => p.enabled && p.state === 'error');
   if (!failing.length) return null;
   return (

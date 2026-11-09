@@ -4,7 +4,9 @@
  */
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { useCleanupPolicies, useRepositoriesByFormat } from '../../api/hooks';
+import { isMissingEndpoint } from '../../api/ops';
 import type { WritePolicy } from '../../api/types';
+import { isForbidden } from '../../lib/gates';
 import { IconArrowDown, IconArrowUp, IconClose } from '../../components/icons';
 import { Pill } from '../../components/Pill';
 import { Select } from '../../components/Select';
@@ -110,7 +112,11 @@ export function RepoSettingsFields({ form, selfName, set, setForm, errors, blur,
           />
           <span id="repo-cleanup-hint" className="field__hint">
             {policies.isError
-              ? 'Cleanup policies are not available on this server yet.'
+              ? isForbidden(policies.error)
+                ? 'Choosing a policy needs the system:cleanup:read privilege.'
+                : isMissingEndpoint(policies.error)
+                  ? 'Cleanup policies are not available on this server yet.'
+                  : 'Could not load cleanup policies.'
               : policies.data && policyOptions.length === 0
                 ? 'No cleanup policies for this format yet.'
                 : 'What gets deleted, and when'}

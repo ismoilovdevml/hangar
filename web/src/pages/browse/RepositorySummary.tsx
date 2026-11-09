@@ -19,7 +19,7 @@ export function RepositorySummary({ repo }: { repo: string }) {
     const notFound = q.error instanceof ApiRequestError && q.error.status === 404;
     return (
       <Panel className="browse-empty" role="status">
-        {notFound ? <p>Repository {repo} does not exist, or you cannot see it.</p> : <ErrorNote what="the repository" onRetry={() => void q.refetch()} />}
+        {notFound ? <p>Repository {repo} does not exist, or you cannot see it.</p> : <ErrorNote what="the repository" error={q.error} onRetry={() => void q.refetch()} />}
       </Panel>
     );
   }

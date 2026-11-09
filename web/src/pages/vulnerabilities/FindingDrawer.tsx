@@ -89,7 +89,7 @@ export function FindingDrawer({ id, plan, onClose, canWrite, canSeePullers }: Fi
           finding.error instanceof ApiRequestError && finding.error.status === 404 ? (
             <p className="meta">This finding no longer exists or is in a repository you cannot read.</p>
           ) : (
-            <ErrorNote what="the finding" onRetry={() => void finding.refetch()} />
+            <ErrorNote what="the finding" error={finding.error} onRetry={() => void finding.refetch()} />
           )
         ) : !f ? (
           <p className="meta" aria-busy="true">
@@ -294,7 +294,7 @@ function Pullers({ id }: { id: string }) {
     if (pullers.error instanceof ApiRequestError && pullers.error.status === 403) {
       return <p className="meta">Seeing who pulls a package needs the security read privilege.</p>;
     }
-    return <ErrorNote what="who pulls it" onRetry={() => void pullers.refetch()} />;
+    return <ErrorNote what="who pulls it" error={pullers.error} onRetry={() => void pullers.refetch()} />;
   }
   const p = pullers.data;
   if (!p) {
