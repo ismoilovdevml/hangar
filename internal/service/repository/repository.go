@@ -703,6 +703,7 @@ func cloneRepo(r *core.Repository) *core.Repository {
 		c.Config.Connector = &cc
 	}
 	c.Config.CleanupPolicies = append([]string(nil), r.Config.CleanupPolicies...)
+	c.Config.Routing = r.Config.Routing.Clone()
 	c.Config.Format = cloneFormat(r.Config.Format)
 	return &c
 }
