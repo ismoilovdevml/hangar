@@ -43,8 +43,8 @@ has failed for 5 minutes, so load balancers stop sending it traffic.
 the node is shutting down; it clears when the new process starts.
 
 **Fix.** Follow [HangarDependencyDown](#hangardependencydown) for the failing
-dependency. A node stuck draining for more than `server.shutdown_timeout` is
-hung on a long upload: restart it.
+dependency. A node stuck draining for more than `server.drain_delay` plus
+`server.shutdown_timeout` is hung on a long upload: restart it.
 
 ## HangarDependencyDown
 

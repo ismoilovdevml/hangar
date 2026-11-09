@@ -15,9 +15,18 @@ The schema is versioned with goose migrations embedded in the binary.
 (`database schema is out of date`) unless it migrates itself
 (`database.migrate_on_start: true` or `serve --migrate`).
 
-Only one process may migrate at a time: migrations take no cluster-wide lock.
-With several nodes, run `hangar migrate up` once (the Helm chart does this in
-a hook Job) and keep `migrate_on_start: false` on the nodes.
+Migrations run under a PostgreSQL advisory lock (per schema): when several
+processes migrate at once (nodes starting together with `migrate_on_start`,
+or `hangar migrate up` next to starting nodes), one applies the migrations
+and the others log `waiting for the migration lock`, wait for it and then find
+nothing pending. A node without `migrate_on_start` also waits for a running
+migration instead of failing. The lock needs a session-level connection:
+not PgBouncer in transaction pooling mode.
+
+With several nodes, prefer running `hangar migrate up` once before the
+rollout (the Helm chart does this in a hook Job): a failed migration then
+stops the upgrade before any node runs the new version.
+`migrate_on_start: true` on every node is safe too.
 
 Old nodes on a newer schema: a release can only be rolled out node by node if
 its changelog entry says its migrations are compatible with the previous
@@ -77,7 +86,8 @@ sudo systemctl restart hangar     # migrate_on_start: true
 journalctl -u hangar -n 50
 ```
 
-Several nodes (`migrate_on_start: false`):
+Several nodes (with `migrate_on_start: true` on every node, restarting them
+in turn is enough; otherwise migrate first):
 
 ```bash
 # on one node, with the new binary and the same configuration

@@ -9,9 +9,10 @@ dashboards and alerts shipped in `deploy/observability/`. Alert runbooks are in
 
 1. **Metrics** are served at `/metrics` on every node (`metrics.enabled`,
    `metrics.path`). Scrape each node with a job named `hangar`; see
-   `deploy/observability/prometheus/prometheus.example.yml`. `/metrics` has no
-   authentication: keep it on an internal network or block it at the reverse
-   proxy.
+   `deploy/observability/prometheus/prometheus.example.yml`. By default
+   `/metrics` has no authentication: keep it on an internal network, block it
+   at the reverse proxy, or protect it (see
+   [Protecting /metrics](#protecting-metrics)).
 2. **Alerts**: load `deploy/observability/prometheus/hangar-alerts.yml` as a
    rule file. Check and unit-test them with
    `promtool check rules hangar-alerts.yml` and
@@ -31,6 +32,13 @@ dashboards and alerts shipped in `deploy/observability/`. Alert runbooks are in
 |---|---|---|---|
 | `metrics.enabled` | `HANGAR_METRICS_ENABLED` | `true` | Serve the Prometheus endpoint. Metrics are recorded either way: every node adds its request, proxy cache and remote latency counters to per-minute rows in PostgreSQL (`traffic_minutes`, `upstream_minutes`, kept 62 days), which the Overview screen reads. |
 | `metrics.path` | `HANGAR_METRICS_PATH` | `/metrics` | Endpoint path. |
+| `metrics.auth` | `HANGAR_METRICS_AUTH` | `none` | `none`, `bearer` or `basic`; see [Protecting /metrics](#protecting-metrics). |
+| `metrics.bearer_token` | `HANGAR_METRICS_BEARER_TOKEN` | | Token for `auth: bearer`, at least 16 characters. Secret: environment or `secrets_dir`. |
+| `metrics.bearer_token_file` | `HANGAR_METRICS_BEARER_TOKEN_FILE` | | File holding the token instead (read on start; trailing line breaks dropped). |
+| `metrics.username` | `HANGAR_METRICS_USERNAME` | | User name for `auth: basic`. |
+| `metrics.password` | `HANGAR_METRICS_PASSWORD` | | Password for `auth: basic`, at least 16 characters. Secret. |
+| `metrics.password_file` | `HANGAR_METRICS_PASSWORD_FILE` | | File holding the password instead (read on start). |
+| `metrics.allowed_cidrs` | `HANGAR_METRICS_ALLOWED_CIDRS` | | Client networks (CIDRs or IPs, comma-separated in the variable) allowed to scrape; empty allows any. Combines with `metrics.auth`. |
 | `log.level` | `HANGAR_LOG_LEVEL` | `info` | `debug` also logs probe and scrape requests. |
 | `log.format` | `HANGAR_LOG_FORMAT` | `json` | `json` or `text`. |
 | `log.buffer_size` | `HANGAR_LOG_BUFFER_SIZE` | `5000` | Recent records each node keeps in memory for the System logs screen, 100 to 100000 (about 1 KiB each). |
@@ -45,6 +53,69 @@ Collector authentication headers come from the standard OpenTelemetry
 variables `OTEL_EXPORTER_OTLP_HEADERS` or `OTEL_EXPORTER_OTLP_TRACES_HEADERS`
 (e.g. `authorization=Bearer …`). If the collector is unreachable, export
 errors are logged at most once a minute and requests are not affected.
+
+## Protecting /metrics
+
+The endpoint exposes no secrets, but it does reveal repository names, request
+rates and the build. Pick one of:
+
+| `metrics.auth` | Prometheus sends | Wrong or missing credentials |
+|---|---|---|
+| `none` (default) | nothing | (open) |
+| `bearer` | `Authorization: Bearer <metrics.bearer_token>` | `401`, `WWW-Authenticate: Bearer realm="metrics"` |
+| `basic` | HTTP basic with `metrics.username` / `metrics.password` | `401`, `WWW-Authenticate: Basic realm="metrics"` |
+
+`metrics.allowed_cidrs` works with any mode: requests from other client
+addresses get `403` before credentials are checked. The client address is
+the TCP peer, or the `X-Forwarded-For` client when the peer is listed in
+`server.trusted_proxies`, the same address used for rate limits and the audit
+log. Tokens and passwords are compared in constant time, and wrong ones count
+towards the per-IP failed authentication limit (`security.rate_limit.failed_auth`).
+The token and password (and their files) are read on start: restart the
+nodes after rotating them; scrapes answer `401` until Prometheus has the new
+value too.
+
+Generate a token with `openssl rand -hex 32`. Prometheus configurations for
+each mode (the job must stay named `hangar`):
+
+```yaml
+# metrics.auth: none, metrics.allowed_cidrs: [10.0.5.0/24] (the Prometheus subnet)
+- job_name: hangar
+  static_configs:
+    - targets: [hangar-1.internal:8080, hangar-2.internal:8080]
+
+# metrics.auth: bearer
+- job_name: hangar
+  authorization:
+    type: Bearer
+    credentials_file: /etc/prometheus/secrets/hangar-metrics-token
+  static_configs:
+    - targets: [hangar-1.internal:8080, hangar-2.internal:8080]
+
+# metrics.auth: basic
+- job_name: hangar
+  basic_auth:
+    username: prometheus
+    password_file: /etc/prometheus/secrets/hangar-metrics-password
+  static_configs:
+    - targets: [hangar-1.internal:8080, hangar-2.internal:8080]
+```
+
+Behind TLS add `scheme: https`. With the Helm chart set `metrics.auth.mode`
+and `metrics.auth.existingSecret` (keys `metrics-token`, or
+`metrics-username` and `metrics-password`); the chart passes the secret to
+the pods and, with `metrics.serviceMonitor.enabled`, adds the matching
+`authorization` or `basicAuth` to the ServiceMonitor:
+
+```bash
+kubectl -n hangar create secret generic hangar-metrics \
+  --from-literal=metrics-token="$(openssl rand -hex 32)"
+helm upgrade hangar deploy/helm/hangar -n hangar --reuse-values \
+  --set metrics.auth.mode=bearer --set metrics.auth.existingSecret=hangar-metrics
+```
+
+Check a node with `curl -H "Authorization: Bearer $TOKEN" http://hangar-1.internal:8080/metrics | head`;
+without the header it answers `401`.
 
 ## Metrics
 

@@ -155,6 +155,13 @@ func TestQueueStreamReplicasFollowConfig(t *testing.T) {
 		t.Errorf("unchanged replicas updated the stream: %s", logs.String())
 	}
 
+	// More replicas than NATS servers is refused, and the stream is kept.
+	if _, err := NewQueue(ctx, rt.JS, QueueOptions{Replicas: 5}, log); err == nil ||
+		!strings.Contains(err.Error(), "no suitable peers") {
+		t.Fatalf("R5 on 3 servers = %v", err)
+	}
+	assertReplicas(ctx, t, rt.JS, 3)
+
 	// Scaling back down works too.
 	q1b, err := NewQueue(ctx, rt.JS, QueueOptions{Replicas: 1}, log)
 	if err != nil {

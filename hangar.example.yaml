@@ -16,7 +16,7 @@
 # storage.s3.secret_access_key, storage.s3.session_token, http.proxy_password,
 # docker.token_key, bootstrap.admin_password, security.secret_key (alias
 # HANGAR_SECRET_KEY), security.previous_secret_keys, auth.oidc.client_secret,
-# auth.ldap.bind_password.
+# auth.ldap.bind_password, metrics.bearer_token, metrics.password.
 # Deployment guides: docs/deploy/.
 
 # Directory of secret files, one per setting, named after its path in this
@@ -41,7 +41,16 @@ server:
   read_header_timeout: 10s
   # Idle keep-alive connections are closed after this long.
   idle_timeout: 120s
-  # Time in-flight requests (large uploads) get to finish on shutdown.
+  # Graceful shutdown on SIGTERM: /readyz fails at once; the node keeps
+  # serving new requests for drain_delay (so a load balancer polling /readyz
+  # takes it out of rotation), then stops listening and gives in-flight
+  # requests (large uploads) shutdown_timeout to finish. The service manager
+  # must wait at least drain_delay + shutdown_timeout before killing the
+  # process (systemd TimeoutStopSec, Kubernetes terminationGracePeriodSeconds).
+  # drain_delay: 0s to 5m; 0 stops listening at once (single node, or a load
+  # balancer that is told about shutdowns, like Kubernetes endpoints).
+  drain_delay: 0s
+  # 1s to 24h.
   shutdown_timeout: 30s
   # Reverse proxies / load balancers (CIDRs or IPs) whose X-Forwarded-For,
   # X-Forwarded-Proto and X-Forwarded-Host headers are trusted. Behind a proxy
@@ -64,13 +73,16 @@ database:
   # PostgreSQL 16+. Default: empty (required). Set HANGAR_DATABASE_URL in
   # production; percent-encode special characters in the password.
   url: "postgres://hangar@localhost:5432/hangar?sslmode=disable"
-  # Connection pool per process; size PostgreSQL max_connections for
-  # nodes x max_conns plus maintenance headroom.
+  # Connection pool per process (at least 2); size PostgreSQL
+  # max_connections for nodes x max_conns plus maintenance headroom.
   max_conns: 20
   min_conns: 2
   conn_lifetime: 1h
   # Apply pending schema migrations on `hangar serve` (default false; or run
-  # `hangar migrate up`). Let only one process migrate at a time.
+  # `hangar migrate up`). Migrations hold a PostgreSQL advisory lock, so
+  # several nodes may start with this at once: one migrates, the others wait
+  # for it. The lock needs a session-level connection (not PgBouncer in
+  # transaction pooling mode).
   migrate_on_start: true
 
 # Default blob store, registered on first start as "default".
@@ -119,6 +131,12 @@ nats:
   listen: ""
   # External cluster, e.g. nats://user:password@nats:4222.
   url: ""
+  # Replicas of every JetStream stream Hangar creates (the job queue), 1 to
+  # 5. Embedded NATS is a single server: keep 1. On a 3-node NATS cluster use
+  # 3, so queued jobs survive the loss of one NATS server. Changing it scales
+  # the existing stream when the next node starts; it must not exceed the
+  # number of NATS servers.
+  replicas: 1
 
 # Outbound HTTP for proxy repositories (Maven Central, npmjs, Docker Hub, ...).
 # Each proxy repository inherits these settings and can override proxy, CA
@@ -331,10 +349,29 @@ scanning:
     url: https://api.osv.dev
 
 metrics:
-  # Serve Prometheus metrics (no authentication: keep the path off public
-  # hosts). Metrics are recorded either way for the Overview screen.
+  # Serve Prometheus metrics. Metrics are recorded either way for the
+  # Overview screen.
   enabled: true
   path: /metrics
+  # Authentication for the endpoint: none, bearer or basic. With none, keep
+  # the path off public hosts (block it at the reverse proxy) or use
+  # allowed_cidrs. Scrape configurations: docs/operations/monitoring.md.
+  auth: none
+  # auth=bearer: clients send "Authorization: Bearer <token>". At least 16
+  # characters (`openssl rand -hex 32`). Set the token or a file holding it
+  # (read on start), not both.
+  bearer_token: "" # use HANGAR_METRICS_BEARER_TOKEN
+  bearer_token_file: ""
+  # auth=basic: HTTP basic authentication. Password at least 16 characters,
+  # set directly or from a file (read on start), not both.
+  username: ""
+  password: "" # use HANGAR_METRICS_PASSWORD
+  password_file: ""
+  # Clients allowed to scrape (CIDRs or IPs); empty allows any. Applies in
+  # addition to auth. The client address is taken from X-Forwarded-For only
+  # when the request comes from server.trusted_proxies.
+  allowed_cidrs: []
+  #  - 10.0.0.0/8
 
 # Encryption of stored credentials and HTTP hardening. See docs/security.md.
 security:

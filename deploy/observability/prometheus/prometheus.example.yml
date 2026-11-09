@@ -16,5 +16,13 @@ scrape_configs:
       - targets:
           - hangar-1.internal:8080
           - hangar-2.internal:8080
-    # If /metrics is reachable from untrusted networks, restrict it at the
-    # reverse proxy instead of exposing it publicly.
+    # If /metrics is reachable from untrusted networks, protect it
+    # (metrics.auth, metrics.allowed_cidrs; docs/operations/monitoring.md)
+    # or block it at the reverse proxy. With metrics.auth: bearer:
+    # authorization:
+    #   type: Bearer
+    #   credentials_file: /etc/prometheus/secrets/hangar-metrics-token
+    # With metrics.auth: basic:
+    # basic_auth:
+    #   username: prometheus
+    #   password_file: /etc/prometheus/secrets/hangar-metrics-password

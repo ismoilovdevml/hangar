@@ -131,7 +131,10 @@ after the first sign-in ([first-admin.md](first-admin.md)).
 | `storage.kind` | `s3` (recommended). `fs` with a PersistentVolumeClaim: `ReadWriteOnce` for one replica (the Deployment switches to `Recreate`), `ReadWriteMany` for more. The claim is kept on uninstall. |
 | `storage.s3` credentials | `existingSecret` / `accessKeyID`+`secretAccessKey`, or none: the AWS default chain (IRSA, EKS Pod Identity) with `serviceAccount.annotations`. |
 | `nats.mode` | `bundled` (default), `external` (`nats.external.url` or `existingSecret`, JetStream required), `embedded` (one replica only). |
-| `migrations.mode` | `job` (default), `onStart` (one replica only), `none` (you run `hangar migrate up`). |
+| `nats.streamReplicas` | Replicas of the job stream (`nats.replicas`), 1 to 5. `0` (default): `nats.bundled.replicas` for `bundled`, 1 otherwise. See [high-availability.md](high-availability.md#job-queue-replicas). |
+| `migrations.mode` | `job` (default), `onStart` (every pod migrates on start; an advisory lock lets one apply and the others wait), `none` (you run `hangar migrate up`). |
+| `metrics.auth.mode` | `none` (default), `bearer` or `basic`, with the credentials in `metrics.auth.existingSecret`; the ServiceMonitor sends them. See [monitoring.md](../operations/monitoring.md#protecting-metrics). |
+| `config.server.drain_delay` | Time a terminating pod keeps serving with `/readyz` failing (default `0s`; the pre-stop sleep covers Kubernetes 1.30+). Keep `terminationGracePeriodSeconds` above `lifecycle.preStopSleepSeconds + drain_delay + shutdown_timeout`. See [high-availability.md](high-availability.md#draining-nodes). |
 
 ## GitOps (Argo CD, Flux)
 
