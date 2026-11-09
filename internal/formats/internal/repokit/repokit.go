@@ -414,6 +414,11 @@ func (b *Base) Sign(ctx context.Context, repo *core.Repository, kind string, doc
 	if ok {
 		return sig, nil
 	}
+	// A signature older than its key does not verify (gpg reports a time
+	// conflict), as happens for a document from before a key rotation.
+	if at.Before(key.CreatedAt()) {
+		at = b.Now()
+	}
 	if kind == SignClear {
 		sig, err = key.ClearSign(doc, at)
 	} else {

@@ -38,6 +38,7 @@ type fixture struct {
 	env    *coretest.Env
 	h      http.Handler
 	hosted *core.Repository
+	signer *signing.Service
 }
 
 func newSigner(t *testing.T) *signing.Service {
@@ -61,7 +62,8 @@ func newFixture(t *testing.T) *fixture {
 	env.AuthZ.Grant("alice", "repo:*:read", "repo:apt-hosted:write", "repo:apt-hosted:delete", "repo:apt-other:write")
 	env.AuthZ.Grant("bob", "repo:*:read")
 	env.AuthZ.Grant("system", "repo:*:admin")
-	f.h = formats.NewHandler(env.Deps(), apt.New(newSigner(t)))
+	f.signer = newSigner(t)
+	f.h = formats.NewHandler(env.Deps(), apt.New(f.signer))
 	return f
 }
 
@@ -688,5 +690,44 @@ func TestGPGVVerifiesInRelease(t *testing.T) {
 		if err != nil || !strings.Contains(string(out), "Good signature") {
 			t.Fatalf("gpgv %v: %v\n%s", args, err, out)
 		}
+	}
+}
+
+// After a key rotation the unchanged Release is signed again by the new key,
+// with a signature time after the key's creation (gpg rejects older ones).
+func TestRotationResigns(t *testing.T) {
+	f := newFixture(t)
+	f.upload(t, "apt-hosted", "", apttest.Package{Name: "hello", Version: "1.0", Architecture: "amd64"})
+	old := keyring(t, f, "apt-hosted")
+	time.Sleep(1100 * time.Millisecond) // key times have one-second resolution
+	if _, err := f.signer.Rotate(t.Context(), f.hosted, ""); err != nil {
+		t.Fatal(err)
+	}
+	el := keyring(t, f, "apt-hosted")
+	if el[0].PrimaryKey.KeyId == old[0].PrimaryKey.KeyId {
+		t.Fatal("key not rotated")
+	}
+	verifiedRelease(t, f, "apt-hosted", "stable")
+	in := f.get(t, "/repository/apt-hosted/dists/stable/InRelease")
+	b, _ := clearsign.Decode(in)
+	if _, err := b.VerifySignature(old, nil); err == nil {
+		t.Fatal("old key still verifies")
+	}
+	gpgv, err := exec.LookPath("gpgv")
+	if err != nil {
+		return
+	}
+	dir := t.TempDir()
+	writeTemp := func(n string, data []byte) string {
+		p := filepath.Join(dir, n)
+		if err := os.WriteFile(p, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	key := writeTemp("key.gpg", f.get(t, "/repository/apt-hosted/public.gpg"))
+	out, err := exec.CommandContext(t.Context(), gpgv, "--keyring", key, writeTemp("InRelease", in)).CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "Good signature") {
+		t.Fatalf("gpgv after rotation: %v\n%s", err, out)
 	}
 }
