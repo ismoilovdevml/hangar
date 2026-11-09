@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
 func TestAuthPresence(t *testing.T) {
@@ -176,5 +177,29 @@ func TestUpdateUpstreamAuth(t *testing.T) {
 		if strings.Contains(string(raw), secret) {
 			t.Errorf("audit trail contains %q: %s", secret, raw)
 		}
+	}
+}
+
+// TestUpstreamAuthFailureStatus: a proxy whose remote refuses its
+// credentials reports why, on the repository and in upstream health.
+func TestUpstreamAuthFailureStatus(t *testing.T) {
+	f := newFixture(t)
+	f.seedRepos()
+	f.api.Catalog = fakeCatalog{}
+	f.api.Upstreams = fakeUpstreams{"npm-proxy": {Name: "npm-proxy", State: proxy.StateBlocked, Reason: proxy.ReasonAuthFailed}}
+	var repo repositoryJSON
+	_ = json.Unmarshal(f.expect("admin", "GET", "/api/v1/repositories/npm-proxy", nil, 200), &repo)
+	if repo.Status != "blocked" || repo.StatusReason != "auth_failed" {
+		t.Errorf("repository = %s %q", repo.Status, repo.StatusReason)
+	}
+	var up struct{ Items []upstreamHealthJSON }
+	_ = json.Unmarshal(f.expect("admin", "GET", "/api/v1/upstreams/health", nil, 200), &up)
+	if len(up.Items) != 1 || up.Items[0].State != "blocked" || up.Items[0].Reason != "auth_failed" {
+		t.Errorf("health = %+v", up.Items)
+	}
+	// Healthy repositories carry no reason.
+	b := f.expect("admin", "GET", "/api/v1/repositories/npm-hosted", nil, 200)
+	if strings.Contains(string(b), "status_reason") {
+		t.Errorf("hosted = %s", b)
 	}
 }

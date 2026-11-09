@@ -13,6 +13,8 @@ type upstreamHealthJSON struct {
 	Name  string `json:"name"`
 	URL   string `json:"url"`
 	State string `json:"state"` // healthy, slow, blocked, offline, unknown
+	// Reason is set for blocked: auth_failed, access_denied, address_blocked.
+	Reason string `json:"reason,omitempty"`
 	// LatencyMS is the median time to response headers over the range; nil
 	// without remote requests in it.
 	LatencyMS *int64 `json:"latency_ms"`
@@ -65,14 +67,14 @@ func (a *API) upstreamHealth(w http.ResponseWriter, r *http.Request) {
 		}
 		j := upstreamHealthJSON{Name: repo.Name, URL: core.RedactURL(repo.Config.Proxy.RemoteURL), State: "unknown"}
 		if h, ok := up[repo.Name]; ok {
-			j.State = string(h.State)
+			j.State, j.Reason = string(h.State), string(h.Reason)
 		}
 		if a.Traffic != nil {
 			h := latency[repo.Name]
 			j.LatencyMS, j.Requests = latencyMS(h, 0.5), ptr(h.Total())
 		}
 		if !repo.Online {
-			j.State = "offline"
+			j.State, j.Reason = "offline", ""
 		}
 		items = append(items, j)
 	}

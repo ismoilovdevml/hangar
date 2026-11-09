@@ -36,20 +36,23 @@ type repositoryInput struct {
 
 // repositoryJSON is schema Repository.
 type repositoryJSON struct {
-	ID             string          `json:"id"`
-	Name           string          `json:"name"`
-	Format         string          `json:"format"`
-	Type           core.RepoType   `json:"type"`
-	Description    string          `json:"description"`
-	BlobStore      string          `json:"blob_store,omitempty"`
-	Online         bool            `json:"online"`
-	Config         core.RepoConfig `json:"config"`
-	URL            string          `json:"url"`
-	Status         string          `json:"status"`
-	SizeBytes      int64           `json:"size_bytes"`
-	ComponentCount int64           `json:"component_count"`
-	CreatedAt      time.Time       `json:"created_at"`
-	UpdatedAt      time.Time       `json:"updated_at"`
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	Format      string          `json:"format"`
+	Type        core.RepoType   `json:"type"`
+	Description string          `json:"description"`
+	BlobStore   string          `json:"blob_store,omitempty"`
+	Online      bool            `json:"online"`
+	Config      core.RepoConfig `json:"config"`
+	URL         string          `json:"url"`
+	Status      string          `json:"status"`
+	// StatusReason says why a proxy is "blocked": auth_failed (401),
+	// access_denied (403) or address_blocked (outbound address policy).
+	StatusReason   string    `json:"status_reason,omitempty"`
+	SizeBytes      int64     `json:"size_bytes"`
+	ComponentCount int64     `json:"component_count"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 	// LastActivityAt is the latest upload, cache fill or download; null when none.
 	LastActivityAt *time.Time `json:"last_activity_at"`
 }
@@ -154,6 +157,9 @@ func (a *API) toRepositoryJSON(r *core.Repository, stats map[string]catalog.Repo
 		ID: r.ID, Name: r.Name, Format: r.Format, Type: r.Type, Description: r.Description, BlobStore: r.BlobStore,
 		Online: r.Online, Config: redactConfig(r.Config), URL: a.repoURL(r), Status: repoStatus(r, up),
 		SizeBytes: st.SizeBytes, ComponentCount: st.ComponentCount, CreatedAt: r.CreatedAt.UTC(), UpdatedAt: r.UpdatedAt.UTC(),
+	}
+	if j.Status == "blocked" {
+		j.StatusReason = string(up[r.Name].Reason)
 	}
 	if !st.LastActivityAt.IsZero() {
 		last := st.LastActivityAt

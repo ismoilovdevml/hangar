@@ -457,6 +457,7 @@ func UpstreamsCheck(list UpstreamLister) Check {
 	return Check{Name: "upstreams", Label: "Upstream proxies", Run: func(ctx context.Context) Result {
 		counts := map[proxy.State]int{}
 		bad := map[proxy.State][]string{}
+		denied := map[proxy.Reason][]string{}
 		var hosts []string
 		total := 0
 		slowest := int64(-1)
@@ -475,7 +476,11 @@ func UpstreamsCheck(list UpstreamLister) Check {
 				if u, err := url.Parse(it.URL); err == nil && u.Host != "" && !slices.Contains(hosts, u.Host) {
 					hosts = append(hosts, u.Host)
 				}
-				if it.State == proxy.StateOffline || it.State == proxy.StateBlocked {
+				switch {
+				case it.State == proxy.StateBlocked && authReason[it.Reason] != "":
+					// Credentials, not the network: told apart below.
+					denied[it.Reason] = append(denied[it.Reason], it.Name)
+				case it.State == proxy.StateOffline || it.State == proxy.StateBlocked:
 					bad[it.State] = append(bad[it.State], it.Name)
 				}
 			}
@@ -496,8 +501,17 @@ func UpstreamsCheck(list UpstreamLister) Check {
 		order := []proxy.State{proxy.StateHealthy, proxy.StateSlow, proxy.StateBlocked, proxy.StateOffline}
 		var parts []string
 		for _, s := range order[1:] {
-			if counts[s] > 0 {
-				parts = append(parts, fmt.Sprintf("%d %s", counts[s], s))
+			n := counts[s]
+			if s == proxy.StateBlocked {
+				n = len(bad[s]) // credential failures are listed on their own
+			}
+			if n > 0 {
+				parts = append(parts, fmt.Sprintf("%d %s", n, s))
+			}
+		}
+		for _, r := range authReasons {
+			if names := denied[r]; len(names) > 0 {
+				parts = append(parts, fmt.Sprintf("%d %s", len(names), authReason[r]))
 			}
 		}
 		for _, s := range order {
@@ -509,6 +523,12 @@ func UpstreamsCheck(list UpstreamLister) Check {
 				res.Facts = append(res.Facts, Fact{titleCase(string(s)) + " remotes", listNames(names, 5)})
 			}
 		}
+		for _, r := range authReasons {
+			if names := denied[r]; len(names) > 0 {
+				sort.Strings(names)
+				res.Facts = append(res.Facts, Fact{titleCase(authReason[r]), listNames(names, 5)})
+			}
+		}
 		res.Detail = fmt.Sprintf("%d of %d healthy", counts[proxy.StateHealthy], total)
 		if len(parts) > 0 {
 			res.Detail += " · " + strings.Join(parts, ", ")
@@ -516,12 +536,25 @@ func UpstreamsCheck(list UpstreamLister) Check {
 		if len(hosts) > 0 && len(hosts) <= 2 {
 			res.Detail += " · " + strings.Join(hosts, ", ")
 		}
-		if len(bad[proxy.StateOffline])+len(bad[proxy.StateBlocked]) > 0 {
+		if len(denied) > 0 {
+			res.Detail += " · check the proxy credentials"
+		}
+		if len(bad[proxy.StateOffline])+len(bad[proxy.StateBlocked])+len(denied) > 0 {
 			res.Status = StatusDegraded
 		}
 		return res
 	}}
 }
+
+// authReasons are the blocked reasons that are credential problems, in
+// report order, with their wording.
+var (
+	authReasons = []proxy.Reason{proxy.ReasonAuthFailed, proxy.ReasonAccessDenied}
+	authReason  = map[proxy.Reason]string{
+		proxy.ReasonAuthFailed:   "authentication failed (401)",
+		proxy.ReasonAccessDenied: "access denied (403)",
+	}
+)
 
 func titleCase(s string) string {
 	if s == "" {
