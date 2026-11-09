@@ -431,7 +431,7 @@ Some errors add `retry_after` (seconds) or `details`.
 | 405 | `method_not_allowed` | |
 | 409 | `already_exists` (or `conflict` on `/users`, `/roles`, `/tokens`), `write_denied`, `already_running`, `not_running`, `managed` | name taken; write policy refused; task or policy run state |
 | 413 | `body_too_large` | request body over `security.limits.api_body_bytes` (1 MiB) |
-| 423 | `locked` | account locked after failed password checks (`Retry-After` set) |
+| 423 | `locked` | this address is locked out of the username after failed password checks (`Retry-After` set) |
 | 429 | `rate_limited` | a rate limit below was hit (`Retry-After` set) |
 | 501 | `not_implemented` | endpoint described in `openapi.yaml` but not available yet |
 | 502 | `upstream_unavailable` | a proxy remote failed |
@@ -449,7 +449,7 @@ every client behind a reverse proxy shares the proxy's budget.
 | API requests (`/api/v1`) | 1200 per minute, burst 300 | `security.rate_limit.api` |
 | Failed authentications (`401`) on the API and package endpoints | 30 per minute, burst 30 | `security.rate_limit.failed_auth` |
 | Sign-in attempts (`POST /auth/login`) | 10 per minute, burst 10 | `auth.login_rate` |
-| Failed password checks per account | 5 in 15 minutes, then locked 15 minutes (`423`) | `auth.lockout` |
+| Failed password checks per username and address | 5 in 15 minutes, then that address is locked out 15 minutes (`423`); from 10 failures from all addresses attempts are slowed down | `auth.lockout` |
 
 Clients should retry only `429` and `5xx` answers, after the `Retry-After`
 seconds (also `retry_after` in the body), with backoff; other `4xx` answers will

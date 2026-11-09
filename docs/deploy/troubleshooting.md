@@ -54,7 +54,8 @@ During shutdown a node answers 503 on purpose (draining).
 | `docker push` to `registry.example.com` fails on the token request | The registry host is reachable but the UI host (realm) is not. | Make `server.base_url` reachable from Docker clients too. |
 | Every client gets 429 at once | All clients appear with the proxy's IP and share one rate-limit bucket. | Set `server.trusted_proxies` to the proxy's address. |
 | 429 for one client with valid credentials | That IP had many failed authentications (`security.rate_limit.failed_auth`), e.g. a CI job with an expired token. | Fix the client's credentials; the bucket refills within minutes. |
-| `423 Locked` on sign-in | Account locked after repeated wrong passwords (`auth.lockout`). | Wait 15 minutes or unlock it as an administrator. |
+| `423 Locked` on sign-in | This address is locked out of the username after repeated wrong passwords (`auth.lockout`). | Wait 15 minutes, sign in from another address, or unlock it as an administrator. |
+| Server does not start: `... is the public development key from deploy/docker-compose.yml` | The configuration uses a key published for development. | Generate your own (`openssl rand -base64 32` for `security.secret_key`, `openssl rand -base64 48` for `docker.token_key`). `server.dev_mode: true` is for development servers only. |
 | Browser sign-in does not stick over plain HTTP | Session cookies are `Secure`. | Use HTTPS. Only for a lab on plain HTTP (not localhost), `auth.session.insecure: true`. |
 | Links in npm metadata or the UI point at `localhost` or the wrong host | `server.base_url` not set. | Set it; generated links never use the request's `Host`. |
 | `501` when saving a proxy repository with credentials or a blob store with keys | No `security.secret_key`. | Set `HANGAR_SECRET_KEY` on every node and restart ([security.md](../security.md)). |

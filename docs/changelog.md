@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+- **Security fixes** (see `docs/security.md`, privilege escalation model and
+  sign-in lockout):
+  - Groups expose only what their author may read: adding a member needs
+    `repo:<member>:read` on it and on everything a nested group member
+    reaches, a write member needs `repo:<member>:write`, and opening a group
+    to anonymous readers needs read on all of it. `system:repos:admin` alone
+    no longer reaches content through a group. Refusals are audited.
+  - User and role management cannot grant more than the caller holds:
+    creating or changing roles, binding roles and creating members with roles
+    need the caller to cover every privilege; setting a password, disabling,
+    enabling, editing, deleting and signing out another account need covering
+    everything it holds, so only holders of `system:*` manage administrators.
+    `system:tokens:write` issues service-account tokens only for accounts the
+    caller covers.
+  - A password set by another member (reset or edit) must be replaced at the
+    next sign-in.
+  - `/v2/token` reloads the account before renewing a registry token: a
+    disabled member, a revoked token or a removed role no longer renews it,
+    and a renewal never outlives the first token of its chain.
+  - Lockout is per username and client address (migration 00290), with a
+    per-username slow-down (`auth.lockout.slowdown_after`, `max_delay`)
+    instead of locking an account for everyone. Unknown usernames are counted
+    and answered the same way, so `423` no longer reveals which accounts
+    exist.
+  - The server refuses to start with the public development keys of
+    `deploy/docker-compose.yml` unless `server.dev_mode` is set (the
+    development compose file sets it).
+  - New installations protect `/metrics` with a generated bearer token
+    (`secrets/metrics.bearer_token`, `metrics.auth: bearer`); a server with an
+    open `/metrics` logs a warning on start.
+  - **Upgrade notes**: groups created earlier by someone who could not read
+    a member are not changed; review the members of your groups (and which
+    are anonymous). Members whose password an administrator sets must now
+    choose a new one at the next sign-in. Helpdesk-style roles with only
+    `system:users:write` can no longer manage members who hold more than they
+    do. Upgraded installations keep their `metrics.auth` (`none` unless you
+    changed it). A server started with the development keys outside the
+    development compose file must get its own keys, or `server.dev_mode`.
+
 - **Move to Hangar: import and pre-warm tasks** (issue #74, guide
   `docs/guides/migrate.md`):
   - `repository_import` copies packages from any registry that speaks a
