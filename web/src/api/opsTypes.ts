@@ -86,13 +86,3 @@ export type SystemStatusDetail = SystemStatus & {
   registry_host?: string;
 };
 
-/**
- * Effective configuration with secrets already masked by the server (not in
- * the contract yet: `GET /system/config`, admin only). Nested objects use the
- * same snake_case keys as hangar.yaml.
- */
-export interface SystemConfig {
-  config: Record<string, unknown>;
-  /** Where values came from, keyed by dotted path ("server.base_url": "env"). */
-  sources?: Record<string, 'default' | 'file' | 'env'>;
-}
