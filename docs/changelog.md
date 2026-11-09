@@ -6,6 +6,16 @@
   `helm install`, `helm pull --verify` with provenance files, `helm cm-push` and
   `curl --upload-file` uploads, a generated and cached `index.yaml`, and the
   ChartMuseum read API. Guide: `docs/guides/helm.md`.
+- **Go modules** (`go` format): the GOPROXY protocol (`@v/list`, `.info`,
+  `.mod`, `.zip`, `@latest`, case-encoded paths) for hosted, proxy and group
+  repositories. Proxies of `proxy.golang.org` or any GOPROXY cache versions
+  forever and lists for `metadata_ttl`; 404/410 keep `GOPROXY=a,b` fallback
+  working. Hosted modules are published with `PUT .../@v/<version>.zip`
+  (validated against the module zip rules; optional `.mod` and `.info`),
+  write-once under `allow_once`, deleted with `DELETE .../@v/<version>`.
+  Proxies pass the `sum.golang.org` checksum database through. Browse tree,
+  README and licence from the module zip, OSV scanning. Guide:
+  `docs/guides/go.md`.
 - **Automation-friendly API**: the OpenAPI document is public at
   `/api/v1/openapi.yaml` and `/api/v1/openapi.json`; `/api/v1/automation-guide.md`
   and `/llms.txt` give scripts and automated clients a short guide with the
