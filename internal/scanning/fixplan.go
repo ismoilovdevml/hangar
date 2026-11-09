@@ -124,6 +124,13 @@ type PlanFinding struct {
 	InUse       bool       `json:"in_use"`
 	Pulls       int64      `json:"pulls"`
 	Clients     int        `json:"clients"`
+	// Package is the vulnerable package: the plan's package, or for an
+	// image the package inside it. Version is the component version (the
+	// tag of an image). Location and Image locate it inside an image.
+	Package  string        `json:"package"`
+	Version  string        `json:"version"`
+	Location string        `json:"location"`
+	Image    *ImageDetails `json:"image"`
 
 	affected      string
 	fixedVersions []string
@@ -158,6 +165,9 @@ type PackagePlan struct {
 	Assignee      *string        `json:"assignee"`
 	AssigneeMixed bool           `json:"assignee_mixed"`
 	Items         []*PlanFinding `json:"items"`
+	// Image is set for container images (format docker): the packages
+	// inside them to fix by rebuilding.
+	Image *ImagePlan `json:"image"`
 }
 
 // PackageKey is the key of a package plan.
@@ -184,8 +194,8 @@ func (s *store) planFindings(ctx context.Context, q FixPlanQuery) ([]*PlanFindin
 	}
 	rows, err := s.pool.Query(ctx, `SELECT f.id::text, f.advisory_id, f.aliases, f.title, f.severity, f.cvss::float8, f.status,
 		f.package, f.installed, f.fixed_in, f.fixed_versions, f.affected, f.assignee, f.waiver_until,
-		c.id::text, c.last_downloaded_at, r.name, r.format, c.name`+findingFrom+` WHERE `+strings.Join(where, " AND ")+
-		` ORDER BY f.package, f.id`, b.args...)
+		c.id::text, c.last_downloaded_at, r.name, r.format, c.name, `+planKeyExpr("f", "c", "r")+`, c.version, f.location, f.image`+
+		findingFrom+` WHERE `+strings.Join(where, " AND ")+` ORDER BY f.package, f.id`, b.args...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("fix plan: %w", err)
 	}
@@ -193,12 +203,14 @@ func (s *store) planFindings(ctx context.Context, q FixPlanQuery) ([]*PlanFindin
 	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (*PlanFinding, error) {
 		var f PlanFinding
 		var pkg, format string
-		err := r.Scan(&f.ID, &f.AdvisoryID, &f.Aliases, &f.Title, &f.Severity, &f.CVSS, &f.Status, &pkg, &f.Installed,
+		var image []byte
+		err := r.Scan(&f.ID, &f.AdvisoryID, &f.Aliases, &f.Title, &f.Severity, &f.CVSS, &f.Status, &f.Package, &f.Installed,
 			&f.FixedIn, &f.fixedVersions, &f.affected, &f.Assignee, &f.WaiverUntil, &f.ComponentID, &f.lastDownload,
-			&f.Repository, &format, &f.binary)
+			&f.Repository, &format, &f.binary, &pkg, &f.Version, &f.Location, &image)
 		if err != nil {
 			return nil, err
 		}
+		f.Image = decodeImage(image)
 		f.Aliases = nonNil(f.Aliases)
 		if f.WaiverUntil != nil {
 			v := f.WaiverUntil.UTC()
@@ -408,11 +420,17 @@ func packagePlan(key string, list []*PlanFinding, byComp map[string]*pullAgg) *P
 	format, pkg, _ := strings.Cut(key, ":")
 	p := &PackagePlan{Key: key, Format: format, Package: pkg, Findings: len(list), MaxSeverity: "unknown", Items: list}
 	repos, versions, comps := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	image := format == FormatDocker
 	advisories := map[string]*Advisory{}
 	assignees := map[string]bool{}
 	unassigned := false
 	for _, f := range list {
-		repos[f.Repository], versions[f.Installed], comps[f.ComponentID] = true, true, true
+		repos[f.Repository], comps[f.ComponentID] = true, true
+		if image {
+			versions[f.Version] = true // the tags
+		} else {
+			versions[f.Installed] = true
+		}
 		if severityOrder(f.Severity) < severityOrder(p.MaxSeverity) {
 			p.MaxSeverity = f.Severity
 		}
@@ -468,7 +486,12 @@ func packagePlan(key string, list []*PlanFinding, byComp map[string]*pullAgg) *P
 		return cmp.Or(cmp.Compare(severityOrder(a.Severity), severityOrder(b.Severity)), -cmp.Compare(cvssOf(a.CVSS), cvssOf(b.CVSS)),
 			order(a.Installed, b.Installed), strings.Compare(a.AdvisoryID, b.AdvisoryID), strings.Compare(a.ID, b.ID))
 	})
-	p.Upgrades = Upgrades(format, pkg, list)
+	if image {
+		p.Image = imagePlan(list)
+		p.Upgrades = []UpgradeLine{imageUpgrade(p.Versions, list, p.Image)}
+	} else {
+		p.Upgrades = Upgrades(format, pkg, list)
+	}
 	for _, u := range p.Upgrades {
 		p.Fixable += u.Fixes
 	}

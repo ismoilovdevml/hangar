@@ -191,7 +191,7 @@ func (s *store) packageFindings(ctx context.Context, repoIDs []string, key strin
 		return nil, fmt.Errorf("package %q: want <format>:<package>: %w", key, core.ErrInvalid)
 	}
 	var b builder
-	where := " WHERE r.format = " + b.arg(format) + " AND f.package = " + b.arg(pkg) + " AND f.status <> 'fixed'"
+	where := " WHERE r.format = " + b.arg(format) + " AND " + planKeyExpr("f", "c", "r") + " = " + b.arg(pkg) + " AND f.status <> 'fixed'"
 	if repoIDs != nil {
 		where += " AND c.repo_id = ANY(" + b.arg(repoIDs) + "::uuid[])"
 	}
@@ -337,7 +337,7 @@ func (s *Service) RescanAll(ctx context.Context) (*Rescan, bool, error) {
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, rescanLockKey); err != nil {
 			return err
 		}
-		cur, err := latestRescan(ctx, tx, s.now())
+		cur, err := latestRescan(ctx, tx, s.scannableSQL("r"), s.now())
 		if err != nil {
 			return err
 		}
@@ -346,7 +346,7 @@ func (s *Service) RescanAll(ctx context.Context) (*Rescan, bool, error) {
 			return nil
 		}
 		rows, err := tx.Query(ctx, `SELECT r.id::text FROM repositories r
-			WHERE `+ScannableSQL("r")+` AND EXISTS (SELECT 1 FROM components c WHERE c.repo_id = r.id) ORDER BY r.name`)
+			WHERE `+s.scannableSQL("r")+` AND EXISTS (SELECT 1 FROM components c WHERE c.repo_id = r.id) ORDER BY r.name`)
 		if err != nil {
 			return err
 		}
@@ -360,7 +360,7 @@ func (s *Service) RescanAll(ctx context.Context) (*Rescan, bool, error) {
 			return err
 		}
 		started = true
-		run, err = latestRescan(ctx, tx, s.now())
+		run, err = latestRescan(ctx, tx, s.scannableSQL("r"), s.now())
 		return err
 	})
 	if err != nil {
@@ -382,7 +382,7 @@ func (s *Service) RescanAll(ctx context.Context) (*Rescan, bool, error) {
 
 // LatestRescan returns the last rescan of everything with its progress, or nil.
 func (s *Service) LatestRescan(ctx context.Context) (*Rescan, error) {
-	run, err := latestRescan(ctx, s.opts.Pool, s.now())
+	run, err := latestRescan(ctx, s.opts.Pool, s.scannableSQL("r"), s.now())
 	if err != nil {
 		return nil, fmt.Errorf("rescan: %w", err)
 	}
@@ -393,13 +393,13 @@ type querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-func latestRescan(ctx context.Context, q querier, now time.Time) (*Rescan, error) {
+func latestRescan(ctx context.Context, q querier, scannable string, now time.Time) (*Rescan, error) {
 	var r Rescan
 	err := q.QueryRow(ctx, `SELECT v.id::text, v.started_at, v.started_by, v.repositories,
 		(SELECT count(*) FROM components c JOIN repositories r ON r.id = c.repo_id
-			WHERE `+ScannableSQL("r")+` AND c.created_at <= v.started_at),
+			WHERE `+scannable+` AND c.created_at <= v.started_at),
 		(SELECT count(*) FROM components c JOIN repositories r ON r.id = c.repo_id JOIN component_scans s ON s.component_id = c.id
-			WHERE `+ScannableSQL("r")+` AND c.created_at <= v.started_at AND s.scanned_at >= v.started_at)
+			WHERE `+scannable+` AND c.created_at <= v.started_at AND s.scanned_at >= v.started_at)
 		FROM vulnerability_rescans v ORDER BY v.started_at DESC LIMIT 1`).
 		Scan(&r.ID, &r.StartedAt, &r.StartedBy, &r.Repositories, &r.Total, &r.Done)
 	if errors.Is(err, pgx.ErrNoRows) {
