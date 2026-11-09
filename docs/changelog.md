@@ -66,6 +66,26 @@
     sends the database downloads through a corporate proxy and
     `--without-trivy` turns it off. The Helm chart gets `imageScanning`.
     Guide: `docs/guides/vulnerabilities.md#container-images`.
+- **Faster repository list** (issue #68): `GET /api/v1/repositories` and
+  `GET /api/v1/repositories/{name}` no longer aggregate every asset on each
+  request. Database triggers log each asset and component change in the
+  writer's transaction, and the totals are folded into stored rows: by a
+  background loop every 5 s, and before each read, so a client sees its own
+  uploads at once. Groups keep reference counts of the blobs and versions
+  their members serve, so a shared blob or version is still counted once.
+  Every hour the totals are recounted from scratch; any difference is
+  repaired and logged as a warning. With 50 repositories and 100k assets the
+  list drops from about 440 ms to 2 ms (median). Migration 00275 adds the
+  tables, the triggers and an index for last activity; the first fold after
+  the upgrade counts the existing content (about 1.5 s per 100k assets).
+- **Client cancellation is not an error**: an API request whose client goes
+  away (for example by leaving a page) is logged at debug level and answered
+  with status 499. It is no longer logged as `ERROR ... context canceled`
+  or counted as a server error. The access log also logs a 5xx caused by a
+  departed client at debug level.
+- **Search**: the total and the facets of dimensions the query does not
+  filter on come from one statement instead of four. `GET /api/v1/search`
+  takes about 35% less time with 33k components.
 - **Cluster operations** (issue #34):
   - `nats.replicas` (1 to 5, default 1) sets the replica count of the
     JetStream job stream. Every node creates or scales the stream on start,

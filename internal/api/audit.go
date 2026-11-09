@@ -126,6 +126,6 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	if err := a.Audit.Export(ctx, q, format, flushWriter{w: w, rc: http.NewResponseController(w)}); err != nil {
 		// Headers are sent; the client sees a truncated download.
-		a.logger().ErrorContext(ctx, "audit export failed", "error", err)
+		a.logFailure(r, "audit export failed", err)
 	}
 }

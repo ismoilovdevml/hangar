@@ -273,7 +273,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 	}
 	h, err := a.eventHub(ctx)
 	if err != nil {
-		a.logger().ErrorContext(ctx, "event stream unavailable", "error", err)
+		a.logFailure(r, "event stream unavailable", err)
 		WriteError(w, http.StatusServiceUnavailable, "unavailable", "event stream unavailable")
 		return
 	}

@@ -66,6 +66,13 @@ func TestCleanupAndTasksAPI(t *testing.T) {
 		t.Errorf("status urls = %+v", st)
 	}
 
+	// The repository totals before the cleanup run.
+	var repo repositoryJSON
+	_ = json.Unmarshal(f.expect("admin", "GET", "/api/v1/repositories/raw-hosted", nil, 200), &repo)
+	if repo.SizeBytes != 1000 || repo.ComponentCount != 2 {
+		t.Fatalf("totals before cleanup = %d bytes, %d components", repo.SizeBytes, repo.ComponentCount)
+	}
+
 	// Preview -> save -> run.
 	in := map[string]any{"name": "old-tools", "criteria": map[string]any{"older_than_days": 30, "keep_newest": 1},
 		"repositories": []string{"raw-hosted"}, "schedule": "0 2 * * *"}
@@ -111,6 +118,10 @@ func TestCleanupAndTasksAPI(t *testing.T) {
 	if run.Status != tasks.StatusSucceeded || run.ComponentsDeleted == nil || *run.ComponentsDeleted != 1 ||
 		run.BytesFreed == nil || *run.BytesFreed != 500 || run.Log != nil {
 		t.Fatalf("run = %+v", run)
+	}
+	_ = json.Unmarshal(f.expect("admin", "GET", "/api/v1/repositories/raw-hosted", nil, 200), &repo)
+	if repo.SizeBytes != 500 || repo.ComponentCount != 1 {
+		t.Errorf("totals after cleanup = %d bytes, %d components", repo.SizeBytes, repo.ComponentCount)
 	}
 	var runs page[tasks.Run]
 	_ = json.Unmarshal(f.expect("bob", "GET", "/api/v1/cleanup-policies/old-tools/runs?limit=5", nil, 200), &runs)

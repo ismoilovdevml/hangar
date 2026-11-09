@@ -2,6 +2,7 @@ package observability
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -229,5 +230,26 @@ func TestThrottledErrors(t *testing.T) {
 	}
 	if n := strings.Count(buf.String(), "collector unreachable"); n != 1 {
 		t.Errorf("logged %d times", n)
+	}
+}
+
+// TestHTTPMiddlewareClientGone logs a failure caused by the client going
+// away at debug level, never as a server error.
+func TestHTTPMiddlewareClientGone(t *testing.T) {
+	var buf strings.Builder
+	log := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	h := HTTPMiddleware(HTTPOptions{Logger: log, AccessLogSampleRatio: 1})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/v1/repositories", nil).WithContext(ctx))
+	if !strings.Contains(buf.String(), `"level":"DEBUG"`) || strings.Contains(buf.String(), `"level":"ERROR"`) {
+		t.Errorf("canceled request logged as:\n%s", buf.String())
+	}
+	buf.Reset()
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/v1/repositories", nil))
+	if !strings.Contains(buf.String(), `"level":"ERROR"`) {
+		t.Errorf("server error logged as:\n%s", buf.String())
 	}
 }

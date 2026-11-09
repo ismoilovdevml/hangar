@@ -1,11 +1,13 @@
 package api
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -47,11 +49,41 @@ func errorCode(err error) string {
 	}
 }
 
+// StatusClientClosedRequest answers a request whose client went away before
+// the response was ready. Nobody reads it; it keeps such requests out of the
+// server error counts.
+const StatusClientClosedRequest = 499
+
+// clientGone reports whether err is the result of the client going away:
+// the request was canceled (navigated away, closed the connection) rather
+// than the server failing.
+func clientGone(r *http.Request, err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(r.Context().Err(), context.Canceled)
+}
+
+// logFailure logs a failure of a request that cannot be answered with an
+// error any more (or of a side task): at error level, unless the client
+// went away, which is logged at debug level.
+func (a *API) logFailure(r *http.Request, msg string, err error) {
+	level := slog.LevelError
+	if clientGone(r, err) {
+		level = slog.LevelDebug
+	}
+	a.logger().Log(r.Context(), level, msg, "method", r.Method, "path", r.URL.Path, "error", err)
+}
+
 // writeErr answers with the status and code for err. Internal errors are
-// logged and their text is not sent to the client.
+// logged and their text is not sent to the client. A request canceled by
+// its client is not an error: it is logged at debug level and answered
+// with StatusClientClosedRequest.
 func (a *API) writeErr(w http.ResponseWriter, r *http.Request, err error) {
 	code := core.HTTPStatus(err)
 	msg := err.Error()
+	if code >= http.StatusInternalServerError && clientGone(r, err) {
+		a.logger().DebugContext(r.Context(), "api request canceled by the client", "method", r.Method, "path", r.URL.Path, "error", err)
+		WriteError(w, StatusClientClosedRequest, "canceled", "request canceled")
+		return
+	}
 	if code == http.StatusInternalServerError {
 		a.logger().ErrorContext(r.Context(), "api request failed", "method", r.Method, "path", r.URL.Path, "error", err)
 		msg = "internal error"
