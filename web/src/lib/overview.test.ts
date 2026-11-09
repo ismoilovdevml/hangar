@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../api/opsTypes';
+import type { UpstreamHealth } from '../api/types';
 import { overview } from '../mocks/data';
 import { headlineUpstream, ratioPercent, storageNote, successRatio, todoItems, urlHost } from './overview';
 
@@ -77,6 +78,33 @@ describe('storageNote', () => {
 describe('todoItems', () => {
   it('is empty when nothing needs attention', () => {
     expect(todoItems({ metrics: calm(), now: NOW })).toEqual([]);
+  });
+
+  it('names upstream credential failures instead of calling the remote unreachable', () => {
+    const up = (name: string, state: UpstreamHealth['state'], reason?: UpstreamHealth['reason']): UpstreamHealth => ({
+      name,
+      url: `https://${name}.example.com/`,
+      state,
+      reason,
+      latency_ms: null,
+      requests: 0,
+    });
+    const items = todoItems({
+      metrics: calm(),
+      upstreams: [
+        up('nuget-gitlab', 'blocked', 'auth_failed'),
+        up('npm-gitlab', 'blocked', 'access_denied'),
+        up('raw-lan', 'blocked', 'address_blocked'),
+        up('pypi', 'offline'),
+      ],
+      now: NOW,
+    });
+    expect(items.map((t) => [t.title, t.detail])).toEqual([
+      ['nuget-gitlab: authentication failed (401)', 'nuget-gitlab.example.com refuses the credentials: check the proxy credentials; uncached packages fail'],
+      ['npm-gitlab: access denied (403)', 'npm-gitlab.example.com refuses the credentials: check the proxy credentials; uncached packages fail'],
+      ['raw-lan is blocked', 'raw-lan.example.com cannot be reached; uncached packages fail'],
+      ['pypi is offline', 'pypi.example.com cannot be reached; uncached packages fail'],
+    ]);
   });
 
   it('orders urgent items before reminders and setup', () => {

@@ -16,7 +16,7 @@ import { formatBytes, relativeTime } from '../../lib/format';
 import { plural } from '../../lib/overview';
 import { formatUtc } from '../../lib/tasks';
 import { useNow } from '../../lib/useNow';
-import { ALL_FORMATS, displayUrl, isFormat, isRepoSort, repoSubtitle, STATUS_META, TYPE_META } from '../../lib/repositories';
+import { ALL_FORMATS, displayUrl, isFormat, isRepoSort, repoStatusMeta, repoSubtitle, TYPE_META } from '../../lib/repositories';
 
 const route = getRouteApi('/app/repositories');
 
@@ -220,8 +220,8 @@ export function RepositoriesPage() {
       header: 'Status',
       className: 'nowrap',
       cell: (r) => {
-        const s = STATUS_META[r.status];
-        return <StatusDot tone={s.tone} label={s.label} />;
+        const s = repoStatusMeta(r);
+        return <StatusDot tone={s.tone} label={s.label} title={s.hint} />;
       },
     },
     {

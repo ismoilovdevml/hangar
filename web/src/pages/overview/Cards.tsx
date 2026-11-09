@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import type { OverviewMetrics, UpstreamHealth } from '../../api/types';
 import { ErrorNote } from '../../components/ErrorNote';
 import { FORMAT_META, formatBytes, formatCompact, formatPercent } from '../../lib/format';
+import { upstreamAuthProblem } from '../../lib/repositories';
 import { headlineUpstream, plural, ratioPercent, storageNote, successRatio, urlHost } from '../../lib/overview';
 
 function CardSkeleton() {
@@ -169,7 +170,8 @@ export function UpstreamCard({ items, error, onRetry, m }: UpstreamCardProps) {
       </Link>
     );
   }
-  const s = UPSTREAM_TONE[u.state];
+  const auth = u.state === 'blocked' ? upstreamAuthProblem(u.reason) : null;
+  const s = auth ? { ...UPSTREAM_TONE.blocked, label: auth.label } : UPSTREAM_TONE[u.state];
   const hit = m?.cache.hit_ratio;
   const note = [
     u.latency_ms !== null ? `${u.latency_ms} ms` : s.label,

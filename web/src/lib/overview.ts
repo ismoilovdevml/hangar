@@ -4,6 +4,7 @@ import type { Format, OverviewMetrics, OverviewRange, ScanSummary, TrafficBucket
 
 type Token = components['schemas']['Token'];
 import type { Tone } from './format';
+import { upstreamAuthProblem } from './repositories';
 
 export function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
@@ -196,12 +197,15 @@ export function todoItems(input: TodoInput): TodoItem[] {
 
   for (const u of input.upstreams ?? []) {
     if (u.state !== 'offline' && u.state !== 'blocked') continue;
+    const auth = u.state === 'blocked' ? upstreamAuthProblem(u.reason) : null;
     out.push({
       id: `upstream-${u.name}`,
       tone: 'bad',
       tag: 'UPSTREAM',
-      title: `${u.name} is ${u.state}`,
-      detail: `${urlHost(u.url)} cannot be reached; uncached packages fail`,
+      title: auth ? `${u.name}: ${auth.label}` : `${u.name} is ${u.state}`,
+      detail: auth
+        ? `${urlHost(u.url)} refuses the credentials: ${auth.hint}; uncached packages fail`
+        : `${urlHost(u.url)} cannot be reached; uncached packages fail`,
       link: { kind: 'repository', name: u.name },
     });
   }

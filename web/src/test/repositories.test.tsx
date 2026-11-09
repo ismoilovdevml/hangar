@@ -30,7 +30,10 @@ describe('repositories list', () => {
     expect(within(row).getByText('Slow upstream')).toBeInTheDocument();
     expect(within(row).getByText('435 GB')).toBeInTheDocument();
     expect(within(row).getByRole('button', { name: 'Copy URL of npmjs-proxy' })).toBeInTheDocument();
-    expect(within(within(table).getByText('ghcr-proxy').closest('tr')!).getByText('Blocked by policy')).toBeInTheDocument();
+    expect(within(within(table).getByText('ghcr-proxy').closest('tr')!).getByText('Authentication failed (401)')).toHaveAttribute(
+      'title',
+      'Check the proxy credentials.',
+    );
     // A group stores nothing itself: it shows what it serves through its members.
     const dockerAll = all.find((r) => r.name === 'docker-all')!;
     const groupRow = within(table).getByText('docker-all').closest('tr')!;

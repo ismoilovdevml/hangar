@@ -11,7 +11,7 @@ import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
 import { dedupShare, quotaRatio, storeBadge } from '../../lib/blobStores';
 import { formatBytes, formatCompact } from '../../lib/format';
-import { isFormat, STATUS_META, TYPE_META } from '../../lib/repositories';
+import { isFormat, repoStatusMeta, TYPE_META } from '../../lib/repositories';
 import { BlobStoreManage } from './BlobStoreManage';
 import '../../styles/catalog.css';
 import './blobstores.css';
@@ -177,7 +177,10 @@ function UsedBy({ s }: { s: BlobStore }) {
       key: 'status',
       header: 'Status',
       className: 'col-last nowrap',
-      cell: (r) => <StatusDot tone={STATUS_META[r.status].tone} label={STATUS_META[r.status].label} />,
+      cell: (r) => {
+        const s = repoStatusMeta(r);
+        return <StatusDot tone={s.tone} label={s.label} title={s.hint} />;
+      },
     },
   ];
   return (

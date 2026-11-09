@@ -9,7 +9,7 @@ import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
 import { FORMAT_META, formatBytes } from '../../lib/format';
 import { repoClientTarget } from '../../lib/repoSettings';
-import { isFormat, STATUS_META, TYPE_META } from '../../lib/repositories';
+import { isFormat, repoStatusMeta, TYPE_META } from '../../lib/repositories';
 import { FormatIcon } from '../../components/FormatIcon';
 
 /** Right column when a repository is chosen but no package yet. */
@@ -31,7 +31,7 @@ export function RepositorySummary({ repo }: { repo: string }) {
       </Panel>
     );
   }
-  const status = STATUS_META[r.status];
+  const status = repoStatusMeta(r);
   return (
     <>
       <Panel className="pkg-head">
@@ -63,7 +63,7 @@ export function RepositorySummary({ repo }: { repo: string }) {
           <div>
             <dt>Status</dt>
             <dd>
-              <StatusDot tone={status.tone} label={status.label} />
+              <StatusDot tone={status.tone} label={status.hint ? `${status.label} · ${status.hint}` : status.label} />
             </dd>
           </div>
           <div>

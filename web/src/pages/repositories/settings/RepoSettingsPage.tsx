@@ -22,8 +22,8 @@ import {
   isFormat,
   repositoryYaml,
   SIGNED_FORMATS,
+  repoStatusMeta,
   secretStored,
-  STATUS_META,
   TYPE_META,
   validateRepoForm,
   type RepoForm,
@@ -111,7 +111,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
   const body = toRepositoryUpdate(form, repo);
   const yaml = repositoryYaml(body);
   const online = repo.online ?? true;
-  const status = STATUS_META[repo.status];
+  const status = repoStatusMeta(repo);
   const formatLabel = isFormat(repo.format) ? FORMAT_META[repo.format].label : repo.format;
 
   const onSubmit = (e: FormEvent) => {
@@ -254,7 +254,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
               </dd>
               <dt>Status</dt>
               <dd>
-                <StatusDot tone={status.tone} label={status.label} />
+                <StatusDot tone={status.tone} label={status.hint ? `${status.label} · ${status.hint}` : status.label} />
               </dd>
               {repo.type !== 'group' && (
                 <>
