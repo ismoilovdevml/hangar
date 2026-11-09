@@ -1,8 +1,10 @@
 package coretest
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -94,7 +96,11 @@ func (f *fakeUpstream) Fetch(ctx context.Context, req core.UpstreamRequest) (*co
 	if method == "" {
 		method = http.MethodGet
 	}
-	hreq, err := http.NewRequestWithContext(ctx, method, target, nil)
+	var body io.Reader
+	if req.Body != nil {
+		body = bytes.NewReader(req.Body)
+	}
+	hreq, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
 		return nil, fmt.Errorf("upstream request: %w: %w", err, core.ErrInvalid)
 	}
