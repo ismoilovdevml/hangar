@@ -207,6 +207,26 @@ func (h *handler) get(w http.ResponseWriter, r *http.Request) {
 // cached or freshly fetched remote content, or the first group member's answer.
 func (h *handler) resolve(ctx context.Context, repo *core.Repository, mp *mavenPath, depth int) (*entity, error) {
 	if mp.kind == kindChecksum {
+		// A remote publishes checksums of its files next to them: fetch that
+		// side file alone rather than the whole artifact. Metadata checksums
+		// describe the document this server generates, so they are derived.
+		if mp.base.kind != kindMetadata {
+			switch repo.Type {
+			case core.RepoProxy:
+				if e, ok, err := h.proxyChecksum(ctx, repo, mp); err != nil || ok {
+					return e, err
+				}
+			case core.RepoGroup:
+				cfg, err := ConfigOf(repo)
+				if err != nil {
+					return nil, err
+				}
+				if v := mp.base.version; v != "" && !cfg.allowsVersion(v) {
+					return nil, fmt.Errorf("%s: version %s is outside the %s policy of %s: %w", mp.path, v, cfg.VersionPolicy, repo.Name, core.ErrNotFound)
+				}
+				return h.resolveGroup(ctx, repo, mp, depth)
+			}
+		}
 		base, err := h.resolve(ctx, repo, mp.base, depth)
 		if err != nil {
 			return nil, err
