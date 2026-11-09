@@ -201,7 +201,7 @@ func (a *API) previewCSV(w http.ResponseWriter, r *http.Request, in cleanup.Inpu
 			a.writeErr(w, r, err)
 			return
 		}
-		a.logger().ErrorContext(r.Context(), "cleanup preview CSV aborted", "error", err)
+		a.logFailure(r, "cleanup preview CSV aborted", err)
 	}
 }
 
