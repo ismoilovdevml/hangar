@@ -46,13 +46,25 @@ const DefaultMetadataTTL = 30 * time.Minute
 // through when its format config does not name any.
 var DefaultSumDBs = []string{"sum.golang.org"}
 
+// Where a proxy repository forwards checksum database requests (Config.SumDBVia).
+const (
+	// SumDBViaDatabase: to the database itself, https://{name}/..., as a
+	// related host of the remote (the default; proxy.golang.org does not
+	// serve sumdb/ paths).
+	SumDBViaDatabase = "database"
+	// SumDBViaRemote: to {remote_url}/sumdb/{name}/..., for remotes that
+	// proxy the database themselves (Athens, goproxy.io, an inner Hangar).
+	SumDBViaRemote = "remote"
+)
+
 // Config is the format-specific repository configuration (RepoConfig.Format).
 type Config struct {
 	// SumDBs lists the checksum database names a proxy repository serves
-	// under sumdb/{name}/ by forwarding to its remote (proxy.golang.org
-	// supports this for sum.golang.org). Absent means DefaultSumDBs; an
-	// empty list turns the pass-through off.
+	// under sumdb/{name}/. Absent means DefaultSumDBs; an empty list turns
+	// the pass-through off.
 	SumDBs []string `json:"sumdbs,omitempty"`
+	// SumDBVia is SumDBViaDatabase (default) or SumDBViaRemote.
+	SumDBVia string `json:"sumdb_via,omitempty"`
 }
 
 // Format implements core.Format for Go modules.
@@ -90,6 +102,11 @@ func (f *Format) Validate(repo *core.Repository) error {
 		if !validSumDBName(db) {
 			return fmt.Errorf("repository %q: sumdbs entry %q must be a host name: %w", repo.Name, db, core.ErrInvalid)
 		}
+	}
+	switch cfg.SumDBVia {
+	case "", SumDBViaDatabase, SumDBViaRemote:
+	default:
+		return fmt.Errorf("repository %q: sumdb_via %q: want %s or %s: %w", repo.Name, cfg.SumDBVia, SumDBViaDatabase, SumDBViaRemote, core.ErrInvalid)
 	}
 	return nil
 }
@@ -132,6 +149,9 @@ func formatConfig(repo *core.Repository) Config {
 	_ = repo.Config.DecodeFormat(&cfg)
 	if cfg.SumDBs == nil {
 		cfg.SumDBs = DefaultSumDBs
+	}
+	if cfg.SumDBVia == "" {
+		cfg.SumDBVia = SumDBViaDatabase
 	}
 	return cfg
 }

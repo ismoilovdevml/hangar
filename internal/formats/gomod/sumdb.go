@@ -23,12 +23,14 @@ const maxSumDBBytes = 1 << 20
 // tile requests here instead of contacting the database directly, so
 // GOSUMDB verification works where only Hangar can reach the internet.
 //
-// Proxy repositories forward these requests unchanged to their remote
-// (proxy.golang.org serves sum.golang.org this way); the database's
-// signatures are checked by the go command, so nothing is cached or
+// Proxy repositories forward these requests unchanged, through the same
+// outbound HTTP path, SSRF guard and breaker as their remote, either to the
+// database host itself (https://{name}/lookup/..., the default) or to the
+// remote's own sumdb/{name}/ path (format config sumdb_via: remote). The go
+// command checks the database's signatures, so nothing is cached or
 // rewritten. Hosted repositories answer 404, which tells the go command to
-// contact the database itself; groups delegate to their first proxy
-// member that passes the database through.
+// contact the database itself; groups delegate to their first proxy member
+// that passes the database through.
 func (h *handler) serveSumDB(w http.ResponseWriter, r *http.Request) {
 	repo := core.RepositoryFrom(r.Context())
 	ctx, ok := h.authorize(w, r, repo, core.ActionRead)
@@ -45,7 +47,21 @@ func (h *handler) serveSumDB(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, err)
 		return
 	}
-	resp, err := h.fetch(ctx, target, "sumdb/"+db+"/"+rest, core.Conditional{})
+	via := formatConfig(target).SumDBVia
+	if via == SumDBViaDatabase && rest == "supported" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	var resp *core.UpstreamResponse
+	if via == SumDBViaRemote {
+		resp, err = h.fetch(ctx, target, "sumdb/"+db+"/"+rest, core.Conditional{})
+	} else {
+		var up core.Upstream
+		if up, err = h.deps.Upstreams.ForRepository(ctx, target); err == nil {
+			resp, err = up.Fetch(ctx, core.UpstreamRequest{URL: "https://" + db + "/" + rest, RelatedHosts: []string{db}})
+		}
+	}
 	if err != nil {
 		h.writeError(w, r, err)
 		return
