@@ -321,6 +321,11 @@ func (s *Service) UpdateUser(ctx context.Context, id string, in UserInput) (*Use
 				return err
 			}
 		}
+		if hash != nil {
+			if err := s.clearSignInFailures(ctx, tx, old.Username); err != nil {
+				return err
+			}
+		}
 		if hash != nil || slices.Contains(changed, "disabled") || slices.Contains(changed, "username") {
 			if _, err := endSessions(ctx, tx, id, ""); err != nil {
 				return err
@@ -376,8 +381,8 @@ func (s *Service) DeleteUser(ctx context.Context, id string) error {
 	return nil
 }
 
-// UnlockUser clears a lockout after failed sign-ins (system:users:write) and
-// returns the user.
+// UnlockUser clears a lockout after failed sign-ins, for every client
+// address, (system:users:write) and returns the user.
 func (s *Service) UnlockUser(ctx context.Context, id string) (*User, error) {
 	if err := s.require(ctx, AuditUserUnlock, core.ActionWrite, core.SystemResource(core.SystemUsers)); err != nil {
 		return nil, err
@@ -391,6 +396,9 @@ func (s *Service) UnlockUser(ctx context.Context, id string) (*User, error) {
 		UPDATE users SET failed_logins = 0, failed_window_start = NULL, locked_until = NULL, updated_at = now()
 		WHERE id = $1`, id); err != nil {
 		return nil, dbErr(err, "unlock user")
+	}
+	if err := s.clearSignInFailures(ctx, s.pool, u.Username); err != nil {
+		return nil, err
 	}
 	s.record(ctx, core.AuditEvent{Action: AuditUserUnlock, Target: "user:" + u.Username,
 		Details: map[string]any{"id": id, "was_locked": wasLocked}})

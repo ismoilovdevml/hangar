@@ -181,6 +181,9 @@ func (s *Service) ResetPasswordOneTime(ctx context.Context, username string) (st
 			WHERE id = $1`, u.ID, hash); err != nil {
 			return dbErr(err, "reset password")
 		}
+		if err := s.clearSignInFailures(ctx, tx, u.Username); err != nil {
+			return err
+		}
 		ended, err = endSessions(ctx, tx, u.ID, "")
 		return err
 	})

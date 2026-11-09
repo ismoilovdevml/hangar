@@ -128,6 +128,9 @@ func (s *Service) ResetPassword(ctx context.Context, id, password string) error 
 			WHERE id = $1`, id, hash); err != nil {
 			return dbErr(err, "reset password")
 		}
+		if err := s.clearSignInFailures(ctx, tx, u.Username); err != nil {
+			return err
+		}
 		ended, err = endSessions(ctx, tx, id, "")
 		return err
 	})
@@ -164,9 +167,8 @@ func (s *Service) ChangePassword(ctx context.Context, current, next, keepSession
 	if u.Kind != KindUser || u.Source != SourceLocal || u.passwordHash == "" {
 		return fmt.Errorf("your account has no local password; it is managed by %s: %w", u.Source, core.ErrInvalid)
 	}
-	now := s.now()
-	if u.lockedAt(now) {
-		return &LockedError{Until: *u.LockedUntil}
+	if err := s.signInLocked(ctx, u.Username); err != nil {
+		return err
 	}
 	if len(current) > 4096 {
 		return errWrongPassword
@@ -176,7 +178,7 @@ func (s *Service) ChangePassword(ctx context.Context, current, next, keepSession
 		return fmt.Errorf("verify password: %w", err)
 	}
 	if !ok {
-		attempts, lockedUntil, err := s.recordFailure(ctx, u.ID, now)
+		attempts, lockedUntil, err := s.noteSignInFailure(ctx, u.Username, u.ID)
 		if err != nil {
 			return err
 		}
@@ -186,7 +188,6 @@ func (s *Service) ChangePassword(ctx context.Context, current, next, keepSession
 		}
 		s.record(ctx, core.AuditEvent{Action: AuditUserPassword, Target: "user:" + u.Username, Outcome: core.OutcomeDenied, Details: details})
 		if lockedUntil != nil {
-			s.basic.clear()
 			return &LockedError{Until: *lockedUntil}
 		}
 		return errWrongPassword
@@ -215,6 +216,9 @@ func (s *Service) ChangePassword(ctx context.Context, current, next, keepSession
 		}
 		if tag.RowsAffected() == 0 {
 			return fmt.Errorf("the password was changed concurrently; try again: %w", core.ErrAlreadyExists)
+		}
+		if err := s.clearSignInFailures(ctx, tx, u.Username); err != nil {
+			return err
 		}
 		ended, err = endSessions(ctx, tx, u.ID, keepSession)
 		return err

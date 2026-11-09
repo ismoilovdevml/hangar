@@ -205,9 +205,11 @@ auth:
   password:
     min_length: 12
   lockout:
-    max_attempts: 5              # failed sign-ins (and wrong current passwords)
+    max_attempts: 5              # failed sign-ins per address (and wrong current passwords)
     window: 15m
-    duration: 15m
+    duration: 15m                # the address is locked out this long
+    slowdown_after: 10           # failures from all addresses before attempts wait
+    max_delay: 4s                # longest wait
   session:
     ttl: 12h
     remember_ttl: 720h

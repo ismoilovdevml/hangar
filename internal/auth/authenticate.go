@@ -5,21 +5,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 )
 
-// LockedError is returned while an account is locked after repeated failed
-// logins. It wraps core.ErrUnauthenticated, so package clients get a 401.
+// LockedError is returned while a username is locked out for the client's
+// address after repeated failed sign-ins (see Lockout); it is the same
+// whether or not the username belongs to an account. It wraps
+// core.ErrUnauthenticated, so package clients get a 401.
 type LockedError struct {
 	Until time.Time
 }
 
 func (e *LockedError) Error() string {
-	return "account locked until " + e.Until.UTC().Format(time.RFC3339)
+	return "too many failed sign-ins; locked until " + e.Until.UTC().Format(time.RFC3339)
 }
 
 // Unwrap makes errors.Is(err, core.ErrUnauthenticated) true.
@@ -141,29 +142,48 @@ func (s *Service) verifyPassword(ctx context.Context, username, password, method
 		fail("malformed", nil)
 		return nil, errBadCredentials
 	}
+	// Answered the same way for every name, existing or not, and before
+	// any password hash is computed.
+	if err := s.signInLocked(ctx, username); err != nil {
+		var locked *LockedError
+		if errors.As(err, &locked) {
+			fail("locked", map[string]any{"locked_until": locked.Until.UTC()})
+		}
+		return nil, err
+	}
+	if err := s.waitSignIn(ctx, username); err != nil {
+		return nil, err
+	}
+	// refuse spends a verification's time on a name that cannot sign in
+	// with a password, and counts it like a wrong password.
+	refuse := func(reason, userID string) (*User, error) {
+		s.equalizeTiming(ctx, password)
+		attempts, lockedUntil, err := s.noteSignInFailure(ctx, username, userID)
+		if err != nil {
+			return nil, err
+		}
+		details := map[string]any{"attempts": attempts}
+		if lockedUntil != nil {
+			details["locked_until"] = lockedUntil.UTC()
+		}
+		fail(reason, details)
+		if lockedUntil != nil {
+			return nil, &LockedError{Until: *lockedUntil}
+		}
+		return nil, errBadCredentials
+	}
 	u, err := s.userByName(ctx, s.pool, username)
 	if errors.Is(err, core.ErrNotFound) {
-		s.equalizeTiming(ctx, password)
-		fail("unknown_user", nil)
-		return nil, errBadCredentials
+		return refuse("unknown_user", "")
 	}
 	if err != nil {
 		return nil, err
 	}
 	if u.Kind != KindUser || u.Source != SourceLocal || u.passwordHash == "" {
-		s.equalizeTiming(ctx, password)
-		fail("no_local_password", nil)
-		return nil, errBadCredentials
+		return refuse("no_local_password", "")
 	}
 	if u.Disabled {
-		s.equalizeTiming(ctx, password)
-		fail("disabled", nil)
-		return nil, errBadCredentials
-	}
-	now := s.now()
-	if u.lockedAt(now) {
-		fail("locked", map[string]any{"locked_until": u.LockedUntil.UTC()})
-		return nil, &LockedError{Until: *u.LockedUntil}
+		return refuse("disabled", "")
 	}
 	ok, rehash, err := s.hasher.Verify(ctx, u.passwordHash, password)
 	if err != nil && !errors.Is(err, errBadHash) {
@@ -173,7 +193,7 @@ func (s *Service) verifyPassword(ctx context.Context, username, password, method
 		s.log.ErrorContext(ctx, "auth: stored password hash is malformed", "user", u.Username)
 	}
 	if !ok {
-		attempts, lockedUntil, lerr := s.recordFailure(ctx, u.ID, now)
+		attempts, lockedUntil, lerr := s.noteSignInFailure(ctx, username, u.ID)
 		if lerr != nil {
 			return nil, lerr
 		}
@@ -183,18 +203,12 @@ func (s *Service) verifyPassword(ctx context.Context, username, password, method
 		}
 		fail("bad_password", details)
 		if lockedUntil != nil {
-			s.basic.clear()
 			return nil, &LockedError{Until: *lockedUntil}
 		}
 		return nil, errBadCredentials
 	}
-	if u.failedLogins > 0 || u.LockedUntil != nil {
-		if _, err := s.pool.Exec(ctx, `
-			UPDATE users SET failed_logins = 0, failed_window_start = NULL, locked_until = NULL
-			WHERE id = $1`, u.ID); err != nil {
-			return nil, fmt.Errorf("reset failed logins: %w", err)
-		}
-		u.failedLogins, u.LockedUntil = 0, nil
+	if err := s.noteSignInSuccess(ctx, u); err != nil {
+		return nil, err
 	}
 	if rehash {
 		s.rehash(ctx, u, password)
@@ -218,38 +232,6 @@ func (s *Service) rehash(ctx context.Context, u *User, password string) {
 	if err != nil {
 		s.log.WarnContext(ctx, "auth: password rehash failed", "user", u.Username, "error", err)
 	}
-}
-
-// recordFailure counts a failed password attempt in the lockout window and
-// locks the account when the limit is reached. It returns the attempt count
-// and, when this attempt locked the account, the lock expiry.
-func (s *Service) recordFailure(ctx context.Context, userID string, now time.Time) (int, *time.Time, error) {
-	limit := s.cfg.Lockout.MaxAttempts
-	if limit <= 0 {
-		limit = math.MaxInt32
-	}
-	var (
-		attempts int
-		locked   *time.Time
-	)
-	err := s.pool.QueryRow(ctx, `
-		WITH c AS (
-			SELECT id, CASE WHEN failed_window_start IS NULL OR failed_window_start <= $3
-			                THEN 1 ELSE failed_logins + 1 END AS n
-			FROM users WHERE id = $1 FOR UPDATE
-		)
-		UPDATE users u SET
-			failed_logins = CASE WHEN c.n >= $4 THEN 0 ELSE c.n END,
-			failed_window_start = CASE WHEN c.n >= $4 THEN NULL WHEN c.n = 1 THEN $2 ELSE u.failed_window_start END,
-			locked_until = CASE WHEN c.n >= $4 THEN $5 ELSE u.locked_until END
-		FROM c WHERE u.id = c.id
-		RETURNING c.n, CASE WHEN c.n >= $4 THEN u.locked_until END`,
-		userID, now, now.Add(-s.cfg.Lockout.Window), limit, now.Add(s.cfg.Lockout.Duration),
-	).Scan(&attempts, &locked)
-	if err != nil {
-		return 0, nil, dbErr(err, "record failed login")
-	}
-	return attempts, locked, nil
 }
 
 // authenticateToken resolves a personal, service-account or session token.
