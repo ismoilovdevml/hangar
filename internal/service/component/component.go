@@ -178,6 +178,9 @@ func (s *Service) publish(ctx context.Context, repo *core.Repository, req core.P
 	if policy == core.WriteDeny {
 		return nil, nil, fmt.Errorf("repository %q: write policy deny: %w", repo.Name, core.ErrWriteDenied)
 	}
+	if req.Replace && policy == core.WriteAllowOnce {
+		policy = core.WriteAllow // the format marked these paths mutable
+	}
 	if !isUUID(repo.ID) {
 		return nil, nil, fmt.Errorf("repository %q: %w", repo.Name, core.ErrNotFound)
 	}
@@ -669,6 +672,9 @@ func (s *Service) ListComponents(ctx context.Context, q core.ComponentQuery) (co
 	if q.Name != "" {
 		args = append(args, q.Name)
 		sql += fmt.Sprintf(` AND c.name = $%d`, len(args))
+	}
+	if q.QuarantinedOnly {
+		sql += ` AND c.quarantined`
 	}
 	if after != nil {
 		args = append(args, after.Namespace, after.Name, after.Version)
