@@ -9,6 +9,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -296,9 +297,15 @@ func (h *handler) remoteHasBlob(ctx context.Context, hdr http.Header, repo *core
 	return nil
 }
 
+// maxTagPages bounds how many pages of a remote's tag list are followed.
+const maxTagPages = 200
+
 // proxyTags lists the remote's tags merged with the cached ones (only the
 // cached ones when the remote cannot be reached). known reports whether the
-// image exists: cached tags, or a remote that listed it.
+// image exists: cached tags, or a remote that listed it. A remote that pages
+// its tag list (Link: <...>; rel="next", as Quay, Harbor and GitLab do) is
+// followed to the last page; when a later page fails, the tags read so far
+// are kept.
 func (h *handler) proxyTags(ctx context.Context, hdr http.Header, repo *core.Repository, image string) (tags []string, known bool, err error) {
 	local, err := h.localTags(ctx, repo, image)
 	if err != nil {
@@ -309,26 +316,97 @@ func (h *handler) proxyTags(ctx context.Context, hdr http.Header, repo *core.Rep
 	if h.unknown.unknown(repo, remoteName, h.now()) {
 		return local, known, nil
 	}
-	resp, err := h.fetch(ctx, repo, http.MethodGet, "v2/"+remoteName+"/tags/list", "application/json", remoteName)
-	if err != nil {
-		// Remote down: an image we cannot rule out is reported as known.
-		return local, true, nil
-	}
-	defer closeBody(resp)
-	copyRateLimit(hdr, resp.Header)
-	if resp.StatusCode != http.StatusOK {
-		if err := h.remoteMiss(repo, remoteName, "tags of "+image, resp); !errors.Is(err, core.ErrNotFound) {
-			known = true // remote failing: do not claim the name is unknown
+	path := "v2/" + remoteName + "/tags/list"
+	seen := map[string]bool{}
+	var remote []string
+	for page := 0; path != ""; page++ {
+		if page == maxTagPages || seen[path] {
+			h.log.WarnContext(ctx, "docker: remote tag list pages stopped", "repository", repo.Name, "image", remoteName, "pages", page)
+			break
 		}
-		return local, known, nil
+		seen[path] = true
+		resp, err := h.fetch(ctx, repo, http.MethodGet, path, "application/json", remoteName)
+		if err != nil {
+			if page > 0 {
+				h.log.WarnContext(ctx, "docker: remote tag list page failed", "repository", repo.Name, "image", remoteName, "page", page, "err", err)
+				break
+			}
+			// Remote down: an image we cannot rule out is reported as known.
+			return local, true, nil
+		}
+		copyRateLimit(hdr, resp.Header)
+		if resp.StatusCode != http.StatusOK {
+			closeBody(resp)
+			if page > 0 {
+				h.log.WarnContext(ctx, "docker: remote tag list page failed", "repository", repo.Name, "image", remoteName, "page", page, "status", resp.StatusCode)
+				break
+			}
+			if err := h.remoteMiss(repo, remoteName, "tags of "+image, resp); !errors.Is(err, core.ErrNotFound) {
+				known = true // remote failing: do not claim the name is unknown
+			}
+			return local, known, nil
+		}
+		var tl struct {
+			Tags []string `json:"tags"`
+		}
+		err = json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(&tl)
+		closeBody(resp)
+		if err != nil {
+			if page > 0 {
+				break
+			}
+			return local, true, nil
+		}
+		remote = append(remote, tl.Tags...)
+		path = nextTagPage(repo.Config.Proxy.RemoteURL, path, resp.Header.Get("Link"))
 	}
-	var tl struct {
-		Tags []string `json:"tags"`
+	return append(local, remote...), true, nil
+}
+
+// nextTagPage resolves the rel="next" target of a tag list page fetched
+// from path (relative to remoteURL) to the next path relative to remoteURL,
+// or "" when there is none or it points away from the remote.
+func nextTagPage(remoteURL, path, link string) string {
+	target := ""
+	for _, part := range strings.Split(link, ",") {
+		ref, params, ok := strings.Cut(strings.TrimSpace(part), ";")
+		ref = strings.TrimSpace(ref)
+		if !ok || !strings.HasPrefix(ref, "<") || !strings.HasSuffix(ref, ">") {
+			continue
+		}
+		for _, p := range strings.Split(params, ";") {
+			k, v, _ := strings.Cut(strings.TrimSpace(p), "=")
+			if strings.EqualFold(strings.TrimSpace(k), "rel") && slices.Contains(strings.Fields(strings.ToLower(strings.Trim(strings.TrimSpace(v), `"`))), "next") {
+				target = ref[1 : len(ref)-1]
+			}
+		}
+		if target != "" {
+			break
+		}
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(&tl); err != nil {
-		return local, true, nil
+	if target == "" {
+		return ""
 	}
-	return append(local, tl.Tags...), true, nil
+	base, err := url.Parse(strings.TrimSuffix(remoteURL, "/") + "/")
+	if err != nil {
+		return ""
+	}
+	cur, err := base.Parse(path)
+	if err != nil {
+		return ""
+	}
+	next, err := cur.Parse(target)
+	if err != nil || !strings.EqualFold(next.Scheme, base.Scheme) || !strings.EqualFold(next.Host, base.Host) {
+		return ""
+	}
+	rel, ok := strings.CutPrefix(next.EscapedPath(), base.EscapedPath())
+	if !ok || rel == "" {
+		return ""
+	}
+	if next.RawQuery != "" {
+		rel += "?" + next.RawQuery
+	}
+	return rel
 }
 
 // proxyReferrers asks the remote for referrers (falling back to the cache).
