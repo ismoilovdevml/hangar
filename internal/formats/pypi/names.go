@@ -121,15 +121,95 @@ func versionFromFilename(filename, project string) (string, bool) {
 	return v, err == nil
 }
 
-// sameVersion compares a declared version with the one in a filename loosely:
-// build backends escape "-" as "_" in filenames and may drop a "v" prefix.
-// Full PEP 440 normalisation is not needed to catch mismatched uploads.
-func sameVersion(a, b string) bool {
-	canon := func(s string) string {
-		s = strings.TrimPrefix(strings.ToLower(s), "v")
-		return strings.NewReplacer("-", "", "_", "", ".", "").Replace(s)
+// pep440RE is the PEP 440 version grammar with the permitted spelling
+// variations (case, separators, "v" prefix, implicit numbers), as the
+// reference implementation parses it.
+var pep440RE = regexp.MustCompile(`(?i)^\s*v?` +
+	`(?:([0-9]+)!)?` + // epoch
+	`([0-9]+(?:\.[0-9]+)*)` + // release
+	`(?:[-_.]?(alpha|a|beta|b|preview|pre|c|rc)[-_.]?([0-9]+)?)?` + // pre-release
+	`(?:-([0-9]+)|[-_.]?(post|rev|r)[-_.]?([0-9]+)?)?` + // post-release
+	`(?:[-_.]?(dev)[-_.]?([0-9]+)?)?` + // development release
+	`(?:\+([a-z0-9]+(?:[-_.][a-z0-9]+)*))?\s*$`) // local version
+
+// canonicalVersion returns the PEP 440 normal form of v for equality:
+// numbers without leading zeros, trailing ".0" release parts dropped (1.0
+// equals 1.0.0), pre-release labels spelled a, b or rc, and post, dev and
+// local parts in their normal spelling. ok is false when v is not a PEP
+// 440 version.
+func canonicalVersion(v string) (string, bool) {
+	m := pep440RE.FindStringSubmatch(v)
+	if m == nil {
+		return "", false
 	}
-	return canon(a) == canon(b)
+	num := func(s string) string {
+		s = strings.TrimLeft(s, "0")
+		if s == "" {
+			return "0"
+		}
+		return s
+	}
+	var b strings.Builder
+	if m[1] != "" && num(m[1]) != "0" {
+		b.WriteString(num(m[1]) + "!")
+	}
+	release := strings.Split(m[2], ".")
+	for i := range release {
+		release[i] = num(release[i])
+	}
+	for len(release) > 1 && release[len(release)-1] == "0" {
+		release = release[:len(release)-1]
+	}
+	b.WriteString(strings.Join(release, "."))
+	if m[3] != "" {
+		label := strings.ToLower(m[3])
+		switch label {
+		case "alpha":
+			label = "a"
+		case "beta":
+			label = "b"
+		case "c", "pre", "preview":
+			label = "rc"
+		}
+		b.WriteString(label + num(m[4]))
+	}
+	switch {
+	case m[5] != "":
+		b.WriteString(".post" + num(m[5]))
+	case m[6] != "":
+		b.WriteString(".post" + num(m[7]))
+	}
+	if m[8] != "" {
+		b.WriteString(".dev" + num(m[9]))
+	}
+	if m[10] != "" {
+		b.WriteString("+" + strings.ToLower(separatorsRE.ReplaceAllString(m[10], ".")))
+	}
+	return b.String(), true
+}
+
+// sameVersion reports whether a declared version and the version in a
+// filename are the same PEP 440 version. Build backends escape "-" as "_"
+// in filenames, so the filename's version is also tried with "_" read as
+// "-". Versions that are not PEP 440 (legacy uploads) must match exactly,
+// ignoring case and the escaping.
+func sameVersion(a, b string) bool {
+	ca, okA := canonicalVersion(a)
+	if !okA {
+		ca, okA = canonicalVersion(strings.ReplaceAll(a, "_", "-"))
+	}
+	cb, okB := canonicalVersion(b)
+	if !okB {
+		cb, okB = canonicalVersion(strings.ReplaceAll(b, "_", "-"))
+	}
+	if okA && okB {
+		return ca == cb
+	}
+	if okA != okB {
+		return false
+	}
+	unescape := func(s string) string { return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(s), "_", "-")) }
+	return unescape(a) == unescape(b)
 }
 
 // filePath is the asset path of a distribution file.

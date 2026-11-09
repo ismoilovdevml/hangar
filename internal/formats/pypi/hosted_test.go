@@ -217,6 +217,9 @@ func TestUploadValidation(t *testing.T) {
 		{"bad name", "0.1.0", sd, map[string]string{"name": "bad name"}, nil, 400, "project name"},
 		{"foreign filename", "0.1.0", sd, map[string]string{"name": "other"}, nil, 400, "does not start with project"},
 		{"version mismatch", "0.2.0", sd, nil, nil, 400, "does not match version"},
+		// Regression: "1.0" and "10" compared equal once separators were dropped.
+		{"version 1.0 vs file 10", "1.0", fakeSdist("tiny-pkg", "10"), nil, nil, 400, "does not match version"},
+		{"PEP 440 spelling of the file version", "0.1", sd, nil, nil, 200, ""},
 		{"filetype mismatch", "0.1.0", sd, map[string]string{"filetype": "bdist_wheel"}, nil, 400, "is not a bdist_wheel"},
 		{"unsupported filetype", "0.1.0", sd, map[string]string{"filetype": "bdist_egg"}, nil, 400, "unsupported filetype"},
 		{"wheel without metadata", "0.1.0", dist{filename: whl.filename, data: []byte("not a zip"), filetype: "bdist_wheel", pyver: "py3"}, nil, nil, 400, "not a zip"},
