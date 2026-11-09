@@ -240,20 +240,27 @@ export function NewTaskPage() {
               ]}
             />
             <div className="form-grid new-task__grid">
-              <label className="field" htmlFor={f('name')}>
-                Task name
+              <div className="field">
+                <label className="field__label" htmlFor={f('name')}>
+                  Task name
+                </label>
                 <input
                   id={f('name')}
                   className="input input--mono"
                   value={draft.name}
                   placeholder={kind === 'import' ? 'import-npm' : 'prewarm-npm'}
                   aria-invalid={!!err('name') || undefined}
+                  aria-describedby={err('name') ? f('name-err') : undefined}
                   onChange={(e) => set({ name: e.target.value.trim() })}
                   autoComplete="off"
                   spellCheck={false}
                 />
-                {err('name') && <span className="field__error">{err('name')}</span>}
-              </label>
+                {err('name') && (
+                  <span id={f('name-err')} className="field__error">
+                    {err('name')}
+                  </span>
+                )}
+              </div>
               <div className="field">
                 <label className="field__label" htmlFor={f('repo')}>
                   {kind === 'import' ? 'Hosted repository' : 'Proxy or group repository'}
@@ -321,21 +328,25 @@ export function NewTaskPage() {
 
               {needSource && (
                 <>
-                  <label className="field field--wide" htmlFor={f('url')}>
-                    Source URL
+                  <div className="field field--wide">
+                    <label className="field__label" htmlFor={f('url')}>
+                      Source URL
+                    </label>
                     <input
                       id={f('url')}
                       className="input input--mono"
                       value={draft.url}
                       placeholder={hints.url}
                       aria-invalid={!!err('url') || undefined}
+                      aria-describedby={f('url-note')}
                       onChange={(e) => set({ url: e.target.value })}
                       autoComplete="off"
                       spellCheck={false}
                     />
-                    {err('url') && <span className="field__error">{err('url')}</span>}
-                    {!err('url') && <span className="field__hint">{hints.source}</span>}
-                  </label>
+                    <span id={f('url-note')} className={err('url') ? 'field__error' : 'field__hint'}>
+                      {err('url') ?? hints.source}
+                    </span>
+                  </div>
                   <label className="field" htmlFor={f('user')}>
                     <span>
                       Username <span className="field__optional">optional</span>
