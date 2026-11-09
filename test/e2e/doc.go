@@ -8,7 +8,7 @@
 // pnpm, yarn, mvn, gradle, pip, twine, uv, poetry, go, helm, dotnet, cargo,
 // curl, wget, crane, cosign) found on PATH of the machine running `go test`.
 // Only the APT and RPM tests start containers of their own (Debian and
-// Rocky Linux, through docker), so those two need a Docker daemon. CI runs
+// Rocky Linux); they and the Docker tests need a Docker daemon. CI runs
 // the whole suite inside an image that carries every client
 // (test/e2e/runner/Dockerfile, see CONTRIBUTING.md).
 //
