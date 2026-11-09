@@ -37,7 +37,8 @@ type Report struct {
 }
 
 // Sweep walks every stored secret (repositories.config, blob_stores.config,
-// the sign-in settings and the outbound proxy passwords) in one transaction, sealing plaintext values with the
+// the sign-in settings, the outbound proxy passwords and the repository
+// signing keys) in one transaction, sealing plaintext values with the
 // primary key and, with Rewrap, re-wrapping values sealed with previous keys.
 // It is idempotent and safe to run on several nodes at once (rows are locked).
 // Updated rows keep their updated_at: the secrets themselves do not change.
@@ -106,6 +107,11 @@ func Sweep(ctx context.Context, pool *pgxpool.Pool, k *Keyring, opts SweepOption
 			WHERE password <> '' ORDER BY name FOR UPDATE`,
 			`UPDATE outbound_proxies SET password = $2::jsonb ->> 'password' WHERE name = $1`,
 			func(doc map[string]any, where string) (bool, error) { return mapFields(doc, visit(where), "password") }},
+		{"signing_keys", `SELECT name, name, jsonb_build_object('private_key', private_key) FROM signing_keys ORDER BY name FOR UPDATE`,
+			`UPDATE signing_keys SET private_key = $2::jsonb ->> 'private_key' WHERE name = $1`,
+			func(doc map[string]any, where string) (bool, error) {
+				return mapFields(doc, visit(where), "private_key")
+			}},
 	}
 	for _, t := range tables {
 		updates, err := sweepTable(ctx, tx, t.table, t.query, t.apply)
