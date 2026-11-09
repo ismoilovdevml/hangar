@@ -132,7 +132,7 @@ RETURNING claims, recoveries, state`, runID, s.opts.Node, s.opts.StaleAfter.Seco
 	if err != nil {
 		return nil, fmt.Errorf("load claimed run %s: %w", runID, err)
 	}
-	task, err := s.Get(ctx, run.TaskID)
+	task, err := s.get(ctx, run.TaskID)
 	if err != nil {
 		return nil, fmt.Errorf("load task of run %s: %w", runID, err)
 	}
@@ -461,12 +461,18 @@ func (s *Service) Close(ctx context.Context) {
 // TriggerSchedule. It fails with ErrActiveRun when a run is active. Manual
 // triggers are audited (the caller authorizes).
 func (s *Service) Trigger(ctx context.Context, ref, triggeredBy string) (*Run, error) {
-	t, err := s.Get(ctx, ref)
+	t, err := s.get(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
-	if _, ok := s.registration(t.Type); !ok {
+	reg, ok := s.registration(t.Type)
+	if !ok {
 		return nil, fmt.Errorf("task type %q cannot run on this server: %w", t.Type, core.ErrNotImplemented)
+	}
+	if h, ok := reg.exec.(ConfigHooks); ok && triggeredBy != TriggerSchedule {
+		if err := h.AuthorizeRun(ctx, t.Config); err != nil {
+			return nil, err
+		}
 	}
 	var runID string
 	err = s.pool.QueryRow(ctx, `INSERT INTO task_runs (task_id, status, triggered_by, message, heartbeat_at)
