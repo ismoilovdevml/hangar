@@ -749,7 +749,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Start an online migration of repositories into this store */
+        /**
+         * Start an online migration of repositories into this store
+         * @description Planned; not implemented yet (answers 501).
+         */
         post: operations["moveRepositories"];
         delete?: never;
         options?: never;
@@ -948,6 +951,7 @@ export interface paths {
             };
             cookie?: never;
         };
+        /** @description Planned; not implemented yet (answers 501). */
         get: operations["listComponentDependents"];
         put?: never;
         post?: never;
@@ -966,6 +970,7 @@ export interface paths {
             };
             cookie?: never;
         };
+        /** @description Planned; not implemented yet (answers 501). */
         get: operations["getComponentSbom"];
         put?: never;
         post?: never;
@@ -2148,8 +2153,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Planned (edge replication); not implemented yet (answers 501). */
         get: operations["listReplicationTargets"];
         put?: never;
+        /** @description Planned (edge replication); not implemented yet (answers 501). */
         post: operations["createReplicationTarget"];
         delete?: never;
         options?: never;
@@ -2169,6 +2176,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** @description Planned (edge replication); not implemented yet (answers 501). */
         delete: operations["deleteReplicationTarget"];
         options?: never;
         head?: never;
@@ -2208,7 +2216,7 @@ export interface components {
              * @description Machine-readable code, e.g. `invalid_argument` (400), `unauthenticated` (401),
              *     `forbidden`, `read_only_token` or `password_change_required` (403),
              *     `not_found` (404), `conflict` (409), `locked` (423), `rate_limited` (429),
-             *     `internal` (500)
+             *     `internal` (500), `not_implemented` (501)
              */
             code: string;
             message: string;
@@ -2281,6 +2289,7 @@ export interface components {
             ldap: {
                 enabled: boolean;
             };
+            /** @description SAML sign-in is planned; this server always reports it disabled. */
             saml: {
                 enabled: boolean;
                 start_url: string | null;
@@ -3844,14 +3853,16 @@ export interface components {
         };
         /**
          * @description Types this server runs: cleanup (cleanup policies), blob_compaction,
-         *     docker_gc, auth_purge, audit_partitions, rescan (vulnerability
-         *     rescan against new advisories), repository_import (copy packages
-         *     from another registry into a hosted repository, config
-         *     ImportTaskConfig) and proxy_prewarm (fill a proxy or group cache,
-         *     config PrewarmTaskConfig). The others are reserved.
+         *     docker_gc, docker_upload_cleanup (ends abandoned docker uploads),
+         *     auth_purge, audit_partitions, rescan (vulnerability rescan against
+         *     new advisories), repository_import (copy packages from another
+         *     registry into a hosted repository, config ImportTaskConfig) and
+         *     proxy_prewarm (fill a proxy or group cache, config
+         *     PrewarmTaskConfig). The others are reserved for planned task types;
+         *     the server refuses to create them.
          * @enum {string}
          */
-        TaskType: "cleanup" | "blob_compaction" | "docker_gc" | "auth_purge" | "audit_partitions" | "rescan" | "reindex" | "directory_sync" | "db_backup" | "replication" | "proxy_metadata_refresh" | "blob_store_move" | "repository_import" | "proxy_prewarm";
+        TaskType: "cleanup" | "blob_compaction" | "docker_gc" | "docker_upload_cleanup" | "auth_purge" | "audit_partitions" | "rescan" | "reindex" | "directory_sync" | "db_backup" | "replication" | "proxy_metadata_refresh" | "blob_store_move" | "repository_import" | "proxy_prewarm";
         /**
          * @description A registry to read from, by the URL its clients use: npm registry,
          *     NuGet V3 service index (or V2 feed), Maven repository root, PyPI
@@ -4653,6 +4664,15 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description Planned, not implemented by this server yet (code `not_implemented`) */
+        NotImplemented: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
         /** @description Rate limited */
         TooManyRequests: {
             headers: {
@@ -5399,7 +5419,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Repository"];
-                    /** @description Config-as-code form, accepted back by `hangar apply -f`. */
+                    /** @description Config-as-code form (with `Accept: application/yaml`): the RepositoryInput, ready to send back to POST /repositories or PUT /repositories/{name} as JSON. A `hangar apply -f` CLI is planned. */
                     "application/yaml": components["schemas"]["RepositoryInput"];
                 };
             };
@@ -5982,6 +6002,7 @@ export interface operations {
                     "application/json": components["schemas"]["TaskRun"];
                 };
             };
+            501: components["responses"]["NotImplemented"];
         };
     };
     listComponents: {
@@ -6325,6 +6346,7 @@ export interface operations {
                     "application/json": components["schemas"]["PublishedComponentPage"];
                 };
             };
+            501: components["responses"]["NotImplemented"];
         };
     };
     getComponentSbom: {
@@ -6348,6 +6370,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            501: components["responses"]["NotImplemented"];
         };
     };
     search: {
@@ -8471,6 +8494,7 @@ export interface operations {
                     };
                 };
             };
+            501: components["responses"]["NotImplemented"];
         };
     };
     createReplicationTarget: {
@@ -8495,6 +8519,7 @@ export interface operations {
                     "application/json": components["schemas"]["ReplicationTarget"];
                 };
             };
+            501: components["responses"]["NotImplemented"];
         };
     };
     deleteReplicationTarget: {
@@ -8515,6 +8540,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            501: components["responses"]["NotImplemented"];
         };
     };
     streamEvents: {

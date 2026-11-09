@@ -336,6 +336,7 @@ func TestTakeoverResumesFromCheckpoint(t *testing.T) {
 	ctx := asAdmin()
 	var calls atomic.Int32
 	blockA := make(chan struct{})
+	staleWrite := make(chan error, 1)
 	var stateA *tasks.Exec
 	var mu sync.Mutex
 	exec := fakeExec{run: func(ctx context.Context, x *tasks.Exec) error {
@@ -355,7 +356,9 @@ func TestTakeoverResumesFromCheckpoint(t *testing.T) {
 			stateA = x
 			mu.Unlock()
 			<-blockA // simulate a hung node
-			return x.SaveState(context.Background(), struct{ Done int }{Done: 8})
+			err := x.SaveState(context.Background(), struct{ Done int }{Done: 8})
+			staleWrite <- err
+			return err
 		}
 		if !resumed || st.Done != 7 {
 			return errors.New("takeover did not resume from the checkpoint")
@@ -387,7 +390,12 @@ func TestTakeoverResumesFromCheckpoint(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	// A fresh run cannot be taken over.
-	b.HandleJob(context.Background(), core.Job{Type: tasks.JobType, Payload: json.RawMessage(`{"run_id":"` + run.ID + `"}`)})
+	// The claim is synchronous, so a wrong takeover would show in the run row
+	// as soon as HandleJob returns (the executor itself starts later).
+	_ = b.HandleJob(context.Background(), core.Job{Type: tasks.JobType, Payload: json.RawMessage(`{"run_id":"` + run.ID + `"}`)})
+	if live, err := b.GetRun(ctx, "resumable", run.ID); err != nil || live.Node != "node-a" || live.Status != tasks.StatusRunning {
+		t.Fatalf("live run was taken over: %+v %v", live, err)
+	}
 	if calls.Load() != 1 {
 		t.Fatal("live run was taken over")
 	}
@@ -402,7 +410,14 @@ func TestTakeoverResumesFromCheckpoint(t *testing.T) {
 		t.Fatalf("taken over run = %+v %s", done, done.Result)
 	}
 	close(blockA) // node A wakes up: its write is fenced off
-	time.Sleep(50 * time.Millisecond)
+	select {
+	case err := <-staleWrite:
+		if !errors.Is(err, tasks.ErrLostRun) {
+			t.Fatalf("stale node's checkpoint = %v, want ErrLostRun", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("stale node never attempted its write")
+	}
 	again, _ := b.GetRun(ctx, "resumable", run.ID)
 	if again.Status != tasks.StatusSucceeded || string(again.Result) != `{"Done": 7}` {
 		t.Fatalf("stale node overwrote the run: %+v", again)

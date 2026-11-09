@@ -11,9 +11,9 @@
                      └───┬────┬────┬───┘
          PostgreSQL ◄────┘    │    └────► S3 / MinIO / FS  (blobs, content-addressed)
          (metadata,           │
-          audit, jobs)   NATS JetStream (events, job queue, replication stream)
+          audit, jobs)   NATS JetStream (events, job queue)
                               │
-        Trivy server + scan adapter (optional) · OpenSearch (optional) · OIDC/LDAP
+        Trivy server + scan adapter (optional) · OSV advisories · OIDC/LDAP
 ```
 
 - Image scanning: Hangar asks the scan adapter (`cmd/hangar-scanner`) to scan
@@ -22,7 +22,10 @@
   pull-only registry token for that repository
   ([vulnerabilities.md](guides/vulnerabilities.md#design-how-hangar-talks-to-trivy)).
 
-- Nodes are stateless apart from a local read-through blob cache (LRU on disk).
+- Nodes are stateless. They keep small in-memory caches (repository lookups,
+  authorization decisions, generated metadata) that NATS events invalidate. A
+  per-node on-disk blob cache and edge replication are planned
+  ([roadmap](ROADMAP.md)).
 - Leader (via PostgreSQL advisory lock) starts scheduled task runs (cron schedules in `tasks`); any node executes runs, heart-beating progress, and takes over runs whose node went silent (resuming from checkpoints).
 - Single-node mode: embedded NATS, filesystem blobs, one PostgreSQL — `docker compose up` works.
 
@@ -32,10 +35,10 @@
 3. RBAC check `repo:<name>:read`.
 4. Format handler resolves path → component/asset (group: walk members in order; proxy: cache lookup → upstream fetch on miss with singleflight).
 5. Quarantine check → 403 with explanation body.
-6. Stream blob from local cache or blob store; record download (batched, async) for "last downloaded" and stats.
+6. Stream blob from the blob store; record download (batched, async) for "last downloaded" and stats.
 
 ## Upload path
-Handler validates format rules → streams to temp blob while hashing → dedup by sha256 → transaction: component/asset rows, write policy check → emits `component.published` → scanner job, search indexer, replication, live feed.
+Handler validates format rules → streams to temp blob while hashing → dedup by sha256 → transaction: component/asset rows, write policy check → emits `component.published` → scanner job, live feed (SSE). Search reads PostgreSQL directly; replication is planned.
 
 ## Core interfaces (Go, `internal/core`)
 
@@ -110,7 +113,8 @@ cleanup_policies(id, name, criteria jsonb, schedule), policy_repos
 tasks(id, name, type, schedule, config, enabled, builtin, policy_id, next_run_at),
 task_runs(id, task_id, status, progress, message, log, state, result, node, heartbeat_at, claims, started, finished)
 audit_events(id, at, actor, action, target, ip, details jsonb)  -- append-only, partitioned by month
-nodes(id, address, role, last_heartbeat, stats jsonb), replication_targets, replication_state
+nodes(id, address, role, last_heartbeat, stats jsonb)
+replication_targets, replication_state  -- created by a migration, unused until edge replication ships
 ```
 
 ## API
@@ -118,20 +122,24 @@ nodes(id, address, role, last_heartbeat, stats jsonb), replication_targets, repl
 - `GET/POST /api/v1/...` JSON REST for UI and automation, described in `api/openapi.yaml`.
   Resources: repositories, blob-stores, components, assets, search, findings, waivers,
   cleanup-policies (+ `/preview`, `/{name}/run`, `/{name}/stop`, `/{name}/runs`), tasks (+ `/{id}/run`, `/{id}/stop`, `/{id}/runs`), users, roles, tokens,
-  audit, nodes, replication, system/status, metrics/overview.
+  audit, nodes, system/status, metrics/overview. Operations marked `x-status: planned`
+  (replication targets, SBOM, dependents, moving repositories between blob stores)
+  answer 501 until they are implemented.
 - `GET /api/v1/events` — Server-Sent Events: publishes, quarantines, task progress.
-- Config as code: `hangar apply -f` / `hangar export` (YAML), Terraform provider later.
+- Config as code (planned): the UI shows every repository's settings as YAML; a
+  `hangar apply -f` / `hangar export` CLI and a Terraform provider do not exist yet.
+  Automate with the REST API meanwhile.
 - Health: `/healthz` (liveness), `/readyz` (DB, blob store, NATS reachable), `/metrics`.
 
 ## Security
 - TLS everywhere; HSTS on UI.
 - Passwords argon2id; tokens stored as SHA-256 hashes, prefix `hgr_` for secret scanners.
 - CSRF protection for cookie sessions; tokens for CLI/CI.
-- Rate limiting per principal and per IP; lockout on failed logins.
-- Proxy SSRF guard: remote URLs must match an allow-list; block private ranges unless allowed.
-- Cosign signature verification for OCI where policy requires.
+- Rate limiting per client address; lockout on failed logins.
+- Proxy SSRF guard: loopback, private, link-local and other internal ranges are refused unless listed in `http.allow_private_networks` ([security](security.md)).
+- Cosign signatures are stored and served; verifying them by policy is planned.
 
 ## Integrations (no hard dependency)
 - CI systems (GitLab CI, Gitea Actions, GitHub Actions, Jenkins, Drone) authenticate with service-account tokens; docs show snippets for each.
-- Optional OIDC token exchange so CI jobs use their own JWT (GitLab `id_tokens`, GitHub OIDC) instead of long-lived secrets.
-- Webhooks on events; Slack/Teams via webhook.
+- Planned: OIDC token exchange so CI jobs use their own JWT (GitLab `id_tokens`, GitHub OIDC) instead of long-lived secrets.
+- Planned: webhooks on events (Slack/Teams via webhook). Today, follow `GET /api/v1/events` (SSE) or the audit log.

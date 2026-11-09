@@ -41,14 +41,8 @@ packages = ["hangar_e2e_tiny"]
 
 func TestPyPI(t *testing.T) {
 	base := baseURL(t)
-	token := os.Getenv("HANGAR_E2E_TOKEN")
-	if token == "" {
-		t.Skip("HANGAR_E2E_TOKEN not set")
-	}
-	python, err := exec.LookPath("python3")
-	if err != nil {
-		t.Skip("python3 not installed")
-	}
+	token := requireEnv(t, "HANGAR_E2E_TOKEN")
+	python := requireTool(t, "python3")
 	store := os.Getenv("HANGAR_E2E_BLOB_STORE")
 	if store == "" {
 		store = "default"
@@ -136,10 +130,7 @@ func TestPyPI(t *testing.T) {
 		}
 	})
 	t.Run("uv pip install", func(t *testing.T) {
-		uv, err := exec.LookPath("uv")
-		if err != nil {
-			t.Skip("uv not installed")
-		}
+		uv := requireTool(t, "uv")
 		uvenv := filepath.Join(work, "uvenv")
 		pypiRun(t, work, nil, uv, "venv", "--python", python, uvenv)
 		pypiRun(t, work, []string{"UV_NO_CACHE=1"}, uv, "pip", "install", "--python", filepath.Join(uvenv, "bin", "python"), "--index-url", index, "hangar-e2e-tiny==0.1.0", "six")
@@ -159,10 +150,7 @@ func TestPyPI(t *testing.T) {
 		}
 	})
 	t.Run("poetry", func(t *testing.T) {
-		poetry, err := exec.LookPath("poetry")
-		if err != nil {
-			t.Skip("poetry not installed")
-		}
+		poetry := requireTool(t, "poetry")
 		app := filepath.Join(work, "app")
 		_ = os.MkdirAll(app, 0o755)
 		_ = os.WriteFile(filepath.Join(app, "pyproject.toml"), []byte(`[project]

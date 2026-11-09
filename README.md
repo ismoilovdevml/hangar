@@ -1,6 +1,6 @@
 # Hangar
 
-A self-hosted package registry for Docker, npm, Maven, PyPI, NuGet and raw files, in one Go binary backed by PostgreSQL.
+A self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go modules, Helm charts, Cargo crates, APT and RPM packages and raw files, in one Go binary backed by PostgreSQL.
 
 [![Go version](https://img.shields.io/github/go-mod/go-version/ismoilovdevml/hangar)](go.mod)
 
@@ -8,11 +8,11 @@ A self-hosted package registry for Docker, npm, Maven, PyPI, NuGet and raw files
 
 ## What it does
 
-- **Formats:** Docker/OCI (including Helm charts and cosign signatures), npm, Maven/Gradle, PyPI, NuGet and raw files.
+- **Formats (11):** Docker/OCI (including OCI Helm charts and stored cosign signatures), npm, Maven/Gradle, PyPI, NuGet, Go modules, Helm chart repositories, Cargo, APT (Debian/Ubuntu), RPM (dnf/yum) and raw files. Each is tested with its real clients ([FORMATS.md](docs/FORMATS.md)).
 - **Repository types:** hosted (your own packages), proxy (a cache of a public registry) and group (several repositories behind one URL).
 - **Access:** users, roles and scoped access tokens for people and CI, plus an audit log of every change and failed sign-in.
 - **Cleanup policies:** delete old or unused versions on a schedule, with a preview before anything is removed.
-- **Security:** every request needs sign-in unless a repository allows anonymous read; upstream credentials and S3 keys are encrypted in the database.
+- **Security:** every request needs sign-in unless a repository allows anonymous read; upstream credentials and S3 keys are encrypted in the database; OIDC and LDAP sign-in; vulnerability scanning against OSV advisories and, for images, Trivy.
 - **Observability:** Prometheus metrics, JSON logs, OpenTelemetry traces, Grafana dashboards and alert rules in [`deploy/observability`](deploy/observability).
 - **Simple to run:** a single Go binary with the web UI built in, PostgreSQL for metadata, blobs on a filesystem or S3.
 
@@ -76,7 +76,8 @@ dotnet nuget add source https://hangar.example.com/repository/nuget-group/index.
   --name hangar --username token --password '<token>' --store-password-in-clear-text
 ```
 
-Maven/Gradle, raw files and CI systems (GitLab CI, GitHub Actions, Jenkins, Gitea) are covered in the [guides](docs/guides/README.md).
+Maven/Gradle, Go, Helm, Cargo, APT, RPM, raw files and CI systems (GitLab CI, GitHub Actions, Jenkins, Gitea) are covered in the [guides](docs/guides/README.md).
+What is done, partial and planned: [roadmap](docs/ROADMAP.md).
 
 ## Documentation
 
@@ -95,7 +96,9 @@ Requires Go (see `go.mod`) and PostgreSQL 16 or newer; Node 22 or newer for the 
 
 ```bash
 make dev     # start dependencies, the server and the web dev server
-make test    # Go and web unit tests
+make test    # Go and web unit tests (needs HANGAR_TEST_DATABASE_URL)
 make lint    # golangci-lint, eslint, tsc
 make help    # everything else
 ```
+
+Tests, the real-client e2e suite and Playwright: [CONTRIBUTING.md](CONTRIBUTING.md).

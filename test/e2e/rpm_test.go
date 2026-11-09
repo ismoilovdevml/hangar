@@ -5,6 +5,8 @@ package e2e
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -20,14 +22,22 @@ import (
 //
 // Needs HANGAR_E2E_URL, HANGAR_E2E_TOKEN, docker and internet access for the
 // proxy. HANGAR_E2E_RPM_IMAGE (default rockylinux:9), HANGAR_E2E_RPM_REMOTE
-// (default https://dl.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os/),
+// (default https://dl.rockylinux.org/pub/rocky/9/BaseOS/<arch>/os/, with
+// <arch> x86_64 or aarch64 after the machine running the test),
 // HANGAR_E2E_RPM_KEY (the remote's key in the image,
 // /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9) and HANGAR_E2E_RPM_PACKAGE (tree)
 // override the defaults; see linux_test.go for the container network.
 func TestRPM(t *testing.T) {
 	e := newLinuxE2E(t)
 	image := envOr("HANGAR_E2E_RPM_IMAGE", "rockylinux:9")
-	remote := envOr("HANGAR_E2E_RPM_REMOTE", "https://dl.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os/")
+	remote := os.Getenv("HANGAR_E2E_RPM_REMOTE")
+	if remote == "" {
+		arch, ok := rpmArch[runtime.GOARCH]
+		if !ok {
+			t.Fatalf("no default Rocky Linux mirror for GOARCH %s; set HANGAR_E2E_RPM_REMOTE", runtime.GOARCH)
+		}
+		remote = "https://dl.rockylinux.org/pub/rocky/9/BaseOS/" + arch + "/os/"
+	}
 	remoteKey := envOr("HANGAR_E2E_RPM_KEY", "/etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9")
 	remotePkg := envOr("HANGAR_E2E_RPM_PACKAGE", "tree")
 	hosted, proxy, group := "rpm-e2e-hosted-"+e.suffix, "rpm-e2e-proxy-"+e.suffix, "rpm-e2e-group-"+e.suffix
@@ -101,3 +111,7 @@ hangar-e2e-hello
 		}
 	})
 }
+
+// rpmArch maps GOARCH to the RPM architecture of the containers the test
+// starts, which run on the same machine.
+var rpmArch = map[string]string{"amd64": "x86_64", "arm64": "aarch64", "ppc64le": "ppc64le", "s390x": "s390x"}

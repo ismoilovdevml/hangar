@@ -122,7 +122,7 @@ docker-scanner: ## Build the scan adapter image (hangar-scanner:dev)
 
 .PHONY: deploy-scripts-check
 deploy-scripts-check: ## shellcheck the deploy scripts and run the installer tests
-	shellcheck -x deploy/scripts/*.sh deploy/install.sh deploy/tests/*.sh
+	shellcheck -x deploy/scripts/*.sh deploy/install.sh deploy/tests/*.sh test/e2e/run-docker.sh test/e2e/ldap/run.sh
 	bash deploy/tests/install_test.sh
 
 ## ---- Quality -----------------------------------------------------------
@@ -130,9 +130,29 @@ deploy-scripts-check: ## shellcheck the deploy scripts and run the installer tes
 .PHONY: test
 test: test-go test-web ## Run Go and web unit tests
 
+# Without a database a quarter of the Go tests would skip and the run would
+# still look green, so test-go refuses to run without one.
+# HANGAR_TEST_SKIP_DB=1 runs anyway and reports how many tests were skipped
+# (full output in bin/test-go-nodb.log).
 .PHONY: test-go
-test-go: ## go test ./... (set HANGAR_TEST_DATABASE_URL for database tests)
-	$(GO) test -race -count=1 $(GO_PACKAGES)
+test-go: ## go test ./... (needs HANGAR_TEST_DATABASE_URL; HANGAR_TEST_SKIP_DB=1 to run without)
+	@if [ -n "$$HANGAR_TEST_DATABASE_URL" ]; then \
+		echo "$(GO) test -race -count=1 $(GO_PACKAGES)"; \
+		$(GO) test -race -count=1 $(GO_PACKAGES); \
+	elif [ "$$HANGAR_TEST_SKIP_DB" = 1 ]; then \
+		mkdir -p $(BIN_DIR); log=$(BIN_DIR)/test-go-nodb.log; \
+		echo "WARNING: HANGAR_TEST_DATABASE_URL not set; every database test is SKIPPED"; \
+		$(GO) test -race -count=1 -v $(GO_PACKAGES) 2>&1 | tee "$$log" | grep -E '^(ok|FAIL|--- FAIL|panic:)'; \
+		rc=$${PIPESTATUS[0]}; \
+		echo "WARNING: $$(grep -c -- '--- SKIP' "$$log") tests and subtests SKIPPED, $$(grep -c -- '--- PASS' "$$log") passed, without a database (log: $$log)"; \
+		exit $$rc; \
+	else \
+		echo "error: HANGAR_TEST_DATABASE_URL is not set, so every database test would be skipped." >&2; \
+		echo "  Point it at an empty PostgreSQL database, for example" >&2; \
+		echo "    HANGAR_TEST_DATABASE_URL='postgres://hangar:hangar@localhost:5432/hangar_test?sslmode=disable' make test" >&2; \
+		echo "  or run without the database tests: HANGAR_TEST_SKIP_DB=1 make test" >&2; \
+		exit 2; \
+	fi
 
 .PHONY: cover
 cover: ## Go tests with coverage report (coverage.out)
@@ -140,9 +160,21 @@ cover: ## Go tests with coverage report (coverage.out)
 	$(GO) tool cover -func=coverage.out | tail -1
 
 .PHONY: e2e
-e2e: ## Real-client acceptance tests against HANGAR_E2E_URL (needs docker)
+e2e: ## Real-client acceptance tests against HANGAR_E2E_URL with the clients on PATH
 	@if [ -z "$$HANGAR_E2E_URL" ]; then echo "set HANGAR_E2E_URL (e.g. http://localhost:8080)"; exit 1; fi
 	$(GO) test -tags e2e -count=1 -v ./test/e2e/...
+
+.PHONY: e2e-docker
+e2e-docker: ## Real-client acceptance tests, all in containers, strict (Linux + docker)
+	test/e2e/run-docker.sh
+
+.PHONY: web-e2e
+web-e2e: ## Playwright against the mock (MSW) build
+	$(call web_guard,web-e2e) cd web && CI=1 npx playwright test
+
+.PHONY: web-e2e-live
+web-e2e-live: ## Playwright smoke test against a running server (E2E_LIVE_URL, E2E_LIVE_USER, E2E_LIVE_PASSWORD, E2E_LIVE_TOKEN)
+	$(call web_guard,web-e2e-live) cd web && CI=1 npx playwright test -c playwright.live.config.ts
 
 .PHONY: lint
 lint: lint-go lint-web ## golangci-lint, eslint and tsc

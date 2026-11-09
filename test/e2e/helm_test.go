@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -28,13 +29,8 @@ import (
 // release assets) and HANGAR_E2E_HELM_CHART the chart pulled from it.
 func TestHelm(t *testing.T) {
 	base := baseURL(t)
-	token := os.Getenv("HANGAR_E2E_TOKEN")
-	if token == "" {
-		t.Skip("HANGAR_E2E_TOKEN not set")
-	}
-	if _, err := exec.LookPath("helm"); err != nil {
-		t.Skip("helm not installed")
-	}
+	token := requireEnv(t, "HANGAR_E2E_TOKEN")
+	requireTool(t, "helm")
 	store := os.Getenv("HANGAR_E2E_BLOB_STORE")
 	if store == "" {
 		store = "default"
@@ -79,20 +75,34 @@ func TestHelm(t *testing.T) {
 		}
 		return string(out)
 	}
-	pkg := func(version string) string {
+	// pkg builds chart version into its own directory (variant keeps two
+	// builds of one version apart) and returns the archive path.
+	pkg := func(version, variant string) string {
 		t.Helper()
-		src := filepath.Join(root, "src", version)
+		src := filepath.Join(root, "src", version+variant)
+		// Helm 4 no longer creates missing parent directories.
+		if err := os.MkdirAll(src, 0o755); err != nil {
+			t.Fatal(err)
+		}
 		helm("create", filepath.Join(src, chart))
 		p := filepath.Join(src, chart, "Chart.yaml")
 		b, err := os.ReadFile(p)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(p, bytes.Replace(b, []byte("version: 0.1.0"), []byte("version: "+version), 1), 0o600); err != nil {
+		b = bytes.Replace(b, []byte("version: 0.1.0"), []byte("version: "+version), 1)
+		if variant != "" {
+			b = append(b, []byte("annotations:\n  e2e/variant: "+variant+"\n")...)
+		}
+		if err := os.WriteFile(p, b, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		helm("package", filepath.Join(src, chart), "-d", filepath.Join(root, "pkg"))
-		return filepath.Join(root, "pkg", chart+"-"+version+".tgz")
+		out := filepath.Join(root, "pkg", version+variant)
+		if err := os.MkdirAll(out, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		helm("package", filepath.Join(src, chart), "-d", out)
+		return filepath.Join(out, chart+"-"+version+".tgz")
 	}
 	upload := func(method, url, file string) int {
 		t.Helper()
@@ -113,16 +123,27 @@ func TestHelm(t *testing.T) {
 	}
 
 	repoURL := base + "/repository/" + hosted
-	v1, v2 := pkg("0.1.0"), pkg("0.2.0")
+	v1, v2 := pkg("0.1.0", ""), pkg("0.2.0", "")
 	if code := upload(http.MethodPost, repoURL+"/api/charts", v1); code != http.StatusCreated {
 		t.Fatalf("POST api/charts = %d", code)
 	}
 	if code := upload(http.MethodPut, repoURL+"/"+filepath.Base(v2), v2); code != http.StatusCreated {
 		t.Fatalf("PUT = %d", code)
 	}
-	// allow_once: the same version with other bytes is refused.
-	if code := upload(http.MethodPost, repoURL+"/api/charts?force", pkg("0.2.0")); code != http.StatusCreated && code != http.StatusConflict {
-		t.Fatalf("re-upload = %d", code)
+	// allow_once: the same bytes again are a no-op, other bytes for the same
+	// version are refused even with ?force, and the stored chart is untouched.
+	if code := upload(http.MethodPost, repoURL+"/api/charts", v2); code != http.StatusCreated {
+		t.Fatalf("identical re-upload = %d, want 201", code)
+	}
+	if code := upload(http.MethodPost, repoURL+"/api/charts?force", pkg("0.2.0", "changed")); code != http.StatusConflict {
+		t.Fatalf("forced overwrite on allow_once = %d, want 409", code)
+	}
+	want, err := os.ReadFile(v2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := helmFetch(t, repoURL+"/"+filepath.Base(v2), token); !bytes.Equal(got, want) {
+		t.Fatalf("stored 0.2.0 changed after a refused overwrite (%d bytes, want %d)", len(got), len(want))
 	}
 
 	helm("repo", "add", "hangar", base+"/repository/"+group, "--username", "token", "--password", token)
@@ -146,4 +167,26 @@ func TestHelm(t *testing.T) {
 	if len(matches) == 0 {
 		t.Fatalf("no %s archive pulled through the proxy", remoteChart)
 	}
+}
+
+// helmFetch downloads url with the token and fails on anything but 200.
+func helmFetch(t *testing.T, url, token string) []byte {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.SetBasicAuth("token", token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET %s = %d %v", url, resp.StatusCode, err)
+	}
+	return b
 }

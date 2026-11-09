@@ -30,11 +30,7 @@ import (
 
 func dockerE2ECreds(t *testing.T) (string, string) {
 	t.Helper()
-	u, p := os.Getenv("HANGAR_E2E_USER"), os.Getenv("HANGAR_E2E_PASSWORD")
-	if u == "" || p == "" {
-		t.Skip("HANGAR_E2E_USER and HANGAR_E2E_PASSWORD not set")
-	}
-	return u, p
+	return requireEnvs(t, "HANGAR_E2E_USER", "HANGAR_E2E_PASSWORD")
 }
 
 func dockerE2ERun(t *testing.T, dir string, stdin string, bin string, args ...string) (string, error) {
@@ -86,10 +82,7 @@ func dockerE2ECreateRepo(t *testing.T, base, user, pass string, body map[string]
 func TestDocker(t *testing.T) {
 	base := baseURL(t)
 	user, pass := dockerE2ECreds(t)
-	dockerBin, err := exec.LookPath("docker")
-	if err != nil {
-		t.Skip("docker not installed")
-	}
+	dockerBin := requireTool(t, "docker")
 	u, err := url.Parse(base)
 	if err != nil {
 		t.Fatal(err)
@@ -118,12 +111,12 @@ func TestDocker(t *testing.T) {
 
 	// docker login (token flow) and push/pull to hosted.
 	if out, err := dockerE2ERun(t, dir, "", dockerBin, "info"); err != nil {
-		t.Skipf("docker daemon not available: %v\n%s", err, out)
+		unavailable(t, "docker daemon not available: %v\n%s", err, out)
 	}
 	out, err := dockerE2ERun(t, dir, pass, dockerBin, "login", host, "-u", user, "--password-stdin")
 	if err != nil && strings.Contains(out, "connection refused") {
 		// The daemon runs elsewhere (a VM or remote host) and cannot reach this address.
-		t.Skipf("docker daemon cannot reach %s: %s", host, out)
+		unavailable(t, "docker daemon cannot reach %s: %s", host, out)
 	}
 	if err != nil || !strings.Contains(out, "Login Succeeded") {
 		t.Fatalf("login: %s", out)
@@ -142,7 +135,10 @@ func TestDocker(t *testing.T) {
 	dockerE2EMust(t, dir, "", dockerBin, "pull", host+"/"+hosted+"/e2e/via-group:1")
 
 	// Multi-arch buildx --push with a docker-container builder that trusts the registry.
-	if _, err := dockerE2ERun(t, dir, "", dockerBin, "buildx", "version"); err == nil {
+	t.Run("buildx multi-arch push", func(t *testing.T) {
+		if _, err := dockerE2ERun(t, dir, "", dockerBin, "buildx", "version"); err != nil {
+			missingTool(t, "buildx")
+		}
 		cfg := filepath.Join(dir, "buildkitd.toml")
 		toml := fmt.Sprintf("[registry.%q]\n  http = %t\n  insecure = true\n", host, u.Scheme == "http")
 		if err := os.WriteFile(cfg, []byte(toml), 0o600); err != nil {
@@ -155,13 +151,11 @@ func TestDocker(t *testing.T) {
 		multi := host + "/" + hosted + "/e2e/multi:1"
 		dockerE2EMust(t, dir, "", dockerBin, "buildx", "build", "--builder", builder,
 			"--platform", "linux/amd64,linux/arm64", "-t", multi, "--push", ".")
-		out = dockerE2EMust(t, dir, "", dockerBin, "buildx", "imagetools", "inspect", multi)
+		out := dockerE2EMust(t, dir, "", dockerBin, "buildx", "imagetools", "inspect", multi)
 		if !strings.Contains(out, "linux/amd64") || !strings.Contains(out, "linux/arm64") {
 			t.Fatalf("multi-arch index: %s", out)
 		}
-	} else {
-		t.Log("docker buildx not available; multi-arch push skipped")
-	}
+	})
 
 	// Docker Hub through the proxy (library/ prefix, token dance) and via the group.
 	if os.Getenv("HANGAR_E2E_OFFLINE") == "" {
@@ -169,16 +163,18 @@ func TestDocker(t *testing.T) {
 		dockerE2EMust(t, dir, "", dockerBin, "pull", host+"/"+group+"/library/alpine:3.20")
 	}
 
-	// Optional clients.
-	if crane, err := exec.LookPath("crane"); err == nil {
-		insecure := []string{}
+	// Further clients. Each runs as its own subtest, so a missing tool shows
+	// up as a SKIP line in the output (a failure under HANGAR_E2E_STRICT=1).
+	t.Run("crane copy", func(t *testing.T) {
+		crane := requireTool(t, "crane")
+		args := []string{"copy", img, host + "/" + hosted + "/e2e/copied:1"}
 		if u.Scheme == "http" {
-			insecure = append(insecure, "--insecure")
+			args = append(args, "--insecure")
 		}
-		args := append([]string{"copy", img, host + "/" + hosted + "/e2e/copied:1"}, insecure...)
 		dockerE2EMust(t, dir, "", crane, args...)
-	}
-	if cosign, err := exec.LookPath("cosign"); err == nil {
+	})
+	t.Run("cosign sign and verify", func(t *testing.T) {
+		cosign := requireTool(t, "cosign")
 		t.Setenv("COSIGN_PASSWORD", "")
 		dockerE2EMust(t, dir, "", cosign, "generate-key-pair")
 		flags := []string{"--key", "cosign.key", "--yes", "--tlog-upload=false"}
@@ -191,17 +187,20 @@ func TestDocker(t *testing.T) {
 			vflags = append(vflags, "--allow-insecure-registry", "--allow-http-registry")
 		}
 		dockerE2EMust(t, dir, "", cosign, append(append([]string{"verify"}, vflags...), img)...)
-	}
-	if helm, err := exec.LookPath("helm"); err == nil {
-		dockerE2EMust(t, dir, "", helm, "create", "e2echart")
-		dockerE2EMust(t, dir, "", helm, "package", "e2echart")
+	})
+	t.Run("helm push oci", func(t *testing.T) {
+		helm := requireTool(t, "helm")
+		chartDir := t.TempDir()
+		dockerE2EMust(t, chartDir, "", helm, "create", "e2echart")
+		dockerE2EMust(t, chartDir, "", helm, "package", "e2echart")
 		login := []string{"registry", "login", host, "-u", user, "--password-stdin"}
 		push := []string{"push", "e2echart-0.1.0.tgz", "oci://" + host + "/" + hosted + "/charts"}
 		if u.Scheme == "http" {
-			login = append(login, "--insecure")
+			// Helm 4 needs --plain-http for an http registry; old Helm 3 --insecure.
+			login = append(login, helmLoginPlainHTTP(t, helm))
 			push = append(push, "--plain-http")
 		}
-		dockerE2EMust(t, dir, pass, helm, login...)
-		dockerE2EMust(t, dir, "", helm, push...)
-	}
+		dockerE2EMust(t, chartDir, pass, helm, login...)
+		dockerE2EMust(t, chartDir, "", helm, push...)
+	})
 }

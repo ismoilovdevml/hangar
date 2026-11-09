@@ -18,11 +18,15 @@ function capturePuts() {
 
 afterEach(() => server.events.removeAllListeners());
 
+// These tests type a lot; without a delay between keystrokes they stay
+// fast on a loaded machine (the timeouts are in src/test/setup.ts).
+const setupUser = () => userEvent.setup({ delay: null });
+
 const repo = (name: string) => mockState.repositories.find((r) => r.name === name)!;
 
 describe('repository settings', () => {
   it('opens from the repository list', async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     const { history } = renderApp('/repositories');
     await user.click(await screen.findByRole('link', { name: 'npmjs-proxy' }));
     await waitFor(() => expect(history.location.pathname).toBe('/repositories/npmjs-proxy/settings'));
@@ -32,7 +36,7 @@ describe('repository settings', () => {
 
   it('edits with the New repository form, pre-filled, and saves only what changed', async () => {
     const puts = capturePuts();
-    const user = userEvent.setup();
+    const user = setupUser();
     renderApp('/repositories/npmjs-proxy/settings');
     const form = await screen.findByRole('form', { name: 'Settings of npmjs-proxy' });
     // Name and blob store are shown, not editable.
@@ -50,7 +54,8 @@ describe('repository settings', () => {
     await user.click(save);
 
     expect(await screen.findByRole('button', { name: 'Saved' })).toBeDisabled();
-    expect(puts).toHaveLength(1);
+    // The request listener reads the body asynchronously.
+    await waitFor(() => expect(puts).toHaveLength(1));
     expect(puts[0]).toMatchObject({ name: 'npmjs-proxy', format: 'npm', type: 'proxy', blob_store: 'fs-local', description: 'Cached npmjs.org', online: true });
     expect(puts[0]!.config.proxy).toMatchObject({ remote_url: 'https://registry.npmjs.org', metadata_ttl: '45m', negative_cache_ttl: '10m0s' });
     expect(repo('npmjs-proxy').config.proxy?.metadata_ttl).toBe('45m');
@@ -68,19 +73,20 @@ describe('repository settings', () => {
 
   it('takes a repository offline and back online', async () => {
     const puts = capturePuts();
-    const user = userEvent.setup();
+    const user = setupUser();
     renderApp('/repositories/docker-prod/settings');
     await user.click(await screen.findByRole('button', { name: 'Take offline' }));
     expect(await screen.findByRole('button', { name: 'Bring online' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('Offline')).toBeInTheDocument();
     expect(repo('docker-prod').online).toBe(false);
+    await waitFor(() => expect(puts).toHaveLength(1));
     expect(puts[0]).toMatchObject({ online: false, config: { hosted: { write_policy: 'allow' } } });
     await user.click(screen.getByRole('button', { name: 'Bring online' }));
     await waitFor(() => expect(repo('docker-prod').online).toBe(true));
   });
 
   it('deletes only after the name is typed', async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     const { history } = renderApp('/repositories/npm-sandbox/settings');
     await user.click(await screen.findByRole('button', { name: 'Delete npm-sandbox' }));
     const dialog = screen.getByRole('alertdialog', { name: 'Delete npm-sandbox?' });
@@ -98,7 +104,7 @@ describe('repository settings', () => {
   });
 
   it('explains why a group member cannot be deleted', async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     renderApp('/repositories/npm-internal/settings');
     await user.click(await screen.findByRole('button', { name: 'Delete npm-internal' }));
     const dialog = screen.getByRole('alertdialog');

@@ -79,14 +79,8 @@ func npmE2EWriteJSON(t *testing.T, path string, v any) {
 
 func TestNPM(t *testing.T) {
 	base := baseURL(t)
-	token := os.Getenv("HANGAR_E2E_TOKEN")
-	if token == "" {
-		t.Skip("HANGAR_E2E_TOKEN not set")
-	}
-	npm, err := exec.LookPath("npm")
-	if err != nil {
-		t.Skip("npm not installed")
-	}
+	token := requireEnv(t, "HANGAR_E2E_TOKEN")
+	npm := requireTool(t, "npm")
 	store := os.Getenv("HANGAR_E2E_BLOB_STORE")
 	if store == "" {
 		store = "default"
@@ -181,10 +175,7 @@ func TestNPM(t *testing.T) {
 	})
 
 	t.Run("pnpm install", func(t *testing.T) {
-		pnpm, err := exec.LookPath("pnpm")
-		if err != nil {
-			t.Skip("pnpm not installed")
-		}
+		pnpm := requireTool(t, "pnpm")
 		dir := project()
 		// pnpm 11+ holds back versions younger than minimum-release-age; the
 		// test publishes them seconds before installing.
@@ -194,10 +185,7 @@ func TestNPM(t *testing.T) {
 	})
 
 	t.Run("yarn install", func(t *testing.T) {
-		yarn, err := exec.LookPath("yarn")
-		if err != nil {
-			t.Skip("yarn not installed")
-		}
+		yarn := requireTool(t, "yarn")
 		dir := project()
 		ver, _ := npmE2ERun(t, dir, env, yarn, "--version")
 		if strings.HasPrefix(strings.TrimSpace(ver), "1.") {

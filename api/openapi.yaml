@@ -28,6 +28,10 @@ info:
       effective privileges and, for tokens, the scopes, restrictions and expiry.
     - Requests are rate-limited per client address; a 429 answer carries
       `Retry-After`. Retry 429 and 5xx answers with backoff, never other 4xx.
+    - Operations marked `x-status: planned` are part of the published design
+      but not implemented yet: the server authenticates the call and answers
+      501 with code `not_implemented`. Do not build on them until the marker
+      is gone.
 
     This document is served at `/api/v1/openapi.yaml` (and `.json`), rendered
     at `/api-docs`; `/api/v1/automation-guide.md` is a short guide for scripts and
@@ -630,7 +634,10 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Repository" }
             application/yaml:
-              description: Config-as-code form, accepted back by `hangar apply -f`.
+              description: >-
+                Config-as-code form (with `Accept: application/yaml`): the
+                RepositoryInput, ready to send back to POST /repositories or
+                PUT /repositories/{name} as JSON. A `hangar apply -f` CLI is planned.
               schema: { $ref: "#/components/schemas/RepositoryInput" }
         "404": { $ref: "#/components/responses/NotFound" }
     put:
@@ -1062,7 +1069,9 @@ paths:
     post:
       tags: [blob-stores]
       operationId: moveRepositories
+      x-status: planned
       summary: Start an online migration of repositories into this store
+      description: Planned; not implemented yet (answers 501).
       requestBody:
         required: true
         content:
@@ -1080,6 +1089,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TaskRun" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
 
   # ---------------------------------------------------------------- components
   /components:
@@ -1322,6 +1332,8 @@ paths:
     get:
       tags: [components]
       operationId: listComponentDependents
+      x-status: planned
+      description: Planned; not implemented yet (answers 501).
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
@@ -1331,12 +1343,15 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PublishedComponentPage" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
   /components/{id}/sbom:
     parameters:
       - $ref: "#/components/parameters/Id"
     get:
       tags: [components]
       operationId: getComponentSbom
+      x-status: planned
+      description: Planned; not implemented yet (answers 501).
       responses:
         "200":
           description: CycloneDX SBOM
@@ -1344,6 +1359,7 @@ paths:
             application/vnd.cyclonedx+json:
               schema: { type: object }
         "404": { $ref: "#/components/responses/NotFound" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
 
   # ---------------------------------------------------------------- search
   /search:
@@ -2916,6 +2932,8 @@ paths:
     get:
       tags: [cluster]
       operationId: listReplicationTargets
+      x-status: planned
+      description: Planned (edge replication); not implemented yet (answers 501).
       responses:
         "200":
           description: Targets
@@ -2928,9 +2946,12 @@ paths:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/ReplicationTarget" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
     post:
       tags: [cluster]
       operationId: createReplicationTarget
+      x-status: planned
+      description: Planned (edge replication); not implemented yet (answers 501).
       requestBody:
         required: true
         content:
@@ -2942,6 +2963,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ReplicationTarget" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
   /replication/targets/{name}:
     parameters:
       - name: name
@@ -2951,8 +2973,11 @@ paths:
     delete:
       tags: [cluster]
       operationId: deleteReplicationTarget
+      x-status: planned
+      description: Planned (edge replication); not implemented yet (answers 501).
       responses:
         "204": { description: Deleted }
+        "501": { $ref: "#/components/responses/NotImplemented" }
 
   # ---------------------------------------------------------------- events
   /events:
@@ -3081,6 +3106,11 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    NotImplemented:
+      description: Planned, not implemented by this server yet (code `not_implemented`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     TooManyRequests:
       description: Rate limited
       headers:
@@ -3102,7 +3132,7 @@ components:
             Machine-readable code, e.g. `invalid_argument` (400), `unauthenticated` (401),
             `forbidden`, `read_only_token` or `password_change_required` (403),
             `not_found` (404), `conflict` (409), `locked` (423), `rate_limited` (429),
-            `internal` (500)
+            `internal` (500), `not_implemented` (501)
         message: { type: string }
         retry_after:
           type: integer
@@ -3186,6 +3216,7 @@ components:
             enabled: { type: boolean }
         saml:
           type: object
+          description: SAML sign-in is planned; this server always reports it disabled.
           required: [enabled, start_url]
           properties:
             enabled: { type: boolean }
@@ -5179,13 +5210,15 @@ components:
       type: string
       description: |
         Types this server runs: cleanup (cleanup policies), blob_compaction,
-        docker_gc, auth_purge, audit_partitions, rescan (vulnerability
-        rescan against new advisories), repository_import (copy packages
-        from another registry into a hosted repository, config
-        ImportTaskConfig) and proxy_prewarm (fill a proxy or group cache,
-        config PrewarmTaskConfig). The others are reserved.
-      enum: [cleanup, blob_compaction, docker_gc, auth_purge, audit_partitions, rescan, reindex, directory_sync, db_backup,
-        replication, proxy_metadata_refresh, blob_store_move, repository_import, proxy_prewarm]
+        docker_gc, docker_upload_cleanup (ends abandoned docker uploads),
+        auth_purge, audit_partitions, rescan (vulnerability rescan against
+        new advisories), repository_import (copy packages from another
+        registry into a hosted repository, config ImportTaskConfig) and
+        proxy_prewarm (fill a proxy or group cache, config
+        PrewarmTaskConfig). The others are reserved for planned task types;
+        the server refuses to create them.
+      enum: [cleanup, blob_compaction, docker_gc, docker_upload_cleanup, auth_purge, audit_partitions, rescan, reindex,
+        directory_sync, db_backup, replication, proxy_metadata_refresh, blob_store_move, repository_import, proxy_prewarm]
     ImportSource:
       type: object
       required: [url]

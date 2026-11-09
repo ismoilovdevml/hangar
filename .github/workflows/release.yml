@@ -1,6 +1,8 @@
 name: Release
 
-# Publishes a release from a version tag:
+# Publishes a release from a version tag, after the full test suite passes on
+# the tagged commit (the jobs test-go, lint-go, test-web and deploy-check;
+# nothing is built or pushed until all four are green):
 #   - container image ghcr.io/<owner>/hangar (linux/amd64 + linux/arm64, built
 #     natively per architecture, web UI embedded), smoke-tested per architecture
 #     against PostgreSQL before it is tagged <version>, <major>.<minor> and latest
@@ -72,9 +74,95 @@ jobs:
             echo "date=$(date -u -d "@$epoch" +%Y-%m-%dT%H:%M:%SZ)"
           } >> "$GITHUB_OUTPUT"
 
+  # ---- Release gate: the tagged commit must pass every test before any
+  # image, binary or release is published. These jobs run in parallel.
+  test-go:
+    name: Go tests (race, PostgreSQL)
+    needs: meta
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hangar
+          POSTGRES_PASSWORD: hangar
+          POSTGRES_DB: hangar_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hangar -d hangar_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      HANGAR_TEST_DATABASE_URL: postgres://hangar:hangar@localhost:5432/hangar_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.version }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - name: go vet
+        run: go vet ./cmd/... ./internal/... && go vet -tags e2e ./test/e2e/... && go vet -tags webui ./internal/webui/
+      - name: go test -race
+        run: make test-go
+
+  lint-go:
+    name: golangci-lint
+    needs: meta
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.version }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.15.0
+
+  test-web:
+    name: Web (lint, typecheck, vitest, build)
+    needs: meta
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.version }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm --prefix web ci --no-audit --no-fund
+      - run: npm --prefix web run lint
+      - run: npm --prefix web run typecheck
+      - run: npm --prefix web test
+      - run: npm --prefix web run build
+
+  deploy-check:
+    name: Installer tests and helm lint
+    needs: meta
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.version }}
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.3.1
+      - name: Installer tests
+        run: bash deploy/tests/install_test.sh
+      - name: helm lint and template
+        run: make helm-lint helm-template
+
   image:
     name: Image (${{ matrix.arch }})
-    needs: meta
+    needs: [meta, test-go, lint-go, test-web, deploy-check]
     strategy:
       fail-fast: true
       matrix:
@@ -224,7 +312,7 @@ jobs:
 
   scanner:
     name: Scan adapter image
-    needs: meta
+    needs: [meta, test-go, lint-go, test-web, deploy-check]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -285,7 +373,7 @@ jobs:
 
   binaries:
     name: Binaries
-    needs: meta
+    needs: [meta, test-go, lint-go, test-web, deploy-check]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7

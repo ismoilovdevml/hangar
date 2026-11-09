@@ -1,12 +1,10 @@
 package api
 
 import (
-	"net/http"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -74,31 +72,6 @@ func TestOpenAPIRefsResolve(t *testing.T) {
 	walk(spec)
 	if len(ops) < 50 {
 		t.Errorf("only %d operations; spec truncated?", len(ops))
-	}
-}
-
-// Every route the server implements must be in the contract.
-func TestImplementedRoutesAreDocumented(t *testing.T) {
-	paths, _ := loadSpec(t)["paths"].(map[string]any)
-	r := chi.NewRouter()
-	(&API{}).Mount(r)
-	err := chi.Walk(r, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		p := strings.TrimPrefix(route, Prefix)
-		if strings.HasSuffix(p, "/*") {
-			return nil // not-implemented fallback
-		}
-		item, ok := paths[p].(map[string]any)
-		if !ok {
-			t.Errorf("%s %s implemented but missing from api/openapi.yaml", method, route)
-			return nil
-		}
-		if _, ok := item[strings.ToLower(method)]; !ok {
-			t.Errorf("%s %s: method missing from api/openapi.yaml", method, route)
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
 }
 

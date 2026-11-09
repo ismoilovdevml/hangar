@@ -35,13 +35,8 @@ import (
 // repositories) and go; HANGAR_E2E_BLOB_STORE defaults to "default".
 func TestGoModules(t *testing.T) {
 	base := baseURL(t)
-	token := os.Getenv("HANGAR_E2E_TOKEN")
-	if token == "" {
-		t.Skip("HANGAR_E2E_TOKEN not set")
-	}
-	if _, err := exec.LookPath("go"); err != nil {
-		t.Skip("go not installed")
-	}
+	token := requireEnv(t, "HANGAR_E2E_TOKEN")
+	requireTool(t, "go")
 	store := os.Getenv("HANGAR_E2E_BLOB_STORE")
 	if store == "" {
 		store = "default"

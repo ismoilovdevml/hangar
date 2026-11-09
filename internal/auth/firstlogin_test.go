@@ -76,9 +76,9 @@ func TestInitialAdminCreatedOnceAcrossNodes(t *testing.T) {
 	if (results[0] == nil) == (results[1] == nil) {
 		t.Fatalf("want exactly one node to create the administrator, got %+v and %+v", results[0], results[1])
 	}
-	created, file, other := results[0], fileA, fileB
+	created, file, other, winner := results[0], fileA, fileB, a
 	if created == nil {
-		created, file, other = results[1], fileB, fileA
+		created, file, other, winner = results[1], fileB, fileA, b
 	}
 	if created.Username != "admin" || created.FromFile || created.File != file || len(created.Password) != auth.GeneratedPasswordLength {
 		t.Fatalf("created = %+v", created)
@@ -107,7 +107,8 @@ func TestInitialAdminCreatedOnceAcrossNodes(t *testing.T) {
 	if !u.MustChangePassword || !slices.Contains(u.Roles, auth.AdminRole) {
 		t.Fatalf("admin = %+v", u)
 	}
-	if ev := a.Audit.Events(auth.AuditUserBootstrap); len(ev) != 1 || ev[0].Details["password_source"] != "generated" {
+	// Each node has its own audit log; the node that created the user wrote the event.
+	if ev := winner.Audit.Events(auth.AuditUserBootstrap); len(ev) != 1 || ev[0].Details["password_source"] != "generated" {
 		t.Fatalf("bootstrap audit = %+v", ev)
 	}
 

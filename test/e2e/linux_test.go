@@ -45,16 +45,10 @@ type linuxE2E struct {
 func newLinuxE2E(t *testing.T) *linuxE2E {
 	t.Helper()
 	base := baseURL(t)
-	token := os.Getenv("HANGAR_E2E_TOKEN")
-	if token == "" {
-		t.Skip("HANGAR_E2E_TOKEN not set")
-	}
-	docker, err := exec.LookPath("docker")
-	if err != nil {
-		t.Skip("docker not installed")
-	}
+	token := requireEnv(t, "HANGAR_E2E_TOKEN")
+	docker := requireTool(t, "docker")
 	if out, err := exec.Command(docker, "info").CombinedOutput(); err != nil {
-		t.Skipf("docker not usable: %v %s", err, out)
+		unavailable(t, "docker not usable: %v %s", err, out)
 	}
 	e := &linuxE2E{base: base, inside: strings.TrimSuffix(os.Getenv("HANGAR_E2E_CONTAINER_URL"), "/"), token: token,
 		store: os.Getenv("HANGAR_E2E_BLOB_STORE"), docker: docker, network: os.Getenv("HANGAR_E2E_DOCKER_NETWORK")}

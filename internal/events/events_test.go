@@ -89,6 +89,15 @@ func TestQueueRunsRetriesAndDedups(t *testing.T) {
 	if _, err := q.Enqueue(ctx, core.Job{Type: "test.flaky", Key: "k1"}); err != nil {
 		t.Fatal(err)
 	}
+	// Deduplication happens when the job is stored: the second Enqueue with
+	// the same key adds nothing to the stream.
+	info, err := q.stream.Info(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.State.LastSeq != 1 {
+		t.Fatalf("stream holds %d jobs after two enqueues with one key, want 1", info.State.LastSeq)
+	}
 	select {
 	case j := <-done:
 		if j.ID != id || j.Attempt != 2 || string(j.Payload) != `{"n":1}` {
@@ -97,7 +106,22 @@ func TestQueueRunsRetriesAndDedups(t *testing.T) {
 	case <-time.After(15 * time.Second):
 		t.Fatalf("job not retried; calls=%d", calls.Load())
 	}
-	time.Sleep(200 * time.Millisecond)
+	// Once the stream is empty nothing is left to deliver, so the call count
+	// is final: one failure plus one retry.
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		info, err := q.stream.Info(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.State.Msgs == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("job still in the stream after it succeeded: %+v", info.State)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if n := calls.Load(); n != 2 {
 		t.Fatalf("handler calls = %d, want 2 (dedup by key)", n)
 	}

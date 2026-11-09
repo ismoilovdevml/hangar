@@ -174,10 +174,7 @@ func TestOCI(t *testing.T) {
 		pullAll(t, ref(hub+"/library/busybox:1.36"), auth, platform)  // now from the cache
 	})
 	t.Run("helm push and pull", func(t *testing.T) {
-		helm, err := exec.LookPath("helm")
-		if err != nil {
-			t.Skip("helm not installed")
-		}
+		helm := requireTool(t, "helm")
 		dir := t.TempDir()
 		env := append(os.Environ(), "HELM_CONFIG_HOME="+filepath.Join(dir, "config"),
 			"HELM_CACHE_HOME="+filepath.Join(dir, "cache"), "HELM_REGISTRY_CONFIG="+filepath.Join(dir, "registry.json"))
@@ -201,7 +198,7 @@ func TestOCI(t *testing.T) {
 		push := []string{"push", "e2echart-0.1.0.tgz", "oci://" + host + "/" + hosted + "/charts"}
 		pull := []string{"pull", "oci://" + host + "/" + group + "/charts/e2echart", "--version", "0.1.0", "-d", filepath.Join(dir, "pulled")}
 		if plain {
-			login = append(login, "--plain-http")
+			login = append(login, helmLoginPlainHTTP(t, helm))
 			push = append(push, "--plain-http")
 			pull = append(pull, "--plain-http")
 		}

@@ -9,6 +9,8 @@ const PORT = Number(process.env.E2E_PORT ?? 4173);
  */
 export default defineConfig({
   testDir: './e2e',
+  // e2e/live runs against a real server: playwright.live.config.ts.
+  testIgnore: ['live/**'],
   outputDir: './test-results/artifacts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
