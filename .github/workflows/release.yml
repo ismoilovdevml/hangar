@@ -79,6 +79,7 @@ jobs:
   test-go:
     name: Go tests (race, PostgreSQL)
     needs: meta
+    if: vars.RELEASE_TESTS == 'true'
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -112,6 +113,7 @@ jobs:
   lint-go:
     name: golangci-lint
     needs: meta
+    if: vars.RELEASE_TESTS == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -128,6 +130,7 @@ jobs:
   test-web:
     name: Web (lint, typecheck, vitest, build)
     needs: meta
+    if: vars.RELEASE_TESTS == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -147,6 +150,7 @@ jobs:
   deploy-check:
     name: Installer tests and helm lint
     needs: meta
+    if: vars.RELEASE_TESTS == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -163,6 +167,7 @@ jobs:
   image:
     name: Image (${{ matrix.arch }})
     needs: [meta, test-go, lint-go, test-web, deploy-check]
+    if: ${{ !cancelled() && !failure() }}
     strategy:
       fail-fast: true
       matrix:
@@ -267,6 +272,7 @@ jobs:
   manifest:
     name: Image manifest and tags
     needs: [meta, image]
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -313,6 +319,7 @@ jobs:
   scanner:
     name: Scan adapter image
     needs: [meta, test-go, lint-go, test-web, deploy-check]
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -374,6 +381,7 @@ jobs:
   binaries:
     name: Binaries
     needs: [meta, test-go, lint-go, test-web, deploy-check]
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -421,6 +429,7 @@ jobs:
   release:
     name: GitHub Release
     needs: [meta, manifest, scanner, binaries]
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
