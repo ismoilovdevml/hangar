@@ -37,6 +37,7 @@ type Report struct {
 }
 
 // Sweep walks every stored secret (repositories.config, blob_stores.config,
+// the source credentials of import tasks,
 // the sign-in settings, the outbound proxy passwords and the repository
 // signing keys) in one transaction, sealing plaintext values with the
 // primary key and, with Rewrap, re-wrapping values sealed with previous keys.
@@ -112,6 +113,9 @@ func Sweep(ctx context.Context, pool *pgxpool.Pool, k *Keyring, opts SweepOption
 			func(doc map[string]any, where string) (bool, error) {
 				return mapFields(doc, visit(where), "private_key")
 			}},
+		{"tasks", `SELECT id::text, name, config FROM tasks WHERE config ? 'source' OR config ? 'inventory' ORDER BY name FOR UPDATE`,
+			`UPDATE tasks SET config = $2 WHERE id = $1`,
+			func(doc map[string]any, where string) (bool, error) { return mapTaskDoc(doc, visit(where)) }},
 	}
 	// Tables of later migrations are skipped when absent (schemas migrated in part).
 	optional := map[string]bool{"signing_keys": true}
@@ -186,6 +190,28 @@ func sweepTable(ctx context.Context, tx pgx.Tx, table, query string,
 		return nil, fmt.Errorf("secrets sweep: read %s: %w", table, err)
 	}
 	return out, nil
+}
+
+// mapTaskDoc applies fn to the source credentials of an import or pre-warm
+// task config (source, inventory.source).
+func mapTaskDoc(doc map[string]any, fn valueFunc) (bool, error) {
+	changed := false
+	srcs := []any{doc["source"]}
+	if inv, ok := doc["inventory"].(map[string]any); ok {
+		srcs = append(srcs, inv["source"])
+	}
+	for _, s := range srcs {
+		m, ok := s.(map[string]any)
+		if !ok {
+			continue
+		}
+		c, err := mapFields(m, fn, "password", "token")
+		if err != nil {
+			return false, err
+		}
+		changed = changed || c
+	}
+	return changed, nil
 }
 
 // mapFields applies fn to the non-empty string fields of doc named by

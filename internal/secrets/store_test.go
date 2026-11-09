@@ -111,3 +111,25 @@ func TestSweep(t *testing.T) {
 		t.Errorf("unreadable entry = %q", rep.Unreadable[0])
 	}
 }
+
+func TestSweepTaskCredentials(t *testing.T) {
+	pool := pgtest.Pool(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `INSERT INTO tasks (name, type, config) VALUES
+		('imp', 'repository_import', '{"repository":"r","source":{"url":"https://old.example.com","username":"u","password":"task-pw"}}'),
+		('warm', 'proxy_prewarm', '{"repository":"p","inventory":{"source":{"url":"https://old.example.com","token":"task-tok"}}}')`); err != nil {
+		t.Fatal(err)
+	}
+	k := mustKeyring(t, newKey(t))
+	rep, err := Sweep(ctx, pool, k, SweepOptions{})
+	if err != nil || rep.Plaintext != 2 || rep.Rows != 2 {
+		t.Fatalf("sweep: %+v %v", rep, err)
+	}
+	var cfg string
+	if err := pool.QueryRow(ctx, `SELECT string_agg(config::text, ' ') FROM tasks WHERE name IN ('imp', 'warm')`).Scan(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(cfg, "task-pw") || strings.Contains(cfg, "task-tok") || strings.Count(cfg, Prefix) != 2 {
+		t.Fatalf("not sealed: %s", cfg)
+	}
+}
