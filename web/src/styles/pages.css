@@ -357,7 +357,8 @@
 /* ---------- login ---------- */
 .login { min-height: 100vh; padding: 32px; display: flex; flex-direction: column; }
 .wall--center { background-position: center; }
-.login__main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px 0; }
+/* Top-anchored, not centred: a sign-in error grows the card downwards and nothing above it moves. */
+.login__main { flex: 1; display: flex; align-items: flex-start; justify-content: center; padding: clamp(24px, 14vh, 160px) 0 40px; }
 .login-card {
   width: 100%; max-width: 420px; padding: 36px; border-radius: 26px;
   background: rgba(255, 255, 255, .7); border-color: rgba(255, 255, 255, .85); box-shadow: var(--shadow-modal);
