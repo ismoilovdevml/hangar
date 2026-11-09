@@ -389,6 +389,8 @@ func (m *Manager) build(name string, cfg *core.ProxyConfig, fp string) (*upstrea
 		log:           m.opts.Logger,
 		onState:       m.stateChanged,
 	}
+	evictions := negativeEvictions.WithLabelValues(name)
+	u.neg.evicted = func(n int) { evictions.Add(float64(n)) }
 	if cfg.MaxConcurrentRequests > 0 {
 		u.slots = make(chan struct{}, cfg.MaxConcurrentRequests)
 	}

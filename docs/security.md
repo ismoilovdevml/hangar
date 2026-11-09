@@ -97,6 +97,15 @@ A lost key cannot be recovered: re-enter the affected credentials.
       nothing else, and the file is deleted after the change. Treat container
       logs from the first start as sensitive. See
       [first administrator](deploy/first-admin.md).
+- [ ] In a cluster, a password change or reset takes effect at once on the
+      node that made it, but every other node keeps accepting the old
+      password for up to `auth.basic_cache_ttl` (default `2m`), because each
+      node remembers verified Basic credentials in memory. Disabling or
+      locking an account is not affected: the cached login re-reads the
+      account on every request. When a leaked password must stop working
+      immediately, disable the account until the TTL has passed, or set
+      `basic_cache_ttl` to a negative value (every Basic request then pays
+      for an argon2 check). Tokens are never cached this way.
 - [ ] Give CI tokens the narrowest scopes (`repo:<name>:write`) and an
       expiry; prefer service accounts over personal tokens.
 - [ ] Leave `anonymous_read` off except for repositories that are meant to

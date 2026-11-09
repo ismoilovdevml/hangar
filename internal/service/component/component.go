@@ -7,6 +7,11 @@
 // reaches zero stamps soft_deleted_at so compaction can reclaim the bytes
 // after its grace period.
 //
+// A publish that revives a blob (takes its first reference) confirms, under
+// the blob row lock and inside its transaction, that the bytes still exist,
+// so it can never commit an asset whose bytes blob GC has just deleted. See
+// package blobgc for the other half of that contract.
+//
 // Lock order, shared by every write path so they cannot deadlock each other:
 // repository row (shared) -> component row -> asset rows in path order ->
 // blob rows in digest order.
@@ -71,6 +76,10 @@ type Service struct {
 	done    chan struct{}
 	stopped chan struct{}
 	close   sync.Once
+
+	// afterBlobCheck, when set (tests), runs between the blob existence check
+	// and the publish transaction.
+	afterBlobCheck func()
 }
 
 type download struct {
@@ -182,8 +191,12 @@ func (s *Service) publish(ctx context.Context, repo *core.Repository, req core.P
 	if req.Component != nil && req.Component.Name == "" {
 		return nil, nil, fmt.Errorf("publish: component name is required: %w", core.ErrInvalid)
 	}
-	if err := s.checkBlobs(ctx, repo, assets); err != nil {
+	bs, err := s.checkBlobs(ctx, repo, assets)
+	if err != nil {
 		return nil, nil, err
+	}
+	if s.afterBlobCheck != nil {
+		s.afterBlobCheck()
 	}
 
 	principal := core.PrincipalFrom(ctx).Name
@@ -217,7 +230,11 @@ func (s *Service) publish(ctx context.Context, repo *core.Repository, req core.P
 			}
 			out[order[i]] = stored
 		}
-		return refs.apply(ctx, tx, storeID)
+		revived, err := refs.apply(ctx, tx, storeID)
+		if err != nil {
+			return err
+		}
+		return confirmBlobs(ctx, bs, revived)
 	})
 	if err != nil {
 		return nil, nil, err
@@ -305,15 +322,19 @@ func normaliseAssets(in []*core.Asset) ([]*core.Asset, []int, error) {
 	return sorted, idx, nil
 }
 
-// checkBlobs verifies each blob exists in the repository's store and fills
-// zero sizes from it.
-func (s *Service) checkBlobs(ctx context.Context, repo *core.Repository, assets []*core.Asset) error {
+// checkBlobs verifies each blob exists in the repository's store, fills zero
+// sizes from it and returns the store (nil when Options.Blobs is unset).
+//
+// The check runs before the transaction and only fails a publish early: blob
+// GC may delete the bytes right after it. confirmBlobs repeats it inside the
+// transaction, under the blob row locks, for every blob the publish revives.
+func (s *Service) checkBlobs(ctx context.Context, repo *core.Repository, assets []*core.Asset) (core.BlobStore, error) {
 	if s.opts.Blobs == nil || len(assets) == 0 {
-		return nil
+		return nil, nil
 	}
 	bs, err := s.opts.Blobs.ForRepository(ctx, repo)
 	if err != nil {
-		return fmt.Errorf("repository %q blob store: %w", repo.Name, err)
+		return nil, fmt.Errorf("repository %q blob store: %w", repo.Name, err)
 	}
 	sizes := map[core.Digest]int64{}
 	for _, a := range assets {
@@ -321,7 +342,7 @@ func (s *Service) checkBlobs(ctx context.Context, repo *core.Repository, assets 
 		if !ok {
 			info, err := bs.Stat(ctx, a.BlobDigest)
 			if err != nil {
-				return fmt.Errorf("asset %q blob %s: %w", a.Path, a.BlobDigest, err)
+				return nil, fmt.Errorf("asset %q blob %s: %w", a.Path, a.BlobDigest, err)
 			}
 			size = info.Size
 			sizes[a.BlobDigest] = size
@@ -329,7 +350,28 @@ func (s *Service) checkBlobs(ctx context.Context, repo *core.Repository, assets 
 		if a.Size == 0 {
 			a.Size = size
 		} else if a.Size != size {
-			return fmt.Errorf("asset %q: size %d does not match blob size %d: %w", a.Path, a.Size, size, core.ErrInvalid)
+			return nil, fmt.Errorf("asset %q: size %d does not match blob size %d: %w", a.Path, a.Size, size, core.ErrInvalid)
+		}
+	}
+	return bs, nil
+}
+
+// confirmBlobs checks, inside the publish transaction and after the blob rows
+// are locked, that the bytes of every revived blob (one that had no reference
+// before this publish) still exist. Blob GC deletes bytes only while holding
+// the row lock of a blob with no reference and removes the row in the same
+// transaction, so once this check passes under our lock the bytes stay until
+// the reference is dropped again. Blobs that already had references need no
+// check: GC never selects them.
+func confirmBlobs(ctx context.Context, bs core.BlobStore, revived []core.Digest) error {
+	if bs == nil {
+		return nil
+	}
+	for _, d := range revived {
+		if _, err := bs.Stat(ctx, d); errors.Is(err, core.ErrNotFound) {
+			return fmt.Errorf("blob %s was reclaimed by garbage collection during the publish; upload it again: %w", d, core.ErrNotFound)
+		} else if err != nil {
+			return fmt.Errorf("blob %s: %w", d, err)
 		}
 	}
 	return nil
@@ -510,30 +552,38 @@ func (r refDeltas) add(d core.Digest, size, n int64) {
 	}
 }
 
-// apply writes the deltas in digest order (the lock order).
-func (r refDeltas) apply(ctx context.Context, tx pgx.Tx, storeID string) error {
+// apply writes the deltas in digest order (the lock order) and returns the
+// blobs it revived: those that had no reference before (new rows, and rows
+// with ref_count 0 that blob GC may be about to collect).
+func (r refDeltas) apply(ctx context.Context, tx pgx.Tx, storeID string) ([]core.Digest, error) {
+	var revived []core.Digest
 	digests := slices.Sorted(maps.Keys(r))
 	for _, d := range digests {
 		e := r[d]
 		switch {
 		case e.n > 0:
-			if _, err := tx.Exec(ctx, `
+			var refs int64
+			if err := tx.QueryRow(ctx, `
 INSERT INTO blobs AS b (store_id, digest, size, ref_count) VALUES ($1, $2, $3, $4)
 ON CONFLICT (store_id, digest)
-DO UPDATE SET ref_count = b.ref_count + EXCLUDED.ref_count, soft_deleted_at = NULL`,
-				storeID, string(d), e.size, e.n); err != nil {
-				return fmt.Errorf("blob %s: add reference: %w", d, err)
+DO UPDATE SET ref_count = b.ref_count + EXCLUDED.ref_count, soft_deleted_at = NULL
+RETURNING ref_count`,
+				storeID, string(d), e.size, e.n).Scan(&refs); err != nil {
+				return nil, fmt.Errorf("blob %s: add reference: %w", d, err)
+			}
+			if refs == e.n {
+				revived = append(revived, d)
 			}
 		case e.n < 0:
 			if _, err := tx.Exec(ctx, `
 UPDATE blobs SET ref_count = greatest(ref_count + $3, 0),
        soft_deleted_at = CASE WHEN ref_count + $3 <= 0 THEN coalesce(soft_deleted_at, now()) ELSE soft_deleted_at END
  WHERE store_id = $1 AND digest = $2`, storeID, string(d), e.n); err != nil {
-				return fmt.Errorf("blob %s: drop reference: %w", d, err)
+				return nil, fmt.Errorf("blob %s: drop reference: %w", d, err)
 			}
 		}
 	}
-	return nil
+	return revived, nil
 }
 
 // ---- reads ----
@@ -794,7 +844,8 @@ RETURNING blob_digest`, id); err != nil {
 		if _, err := tx.Exec(ctx, `DELETE FROM components WHERE id = $1`, id); err != nil {
 			return fmt.Errorf("delete component %q: %w", id, err)
 		}
-		return refs.apply(ctx, tx, storeID)
+		_, err = refs.apply(ctx, tx, storeID)
+		return err
 	})
 	if err != nil {
 		if !errors.Is(err, core.ErrNotFound) {
@@ -881,7 +932,8 @@ RETURNING `+componentCols, compID))
 				return fmt.Errorf("delete asset %q: %w", p, err)
 			}
 		}
-		return refs.apply(ctx, tx, storeID)
+		_, err = refs.apply(ctx, tx, storeID)
+		return err
 	})
 	if err != nil {
 		if !errors.Is(err, core.ErrNotFound) {

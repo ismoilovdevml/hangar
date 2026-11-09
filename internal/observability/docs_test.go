@@ -24,7 +24,7 @@ const (
 // knownMetrics is every hangar_* metric a node can export: this package's
 // plus the proxy cache counters.
 func knownMetrics() []string {
-	return append(allHangarMetrics(), proxy.MetricCacheRequests, proxy.MetricCacheHitBytes)
+	return append(allHangarMetrics(), proxy.MetricCacheRequests, proxy.MetricCacheHitBytes, proxy.MetricNegativeCacheEvictions)
 }
 
 var reMetricRef = regexp.MustCompile(`hangar_[a-z0-9_]+`)

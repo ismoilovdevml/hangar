@@ -28,6 +28,32 @@
     **Import** / **Pre-warm** on repository pages, run results with conflict
     and failure lists.
 
+- **Blob storage integrity**:
+  - A publish can no longer reference bytes that blob GC deleted. A publish
+    that takes the first reference of a blob confirms, under the blob row
+    lock and inside its transaction, that the bytes still exist; if GC
+    removed them meanwhile, the upload fails with `404` (docker:
+    `BLOB_UNKNOWN`) and can be retried, instead of leaving an image or
+    package that never downloads again. Docker blob uploads and
+    cross-repository mounts go through the same check.
+  - Content that is stored but never published (a docker digest mismatch, an
+    upload over a limit, a failed validation, a refused publish) is now
+    reclaimed: every upload is recorded as an unreferenced blob, which a
+    publish turns into a referenced one and blob GC otherwise deletes after
+    `storage.gc.grace_period`. Uploading content again restarts the grace
+    period of its unreferenced blob. Such uploads count as reclaimable bytes.
+  - Failed and cancelled uploads leave nothing staged on either driver
+    (filesystem temp files, S3 multipart uploads and temp objects), now
+    covered by tests; crashed uploads are still swept by `blob.gc` after
+    `storage.gc.temp_max_age`.
+- **Proxy negative cache**: the per-remote cache of 404 answers is a bounded
+  LRU (10,000 paths) with a per-entry expiry. A full cache evicts its least
+  recently used path instead of forgetting every path at once, which sent a
+  burst of requests to the remote. Evictions are counted in
+  `hangar_proxy_negative_cache_evictions_total{repository}`.
+- **Docs**: `docs/security.md` explains that other cluster nodes keep
+  accepting an old password for up to `auth.basic_cache_ttl` after a change.
+
 - **Routing rules against dependency confusion** (issue #73):
   - Proxy repositories take `config.routing.block` and `allow` name patterns:
     a blocked name is never requested from the remote nor served from the

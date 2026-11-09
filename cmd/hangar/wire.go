@@ -49,6 +49,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/signing"
 	"github.com/ismoilovdevml/hangar/internal/storage"
 	"github.com/ismoilovdevml/hangar/internal/storage/fs"
+	"github.com/ismoilovdevml/hangar/internal/storage/pending"
 	"github.com/ismoilovdevml/hangar/internal/storage/registry"
 	"github.com/ismoilovdevml/hangar/internal/storage/s3"
 	"github.com/ismoilovdevml/hangar/internal/sysmon"
@@ -265,7 +266,9 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Static: map[string]core.BlobStore{DefaultBlobStore: store}, Fallback: store, Logger: log,
 	})
 	// Request-path blob access is timed per driver; GC uses the stores directly.
-	observedBlobs := observability.InstrumentBlobStores(blobs, metrics, blobDriver)
+	// Every request-path Put is recorded as an unreferenced blob, so GC also
+	// reclaims content that is stored but never published.
+	observedBlobs := pending.Wrap(pool, observability.InstrumentBlobStores(blobs, metrics, blobDriver))
 
 	// Repository metadata signing keys (apt, rpm), sealed with the keyring.
 	signer := signing.New(signing.Options{Store: signing.NewPGStore(pool), Secrets: signingSealer(keyring), Events: bus,

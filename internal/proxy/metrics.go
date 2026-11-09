@@ -16,6 +16,8 @@ const (
 	// MetricUpstreamDuration is the remote latency histogram, labelled by
 	// repository; internal/rollup persists it for the Overview screen.
 	MetricUpstreamDuration = "hangar_proxy_upstream_request_duration_seconds"
+	// MetricNegativeCacheEvictions counts remembered 404s evicted for space.
+	MetricNegativeCacheEvictions = "hangar_proxy_negative_cache_evictions_total"
 )
 
 // Cache results recorded by CacheHit and CacheMiss.
@@ -77,12 +79,16 @@ var (
 		Name: "hangar_proxy_upstream_inflight_requests",
 		Help: "Proxy remote requests in flight (waiting for a slot, waiting for headers or streaming a body).",
 	}, []string{"repository"})
+	negativeEvictions = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: MetricNegativeCacheEvictions,
+		Help: "Remembered remote 404s dropped before their TTL because the repository's negative cache was full.",
+	}, []string{"repository"})
 )
 
 // RegisterMetrics registers the proxy cache and upstream metrics on r.
 // Registering on a registry that already has them is not an error.
 func RegisterMetrics(r prometheus.Registerer) error {
-	for _, c := range []prometheus.Collector{cacheRequests, cacheHitBytes, requestsTotal, requestDuration, retriesTotal, resumesTotal, inflight} {
+	for _, c := range []prometheus.Collector{cacheRequests, cacheHitBytes, requestsTotal, requestDuration, retriesTotal, resumesTotal, inflight, negativeEvictions} {
 		if err := r.Register(c); err != nil {
 			var are prometheus.AlreadyRegisteredError
 			if !errors.As(err, &are) {

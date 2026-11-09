@@ -185,7 +185,10 @@ fix it before purging the stream.
 **Impact.** None yet; it is a capacity warning before the store fills.
 
 **Diagnose.** Storage dashboard → *Blob stores*, *Used and reclaimable*.
-Reclaimable bytes are freed by the next `blob.gc` run. The Blob stores screen
+Reclaimable bytes are freed by the first `blob.gc` run after their
+`storage.gc.grace_period`; they include uploads that were stored but rejected
+(a docker digest mismatch, a failed validation), so a client that keeps
+pushing bad content shows up here, not as used space. The Blob stores screen
 shows growth per day.
 
 **Fix.** Run cleanup policies, delete unused components, let GC run, raise the
