@@ -146,8 +146,9 @@ test('new repository form previews YAML and creates the repository', async ({ pa
   await page.setViewportSize(DESKTOP);
   await page.getByLabel('Name').fill('npm-mirror');
   await page.getByRole('button', { name: 'Create repository' }).click();
-  await expect(page).toHaveURL(/\/repositories\?q=npm-mirror/);
-  await expect(page.getByRole('link', { name: 'npm-mirror', exact: true })).toBeVisible();
+  // The new repository's page, with a confirmation and the next step.
+  await expect(page).toHaveURL(/\/repositories\/npm-mirror\/settings$/);
+  await expect(page.getByRole('status').filter({ hasText: 'npm-mirror is ready.' })).toBeVisible();
   expect(errors).toEqual([]);
 });
 
