@@ -33,7 +33,7 @@ const EnvDatabaseURL = "HANGAR_TEST_DATABASE_URL"
 var FastArgon2 = auth.Argon2Params{Memory: 1024, Iterations: 1, Parallelism: 1, SaltLength: 16, KeyLength: 32}
 
 // Migrations returns the base schema (00001-00006) and the auth ranges
-// (00020-00029, 00040-00049, 00080-00089, 00200-00209, 00210-00219) plus the
+// (00020-00029, 00040-00049, 00080-00089, 00200-00209, 00210-00219, 00266) plus the
 // run-time settings (00090-00099), so these tests do not depend on unrelated
 // migrations.
 func Migrations(t testing.TB) fs.FS {
@@ -59,7 +59,7 @@ func Migrations(t testing.TB) fs.FS {
 }
 
 func authMigration(n int) bool {
-	return n <= 6 || (n >= 20 && n <= 29) || (n >= 40 && n <= 49) || (n >= 80 && n <= 99) || (n >= 200 && n <= 219)
+	return n <= 6 || (n >= 20 && n <= 29) || (n >= 40 && n <= 49) || (n >= 80 && n <= 99) || (n >= 200 && n <= 219) || n == 266
 }
 
 // Pool connects to a fresh schema (dropped at cleanup). If migrate is true

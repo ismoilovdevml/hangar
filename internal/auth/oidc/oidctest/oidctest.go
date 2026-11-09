@@ -1,9 +1,11 @@
 // Package oidctest is an in-process OpenID Connect provider for tests:
 // discovery, JWKS, an authorization endpoint that signs the user in at once,
-// a token endpoint that checks the client secret and PKCE, and userinfo.
+// a token endpoint that checks the client secret and PKCE, userinfo and an
+// end_session_endpoint (RP-Initiated Logout) that records its requests.
 package oidctest
 
 import (
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -55,6 +57,11 @@ type Issuer struct {
 	// providers do for clients without a service account: 401
 	// unauthorized_client after the client authenticated.
 	NoClientCredentials bool
+	// NoEndSession leaves end_session_endpoint out of discovery.
+	NoEndSession bool
+	// Logouts are the query parameters of the requests to the
+	// end_session_endpoint, oldest first.
+	Logouts []url.Values
 
 	codes map[string]grant
 }
@@ -79,6 +86,7 @@ func New(t testing.TB) *Issuer {
 	mux.HandleFunc("GET /authorize", is.authorize)
 	mux.HandleFunc("POST /token", is.token)
 	mux.HandleFunc("GET /userinfo", is.userinfo)
+	mux.HandleFunc("GET /logout", is.logout)
 	is.Server = httptest.NewServer(mux)
 	is.keys.SetIssuer(is.URL)
 	t.Cleanup(is.Close)
@@ -94,13 +102,13 @@ func (is *Issuer) Set(fn func(is *Issuer)) {
 
 func (is *Issuer) discovery(w http.ResponseWriter, _ *http.Request) {
 	is.mu.Lock()
-	down := is.Down
+	down, noEndSession := is.Down, is.NoEndSession
 	is.mu.Unlock()
 	if down {
 		http.Error(w, "down", http.StatusServiceUnavailable)
 		return
 	}
-	writeJSON(w, map[string]any{
+	doc := map[string]any{
 		"issuer":                                is.URL,
 		"authorization_endpoint":                is.URL + "/authorize",
 		"token_endpoint":                        is.URL + "/token",
@@ -110,7 +118,39 @@ func (is *Issuer) discovery(w http.ResponseWriter, _ *http.Request) {
 		"subject_types_supported":               []string{"public"},
 		"id_token_signing_alg_values_supported": []string{"RS256"},
 		"code_challenge_methods_supported":      []string{"S256"},
-	})
+	}
+	if !noEndSession {
+		doc["end_session_endpoint"] = is.URL + "/logout"
+	}
+	writeJSON(w, doc)
+}
+
+// logout is the end_session_endpoint: it records the request and returns
+// the browser to post_logout_redirect_uri, which must belong to the client
+// named by client_id (and by the audience of id_token_hint, when given).
+func (is *Issuer) logout(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	is.mu.Lock()
+	is.Logouts = append(is.Logouts, q)
+	is.mu.Unlock()
+	if hint := q.Get("id_token_hint"); hint != "" {
+		v := gooidc.NewVerifier(is.URL, &gooidc.StaticKeySet{PublicKeys: []crypto.PublicKey{is.key.Public()}},
+			&gooidc.Config{ClientID: ClientID, SkipExpiryCheck: true})
+		if _, err := v.Verify(r.Context(), hint); err != nil {
+			http.Error(w, "invalid id_token_hint", http.StatusBadRequest)
+			return
+		}
+	}
+	if id := q.Get("client_id"); id != "" && id != ClientID {
+		http.Error(w, "unknown client", http.StatusBadRequest)
+		return
+	}
+	if to := q.Get("post_logout_redirect_uri"); to != "" {
+		http.Redirect(w, r, to, http.StatusFound) //nolint:gosec // G710: test issuer
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = w.Write([]byte("signed out"))
 }
 
 func (is *Issuer) authorize(w http.ResponseWriter, r *http.Request) {

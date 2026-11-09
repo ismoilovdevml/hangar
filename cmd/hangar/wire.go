@@ -119,11 +119,12 @@ func openAuth(cfg config.Config, pool *pgxpool.Pool, bus core.EventBus, metrics 
 	return auditLog, authSvc, nil
 }
 
-// oidcOptions are the options of every OIDC provider: the redirect URI and
+// oidcOptions are the options of every OIDC provider: the redirect URIs and
 // the state cookie key, derived from security.secret_key so every node can
 // finish a sign-in another started.
 func oidcOptions(cfg config.Config, log *slog.Logger) (oidc.Options, error) {
-	opts := oidc.Options{RedirectURL: cfg.Server.BaseURL + oidc.CallbackPath, Logger: log}
+	opts := oidc.Options{RedirectURL: cfg.Server.BaseURL + oidc.CallbackPath,
+		PostLogoutRedirectURL: strings.TrimSuffix(cfg.Server.BaseURL, "/") + "/login", Logger: log}
 	if cfg.Security.SecretKey == "" {
 		return opts, nil
 	}

@@ -105,15 +105,16 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, err)
 		return
 	}
-	if err := h.startSession(w, r, p, req.Remember); err != nil {
+	if _, err := h.startSession(w, r, p, req.Remember); err != nil {
 		h.writeError(w, r, err)
 		return
 	}
 	h.writeSession(w, r, p, authMethodSession)
 }
 
-// startSession replaces any session the browser holds with a new one for p.
-func (h *handler) startSession(w http.ResponseWriter, r *http.Request, p *core.Principal, remember bool) error {
+// startSession replaces any session the browser holds with a new one for p
+// and returns its secret.
+func (h *handler) startSession(w http.ResponseWriter, r *http.Request, p *core.Principal, remember bool) (string, error) {
 	ctx := r.Context()
 	// Never keep a session id across a privilege change (session fixation).
 	if c, err := r.Cookie(h.cfg.Session.CookieName); err == nil && c.Value != "" {
@@ -121,15 +122,27 @@ func (h *handler) startSession(w http.ResponseWriter, r *http.Request, p *core.P
 	}
 	secret, sess, err := h.svc.CreateSession(ctx, p, remember)
 	if err != nil {
-		return err
+		return "", err
 	}
 	h.setCookies(w, secret, sess)
-	return nil
+	return secret, nil
 }
 
+// logoutBody is schema LogoutResult.
+type logoutBody struct {
+	// LogoutURL is the identity provider's end_session_endpoint the browser
+	// goes to next, to end the single sign-on session as well.
+	LogoutURL string `json:"logout_url"`
+}
+
+// logout ends the session. A single sign-on session also ends at the
+// provider (auth.oidc.logout: provider, RP-initiated logout): the answer
+// then carries the URL to send the browser to, which returns to /login.
 func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	logoutURL := ""
 	if ra := authFrom(ctx); ra != nil && ra.secret != "" {
+		logoutURL = h.providerLogout(r, ra.secret)
 		if err := h.svc.DeleteSession(ctx, ra.secret); err != nil {
 			h.writeError(w, r, err)
 			return
@@ -137,7 +150,31 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 		h.svc.RecordLogout(ctx)
 	}
 	h.clearCookies(w, r)
-	w.WriteHeader(http.StatusNoContent)
+	if logoutURL == "" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, logoutBody{LogoutURL: logoutURL})
+}
+
+// providerLogout returns the RP-initiated logout URL for the session of
+// secret, "" when it is not a single sign-on session or the provider
+// cannot end sessions.
+func (h *handler) providerLogout(r *http.Request, secret string) string {
+	provider := h.oidc()
+	if provider == nil {
+		return ""
+	}
+	ctx := r.Context()
+	idToken, err := h.svc.SessionIDToken(ctx, secret)
+	if err != nil {
+		h.log.WarnContext(ctx, "auth: reading the session ID token failed", "error", err)
+	}
+	if idToken == "" && core.PrincipalFrom(ctx).Source != auth.SourceOIDC {
+		return ""
+	}
+	return provider.LogoutURL(ctx, idToken)
 }
 
 // sessionUser is schema User.

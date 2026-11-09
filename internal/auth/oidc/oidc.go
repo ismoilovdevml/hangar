@@ -1,7 +1,10 @@
 // Package oidc implements single sign-on with an OpenID Connect provider:
 // the authorization code flow with PKCE, ID token verification (signature,
-// issuer, audience, expiry, nonce) and the mapping of claims to an
-// auth.ExternalIdentity.
+// issuer, audience, expiry, nonce), the mapping of claims to an
+// auth.ExternalIdentity and RP-Initiated Logout (the provider's
+// end_session_endpoint). Back-channel and front-channel logout are not
+// implemented: a session ended at the provider alone keeps its Hangar
+// session until that expires or the user signs out of Hangar.
 //
 // The state, nonce, PKCE verifier and post-login redirect travel in a short
 // lived cookie encrypted with AES-256-GCM, so any node of a cluster that
@@ -81,6 +84,10 @@ func fail(code, reason string, err error) *Error { return &Error{Code: code, Rea
 type Options struct {
 	// RedirectURL is server.base_url + CallbackPath.
 	RedirectURL string
+	// PostLogoutRedirectURL is where the provider sends the browser after
+	// RP-initiated logout: server.base_url + "/login". Empty: the provider
+	// shows its own page.
+	PostLogoutRedirectURL string
 	// StateKey encrypts the state cookie; at least 32 bytes, the same on
 	// every node. Nil: a random per-process key (single node only).
 	StateKey []byte
@@ -107,7 +114,9 @@ type Provider struct {
 	provider *gooidc.Provider
 	verifier *gooidc.IDTokenVerifier
 	oauth    *oauth2.Config
-	lastErr  error
+	// endSession is the end_session_endpoint of the discovery document ("" if none).
+	endSession string
+	lastErr    error
 	lastTry  time.Time
 }
 
@@ -235,6 +244,13 @@ func (p *Provider) discover(ctx context.Context) (*oauth2.Config, error) {
 		p.lastErr = err
 		return nil, err
 	}
+	var extra struct {
+		EndSession string `json:"end_session_endpoint"`
+	}
+	_ = prov.Claims(&extra) // the document already decoded once
+	if u, err := url.Parse(extra.EndSession); err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.Host != "" {
+		p.endSession = extra.EndSession
+	}
 	p.provider, p.lastErr = prov, nil
 	p.verifier = prov.Verifier(&gooidc.Config{ClientID: p.cfg.ClientID, Now: p.now})
 	ep := prov.Endpoint()
@@ -281,37 +297,45 @@ func (p *Provider) Begin(ctx context.Context, redirect string) (authURL, cookie 
 	return oc.AuthCodeURL(st.State, gooidc.Nonce(st.Nonce), oauth2.S256ChallengeOption(st.Verifier)), cookie, nil
 }
 
+// Result is a finished sign-in.
+type Result struct {
+	Identity *auth.ExternalIdentity
+	// Redirect is the same-origin path given to Begin.
+	Redirect string
+	// IDToken is the raw ID token, the id_token_hint of a later logout.
+	IDToken string
+}
+
 // Complete finishes a sign-in: it checks the callback's state against the
 // cookie, exchanges the code (with the PKCE verifier), verifies the ID
 // token and its nonce, and maps the claims (completed from the userinfo
-// endpoint when the ID token lacks some). It returns the identity and the
-// redirect path given to Begin.
-func (p *Provider) Complete(ctx context.Context, cookie, gotState, code string) (*auth.ExternalIdentity, string, error) {
+// endpoint when the ID token lacks some).
+func (p *Provider) Complete(ctx context.Context, cookie, gotState, code string) (*Result, error) {
 	st, err := p.open(cookie)
 	if err != nil {
-		return nil, "", fail(CodeState, "bad_state_cookie", err)
+		return nil, fail(CodeState, "bad_state_cookie", err)
 	}
 	if p.now().Unix() > st.Expires {
-		return nil, "", fail(CodeState, "state_expired", nil)
+		return nil, fail(CodeState, "state_expired", nil)
 	}
 	if gotState == "" || subtle.ConstantTimeCompare([]byte(gotState), []byte(st.State)) != 1 {
-		return nil, "", fail(CodeState, "state_mismatch", nil)
+		return nil, fail(CodeState, "state_mismatch", nil)
 	}
 	if code == "" {
-		return nil, "", fail(CodeFailed, "missing_code", nil)
+		return nil, fail(CodeFailed, "missing_code", nil)
 	}
 	oc, err := p.discover(ctx)
 	if err != nil {
-		return nil, "", fail(CodeUnavailable, "discovery", err)
+		return nil, fail(CodeUnavailable, "discovery", err)
 	}
 	ctx = gooidc.ClientContext(ctx, p.client)
 	tok, err := oc.Exchange(ctx, code, oauth2.VerifierOption(st.Verifier))
 	if err != nil {
-		return nil, "", fail(CodeFailed, "code_exchange", err)
+		return nil, fail(CodeFailed, "code_exchange", err)
 	}
 	raw, _ := tok.Extra("id_token").(string)
 	if raw == "" {
-		return nil, "", fail(CodeFailed, "no_id_token", nil)
+		return nil, fail(CodeFailed, "no_id_token", nil)
 	}
 	p.mu.Lock()
 	verifier, prov := p.verifier, p.provider
@@ -323,26 +347,26 @@ func (p *Provider) Complete(ctx context.Context, cookie, gotState, code string) 
 		if errors.As(err, &expired) {
 			reason = "id_token_expired"
 		}
-		return nil, "", fail(CodeFailed, reason, err)
+		return nil, fail(CodeFailed, reason, err)
 	}
 	if subtle.ConstantTimeCompare([]byte(idt.Nonce), []byte(st.Nonce)) != 1 {
-		return nil, "", fail(CodeFailed, "nonce_mismatch", nil)
+		return nil, fail(CodeFailed, "nonce_mismatch", nil)
 	}
 	claims := map[string]any{}
 	if err := idt.Claims(&claims); err != nil {
-		return nil, "", fail(CodeFailed, "id_token_claims", err)
+		return nil, fail(CodeFailed, "id_token_claims", err)
 	}
 	if p.incomplete(claims) && prov.UserInfoEndpoint() != "" {
 		info, err := prov.UserInfo(ctx, oauth2.StaticTokenSource(tok))
 		if err != nil {
-			return nil, "", fail(CodeFailed, "userinfo", err)
+			return nil, fail(CodeFailed, "userinfo", err)
 		}
 		if info.Subject != idt.Subject {
-			return nil, "", fail(CodeFailed, "userinfo_subject_mismatch", nil)
+			return nil, fail(CodeFailed, "userinfo_subject_mismatch", nil)
 		}
 		extra := map[string]any{}
 		if err := info.Claims(&extra); err != nil {
-			return nil, "", fail(CodeFailed, "userinfo_claims", err)
+			return nil, fail(CodeFailed, "userinfo_claims", err)
 		}
 		for k, v := range extra {
 			if _, ok := claims[k]; !ok {
@@ -364,7 +388,49 @@ func (p *Provider) Complete(ctx context.Context, cookie, gotState, code string) 
 	if v, ok := claims["email_verified"].(bool); ok && !v {
 		id.Email = ""
 	}
-	return id, st.Redirect, nil
+	return &Result{Identity: id, Redirect: st.Redirect, IDToken: raw}, nil
+}
+
+// EndSessionEndpoint is the provider's end_session_endpoint ("" when it
+// has none or discovery has not succeeded yet).
+func (p *Provider) EndSessionEndpoint() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.endSession
+}
+
+// LogoutURL returns where to send the browser to end the provider session
+// too (OpenID Connect RP-Initiated Logout 1.0): the end_session_endpoint
+// with id_token_hint (when idToken is known), client_id and
+// post_logout_redirect_uri. It returns "" when auth.oidc.logout is local or
+// the provider has no end_session_endpoint (or cannot be reached): signing
+// out then ends the Hangar session only.
+func (p *Provider) LogoutURL(ctx context.Context, idToken string) string {
+	if p.cfg.Logout == auth.OIDCLogoutLocal {
+		return ""
+	}
+	if _, err := p.discover(ctx); err != nil {
+		p.log.WarnContext(ctx, "auth.oidc: provider unreachable; signing out of Hangar only", "error", err)
+		return ""
+	}
+	endpoint := p.EndSessionEndpoint()
+	if endpoint == "" {
+		return ""
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return ""
+	}
+	q := u.Query()
+	if idToken != "" {
+		q.Set("id_token_hint", idToken)
+	}
+	q.Set("client_id", p.cfg.ClientID)
+	if p.opts.PostLogoutRedirectURL != "" {
+		q.Set("post_logout_redirect_uri", p.opts.PostLogoutRedirectURL)
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 // incomplete reports whether claims lack the username or groups claim.

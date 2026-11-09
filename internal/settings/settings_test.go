@@ -588,9 +588,16 @@ func TestOIDCTest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.OK || len(res.Steps) != 4 || res.Steps[3].Name != "client_credentials" {
+	if !res.OK || len(res.Steps) != 5 || res.Steps[3].Name != "client_credentials" || res.Steps[4].Name != "logout" ||
+		res.Steps[4].Status != settings.StepOK {
 		t.Fatalf("result = %+v", res)
 	}
+	// A provider without end_session_endpoint signs out locally: not a failure.
+	issuer.Set(func(is *oidctest.Issuer) { is.NoEndSession = true })
+	if res, _ = e.svc.TestOIDC(e.admin, settings.OIDCTestInput{Settings: &in}); !res.OK || res.Steps[4].Status != settings.StepSkipped {
+		t.Fatalf("no end_session_endpoint = %+v", res)
+	}
+	issuer.Set(func(is *oidctest.Issuer) { is.NoEndSession = false })
 	// A client without a service account: the provider authenticates it and
 	// then refuses the grant (401 unauthorized_client). The secret is right.
 	issuer.Set(func(is *oidctest.Issuer) { is.NoClientCredentials = true })

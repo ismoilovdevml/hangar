@@ -40,10 +40,12 @@ type Mapping struct {
 
 // OIDCSettings are the editable OIDC settings (schema OIDCSettings).
 type OIDCSettings struct {
-	Enabled       bool     `json:"enabled"`
-	IssuerURL     string   `json:"issuer_url"`
-	ClientID      string   `json:"client_id"`
-	ClientAuth    string   `json:"client_auth"`
+	Enabled    bool   `json:"enabled"`
+	IssuerURL  string `json:"issuer_url"`
+	ClientID   string `json:"client_id"`
+	ClientAuth string `json:"client_auth"`
+	// Logout is auth.oidc.logout: provider (RP-initiated logout) or local.
+	Logout        string   `json:"logout"`
 	DisplayName   string   `json:"display_name"`
 	Scopes        []string `json:"scopes"`
 	UsernameClaim string   `json:"username_claim"`
@@ -137,7 +139,7 @@ type ldapDoc struct {
 }
 
 var (
-	oidcFields = []string{"enabled", "issuer_url", "client_id", "client_secret", "client_auth", "display_name", "scopes",
+	oidcFields = []string{"enabled", "issuer_url", "client_id", "client_secret", "client_auth", "logout", "display_name", "scopes",
 		"username_claim", "email_claim", "name_claim", "groups_claim", "ca_pem", "group_roles", "default_roles", "allowed_groups", "auto_create"}
 	ldapFields = []string{"enabled", "url", "start_tls", "ca_pem", "bind_dn", "bind_password", "user_base_dn", "user_filter",
 		"username_attribute", "email_attribute", "name_attribute", "group_attribute", "group_base_dn", "group_filter",
@@ -168,7 +170,7 @@ func mappingFrom(m auth.RoleMapping) Mapping {
 func (o OIDCSettings) config(secret string) auth.OIDCConfig {
 	c := auth.OIDCConfig{
 		Enabled: o.Enabled, IssuerURL: o.IssuerURL, ClientID: o.ClientID, ClientSecret: secret, ClientAuth: o.ClientAuth,
-		DisplayName: o.DisplayName, Scopes: slices.Clone(o.Scopes), UsernameClaim: o.UsernameClaim, EmailClaim: o.EmailClaim,
+		Logout: o.Logout, DisplayName: o.DisplayName, Scopes: slices.Clone(o.Scopes), UsernameClaim: o.UsernameClaim, EmailClaim: o.EmailClaim,
 		NameClaim: o.NameClaim, GroupsClaim: o.GroupsClaim, CAPEM: o.CAPEM,
 	}
 	c.GroupRoles, c.DefaultRoles, c.AllowedGroups, c.AutoCreate = o.roleMapping()
@@ -178,8 +180,9 @@ func (o OIDCSettings) config(secret string) auth.OIDCConfig {
 func oidcSettingsFrom(c auth.OIDCConfig) OIDCSettings {
 	c = c.WithDefaults()
 	return OIDCSettings{
-		Enabled: c.Enabled, IssuerURL: c.IssuerURL, ClientID: c.ClientID, ClientAuth: c.ClientAuth, DisplayName: c.DisplayName,
-		Scopes: nonNil(c.Scopes), UsernameClaim: c.UsernameClaim, EmailClaim: c.EmailClaim, NameClaim: c.NameClaim,
+		Enabled: c.Enabled, IssuerURL: c.IssuerURL, ClientID: c.ClientID, ClientAuth: c.ClientAuth, Logout: c.Logout,
+		DisplayName: c.DisplayName,
+		Scopes:      nonNil(c.Scopes), UsernameClaim: c.UsernameClaim, EmailClaim: c.EmailClaim, NameClaim: c.NameClaim,
 		GroupsClaim: c.GroupsClaim, CAPEM: c.CAPEM, Mapping: mappingFrom(c.Mapping()),
 	}
 }
@@ -221,7 +224,7 @@ func (m *Mapping) normalize() {
 
 func (o *OIDCSettings) normalize() {
 	o.Preset = strings.TrimSpace(o.Preset)
-	for _, p := range []*string{&o.IssuerURL, &o.ClientID, &o.ClientAuth, &o.DisplayName, &o.UsernameClaim, &o.EmailClaim, &o.NameClaim, &o.GroupsClaim} {
+	for _, p := range []*string{&o.IssuerURL, &o.ClientID, &o.ClientAuth, &o.Logout, &o.DisplayName, &o.UsernameClaim, &o.EmailClaim, &o.NameClaim, &o.GroupsClaim} {
 		*p = strings.TrimSpace(*p)
 	}
 	o.IssuerURL = strings.TrimSuffix(o.IssuerURL, "/")

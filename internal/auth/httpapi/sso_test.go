@@ -37,7 +37,7 @@ func newSSOServer(t *testing.T, cfg auth.Config, opts ...authtest.Option) *ssoSe
 	var h http.Handler
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { h.ServeHTTP(w, r) }))
 	t.Cleanup(srv.Close)
-	p, err := oidc.New(env.Svc.Config().OIDC, oidc.Options{RedirectURL: srv.URL + oidc.CallbackPath})
+	p, err := oidc.New(env.Svc.Config().OIDC, oidc.Options{RedirectURL: srv.URL + oidc.CallbackPath, PostLogoutRedirectURL: srv.URL + "/login"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,10 @@ func TestOIDCSignIn(t *testing.T) {
 	// The session is a normal one: mutating requests need the CSRF token.
 	c.csrf = resp.Header.Get("X-CSRF-Token")
 	resp, body = c.do(http.MethodPost, "/auth/logout", nil)
-	expect(t, resp, body, http.StatusNoContent, "")
+	expect(t, resp, body, http.StatusOK, "")
+	if u, _ := body["logout_url"].(string); !strings.HasPrefix(u, s.issuer.URL+"/logout?") {
+		t.Fatalf("logout = %v", body)
+	}
 
 	if ev := s.env.Audit.Events(auth.AuditLogin); len(ev) != 1 || ev[0].Details["method"] != auth.MethodOIDC {
 		t.Fatalf("login audit = %+v", ev)
@@ -311,3 +314,104 @@ func TestLDAPRealmDisabled(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// logout signs the client out and returns the provider logout URL ("" for a 204).
+func (c *client) logout() string {
+	c.t.Helper()
+	resp, body := c.do(http.MethodGet, "/auth/session", nil)
+	expect(c.t, resp, body, http.StatusOK, "")
+	c.csrf = resp.Header.Get("X-CSRF-Token")
+	resp, body = c.do(http.MethodPost, "/auth/logout", nil)
+	switch resp.StatusCode {
+	case http.StatusNoContent:
+		return ""
+	case http.StatusOK:
+		u, _ := body["logout_url"].(string)
+		if u == "" {
+			c.t.Fatalf("logout body = %v", body)
+		}
+		return u
+	}
+	c.t.Fatalf("logout: status %d (%v)", resp.StatusCode, body)
+	return ""
+}
+
+func TestOIDCLogout(t *testing.T) {
+	s := newSSOServer(t, ssoConfig())
+	s.issuer.Set(func(is *oidctest.Issuer) { is.User = ssoUser("kc-7", "jroe", "staff") })
+	c := s.client(t)
+	c.sso("/")
+	logoutURL := c.logout()
+	u, err := url.Parse(logoutURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := u.Query()
+	if q.Get("client_id") != oidctest.ClientID || q.Get("post_logout_redirect_uri") != s.URL+"/login" || q.Get("id_token_hint") == "" {
+		t.Fatalf("logout query = %v", q)
+	}
+	// The Hangar session is gone before the browser leaves.
+	resp, body := c.do(http.MethodGet, "/auth/session", nil)
+	expect(t, resp, body, http.StatusUnauthorized, "")
+
+	// The provider accepts the hint (its own, signed ID token for this
+	// client) and returns the browser to the login page.
+	hc := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	lr, err := hc.Get(logoutURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = lr.Body.Close()
+	if loc := lr.Header.Get("Location"); lr.StatusCode != http.StatusFound || loc != s.URL+"/login" {
+		t.Fatalf("provider logout: %d to %q", lr.StatusCode, loc)
+	}
+	if n := len(s.issuer.Logouts); n != 1 {
+		t.Fatalf("provider saw %d logouts", n)
+	}
+
+	// The ID token is stored sealed: the database never holds it in clear.
+	var sealed int
+	if err := s.env.Pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM sessions WHERE id_token IS NOT NULL AND position($1::bytea in id_token) > 0`,
+		[]byte(q.Get("id_token_hint")[:40])).Scan(&sealed); err != nil || sealed != 0 {
+		t.Fatalf("clear ID token in sessions: %d, %v", sealed, err)
+	}
+
+	// A local account signs out of Hangar only, SSO enabled or not.
+	admin := s.env.Admin(t)
+	if _, err := s.env.Svc.CreateUser(admin, auth.UserInput{Username: "localann", Kind: auth.KindUser, Password: ptr(pw)}); err != nil {
+		t.Fatal(err)
+	}
+	lc := s.client(t)
+	resp, body = lc.do(http.MethodPost, "/auth/login", map[string]any{"username": "localann", "password": pw})
+	expect(t, resp, body, http.StatusOK, "")
+	if got := lc.logout(); got != "" {
+		t.Fatalf("local user logout URL = %q", got)
+	}
+}
+
+func TestOIDCLogoutLocalAndWithoutEndpoint(t *testing.T) {
+	cfg := ssoConfig()
+	cfg.OIDC.Logout = auth.OIDCLogoutLocal
+	s := newSSOServer(t, cfg)
+	s.issuer.Set(func(is *oidctest.Issuer) { is.User = ssoUser("kc-8", "kim", "staff") })
+	c := s.client(t)
+	c.sso("/")
+	if got := c.logout(); got != "" {
+		t.Fatalf("auth.oidc.logout local: %q", got)
+	}
+
+	s2 := newSSOServer(t, ssoConfig())
+	s2.issuer.Set(func(is *oidctest.Issuer) {
+		is.User = ssoUser("kc-9", "lee", "staff")
+		is.NoEndSession = true
+	})
+	c2 := s2.client(t)
+	c2.sso("/")
+	if got := c2.logout(); got != "" {
+		t.Fatalf("provider without end_session_endpoint: %q", got)
+	}
+	if n := len(s2.issuer.Logouts); n != 0 {
+		t.Fatalf("provider saw %d logouts", n)
+	}
+}

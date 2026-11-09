@@ -60,7 +60,7 @@ func (h *handler) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(oidc.CookieName); err == nil {
 		cookie = c.Value
 	}
-	id, redirect, err := provider.Complete(ctx, cookie, q.Get("state"), q.Get("code"))
+	res, err := provider.Complete(ctx, cookie, q.Get("state"), q.Get("code"))
 	if err != nil {
 		code, reason := oidc.CodeFailed, "internal"
 		var oe *oidc.Error
@@ -72,6 +72,7 @@ func (h *handler) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		h.loginFailed(w, r, code)
 		return
 	}
+	id := res.Identity
 	p, err := h.svc.SignInExternal(ctx, *id, auth.MethodOIDC)
 	if err != nil {
 		code := oidc.CodeFailed
@@ -84,13 +85,19 @@ func (h *handler) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		h.loginFailed(w, r, code)
 		return
 	}
-	if err := h.startSession(w, r, p, false); err != nil {
+	secret, err := h.startSession(w, r, p, false)
+	if err != nil {
 		h.log.ErrorContext(ctx, "auth: oidc session", "error", err)
 		h.loginFailed(w, r, oidc.CodeFailed)
 		return
 	}
+	// Kept for the id_token_hint of RP-initiated logout; without it logout
+	// still works, the provider may just ask to confirm.
+	if err := h.svc.SetSessionIDToken(ctx, secret, res.IDToken); err != nil {
+		h.log.WarnContext(ctx, "auth: keeping the ID token for logout failed", "error", err)
+	}
 	w.Header().Set("Cache-Control", "no-store")
-	http.Redirect(w, r, oidc.SafeRedirect(redirect), http.StatusFound) //nolint:gosec // G710: SafeRedirect admits same-origin paths only
+	http.Redirect(w, r, oidc.SafeRedirect(res.Redirect), http.StatusFound) //nolint:gosec // G710: SafeRedirect admits same-origin paths only
 }
 
 // loginFailed returns the browser to the login page with an error code.
