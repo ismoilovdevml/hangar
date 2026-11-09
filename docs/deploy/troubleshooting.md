@@ -68,6 +68,7 @@ During shutdown a node answers 503 on purpose (draining).
 |---|---|---|
 | Disk or bucket keeps growing after deletes | Blob GC keeps unreferenced blobs for `storage.gc.grace_period` and runs daily on the leader. | Wait for the next GC run, or check the task list for failed `blob.gc` runs. Cleanup policies decide what gets deleted in the first place. |
 | S3 `AccessDenied` on uploads only | Missing `s3:PutObject` or multipart actions. | Grant the actions in [requirements.md](requirements.md). |
+| An upload fails with `blob sha256:... was reclaimed by garbage collection during the publish; upload it again` | The content was identical to an unreferenced blob that `blob.gc` deleted while the upload was being published. Hangar refuses the publish rather than store a reference to deleted bytes. | Retry the upload; it stores the bytes again. Rare, and only while `blob.gc` runs. |
 | After a restore, some downloads fail | Blobs copied before the database dump, or later than the GC grace period. | Restore blobs from a later copy; see [backup-restore.md](backup-restore.md). |
 
 ## Getting more detail

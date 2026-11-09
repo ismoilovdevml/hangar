@@ -166,6 +166,7 @@ attributed to the group. `op` is `read` (GET, HEAD), `write` (PUT, POST, PATCH),
 | `hangar_format_download_bytes_total` | counter | `format`, `repo_type` | Bytes sent in successful (2xx) reads. |
 | `hangar_proxy_cache_requests_total` | counter | `format`, `result` | Proxy requests answered from the cache (`hit`) or fetched from the remote (`miss`). |
 | `hangar_proxy_cache_hit_bytes_total` | counter | `format` | Bytes served from proxy caches without contacting the remote. |
+| `hangar_proxy_negative_cache_evictions_total` | counter | `repository` | Remembered remote 404s dropped before their `negative_cache_ttl` because the repository's negative cache (10,000 paths per remote, least recently used first) was full. A steady rate means clients probe more missing paths than the cache holds, and those probes reach the remote again. |
 
 ### Blob storage
 
@@ -180,7 +181,7 @@ and is measured by the `blob.gc` job metrics. `result` is `ok`, `not_found`
 | `hangar_blobstore_operation_duration_seconds` | histogram | `driver`, `op` | Latency. `put` includes streaming the content; `get` is the time to open the blob. |
 | `hangar_blobstore_put_bytes_total` | counter | `driver` | Bytes written before deduplication. |
 | `hangar_blobstore_used_bytes` | gauge | `store`, `driver` | Bytes of live blobs per store (as on the Blob stores screen). |
-| `hangar_blobstore_reclaimable_bytes` | gauge | `store`, `driver` | Bytes of soft-deleted blobs that the next GC run frees. |
+| `hangar_blobstore_reclaimable_bytes` | gauge | `store`, `driver` | Bytes of unreferenced blobs that GC frees once their grace period has passed: deleted content, and content that was stored but never published (rejected uploads, digest mismatches). |
 | `hangar_blobstore_soft_quota_bytes` | gauge | `store`, `driver` | Soft quota of stores that have one. |
 | `hangar_blobstore_fs_size_bytes` | gauge | `store` | Size of the filesystem holding an `fs` store, as seen by this node. |
 | `hangar_blobstore_fs_free_bytes` | gauge | `store` | Bytes available to Hangar on that filesystem. |
