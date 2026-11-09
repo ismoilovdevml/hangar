@@ -1,6 +1,8 @@
 package observability
 
 import (
+	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"math/rand/v2"
@@ -115,6 +117,9 @@ func HTTPMiddleware(o HTTPOptions) func(http.Handler) http.Handler {
 
 			level := slog.LevelInfo
 			switch {
+			case status >= http.StatusInternalServerError && errors.Is(req.Context().Err(), context.Canceled):
+				// The client went away; a failure it caused is not a server error.
+				level = slog.LevelDebug
 			case status >= http.StatusInternalServerError && status != http.StatusNotImplemented:
 				level = slog.LevelError
 			case o.QuietPaths[r.URL.Path]:
