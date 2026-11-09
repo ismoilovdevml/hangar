@@ -90,6 +90,9 @@ type RepoConfig struct {
 	Connector *ConnectorConfig `json:"connector,omitempty" yaml:"connector,omitempty"`
 	// CleanupPolicies lists cleanup policy names applied to this repository.
 	CleanupPolicies []string `json:"cleanup_policies,omitempty" yaml:"cleanup_policies,omitempty"`
+	// Routing restricts which package names a proxy fetches and serves, or
+	// which group member serves which names (dependency confusion guard).
+	Routing *RoutingRules `json:"routing,omitempty" yaml:"routing,omitempty"`
 
 	// Format holds format-specific settings (e.g. Maven version policy). Its
 	// shape is owned by the format package, which validates it in
@@ -432,6 +435,9 @@ func (r *Repository) Validate() error {
 	}
 	if r.Type != RepoGroup && r.BlobStore == "" {
 		return fmt.Errorf("repository %q: blobStore is required: %w", r.Name, ErrInvalid)
+	}
+	if err := r.validateRouting(); err != nil {
+		return fmt.Errorf("repository %q: %w", r.Name, err)
 	}
 	return nil
 }

@@ -15,6 +15,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // crateParams reads {crate} and {version} from the route. The crate name is
@@ -135,7 +136,7 @@ func (h *handler) openCrate(ctx context.Context, repo *core.Repository, name, ve
 			owner   *core.Repository
 			lastErr error
 		)
-		err := h.eachMember(ctx, repo, depth, func(m *core.Repository) error {
+		err := h.eachMember(ctx, repo, depth, name, func(m *core.Repository) error {
 			if found != nil {
 				return nil
 			}
@@ -160,6 +161,9 @@ func (h *handler) openCrate(ctx context.Context, repo *core.Repository, name, ve
 		}
 		return nil, nil, fmt.Errorf("crate `%s@%s`: %w", name, version, core.ErrNotFound)
 	case core.RepoProxy:
+		if err := routing.Check(ctx, repo, name); err != nil {
+			return nil, nil, err
+		}
 		a, err := h.deps.Components.GetAsset(ctx, repo.ID, cratePath(name, version))
 		if err == nil {
 			proxy.NoteCacheHit(ctx, a.Size)
@@ -240,13 +244,16 @@ func (h *handler) searchRepo(ctx context.Context, repo *core.Repository, q strin
 	if repo.Type == core.RepoGroup {
 		var out []searchHit
 		seen := map[string]bool{}
-		err := h.eachMember(ctx, repo, depth, func(m *core.Repository) error {
+		err := h.eachMember(ctx, repo, depth, "", func(m *core.Repository) error {
 			hits, err := h.searchRepo(ctx, m, q, depth+1)
 			if err != nil {
 				h.log.WarnContext(ctx, "group member search failed", "group", repo.Name, "member", m.Name, "err", err)
 				return nil
 			}
 			for _, hit := range hits {
+				if !routing.Allows(ctx, repo, m, hit.Name) {
+					continue
+				}
 				if k := strings.ToLower(hit.Name); !seen[k] {
 					seen[k] = true
 					out = append(out, hit)
@@ -265,6 +272,9 @@ func (h *handler) searchRepo(ctx context.Context, repo *core.Repository, q strin
 	for _, c := range comps {
 		if c.Namespace != "" || c.Quarantined || !matches(c, q) {
 			continue
+		}
+		if repo.Type == core.RepoProxy && routing.Check(ctx, repo, c.Name) != nil {
+			continue // cached before a routing rule excluded it
 		}
 		cur, ok := best[c.Name]
 		if !ok {

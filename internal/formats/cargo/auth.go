@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // credentials reads the Authorization header the way cargo sends it: the
@@ -62,6 +63,7 @@ type errorDetail struct {
 
 // writeError answers with {"errors":[{"detail": ...}]}.
 func (h *handler) writeError(w http.ResponseWriter, r *http.Request, err error) {
+	err = routing.Annotate(r.Context(), err)
 	code := core.HTTPStatus(err)
 	if errors.Is(err, errMethod) {
 		code = http.StatusMethodNotAllowed

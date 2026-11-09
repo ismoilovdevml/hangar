@@ -12,6 +12,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // serveFile answers GET/HEAD packages/{project}/{filename}: a distribution
@@ -74,7 +75,7 @@ func (h *handler) openFile(ctx context.Context, repo *core.Repository, name, fil
 			owner      *core.Repository
 			upstreamEr error
 		)
-		err := h.eachMember(ctx, repo, depth, func(m *core.Repository) error {
+		err := h.eachMember(ctx, repo, depth, name, func(m *core.Repository) error {
 			if found != nil {
 				return nil
 			}
@@ -99,6 +100,9 @@ func (h *handler) openFile(ctx context.Context, repo *core.Repository, name, fil
 		}
 		return nil, nil, fmt.Errorf("file %q: %w", filename, core.ErrNotFound)
 	case core.RepoProxy:
+		if err := routing.Check(ctx, repo, name); err != nil {
+			return nil, nil, err
+		}
 		a, err := h.deps.Components.GetAsset(ctx, repo.ID, filePath(name, filename))
 		if err == nil {
 			proxy.NoteCacheHit(ctx, a.Size)

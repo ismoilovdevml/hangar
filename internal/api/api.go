@@ -190,6 +190,11 @@ func (a *API) Mount(r chi.Router) {
 		r.Post("/repositories/{name}/cache:invalidate", a.invalidateRepositoryCache)
 		r.Get("/repositories/{name}/browse", a.browseRepository)
 		r.Post("/repositories/{name}:scan", a.scanRepository)
+		r.Get("/repositories/{name}/routing", a.getRouting)
+		r.Put("/repositories/{name}/routing", a.putRouting)
+		r.Delete("/repositories/{name}/routing", a.deleteRouting)
+		r.Post("/repositories/{name}/routing:test", a.testRouting)
+		r.Get("/repositories/{name}/routing:suggest", a.suggestRouting)
 
 		r.Get("/blob-stores", a.listBlobStores)
 		r.Post("/blob-stores", a.createBlobStore)

@@ -63,3 +63,27 @@ test('proxies list, short form and inline test', async ({ page }) => {
   }
   expect(errors).toEqual([]);
 });
+
+test('routing rules panel on a group and a proxy', async ({ page }) => {
+  const errors = collectErrors(page);
+  for (const [w, size] of SIZES) {
+    await page.setViewportSize(size);
+    await page.goto('/repositories/npm-all/settings');
+    const panel = page.getByRole('region', { name: 'Routing rules' });
+    await expect(panel.getByText(/dependency confusion/)).toBeVisible();
+    await panel.getByLabel('Names only npm-internal serves').fill('@acme/*');
+    await panel.getByRole('button', { name: 'Save routing rules' }).click();
+    await expect(panel.getByRole('button', { name: 'Saved' })).toBeVisible();
+    await panel.getByLabel('Test a name').fill('@acme/ui');
+    await panel.getByRole('button', { name: 'Test', exact: true }).click();
+    await expect(panel.getByRole('status', { name: 'Routing test result' })).toContainText('Served by npm-internal');
+    await panel.scrollIntoViewIfNeeded();
+    await checkFrame(page, `routing-group-${w}`);
+
+    await page.goto('/repositories/nuget-proxy/settings');
+    const proxyPanel = page.getByRole('region', { name: 'Routing rules' });
+    await expect(proxyPanel.getByLabel('Block')).toBeVisible();
+    await checkFrame(page, `routing-proxy-${w}`);
+  }
+  expect(errors).toEqual([]);
+});

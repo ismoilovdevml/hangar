@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 const (
@@ -22,16 +23,41 @@ const (
 // errReadOnly marks a write to a repository that cannot take one.
 var errReadOnly = errors.New("repository is read-only")
 
-// contentRepos returns the hosted and proxy repositories that answer reads
-// for repo: repo itself, or a group's members flattened in resolution order.
-func (h *handler) contentRepos(ctx context.Context, repo *core.Repository) ([]*core.Repository, error) {
-	if repo.Type != core.RepoGroup {
-		return []*core.Repository{repo}, nil
+// leaf is a hosted or proxy repository answering reads for a repository,
+// with the group memberships it was reached through (outermost first).
+type leaf struct {
+	repo *core.Repository
+	via  []link
+}
+
+type link struct{ group, member *core.Repository }
+
+// block returns the routing rule that keeps l from serving image: a group's
+// rule for the member on the way (matched against the image path), or a
+// proxy's own rule (matched against the name the remote sees, so
+// "library/*" covers Docker Hub's official images).
+func (l leaf) block(image string) *core.RoutingBlock {
+	for _, k := range l.via {
+		if b := k.group.MemberRoutingBlock(k.member.Name, image); b != nil {
+			return b
+		}
 	}
-	var out []*core.Repository
+	if l.repo.Type == core.RepoProxy {
+		return l.repo.RoutingBlock(upstreamName(l.repo, image))
+	}
+	return nil
+}
+
+// leaves returns the hosted and proxy repositories that answer reads for
+// repo: repo itself, or a group's members flattened in resolution order.
+func (h *handler) leaves(ctx context.Context, repo *core.Repository) ([]leaf, error) {
+	if repo.Type != core.RepoGroup {
+		return []leaf{{repo: repo}}, nil
+	}
+	var out []leaf
 	seen := map[string]bool{repo.Name: true}
-	var walk func(g *core.Repository, depth int) error
-	walk = func(g *core.Repository, depth int) error {
+	var walk func(g *core.Repository, via []link, depth int) error
+	walk = func(g *core.Repository, via []link, depth int) error {
 		if depth > maxGroupDepth {
 			return nil
 		}
@@ -44,20 +70,62 @@ func (h *handler) contentRepos(ctx context.Context, repo *core.Repository) ([]*c
 				continue
 			}
 			seen[m.Name] = true
+			path := make([]link, len(via)+1)
+			copy(path, via)
+			path[len(via)] = link{group: g, member: m}
 			if m.Type == core.RepoGroup {
-				if err := walk(m, depth+1); err != nil {
+				if err := walk(m, path, depth+1); err != nil {
 					return err
 				}
 				continue
 			}
-			out = append(out, m)
+			out = append(out, leaf{repo: m, via: path})
 		}
 		return nil
 	}
-	if err := walk(repo, 0); err != nil {
+	if err := walk(repo, nil, 0); err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+// contentRepos returns the leaves' repositories, without routing rules
+// (authorization and write paths).
+func (h *handler) contentRepos(ctx context.Context, repo *core.Repository) ([]*core.Repository, error) {
+	ls, err := h.leaves(ctx, repo)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*core.Repository, len(ls))
+	for i, l := range ls {
+		out[i] = l.repo
+	}
+	return out, nil
+}
+
+// servingRepos returns the repositories that may serve image for reads of
+// repo: contentRepos minus those the routing rules exclude (recorded).
+// blocked is the first exclusion, set when it removed every repository.
+func (h *handler) servingRepos(ctx context.Context, repo *core.Repository, image string) (repos []*core.Repository, blocked error, err error) {
+	ls, err := h.leaves(ctx, repo)
+	if err != nil {
+		return nil, nil, err
+	}
+	var first *core.RoutingBlock
+	for _, l := range ls {
+		if b := l.block(image); b != nil {
+			routing.Record(ctx, Name, b)
+			if first == nil {
+				first = b
+			}
+			continue
+		}
+		repos = append(repos, l.repo)
+	}
+	if len(repos) == 0 && first != nil {
+		return nil, first, nil
+	}
+	return repos, nil, nil
 }
 
 // writeTarget resolves where a write addressed to repo lands: the repository

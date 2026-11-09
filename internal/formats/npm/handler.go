@@ -13,6 +13,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 type handler struct {
@@ -105,7 +106,7 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 			h.deps.Logger.ErrorContext(r.Context(), "npm request failed", "repository", repo.Name,
 				"method", r.Method, "path", r.URL.Path, "error", err)
 		}
-		writeError(w, err)
+		writeError(w, routing.Annotate(r.Context(), err))
 	}
 }
 

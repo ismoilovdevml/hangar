@@ -99,6 +99,16 @@ type UpstreamRequest struct {
 	// Header is added to the outgoing request (e.g. Accept for OCI manifests).
 	Header      http.Header
 	Conditional Conditional
+	// Package is the routing identity (see RoutingName) of the package the
+	// request is about. A proxy repository with routing rules refuses the
+	// request with a *RoutingBlock, without contacting the remote, when its
+	// rules exclude the name.
+	Package string
+	// Index marks a request that is not about one package: a service index,
+	// a search, repository-wide metadata. A proxy repository with routing
+	// rules refuses requests that set neither Package nor Index, so a format
+	// cannot leak a name to the remote by forgetting to declare it.
+	Index bool
 }
 
 // UpstreamResponse is the remote's answer. The caller must close Body.

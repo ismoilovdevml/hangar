@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- **Routing rules against dependency confusion** (issue #73):
+  - Proxy repositories take `config.routing.block` and `allow` name patterns:
+    a blocked name is never requested from the remote nor served from the
+    cache (also content cached before the rule). Groups take per-member
+    `exclusive` (names served only by that member) and `block` patterns.
+  - Enforced in every format (apt, cargo, docker, go, helm, maven, npm, nuget,
+    pypi, raw, rpm): merged metadata, search and indexes leave out excluded
+    versions, downloads answer 404 naming the rule, and the
+    `X-Hangar-Routing` header explains exclusions. Remote requests of a proxy
+    with rules must declare their package, so no format can leak an internal
+    name upstream. APT and RPM proxies still pass the remote's signed indexes
+    through; only downloads of blocked packages are refused.
+  - Patterns match each format's identity: case-insensitive NuGet ids,
+    normalized PyPI names, npm `@scope/*`, Maven `groupId[:artifactId]`, Go
+    module path prefixes (GOPRIVATE syntax), Cargo crates, Docker image paths,
+    Helm charts, APT/RPM package names, raw paths.
+  - API: `GET/PUT/DELETE /repositories/{name}/routing`,
+    `POST .../routing:test` (which member serves a name) and
+    `GET .../routing:suggest` (patterns from what hosted repositories
+    publish). Changes are audited as `repository.routing.update`; exclusions
+    are counted in `hangar_routing_blocked_total` and audited as
+    `routing.blocked` (at most once per name every 10 minutes).
+  - Web UI: a **Routing rules** panel in proxy and group settings with a
+    suggested default and a **Test a name** field.
+  - Guide: `docs/guides/routing-rules.md`.
 - **API and client feedback** (issues #67, #69, #70, #71, #75):
   - A request with a wrong, expired or revoked token or password answers
     `401` on every endpoint, public ones included: a NuGet service index, apt

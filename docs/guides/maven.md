@@ -296,3 +296,10 @@ file.
 curl -u <user>:'<token>' -X DELETE \
   https://hangar.example.com/repository/maven-releases/com/acme/greeter/1.0.0
 ```
+
+## Routing rules
+
+A group that combines a hosted repository with a public proxy can serve a
+public package published under one of your internal names. Block internal
+names on the proxy and reserve them for the hosted member (for example `com.edcom`);
+see [routing-rules.md](routing-rules.md).

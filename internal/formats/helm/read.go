@@ -21,7 +21,7 @@ func (h *handler) serveIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, tally := proxy.WithCacheTally(r.Context())
 	defer tally.Record(Name, r.Method)
-	v, err := h.view(ctx, repo, 0)
+	v, err := h.servedView(ctx, repo)
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -88,7 +88,7 @@ func (h *handler) apiView(w http.ResponseWriter, r *http.Request) (*view, bool) 
 	}
 	ctx, tally := proxy.WithCacheTally(r.Context())
 	defer tally.Record(Name, r.Method)
-	v, err := h.view(ctx, repo, 0)
+	v, err := h.servedView(ctx, repo)
 	if err != nil {
 		h.fail(w, r, err)
 		return nil, false

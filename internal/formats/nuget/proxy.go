@@ -101,7 +101,7 @@ func (h *handler) upstreamIndex(ctx context.Context, repo *core.Repository) (*up
 		return nil, err
 	}
 	b, err := h.cachedDoc(ctx, repo, upstreamPrefix+"index.json", func(ctx context.Context) ([]byte, error) {
-		return h.fetchDoc(ctx, repo, h.remoteBase(repo)+"/"+cfg.ServiceIndex, maxServiceIndex)
+		return h.fetchDoc(ctx, repo, h.remoteBase(repo)+"/"+cfg.ServiceIndex, "", maxServiceIndex)
 	})
 	if err != nil {
 		// A remote without a service index is broken (502); an offline-mode
@@ -124,9 +124,10 @@ func (h *handler) remoteBase(repo *core.Repository) string {
 // credentials; resources the service index places on other hosts (search,
 // registrations, CDNs) are fetched as related hosts, without them. Hosts
 // neither in the service index nor in the repository's related_hosts are
-// refused.
-func (h *handler) fetch(ctx context.Context, repo *core.Repository, abs string) (*core.UpstreamResponse, error) {
-	req := core.UpstreamRequest{Header: http.Header{"Accept": {"application/json, */*"}}}
+// refused. lid is the package the request is about, "" for documents about
+// no single package (service index, search); routing rules see it.
+func (h *handler) fetch(ctx context.Context, repo *core.Repository, abs, lid string) (*core.UpstreamResponse, error) {
+	req := core.UpstreamRequest{Header: http.Header{"Accept": {"application/json, */*"}}, Package: lid, Index: lid == ""}
 	if rel, ok := strings.CutPrefix(abs, h.remoteBase(repo)+"/"); ok {
 		req.Path = rel
 	} else {
@@ -150,8 +151,8 @@ func (h *handler) fetch(ctx context.Context, repo *core.Repository, abs string) 
 }
 
 // fetchDoc fetches a JSON document of at most limit bytes. 404 is ErrNotFound.
-func (h *handler) fetchDoc(ctx context.Context, repo *core.Repository, abs string, limit int64) ([]byte, error) {
-	resp, err := h.fetch(ctx, repo, abs)
+func (h *handler) fetchDoc(ctx context.Context, repo *core.Repository, abs, lid string, limit int64) ([]byte, error) {
+	resp, err := h.fetch(ctx, repo, abs, lid)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +250,7 @@ func (h *handler) proxyVersions(ctx context.Context, repo *core.Repository, lid 
 		if err != nil {
 			return nil, err
 		}
-		return h.fetchDoc(ctx, repo, idx.Flat+lid+"/index.json", maxFlatIndex)
+		return h.fetchDoc(ctx, repo, idx.Flat+lid+"/index.json", lid, maxFlatIndex)
 	})
 	if err != nil {
 		return nil, err
@@ -287,7 +288,7 @@ func (h *handler) proxyRegistration(ctx context.Context, repo *core.Repository, 
 		if idx.Registration == "" {
 			return nil, fmt.Errorf("upstream has no registration resource: %w", core.ErrNotFound)
 		}
-		doc, err := h.fetchDoc(ctx, repo, idx.Registration+lid+"/index.json", maxRegistration)
+		doc, err := h.fetchDoc(ctx, repo, idx.Registration+lid+"/index.json", lid, maxRegistration)
 		if err != nil {
 			return nil, err
 		}
@@ -300,7 +301,7 @@ func (h *handler) proxyRegistration(ctx context.Context, repo *core.Repository, 
 		var cats []json.RawMessage
 		for _, p := range index.Items {
 			if p.Items == nil && p.ID != "" {
-				pb, err := h.fetchDoc(ctx, repo, p.ID, maxRegistration)
+				pb, err := h.fetchDoc(ctx, repo, p.ID, lid, maxRegistration)
 				if err != nil {
 					return nil, err
 				}
@@ -351,7 +352,7 @@ func (h *handler) cachePackage(ctx context.Context, repo *core.Repository, lid, 
 		return nil, err
 	}
 	abs := idx.Flat + lid + "/" + lver + "/" + lid + "." + lver + ".nupkg"
-	resp, err := h.fetch(ctx, repo, abs)
+	resp, err := h.fetch(ctx, repo, abs, lid)
 	if err != nil {
 		return nil, err
 	}

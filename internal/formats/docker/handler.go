@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // handler serves the OCI Distribution API under /v2/.
@@ -328,6 +329,7 @@ func (h *handler) internal(w http.ResponseWriter, r *http.Request, what string, 
 // fail answers err: auth sentinels with a challenge, everything else via the
 // core sentinel mapping.
 func (h *handler) fail(w http.ResponseWriter, r *http.Request, rq *request, err error, notFound string) {
+	err = routing.Annotate(r.Context(), err)
 	switch {
 	case errors.Is(err, core.ErrUnauthenticated), errors.Is(err, core.ErrForbidden):
 		action, _ := actionFor(rq.kind, r.Method)

@@ -2,12 +2,15 @@ package rpm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/repokit"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // groupData is the generated repodata of one group root, with the previous
@@ -23,17 +26,20 @@ type groupData struct {
 // groupRepodata returns the merged repodata of root over the group's hosted
 // members. A package path present in several members, or the same
 // name-epoch-version-release.arch, is taken from the first member.
+// Packages the group's routing rules keep from a member are left out.
 func (h *handler) groupRepodata(ctx context.Context, group *core.Repository, root string) (*groupData, error) {
-	members, err := h.HostedMembers(ctx, group)
+	leaves, err := h.HostedLeaves(ctx, group)
 	if err != nil {
 		return nil, err
 	}
 	depth := strings.Count(root, "/")
 	var key strings.Builder
+	key.WriteString(repokit.RoutingKey(leaves))
 	var pkgs []pkgFile
 	seen := map[string]bool{}
 	var latest int64
-	for _, m := range members {
+	for _, l := range leaves {
+		m := l.Repo
 		ps, err := h.packagesUnder(ctx, m, root, depth)
 		if err != nil {
 			return nil, err
@@ -42,7 +48,7 @@ func (h *handler) groupRepodata(ctx context.Context, group *core.Repository, roo
 		for _, p := range ps {
 			key.WriteString(p.Href + " " + p.SHA256 + "\n")
 			id := p.Header.NEVRA()
-			if seen[p.Href] || seen[id] {
+			if seen[p.Href] || seen[id] || !l.Allows(ctx, p.Header.Name) {
 				continue
 			}
 			seen[p.Href], seen[id] = true, true
@@ -77,12 +83,7 @@ func (h *handler) serveGroup(w http.ResponseWriter, r *http.Request, group *core
 	ctx := r.Context()
 	root, file, isMeta := splitRepodata(p)
 	if !isMeta {
-		members, err := h.HostedMembers(ctx, group)
-		if err != nil {
-			h.Fail(w, r, err)
-			return
-		}
-		a, owner, err := h.FindInMembers(ctx, members, p)
+		a, owner, err := h.findPackage(ctx, group, p)
 		if err == nil {
 			err = h.CheckQuarantine(ctx, a)
 		}
@@ -130,4 +131,60 @@ func (h *handler) serveGroup(w http.ResponseWriter, r *http.Request, group *core
 		return
 	}
 	h.ServeBytes(w, r, f.Data, f.ContentType, gd.at)
+}
+
+// findPackage returns the first hosted member of group holding path whose
+// routing rules let it serve the package (named by its component, else by
+// the file name). When every holder is excluded the error is the first
+// *core.RoutingBlock.
+func (h *handler) findPackage(ctx context.Context, group *core.Repository, path string) (*core.Asset, *core.Repository, error) {
+	leaves, err := h.HostedLeaves(ctx, group)
+	if err != nil {
+		return nil, nil, err
+	}
+	var blocked *core.RoutingBlock
+	for _, l := range leaves {
+		a, err := h.Deps.Components.GetAsset(ctx, l.Repo.ID, path)
+		if errors.Is(err, core.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		name := packageName(path)
+		if a.ComponentID != "" {
+			if c, err := h.Deps.Components.GetComponentByID(ctx, a.ComponentID); err == nil {
+				name = c.Name
+			}
+		}
+		if b := l.Block(name); b != nil {
+			routing.Record(ctx, Name, b)
+			if blocked == nil {
+				blocked = b
+			}
+			continue
+		}
+		return a, l.Repo, nil
+	}
+	if blocked != nil {
+		return nil, nil, blocked
+	}
+	return nil, nil, fmt.Errorf("%s: %w", path, core.ErrNotFound)
+}
+
+// packageName is the package name in an RPM file name
+// (name-version-release.arch.rpm), the routing identity of a download; the
+// file name without .rpm when it does not follow that form.
+func packageName(p string) string {
+	base := strings.TrimSuffix(p[strings.LastIndexByte(p, '/')+1:], ".rpm")
+	nvr := base
+	if i := strings.LastIndexByte(nvr, '.'); i > 0 {
+		nvr = nvr[:i]
+	}
+	if i := strings.LastIndexByte(nvr, '-'); i > 0 {
+		if j := strings.LastIndexByte(nvr[:i], '-'); j > 0 {
+			return nvr[:j]
+		}
+	}
+	return base
 }

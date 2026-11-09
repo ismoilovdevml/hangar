@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // authorize authenticates the request and checks action on repo. On failure
@@ -33,6 +34,7 @@ func (h *handler) authorize(w http.ResponseWriter, r *http.Request, repo *core.R
 
 // writeError answers with a plain-text message, which pip and twine print.
 func (h *handler) writeError(w http.ResponseWriter, r *http.Request, err error) {
+	err = routing.Annotate(r.Context(), err)
 	code := core.HTTPStatus(err)
 	msg := err.Error()
 	switch {

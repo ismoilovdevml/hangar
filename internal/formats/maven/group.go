@@ -18,9 +18,24 @@ func (h *handler) resolveGroup(ctx context.Context, repo *core.Repository, mp *m
 	if depth >= maxGroupDepth {
 		return nil, fmt.Errorf("group %q nested deeper than %d: %w", repo.Name, maxGroupDepth, core.ErrNotFound)
 	}
-	members, err := h.deps.Repos.Members(ctx, repo)
+	all, err := h.deps.Repos.Members(ctx, repo)
 	if err != nil {
 		return nil, err
+	}
+	// Routing rules drop members that must not serve this groupId:artifactId.
+	members := all[:0:0]
+	var blocked *core.RoutingBlock
+	for _, m := range all {
+		if b := memberBlock(ctx, repo, m, mp); b != nil {
+			if blocked == nil {
+				blocked = b
+			}
+			continue
+		}
+		members = append(members, m)
+	}
+	if len(members) == 0 && blocked != nil {
+		return nil, blocked
 	}
 	var lastErr error
 	if mp.kind == kindMetadata {

@@ -75,9 +75,13 @@ func sortUnique(s []string) []string {
 // serveTags implements GET /v2/<name>/tags/list.
 func (h *handler) serveTags(w http.ResponseWriter, r *http.Request, rq *request) {
 	ctx := r.Context()
-	repos, err := h.contentRepos(ctx, rq.repo)
+	repos, blocked, err := h.servingRepos(ctx, rq.repo, rq.image)
 	if err != nil {
 		h.internal(w, r, "resolve group", err)
+		return
+	}
+	if blocked != nil {
+		writeError(w, http.StatusNotFound, codeNameUnknown, blocked.Error())
 		return
 	}
 	var tags []string
@@ -175,17 +179,20 @@ func (h *handler) serveCatalog(w http.ResponseWriter, r *http.Request) {
 			if repo.Format != Name || !repo.Online || (n.repo != "" && repo.Name != n.repo) || h.deps.AuthZ.Authorize(ctx, p, core.ActionRead, core.RepoResource(repo.Name)) != nil {
 				continue
 			}
-			members, err := h.contentRepos(ctx, repo)
+			members, err := h.leaves(ctx, repo)
 			if err != nil {
 				continue
 			}
 			for _, m := range members {
-				imgs, err := h.localImages(ctx, m)
+				imgs, err := h.localImages(ctx, m.repo)
 				if err != nil {
 					h.internal(w, r, "list images", err)
 					return
 				}
 				for _, img := range imgs {
+					if m.block(img) != nil {
+						continue // routing rules keep it from this repository
+					}
 					if pub, ok := n.public(repo.Name, img); ok {
 						names = append(names, pub)
 					}
@@ -240,7 +247,7 @@ func (h *handler) serveReferrers(w http.ResponseWriter, r *http.Request, rq *req
 		writeError(w, http.StatusBadRequest, codeDigestInvalid, "invalid digest "+rq.ref)
 		return
 	}
-	repos, err := h.contentRepos(ctx, rq.repo)
+	repos, _, err := h.servingRepos(ctx, rq.repo, rq.image)
 	if err != nil {
 		h.internal(w, r, "resolve group", err)
 		return

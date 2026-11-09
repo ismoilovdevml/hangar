@@ -70,6 +70,9 @@ func (h *handler) listDir(ctx context.Context, repo *core.Repository, dir string
 			}
 			truncated = truncated || tr
 			for _, e := range es {
+				if listingHidden(repo, m, dir+e.Name) {
+					continue
+				}
 				if _, ok := seen[e.Name]; !ok {
 					seen[e.Name] = e
 				}
@@ -82,6 +85,9 @@ func (h *handler) listDir(ctx context.Context, repo *core.Repository, dir string
 		}
 		truncated = tr
 		for _, a := range assets {
+			if repo.Type == core.RepoProxy && listingHidden(nil, repo, a.Path) {
+				continue
+			}
 			rest := strings.TrimPrefix(a.Path, dir)
 			if i := strings.IndexByte(rest, '/'); i >= 0 {
 				name := rest[:i+1]

@@ -14,6 +14,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 const (
@@ -35,8 +36,13 @@ func remoteBase(repo *core.Repository) string {
 
 // proxyIndex returns the remote's index file of name, minus the versions
 // quarantined in this repository.
+// The proxy's routing rules are applied first: a blocked crate is neither
+// served from the cache nor requested from the remote.
 func (h *handler) proxyIndex(ctx context.Context, repo *core.Repository, name string) (*indexFile, error) {
-	doc, err := h.remoteDoc(ctx, repo, IndexPath(name), indexCachePath(name), maxIndexBytes)
+	if err := routing.Check(ctx, repo, name); err != nil {
+		return nil, err
+	}
+	doc, err := h.remoteDoc(ctx, repo, IndexPath(name), indexCachePath(name), name, maxIndexBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -80,8 +86,9 @@ type remoteDocument struct {
 // remoteDoc returns the remote document at remotePath (relative to the
 // remote URL), cached at cachePath: from cache while fresh
 // (ProxyConfig.MetadataTTL), revalidated with ETag / Last-Modified after
-// that, and served stale while the remote fails.
-func (h *handler) remoteDoc(ctx context.Context, repo *core.Repository, remotePath, cachePath string, limit int64) (*remoteDocument, error) {
+// that, and served stale while the remote fails. crate is the crate the
+// document is about, "" for the remote's config.json (routing rules see it).
+func (h *handler) remoteDoc(ctx context.Context, repo *core.Repository, remotePath, cachePath, crate string, limit int64) (*remoteDocument, error) {
 	key := repo.ID + "/" + cachePath
 	cached, asset := h.cachedDoc(ctx, repo, cachePath, limit)
 	if cached != nil {
@@ -97,7 +104,7 @@ func (h *handler) remoteDoc(ctx context.Context, repo *core.Repository, remotePa
 		}
 	}
 	v, err, _ := h.flight.Do("doc:"+key, func() (any, error) {
-		doc, err := h.refreshDoc(context.WithoutCancel(ctx), repo, remotePath, cachePath, limit, cached, asset)
+		doc, err := h.refreshDoc(context.WithoutCancel(ctx), repo, remotePath, cachePath, crate, limit, cached, asset)
 		return refreshed{doc: doc, fromCache: doc != nil && doc == cached}, err
 	})
 	res, _ := v.(refreshed)
@@ -143,14 +150,14 @@ func (h *handler) cachedDoc(ctx context.Context, repo *core.Repository, cachePat
 	return doc, a
 }
 
-func (h *handler) refreshDoc(ctx context.Context, repo *core.Repository, remotePath, cachePath string, limit int64,
+func (h *handler) refreshDoc(ctx context.Context, repo *core.Repository, remotePath, cachePath, crate string, limit int64,
 	cached *remoteDocument, asset *core.Asset) (*remoteDocument, error) {
 	key := repo.ID + "/" + cachePath
 	up, err := h.deps.Upstreams.ForRepository(ctx, repo)
 	if err != nil {
 		return nil, err
 	}
-	req := core.UpstreamRequest{Path: remotePath}
+	req := core.UpstreamRequest{Path: remotePath, Package: crate, Index: crate == ""}
 	if asset != nil {
 		req.Conditional.ETag = attrString(asset.Attributes, "etag")
 		req.Conditional.LastModified, _ = time.Parse(time.RFC3339Nano, attrString(asset.Attributes, "last_modified"))
@@ -226,7 +233,7 @@ func (h *handler) downloadTemplate(ctx context.Context, repo *core.Repository) s
 	if cfg := formatConfig(repo); cfg.DownloadURL != "" {
 		return cfg.DownloadURL
 	}
-	doc, err := h.remoteDoc(ctx, repo, "config.json", remoteConfigPath, maxConfigBytes)
+	doc, err := h.remoteDoc(ctx, repo, "config.json", remoteConfigPath, "", maxConfigBytes)
 	if err == nil {
 		var c struct {
 			DL string `json:"dl"`
@@ -282,7 +289,7 @@ func (h *handler) fetchCrate(ctx context.Context, repo *core.Repository, name, v
 		return nil, fmt.Errorf("remote index line of %s@%s names crate %q: %w", name, version, display, core.ErrUpstream)
 	}
 	src := expandDownload(h.downloadTemplate(ctx, repo), display, version, cksum)
-	body, err := h.fetchURL(ctx, repo, src)
+	body, err := h.fetchURL(ctx, repo, src, name)
 	if err != nil {
 		return nil, err
 	}
@@ -322,15 +329,16 @@ func (h *handler) fetchCrate(ctx context.Context, repo *core.Repository, name, v
 // (static.crates.io for index.crates.io). The download template's host is
 // trusted as a related host because the administrator configured it or the
 // remote declared it; the remote's credentials are never sent there.
-func (h *handler) fetchURL(ctx context.Context, repo *core.Repository, raw string) (io.ReadCloser, error) {
+// crate is the routing identity of the download.
+func (h *handler) fetchURL(ctx context.Context, repo *core.Repository, raw, crate string) (io.ReadCloser, error) {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" {
 		return nil, fmt.Errorf("crate download URL %q: %w", raw, core.ErrUpstream)
 	}
 	base := remoteBase(repo)
-	req := core.UpstreamRequest{Path: strings.TrimPrefix(raw, base)}
+	req := core.UpstreamRequest{Path: strings.TrimPrefix(raw, base), Package: crate}
 	if !strings.HasPrefix(raw, base) {
-		req = core.UpstreamRequest{URL: raw, RelatedHosts: []string{u.Host}}
+		req = core.UpstreamRequest{URL: raw, RelatedHosts: []string{u.Host}, Package: crate}
 	}
 	up, err := h.deps.Upstreams.ForRepository(ctx, repo)
 	if err != nil {

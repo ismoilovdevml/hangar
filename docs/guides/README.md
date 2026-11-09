@@ -19,6 +19,7 @@ Practical, copy-paste guides for running Hangar and connecting package clients t
 | [CI integration](ci.md) | GitLab CI, GitHub Actions, Jenkins and Gitea Actions with tokens |
 | [REST API](api.md) | Authentication, common calls, pagination, errors |
 | [Access management](access.md) | Members, service accounts, roles, privileges and token scopes |
+| [Routing rules](routing-rules.md) | Dependency confusion: block internal names on public proxies, reserve them for hosted group members |
 | [Vulnerability scanning](vulnerabilities.md) | OSV scanning of npm, Maven, PyPI, NuGet, Go and Cargo packages, waivers, quarantine, mirrors |
 | [Single sign-on](sso.md) | OIDC (Keycloak example) and LDAP / Active Directory sign-in, group to role mapping, troubleshooting |
 
@@ -83,8 +84,8 @@ Formats compiled into the server today: `apt`, `cargo`, `docker`, `go`, `helm`, 
   cached content is kept.
 - Group members are merged. If a proxy member serves a public package with the
   same name as one of your internal packages, clients may resolve the public one
-  (for example a higher version). Use scoped or prefixed names for internal
-  packages, or keep the public proxy out of groups that serve internal names.
+  (for example a higher version). Add [routing rules](routing-rules.md): block
+  internal names on the public proxy and reserve them for the hosted member.
 
 ## Browsing
 

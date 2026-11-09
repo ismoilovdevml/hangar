@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // DefaultBlobStore is the blob store name AddRepo assigns when none is given.
@@ -56,13 +57,14 @@ func NewEnv(t testing.TB) *Env {
 	return e
 }
 
-// Deps returns the core.Deps a format receives.
+// Deps returns the core.Deps a format receives. Upstreams are guarded by
+// repository routing rules, as in production.
 func (e *Env) Deps() core.Deps {
 	return core.Deps{
 		Repos:      e.Repos,
 		Components: e.Components,
 		Blobs:      SingleStore{Store: e.Blob},
-		Upstreams:  e.Upstreams,
+		Upstreams:  routing.GuardUpstreams(e.Upstreams),
 		Auth:       e.Auth,
 		Tokens:     e.Auth,
 		AuthZ:      e.AuthZ,

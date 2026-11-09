@@ -11,6 +11,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // maxGroupDepth bounds nested group expansion.
@@ -22,20 +23,55 @@ type located struct {
 	asset *core.Asset
 }
 
+// leaf is a hosted or proxy repository serving a request, with the group
+// memberships it was reached through (outermost first).
+type leaf struct {
+	*core.Repository
+	via []link
+}
+
+// link is one group membership on the way to a leaf.
+type link struct {
+	group, member *core.Repository
+}
+
+// serves returns nil when the routing rules on the way to l (each group's
+// rule for the member it was reached through, then a proxy's own rules) let
+// it serve path, else the recorded *core.RoutingBlock.
+func (l leaf) serves(ctx context.Context, path string) error {
+	for _, k := range l.via {
+		if b := k.group.MemberRoutingBlock(k.member.Name, path); b != nil {
+			routing.Record(ctx, Name, b)
+			return b
+		}
+	}
+	return routing.Check(ctx, l.Repository, path)
+}
+
+// repos returns the leaves' repositories.
+func repos(ls []leaf) []*core.Repository {
+	out := make([]*core.Repository, len(ls))
+	for i, l := range ls {
+		out[i] = l.Repository
+	}
+	return out
+}
+
 // leaves expands repo into the hosted and proxy raw repositories that serve
 // it, in resolution order: repo itself, or a group's members depth-first.
-// Members of other formats and repeated members are skipped.
-func (h *handler) leaves(ctx context.Context, repo *core.Repository) ([]*core.Repository, error) {
-	var out []*core.Repository
+// Members of other formats and repeated members are skipped. Routing rules
+// are applied per path by leaf.serves.
+func (h *handler) leaves(ctx context.Context, repo *core.Repository) ([]leaf, error) {
+	var out []leaf
 	seen := map[string]bool{}
-	var walk func(r *core.Repository, depth int) error
-	walk = func(r *core.Repository, depth int) error {
+	var walk func(r *core.Repository, via []link, depth int) error
+	walk = func(r *core.Repository, via []link, depth int) error {
 		if seen[r.ID] || r.Format != Name {
 			return nil
 		}
 		seen[r.ID] = true
 		if r.Type != core.RepoGroup {
-			out = append(out, r)
+			out = append(out, leaf{Repository: r, via: via})
 			return nil
 		}
 		if depth >= maxGroupDepth {
@@ -49,13 +85,13 @@ func (h *handler) leaves(ctx context.Context, repo *core.Repository) ([]*core.Re
 			if !m.Online {
 				continue
 			}
-			if err := walk(m, depth+1); err != nil {
+			if err := walk(m, append(via[:len(via):len(via)], link{group: r, member: m}), depth+1); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
-	if err := walk(repo, 0); err != nil {
+	if err := walk(repo, nil, 0); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -69,9 +105,17 @@ func (h *handler) get(w http.ResponseWriter, r *http.Request, repo *core.Reposit
 		h.fail(w, r, err)
 		return
 	}
-	var upstreamErr error
+	var upstreamErr, blocked error
+	nblocked := 0
 	for _, leaf := range leaves {
-		loc, err := h.find(ctx, leaf, clean)
+		if err := leaf.serves(ctx, clean); err != nil {
+			if blocked == nil {
+				blocked = err
+			}
+			nblocked++
+			continue
+		}
+		loc, err := h.find(ctx, leaf.Repository, clean)
 		switch {
 		case err == nil:
 			h.serveAsset(w, r, loc)
@@ -87,7 +131,7 @@ func (h *handler) get(w http.ResponseWriter, r *http.Request, repo *core.Reposit
 			return
 		}
 	}
-	if isDir, err := h.hasChildren(ctx, leaves, clean); err == nil && isDir {
+	if isDir, err := h.hasChildren(ctx, repos(leaves), clean); err == nil && isDir {
 		_, name := splitPath(clean)
 		w.Header().Set("Location", url.PathEscape(name)+"/")
 		w.WriteHeader(http.StatusFound)
@@ -95,6 +139,10 @@ func (h *handler) get(w http.ResponseWriter, r *http.Request, repo *core.Reposit
 	}
 	if upstreamErr != nil {
 		h.fail(w, r, upstreamErr)
+		return
+	}
+	if blocked != nil && nblocked == len(leaves) {
+		h.fail(w, r, blocked) // every source is excluded: say which rule
 		return
 	}
 	h.fail(w, r, fmt.Errorf("%s: %w", clean, core.ErrNotFound))

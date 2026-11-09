@@ -565,6 +565,17 @@ export function repositoryYaml(input: RepositoryInput): string {
   if (config.scanning?.distro) cfg.scanning = { distro: config.scanning.distro };
   if (config.cleanup_policies?.length) cfg.cleanup_policies = config.cleanup_policies;
   if (config.format && Object.keys(config.format).length) cfg.format = config.format as { [k: string]: YamlValue };
+  if (config.routing) {
+    const r = config.routing;
+    const routing: { [k: string]: YamlValue | undefined } = {};
+    if (r.allow?.length) routing.allow = r.allow;
+    if (r.block?.length) routing.block = r.block;
+    const members = (r.members ?? [])
+      .filter((m) => m.exclusive?.length || m.block?.length)
+      .map((m) => ({ member: m.member, exclusive: m.exclusive?.length ? m.exclusive : undefined, block: m.block?.length ? m.block : undefined }));
+    if (members.length) routing.members = members;
+    if (Object.keys(routing).length) cfg.routing = routing;
+  }
 
   return toYaml({
     name: input.name || '<name>',

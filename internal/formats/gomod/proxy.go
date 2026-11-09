@@ -22,13 +22,15 @@ func (h *handler) metadataTTL(repo *core.Repository) time.Duration {
 	return DefaultMetadataTTL
 }
 
-// fetch requests a path relative to the proxy's remote URL.
-func (h *handler) fetch(ctx context.Context, repo *core.Repository, path string, cond core.Conditional) (*core.UpstreamResponse, error) {
+// fetch requests a path relative to the proxy's remote URL. mod is the
+// module the request is about ("" for requests about none, such as checksum
+// database tiles); routing rules see it.
+func (h *handler) fetch(ctx context.Context, repo *core.Repository, path, mod string, cond core.Conditional) (*core.UpstreamResponse, error) {
 	up, err := h.deps.Upstreams.ForRepository(ctx, repo)
 	if err != nil {
 		return nil, err
 	}
-	return up.Fetch(ctx, core.UpstreamRequest{Path: path, Conditional: cond})
+	return up.Fetch(ctx, core.UpstreamRequest{Path: path, Conditional: cond, Package: mod, Index: mod == ""})
 }
 
 // remoteNotFound reports the remote's 404 or 410 as ErrNotFound, keeping
@@ -116,7 +118,7 @@ func (h *handler) refreshDoc(ctx context.Context, repo *core.Repository, mod str
 		cond.ETag = attrString(cachedAsset.Attributes, "etag")
 		cond.LastModified, _ = time.Parse(time.RFC3339Nano, attrString(cachedAsset.Attributes, "last_modified"))
 	}
-	resp, err := h.fetch(ctx, repo, remotePath, cond)
+	resp, err := h.fetch(ctx, repo, remotePath, mod, cond)
 	if err != nil {
 		return stale(err)
 	}
@@ -187,7 +189,7 @@ func (h *handler) resolveQuery(ctx context.Context, repo *core.Repository, mod, 
 		return nil, fmt.Errorf("%s: %w", err.Error(), core.ErrNotFound)
 	}
 	proxy.NoteCacheMiss(ctx)
-	resp, err := h.fetch(ctx, repo, p, core.Conditional{})
+	resp, err := h.fetch(ctx, repo, p, mod, core.Conditional{})
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +244,7 @@ func (h *handler) fetchFile(ctx context.Context, repo *core.Repository, mod, ver
 	if err != nil {
 		return nil, err
 	}
-	resp, err := h.fetch(ctx, repo, remotePath, core.Conditional{})
+	resp, err := h.fetch(ctx, repo, remotePath, mod, core.Conditional{})
 	if err != nil {
 		return nil, err
 	}

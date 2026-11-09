@@ -37,6 +37,9 @@ func mutableRemote(mp *mavenPath) bool {
 // negative-cached by the core Upstream. When the remote is unreachable a
 // stale copy is served.
 func (h *handler) resolveProxy(ctx context.Context, repo *core.Repository, mp *mavenPath) (*entity, error) {
+	if err := checkProxy(ctx, repo, mp); err != nil {
+		return nil, err
+	}
 	a, err := h.deps.Components.GetAsset(ctx, repo.ID, mp.path)
 	switch {
 	case err == nil:
@@ -68,6 +71,7 @@ func (h *handler) fetchRemote(ctx context.Context, repo *core.Repository, mp *ma
 		return nil, err
 	}
 	req := core.UpstreamRequest{Method: http.MethodGet, Path: mp.path}
+	req.Package, req.Index = upstreamPackage(mp)
 	if cached != nil {
 		req.Conditional.ETag, _ = cached.Attributes[attrRemoteETag].(string)
 		if s, ok := cached.Attributes[attrRemoteLastModified].(string); ok {
@@ -154,7 +158,8 @@ func (h *handler) verifyRemote(ctx context.Context, up core.Upstream, mp *mavenP
 			}
 		}
 	}
-	resp, err := up.Fetch(ctx, core.UpstreamRequest{Method: http.MethodGet, Path: mp.path + ".sha1"})
+	pkg, index := upstreamPackage(mp)
+	resp, err := up.Fetch(ctx, core.UpstreamRequest{Method: http.MethodGet, Path: mp.path + ".sha1", Package: pkg, Index: index})
 	if err != nil {
 		h.log.Debug("remote checksum unavailable", "path", mp.path, "err", err)
 		return nil

@@ -23,6 +23,9 @@ import type {
   Repository,
   RepositoryInput,
   RepositoryList,
+  RoutingRules,
+  RoutingSuggestions,
+  RoutingTest,
   SearchResult,
   SearchSort,
   SigningKey,
@@ -303,6 +306,41 @@ export function useChangeSigningKey(name: string, key: string) {
       // Other repositories on the shared key show the new one too.
       if (key === 'shared') void qc.invalidateQueries({ queryKey: ['signing-key'], predicate: (q) => q.queryKey[2] === 'shared' && q.queryKey[1] !== name });
     },
+  });
+}
+
+/* ---------------------------------------------------------------- routing rules */
+
+const routingPath = (name: string) => `/repositories/${encodeURIComponent(name)}/routing`;
+
+const emptyRules = (r: RoutingRules) => !r.allow?.length && !r.block?.length && !(r.members ?? []).some((m) => m.exclusive?.length || m.block?.length);
+
+/** Replaces a proxy's or group's routing rules (empty rules clear them); the repository is refetched. */
+export function useSaveRouting(name: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (rules: RoutingRules): Promise<void> => {
+      if (emptyRules(rules)) await apiFetch<void>(routingPath(name), { method: 'DELETE' });
+      else await apiFetch<RoutingRules>(routingPath(name), { method: 'PUT', body: rules });
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: catalogKeys.repository(name) });
+      void qc.invalidateQueries({ queryKey: queryKeys.repositories });
+    },
+  });
+}
+
+/** Evaluates the stored rules for one package name. */
+export function useTestRouting(name: string) {
+  return useMutation({
+    mutationFn: (pkg: string) => apiFetch<RoutingTest>(`${routingPath(name)}:test`, { method: 'POST', body: { name: pkg } }),
+  });
+}
+
+/** Patterns derived from the names the hosted repositories publish. */
+export function useSuggestRouting(name: string) {
+  return useMutation({
+    mutationFn: () => apiFetch<RoutingSuggestions>(`${routingPath(name)}:suggest`),
   });
 }
 

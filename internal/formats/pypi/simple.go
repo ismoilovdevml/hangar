@@ -17,6 +17,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // Simple API media types (PEP 691).
@@ -339,14 +340,14 @@ func (h *handler) projectNames(ctx context.Context, repo *core.Repository, depth
 	case core.RepoGroup:
 		seen := map[string]bool{}
 		var out []string
-		err := h.eachMember(ctx, repo, depth, func(m *core.Repository) error {
+		err := h.eachMember(ctx, repo, depth, "", func(m *core.Repository) error {
 			names, err := h.projectNames(ctx, m, depth+1)
 			if err != nil {
 				h.log.WarnContext(ctx, "group member project list failed", "group", repo.Name, "member", m.Name, "err", err)
 				return nil
 			}
 			for _, n := range names {
-				if !seen[n] {
+				if !seen[n] && routing.Allows(ctx, repo, m, n) {
 					seen[n] = true
 					out = append(out, n)
 				}
@@ -362,7 +363,8 @@ func (h *handler) projectNames(ctx context.Context, repo *core.Repository, depth
 		}
 		var out []string
 		for _, a := range assets {
-			if n, ok := strings.CutSuffix(strings.TrimPrefix(a.Path, "simple/"), "/index.json"); ok && !strings.Contains(n, "/") {
+			if n, ok := strings.CutSuffix(strings.TrimPrefix(a.Path, "simple/"), "/index.json"); ok && !strings.Contains(n, "/") &&
+				routing.Check(ctx, repo, n) == nil {
 				out = append(out, n)
 			}
 		}
@@ -408,7 +410,7 @@ func (h *handler) groupProject(ctx context.Context, repo *core.Repository, name 
 	seen := map[string]bool{}
 	found := false
 	var lastErr error
-	err := h.eachMember(ctx, repo, depth, func(m *core.Repository) error {
+	err := h.eachMember(ctx, repo, depth, name, func(m *core.Repository) error {
 		p, err := h.projectFiles(ctx, m, name, depth+1)
 		if errors.Is(err, core.ErrNotFound) {
 			return nil
@@ -440,12 +442,24 @@ func (h *handler) groupProject(ctx context.Context, repo *core.Repository, name 
 	return out, nil
 }
 
-// eachMember calls fn for every member of group in resolution order.
-func (h *handler) eachMember(ctx context.Context, group *core.Repository, depth int, fn func(*core.Repository) error) error {
+// eachMember calls fn for every member of group in resolution order that
+// the group's routing rules let serve project name ("" for every member:
+// callers merging many projects filter with routing.Allows). When the rules
+// exclude every member the error is the *core.RoutingBlock (a 404 naming
+// the rule).
+func (h *handler) eachMember(ctx context.Context, group *core.Repository, depth int, name string, fn func(*core.Repository) error) error {
 	if depth >= maxGroupDepth {
 		return fmt.Errorf("group %q nests deeper than %d levels: %w", group.Name, maxGroupDepth, core.ErrInvalid)
 	}
-	members, err := h.deps.Repos.Members(ctx, group)
+	var (
+		members []*core.Repository
+		err     error
+	)
+	if name == "" {
+		members, err = h.deps.Repos.Members(ctx, group)
+	} else {
+		members, err = routing.Members(ctx, h.deps.Repos, group, name)
+	}
 	if err != nil {
 		return err
 	}

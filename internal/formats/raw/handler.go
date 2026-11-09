@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // authRealm is the HTTP Basic realm in 401 challenges. curl and wget send
@@ -113,6 +114,7 @@ var errInternal = errors.New("internal error")
 // fail answers with the status for err. 401 carries a Basic challenge; server
 // errors are logged and answered without details.
 func (h *handler) fail(w http.ResponseWriter, r *http.Request, err error) {
+	err = routing.Annotate(r.Context(), err)
 	code := core.HTTPStatus(err)
 	msg := err.Error()
 	switch {

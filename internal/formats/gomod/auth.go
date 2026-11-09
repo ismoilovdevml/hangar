@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // authorize authenticates the request and checks action on repo. On failure
@@ -35,6 +36,7 @@ func (h *handler) authorize(w http.ResponseWriter, r *http.Request, repo *core.R
 // Missing modules and versions answer 404, so that the go command moves on
 // to the next entry of GOPROXY ("a,b" falls back only on 404 and 410).
 func (h *handler) writeError(w http.ResponseWriter, r *http.Request, err error) {
+	err = routing.Annotate(r.Context(), err)
 	code := core.HTTPStatus(err)
 	msg := err.Error()
 	switch {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // maxGroupDepth bounds group nesting (and breaks accidental cycles).
@@ -44,6 +45,9 @@ func (h *handler) entries(ctx context.Context, repo *core.Repository, lid string
 			}
 		}
 	case core.RepoProxy:
+		if err := routing.Check(ctx, repo, lid); err != nil {
+			return nil, err
+		}
 		cats, err := h.proxyRegistration(ctx, repo, lid)
 		if err != nil {
 			return nil, err
@@ -55,7 +59,7 @@ func (h *handler) entries(ctx context.Context, repo *core.Repository, lid string
 		}
 	case core.RepoGroup:
 		seen := map[string]bool{}
-		err := h.eachMember(ctx, repo, depth, func(m *core.Repository) error {
+		err := h.eachMember(ctx, repo, depth, lid, func(m *core.Repository) error {
 			es, err := h.entries(ctx, m, lid, depth+1)
 			for _, e := range es {
 				if k := e.ver.Lower(); !seen[k] {
@@ -92,13 +96,16 @@ func (h *handler) versions(ctx context.Context, repo *core.Repository, lid strin
 			}
 		}
 	case core.RepoProxy:
+		if err := routing.Check(ctx, repo, lid); err != nil {
+			return nil, err
+		}
 		vs, err := h.proxyVersions(ctx, repo, lid)
 		if err != nil {
 			return nil, err
 		}
 		out = vs
 	case core.RepoGroup:
-		err := h.eachMember(ctx, repo, depth, func(m *core.Repository) error {
+		err := h.eachMember(ctx, repo, depth, lid, func(m *core.Repository) error {
 			vs, err := h.versions(ctx, m, lid, depth+1)
 			out = append(out, vs...)
 			return err
@@ -128,6 +135,9 @@ func (h *handler) locate(ctx context.Context, repo *core.Repository, lid, lver, 
 		a, err := h.deps.Components.GetAsset(ctx, repo.ID, path)
 		return repo, a, err
 	case core.RepoProxy:
+		if err := routing.Check(ctx, repo, lid); err != nil {
+			return nil, nil, err
+		}
 		a, err := h.deps.Components.GetAsset(ctx, repo.ID, path)
 		if err == nil {
 			proxy.NoteCacheHit(ctx, a.Size)
@@ -152,7 +162,7 @@ func (h *handler) locate(ctx context.Context, repo *core.Repository, lid, lver, 
 			found *core.Repository
 			asset *core.Asset
 		)
-		err := h.eachMember(ctx, repo, depth, func(m *core.Repository) error {
+		err := h.eachMember(ctx, repo, depth, lid, func(m *core.Repository) error {
 			if found != nil {
 				return nil
 			}
@@ -173,14 +183,25 @@ func (h *handler) locate(ctx context.Context, repo *core.Repository, lid, lver, 
 	return nil, nil, fmt.Errorf("repository type %q: %w", repo.Type, core.ErrInvalid)
 }
 
-// eachMember calls fn for every member of group in order. Not-found results
-// are ignored; the first other error is returned after all members ran, so
-// one unreachable proxy does not hide the others.
-func (h *handler) eachMember(ctx context.Context, group *core.Repository, depth int, fn func(*core.Repository) error) error {
+// eachMember calls fn for every member of group in order that the group's
+// routing rules let serve package lid ("" for every member: callers that
+// merge many packages filter with routing.Allows). Not-found results are
+// ignored; the first other error is returned after all members ran, so one
+// unreachable proxy does not hide the others. When the rules exclude every
+// member the error is the *core.RoutingBlock (a 404 naming the rule).
+func (h *handler) eachMember(ctx context.Context, group *core.Repository, depth int, lid string, fn func(*core.Repository) error) error {
 	if depth >= maxGroupDepth {
 		return fmt.Errorf("group %q nested too deeply: %w", group.Name, core.ErrInvalid)
 	}
-	members, err := h.deps.Repos.Members(ctx, group)
+	var (
+		members []*core.Repository
+		err     error
+	)
+	if lid == "" {
+		members, err = h.deps.Repos.Members(ctx, group)
+	} else {
+		members, err = routing.Members(ctx, h.deps.Repos, group, lid)
+	}
 	if err != nil {
 		return err
 	}

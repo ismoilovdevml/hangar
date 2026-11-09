@@ -34,6 +34,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/observability"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 	"github.com/ismoilovdevml/hangar/internal/rollup"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 	"github.com/ismoilovdevml/hangar/internal/scanning"
 	"github.com/ismoilovdevml/hangar/internal/scanning/osv"
 	"github.com/ismoilovdevml/hangar/internal/scanning/pulls"
@@ -366,10 +367,11 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	signer.SetServices(repos, authz, locks)
 
 	deps := core.Deps{
-		Repos:       repos,
-		Components:  pulls.Wrap(comps, pullRec),
-		Blobs:       observedBlobs,
-		Upstreams:   observability.InstrumentUpstreams(upstreams, metrics),
+		Repos:      repos,
+		Components: pulls.Wrap(comps, pullRec),
+		Blobs:      observedBlobs,
+		// Routing rules are checked before a request reaches a remote.
+		Upstreams:   routing.GuardUpstreams(observability.InstrumentUpstreams(upstreams, metrics)),
 		HTTPClients: clients,
 		// Package clients authenticate per request; signed-in web UI users
 		// may also download with their session (see DownloadSessions).
@@ -393,6 +395,9 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	// Metrics are always collected (the Overview screen reads them);
 	// metrics.enabled only controls the /metrics endpoint.
 	if err := proxy.RegisterMetrics(metrics.Registry); err != nil {
+		return nil, err
+	}
+	if err := routing.RegisterMetrics(metrics.Registry); err != nil {
 		return nil, err
 	}
 	if err := metrics.RegisterDBPool(pool); err != nil {

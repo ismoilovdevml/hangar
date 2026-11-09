@@ -23,6 +23,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // maxGroupDepth bounds nested group resolution.
@@ -140,6 +141,7 @@ func (h *handler) begin(w http.ResponseWriter, r *http.Request, action core.Acti
 // and a plain-text body; 401 carries a Basic challenge, which is what makes
 // both clients send their configured credentials.
 func (h *handler) fail(w http.ResponseWriter, r *http.Request, err error) {
+	err = routing.Annotate(r.Context(), err)
 	code := core.HTTPStatus(err)
 	msg := err.Error()
 	if code == http.StatusInternalServerError {

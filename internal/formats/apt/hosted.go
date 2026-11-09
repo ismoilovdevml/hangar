@@ -329,9 +329,9 @@ func (h *handler) servePool(w http.ResponseWriter, r *http.Request) {
 	case core.RepoProxy:
 		a, err = h.proxyPool(ctx, repo, p)
 	case core.RepoGroup:
-		var members []*core.Repository
-		if members, err = h.HostedMembers(ctx, repo); err == nil {
-			a, owner, err = h.FindInMembers(ctx, members, p)
+		var leaves []repokit.Leaf
+		if leaves, err = h.HostedLeaves(ctx, repo); err == nil {
+			a, owner, err = h.FindInLeaves(ctx, leaves, p, poolPackage(p))
 		}
 	default:
 		a, err = h.Deps.Components.GetAsset(ctx, repo.ID, p)
@@ -340,11 +340,22 @@ func (h *handler) servePool(w http.ResponseWriter, r *http.Request) {
 		err = h.CheckQuarantine(ctx, a)
 	}
 	if err != nil {
-		if errors.Is(err, core.ErrNotFound) {
+		if errors.Is(err, core.ErrNotFound) && !errors.Is(err, core.ErrRoutingBlocked) {
 			err = fmt.Errorf("%s: %w", p, core.ErrNotFound)
 		}
 		h.Fail(w, r, err)
 		return
 	}
 	h.ServeAsset(w, r, owner, a)
+}
+
+// poolPackage is the package name of a pool file, the routing identity:
+// the part of the file name before the first '_' (name_version_arch.deb,
+// name_version.dsc, name_version.orig.tar.gz), else the file name.
+func poolPackage(p string) string {
+	base := p[strings.LastIndexByte(p, '/')+1:]
+	if i := strings.IndexByte(base, '_'); i > 0 {
+		return base[:i]
+	}
+	return base
 }

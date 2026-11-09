@@ -20,6 +20,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 const maxIndexBytes = 64 << 20 // a remote project page (large projects list thousands of files)
@@ -56,6 +57,9 @@ func remoteBase(repo *core.Repository) (base, simplePrefix string) {
 }
 
 func (h *handler) proxyProject(ctx context.Context, repo *core.Repository, name string) (*project, error) {
+	if err := routing.Check(ctx, repo, name); err != nil {
+		return nil, err
+	}
 	idx, err := h.index(ctx, repo, name)
 	if err != nil {
 		return nil, err
@@ -192,8 +196,9 @@ func (h *handler) refreshIndex(ctx context.Context, repo *core.Repository, name 
 	}
 	base, prefix := remoteBase(repo)
 	req := core.UpstreamRequest{
-		Path:   prefix + name + "/",
-		Header: http.Header{"Accept": {mediaJSON + ", " + mediaHTML + ";q=0.1, " + mediaTextHTML + ";q=0.01"}},
+		Path:    prefix + name + "/",
+		Header:  http.Header{"Accept": {mediaJSON + ", " + mediaHTML + ";q=0.1, " + mediaTextHTML + ";q=0.01"}},
+		Package: name,
 	}
 	if cachedAsset != nil {
 		req.Conditional.ETag = attrString(cachedAsset.Attributes, "etag")
@@ -516,7 +521,7 @@ func (h *handler) fetchAndStore(ctx context.Context, repo *core.Repository, name
 	if isMeta {
 		src, hashes = file.URL+metadataSuffix, file.MetadataHashes
 	}
-	body, err := h.fetchURL(ctx, repo, src)
+	body, err := h.fetchURL(ctx, repo, src, name)
 	if err != nil {
 		return nil, err
 	}
@@ -581,8 +586,9 @@ func (h *handler) fetchAndStore(ctx context.Context, repo *core.Repository, name
 // Upstream applies the SSRF guard, breaker, request collapsing, outbound
 // proxy and rate limits to both, and sends the remote's credentials only to
 // the remote's own origin. Hosts other than the remote's must be in
-// file_hosts or the repository's related_hosts.
-func (h *handler) fetchURL(ctx context.Context, repo *core.Repository, raw string) (io.ReadCloser, error) {
+// file_hosts or the repository's related_hosts. name is the project the
+// file belongs to (its routing identity).
+func (h *handler) fetchURL(ctx context.Context, repo *core.Repository, raw, name string) (io.ReadCloser, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return nil, fmt.Errorf("remote file URL %q: %w", raw, core.ErrUpstream)
@@ -592,13 +598,13 @@ func (h *handler) fetchURL(ctx context.Context, repo *core.Repository, raw strin
 	if err != nil {
 		return nil, fmt.Errorf("remote URL: %w", core.ErrInvalid)
 	}
-	req := core.UpstreamRequest{Path: strings.TrimPrefix(raw, base)}
+	req := core.UpstreamRequest{Path: strings.TrimPrefix(raw, base), Package: name}
 	if !strings.HasPrefix(raw, base) {
 		cfg := formatConfig(repo)
 		if !fileHostAllowed(cfg, remote.Host, u.Host) && !core.MatchHost(repo.Config.Proxy.RelatedHosts, u.Host) {
 			return nil, fmt.Errorf("remote links to %s, which is not in file_hosts: %w", u.Host, core.ErrUpstream)
 		}
-		req = core.UpstreamRequest{URL: raw, RelatedHosts: cfg.FileHosts}
+		req = core.UpstreamRequest{URL: raw, RelatedHosts: cfg.FileHosts, Package: name}
 	}
 	up, err := h.deps.Upstreams.ForRepository(ctx, repo)
 	if err != nil {
