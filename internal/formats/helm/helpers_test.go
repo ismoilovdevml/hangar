@@ -12,6 +12,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"testing"
 	"time"
 
@@ -239,3 +240,13 @@ func serve(h http.Handler, req *http.Request) *httptest.ResponseRecorder {
 	h.ServeHTTP(rec, req)
 	return rec
 }
+
+func decodeYAML(resp *http.Response, v any) error {
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("status %d", resp.StatusCode)
+	}
+	return yaml.NewDecoder(resp.Body).Decode(v)
+}
+
+func joinPath(elem ...string) string { return path.Join(elem...) }

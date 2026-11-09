@@ -81,38 +81,38 @@ func ValidName(name string) bool { return nameRE.MatchString(name) && !strings.C
 func (m *Metadata) Validate() error {
 	switch m.APIVersion {
 	case "":
-		return fmt.Errorf("Chart.yaml: apiVersion is required: %w", core.ErrInvalid)
+		return fmt.Errorf("invalid Chart.yaml: apiVersion is required: %w", core.ErrInvalid)
 	case APIVersionV1, APIVersionV2:
 	default:
-		return fmt.Errorf("Chart.yaml: apiVersion %q: want %s or %s: %w", m.APIVersion, APIVersionV1, APIVersionV2, core.ErrInvalid)
+		return fmt.Errorf("invalid Chart.yaml: apiVersion %q: want %s or %s: %w", m.APIVersion, APIVersionV1, APIVersionV2, core.ErrInvalid)
 	}
 	if m.Name == "" {
-		return fmt.Errorf("Chart.yaml: name is required: %w", core.ErrInvalid)
+		return fmt.Errorf("invalid Chart.yaml: name is required: %w", core.ErrInvalid)
 	}
 	if !ValidName(m.Name) {
-		return fmt.Errorf("Chart.yaml: name %q: use letters, digits, '.', '_' and '-': %w", m.Name, core.ErrInvalid)
+		return fmt.Errorf("invalid Chart.yaml: name %q: use letters, digits, '.', '_' and '-': %w", m.Name, core.ErrInvalid)
 	}
 	if m.Version == "" {
-		return fmt.Errorf("Chart.yaml: version is required: %w", core.ErrInvalid)
+		return fmt.Errorf("invalid Chart.yaml: version is required: %w", core.ErrInvalid)
 	}
 	if _, err := ParseVersion(m.Version); err != nil {
-		return fmt.Errorf("Chart.yaml: %w", err)
+		return fmt.Errorf("invalid Chart.yaml: %w", err)
 	}
 	if strings.ContainsAny(m.AppVersion, "\n\r") || len(m.AppVersion) > 256 {
-		return fmt.Errorf("Chart.yaml: appVersion must be a single line: %w", core.ErrInvalid)
+		return fmt.Errorf("invalid Chart.yaml: appVersion must be a single line: %w", core.ErrInvalid)
 	}
 	switch m.Type {
 	case "", "application":
 	case "library":
 		if m.APIVersion == APIVersionV1 {
-			return fmt.Errorf("Chart.yaml: library charts need apiVersion %s: %w", APIVersionV2, core.ErrInvalid)
+			return fmt.Errorf("invalid Chart.yaml: library charts need apiVersion %s: %w", APIVersionV2, core.ErrInvalid)
 		}
 	default:
-		return fmt.Errorf("Chart.yaml: type %q: want application or library: %w", m.Type, core.ErrInvalid)
+		return fmt.Errorf("invalid Chart.yaml: type %q: want application or library: %w", m.Type, core.ErrInvalid)
 	}
 	for _, d := range m.Dependencies {
 		if d == nil || d.Name == "" {
-			return fmt.Errorf("Chart.yaml: every dependency needs a name: %w", core.ErrInvalid)
+			return fmt.Errorf("invalid Chart.yaml: every dependency needs a name: %w", core.ErrInvalid)
 		}
 	}
 	return nil
@@ -123,7 +123,7 @@ func (m *Metadata) Validate() error {
 func ParseChartYAML(b []byte) (*Metadata, error) {
 	var m Metadata
 	if err := yaml.Unmarshal(b, &m); err != nil {
-		return nil, fmt.Errorf("Chart.yaml: %w: %w", err, core.ErrInvalid)
+		return nil, fmt.Errorf("invalid Chart.yaml: %w: %w", err, core.ErrInvalid)
 	}
 	m.Name, m.Version = strings.TrimSpace(m.Name), strings.TrimSpace(m.Version)
 	if err := m.Validate(); err != nil {
@@ -160,7 +160,7 @@ func ReadChart(r io.Reader) (*Metadata, error) {
 		if n, err := io.Copy(&buf, io.LimitReader(tr, maxChartYAML+1)); err != nil {
 			return nil, fmt.Errorf("chart archive: %w: %w", err, core.ErrInvalid)
 		} else if n > maxChartYAML {
-			return nil, fmt.Errorf("Chart.yaml is larger than %d bytes: %w", maxChartYAML, core.ErrInvalid)
+			return nil, fmt.Errorf("the Chart.yaml is larger than %d bytes: %w", maxChartYAML, core.ErrInvalid)
 		}
 		return ParseChartYAML(buf.Bytes())
 	}
