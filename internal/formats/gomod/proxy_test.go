@@ -58,6 +58,10 @@ func (rm *remote) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("module rsc.io/quote\n\ngo 1.21\n"))
 	case "/rsc.io/quote/@v/v1.5.2.zip":
 		_, _ = w.Write(rm.zip)
+	case "/rsc.io/quote/@v/v1.5.1.info":
+		_, _ = w.Write([]byte(`{"Version":"v1.5.1","Time":"2018-02-13T10:00:00Z"}`))
+	case "/rsc.io/quote/@v/v1.5.info":
+		_, _ = w.Write([]byte(`{"Version":"v1.5.2","Time":"2018-02-14T15:44:20Z"}`))
 	case "/rsc.io/quote/@v/v1.5.1.zip":
 		_, _ = w.Write([]byte("not a zip"))
 	case "/rsc.io/quote/@v/master.info":
