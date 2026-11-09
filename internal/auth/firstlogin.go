@@ -127,6 +127,9 @@ func (s *Service) RequirePasswordChange(ctx context.Context, id string) (*User, 
 		if u, err = s.lockUser(ctx, tx, id); err != nil {
 			return err
 		}
+		if err := s.requireCoversUser(ctx, AuditUserPasswordRequire, u); err != nil {
+			return err
+		}
 		if u.Kind != KindUser || u.Source != SourceLocal || u.passwordHash == "" {
 			return fmt.Errorf("user %q has no local password (%s %s): %w", u.Username, u.Source, u.Kind, core.ErrInvalid)
 		}

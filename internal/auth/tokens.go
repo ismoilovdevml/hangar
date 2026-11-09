@@ -202,6 +202,10 @@ func (s *Service) planToken(ctx context.Context, in TokenInput) (*tokenPlan, err
 		if owner.Disabled {
 			return nil, fmt.Errorf("service account %q is disabled: %w", in.Owner, core.ErrInvalid)
 		}
+		// A token acts with the account's rights: issuing one hands them out.
+		if err := s.requireCoversUser(ctx, AuditTokenCreate, owner); err != nil {
+			return nil, err
+		}
 		plan.ownerID, plan.ownerName, plan.ownerKind = owner.ID, owner.Username, owner.Kind
 	}
 	return plan, nil

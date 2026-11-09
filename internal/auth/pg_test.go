@@ -242,8 +242,10 @@ func TestBasicCacheDroppedOnPasswordChange(t *testing.T) {
 	if _, err := e.Svc.Authenticate(ctx, creds); !errors.Is(err, core.ErrUnauthenticated) {
 		t.Fatalf("old password still accepted: %v", err)
 	}
-	if p, err := e.Svc.Authenticate(ctx, core.Credentials{Username: "dave", Password: "a brand new passphrase"}); err != nil || p.Name != "dave" {
-		t.Fatalf("new password: %v", err)
+	// A password set by an administrator is correct but must be replaced
+	// before package clients may use it.
+	if _, err := e.Svc.Authenticate(ctx, core.Credentials{Username: "dave", Password: "a brand new passphrase"}); !errors.Is(err, auth.ErrPasswordChangeRequired) {
+		t.Fatalf("new password: %v, want password change required", err)
 	}
 	if p, _ := e.Svc.Authenticate(ctx, core.Credentials{}); !p.IsAnonymous() {
 		t.Fatal("empty credentials must be anonymous")
