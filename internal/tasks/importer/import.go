@@ -407,7 +407,7 @@ func (s *Service) runImport(ctx context.Context, x reporter, cfg *ImportConfig) 
 		frac := float64(res.PackagesDone) / float64(max(len(names), 1))
 		msg := fmt.Sprintf("%d of %d packages · %d imported, %d skipped, %d conflicts, %d failed",
 			res.PackagesDone, len(names), res.Imported, res.Skipped, res.Conflicts, res.Failed)
-		save := time.Since(lastSave) > time.Second || next == len(names)
+		save := time.Since(lastSave) > s.opts.CheckpointEvery || next == len(names)
 		if save {
 			lastSave = time.Now()
 		}
@@ -421,6 +421,10 @@ func (s *Service) runImport(ctx context.Context, x reporter, cfg *ImportConfig) 
 
 	err = forEach(ctx, start, len(names), cfg.workers(), func(ctx context.Context, i int) error {
 		r := j.importPackage(ctx, ad, cfg.Filters, names[i])
+		if ctx.Err() != nil {
+			// Interrupted: the package is not finished and stays in the checkpoint.
+			return context.Cause(ctx)
+		}
 		return record(i, r)
 	})
 	x.SetResult(res)

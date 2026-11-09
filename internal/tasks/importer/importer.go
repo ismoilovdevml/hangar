@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 )
@@ -82,7 +83,10 @@ type Options struct {
 	Secrets Sealer
 	// TempDir holds downloads that must be read twice (default os.TempDir()).
 	TempDir string
-	Logger  *slog.Logger
+	// CheckpointEvery spaces checkpoints of a run (default 1s; negative:
+	// after every package or coordinate).
+	CheckpointEvery time.Duration
+	Logger          *slog.Logger
 }
 
 // Service implements the two task types.
@@ -104,6 +108,9 @@ func New(o Options) *Service {
 		o.TempDir = os.TempDir()
 	}
 	o.BaseURL = strings.TrimRight(o.BaseURL, "/")
+	if o.CheckpointEvery == 0 {
+		o.CheckpointEvery = time.Second
+	}
 	return &Service{opts: o, log: o.Logger}
 }
 

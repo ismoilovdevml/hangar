@@ -267,7 +267,7 @@ func (s *Service) runPrewarm(ctx context.Context, x reporter, cfg *PrewarmConfig
 		}
 		frac := float64(res.Done) / float64(max(len(parsed), 1))
 		msg := fmt.Sprintf("%d of %d · %d cached, %d failed", res.Done, len(parsed), res.Cached, res.Failed)
-		save := time.Since(lastSave) > time.Second || next == len(parsed)
+		save := time.Since(lastSave) > s.opts.CheckpointEvery || next == len(parsed)
 		if save {
 			lastSave = time.Now()
 		}

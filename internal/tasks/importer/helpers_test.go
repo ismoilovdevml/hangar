@@ -166,6 +166,8 @@ type fakeSource struct {
 	user     string
 	password string
 	fallback http.HandlerFunc
+	// hook runs before a request is answered.
+	hook func(r *http.Request)
 }
 
 type fakeFile struct {
@@ -205,6 +207,12 @@ func (f *fakeSource) count(path string) int {
 }
 
 func (f *fakeSource) serve(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	hook := f.hook
+	f.mu.Unlock()
+	if hook != nil {
+		hook(r)
+	}
 	if f.user != "" {
 		u, p, ok := r.BasicAuth()
 		if !ok || u != f.user || p != f.password {
