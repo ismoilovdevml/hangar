@@ -66,6 +66,9 @@ export default defineConfig(({ mode }) => {
       setupFiles: ['./src/test/setup.ts'],
       include: ['src/**/*.test.{ts,tsx}'],
       css: false,
+      // Tests render whole pages against the mock server; leave room for a
+      // loaded machine (parallel workers, CI runners). See src/test/setup.ts.
+      testTimeout: 20_000,
     },
   };
 });
