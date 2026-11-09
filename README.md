@@ -81,6 +81,7 @@ Maven/Gradle, raw files and CI systems (GitLab CI, GitHub Actions, Jenkins, Gite
 ## Documentation
 
 - [User guides](docs/guides/README.md): clients, CI, access and the REST API
+- [Move to Hangar](docs/guides/migrate.md): import packages from another registry and pre-warm proxy caches
 - [Deployment](docs/deploy/README.md): Docker Compose with automatic TLS, Helm chart, binary with systemd, backups, upgrades and high availability
 - [Security](docs/security.md): hardening checklist and how secrets are stored; report vulnerabilities as described in [SECURITY.md](SECURITY.md)
 - Operations: [monitoring](docs/operations/monitoring.md), [runbooks](docs/operations/runbooks.md), [performance](docs/operations/performance.md)

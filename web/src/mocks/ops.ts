@@ -15,6 +15,8 @@ import type {
   ClusterStatus,
   SystemConfig,
   Task,
+  LockfileResult,
+  TaskInput,
   TaskLogLine,
   TaskRun,
   TaskType,
@@ -611,6 +613,64 @@ export function opsHandlers(guard: Guard) {
       const denied = guard(request);
       if (denied) return denied;
       return HttpResponse.json({ items: state.tasks, running: [...state.active.values()].map((a) => a.run) });
+    }),
+
+    http.post(api('/tasks'), async ({ request }) => {
+      const denied = guard(request, true);
+      if (denied) return denied;
+      const input = (await request.json()) as TaskInput;
+      if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(input.name ?? '')) return error(400, { code: 'invalid_argument', message: 'invalid task name' });
+      if (state.tasks.some((t) => t.name === input.name)) return error(409, { code: 'already_exists', message: `task "${input.name}" already exists` });
+      const now = new Date().toISOString();
+      const cfg = { ...(input.config ?? {}) } as Record<string, unknown>;
+      const src = cfg.source as Record<string, unknown> | undefined;
+      if (src) cfg.source = { ...src, password: undefined, token: undefined };
+      const task: Task = {
+        id: `t_${input.name.replace(/-/g, '_')}`,
+        name: input.name,
+        type: input.type,
+        description: input.description ?? '',
+        schedule: input.schedule ?? null,
+        schedule_text: (input.schedule ? describeCron(input.schedule) : null) ?? 'Manual only',
+        config: cfg,
+        enabled: input.enabled ?? true,
+        builtin: false,
+        next_run_at: null,
+        last_run: null,
+        created_at: now,
+        updated_at: now,
+      };
+      state.tasks = [...state.tasks, task];
+      return HttpResponse.json(task, { status: 201 });
+    }),
+
+    http.post(api('/lockfiles'), async ({ request }) => {
+      const denied = guard(request, true);
+      if (denied) return denied;
+      const url = new URL(request.url);
+      const filename = url.searchParams.get('filename') ?? '';
+      let text: string;
+      if (request.headers.get('Content-Encoding') === 'gzip' && typeof DecompressionStream !== 'undefined' && request.body) {
+        text = await new Response(request.body.pipeThrough(new DecompressionStream('gzip'))).text();
+      } else {
+        text = await request.text();
+      }
+      const res: LockfileResult = { kind: filename.endsWith('package-lock.json') ? 'package-lock.json' : 'list', coordinates: [], skipped: 0 };
+      if (res.kind === 'package-lock.json') {
+        const doc = JSON.parse(text) as { packages?: Record<string, { version?: string; link?: boolean }> };
+        for (const [k, p] of Object.entries(doc.packages ?? {})) {
+          if (!k) continue;
+          if (p.link || !p.version) res.skipped++;
+          else res.coordinates.push(`${k.slice(k.lastIndexOf('node_modules/') + 13)}@${p.version}`);
+        }
+      } else {
+        for (const line of text.split('\n').map((l) => l.trim())) {
+          if (!line || line.startsWith('#')) continue;
+          if (!/[@=:]/.test(line.slice(1))) return error(400, { code: 'invalid_argument', message: `coordinate "${line}": want name@version` });
+          res.coordinates.push(line);
+        }
+      }
+      return HttpResponse.json(res);
     }),
 
     http.get(api('/tasks/:id'), ({ request, params }) => {

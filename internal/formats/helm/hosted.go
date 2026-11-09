@@ -28,6 +28,15 @@ type stored struct {
 
 // chartAttributes are the component attributes of a chart version: the
 // Chart.yaml metadata the index repeats, plus the facts the UI shows.
+// createdAt is the chart's created time: the source's when an import keeps
+// it (core.WithPublishedAt), else now.
+func createdAt(ctx context.Context, now time.Time) time.Time {
+	if at, ok := core.PublishedAtFrom(ctx); ok {
+		return at
+	}
+	return now
+}
+
 func chartAttributes(md *Metadata, digest string, created time.Time) map[string]any {
 	var chart map[string]any
 	b, _ := json.Marshal(md)
@@ -150,7 +159,7 @@ func (h *handler) storeChart(ctx context.Context, repo *core.Repository, bs core
 		return nil, err
 	}
 	_, _, err = h.deps.Components.Publish(ctx, repo, core.PublishRequest{
-		Component: &core.Component{Name: md.Name, Version: md.Version, Attributes: chartAttributes(md, up.digest.Hex(), h.now())},
+		Component: &core.Component{Name: md.Name, Version: md.Version, Attributes: chartAttributes(md, up.digest.Hex(), createdAt(ctx, h.now()))},
 		Assets: []*core.Asset{{
 			Path: chartPath(md.Name, md.Version), Kind: core.AssetContent, BlobDigest: up.digest, Size: up.size,
 			ContentType: contentTypeChart, Attributes: map[string]any{"filename": ChartFile(md.Name, md.Version)},

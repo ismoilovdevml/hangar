@@ -5,6 +5,7 @@ Practical, copy-paste guides for running Hangar and connecting package clients t
 | Guide | What it covers |
 |---|---|
 | [Getting started](getting-started.md) | Run the server, create the first administrator and token, create a repository, upload and download a file |
+| [Move to Hangar](migrate.md) | Import packages from another registry, pre-warm proxies from lockfiles, switch clients, verify |
 | [Docker / OCI](docker.md) | `docker login/push/pull`, buildx multi-arch, Helm charts over OCI, cosign |
 | [npm](npm.md) | npm, pnpm and yarn: `.npmrc`, `.yarnrc.yml`, publish, dist-tags, deprecate, unpublish |
 | [Maven](maven.md) | Maven `settings.xml`, Gradle Kotlin and Groovy DSL, `maven-publish` |

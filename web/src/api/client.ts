@@ -115,6 +115,8 @@ export interface ApiFetchInit {
   method?: string;
   query?: Query;
   body?: unknown;
+  /** A body sent as is (a file), with its own headers, instead of JSON `body`. */
+  raw?: { body: BodyInit; headers?: Record<string, string> };
   signal?: AbortSignal;
   /**
    * Leave a 401 to the caller instead of redirecting to sign-in: the login call
@@ -136,6 +138,7 @@ async function send(path: string, init: ApiFetchInit): Promise<Response> {
   const method = (init.method ?? 'GET').toUpperCase();
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (init.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (init.raw) Object.assign(headers, { 'Content-Type': 'application/octet-stream' }, init.raw.headers);
   if (!SAFE_METHODS.has(method)) {
     const token = csrfToken();
     if (token) headers[CSRF_HEADER] = token;
@@ -144,7 +147,7 @@ async function send(path: string, init: ApiFetchInit): Promise<Response> {
     method,
     credentials: 'same-origin',
     headers,
-    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+    body: init.raw ? init.raw.body : init.body !== undefined ? JSON.stringify(init.body) : undefined,
     signal: init.signal,
   });
   rememberCsrf(res);

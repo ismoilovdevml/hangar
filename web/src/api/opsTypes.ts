@@ -35,6 +35,12 @@ export type TaskRun = Schemas['TaskRun'];
 export type Task = Schemas['Task'];
 export type TaskList = Schemas['TaskList'];
 export type TaskRunPage = Schemas['TaskRunPage'];
+export type TaskInput = Schemas['TaskInput'];
+export type ImportTaskConfig = Schemas['ImportTaskConfig'];
+export type PrewarmTaskConfig = Schemas['PrewarmTaskConfig'];
+export type ImportRunResult = Schemas['ImportRunResult'];
+export type PrewarmRunResult = Schemas['PrewarmRunResult'];
+export type LockfileResult = Schemas['LockfileResult'];
 
 type TaskProgressEvent = Extract<Schemas['LiveEvent'], { type: 'task.progress' }>;
 export type TaskProgress = TaskProgressEvent['data'];

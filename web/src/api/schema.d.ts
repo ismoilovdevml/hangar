@@ -1470,6 +1470,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/lockfiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read the coordinates a lockfile pins (for a pre-warm task)
+         * @description Reads a lockfile, or a plain list with one coordinate per line, into
+         *     the coordinates of `repository`'s format. The parser is chosen by
+         *     `filename`: npm `package-lock.json`, `npm-shrinkwrap.json`,
+         *     `pnpm-lock.yaml`, `yarn.lock` (v1 and berry); NuGet
+         *     `packages.lock.json`; PyPI `requirements*.txt` (pinned `==` lines),
+         *     `uv.lock`, `poetry.lock`; Go `go.sum`; Cargo `Cargo.lock`; Maven
+         *     `gradle.lockfile`; Helm `Chart.lock`; anything else is a plain list.
+         *     Dependencies no registry serves (workspace, path, git, link) are
+         *     counted as skipped. Send the body gzip-compressed
+         *     (`Content-Encoding: gzip`) when it is larger than the API body limit;
+         *     up to 32 MiB uncompressed. Nothing is stored. Needs `system:tasks:write`.
+         */
+        post: operations["parseLockfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -3785,10 +3815,143 @@ export interface components {
         /**
          * @description Types this server runs: cleanup (cleanup policies), blob_compaction,
          *     docker_gc, auth_purge, audit_partitions, rescan (vulnerability
-         *     rescan against new advisories). The others are reserved.
+         *     rescan against new advisories), repository_import (copy packages
+         *     from another registry into a hosted repository, config
+         *     ImportTaskConfig) and proxy_prewarm (fill a proxy or group cache,
+         *     config PrewarmTaskConfig). The others are reserved.
          * @enum {string}
          */
-        TaskType: "cleanup" | "blob_compaction" | "docker_gc" | "auth_purge" | "audit_partitions" | "rescan" | "reindex" | "directory_sync" | "db_backup" | "replication" | "proxy_metadata_refresh" | "blob_store_move";
+        TaskType: "cleanup" | "blob_compaction" | "docker_gc" | "auth_purge" | "audit_partitions" | "rescan" | "reindex" | "directory_sync" | "db_backup" | "replication" | "proxy_metadata_refresh" | "blob_store_move" | "repository_import" | "proxy_prewarm";
+        /**
+         * @description A registry to read from, by the URL its clients use: npm registry,
+         *     NuGet V3 service index (or V2 feed), Maven repository root, PyPI
+         *     simple index, GOPROXY, Cargo sparse index (`sparse+` optional), Helm
+         *     repository, OCI registry root, Debian archive root, RPM repository
+         *     (the directory holding repodata/) or a base URL of raw files. The URL
+         *     must pass the outbound address policy of proxy remotes.
+         */
+        ImportSource: {
+            /** Format: uri */
+            url: string;
+            username?: string;
+            /** @description Sealed at rest; never returned. Leave empty on update to keep the stored one. */
+            password?: string;
+            /** @description Bearer token instead of a password. Sealed at rest; never returned. */
+            token?: string;
+        };
+        ImportFilters: {
+            /**
+             * @description Names or glob patterns (`*`, `?`, case-insensitive). Exact names are
+             *     read directly; patterns and an empty list need a source that lists
+             *     its packages (npm `/-/all` or `/-/v1/search`, NuGet search, PyPI
+             *     simple index, Cargo API search, Helm index, OCI catalog, Debian and
+             *     RPM metadata, Maven and raw directory listings; Go cannot list).
+             *     Maven names are `groupId:artifactId`.
+             */
+            packages?: string[];
+            exclude?: string[];
+            /** @description A range (`>=1.2 <2`, `^1.4`, `~1.2`, `~=2.1`, joined with `||`) or glob patterns (`1.*`, `v2.*`). Empty means all. */
+            versions?: string;
+            /** @description Keep the newest N versions of each package (0 = all) */
+            latest?: number;
+            /** @description Include pre-releases (excluded by default) */
+            prereleases?: boolean;
+        };
+        ImportTuning: {
+            /** @description Requests to the source per second (default 10) */
+            requests_per_second?: number;
+            /** @description Packages or coordinates handled at once (default 4) */
+            concurrency?: number;
+        };
+        /**
+         * @description Config of a repository_import task. Every version selected is copied
+         *     with the format's own publish protocol, so it goes through the same
+         *     checks as a client upload. Versions already present with identical
+         *     content are skipped; present with other content they are reported as
+         *     conflicts and left alone. The source's publish date becomes the
+         *     version's date where the source has one (npm time, NuGet published,
+         *     Helm created, Go .info Time, PyPI upload-time, Maven and raw
+         *     Last-Modified, RPM file time); yanked, unlisted and dist-tag state is
+         *     carried over (PyPI, Cargo, NuGet, npm). Runs resume from a checkpoint.
+         */
+        ImportTaskConfig: components["schemas"]["ImportFilters"] & components["schemas"]["ImportTuning"] & {
+            /** @description The hosted repository to import into */
+            repository: string;
+            source: components["schemas"]["ImportSource"];
+            /** @description apt: suite to read and upload to (default stable) */
+            distribution?: string;
+            /** @description apt: archive areas (default main) */
+            components?: string[];
+            /** @description apt: architectures (default amd64) */
+            architectures?: string[];
+            /** @description raw: paths relative to the source URL; a path ending in / is a directory, crawled through its listing */
+            files?: string[];
+        };
+        /**
+         * @description Config of a proxy_prewarm task: every coordinate is fetched through
+         *     the proxy (or group) as a client would, so the cache holds it.
+         *     Notation per format: `name@version` (npm, NuGet, Cargo, Helm, Go;
+         *     `module@version/go.mod` fetches only the go.mod), `name==version`
+         *     (PyPI), `groupId:artifactId[:extension[:classifier]]:version` (Maven),
+         *     `image:tag` or `image@sha256:...` (Docker, every platform), a path
+         *     (raw, apt, rpm).
+         */
+        PrewarmTaskConfig: components["schemas"]["ImportTuning"] & {
+            /** @description The proxy or group repository to fill */
+            repository: string;
+            coordinates?: string[];
+            /** @description Read when the task is saved and replaced by the coordinates they pin (content is not stored) */
+            lockfiles?: {
+                name: string;
+                content?: string;
+                readonly entries?: number;
+                readonly skipped?: number;
+            }[];
+            /** @description List what a source registry holds and fetch all of it */
+            inventory?: components["schemas"]["ImportFilters"] & {
+                source: components["schemas"]["ImportSource"];
+                distribution?: string;
+                components?: string[];
+                architectures?: string[];
+            };
+        };
+        /** @description TaskRun.result of a repository_import run */
+        ImportRunResult: {
+            packages?: number;
+            packages_done?: number;
+            /** @description Versions copied */
+            imported?: number;
+            /** @description Versions already present with identical content */
+            skipped?: number;
+            /** @description Versions present with other content (left as they are) */
+            conflicts?: number;
+            failed?: number;
+            bytes?: components["schemas"]["Bytes"];
+            /** @description The first 100 */
+            conflict_items?: string[];
+            /** @description The first 100 */
+            failed_items?: string[];
+        };
+        /** @description TaskRun.result of a proxy_prewarm run */
+        PrewarmRunResult: {
+            coordinates?: number;
+            done?: number;
+            /** @description Coordinates fetched through the proxy (now in its cache) */
+            cached?: number;
+            failed?: number;
+            /** @description Coordinates a routing rule of the repository keeps from its remote or member, and lockfile entries left out (workspace, path, git, link) */
+            skipped?: number;
+            bytes?: components["schemas"]["Bytes"];
+            failed_items?: string[];
+            /** @description The first 100 routing exclusions */
+            skipped_items?: string[];
+        };
+        LockfileResult: {
+            /** @description The parser used */
+            kind: string;
+            coordinates: string[];
+            skipped: number;
+        };
         /** @enum {string} */
         TaskRunStatus: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         TaskInput: {
@@ -3801,7 +3964,10 @@ export interface components {
              * @description Per type. blob_compaction: `blob_store` (name; default all),
              *     `orphan_scan` (bool). docker_gc: `older_than_days` (default 7),
              *     `repositories` (default all hosted and proxy docker repositories),
-             *     `dry_run`. Others take none.
+             *     `dry_run`. repository_import: ImportTaskConfig. proxy_prewarm:
+             *     PrewarmTaskConfig. Others take none. Creating or changing an import
+             *     or pre-warm task, and running it by hand, also needs
+             *     `repo:<repository>:write` on its repository.
              */
             config?: {
                 [key: string]: unknown;
@@ -3831,7 +3997,10 @@ export interface components {
             components_deleted?: number;
             /** @description Cleanup, docker GC and blob compaction runs - bytes released (from the result) */
             bytes_freed?: components["schemas"]["Bytes"];
-            /** @description Summary of a finished run, per type (cleanup runs - CleanupRunResult) */
+            /**
+             * @description Summary of a finished run, per type (cleanup runs - CleanupRunResult,
+             *     repository_import - ImportRunResult, proxy_prewarm - PrewarmRunResult)
+             */
             result?: {
                 [key: string]: unknown;
             };
@@ -7141,6 +7310,39 @@ export interface operations {
                     "application/json": components["schemas"]["TaskRunLog"];
                 };
             };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    parseLockfile: {
+        parameters: {
+            query: {
+                /** @description The proxy or group repository to pre-warm (selects the format) */
+                repository: string;
+                /** @description The lockfile's file name */
+                filename: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+                "text/plain": string;
+            };
+        };
+        responses: {
+            /** @description Coordinates */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LockfileResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };

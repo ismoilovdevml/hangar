@@ -14,6 +14,8 @@ export const TASK_TYPES: Record<TaskType, { label: string; hint: string }> = {
   replication: { label: 'Replication', hint: 'Copies repositories to other sites' },
   proxy_metadata_refresh: { label: 'Proxy metadata refresh', hint: 'Refreshes cached upstream metadata' },
   blob_store_move: { label: 'Blob store move', hint: 'Moves repositories between blob stores' },
+  repository_import: { label: 'Import', hint: 'Copies packages from another registry into a hosted repository' },
+  proxy_prewarm: { label: 'Proxy pre-warm', hint: 'Fetches packages through a proxy so its cache holds them' },
 };
 
 export const ALL_TASK_TYPES = Object.keys(TASK_TYPES) as TaskType[];

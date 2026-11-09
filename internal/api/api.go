@@ -222,6 +222,7 @@ func (a *API) Mount(r chi.Router) {
 		r.Get("/tasks/{id}/runs", a.listTaskRuns)
 		r.Get("/tasks/{id}/runs/{run_id}", a.getTaskRun)
 		r.Get("/tasks/{id}/runs/{run_id}/log", a.getTaskRunLog)
+		r.Post("/lockfiles", a.parseLockfile)
 
 		r.Get("/components", a.listComponents)
 		r.Get("/components/{id}", a.getComponent)

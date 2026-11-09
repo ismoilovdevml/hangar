@@ -1,0 +1,8 @@
+# pinned with pip-compile
+acme-tools==1.1.0 \
+    --hash=sha256:0000000000000000000000000000000000000000000000000000000000000000
+Requests[socks]==2.31.0 ; python_version >= "3.8"
+-r base.txt
+--index-url https://pypi.example.com/simple
+flask>=2.0
+git+https://git.example.com/lib.git#egg=lib

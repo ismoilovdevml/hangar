@@ -2061,6 +2061,42 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   # ---------------------------------------------------------------- access
+  /lockfiles:
+    post:
+      tags: [tasks]
+      operationId: parseLockfile
+      summary: Read the coordinates a lockfile pins (for a pre-warm task)
+      description: |
+        Reads a lockfile, or a plain list with one coordinate per line, into
+        the coordinates of `repository`'s format. The parser is chosen by
+        `filename`: npm `package-lock.json`, `npm-shrinkwrap.json`,
+        `pnpm-lock.yaml`, `yarn.lock` (v1 and berry); NuGet
+        `packages.lock.json`; PyPI `requirements*.txt` (pinned `==` lines),
+        `uv.lock`, `poetry.lock`; Go `go.sum`; Cargo `Cargo.lock`; Maven
+        `gradle.lockfile`; Helm `Chart.lock`; anything else is a plain list.
+        Dependencies no registry serves (workspace, path, git, link) are
+        counted as skipped. Send the body gzip-compressed
+        (`Content-Encoding: gzip`) when it is larger than the API body limit;
+        up to 32 MiB uncompressed. Nothing is stored. Needs `system:tasks:write`.
+      parameters:
+        - { name: repository, in: query, required: true, schema: { type: string }, description: The proxy or group repository to pre-warm (selects the format) }
+        - { name: filename, in: query, required: true, schema: { type: string }, description: The lockfile's file name }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+          text/plain:
+            schema: { type: string }
+      responses:
+        "200":
+          description: Coordinates
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LockfileResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /users:
     get:
       tags: [access]
@@ -5108,9 +5144,155 @@ components:
       description: |
         Types this server runs: cleanup (cleanup policies), blob_compaction,
         docker_gc, auth_purge, audit_partitions, rescan (vulnerability
-        rescan against new advisories). The others are reserved.
+        rescan against new advisories), repository_import (copy packages
+        from another registry into a hosted repository, config
+        ImportTaskConfig) and proxy_prewarm (fill a proxy or group cache,
+        config PrewarmTaskConfig). The others are reserved.
       enum: [cleanup, blob_compaction, docker_gc, auth_purge, audit_partitions, rescan, reindex, directory_sync, db_backup,
-        replication, proxy_metadata_refresh, blob_store_move]
+        replication, proxy_metadata_refresh, blob_store_move, repository_import, proxy_prewarm]
+    ImportSource:
+      type: object
+      required: [url]
+      description: |
+        A registry to read from, by the URL its clients use: npm registry,
+        NuGet V3 service index (or V2 feed), Maven repository root, PyPI
+        simple index, GOPROXY, Cargo sparse index (`sparse+` optional), Helm
+        repository, OCI registry root, Debian archive root, RPM repository
+        (the directory holding repodata/) or a base URL of raw files. The URL
+        must pass the outbound address policy of proxy remotes.
+      properties:
+        url: { type: string, format: uri }
+        username: { type: string }
+        password:
+          type: string
+          writeOnly: true
+          description: Sealed at rest; never returned. Leave empty on update to keep the stored one.
+        token:
+          type: string
+          writeOnly: true
+          description: Bearer token instead of a password. Sealed at rest; never returned.
+    ImportFilters:
+      type: object
+      properties:
+        packages:
+          type: array
+          items: { type: string }
+          description: |
+            Names or glob patterns (`*`, `?`, case-insensitive). Exact names are
+            read directly; patterns and an empty list need a source that lists
+            its packages (npm `/-/all` or `/-/v1/search`, NuGet search, PyPI
+            simple index, Cargo API search, Helm index, OCI catalog, Debian and
+            RPM metadata, Maven and raw directory listings; Go cannot list).
+            Maven names are `groupId:artifactId`.
+        exclude: { type: array, items: { type: string } }
+        versions:
+          type: string
+          description: A range (`>=1.2 <2`, `^1.4`, `~1.2`, `~=2.1`, joined with `||`) or glob patterns (`1.*`, `v2.*`). Empty means all.
+        latest: { type: integer, minimum: 0, description: Keep the newest N versions of each package (0 = all) }
+        prereleases: { type: boolean, description: Include pre-releases (excluded by default) }
+    ImportTuning:
+      type: object
+      properties:
+        requests_per_second: { type: number, minimum: 0, maximum: 1000, description: Requests to the source per second (default 10) }
+        concurrency: { type: integer, minimum: 0, maximum: 16, description: Packages or coordinates handled at once (default 4) }
+    ImportTaskConfig:
+      description: |
+        Config of a repository_import task. Every version selected is copied
+        with the format's own publish protocol, so it goes through the same
+        checks as a client upload. Versions already present with identical
+        content are skipped; present with other content they are reported as
+        conflicts and left alone. The source's publish date becomes the
+        version's date where the source has one (npm time, NuGet published,
+        Helm created, Go .info Time, PyPI upload-time, Maven and raw
+        Last-Modified, RPM file time); yanked, unlisted and dist-tag state is
+        carried over (PyPI, Cargo, NuGet, npm). Runs resume from a checkpoint.
+      allOf:
+        - $ref: "#/components/schemas/ImportFilters"
+        - $ref: "#/components/schemas/ImportTuning"
+        - type: object
+          required: [repository, source]
+          properties:
+            repository: { type: string, description: The hosted repository to import into }
+            source: { $ref: "#/components/schemas/ImportSource" }
+            distribution: { type: string, description: "apt: suite to read and upload to (default stable)" }
+            components: { type: array, items: { type: string }, description: "apt: archive areas (default main)" }
+            architectures: { type: array, items: { type: string }, description: "apt: architectures (default amd64)" }
+            files:
+              type: array
+              items: { type: string }
+              description: "raw: paths relative to the source URL; a path ending in / is a directory, crawled through its listing"
+    PrewarmTaskConfig:
+      description: |
+        Config of a proxy_prewarm task: every coordinate is fetched through
+        the proxy (or group) as a client would, so the cache holds it.
+        Notation per format: `name@version` (npm, NuGet, Cargo, Helm, Go;
+        `module@version/go.mod` fetches only the go.mod), `name==version`
+        (PyPI), `groupId:artifactId[:extension[:classifier]]:version` (Maven),
+        `image:tag` or `image@sha256:...` (Docker, every platform), a path
+        (raw, apt, rpm).
+      allOf:
+        - $ref: "#/components/schemas/ImportTuning"
+        - type: object
+          required: [repository]
+          properties:
+            repository: { type: string, description: The proxy or group repository to fill }
+            coordinates: { type: array, maxItems: 100000, items: { type: string } }
+            lockfiles:
+              type: array
+              description: Read when the task is saved and replaced by the coordinates they pin (content is not stored)
+              items:
+                type: object
+                required: [name]
+                properties:
+                  name: { type: string }
+                  content: { type: string, writeOnly: true }
+                  entries: { type: integer, readOnly: true }
+                  skipped: { type: integer, readOnly: true }
+            inventory:
+              description: List what a source registry holds and fetch all of it
+              allOf:
+                - $ref: "#/components/schemas/ImportFilters"
+                - type: object
+                  required: [source]
+                  properties:
+                    source: { $ref: "#/components/schemas/ImportSource" }
+                    distribution: { type: string }
+                    components: { type: array, items: { type: string } }
+                    architectures: { type: array, items: { type: string } }
+    ImportRunResult:
+      type: object
+      description: TaskRun.result of a repository_import run
+      properties:
+        packages: { type: integer }
+        packages_done: { type: integer }
+        imported: { type: integer, description: Versions copied }
+        skipped: { type: integer, description: Versions already present with identical content }
+        conflicts: { type: integer, description: Versions present with other content (left as they are) }
+        failed: { type: integer }
+        bytes: { $ref: "#/components/schemas/Bytes" }
+        conflict_items: { type: array, items: { type: string }, description: The first 100 }
+        failed_items: { type: array, items: { type: string }, description: The first 100, with the reason }
+    PrewarmRunResult:
+      type: object
+      description: TaskRun.result of a proxy_prewarm run
+      properties:
+        coordinates: { type: integer }
+        done: { type: integer }
+        cached: { type: integer, description: Coordinates fetched through the proxy (now in its cache) }
+        failed: { type: integer }
+        skipped:
+          type: integer
+          description: Coordinates a routing rule of the repository keeps from its remote or member, and lockfile entries left out (workspace, path, git, link)
+        bytes: { $ref: "#/components/schemas/Bytes" }
+        failed_items: { type: array, items: { type: string } }
+        skipped_items: { type: array, items: { type: string }, description: The first 100 routing exclusions, with the rule }
+    LockfileResult:
+      type: object
+      required: [kind, coordinates, skipped]
+      properties:
+        kind: { type: string, description: The parser used, e.g. package-lock.json or list }
+        coordinates: { type: array, items: { type: string } }
+        skipped: { type: integer }
     TaskRunStatus:
       type: string
       enum: [queued, running, succeeded, failed, cancelled]
@@ -5129,7 +5311,10 @@ components:
             Per type. blob_compaction: `blob_store` (name; default all),
             `orphan_scan` (bool). docker_gc: `older_than_days` (default 7),
             `repositories` (default all hosted and proxy docker repositories),
-            `dry_run`. Others take none.
+            `dry_run`. repository_import: ImportTaskConfig. proxy_prewarm:
+            PrewarmTaskConfig. Others take none. Creating or changing an import
+            or pre-warm task, and running it by hand, also needs
+            `repo:<repository>:write` on its repository.
         enabled:
           type: boolean
           description: Optional; true when omitted
@@ -5164,7 +5349,9 @@ components:
         result:
           type: object
           additionalProperties: true
-          description: Summary of a finished run, per type (cleanup runs - CleanupRunResult)
+          description: |
+            Summary of a finished run, per type (cleanup runs - CleanupRunResult,
+            repository_import - ImportRunResult, proxy_prewarm - PrewarmRunResult)
     TaskRunLogLine:
       type: object
       required: [seq, at, level, message]

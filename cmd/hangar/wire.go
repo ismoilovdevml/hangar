@@ -56,6 +56,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/tasks/blobgc"
 	"github.com/ismoilovdevml/hangar/internal/tasks/dockergc"
 	"github.com/ismoilovdevml/hangar/internal/tasks/dockeruploads"
+	"github.com/ismoilovdevml/hangar/internal/tasks/importer"
 	"github.com/ismoilovdevml/hangar/internal/tasks/scheduler"
 	"github.com/ismoilovdevml/hangar/internal/version"
 )
@@ -390,7 +391,9 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	// principal it resolved, for logs, spans and per-format metrics.
 	formatDeps := deps
 	formatDeps.Repos = observability.TagRepositories(repos)
-	formatDeps.Auth = observability.TagAuthenticator(deps.Auth)
+	// Imports and proxy pre-warming send in-process requests as the task's
+	// principal (importer.Authenticator).
+	formatDeps.Auth = observability.TagAuthenticator(importer.Authenticator(deps.Auth))
 
 	// Metrics are always collected (the Overview screen reads them);
 	// metrics.enabled only controls the /metrics endpoint.
@@ -591,7 +594,18 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	// Tasks: scheduled maintenance, cleanup policies and docker GC, executed
 	// as task runs on any node. Close hands running runs back to the queue
 	// before the queue stops.
-	taskSvc, cleanupSvc, err := buildTasks(ctx, cfg, pool, queue, deps, collector, authSvc, dockerFormat, scanner, log)
+	// Imports from other registries and proxy pre-warming talk to the
+	// repositories through the router, as package clients do.
+	var importSecrets importer.Sealer
+	if keyring != nil {
+		importSecrets = keyring
+	}
+	imports := importer.New(importer.Options{Repos: repos, Components: deps.Components, AuthZ: authz, Handler: a.router,
+		BaseURL: cfg.Server.BaseURL, Secrets: importSecrets, Logger: log,
+		HTTPClient: func(u string) (*http.Client, error) { return clients.ForUpstream(u, core.UpstreamHTTP{}, nil) },
+		CheckURL:   func(ctx context.Context, u string) error { return guard.ValidateRemote(ctx, u, false) },
+	})
+	taskSvc, cleanupSvc, err := buildTasks(ctx, cfg, pool, queue, deps, collector, authSvc, dockerFormat, scanner, imports, log)
 	if err != nil {
 		return nil, err
 	}
@@ -636,7 +650,8 @@ var dockerUploadCleanupTask = tasks.Builtin{Name: "docker-upload-cleanup", Type:
 // buildTasks wires the task service with every executor and the cleanup
 // policy service, and makes sure the built-in tasks exist.
 func buildTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, queue core.JobQueue, deps core.Deps,
-	collector *blobgc.Collector, authSvc *auth.Service, dockerFormat *docker.Format, scanner *scanning.Service, log *slog.Logger,
+	collector *blobgc.Collector, authSvc *auth.Service, dockerFormat *docker.Format, scanner *scanning.Service,
+	imports *importer.Service, log *slog.Logger,
 ) (*tasks.Service, *cleanup.Service, error) {
 	if g := cfg.Storage.GC.GracePeriod; g > 0 && g <= docker.DefaultUploadTTL {
 		log.Warn("storage.gc.grace_period should exceed the docker upload session lifetime, or blobs of uploads "+
@@ -663,6 +678,8 @@ func buildTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, queu
 		return err
 	}), tasks.TypeOptions{})
 	taskSvc.Register(scanning.TaskType, scanner.Executor(), tasks.TypeOptions{})
+	taskSvc.Register(importer.TypeImport, imports.ImportExecutor(), tasks.TypeOptions{Creatable: true})
+	taskSvc.Register(importer.TypePrewarm, imports.PrewarmExecutor(), tasks.TypeOptions{Creatable: true})
 	builtins := append(slices.Clone(builtinTasks), scanning.RescanTask)
 	if dockerFormat != nil {
 		taskSvc.Register(tasks.TypeDockerUploadCleanup, dockeruploads.Executor(dockerFormat, pool), tasks.TypeOptions{})

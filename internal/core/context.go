@@ -1,6 +1,9 @@
 package core
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type ctxKey int
 
@@ -75,4 +78,25 @@ func WithRequestInfo(ctx context.Context, info RequestInfo) context.Context {
 func RequestInfoFrom(ctx context.Context) RequestInfo {
 	info, _ := ctx.Value(requestInfoKey).(RequestInfo)
 	return info
+}
+
+type publishedAtKey struct{}
+
+// WithPublishedAt returns ctx asking ComponentService.Publish to record t as
+// the creation time of the components it creates in ctx, instead of now.
+// Imports from another registry set it to keep the source's publish date
+// (npm time, NuGet published, Helm created). It never changes existing
+// components, and a zero t is ignored. Only server code sets it: no client
+// request can.
+func WithPublishedAt(ctx context.Context, t time.Time) context.Context {
+	if t.IsZero() {
+		return ctx
+	}
+	return context.WithValue(ctx, publishedAtKey{}, t.UTC())
+}
+
+// PublishedAtFrom returns the time set by WithPublishedAt, if any.
+func PublishedAtFrom(ctx context.Context) (time.Time, bool) {
+	t, ok := ctx.Value(publishedAtKey{}).(time.Time)
+	return t, ok && !t.IsZero()
 }

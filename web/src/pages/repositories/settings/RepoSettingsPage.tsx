@@ -80,6 +80,8 @@ function SettingsForm({ repo }: { repo: Repository }) {
   const navigate = useNavigate();
   const perms = usePermissions();
   const canAdmin = perms.canAdminRepo(repo.name);
+  // Import (hosted) and pre-warm (proxy, group) tasks need tasks and repository write.
+  const canImport = perms.can('write', 'system', 'tasks') && perms.can('write', 'repo', repo.name);
   const [form, setForm] = useState<RepoForm>(() => repoToForm(repo));
   const [blurred, setBlurred] = useState<Partial<Record<RepoFormField, boolean>>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -160,6 +162,15 @@ function SettingsForm({ repo }: { repo: Repository }) {
             <Link to="/browse" search={{ repo: repo.name }} className="button button--secondary">
               <IconPackage size={16} /> Browse packages
             </Link>
+            {canImport && (
+              <Link
+                to="/tasks/new"
+                search={{ kind: repo.type === 'hosted' ? 'import' : 'prewarm', repository: repo.name }}
+                className="button button--secondary"
+              >
+                {repo.type === 'hosted' ? 'Import' : 'Pre-warm'}
+              </Link>
+            )}
             <button
               type="button"
               className="button button--secondary"

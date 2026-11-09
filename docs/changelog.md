@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- **Move to Hangar: import and pre-warm tasks** (issue #74, guide
+  `docs/guides/migrate.md`):
+  - `repository_import` copies packages from any registry that speaks a
+    format's client protocol into a hosted repository: npm, NuGet (V3, V2),
+    Maven, PyPI, Go, Cargo, Helm, Docker/OCI (every platform), raw, APT and
+    RPM. Name patterns, version ranges or globs, newest N, pre-releases.
+    Identical versions are skipped, different ones reported as conflicts;
+    publish dates, yanked, unlisted and dist-tag state are kept where the
+    format has them. Rate-limited, concurrent, resumable from checkpoints.
+  - `proxy_prewarm` fetches coordinates through a proxy or group so its cache
+    holds them: pasted lists, lockfiles (`package-lock.json`,
+    `pnpm-lock.yaml`, `yarn.lock`, `packages.lock.json`, `requirements.txt`,
+    `uv.lock`, `poetry.lock`, `go.sum`, `Cargo.lock`, `gradle.lockfile`,
+    `Chart.lock`) or a source registry's inventory. Reports cached, failed
+    and skipped (routing-blocked names are skipped).
+  - Source credentials are sealed with the secret key, never returned, kept
+    on edits, swept by `rotate-secrets`, and guarded in the database
+    (migration 00285). Creating, editing and running these tasks also needs
+    write on the target repository.
+  - API: task types and configs in `api/openapi.yaml`, `POST /lockfiles`
+    reads a lockfile (gzip accepted). Imports keep the source's publish time
+    through `core.WithPublishedAt`.
+  - UI: **Scheduled tasks → New task** (import or pre-warm, lockfile upload),
+    **Import** / **Pre-warm** on repository pages, run results with conflict
+    and failure lists.
+
 - **Routing rules against dependency confusion** (issue #73):
   - Proxy repositories take `config.routing.block` and `allow` name patterns:
     a blocked name is never requested from the remote nor served from the

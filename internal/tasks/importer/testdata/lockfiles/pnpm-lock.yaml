@@ -1,0 +1,30 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+  .:
+    dependencies:
+      left-pad:
+        specifier: ^1.1.0
+        version: 1.2.0
+      '@acme/ui':
+        specifier: 0.2.0
+        version: 0.2.0(react@18.3.1)
+
+packages:
+  left-pad@1.2.0:
+    resolution: {integrity: sha512-xxx}
+  '@acme/ui@0.2.0':
+    resolution: {integrity: sha512-yyy}
+    peerDependencies:
+      react: '>=18'
+  react@18.3.1:
+    resolution: {integrity: sha512-www}
+  local-lib@file:../local-lib:
+    resolution: {directory: ../local-lib, type: directory}
+
+snapshots:
+  left-pad@1.2.0: {}

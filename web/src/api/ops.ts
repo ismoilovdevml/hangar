@@ -21,6 +21,8 @@ import type {
   TaskLogPage,
   TaskRun,
   TaskRunPage,
+  TaskInput,
+  LockfileResult,
 } from './opsTypes';
 import { allows, type PrivilegeAction } from '../lib/can';
 import { applyTaskFinished, applyTaskProgress } from '../lib/tasks';
@@ -226,6 +228,34 @@ export function useRunTask() {
       );
       invalidateTask(qc, id);
     },
+  });
+}
+
+/** Creates a task (POST /tasks), optionally starting a run right away. */
+export function useCreateTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ input, runNow }: { input: TaskInput; runNow: boolean }) => {
+      const task = await apiFetch<Task>('/tasks', { method: 'POST', body: input });
+      const run = runNow ? await apiFetch<TaskRun>(`/tasks/${encodeURIComponent(task.id)}/run`, { method: 'POST' }) : undefined;
+      return { task, run };
+    },
+    onSuccess: ({ task }) => invalidateTask(qc, task.id),
+  });
+}
+
+/** Gzip-compresses a file in the browser when it can (large lockfiles fit the API body limit). */
+async function gzipped(file: Blob): Promise<{ body: BodyInit; headers?: Record<string, string> }> {
+  if (typeof CompressionStream === 'undefined' || typeof file.stream !== 'function') return { body: file };
+  const stream = file.stream().pipeThrough(new CompressionStream('gzip'));
+  return { body: await new Response(stream).blob(), headers: { 'Content-Encoding': 'gzip' } };
+}
+
+/** Reads the coordinates a lockfile pins for a repository (POST /lockfiles). */
+export function useParseLockfile() {
+  return useMutation({
+    mutationFn: async ({ repository, file }: { repository: string; file: File }) =>
+      apiFetch<LockfileResult>('/lockfiles', { method: 'POST', query: { repository, filename: file.name }, raw: await gzipped(file) }),
   });
 }
 

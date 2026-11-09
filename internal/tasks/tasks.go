@@ -181,6 +181,21 @@ type Executor interface {
 	Execute(ctx context.Context, x *Exec) error
 }
 
+// ConfigHooks is implemented by executors whose task configs hold secrets or
+// name resources beyond system:tasks, such as the repository an import
+// writes to. The service calls the hooks with the caller's context.
+type ConfigHooks interface {
+	// PrepareConfig runs on Create and Update after Validate. prev is the
+	// stored config on Update (nil on Create). It authorizes the caller for
+	// what the task will do, keeps write-only secrets of prev the client left
+	// empty, seals secrets, and returns the config to store.
+	PrepareConfig(ctx context.Context, config, prev json.RawMessage) (json.RawMessage, error)
+	// AuthorizeRun checks that the caller may start a run by hand.
+	AuthorizeRun(ctx context.Context, config json.RawMessage) error
+	// RedactConfig removes write-only secrets before a config leaves the server.
+	RedactConfig(config json.RawMessage) json.RawMessage
+}
+
 // TypeOptions describe a registered task type.
 type TypeOptions struct {
 	// Creatable allows administrators to add tasks of this type.
@@ -433,6 +448,7 @@ ORDER BY r.task_id, r.created_at DESC, r.id DESC`)
 	}
 	for _, t := range list {
 		t.LastRun = byTask[t.ID]
+		s.redact(t)
 	}
 	active, err := s.ActiveRuns(ctx)
 	if err != nil {
@@ -455,8 +471,28 @@ WHERE r.status IN ('queued', 'running') ORDER BY r.created_at, r.id`)
 	return out, nil
 }
 
-// Get returns a task by id or name, with its last run.
+// Get returns a task by id or name, with its last run. Write-only secrets of
+// its config are removed (ConfigHooks).
 func (s *Service) Get(ctx context.Context, ref string) (*Task, error) {
+	t, err := s.get(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	s.redact(t)
+	return t, nil
+}
+
+// redact applies the type's ConfigHooks.RedactConfig to t.Config.
+func (s *Service) redact(t *Task) {
+	if reg, ok := s.registration(t.Type); ok {
+		if h, ok := reg.exec.(ConfigHooks); ok {
+			t.Config = h.RedactConfig(t.Config)
+		}
+	}
+}
+
+// get is Get with the stored config (secrets sealed, not removed).
+func (s *Service) get(ctx context.Context, ref string) (*Task, error) {
 	q := `SELECT ` + taskCols + ` FROM tasks t WHERE t.name = $1`
 	if isUUID(ref) {
 		q = `SELECT ` + taskCols + ` FROM tasks t WHERE t.id = $1::uuid`
@@ -556,7 +592,7 @@ WHERE r.id = $1 AND r.task_id = $2`, runID, t.ID), &log)
 
 var taskNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,62}$`)
 
-func (s *Service) validateInput(in *Input) (registration, error) {
+func (s *Service) validateInput(ctx context.Context, in *Input, prev json.RawMessage) (registration, error) {
 	if !taskNameRE.MatchString(in.Name) {
 		return registration{}, fmt.Errorf("task name %q must match %s: %w", in.Name, taskNameRE, core.ErrInvalid)
 	}
@@ -578,6 +614,13 @@ func (s *Service) validateInput(in *Input) (registration, error) {
 	}
 	if err := reg.exec.Validate(in.Config); err != nil {
 		return registration{}, err
+	}
+	if h, ok := reg.exec.(ConfigHooks); ok {
+		cfg, err := h.PrepareConfig(ctx, in.Config, prev)
+		if err != nil {
+			return registration{}, err
+		}
+		in.Config = cfg
 	}
 	if len(in.Description) > 1000 {
 		return registration{}, fmt.Errorf("description longer than 1000 characters: %w", core.ErrInvalid)
@@ -602,7 +645,7 @@ func enabled(p *bool) bool { return p == nil || *p }
 
 // Create adds a task of a creatable type. The caller authorizes; Create audits.
 func (s *Service) Create(ctx context.Context, in Input) (*Task, error) {
-	reg, err := s.validateInput(&in)
+	reg, err := s.validateInput(ctx, &in, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -629,7 +672,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id::text`,
 // Name and type cannot change. Tasks of cleanup policies are edited through
 // their policy. The caller authorizes; Update audits.
 func (s *Service) Update(ctx context.Context, ref string, in Input) (*Task, error) {
-	cur, err := s.Get(ctx, ref)
+	cur, err := s.get(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -645,7 +688,7 @@ func (s *Service) Update(ctx context.Context, ref string, in Input) (*Task, erro
 	if in.Name != cur.Name || in.Type != cur.Type {
 		return nil, fmt.Errorf("task name and type cannot be changed: %w", core.ErrInvalid)
 	}
-	if _, err := s.validateInput(&in); err != nil {
+	if _, err := s.validateInput(ctx, &in, cur.Config); err != nil {
 		return nil, err
 	}
 	_, err = s.pool.Exec(ctx, `

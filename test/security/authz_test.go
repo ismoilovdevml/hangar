@@ -146,6 +146,7 @@ var apiPolicy = map[string]policy{
 	"GET /tasks/{id}/runs":                         privileged,
 	"GET /tasks/{id}/runs/{run_id}":                privileged,
 	"GET /tasks/{id}/runs/{run_id}/log":            privileged,
+	"POST /lockfiles":                              privileged,
 	"GET /cleanup-policies/{name}/runs":            privileged,
 	"POST /cleanup-policies/{name}/run":            privileged,
 	"POST /cleanup-policies/{name}/stop":           privileged,
