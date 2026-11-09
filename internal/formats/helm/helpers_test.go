@@ -250,3 +250,5 @@ func decodeYAML(resp *http.Response, v any) error {
 }
 
 func joinPath(elem ...string) string { return path.Join(elem...) }
+
+func bytesReader(s string) io.Reader { return bytes.NewReader([]byte(s)) }
