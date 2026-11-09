@@ -16,6 +16,8 @@ export interface OidcForm {
   client_secret: string;
   clear_client_secret: boolean;
   client_auth: 'basic' | 'post';
+  /** What signing out does: provider (RP-initiated logout) or local (Hangar only). */
+  logout: 'provider' | 'local';
   display_name: string;
   scopes: string[];
   username_claim: string;
@@ -37,6 +39,7 @@ export function oidcForm(s: OIDCSettings): OidcForm {
     client_secret: '',
     clear_client_secret: false,
     client_auth: s.client_auth,
+    logout: s.logout ?? 'provider',
     display_name: s.display_name,
     scopes: [...s.scopes],
     username_claim: s.username_claim,

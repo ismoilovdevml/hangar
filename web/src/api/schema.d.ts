@@ -96,7 +96,17 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** End the session */
+        /**
+         * End the session
+         * @description Ends the Hangar session. A single sign-on session with
+         *     `auth.oidc.logout: provider` (the default) also ends at the identity
+         *     provider (OpenID Connect RP-Initiated Logout): the answer is 200 with
+         *     the provider's `end_session_endpoint` URL (with `id_token_hint`,
+         *     `client_id` and `post_logout_redirect_uri` = `<base_url>/login`) to
+         *     send the browser to. Without such an endpoint, or with
+         *     `auth.oidc.logout: local`, the answer is 204. Back-channel logout is
+         *     not supported.
+         */
         post: operations["logout"];
         delete?: never;
         options?: never;
@@ -3617,6 +3627,11 @@ export interface components {
             client_id: string;
             /** @enum {string} */
             client_auth: "basic" | "post";
+            /**
+             * @description provider (default): signing out also ends the provider session when it has an end_session_endpoint (RP-Initiated Logout); local: Hangar only
+             * @enum {string}
+             */
+            logout?: "provider" | "local";
             /** @description Label of the sign-in button */
             display_name: string;
             /** @description Must include openid */
@@ -4254,6 +4269,18 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Signed out of Hangar; send the browser to `logout_url` to sign out of the provider too */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uri */
+                        logout_url: string;
+                    };
+                };
+            };
             /** @description Signed out */
             204: {
                 headers: {

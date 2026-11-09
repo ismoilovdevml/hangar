@@ -1,8 +1,9 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiFetch, ApiRequestError, resetCsrfToken } from '../api/client';
+import { leaveAfterLogout, type LogoutResult } from '../api/hooks';
 import { session as mockSession } from '../mocks/data';
 import { mockState } from '../mocks/handlers';
 import { server } from '../mocks/node';
@@ -69,6 +70,25 @@ describe('sign-in against the API', () => {
     expect(logout.csrf).toBe('mock-csrf-1');
     expect(mockState.signedIn).toBe(false);
     expect(seen.filter((r) => r.method === 'GET').every((r) => r.csrf === null)).toBe(true);
+  });
+
+  it('sends a single sign-on session to the provider logout page, others to /login', async () => {
+    server.use(
+      http.post('*/api/v1/auth/logout', () =>
+        HttpResponse.json({ logout_url: 'https://sso.example.com/realms/acme/protocol/openid-connect/logout?client_id=hangar' }),
+      ),
+    );
+    const res = await apiFetch<LogoutResult>('/auth/logout', { method: 'POST', allowUnauthorized: true });
+    const assign = vi.fn();
+    const toLogin = vi.fn();
+    leaveAfterLogout(res, toLogin, assign);
+    expect(assign).toHaveBeenCalledWith('https://sso.example.com/realms/acme/protocol/openid-connect/logout?client_id=hangar');
+    expect(toLogin).not.toHaveBeenCalled();
+
+    leaveAfterLogout(undefined, toLogin, assign);
+    leaveAfterLogout({ logout_url: 'javascript:alert(1)' }, toLogin, assign);
+    expect(toLogin).toHaveBeenCalledTimes(2);
+    expect(assign).toHaveBeenCalledTimes(1);
   });
 
   it('returns to the page (and query) that asked for sign-in', async () => {

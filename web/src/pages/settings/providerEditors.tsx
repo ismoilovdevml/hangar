@@ -106,6 +106,12 @@ function Summary({ items, open, onToggle, controls }: { items: string[]; open: b
   );
 }
 
+/** The post-logout redirect URI that matches a callback URI: <base>/login. */
+function postLogoutUri(redirectUri?: string): string {
+  const base = redirectUri?.replace(/\/api\/v1\/auth\/oidc\/callback$/, '');
+  return base && base !== redirectUri ? `${base}/login` : '';
+}
+
 function SetupSteps({ preset, redirectUri, open }: { preset: { name: string; id: string; steps: string[] }; redirectUri?: string; open: boolean }) {
   const where = preset.id === 'other' ? 'your provider' : preset.name;
   return (
@@ -480,6 +486,26 @@ export function OidcEditor({
                     options={[
                       { value: 'basic', label: 'HTTP Basic (client_secret_basic)' },
                       { value: 'post', label: 'In the request body (client_secret_post)' },
+                    ]}
+                  />
+                )}
+              </Field>
+              <Field
+                id={`${id}-logout`}
+                label={label('Sign out', 'logout', ff)}
+                error={err('logout')}
+                hint={postLogoutUri(data.redirect_uri) ? `Register ${postLogoutUri(data.redirect_uri)} as a post-logout redirect URI` : undefined}
+              >
+                {(a) => (
+                  <Select
+                    id={a.id}
+                    aria-describedby={a['aria-describedby']}
+                    value={form.logout}
+                    onChange={(v) => set('logout', v)}
+                    disabled={locked}
+                    options={[
+                      { value: 'provider', label: 'Also sign out of the provider', hint: 'When it has an end_session_endpoint' },
+                      { value: 'local', label: 'Sign out of Hangar only' },
                     ]}
                   />
                 )}

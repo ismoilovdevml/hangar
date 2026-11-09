@@ -78,10 +78,24 @@ export function useLogin() {
   });
 }
 
+/** POST /auth/logout: a single sign-on session also ends at the provider, whose logout page the browser visits next. */
+export type LogoutResult = { logout_url: string } | undefined;
+
+/**
+ * Leaves the app after sign-out: to the identity provider's logout page when
+ * the server returned one (it comes back to /login), else straight to /login.
+ * Only absolute http(s) URLs are followed.
+ */
+export function leaveAfterLogout(res: LogoutResult | void, toLogin: () => void, assign: (url: string) => void = (u) => window.location.assign(u)) {
+  const url = res?.logout_url;
+  if (url && /^https?:\/\//i.test(url)) assign(url);
+  else toLogin();
+}
+
 export function useLogout() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => apiFetch<void>('/auth/logout', { method: 'POST', allowUnauthorized: true }),
+    mutationFn: () => apiFetch<LogoutResult>('/auth/logout', { method: 'POST', allowUnauthorized: true }),
     onSettled: () => {
       resetCsrfToken();
       qc.clear();

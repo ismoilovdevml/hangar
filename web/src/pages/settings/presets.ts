@@ -80,7 +80,7 @@ const OIDC_PRESETS: Record<string, OidcPreset> = {
     values: OIDC_STD,
     steps: [
       'In your realm, open Clients → Create client: OpenID Connect, client ID hangar, Client authentication on, Standard flow only.',
-      'Add the redirect URI below to Valid redirect URIs, then copy the secret from the Credentials tab.',
+      'Add the redirect URI below to Valid redirect URIs and the same address ending in /login to Valid post logout redirect URIs, then copy the secret from the Credentials tab.',
       'Under Client scopes → hangar-dedicated, add a Group Membership mapper with token claim name groups (Full group path off).',
     ],
     groupPlaceholder: 'hangar-admins',
