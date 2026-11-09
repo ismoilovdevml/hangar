@@ -2289,6 +2289,7 @@ export interface components {
             ldap: {
                 enabled: boolean;
             };
+            /** @description SAML sign-in is planned; this server always reports it disabled. */
             saml: {
                 enabled: boolean;
                 start_url: string | null;
@@ -5418,7 +5419,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Repository"];
-                    /** @description Config-as-code form, accepted back by `hangar apply -f`. */
+                    /** @description Config-as-code form (with `Accept: application/yaml`): the RepositoryInput, ready to send back to POST /repositories or PUT /repositories/{name} as JSON. A `hangar apply -f` CLI is planned. */
                     "application/yaml": components["schemas"]["RepositoryInput"];
                 };
             };

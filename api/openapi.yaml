@@ -634,7 +634,10 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Repository" }
             application/yaml:
-              description: Config-as-code form, accepted back by `hangar apply -f`.
+              description: >-
+                Config-as-code form (with `Accept: application/yaml`): the
+                RepositoryInput, ready to send back to POST /repositories or
+                PUT /repositories/{name} as JSON. A `hangar apply -f` CLI is planned.
               schema: { $ref: "#/components/schemas/RepositoryInput" }
         "404": { $ref: "#/components/responses/NotFound" }
     put:
@@ -3213,6 +3216,7 @@ components:
             enabled: { type: boolean }
         saml:
           type: object
+          description: SAML sign-in is planned; this server always reports it disabled.
           required: [enabled, start_url]
           properties:
             enabled: { type: boolean }
