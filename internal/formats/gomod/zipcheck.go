@@ -46,7 +46,7 @@ func checkVersion(mod, ver string) error {
 		return fmt.Errorf("version %q is not canonical (use %q): %w", ver, c, core.ErrInvalid)
 	}
 	if err := module.Check(mod, ver); err != nil {
-		return fmt.Errorf("%v: %w", err, core.ErrInvalid)
+		return fmt.Errorf("%w: %w", err, core.ErrInvalid)
 	}
 	return nil
 }
@@ -58,7 +58,7 @@ func parseGoMod(mod string, data []byte) (*modfile.File, error) {
 	}
 	f, err := modfile.ParseLax("go.mod", data, nil)
 	if err != nil {
-		return nil, fmt.Errorf("go.mod: %v: %w", err, core.ErrInvalid)
+		return nil, fmt.Errorf("go.mod: %w: %w", err, core.ErrInvalid)
 	}
 	if f.Module == nil {
 		return nil, fmt.Errorf("go.mod has no module directive: %w", core.ErrInvalid)
@@ -86,7 +86,7 @@ func checkModuleZip(mod, ver string, ra io.ReaderAt, size int64) (*zipFacts, err
 	}
 	zr, err := zip.NewReader(ra, size)
 	if err != nil {
-		return nil, fmt.Errorf("not a zip archive: %v: %w", err, core.ErrInvalid)
+		return nil, fmt.Errorf("not a zip archive: %w: %w", err, core.ErrInvalid)
 	}
 	prefix := mod + "@" + ver + "/"
 	var (
@@ -167,12 +167,12 @@ func checkModuleZip(mod, ver string, ra io.ReaderAt, size int64) (*zipFacts, err
 	if gomod != nil {
 		rc, err := gomod.Open()
 		if err != nil {
-			return nil, fmt.Errorf("go.mod in the zip: %v: %w", err, core.ErrInvalid)
+			return nil, fmt.Errorf("go.mod in the zip: %w: %w", err, core.ErrInvalid)
 		}
 		b, err := io.ReadAll(io.LimitReader(rc, maxGoModBytes+1))
 		_ = rc.Close()
 		if err != nil {
-			return nil, fmt.Errorf("go.mod in the zip: %v: %w", err, core.ErrInvalid)
+			return nil, fmt.Errorf("go.mod in the zip: %w: %w", err, core.ErrInvalid)
 		}
 		f, err := parseGoMod(mod, b)
 		if err != nil {

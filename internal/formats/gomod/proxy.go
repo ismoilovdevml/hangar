@@ -134,7 +134,7 @@ func (h *handler) refreshDoc(ctx context.Context, repo *core.Repository, mod str
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, maxListBytes+1))
 	if err != nil {
-		return stale(fmt.Errorf("read %s: %v: %w", remotePath, err, core.ErrUpstream))
+		return stale(fmt.Errorf("read %s: %w: %w", remotePath, err, core.ErrUpstream))
 	}
 	if len(b) > maxListBytes {
 		return stale(fmt.Errorf("remote %s exceeds %d bytes: %w", remotePath, maxListBytes, core.ErrUpstream))
@@ -184,7 +184,7 @@ func (h *handler) storeDoc(ctx context.Context, repo *core.Repository, mod, path
 func (h *handler) resolveQuery(ctx context.Context, repo *core.Repository, mod, query string) ([]byte, error) {
 	p, err := escaped(mod, query, kindInfo)
 	if err != nil {
-		return nil, fmt.Errorf("%v: %w", err, core.ErrNotFound)
+		return nil, fmt.Errorf("%s: %w", err.Error(), core.ErrNotFound)
 	}
 	proxy.NoteCacheMiss(ctx)
 	resp, err := h.fetch(ctx, repo, p, core.Conditional{})
@@ -281,7 +281,8 @@ func (h *handler) fetchFile(ctx context.Context, repo *core.Repository, mod, ver
 		}
 		facts, err := h.checkStoredZip(ctx, bs, mod, ver, d, n)
 		if err != nil {
-			return nil, fmt.Errorf("remote zip of %s@%s: %v: %w", mod, ver, err, core.ErrUpstream)
+			// Not wrapped: the remote's bad zip is a gateway error, not the client's.
+			return nil, fmt.Errorf("remote zip of %s@%s: %s: %w", mod, ver, err.Error(), core.ErrUpstream)
 		}
 		attrs[attrGoMod] = facts.goMod != nil
 		if facts.goVersion != "" {
@@ -290,7 +291,7 @@ func (h *handler) fetchFile(ctx context.Context, repo *core.Repository, mod, ver
 	default:
 		b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %v: %w", remotePath, err, core.ErrUpstream)
+			return nil, fmt.Errorf("read %s: %w: %w", remotePath, err, core.ErrUpstream)
 		}
 		if int64(len(b)) > limit {
 			return nil, fmt.Errorf("remote %s exceeds %d bytes: %w", remotePath, limit, core.ErrUpstream)

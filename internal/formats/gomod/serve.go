@@ -280,13 +280,13 @@ func (h *handler) latest(ctx context.Context, repo *core.Repository, mod string,
 				lastErr = err
 				return nil
 			}
-			var doc infoDoc
-			if json.Unmarshal(b, &doc) != nil || !canonical(doc.Version) {
+			v, ok := infoVersion(b)
+			if !ok {
 				return nil
 			}
 			anyFound = true
-			if bestV == "" || newer(doc.Version, bestV) { // the first member wins a tie
-				best, bestV = b, doc.Version
+			if bestV == "" || newer(v, bestV) { // the first member wins a tie
+				best, bestV = b, v
 			}
 			return nil
 		})
@@ -325,6 +325,15 @@ func (h *handler) latest(ctx context.Context, repo *core.Repository, mod string,
 		}
 		return h.readAsset(ctx, repo, a, maxInfoBytes)
 	}
+}
+
+// infoVersion returns the canonical Version of a .info document.
+func infoVersion(b []byte) (string, bool) {
+	var doc infoDoc
+	if err := json.Unmarshal(b, &doc); err != nil {
+		return "", false
+	}
+	return doc.Version, canonical(doc.Version)
 }
 
 // open resolves a .info, .mod or .zip request.

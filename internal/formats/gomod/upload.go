@@ -84,7 +84,7 @@ func (h *handler) upload(w http.ResponseWriter, r *http.Request) {
 		err = fmt.Errorf("PUT {module}/@v/{version}.zip, .mod or .info: %w", core.ErrInvalid)
 	}
 	if errors.Is(err, core.ErrNotFound) {
-		err = fmt.Errorf("%v: %w", err, core.ErrInvalid)
+		err = fmt.Errorf("%s: %w", err.Error(), core.ErrInvalid) // not ErrNotFound: a bad upload path is the client's error
 	}
 	if err == nil {
 		err = checkVersion(req.module, req.version)
@@ -218,7 +218,7 @@ func (h *handler) putSideFile(ctx context.Context, r *http.Request, target *core
 	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
 	if err != nil {
-		return 0, fmt.Errorf("read body: %v: %w", err, core.ErrInvalid)
+		return 0, fmt.Errorf("read body: %w: %w", err, core.ErrInvalid)
 	}
 	if int64(len(body)) > limit {
 		return 0, fmt.Errorf("%s is larger than %d bytes: %w", req.kind.ext(), limit, core.ErrInvalid)
@@ -232,7 +232,7 @@ func (h *handler) putSideFile(ctx context.Context, r *http.Request, target *core
 	case kindInfo:
 		var doc infoDoc
 		if err := json.Unmarshal(body, &doc); err != nil {
-			return 0, fmt.Errorf(".info must be JSON {\"Version\": ..., \"Time\": ...}: %v: %w", err, core.ErrInvalid)
+			return 0, fmt.Errorf(".info must be JSON {\"Version\": ..., \"Time\": ...}: %w: %w", err, core.ErrInvalid)
 		}
 		if doc.Version != "" && doc.Version != req.version {
 			return 0, fmt.Errorf(".info Version %q does not match %q: %w", doc.Version, req.version, core.ErrInvalid)
