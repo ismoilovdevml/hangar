@@ -246,11 +246,10 @@ describe('package browser: package', () => {
     for (const b of within(table).getAllByRole('button', { name: /Delete version/ })) expect(b).toBeDisabled();
   });
 
-  it('shows dependents and vulnerabilities only when the server reports them', async () => {
+  it('shows vulnerabilities when the server reports them, and never asks for dependents', async () => {
+    const asked: string[] = [];
+    server.events.on('request:start', ({ request }) => void asked.push(new URL(request.url).pathname));
     server.use(
-      http.get('*/api/v1/components/:id/dependents', () =>
-        HttpResponse.json({ items: [{ ...catalogState.components[4]!, id: 'dep1' }], next_cursor: null }),
-      ),
       http.get('*/api/v1/components/:id/findings', () =>
         HttpResponse.json({
           items: [{ id: 'f1', advisory_id: 'CVE-2026-0001', title: 'Heap overflow', severity: 'high', package: 'zlib', installed: '1.2.11', fixed_in: '1.2.12', status: 'open', affected_components: 1 }],
@@ -263,8 +262,9 @@ describe('package browser: package', () => {
     await user.click(await screen.findByRole('tab', { name: 'Vulnerabilities' }));
     expect(within(screen.getByRole('table', { name: 'Vulnerabilities' })).getByText('CVE-2026-0001')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Version' })).toHaveTextContent('1 high');
-    await user.click(screen.getByRole('tab', { name: 'Dependents' }));
-    expect(within(screen.getByRole('table', { name: 'Dependents' })).getByRole('link', { name: '@acme/ui-kit 5.3.1' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Dependents' })).not.toBeInTheDocument();
+    expect(asked.some((p) => p.endsWith('/dependents'))).toBe(false);
+    server.events.removeAllListeners();
   });
 
   it('says when the server does not read READMEs', async () => {

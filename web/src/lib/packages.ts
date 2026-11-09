@@ -51,6 +51,6 @@ export function securityPill(scan: ScanSummary | ScanState, format?: string): { 
 
 /* ---------------------------------------------------------------- browse tabs */
 
-export const BROWSE_TABS = ['readme', 'versions', 'files', 'repositories', 'dependents', 'security'] as const;
+export const BROWSE_TABS = ['readme', 'versions', 'files', 'repositories', 'security'] as const;
 export type BrowseTab = (typeof BROWSE_TABS)[number];
 export const isBrowseTab = (v: unknown): v is BrowseTab => BROWSE_TABS.includes(v as BrowseTab);

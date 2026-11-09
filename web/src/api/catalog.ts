@@ -37,7 +37,6 @@ export const catalogKeys = {
   component: (id: string) => ['components', 'detail', id] as const,
   versions: (id: string) => ['components', 'versions', id] as const,
   assets: (id: string) => ['components', 'assets', id] as const,
-  dependents: (id: string) => ['components', 'dependents', id] as const,
   findings: (id: string) => ['components', 'findings', id] as const,
   search: ['search'] as const,
   searchQuery: (q: string, sort: SearchSort) => ['search', 'query', q, sort] as const,
@@ -57,14 +56,14 @@ const isUnsupported = (err: unknown) => err instanceof ApiRequestError && err.st
  * for the page's lifetime so every package view does not ask again; a server
  * upgrade is picked up on the next load.
  */
-const unsupported = new Set<'dependents' | 'findings'>();
+const unsupported = new Set<'findings'>();
 
 /** Forgets what the server did not support (tests). */
 export function resetUnsupported(): void {
   unsupported.clear();
 }
 
-async function optional<T>(kind: 'dependents' | 'findings', load: () => Promise<T>): Promise<T | null> {
+async function optional<T>(kind: 'findings', load: () => Promise<T>): Promise<T | null> {
   if (unsupported.has(kind)) return null;
   try {
     return await load();
@@ -131,19 +130,6 @@ export function useComponentAssets(id: string | undefined) {
         signal,
       }),
     getNextPageParam: nextCursor,
-  });
-}
-
-/** Dependents, or null when the server does not report them. */
-export function useComponentDependents(id: string | undefined) {
-  return useQuery({
-    queryKey: catalogKeys.dependents(id ?? ''),
-    enabled: !!id,
-    retry: false,
-    queryFn: ({ signal }) =>
-      optional('dependents', () =>
-        apiFetch<PublishedComponentPage>(`/components/${encodeURIComponent(id!)}/dependents`, { query: { limit: 100 }, signal }),
-      ),
   });
 }
 
