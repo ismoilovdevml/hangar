@@ -221,7 +221,7 @@ func ValidateHostPattern(p string) error {
 const (
 	UpstreamAuthBasic  = "basic"  // Username + Password
 	UpstreamAuthBearer = "bearer" // Token as "Authorization: Bearer <token>"
-	UpstreamAuthHeader = "header" // Token in the header named HeaderName (e.g. "X-JFrog-Art-Api", "Private-Token")
+	UpstreamAuthHeader = "header" // Token in the header named HeaderName (e.g. "Private-Token", "X-Api-Key")
 )
 
 // UpstreamAuth holds credentials for a proxy remote. They are sent only to the
