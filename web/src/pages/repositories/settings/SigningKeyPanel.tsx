@@ -106,31 +106,39 @@ export function SigningKeyPanel({ repo }: { repo: Repository }) {
               <a href={keyUrl} download className="link-strong">public.key</a>
               <CopyButton text={keyUrl} label="Copy public.key URL" />
             </span>
-            <span className="meta">binary for Signed-By · armored for rpm --import</span>
+            <span className="meta">{repo.format === 'rpm' ? 'public.key is the gpgkey of the .repo file' : 'public.gpg goes in Signed-By'}</span>
           </dd>
         </dl>
-        <div className="signing-key__actions">
-          <button type="button" className="button button--secondary button--sm" disabled={!canChange} title={canChange ? undefined : reason} onClick={() => open('rotate')}>
-            Rotate…
-          </button>
-          <button type="button" className="button button--secondary button--sm" disabled={!canChange} title={canChange ? undefined : reason} onClick={() => open('import')}>
-            Import key…
-          </button>
-          {!canChange && <span className="meta">{reason}</span>}
-          <span className="visually-hidden" aria-live="polite">
-            {done}
-          </span>
-        </div>
+        {!canChange && <p className="meta">{reason}</p>}
+        <span className="visually-hidden" aria-live="polite">
+          {done}
+        </span>
       </>
     );
   }
+
+  const actions = key.isSuccess && (
+    <>
+      <button type="button" className="button button--secondary button--sm" disabled={!canChange} title={canChange ? undefined : reason} onClick={() => open('rotate')}>
+        Rotate…
+      </button>
+      <button type="button" className="button button--secondary button--sm" disabled={!canChange} title={canChange ? undefined : reason} onClick={() => open('import')}>
+        Import key…
+      </button>
+    </>
+  );
 
   return (
     <Panel
       title="Signing key"
       titleId="signing-title"
       className="signing-key"
-      action={<Pill tone={shared ? 'violet' : 'info'}>{shared ? 'Shared key' : 'Own key'}</Pill>}
+      action={
+        <span className="signing-key__actions">
+          <Pill tone={shared ? 'violet' : 'info'}>{shared ? 'Shared key' : 'Own key'}</Pill>
+          {actions}
+        </span>
+      }
     >
       {body}
 

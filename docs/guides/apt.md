@@ -39,6 +39,9 @@ Format settings (`config.format`):
 | `architectures` | `["amd64", "arm64"]` | Listed in every distribution besides the architectures of uploaded packages. Clients of a listed architecture get (possibly empty) indexes. |
 | `signing_key` | `repository` | `repository`: the repository has its own key. `shared`: it signs with the server-wide shared key. |
 
+In the web UI both settings are on the repository form (**Architectures**
+and **Sign with**) for hosted and group repositories; proxies have neither.
+
 Hangar stores each package once under
 `pool/<component>/<letter or libX>/<source>/<package>_<version>_<arch>.deb`. After
 every upload or delete it regenerates `dists/`:
@@ -197,6 +200,14 @@ Clients fail with `NO_PUBKEY` until they download the new `public.gpg`.
 Rotating needs repository administration; the shared key (`signing_key:
 shared`) needs `system:repos:admin`. Both are audited (`signing_key.rotate`,
 `signing_key.import`).
+
+In the web UI, the **Signing key** panel on the settings page of a hosted or
+group repository shows the fingerprint, algorithm and creation date, whether
+the key is the repository's own or the shared one, and links to `public.gpg`
+and `public.key`. **Rotate** asks for confirmation first; **Import key** takes
+a pasted ASCII-armored private key and an optional passphrase, which are sent
+once and never shown again. Users without the rights above see the buttons
+disabled with the reason. Without `HANGAR_SECRET_KEY` the panel says so.
 
 ## Vulnerability scanning
 

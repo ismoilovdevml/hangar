@@ -749,6 +749,11 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "501":
+          description: No `security.secret_key` is configured, so keys cannot be stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /repositories/{name}/signing-key:rotate:
     parameters:
       - $ref: "#/components/parameters/RepositoryName"
@@ -777,6 +782,11 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "501":
+          description: No `security.secret_key` is configured, so keys cannot be stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /repositories/{name}/browse:
     parameters:

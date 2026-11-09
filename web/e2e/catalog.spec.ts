@@ -151,3 +151,31 @@ test('repository settings: edit, offline switch and typed delete', async ({ page
   await expect(page.getByRole('link', { name: 'raw-legacy' })).toBeHidden();
   expect(errors).toEqual([]);
 });
+
+test('APT and RPM settings: format fields and the signing key panel', async ({ page }) => {
+  const errors = collectErrors(page);
+  for (const [w, size] of SIZES) {
+    await page.setViewportSize(size);
+    await page.goto('/repositories/internal-apt/settings');
+    const panel = page.getByRole('region', { name: 'Signing key' });
+    await expect(panel.getByText('RSA 4096')).toBeVisible();
+    await expect(page.getByLabel(/^Architectures/)).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    await page.screenshot({ path: shot(`repo-settings-apt-${w}`), fullPage: true });
+    await noOverflow(page, size.width);
+  }
+  await page.setViewportSize(DESKTOP);
+  const panel = page.getByRole('region', { name: 'Signing key' });
+  await panel.getByRole('button', { name: 'Rotate…' }).click();
+  const dialog = page.getByRole('alertdialog', { name: 'Rotate the signing key of internal-apt?' });
+  await expect(dialog).toContainText('NO_PUBKEY');
+  await page.screenshot({ path: shot('repo-signing-rotate-1440') });
+  await dialog.getByRole('button', { name: 'Rotate key' }).click();
+  await expect(dialog).toBeHidden();
+
+  await page.goto('/repositories/internal-rpm/settings');
+  await expect(page.getByLabel('Repodata depth')).toHaveValue('2');
+  await expect(page.getByRole('region', { name: 'Signing key' }).getByText('Shared key')).toBeVisible();
+  await page.screenshot({ path: shot('repo-settings-rpm-1440'), fullPage: true });
+  expect(errors).toEqual([]);
+});
