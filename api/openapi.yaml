@@ -684,6 +684,113 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /repositories/{name}/routing:
+    parameters:
+      - $ref: "#/components/parameters/RepositoryName"
+    get:
+      tags: [repositories, security]
+      operationId: getRepositoryRouting
+      description: >-
+        Routing rules of a proxy or group repository, the guard against
+        dependency confusion (an internal package name published with a
+        higher version on a public registry). The same rules are
+        `config.routing` of the repository. Requires read access.
+      responses:
+        "200":
+          description: The rules; empty lists when none are set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoutingRules" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [repositories, security]
+      operationId: putRepositoryRouting
+      description: >-
+        Replaces the routing rules. Proxy repositories take `allow` and
+        `block`; groups take `members` (rules for direct members only).
+        Patterns use `*` and `?` on the format's package identity (NuGet ids
+        and PyPI names case-insensitive and normalized, npm `@scope/name`,
+        Maven `groupId:artifactId` or a bare groupId, Go module path
+        prefixes in GOPRIVATE syntax, Cargo crates, Docker image paths, Helm
+        charts, APT/RPM package names, raw paths). Empty rules clear them
+        (204). Requires repository administration; audited as
+        `repository.routing.update` with the rules before and after.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoutingRules" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoutingRules" }
+        "204": { description: Rules cleared }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [repositories, security]
+      operationId: deleteRepositoryRouting
+      description: Clears the routing rules. Requires repository administration; audited as `repository.routing.update`.
+      responses:
+        "204": { description: Rules cleared }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /repositories/{name}/routing:test:
+    parameters:
+      - $ref: "#/components/parameters/RepositoryName"
+    post:
+      tags: [repositories, security]
+      operationId: testRepositoryRouting
+      description: >-
+        Evaluates the stored rules for one package name without serving
+        anything: for a proxy whether it may fetch and serve the name, for a
+        group every member (nested groups depth-first) with the rule that
+        excludes it and the first member that would serve it. Requires read
+        access.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: Edcom.Common.Utils }
+      responses:
+        "200":
+          description: Evaluation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoutingTest" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /repositories/{name}/routing:suggest:
+    parameters:
+      - $ref: "#/components/parameters/RepositoryName"
+    get:
+      tags: [repositories, security]
+      operationId: suggestRepositoryRouting
+      description: >-
+        Suggests patterns from the names hosted repositories publish: for a
+        group its hosted members (to make exclusive to the member named in
+        `member`), for a proxy every hosted repository of the same format
+        (to block on the proxy). Only repositories the caller may read are
+        looked at, up to 5000 components each. Requires repository
+        administration.
+      responses:
+        "200":
+          description: Suggestions, most common first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoutingSuggestions" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /repositories/{name}:scan:
     parameters:
       - $ref: "#/components/parameters/RepositoryName"
@@ -3630,6 +3737,7 @@ components:
           type: array
           items: { type: string }
         connector: { $ref: "#/components/schemas/ConnectorConfig" }
+        routing: { $ref: "#/components/schemas/RoutingRules" }
         format:
           type: object
           additionalProperties: true
@@ -3797,6 +3905,106 @@ components:
           type: string
           enum: [repository, shared]
           description: Key that signs the metadata. Default `repository` (the repository's own key).
+    RoutingRules:
+      type: object
+      description: >-
+        Dependency-confusion guard. A name a rule excludes is never fetched
+        from a proxy's remote, not served from its cache, and left out of a
+        group's merged metadata (version lists, indexes, search); downloads
+        answer 404 with the reason in the body and the `X-Hangar-Routing`
+        header. Block wins over allow and exclusive.
+      properties:
+        allow:
+          type: array
+          description: Proxy repositories. When set, only names matching one of these are fetched and served.
+          items: { type: string, maxLength: 256 }
+          maxItems: 256
+        block:
+          type: array
+          description: Proxy repositories. Names matching one of these are never fetched nor served.
+          items: { type: string, maxLength: 256 }
+          maxItems: 256
+          example: ["Edcom.*"]
+        members:
+          type: array
+          description: Group repositories. Rules for direct members; each member must be in the group.
+          items: { $ref: "#/components/schemas/MemberRouting" }
+    MemberRouting:
+      type: object
+      required: [member]
+      properties:
+        member: { $ref: "#/components/schemas/RepositoryName" }
+        exclusive:
+          type: array
+          description: >-
+            Names reserved for this member: a name matching the exclusive
+            patterns of one or more members is served only by them.
+          items: { type: string, maxLength: 256 }
+          maxItems: 256
+          example: ["Edcom.*"]
+        block:
+          type: array
+          description: Names this member never serves through the group.
+          items: { type: string, maxLength: 256 }
+          maxItems: 256
+    RoutingBlock:
+      type: object
+      required: [repository, rule, name]
+      properties:
+        repository: { type: string, description: Repository holding the rule (the proxy or the group) }
+        member: { type: string, description: Group member the rule excludes }
+        rule: { type: string, enum: [block, allow, exclusive] }
+        pattern: { type: string, description: The pattern that matched; empty when no allow pattern matched }
+        owners:
+          type: array
+          description: Members reserving the name (exclusive rules)
+          items: { type: string }
+        name: { type: string }
+    RoutingTest:
+      type: object
+      required: [repository, format, name, normalized, allowed, members]
+      properties:
+        repository: { type: string }
+        format: { $ref: "#/components/schemas/Format" }
+        name: { type: string }
+        normalized: { type: string, description: The name as the rules compare it }
+        allowed: { type: boolean, description: At least one source may serve the name }
+        block: { $ref: "#/components/schemas/RoutingBlock" }
+        served_by: { type: string, description: First hosted or proxy member, in resolution order, that may serve the name }
+        members:
+          type: array
+          items:
+            type: object
+            required: [repository, type, via, allowed, online]
+            properties:
+              repository: { type: string }
+              type: { $ref: "#/components/schemas/RepositoryType" }
+              via:
+                type: array
+                description: Groups between the tested repository and this member
+                items: { type: string }
+              allowed: { type: boolean }
+              online: { type: boolean }
+              block: { $ref: "#/components/schemas/RoutingBlock" }
+    RoutingSuggestions:
+      type: object
+      required: [repository, suggestions, truncated]
+      properties:
+        repository: { type: string }
+        truncated: { type: boolean, description: A source had more components than were read }
+        suggestions:
+          type: array
+          items:
+            type: object
+            required: [pattern, matches, examples, source]
+            properties:
+              pattern: { type: string, example: Edcom.* }
+              matches: { type: integer }
+              examples:
+                type: array
+                items: { type: string }
+              source: { type: string, description: Hosted repository publishing the names }
+              member: { type: string, description: Groups only; the direct member the source is reached through }
     RepositoryInput:
       type: object
       required: [name, format, type, config]
