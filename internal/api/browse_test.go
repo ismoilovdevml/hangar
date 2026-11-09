@@ -56,6 +56,9 @@ func TestFolderKind(t *testing.T) {
 		{"raw", "releases/", c("releases", "app", ""), nodeFolder},
 		{"helm", "web/", c("", "web", "1.2.0"), nodePackage},
 		{"helm", "web/1.2.0/", c("", "web", "1.2.0"), nodeVersion},
+		{"go", "github.com/", c("", "github.com/Acme/x", "v1.0.0"), nodeFolder},
+		{"go", "github.com/Acme/x/", c("", "github.com/Acme/x", "v1.0.0"), nodePackage},
+		{"go", "github.com/Acme/x/@v/v1.0.0/", c("", "github.com/Acme/x", "v1.0.0"), nodeVersion},
 		{"maven", "com/", nil, nodeFolder},
 	} {
 		if got := folderKind(tc.format, tc.tree, tc.c); got != tc.want {
@@ -164,6 +167,7 @@ func TestBrowseWithPostgres(t *testing.T) {
 	pypi := e.repo("pypi-hosted", "pypi", core.RepoHosted)
 	docker := e.repo("docker-hosted", "docker", core.RepoHosted)
 	raw := e.repo("raw-hosted", "raw", core.RepoHosted)
+	gomod := e.repo("go-hosted", "go", core.RepoHosted)
 
 	ui := e.s.Component(npm, "@acme", "ui-kit", "5.3.1", e.now, 0, "alice")
 	tgz := e.file(npm, ui, "@acme/ui-kit/-/ui-kit-5.3.1.tgz")
@@ -192,6 +196,12 @@ func TestBrowseWithPostgres(t *testing.T) {
 	app := e.s.Component(docker, "team", "app", "1.0", e.now, 0, "ci")
 	e.file(docker, app, "team/app/manifests/1.0")
 	e.file(docker, app, "team/app/blobs/"+apitest.Digest("layer"))
+
+	gx := e.s.Component(gomod, "", "github.com/Acme/x", "v1.0.0", e.now, 0, "ci")
+	for _, ext := range []string{".info", ".mod", ".zip"} {
+		e.file(gomod, gx, "github.com/Acme/x/@v/v1.0.0/v1.0.0"+ext)
+	}
+	e.file(gomod, e.s.Component(gomod, "", "github.com/Acme/x/v2", "v2.0.0", e.now, 0, "ci"), "github.com/Acme/x/v2/@v/v2.0.0/v2.0.0.zip")
 
 	e.file(raw, "", "readme.txt")
 	for _, p := range []string{"dir/f1", "dir/f2", "dir/sub/a", "dir/sub/b", "dir/f3", "dir/zz/deep/x"} {
@@ -232,6 +242,13 @@ func TestBrowseWithPostgres(t *testing.T) {
 	// PyPI: project, files.
 	check("pypi root", e.browse("admin", "pypi-hosted", ""), "acme-ml-utils:package")
 	check("pypi project", e.browse("admin", "pypi-hosted", "acme-ml-utils/"), "acme_ml_utils-0.9.4-py3-none-any.whl:asset")
+
+	// Go: module path segments, the module, @v, versions, files.
+	check("go root", e.browse("admin", "go-hosted", ""), "github.com:folder")
+	check("go owner", e.browse("admin", "go-hosted", "github.com/Acme/"), "x:package")
+	check("go module", e.browse("admin", "go-hosted", "github.com/Acme/x/"), "@v:folder", "v2:package")
+	check("go versions", e.browse("admin", "go-hosted", "github.com/Acme/x/@v/"), "v1.0.0:version")
+	check("go version", e.browse("admin", "go-hosted", "github.com/Acme/x/@v/v1.0.0/"), "v1.0.0.info:asset", "v1.0.0.mod:asset", "v1.0.0.zip:asset")
 
 	// Docker: image path, then tags and digests.
 	check("docker root", e.browse("admin", "docker-hosted", ""), "team:folder")
