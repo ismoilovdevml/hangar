@@ -31,8 +31,9 @@ replicaCount: 2
 # hangar.yaml, rendered into a ConfigMap. Every key is documented in
 # hangar.example.yaml at the repository root. The chart manages these keys
 # itself and overrides them: server.addr, database.url,
-# database.migrate_on_start, storage.kind/fs/s3, nats, docker.token_key and
-# bootstrap.* (see the sections below). Secrets never go here.
+# database.migrate_on_start, storage.kind/fs/s3, nats, docker.token_key,
+# bootstrap.* and the metrics credentials (metrics.auth, bearer_token*,
+# username, password*; see the sections below). Secrets never go here.
 config:
   server:
     # External URL clients use (required), e.g. https://hangar.example.com.
@@ -40,9 +41,18 @@ config:
     instance_name: hangar
     read_header_timeout: 10s
     idle_timeout: 120s
-    # Time in-flight uploads get on shutdown; keep it below
-    # terminationGracePeriodSeconds minus lifecycle.preStopSleepSeconds.
+    # Time in-flight uploads get on shutdown, once the listener has closed.
+    # Keep lifecycle.preStopSleepSeconds + drain_delay + shutdown_timeout
+    # below terminationGracePeriodSeconds, or the kubelet kills the pod
+    # while uploads are still finishing.
     shutdown_timeout: 30s
+    # After SIGTERM, keep serving with /readyz failing for this long before
+    # the listener closes (0s to 5m). Not needed with the preStop sleep
+    # below (Kubernetes 1.30+): endpoints are removed during the sleep. Set
+    # it to about the readiness probe's periodSeconds x failureThreshold on
+    # older clusters, or when a load balancer outside the cluster polls
+    # /readyz itself.
+    drain_delay: 0s
     # X-Forwarded-* are trusted only from these peers (the ingress controller
     # pods). The default trusts private ranges, i.e. any pod in the cluster;
     # narrow it to the pod CIDR of your ingress controller where possible.
@@ -79,6 +89,9 @@ config:
   metrics:
     enabled: true
     path: /metrics
+    # Clients (CIDRs or IPs, e.g. the Prometheus pods) allowed to scrape;
+    # empty allows any. Combines with metrics.auth below.
+    allowed_cidrs: []
   # HTTP hardening (docs/security.md). The secret key itself is set in
   # secretKey below, never here.
   security:
@@ -185,10 +198,13 @@ httpProxyPassword:
   existingSecret: ""
   existingSecretKey: http-proxy-password
 
-# Schema migrations.
+# Schema migrations. Migrations take a PostgreSQL advisory lock, so only one
+# process applies them; the others wait and then start.
 #   job      a pre-install/pre-upgrade hook Job runs `hangar migrate up` before
-#            any new pod starts (recommended)
-#   onStart  `hangar serve` migrates on start (replicaCount 1 only)
+#            any new pod starts (recommended: a failed migration stops the
+#            upgrade before any pod is replaced)
+#   onStart  `hangar serve` migrates on start; with several replicas the
+#            first pod migrates and the others wait for it
 #   none     you run `hangar migrate up` yourself; pods refuse to start on an
 #            outdated schema
 migrations:
@@ -210,6 +226,11 @@ migrations:
 #   embedded  inside the hangar process (replicaCount 1 only)
 nats:
   mode: bundled
+  # Replicas of Hangar's JetStream streams (the job queue), 1 to 5. 0 picks
+  # nats.bundled.replicas for bundled and 1 for external and embedded. Use 3
+  # on a 3-node cluster so queued jobs survive the loss of one NATS server.
+  # Changing it scales the existing stream when the pods restart.
+  streamReplicas: 0
   external:
     # nats://user:password@nats.messaging.svc:4222 (stored in the chart's Secret).
     url: ""
@@ -281,7 +302,8 @@ resources:
     memory: 2Gi
 
 # Pods are removed from Service endpoints before SIGTERM; needs Kubernetes 1.30+
-# (sleep action), ignored on older clusters.
+# (sleep action), ignored on older clusters (use config.server.drain_delay
+# there).
 lifecycle:
   preStopSleepSeconds: 5
 terminationGracePeriodSeconds: 60
@@ -386,6 +408,18 @@ podDisruptionBudget:
   minAvailable: 1
 
 metrics:
+  # Protects the metrics endpoint (config.metrics.path):
+  #   none    no authentication (keep it off public hosts: ingress.blockMetrics)
+  #   bearer  Authorization: Bearer <token>; existingSecret[tokenKey]
+  #   basic   HTTP basic; existingSecret[usernameKey] and [passwordKey]
+  # Tokens and passwords need at least 16 characters. The ServiceMonitor
+  # below sends the same credentials.
+  auth:
+    mode: none
+    existingSecret: ""
+    tokenKey: metrics-token
+    usernameKey: metrics-username
+    passwordKey: metrics-password
   serviceMonitor:
     enabled: false
     interval: 30s

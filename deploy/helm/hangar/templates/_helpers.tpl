@@ -63,6 +63,15 @@ app.kubernetes.io/component: nats
 {{- end -}}
 
 {{/* Scaling */}}
+{{/* Replicas of Hangar's JetStream streams: nats.streamReplicas, or automatic. */}}
+{{- define "hangar.streamReplicas" -}}
+{{- $sr := int .Values.nats.streamReplicas -}}
+{{- if gt $sr 0 -}}{{ $sr }}
+{{- else if eq .Values.nats.mode "bundled" -}}{{ int .Values.nats.bundled.replicas }}
+{{- else -}}1
+{{- end -}}
+{{- end -}}
+
 {{- define "hangar.multiReplica" -}}
 {{- if or .Values.autoscaling.enabled (gt (int .Values.replicaCount) 1) -}}true{{- end -}}
 {{- end -}}
@@ -139,11 +148,15 @@ offline render.
 {{- end -}}
 {{- $_ := set $cfg "storage" $storage -}}
 {{- if eq .Values.nats.mode "embedded" -}}
-{{- $_ := set $cfg "nats" (dict "embedded" true "data_dir" "/var/lib/hangar/nats") -}}
+{{- $_ := set $cfg "nats" (dict "embedded" true "data_dir" "/var/lib/hangar/nats" "replicas" 1) -}}
 {{- else -}}
 {{- /* The URL (with credentials) comes from HANGAR_NATS_URL. */ -}}
-{{- $_ := set $cfg "nats" (dict "embedded" false) -}}
+{{- $_ := set $cfg "nats" (dict "embedded" false "replicas" (include "hangar.streamReplicas" . | int)) -}}
 {{- end -}}
+{{- $metrics := (get $cfg "metrics") | default (dict) -}}
+{{- range $k := list "bearer_token" "bearer_token_file" "username" "password" "password_file" -}}{{- $_ := unset $metrics $k -}}{{- end -}}
+{{- $_ := set $metrics "auth" .Values.metrics.auth.mode -}}
+{{- $_ := set $cfg "metrics" $metrics -}}
 {{- $_ := unset $cfg "docker" -}}
 {{- $_ := unset $cfg "bootstrap" -}}
 {{- $security := (get $cfg "security") | default (dict) -}}
@@ -163,12 +176,12 @@ offline render.
 {{- if not (or .Values.database.url .Values.database.existingSecret) -}}
 {{- fail "set database.url or database.existingSecret (PostgreSQL connection URL)" -}}
 {{- end -}}
-{{- range $path := list "database.url" "storage.s3.access_key_id" "storage.s3.secret_access_key" "storage.s3.session_token" "http.proxy_password" "docker.token_key" "bootstrap.admin_password" "security.secret_key" "security.previous_secret_keys" -}}
+{{- range $path := list "database.url" "storage.s3.access_key_id" "storage.s3.secret_access_key" "storage.s3.session_token" "http.proxy_password" "docker.token_key" "bootstrap.admin_password" "security.secret_key" "security.previous_secret_keys" "metrics.bearer_token" "metrics.password" -}}
 {{- $parts := splitList "." $path -}}
 {{- $v := $.Values.config -}}
 {{- range $parts -}}{{- if kindIs "map" $v -}}{{- $v = get $v . -}}{{- else -}}{{- $v = "" -}}{{- end -}}{{- end -}}
 {{- if $v -}}
-{{- fail (printf "config.%s is a secret: set it through the chart's secret values (database, storage.s3, httpProxyPassword, dockerTokenKey, bootstrapAdmin, secretKey) so it never lands in the ConfigMap" $path) -}}
+{{- fail (printf "config.%s is a secret: set it through the chart's secret values (database, storage.s3, httpProxyPassword, dockerTokenKey, bootstrapAdmin, secretKey, metrics.auth) so it never lands in the ConfigMap" $path) -}}
 {{- end -}}
 {{- end -}}
 {{- if not (has .Values.storage.kind (list "s3" "fs")) -}}
@@ -198,8 +211,21 @@ offline render.
 {{- if not (has .Values.migrations.mode (list "job" "onStart" "none")) -}}
 {{- fail "migrations.mode must be job, onStart or none" -}}
 {{- end -}}
-{{- if and (eq .Values.migrations.mode "onStart") $multi -}}
-{{- fail "migrations.mode=onStart with several replicas would run migrations concurrently: use migrations.mode=job" -}}
+{{- $sr := int .Values.nats.streamReplicas -}}
+{{- if or (lt $sr 0) (gt $sr 5) -}}
+{{- fail "nats.streamReplicas must be 0 (automatic) or 1 to 5" -}}
+{{- end -}}
+{{- if and (eq .Values.nats.mode "embedded") (gt $sr 1) -}}
+{{- fail "nats.streamReplicas > 1 needs a NATS cluster: embedded NATS is a single server" -}}
+{{- end -}}
+{{- if and (eq .Values.nats.mode "bundled") (gt $sr (int .Values.nats.bundled.replicas)) -}}
+{{- fail (printf "nats.streamReplicas %d exceeds nats.bundled.replicas %d: a stream cannot have more replicas than NATS servers" $sr (int .Values.nats.bundled.replicas)) -}}
+{{- end -}}
+{{- if not (has .Values.metrics.auth.mode (list "none" "bearer" "basic")) -}}
+{{- fail "metrics.auth.mode must be none, bearer or basic" -}}
+{{- end -}}
+{{- if and (ne .Values.metrics.auth.mode "none") (not .Values.metrics.auth.existingSecret) -}}
+{{- fail (printf "metrics.auth.mode=%s needs metrics.auth.existingSecret holding the credentials" .Values.metrics.auth.mode) -}}
 {{- end -}}
 {{- if and (not .Values.bootstrapAdmin.existingSecret) (ne (empty .Values.bootstrapAdmin.username) (empty .Values.bootstrapAdmin.password)) -}}
 {{- fail "bootstrapAdmin.username and bootstrapAdmin.password must be set together" -}}
