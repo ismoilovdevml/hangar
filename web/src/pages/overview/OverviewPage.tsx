@@ -5,6 +5,7 @@ import { apiFetch } from '../../api/client';
 import { useOverview, useSession, useSystemStatus, useUpstreamHealth } from '../../api/hooks';
 import { opsKeys, useCanSystem } from '../../api/ops';
 import type { TaskList } from '../../api/opsTypes';
+import { useDismissed } from '../../lib/dismissed';
 import { todoItems } from '../../lib/overview';
 import { useNow } from '../../lib/useNow';
 import { OutcomeCard, SecurityCard, StorageCard, UpstreamCard } from './Cards';
@@ -36,6 +37,7 @@ export function OverviewPage() {
   const canAdminBlobStores = useCanSystem('blobstores', 'admin');
   const now = useNow(60_000);
   const m = overview.data;
+  const [dismissed, dismiss] = useDismissed();
 
   const todo = useMemo(
     () =>
@@ -49,8 +51,8 @@ export function OverviewPage() {
         tasks: tasks.data?.items,
         canAdminBlobStores,
         now,
-      }),
-    [m, upstreams.data, status.data, session.data, tasks.data, canAdminBlobStores, now],
+      }).filter((t) => !t.dismissible || !dismissed.has(t.id)),
+    [m, upstreams.data, status.data, session.data, tasks.data, canAdminBlobStores, now, dismissed],
   );
   const retry = () => void overview.refetch();
 
@@ -68,7 +70,7 @@ export function OverviewPage() {
           onRange={(r) => void navigate({ search: (s) => ({ ...s, range: r === 'today' ? undefined : r }), replace: true })}
         />
         <OutcomeCard m={m} error={overview.isError} />
-        <TodoCard items={todo || undefined} error={overview.isError} onRetry={retry} />
+        <TodoCard items={todo || undefined} error={overview.isError} onRetry={retry} onDismiss={dismiss} />
         <StorageCard m={m} error={overview.isError} />
         <SecurityCard m={m} error={overview.isError} />
         <UpstreamCard items={upstreams.data?.items} error={upstreams.isError} onRetry={() => void upstreams.refetch()} m={m} />

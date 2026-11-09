@@ -1,11 +1,15 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { http, HttpResponse } from 'msw';
+import { afterEach, describe, expect, it } from 'vitest';
+import { opsMockState } from '../mocks/ops';
+import { server } from '../mocks/node';
 import { renderApp } from './render';
 
 const card = (name: RegExp) => screen.getByRole('link', { name });
 
 describe('overview', () => {
+  afterEach(() => window.localStorage.clear());
   it('summarises the day from the metrics API', async () => {
     renderApp('/');
     const today = await screen.findByRole('region', { name: /^Today · / });
@@ -56,6 +60,27 @@ describe('overview', () => {
     expect(todo.querySelector('.todo__count')).toHaveTextContent('4 items');
     // The backup task is scheduled and the blob stores have quotas: no reminders for those.
     expect(todo).not.toHaveTextContent(/backup|quota/i);
+  });
+
+  it('points at the backup guide when the server has no backup task, until dismissed', async () => {
+    server.use(http.get('*/api/v1/tasks', () => HttpResponse.json({ items: opsMockState.tasks.filter((t) => t.type !== 'db_backup'), running: [] })));
+    const user = userEvent.setup();
+    const first = renderApp('/');
+    const todo = await screen.findByRole('region', { name: 'To do' });
+    const reminder = (await within(todo).findByText('Back up the database')).closest('a')!;
+    expect(reminder).toHaveAttribute('href', expect.stringContaining('docs/deploy/backup-restore.md'));
+    expect(reminder).toHaveAttribute('target', '_blank');
+    expect(within(todo).queryByText('Schedule a database backup')).not.toBeInTheDocument();
+
+    await user.click(within(todo).getByRole('button', { name: 'Dismiss: Back up the database' }));
+    expect(within(todo).queryByText('Back up the database')).not.toBeInTheDocument();
+
+    // Remembered in this browser.
+    first.unmount();
+    renderApp('/');
+    const again = await screen.findByRole('region', { name: 'To do' });
+    await within(again).findByText('ghcr-proxy is blocked');
+    expect(within(again).queryByText('Back up the database')).not.toBeInTheDocument();
   });
 
   it('shows the most downloaded packages and fits the overview on one screen', async () => {

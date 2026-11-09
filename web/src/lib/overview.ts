@@ -1,5 +1,6 @@
 import type { Task } from '../api/opsTypes';
 import type { components } from '../api/schema';
+import { DOCS } from './docs';
 import type { Format, OverviewMetrics, OverviewRange, ScanSummary, TrafficBucket, UpstreamHealth } from '../api/types';
 
 type Token = components['schemas']['Token'];
@@ -170,7 +171,9 @@ export type TodoLink =
   | { kind: 'tasks' }
   | { kind: 'task'; id: string }
   | { kind: 'blob-stores' }
-  | { kind: 'repository'; name: string };
+  | { kind: 'repository'; name: string }
+  /** Documentation outside the app (opens in a new tab). */
+  | { kind: 'docs'; href: string };
 
 export interface TodoItem {
   id: string;
@@ -180,6 +183,8 @@ export interface TodoItem {
   title: string;
   detail: string;
   link: TodoLink;
+  /** A reminder the user may dismiss for good: nothing in the app can tell when it is done. */
+  dismissible?: boolean;
 }
 
 export interface TodoInput {
@@ -278,7 +283,19 @@ export function todoItems(input: TodoInput): TodoItem[] {
     const backups = input.tasks.filter((t) => t.type === 'db_backup');
     const scheduled = backups.filter((t) => t.enabled && t.schedule);
     const failed = backups.find((t) => t.last_run?.status === 'failed');
-    if (failed) {
+    if (backups.length === 0) {
+      // The server has no backup task to schedule: backups run outside it (deploy/scripts/backup.sh),
+      // so the reminder points at how, and can be dismissed once they are set up.
+      out.push({
+        id: 'backup-outside',
+        tone: 'info',
+        tag: 'RECOMMENDED',
+        title: 'Back up the database',
+        detail: 'Hangar does not back itself up: schedule the backup script',
+        link: { kind: 'docs', href: DOCS.backups },
+        dismissible: true,
+      });
+    } else if (failed) {
       out.push({
         id: 'backup-failed',
         tone: 'bad',

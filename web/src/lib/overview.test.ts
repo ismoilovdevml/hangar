@@ -136,8 +136,12 @@ describe('todoItems', () => {
 
   it('follows the backup tasks the user can see', () => {
     const m = calm();
-    expect(todoItems({ metrics: m, tasks: [], now: NOW })).toMatchObject([{ id: 'backup', detail: 'No backup has ever run' }]);
-    expect(todoItems({ metrics: m, tasks: [task({ enabled: false })], now: NOW })).toMatchObject([{ id: 'backup' }]);
+    // No backup task on the server: backups run outside it, so the reminder links the guide and can be dismissed.
+    expect(todoItems({ metrics: m, tasks: [], now: NOW })).toMatchObject([
+      { id: 'backup-outside', tone: 'info', title: 'Back up the database', dismissible: true, link: { kind: 'docs', href: expect.stringContaining('backup-restore.md') } },
+    ]);
+    expect(todoItems({ metrics: m, tasks: [task({ enabled: false })], now: NOW })).toMatchObject([{ id: 'backup', title: 'Schedule a database backup' }]);
+    expect(todoItems({ metrics: m, tasks: [task({ enabled: false, last_run: null })], now: NOW })[0]!.dismissible).toBeUndefined();
     expect(todoItems({ metrics: m, tasks: [task({})], now: NOW })).toEqual([]);
     const failed = task({
       last_run: { status: 'failed', message: 'disk full' } as Task['last_run'],
