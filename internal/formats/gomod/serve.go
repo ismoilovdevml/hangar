@@ -17,6 +17,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // maxGroupDepth bounds nested group resolution.
@@ -145,7 +146,7 @@ func (h *handler) versions(ctx context.Context, repo *core.Repository, mod strin
 		var out []string
 		found := false
 		var lastErr error
-		err := h.eachMember(ctx, repo, depth, func(m *core.Repository) error {
+		err := h.eachMember(ctx, repo, depth, mod, func(m *core.Repository) error {
 			vs, err := h.versions(ctx, m, mod, depth+1)
 			switch {
 			case errors.Is(err, core.ErrNotFound):
@@ -175,6 +176,9 @@ func (h *handler) versions(ctx context.Context, repo *core.Repository, mod strin
 		sortVersions(out)
 		return out, nil
 	case core.RepoProxy:
+		if err := routing.Check(ctx, repo, mod); err != nil {
+			return nil, err
+		}
 		b, err := h.proxyDoc(ctx, repo, mod, kindList)
 		if err != nil {
 			return nil, err
@@ -270,7 +274,7 @@ func (h *handler) latest(ctx context.Context, repo *core.Repository, mod string,
 			lastErr  error
 			anyFound bool
 		)
-		err := h.eachMember(ctx, repo, depth, func(m *core.Repository) error {
+		err := h.eachMember(ctx, repo, depth, mod, func(m *core.Repository) error {
 			b, err := h.latest(ctx, m, mod, depth+1)
 			switch {
 			case errors.Is(err, core.ErrNotFound):
@@ -300,6 +304,9 @@ func (h *handler) latest(ctx context.Context, repo *core.Repository, mod string,
 		}
 		return nil, fmt.Errorf("module %s: %w", mod, core.ErrNotFound)
 	case core.RepoProxy:
+		if err := routing.Check(ctx, repo, mod); err != nil {
+			return nil, err
+		}
 		b, err := h.proxyDoc(ctx, repo, mod, kindLatest)
 		if err != nil {
 			return nil, err
@@ -344,7 +351,7 @@ func (h *handler) open(ctx context.Context, repo *core.Repository, mod, ver stri
 			found   *served
 			lastErr error
 		)
-		err := h.eachMember(ctx, repo, depth, func(m *core.Repository) error {
+		err := h.eachMember(ctx, repo, depth, mod, func(m *core.Repository) error {
 			if found != nil {
 				return nil
 			}
@@ -369,6 +376,9 @@ func (h *handler) open(ctx context.Context, repo *core.Repository, mod, ver stri
 		}
 		return nil, fmt.Errorf("%s@%s%s: %w", mod, ver, k.ext(), core.ErrNotFound)
 	case core.RepoProxy:
+		if err := routing.Check(ctx, repo, mod); err != nil {
+			return nil, err
+		}
 		if !canonical(ver) {
 			if k != kindInfo {
 				return nil, fmt.Errorf("%s@%s: not a canonical version: %w", mod, ver, core.ErrNotFound)
@@ -403,12 +413,23 @@ func (h *handler) open(ctx context.Context, repo *core.Repository, mod, ver stri
 	}
 }
 
-// eachMember calls fn for every Go member of group in resolution order.
-func (h *handler) eachMember(ctx context.Context, group *core.Repository, depth int, fn func(*core.Repository) error) error {
+// eachMember calls fn for every Go member of group in resolution order
+// that the group's routing rules let serve module mod ("" for every
+// member). When the rules exclude every member the error is the
+// *core.RoutingBlock (a 404 naming the rule).
+func (h *handler) eachMember(ctx context.Context, group *core.Repository, depth int, mod string, fn func(*core.Repository) error) error {
 	if depth >= maxGroupDepth {
 		return fmt.Errorf("group %q nests deeper than %d levels: %w", group.Name, maxGroupDepth, core.ErrInvalid)
 	}
-	members, err := h.deps.Repos.Members(ctx, group)
+	var (
+		members []*core.Repository
+		err     error
+	)
+	if mod == "" {
+		members, err = h.deps.Repos.Members(ctx, group)
+	} else {
+		members, err = routing.Members(ctx, h.deps.Repos, group, mod)
+	}
 	if err != nil {
 		return err
 	}

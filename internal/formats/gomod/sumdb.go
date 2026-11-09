@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // maxSumDBBytes bounds one checksum database answer (a lookup record or a
@@ -42,7 +43,13 @@ func (h *handler) serveSumDB(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, fmt.Errorf("checksum database path: %w", core.ErrNotFound))
 		return
 	}
-	target, err := h.sumDBSource(ctx, repo, db, 0)
+	// A lookup names a module: routing rules decide which member may
+	// forward it, and a blocked module is never sent to the database.
+	mod := sumDBModule(rest)
+	target, err := h.sumDBSource(ctx, repo, db, mod, 0)
+	if err == nil && mod != "" {
+		err = routing.Check(ctx, target, mod)
+	}
 	if err != nil {
 		h.writeError(w, r, err)
 		return
@@ -55,11 +62,12 @@ func (h *handler) serveSumDB(w http.ResponseWriter, r *http.Request) {
 	}
 	var resp *core.UpstreamResponse
 	if via == SumDBViaRemote {
-		resp, err = h.fetch(ctx, target, "sumdb/"+db+"/"+rest, core.Conditional{})
+		resp, err = h.fetch(ctx, target, "sumdb/"+db+"/"+rest, mod, core.Conditional{})
 	} else {
 		var up core.Upstream
 		if up, err = h.deps.Upstreams.ForRepository(ctx, target); err == nil {
-			resp, err = up.Fetch(ctx, core.UpstreamRequest{URL: "https://" + db + "/" + rest, RelatedHosts: []string{db}})
+			resp, err = up.Fetch(ctx, core.UpstreamRequest{URL: "https://" + db + "/" + rest, RelatedHosts: []string{db},
+				Package: mod, Index: mod == ""})
 		}
 	}
 	if err != nil {
@@ -96,8 +104,25 @@ func (h *handler) serveSumDB(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// sumDBSource returns the proxy repository that forwards database db for repo.
-func (h *handler) sumDBSource(ctx context.Context, repo *core.Repository, db string, depth int) (*core.Repository, error) {
+// sumDBModule returns the module of a lookup/{module}@{version} request,
+// "" for latest, supported and tiles (or an undecodable path).
+func sumDBModule(rest string) string {
+	q, ok := strings.CutPrefix(rest, "lookup/")
+	if !ok {
+		return ""
+	}
+	escaped, _, _ := strings.Cut(q, "@")
+	m, err := decodeModule(escaped)
+	if err != nil {
+		return ""
+	}
+	return m
+}
+
+// sumDBSource returns the proxy repository that forwards database db for
+// repo; for a lookup of module mod only members the group's routing rules
+// let serve it are considered.
+func (h *handler) sumDBSource(ctx context.Context, repo *core.Repository, db, mod string, depth int) (*core.Repository, error) {
 	notServed := fmt.Errorf("checksum database %s is not proxied by %s: %w", db, repo.Name, core.ErrNotFound)
 	switch repo.Type {
 	case core.RepoProxy:
@@ -107,9 +132,9 @@ func (h *handler) sumDBSource(ctx context.Context, repo *core.Repository, db str
 		return repo, nil
 	case core.RepoGroup:
 		var found *core.Repository
-		err := h.eachMember(ctx, repo, depth, func(m *core.Repository) error {
+		err := h.eachMember(ctx, repo, depth, mod, func(m *core.Repository) error {
 			if found == nil && m.Type != core.RepoHosted {
-				found, _ = h.sumDBSource(ctx, m, db, depth+1)
+				found, _ = h.sumDBSource(ctx, m, db, mod, depth+1)
 			}
 			return nil
 		})
