@@ -2609,17 +2609,140 @@ export interface components {
             };
             cleanup_policies?: string[];
             connector?: components["schemas"]["ConnectorConfig"];
-            /** @description Format-specific settings (e.g. maven `version_policy`) */
+            /**
+             * @description Format-specific settings. The keys depend on the repository's
+             *     `format`; each format's keys are described by its own schema:
+             *     apt `AptFormatConfig`, cargo `CargoFormatConfig`, docker
+             *     `DockerFormatConfig`, go `GoFormatConfig`, helm `HelmFormatConfig`,
+             *     maven `MavenFormatConfig`, npm `NpmFormatConfig`, nuget
+             *     `NugetFormatConfig`, pypi `PypiFormatConfig`, raw `RawFormatConfig`,
+             *     rpm `RpmFormatConfig` (also listed in `x-format-schemas`). Absent keys
+             *     take the defaults shown there.
+             */
             format?: {
                 [key: string]: unknown;
-            };
+            } | components["schemas"]["AptFormatConfig"] | components["schemas"]["CargoFormatConfig"] | components["schemas"]["DockerFormatConfig"] | components["schemas"]["GoFormatConfig"] | components["schemas"]["HelmFormatConfig"] | components["schemas"]["MavenFormatConfig"] | components["schemas"]["NpmFormatConfig"] | components["schemas"]["NugetFormatConfig"] | components["schemas"]["PypiFormatConfig"] | components["schemas"]["RawFormatConfig"] | components["schemas"]["RpmFormatConfig"];
+        };
+        /** @description `config.format` of apt repositories. Both keys apply to hosted and group repositories; a proxy serves the remote's metadata. */
+        AptFormatConfig: {
+            /** @description Architectures listed in every distribution besides those of the uploaded packages (not `all`). Default `[amd64, arm64]`. */
+            architectures?: string[];
+            /**
+             * @description Key that signs the metadata. Default `repository` (the repository's own key).
+             * @enum {string}
+             */
+            signing_key?: "repository" | "shared";
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description `config.format` of cargo repositories. */
+        CargoFormatConfig: {
+            /**
+             * Format: uri
+             * @description Proxy only: the remote's crate download template, as `dl` in its
+             *     `config.json` (markers `{crate}`, `{version}`, `{prefix}`,
+             *     `{lowerprefix}`, `{sha256-checksum}`; without markers
+             *     `/{crate}/{version}/download` is appended). Default: the remote's own `dl`.
+             * @example https://static.crates.io/crates
+             */
+            download_url?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description `config.format` of docker repositories: none. Host and port connectors are `config.connector`. */
+        DockerFormatConfig: {
+            [key: string]: unknown;
+        };
+        /** @description `config.format` of go repositories. */
+        GoFormatConfig: {
+            /** @description Proxy only. Checksum databases served under `sumdb/<name>/`. Absent means `[sum.golang.org]`; an empty list turns the pass-through off. */
+            sumdbs?: string[];
+            /**
+             * @description Proxy only. Where checksum database requests go. `database` (default) asks `https://<name>/` itself; `remote` asks `<remote_url>/sumdb/<name>/`, for remotes that proxy the database (an inner Hangar, Athens).
+             * @enum {string}
+             */
+            sumdb_via?: "database" | "remote";
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description `config.format` of helm repositories: none; any key is rejected. */
+        HelmFormatConfig: {
+            [key: string]: unknown;
+        };
+        /** @description `config.format` of maven repositories. Other keys are rejected. */
+        MavenFormatConfig: {
+            /**
+             * @description Versions the repository accepts. Default `mixed`.
+             * @enum {string}
+             */
+            version_policy?: "release" | "snapshot" | "mixed";
+            /**
+             * @description `strict` stores only Maven-layout paths; `permissive` also stores other files. Default `strict`.
+             * @enum {string}
+             */
+            layout_policy?: "strict" | "permissive";
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description `config.format` of npm repositories. */
+        NpmFormatConfig: {
+            /** @description How long after publishing a holder of `repo:<name>:delete` may unpublish a version (`repo:<name>:admin` always may). Default `72h`; `0s` means administrators only. */
+            unpublish_window?: components["schemas"]["Duration"];
+            /** @description Lifetime of tokens issued by `npm login`. Default `720h` (30 days). */
+            login_token_ttl?: components["schemas"]["Duration"];
+            /** @description Let a version number be published again after it was unpublished. Default false (a version always names the same bytes). */
+            reuse_unpublished_versions?: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description `config.format` of nuget repositories. */
+        NugetFormatConfig: {
+            /**
+             * @description What `DELETE api/v2/package/{id}/{version}` (`dotnet nuget delete`) does. Default `unlist`.
+             * @enum {string}
+             */
+            delete_mode?: "unlist" | "delete";
+            /**
+             * @description Proxy only. The remote's service index path, relative to `remote_url`. Default `v3/index.json`.
+             * @example v3/index.json
+             * @example index.json
+             */
+            service_index?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description `config.format` of pypi repositories. */
+        PypiFormatConfig: {
+            /** @description Proxy only. Hosts (`host`, `host:port`, or `.domain` for its subdomains) distribution files may be downloaded from when the remote links elsewhere. Default `[files.pythonhosted.org]`; the remote's own host is always allowed. */
+            file_hosts?: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description `config.format` of raw repositories: none; any key is rejected. */
+        RawFormatConfig: {
+            [key: string]: unknown;
+        };
+        /** @description `config.format` of rpm repositories. Both keys apply to hosted and group repositories; a proxy serves the remote's metadata. */
+        RpmFormatConfig: {
+            /** @description Directory depth that holds `repodata/`. Default 0 (one yum repository); 2 serves e.g. `el9/x86_64/repodata/` for packages uploaded below `el9/x86_64/`. */
+            repodata_depth?: number;
+            /**
+             * @description Key that signs the metadata. Default `repository` (the repository's own key).
+             * @enum {string}
+             */
+            signing_key?: "repository" | "shared";
+        } & {
+            [key: string]: unknown;
         };
         RepositoryInput: {
             name: components["schemas"]["RepositoryName"];
             format: components["schemas"]["Format"];
             type: components["schemas"]["RepositoryType"];
             description?: string;
-            /** @description Required for hosted and proxy repositories */
+            /**
+             * @description Required for hosted and proxy repositories. Ignored for groups,
+             *     which store nothing; their responses leave it out.
+             */
             blob_store?: string;
             /** @description Optional; true when omitted */
             online?: boolean;

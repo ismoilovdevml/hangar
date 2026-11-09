@@ -195,6 +195,25 @@ Upstream secrets are never returned; sending the redacted document back keeps
 them. Saving a repository with upstream credentials needs `HANGAR_SECRET_KEY` on
 the server (`501` otherwise).
 
+`config.format` holds the settings of one format. The OpenAPI document describes
+each format's keys, types, allowed values and defaults in its own schema
+(`NugetFormatConfig`, `GoFormatConfig`, ...; `RepositoryConfig.format` lists them
+under `x-format-schemas`):
+
+| Format | `config.format` keys |
+|---|---|
+| apt | `architectures`, `signing_key` |
+| cargo | `download_url` (proxy) |
+| docker, helm, raw | none (host and port connectors are `config.connector`) |
+| go | `sumdbs`, `sumdb_via` (proxy) |
+| maven | `version_policy`, `layout_policy` |
+| npm | `unpublish_window`, `login_token_ttl`, `reuse_unpublished_versions` |
+| nuget | `delete_mode`, `service_index` (proxy) |
+| pypi | `file_hosts` (proxy) |
+| rpm | `repodata_depth`, `signing_key` |
+
+Groups take no `blob_store`; one sent anyway is ignored.
+
 ### Components
 
 A component is one package version (an npm version, a Maven GAV, a Docker tag, a

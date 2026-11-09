@@ -187,3 +187,59 @@ func goKind(t reflect.Type) string {
 		return t.Kind().String()
 	}
 }
+
+// TestRepositoryConfigSchema keeps RepositoryConfig in api/openapi.yaml in
+// step with core.RepoConfig: every JSON key, one level of nested settings
+// included (scanning, hosted, ...), is documented.
+func TestRepositoryConfigSchema(t *testing.T) {
+	var doc struct {
+		Components struct {
+			Schemas map[string]schema `yaml:"schemas"`
+		} `yaml:"components"`
+	}
+	if err := yaml.Unmarshal(apispec.OpenAPIYAML, &doc); err != nil {
+		t.Fatal(err)
+	}
+	resolve := func(s schema) schema {
+		if len(s.AllOf) == 1 {
+			s = s.AllOf[0]
+		}
+		if s.Ref != "" {
+			s = doc.Components.Schemas[strings.TrimPrefix(s.Ref, "#/components/schemas/")]
+		}
+		return s
+	}
+	cfg := doc.Components.Schemas["RepositoryConfig"]
+	for key, ft := range jsonFields(reflect.TypeFor[core.RepoConfig]()) {
+		p, ok := cfg.Properties[key]
+		if !ok {
+			t.Errorf("RepositoryConfig lacks %q", key)
+			continue
+		}
+		if ft.Kind() == reflect.Pointer {
+			ft = ft.Elem()
+		}
+		if ft.Kind() != reflect.Struct || key == "format" {
+			continue
+		}
+		sub := resolve(p)
+		for k := range jsonFields(ft) {
+			if _, ok := sub.Properties[k]; !ok {
+				t.Errorf("RepositoryConfig.%s lacks %q (%v)", key, k, ft)
+			}
+		}
+	}
+}
+
+// jsonFields maps the JSON keys of struct type t to their field types.
+func jsonFields(t reflect.Type) map[string]reflect.Type {
+	out := map[string]reflect.Type{}
+	for i := range t.NumField() {
+		f := t.Field(i)
+		tag, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+		if f.IsExported() && tag != "" && tag != "-" {
+			out[tag] = f.Type
+		}
+	}
+	return out
+}
