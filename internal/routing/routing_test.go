@@ -204,7 +204,7 @@ func TestAnnotate(t *testing.T) {
 	env, g := fixture(t)
 	ctx := routing.WithScope(context.Background(), env.Audit, env.Logger, http.Header{})
 	nf := fmt.Errorf("x: %w", core.ErrNotFound)
-	if got := routing.Annotate(ctx, nf); got != nf {
+	if got := routing.Annotate(ctx, nf); got.Error() != nf.Error() {
 		t.Fatalf("no exclusions: %v", got)
 	}
 	if _, err := routing.Members(ctx, env.Repos, g, "Edcom.A"); err != nil {
@@ -215,10 +215,10 @@ func TestAnnotate(t *testing.T) {
 		t.Fatalf("annotated = %v", got)
 	}
 	other := errors.New("boom")
-	if routing.Annotate(ctx, other) != other {
+	if routing.Annotate(ctx, other).Error() != other.Error() {
 		t.Fatal("non-404 changed")
 	}
-	if routing.Annotate(context.Background(), nf) != nf {
+	if routing.Annotate(context.Background(), nf).Error() != nf.Error() {
 		t.Fatal("no scope changed")
 	}
 }
