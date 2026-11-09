@@ -257,6 +257,12 @@ func IsTransientDNSError(err error) bool {
 	return errors.As(err, &de) && !de.IsNotFound
 }
 
+// DNS metric names (documented in docs/operations/monitoring.md).
+const (
+	MetricDNSCacheRequests = "hangar_upstream_dns_cache_requests_total"
+	MetricDNSErrors        = "hangar_upstream_dns_errors_total"
+)
+
 // Labels of the DNS metrics.
 const (
 	dnsResultHit      = "hit"      // a fresh cached answer
@@ -283,11 +289,11 @@ func dnsErrorKind(err error) string {
 
 var (
 	dnsCacheTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "hangar_upstream_dns_cache_requests_total",
+		Name: MetricDNSCacheRequests,
 		Help: "Upstream host name lookups by DNS cache result (hit, miss = asked the resolver, stale = served the previous answer after a failed refresh, negative = a cached failure).",
 	}, []string{"result"})
 	dnsErrorsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "hangar_upstream_dns_errors_total",
+		Name: MetricDNSErrors,
 		Help: "Failed queries to the system resolver for upstream host names, by kind (timeout, temporary, not_found, other). Retries are counted.",
 	}, []string{"kind"})
 )

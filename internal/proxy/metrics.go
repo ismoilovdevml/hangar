@@ -16,6 +16,9 @@ const (
 	// MetricUpstreamDuration is the remote latency histogram, labelled by
 	// repository; internal/rollup persists it for the Overview screen.
 	MetricUpstreamDuration = "hangar_proxy_upstream_request_duration_seconds"
+	// MetricUpstreamDNSFailures counts remote requests failing on a
+	// transient DNS error.
+	MetricUpstreamDNSFailures = "hangar_proxy_upstream_dns_failures_total"
 	// MetricNegativeCacheEvictions counts remembered 404s evicted for space.
 	MetricNegativeCacheEvictions = "hangar_proxy_negative_cache_evictions_total"
 )
@@ -76,7 +79,7 @@ var (
 		Help: "Interrupted proxy remote downloads continued with a Range request.",
 	}, []string{"repository"})
 	upstreamDNSFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "hangar_proxy_upstream_dns_failures_total",
+		Name: MetricUpstreamDNSFailures,
 		Help: "Proxy remote requests that failed resolving a host name with a timeout or temporary error. They trip the circuit breaker at most once per second.",
 	}, []string{"repository"})
 	inflight = prometheus.NewGaugeVec(prometheus.GaugeOpts{
