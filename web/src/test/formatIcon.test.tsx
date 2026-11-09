@@ -22,15 +22,15 @@ describe('FormatIcon', () => {
     expect(container.querySelectorAll('path').length).toBeGreaterThan(0);
   });
 
-  it('draws APT and RPM with neutral icons and their names', () => {
-    render(
-      <>
-        <FormatIcon format="apt" />
-        <FormatIcon format="rpm" />
-      </>,
-    );
-    expect(screen.getByRole('img', { name: 'APT' })).toHaveClass('format-icon--generic');
-    expect(screen.getByRole('img', { name: 'RPM' })).toHaveClass('format-icon--generic');
+  it.each([
+    ['cargo', 'Cargo', '#000000'],
+    ['apt', 'APT', '#A81D33'],
+    ['rpm', 'RPM', '#EE0000'],
+  ])('draws %s with its brand mark', (format, name, color) => {
+    render(<FormatIcon format={format} />);
+    const icon = screen.getByRole('img', { name });
+    expect(icon).not.toHaveClass('format-icon--generic');
+    expect(icon.querySelector('path')).toHaveAttribute('fill', color);
   });
 
   it('is hidden from screen readers when a visible name sits next to it', () => {

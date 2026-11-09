@@ -102,6 +102,13 @@ describe('package helpers', () => {
     const npm = installCommands({ format: 'npm', url: 'https://pkg/repository/npm-hosted/' }, d);
     expect(npm.map((o) => o.label)).toEqual(['npm', 'pnpm', 'Yarn']);
     expect(npm[1]!.lines[0]!.text).toBe('pnpm add @acme/ui@1.2.3 --registry https://pkg/repository/npm-hosted/');
+    const gomod = installCommands({ format: 'go', url: 'https://pkg/repository/go-group/' }, { name: 'example.com/acme/greet', version: 'v1.2.0' });
+    expect(gomod.map((c) => c.id)).toEqual(['go', 'gomod']);
+    expect(gomod.flatMap((c) => c.lines.map((x) => x.text))).toEqual([
+      'GOPROXY=https://pkg/repository/go-group,direct go get example.com/acme/greet@v1.2.0',
+      '// go.mod',
+      'require example.com/acme/greet v1.2.0',
+    ]);
     const mvn = installCommands({ format: 'maven', url: 'https://pkg/repository/m/' }, { namespace: 'com.acme', name: 'core', version: '1.2.3' });
     expect(mvn.find((o) => o.id === 'gradle')!.lines.map((l) => l.text)).toContain('    implementation("com.acme:core:1.2.3")');
     expect(mvn.find((o) => o.id === 'maven')!.lines.map((l) => l.text)).toContain('  <artifactId>core</artifactId>');
@@ -114,7 +121,6 @@ describe('package helpers', () => {
     );
     const crate = installCommands({ format: 'cargo', url: 'https://pkg/repository/cargo-hosted/', repository: 'cargo-hosted' }, { name: 'serde', version: '1.0.0' });
     expect(crate.map((o) => o.lines.at(-1)!.text)).toEqual(['cargo add serde@1.0.0 --registry cargo-hosted', 'serde = { version = "1.0.0", registry = "cargo-hosted" }']);
-    expect(installCommands({ format: 'go', url: 'u' }, d)).toEqual([]);
     expect(installCommands({ format: 'npm' }, d)).toEqual([]);
   });
 
