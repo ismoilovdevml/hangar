@@ -89,6 +89,62 @@ describe('repository settings round-trip', () => {
   });
 });
 
+describe('format settings round-trip', () => {
+  const apt: Repository = {
+    ...proxy,
+    name: 'apt-hosted',
+    format: 'apt',
+    type: 'hosted',
+    url: 'https://pkg.example.com/repository/apt-hosted/',
+    config: { hosted: { write_policy: 'allow_once' }, format: { architectures: ['amd64', 'riscv64'], signing_key: 'repository', future: 1 } },
+  };
+
+  it('edits only the keys of its format and type, keeping unknown ones', () => {
+    const f = repoToForm(apt);
+    expect(f).toMatchObject({ aptArchitectures: ['amd64', 'riscv64'], signingKey: 'repository' });
+    const body = toRepositoryUpdate({ ...f, aptArchitectures: [], signingKey: 'shared' }, apt);
+    expect(body.config.format).toEqual({ future: 1, signing_key: 'shared' });
+  });
+
+  it('keeps settings of another type as stored', () => {
+    const hostedGo: Repository = { ...apt, format: 'go', config: { hosted: { write_policy: 'allow_once' }, format: { sumdbs: [] } } };
+    expect(toRepositoryUpdate(repoToForm(hostedGo), hostedGo).config.format).toEqual({ sumdbs: [] });
+  });
+
+  it('tells a Go proxy without sumdbs (default) from one with an empty list (off)', () => {
+    const goProxy: Repository = { ...proxy, name: 'go-proxy', format: 'go', config: { proxy: { remote_url: 'https://proxy.golang.org' } } };
+    const f = repoToForm(goProxy);
+    expect(f.goSumdbs).toEqual(['sum.golang.org']);
+    expect(isDirty(f, goProxy)).toBe(false);
+    expect(toRepositoryUpdate(f, goProxy).config.format).toBeUndefined();
+    expect(toRepositoryUpdate({ ...f, goSumdbs: [] }, goProxy).config.format).toEqual({ sumdbs: [] });
+    const off: Repository = { ...goProxy, config: { ...goProxy.config, format: { sumdbs: [] } } };
+    expect(repoToForm(off).goSumdbs).toEqual([]);
+  });
+
+  it('keeps proxy related hosts, offline mode and the request limit', () => {
+    const r: Repository = { ...proxy, config: { ...proxy.config, proxy: { ...proxy.config.proxy!, related_hosts: ['.cdn.example'], offline: true, max_concurrent_requests: 8 } } };
+    expect(toRepositoryUpdate(repoToForm(r), r).config.proxy).toMatchObject({ related_hosts: ['.cdn.example'], offline: true, max_concurrent_requests: 8 });
+  });
+
+  it('validates format settings like the server', () => {
+    const f = repoToForm(apt);
+    expect(validateRepoForm({ ...f, aptArchitectures: ['all'] }).aptArchitectures).toMatch(/Leave out "all"/);
+    expect(validateRepoForm({ ...f, aptArchitectures: ['AMD64'] }).aptArchitectures).toBeDefined();
+    const rpm = { ...f, format: 'rpm' as const };
+    expect(validateRepoForm({ ...rpm, rpmRepodataDepth: '4' }).rpmRepodataDepth).toBeUndefined();
+    for (const d of ['5', '-1', '1.5', '']) expect(validateRepoForm({ ...rpm, rpmRepodataDepth: d }).rpmRepodataDepth).toBeDefined();
+    const go = { ...repoToForm(proxy), format: 'go' as const };
+    expect(validateRepoForm({ ...go, goSumdbs: ['sum.golang.org', 'sum.example.com'] }).goSumdbs).toBeUndefined();
+    for (const d of ['Sum.golang.org', '.x', 'a..b', 'https://sum.golang.org']) expect(validateRepoForm({ ...go, goSumdbs: [d] }).goSumdbs).toBeDefined();
+    const cargo = { ...go, format: 'cargo' as const };
+    expect(validateRepoForm({ ...cargo, cargoDownloadUrl: 'https://dl.example/{crate}/{version}' }).cargoDownloadUrl).toBeUndefined();
+    expect(validateRepoForm({ ...cargo, cargoDownloadUrl: '{crate}/{version}' }).cargoDownloadUrl).toBeDefined();
+    for (const h of ['charts.example.com', 'host:8443', '.example.org']) expect(validateRepoForm({ ...go, relatedHosts: [h] }).relatedHosts).toBeUndefined();
+    for (const h of ['https://x.example', 'x.example/path', 'host:0', '..x', '*.x']) expect(validateRepoForm({ ...go, relatedHosts: [h] }).relatedHosts).toBeDefined();
+  });
+});
+
 const detail = (over: Partial<ComponentDetail>): ComponentDetail => ({
   id: 'c', format: 'npm', namespace: '@acme', name: 'ui', version: '1.2.3', repository: 'npm-hosted',
   publisher: { kind: 'user', display_name: 'admin' }, published_at: '2026-01-01T00:00:00Z', scan: { state: 'pending', critical: 0, high: 0, medium: 0, low: 0 },

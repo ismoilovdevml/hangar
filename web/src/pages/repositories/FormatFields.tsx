@@ -87,7 +87,7 @@ export function FormatSettings({ form, set, errors, blur }: { form: RepoForm; se
 
       {keys.includes('signing_key') && (
         <div className="field">
-          <label htmlFor="repo-signingKey" className="field__label">Signing key</label>
+          <label htmlFor="repo-signingKey" className="field__label">Sign with</label>
           <Select<SigningKeyChoice>
             id="repo-signingKey"
             value={form.signingKey}
