@@ -91,8 +91,7 @@ func New(pool *pgxpool.Pool) *Service {
 func ScanStateSQL(c string) string {
 	return `CASE WHEN ` + c + `.quarantined THEN 'quarantined'
 		WHEN EXISTS (SELECT 1 FROM findings sf WHERE sf.component_id = ` + c + `.id AND sf.status IN ('open', 'assigned')) THEN 'findings'
-		WHEN (SELECT sr.format FROM repositories sr WHERE sr.id = ` + c + `.repo_id) <> ALL ('{` +
-		strings.Join(scanning.SupportedFormats(), ",") + `}'::text[]) THEN 'unsupported'
+		WHEN NOT EXISTS (SELECT 1 FROM repositories sr WHERE sr.id = ` + c + `.repo_id AND ` + scanning.ScannableSQL("sr") + `) THEN 'unsupported'
 		WHEN (SELECT ss.status FROM component_scans ss WHERE ss.component_id = ` + c + `.id) = 'ok' THEN 'clean'
 		WHEN (SELECT ss.status FROM component_scans ss WHERE ss.component_id = ` + c + `.id) = 'failed' THEN 'failed'
 		ELSE 'pending' END`
