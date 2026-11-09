@@ -1,7 +1,10 @@
 package pypi
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -137,8 +140,6 @@ func (h *handler) serveIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sort.Strings(names)
-	w.Header().Set("Vary", "Accept")
-	w.Header().Set("Content-Type", rd.contentType)
 	if rd.json {
 		type entry struct {
 			Name string `json:"name"`
@@ -150,7 +151,7 @@ func (h *handler) serveIndex(w http.ResponseWriter, r *http.Request) {
 		for _, n := range names {
 			out.Projects = append(out.Projects, entry{Name: n})
 		}
-		_ = json.NewEncoder(w).Encode(out)
+		writePage(w, r, rd.contentType, encodeJSON(out))
 		return
 	}
 	var b strings.Builder
@@ -160,7 +161,48 @@ func (h *handler) serveIndex(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(&b, "    <a href=\"%s\">%s</a><br/>\n", html.EscapeString(base+n+"/"), html.EscapeString(n))
 	}
 	b.WriteString("  </body>\n</html>\n")
-	_, _ = w.Write([]byte(b.String()))
+	writePage(w, r, rd.contentType, []byte(b.String()))
+}
+
+// encodeJSON renders a Simple API JSON page the way json.Encoder writes it.
+func encodeJSON(v any) []byte {
+	var buf bytes.Buffer
+	_ = json.NewEncoder(&buf).Encode(v)
+	return buf.Bytes()
+}
+
+// writePage sends a rendered Simple API page with a strong ETag (the
+// page's own digest, so the HTML and JSON renderings differ) and answers a
+// matching If-None-Match with 304, so pip and uv revalidating their HTTP
+// cache download nothing when the project has not changed.
+func writePage(w http.ResponseWriter, r *http.Request, contentType string, body []byte) {
+	sum := sha256.Sum256(append([]byte(contentType+"\x00"), body...))
+	etag := `"` + hex.EncodeToString(sum[:16]) + `"`
+	hd := w.Header()
+	hd.Set("Vary", "Accept")
+	hd.Set("ETag", etag)
+	hd.Set("Cache-Control", "no-cache")
+	if etagMatches(r.Header.Get("If-None-Match"), etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	hd.Set("Content-Type", contentType)
+	hd.Set("Content-Length", strconv.Itoa(len(body)))
+	w.WriteHeader(http.StatusOK)
+	if r.Method != http.MethodHead {
+		_, _ = w.Write(body)
+	}
+}
+
+// etagMatches applies If-None-Match (RFC 9110 weak comparison) to etag.
+func etagMatches(header, etag string) bool {
+	for _, v := range strings.Split(header, ",") {
+		v = strings.TrimPrefix(strings.TrimSpace(v), "W/")
+		if v == "*" || v == etag {
+			return true
+		}
+	}
+	return false
 }
 
 // serveProject answers GET simple/{project}/.
@@ -196,14 +238,12 @@ func (h *handler) serveProject(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, err)
 		return
 	}
-	w.Header().Set("Vary", "Accept")
-	w.Header().Set("Content-Type", rd.contentType)
 	base := h.repoURL(repo)
 	if rd.json {
-		_ = json.NewEncoder(w).Encode(projectJSON(p, base))
+		writePage(w, r, rd.contentType, encodeJSON(projectJSON(p, base)))
 		return
 	}
-	_, _ = w.Write([]byte(projectHTML(p, base)))
+	writePage(w, r, rd.contentType, []byte(projectHTML(p, base)))
 }
 
 // version reports the API version a page can honestly claim.
