@@ -3995,7 +3995,10 @@ export interface components {
             components_deleted?: number;
             /** @description Cleanup, docker GC and blob compaction runs - bytes released (from the result) */
             bytes_freed?: components["schemas"]["Bytes"];
-            /** @description Summary of a finished run, per type (cleanup runs - CleanupRunResult) */
+            /**
+             * @description Summary of a finished run, per type (cleanup runs - CleanupRunResult,
+             *     repository_import - ImportRunResult, proxy_prewarm - PrewarmRunResult)
+             */
             result?: {
                 [key: string]: unknown;
             };

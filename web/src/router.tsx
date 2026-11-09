@@ -43,6 +43,8 @@ import { AuthenticationPage } from './pages/settings/AuthenticationPage';
 import { ProxiesPage } from './pages/settings/ProxiesPage';
 import { TaskDetailPage, type TaskDetailSearch } from './pages/tasks/TaskDetailPage';
 import { TasksPage, type TasksSearch } from './pages/tasks/TasksPage';
+import { NewTaskPage, type NewTaskSearch } from './pages/tasks/NewTaskPage';
+import { isImportKind } from './lib/imports';
 import { validateAuditSearch, type AuditSearch } from './lib/audit';
 import { isTaskStatusFilter, isTaskType } from './lib/tasks';
 import { SystemStatusPage } from './pages/system/SystemStatusPage';
@@ -254,6 +256,17 @@ const tasksRoute = createRoute({
   component: TasksPage,
 });
 
+const newTaskRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/tasks/new',
+  staticData: { title: 'New task' },
+  validateSearch: (s: Record<string, unknown>): NewTaskSearch => ({
+    kind: isImportKind(s.kind) ? s.kind : undefined,
+    repository: str(s.repository),
+  }),
+  component: NewTaskPage,
+});
+
 const taskDetailRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/tasks/$taskId',
@@ -362,6 +375,7 @@ const routeTree = rootRoute.addChildren([
     accessRoute,
     accountRoute,
     tasksRoute,
+    newTaskRoute,
     taskDetailRoute,
     page('/cluster', 'Cluster & replication', ClusterPage),
     systemStatusRoute,

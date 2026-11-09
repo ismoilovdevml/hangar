@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link, useRouterState } from '@tanstack/react-router';
 import { subscribeLiveEvents } from '../../api/events';
 import { isMissingEndpoint, opsKeys, useCanSystem, useTask, useTaskLiveUpdates, useTaskRunLog, useTaskRuns, useTasks } from '../../api/ops';
-import type { TaskRun } from '../../api/opsTypes';
+import type { ImportRunResult, PrewarmRunResult, Task, TaskRun } from '../../api/opsTypes';
 import { ApiRequestError } from '../../api/client';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
@@ -86,6 +86,146 @@ function RunLog({ taskId, run }: { taskId: string; run: TaskRun }) {
   );
 }
 
+const count = (n: number | undefined) => (n ?? 0).toLocaleString('en-US');
+
+function bytesText(n: number | undefined): string {
+  let v = n ?? 0;
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${i === 0 ? v : v.toFixed(1)} ${units[i]}`;
+}
+
+function ItemList({ title, items }: { title: string; items?: string[] }) {
+  if (!items?.length) return null;
+  return (
+    <details>
+      <summary className="meta">
+        {title} ({items.length}
+        {items.length >= 100 ? '+' : ''})
+      </summary>
+      <ul className="import-result__items">
+        {items.map((it) => (
+          <li key={it}>{it}</li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+/** Counts of an import or pre-warm run (its result, or the totals so far). */
+function ImportSummary({ run }: { run: TaskRun }) {
+  if (!run.result) return null;
+  if (run.task_type === 'repository_import') {
+    const r = run.result as ImportRunResult;
+    return (
+      <div className="import-result">
+        <dl className="facts">
+          <div>
+            <dt>Imported</dt>
+            <dd>{count(r.imported)}</dd>
+          </div>
+          <div>
+            <dt>Already present</dt>
+            <dd>{count(r.skipped)}</dd>
+          </div>
+          <div>
+            <dt>Conflicts</dt>
+            <dd>{count(r.conflicts)}</dd>
+          </div>
+          <div>
+            <dt>Failed</dt>
+            <dd>{count(r.failed)}</dd>
+          </div>
+          <div>
+            <dt>Packages</dt>
+            <dd>
+              {count(r.packages_done)} of {count(r.packages)}
+            </dd>
+          </div>
+          <div>
+            <dt>Copied</dt>
+            <dd>{bytesText(r.bytes)}</dd>
+          </div>
+        </dl>
+        <ItemList title="Conflicts: already present with other content, left as they are" items={r.conflict_items} />
+        <ItemList title="Failed" items={r.failed_items} />
+      </div>
+    );
+  }
+  if (run.task_type === 'proxy_prewarm') {
+    const r = run.result as PrewarmRunResult;
+    return (
+      <div className="import-result">
+        <dl className="facts">
+          <div>
+            <dt>Cached</dt>
+            <dd>{count(r.cached)}</dd>
+          </div>
+          <div>
+            <dt>Failed</dt>
+            <dd>{count(r.failed)}</dd>
+          </div>
+          <div>
+            <dt>Skipped</dt>
+            <dd title="Lockfile entries no registry serves (workspace, path, git, link)">{count(r.skipped)}</dd>
+          </div>
+          <div>
+            <dt>Coordinates</dt>
+            <dd>
+              {count(r.done)} of {count(r.coordinates)}
+            </dd>
+          </div>
+          <div>
+            <dt>Fetched</dt>
+            <dd>{bytesText(r.bytes)}</dd>
+          </div>
+        </dl>
+        <ItemList title="Failed" items={r.failed_items} />
+      </div>
+    );
+  }
+  return null;
+}
+
+/** Repository and source of an import or pre-warm task. */
+function ImportFacts({ task }: { task: Task }) {
+  if (task.type !== 'repository_import' && task.type !== 'proxy_prewarm') return null;
+  const c = task.config as { repository?: string; source?: { url?: string }; inventory?: { source?: { url?: string } }; coordinates?: string[] };
+  const source = c.source?.url ?? c.inventory?.source?.url;
+  return (
+    <>
+      <div>
+        <dt>Repository</dt>
+        <dd>
+          {c.repository ? (
+            <Link to="/repositories/$name/settings" params={{ name: c.repository }}>
+              {c.repository}
+            </Link>
+          ) : (
+            <NotAvailable />
+          )}
+        </dd>
+      </div>
+      {source && (
+        <div>
+          <dt>Source</dt>
+          <dd className="facts__mono">{source}</dd>
+        </div>
+      )}
+      {task.type === 'proxy_prewarm' && (
+        <div>
+          <dt>Coordinates</dt>
+          <dd>{count(c.coordinates?.length)}</dd>
+        </div>
+      )}
+    </>
+  );
+}
+
 function RunDetail({ taskId, run }: { taskId: string; run: TaskRun }) {
   const now = useNow(isActive(run) ? 1_000 : 30_000);
   const meta = RUN_STATUS[run.status];
@@ -123,6 +263,7 @@ function RunDetail({ taskId, run }: { taskId: string; run: TaskRun }) {
           <dd>{run.node ?? <NotAvailable />}</dd>
         </div>
       </dl>
+      <ImportSummary run={run} />
       <RunLog taskId={taskId} run={run} />
     </Panel>
   );
@@ -259,6 +400,7 @@ export function TaskDetailPage() {
               <dt>Type</dt>
               <dd>{taskTypeLabel(t.type)}</dd>
             </div>
+            <ImportFacts task={t} />
           </dl>
         </Panel>
       )}

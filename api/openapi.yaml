@@ -5346,7 +5346,9 @@ components:
         result:
           type: object
           additionalProperties: true
-          description: Summary of a finished run, per type (cleanup runs - CleanupRunResult)
+          description: |
+            Summary of a finished run, per type (cleanup runs - CleanupRunResult,
+            repository_import - ImportRunResult, proxy_prewarm - PrewarmRunResult)
     TaskRunLogLine:
       type: object
       required: [seq, at, level, message]

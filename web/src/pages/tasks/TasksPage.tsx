@@ -198,7 +198,17 @@ export function TasksPage() {
 
   return (
     <div className="screen">
-      <PageHeader title="Scheduled tasks" description="Maintenance the registry does on its own, mostly at night. Times are in UTC." />
+      <PageHeader
+        title="Scheduled tasks"
+        description="Maintenance the registry does on its own, mostly at night. Times are in UTC."
+        actions={
+          canRun ? (
+            <Link to="/tasks/new" search={{}} className="button button--primary">
+              New task
+            </Link>
+          ) : undefined
+        }
+      />
 
       <p className="visually-hidden" role="status">
         {message}
