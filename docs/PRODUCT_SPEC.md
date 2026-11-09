@@ -2,6 +2,9 @@
 
 Every number shown in the UI comes from the API.
 
+This is the product design. Parts marked *(planned)* are not built yet; the
+[roadmap](ROADMAP.md) has the current status of each.
+
 ## Concepts
 
 | Term | Meaning |
@@ -19,7 +22,7 @@ Every number shown in the UI comes from the API.
 | Quarantine | A component blocked from download by policy until fixed or waived. |
 
 ## 01 · Sign in (`Login`)
-- SSO button (OIDC, configured provider name), LDAP and SAML buttons, local username/password with "remember me".
+- SSO button (OIDC, configured provider name), LDAP and SAML *(planned)* buttons, local username/password with "remember me".
 - Hint for CLI/CI users: `hangar login --token`.
 - Footer: version, docs and API links; header: system status dot.
 - Lockout after N failed attempts (configurable), audit event on every attempt.
@@ -35,7 +38,7 @@ Every number shown in the UI comes from the API.
   critical findings, expiring tokens, a missing or failed database backup, scanning turned off, no storage quota.
 - Storage (used, share per format, quota), Security (critical findings or clean, scanned count), Upstream (worst proxy remote, latency, cache hit ratio).
 - Most downloaded: top packages by downloads, all time.
-- Recently published: live list (SSE/WebSocket) with format badge, repo, publisher (user or CI identity), scan status, relative time. Row → package page.
+- The Overview fits one screen, so it has no list of recent publications; packages are browsed on the Packages page. Live events (`GET /api/v1/events`) refresh the cards.
 
 ## 03 · Repositories
 - Count cards for hosted / proxy / group.
@@ -47,13 +50,13 @@ Every number shown in the UI comes from the API.
 - Step 1 format grid (Docker, npm, Maven, PyPI, Go, Helm, NuGet, Cargo, APT, Raw).
 - Step 2 type cards with one-line explanations.
 - Step 3 settings: name (validated `^[a-z0-9][a-z0-9-]{1,62}$`), blob store (shows free space), remote URL for proxy (prefilled per format), re-upload policy, cleanup policy, toggles: scan on arrival, quarantine critical, anonymous read. Group type shows a member picker with drag ordering.
-- Summary panel with the final URL and the **same config as YAML** (and copyable `hangar` CLI / Terraform). Config-as-code must round-trip: `hangar apply -f repo.yaml` creates the identical repo.
+- Summary panel with the final URL and the **same config as YAML**. *(planned)* Copyable `hangar` CLI / Terraform, and a round trip: `hangar apply -f repo.yaml` creates the identical repo.
 
 ## 05 · Package detail (`Browse`)
 - Left tree: repository → package → versions.
-- Header: format badge, name, version pill, signed badge, platform list, publisher and time; actions Download SBOM, Delete (RBAC + confirm).
+- Header: format badge, name, version pill, signed badge, platform list, publisher and time; actions Download SBOM *(planned)*, Delete (RBAC + confirm).
 - Pull/install command for the format, with copy.
-- Tabs: Overview, Versions, Layers (OCI) / Files (others), Vulnerabilities, Dependents.
+- Tabs: Overview, Versions, Layers (OCI) / Files (others), Vulnerabilities, Dependents *(planned)*.
 - Overview metadata: digest/checksums, size, downloads 30d, last pulled (+ by whom/which cluster), base image, source commit link.
 - Versions list with scan status; Layers with size bars.
 
@@ -64,7 +67,7 @@ Every number shown in the UI comes from the API.
 
 ## 07 · Blob stores (`BlobStores`)
 - Totals: used vs capacity, saved by dedup, growth/day with time-to-full estimate, reclaimable now (+ run compaction).
-- Card per store: type, location, state, used/capacity bar, soft quota, repositories count, blob count, write latency, encryption; actions Settings, Move repositories (online migration job).
+- Card per store: type, location, state, used/capacity bar, soft quota, repositories count, blob count, write latency, encryption; actions Settings, Move repositories (online migration job, *planned*).
 
 ## 08 · Cleanup policies (`Cleanup`)
 - Policy list; editor written as readable sentences: delete versions older than N days AND not downloaded in N days; keep newest N per package; keep tags/versions matching glob list; optional pre-release/snapshot only.
@@ -76,7 +79,7 @@ Every number shown in the UI comes from the API.
 - Severity cards (critical/high/medium/low) with sub-notes.
 - Findings table: advisory id + title, severity, package@version, fixed-in, affected components, status (open, assigned, waived until date, quarantined).
 - Filters: fix available, in production (pulled in last N days), waived.
-- Policy panel: quarantine critical, require signatures (cosign) per repo, licence deny-list.
+- Policy panel: quarantine critical; *(planned)* require signatures (cosign) per repo, licence deny-list.
 - 30-day trend chart.
 - Rescan on new advisory DB; waivers need reason + expiry, are audited.
 
@@ -90,9 +93,12 @@ Every number shown in the UI comes from the API.
 ## 11 · Scheduled tasks (`Tasks`)
 - "Running now" banner with progress and Stop.
 - Table: task, description, schedule (human + cron), last run result with status dot, next run, Run now.
-- Built-in task types: cleanup, blob compaction, docker GC, rescan, reindex search, directory sync, DB backup, replication, proxy metadata refresh.
+- Built-in task types: cleanup, blob compaction, docker GC, docker upload cleanup, rescan, auth purge, audit partitions. *(planned)* reindex search, directory sync, DB backup, replication, proxy metadata refresh.
 
-## 12 · Cluster & replication (`Cluster`)
+## 12 · Cluster & replication (`Cluster`) *(planned)*
+
+Today the screen is a placeholder; node health is on Settings → System.
+
 - Overall health + quorum.
 - Node cards: role (leader/follower), zone, CPU/memory/cache-disk meters (warn colour > 75%), req/s, uptime.
 - Replication targets (edge nodes, DR): repos replicated, lag or failure + retry, objects today; Add edge node.

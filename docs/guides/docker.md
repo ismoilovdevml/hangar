@@ -207,8 +207,9 @@ helm install demo oci://hangar.example.com/docker-group/charts/mychart --version
 ```
 
 Against a plain-HTTP server add `--plain-http` to `registry login`, `push`, `pull`
-and `install`. Classic Helm chart repositories (`index.yaml`, `helm repo add`) are
-not supported yet; use OCI.
+and `install` (older Helm 3 releases accept only `--insecure` on `registry login`).
+Classic chart repositories (`index.yaml`, `helm repo add`, ChartMuseum uploads)
+are Helm repositories, not Docker ones; see the [Helm guide](helm.md).
 
 ## Signing with cosign
 
