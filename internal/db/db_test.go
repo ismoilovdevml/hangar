@@ -51,6 +51,14 @@ func TestMigrationFilesAreSequential(t *testing.T) {
 // dropped afterwards, so parallel runs and developer data are never touched.
 func isolatedPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
+	return poolFor(t, isolatedURL(t), 4)
+}
+
+// isolatedURL creates a fresh schema in the test database, dropped after the
+// test, and returns a connection URL whose search_path selects it. Pools
+// opened on it see the same schema, like several nodes of one installation.
+func isolatedURL(t *testing.T) string {
+	t.Helper()
 	base := os.Getenv(EnvTestDatabaseURL)
 	if base == "" {
 		t.Skipf("%s not set; skipping database integration test", EnvTestDatabaseURL)
@@ -66,6 +74,12 @@ func isolatedPool(t *testing.T) *pgxpool.Pool {
 	if _, err := admin.Exec(ctx, "CREATE SCHEMA "+schema); err != nil {
 		t.Fatalf("create schema: %v", err)
 	}
+	t.Cleanup(func() {
+		if _, err := admin.Exec(context.Background(), "DROP SCHEMA "+schema+" CASCADE"); err != nil {
+			t.Errorf("drop schema: %v", err)
+		}
+		admin.Close()
+	})
 	u, err := url.Parse(base)
 	if err != nil {
 		t.Fatal(err)
@@ -73,17 +87,18 @@ func isolatedPool(t *testing.T) *pgxpool.Pool {
 	q := u.Query()
 	q.Set("search_path", schema)
 	u.RawQuery = q.Encode()
-	pool, err := Open(ctx, u.String(), PoolOptions{MaxConns: 4})
+	return u.String()
+}
+
+// poolFor opens a pool on dsn that is closed when the test ends (before the
+// schema of isolatedURL is dropped: cleanups run last-in first-out).
+func poolFor(t *testing.T, dsn string, maxConns int32) *pgxpool.Pool {
+	t.Helper()
+	pool, err := Open(context.Background(), dsn, PoolOptions{MaxConns: maxConns})
 	if err != nil {
 		t.Fatalf("connect with schema: %v", err)
 	}
-	t.Cleanup(func() {
-		pool.Close()
-		if _, err := admin.Exec(context.Background(), "DROP SCHEMA "+schema+" CASCADE"); err != nil {
-			t.Errorf("drop schema: %v", err)
-		}
-		admin.Close()
-	})
+	t.Cleanup(pool.Close)
 	return pool
 }
 
@@ -108,7 +123,7 @@ func TestMigrationsUpDown(t *testing.T) {
 			t.Errorf("migration %s not applied", s.Name)
 		}
 	}
-	if pending, _ := m.HasPending(ctx); pending {
+	if pending, _ := m.HasPending(ctx, nil); pending {
 		t.Error("pending after up")
 	}
 

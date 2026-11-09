@@ -120,7 +120,7 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool, migrate bool, log *sl
 	if migrate {
 		return m.Up(ctx, log)
 	}
-	pending, err := m.HasPending(ctx)
+	pending, err := m.HasPending(ctx, log)
 	if err != nil {
 		return err
 	}
