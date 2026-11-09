@@ -20,15 +20,17 @@ type groupIndex struct {
 }
 
 // groupFiles returns the merged indexes of a group of hosted repositories.
-// A package path present in several members is taken from the first one.
+// A package path present in several members is taken from the first one;
+// packages the group's routing rules keep from a member are left out.
 func (h *handler) groupFiles(ctx context.Context, group *core.Repository) (*groupIndex, error) {
-	members, err := h.HostedMembers(ctx, group)
+	leaves, err := h.HostedLeaves(ctx, group)
 	if err != nil {
 		return nil, err
 	}
 	var key strings.Builder
 	var latest time.Time
-	for _, m := range members {
+	for _, l := range leaves {
+		m := l.Repo
 		assets, err := h.AllAssets(ctx, m.ID, "dists/")
 		if err != nil {
 			return nil, err
@@ -44,6 +46,7 @@ func (h *handler) groupFiles(ctx context.Context, group *core.Repository) (*grou
 		}
 	}
 	key.WriteString(strings.Join(formatConfig(group).Architectures, ","))
+	key.WriteString("\n" + repokit.RoutingKey(leaves))
 	h.groupMu.Lock()
 	gi := h.groups[group.ID]
 	h.groupMu.Unlock()
@@ -52,14 +55,14 @@ func (h *handler) groupFiles(ctx context.Context, group *core.Repository) (*grou
 	}
 	seen := map[string]bool{}
 	var entries []entry
-	for _, m := range members {
-		es, err := h.hostedEntries(ctx, m)
+	for _, l := range leaves {
+		es, err := h.hostedEntries(ctx, l.Repo)
 		if err != nil {
 			return nil, err
 		}
 		for _, e := range es {
 			id := e.Component + "/" + e.Package + "/" + e.Version + "/" + e.Arch
-			if seen[e.Path] || seen[id] {
+			if seen[e.Path] || seen[id] || !l.Allows(ctx, e.Package) {
 				continue
 			}
 			seen[e.Path], seen[id] = true, true

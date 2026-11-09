@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 	"github.com/ismoilovdevml/hangar/internal/signing"
 )
 
@@ -82,6 +84,7 @@ func (b *Base) Authorize(w http.ResponseWriter, r *http.Request, repo *core.Repo
 
 // Fail answers with a plain-text message (apt and dnf print it).
 func (b *Base) Fail(w http.ResponseWriter, r *http.Request, err error) {
+	err = routing.Annotate(r.Context(), err)
 	code := core.HTTPStatus(err)
 	msg := err.Error()
 	switch {
@@ -179,16 +182,81 @@ func (b *Base) AuthorizeWrite(w http.ResponseWriter, r *http.Request, repo *core
 	return r, target, true
 }
 
+// Leaf is a hosted member of a group with the group memberships it was
+// reached through (outermost first), whose routing rules apply to it.
+type Leaf struct {
+	Repo *core.Repository
+	Via  []Link
+}
+
+// Link is one group membership on the way to a Leaf.
+type Link struct {
+	Group, Member *core.Repository
+}
+
+// Block returns the rule on the way to l that keeps it from serving the
+// package name, or nil.
+func (l Leaf) Block(name string) *core.RoutingBlock {
+	for _, k := range l.Via {
+		if b := k.Group.MemberRoutingBlock(k.Member.Name, name); b != nil {
+			return b
+		}
+	}
+	return nil
+}
+
+// Allows reports whether the routing rules let l serve the package name,
+// recording an exclusion.
+func (l Leaf) Allows(ctx context.Context, name string) bool {
+	if b := l.Block(name); b != nil {
+		routing.Record(ctx, l.Repo.Format, b)
+		return false
+	}
+	return true
+}
+
+// RoutingKey fingerprints the routing rules that apply to leaves, for cache
+// keys of merged documents: a rule change regenerates them.
+func RoutingKey(leaves []Leaf) string {
+	var sb strings.Builder
+	seen := map[string]bool{}
+	for _, l := range leaves {
+		for _, k := range l.Via {
+			if seen[k.Group.ID] || k.Group.Config.Routing.Empty() {
+				continue
+			}
+			seen[k.Group.ID] = true
+			js, _ := json.Marshal(k.Group.Config.Routing)
+			sb.WriteString(k.Group.ID + "=" + string(js) + "\n")
+		}
+	}
+	return sb.String()
+}
+
 // HostedMembers expands a group into its hosted members in resolution
 // order (nested groups depth-first, repeats and offline members skipped).
 // A proxy member fails with core.ErrInvalid: signed metadata of a remote
 // cannot be merged with other content and re-signed honestly, so groups of
 // this format combine hosted repositories only.
 func (b *Base) HostedMembers(ctx context.Context, group *core.Repository) ([]*core.Repository, error) {
-	var out []*core.Repository
+	leaves, err := b.HostedLeaves(ctx, group)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*core.Repository, len(leaves))
+	for i, l := range leaves {
+		out[i] = l.Repo
+	}
+	return out, nil
+}
+
+// HostedLeaves is HostedMembers with the memberships each member was
+// reached through, for routing rules.
+func (b *Base) HostedLeaves(ctx context.Context, group *core.Repository) ([]Leaf, error) {
+	var out []Leaf
 	seen := map[string]bool{}
-	var walk func(r *core.Repository, depth int) error
-	walk = func(r *core.Repository, depth int) error {
+	var walk func(r *core.Repository, via []Link, depth int) error
+	walk = func(r *core.Repository, via []Link, depth int) error {
 		if depth > MaxGroupDepth {
 			return fmt.Errorf("group %q nests deeper than %d levels: %w", group.Name, MaxGroupDepth, core.ErrInvalid)
 		}
@@ -201,22 +269,25 @@ func (b *Base) HostedMembers(ctx context.Context, group *core.Repository) ([]*co
 				continue
 			}
 			seen[m.ID] = true
+			path := make([]Link, len(via)+1)
+			copy(path, via)
+			path[len(via)] = Link{Group: r, Member: m}
 			switch m.Type {
 			case core.RepoProxy:
 				return fmt.Errorf("%s group %q: member %q is a proxy; %s groups combine hosted repositories only "+
 					"(a remote's signed metadata cannot be merged); point clients at the proxy directly: %w",
 					b.Format, group.Name, m.Name, b.Format, core.ErrInvalid)
 			case core.RepoGroup:
-				if err := walk(m, depth+1); err != nil {
+				if err := walk(m, path, depth+1); err != nil {
 					return err
 				}
 			default:
-				out = append(out, m)
+				out = append(out, Leaf{Repo: m, Via: path})
 			}
 		}
 		return nil
 	}
-	if err := walk(group, 1); err != nil {
+	if err := walk(group, nil, 1); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -234,6 +305,30 @@ func (b *Base) FindInMembers(ctx context.Context, members []*core.Repository, pa
 		}
 	}
 	return nil, nil, fmt.Errorf("%s: %w", path, core.ErrNotFound)
+}
+
+// FindInLeaves returns the first leaf holding path that the routing rules
+// let serve the package name ("" applies no rule). When the rules exclude
+// every leaf the error is the first *core.RoutingBlock.
+func (b *Base) FindInLeaves(ctx context.Context, leaves []Leaf, path, name string) (*core.Asset, *core.Repository, error) {
+	var allowed []*core.Repository
+	var first *core.RoutingBlock
+	for _, l := range leaves {
+		if name != "" {
+			if bl := l.Block(name); bl != nil {
+				routing.Record(ctx, l.Repo.Format, bl)
+				if first == nil {
+					first = bl
+				}
+				continue
+			}
+		}
+		allowed = append(allowed, l.Repo)
+	}
+	if len(allowed) == 0 && first != nil {
+		return nil, nil, first
+	}
+	return b.FindInMembers(ctx, allowed, path)
 }
 
 // AllAssets lists every asset of repoID under prefix.

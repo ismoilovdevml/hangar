@@ -19,7 +19,9 @@ const attrSignedFor = "signature_for" // Release.gpg: sha256 of the Release it s
 
 // proxyDists serves dists/ of a proxy repository. The remote's InRelease,
 // Release and Release.gpg are passed through byte for byte; index files are
-// checked against the hashes of the cached Release.
+// checked against the hashes of the cached Release. Routing rules do not
+// filter them (that would break the remote's signature): a blocked package
+// stays listed but its pool file answers 404 (proxyPool).
 func (h *handler) proxyDists(w http.ResponseWriter, r *http.Request, repo *core.Repository, p, dist, rest string) {
 	ctx, tally := repokit.Tally(r.Context())
 	defer tally.Record(Name, r.Method)
@@ -118,12 +120,12 @@ func (h *handler) expectedHash(ctx context.Context, repo *core.Repository, dist,
 
 // proxyPool returns a package file of a proxy repository, cached forever.
 func (h *handler) proxyPool(ctx context.Context, repo *core.Repository, p string) (*core.Asset, error) {
-	f := repokit.Fetch{Path: p, Kind: core.AssetContent, Describe: describeDeb}
+	f := repokit.Fetch{Path: p, Package: poolPackage(p), Kind: core.AssetContent, Describe: describeDeb}
 	if strings.HasSuffix(p, ".deb") || strings.HasSuffix(p, ".udeb") {
 		f.ContentType = ctDeb
 	}
 	a, err := h.ProxyGet(ctx, repo, f)
-	if err != nil && errors.Is(err, core.ErrNotFound) {
+	if err != nil && errors.Is(err, core.ErrNotFound) && !errors.Is(err, core.ErrRoutingBlocked) {
 		return nil, fmt.Errorf("%s not found on the remote: %w", p, core.ErrNotFound)
 	}
 	return a, err

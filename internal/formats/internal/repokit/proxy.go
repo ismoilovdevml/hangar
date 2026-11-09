@@ -11,6 +11,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // Attributes recorded on cached remote files.
@@ -30,6 +31,14 @@ type Fetch struct {
 	// Path is the repository path; the remote path is the same, relative to
 	// the remote URL.
 	Path string
+	// Package is the routing identity of a package file (core.RoutingName):
+	// the proxy's routing rules are checked for it before the cache and the
+	// remote. Empty marks repository metadata (Release, repomd.xml and the
+	// indexes they list): those are signed by the remote and passed through
+	// unchanged, so routing rules cannot filter them without breaking the
+	// signature; a blocked package stays listed there but cannot be
+	// downloaded.
+	Package string
 	// TTL is how long a cached copy is served before it is revalidated; zero
 	// caches it forever (content and content-addressed metadata).
 	TTL time.Duration
@@ -64,6 +73,11 @@ func RemotePath(p string) string {
 func (b *Base) ProxyGet(ctx context.Context, repo *core.Repository, f Fetch) (*core.Asset, error) {
 	if repo.Config.Proxy == nil {
 		return nil, fmt.Errorf("proxy repository %q has no proxy config: %w", repo.Name, core.ErrInvalid)
+	}
+	if f.Package != "" {
+		if err := routing.Check(ctx, repo, f.Package); err != nil {
+			return nil, err
+		}
 	}
 	cached, err := b.Deps.Components.GetAsset(ctx, repo.ID, f.Path)
 	switch {
@@ -128,7 +142,7 @@ func (b *Base) fetch(ctx context.Context, repo *core.Repository, f Fetch, cached
 	if err != nil {
 		return fillResult{}, err
 	}
-	req := core.UpstreamRequest{Method: http.MethodGet, Path: RemotePath(f.Path)}
+	req := core.UpstreamRequest{Method: http.MethodGet, Path: RemotePath(f.Path), Package: f.Package, Index: f.Package == ""}
 	if cached != nil {
 		req.Conditional.ETag = AttrString(cached.Attributes, AttrUpstreamETag)
 		req.Conditional.LastModified, _ = AttrTime(cached, AttrUpstreamLastModified)
