@@ -16,6 +16,9 @@ export function MostDownloaded() {
     staleTime: 5 * 60_000,
   });
   const items = q.data?.items.filter((h) => h.downloads > 0) ?? [];
+  // The same package can sit in several repositories (a proxy and a group, say): name the repository then.
+  const seen = new Map<string, number>();
+  for (const h of items) seen.set(h.name ?? h.coordinates, (seen.get(h.name ?? h.coordinates) ?? 0) + 1);
 
   return (
     <section className="ov-card top glass" aria-labelledby="top-title">
@@ -43,6 +46,12 @@ export function MostDownloaded() {
                 title={`${h.coordinates} in ${h.repository}`}
               >
                 <span className="top__name">{h.name ?? h.coordinates}</span>
+                {(seen.get(h.name ?? h.coordinates) ?? 0) > 1 && (
+                  <span className="top__repo">
+                    <span className="visually-hidden"> in </span>
+                    {h.repository}
+                  </span>
+                )}
                 <span className="top__count">
                   {formatCompact(h.downloads)}
                   <span className="visually-hidden"> downloads</span>

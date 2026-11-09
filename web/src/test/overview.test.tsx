@@ -94,6 +94,32 @@ describe('overview', () => {
     expect(screen.queryByRole('table', { name: 'Recently published packages' })).not.toBeInTheDocument();
   });
 
+  it('names the repository when the same package is popular in several', async () => {
+    const hit = (component_id: string, name: string, repository: string, downloads: number) => ({
+      component_id,
+      name,
+      coordinates: name,
+      repository,
+      format: 'helm',
+      version: '1.0.0',
+      downloads,
+    });
+    server.use(
+      http.get('*/api/v1/search', () =>
+        HttpResponse.json({
+          items: [hit('c1', 'qachart', 'helm-a', 9), hit('c2', 'qachart', 'helm-b', 7), hit('c3', 'alpine', 'docker-hub', 5)],
+          total: 3,
+          next_cursor: null,
+        }),
+      ),
+    );
+    renderApp('/');
+    const top = await screen.findByRole('region', { name: 'Most downloaded' });
+    const chips = await within(top).findAllByRole('link');
+    expect(chips.map((a) => a.textContent)).toEqual([' in helm-a9 downloads', ' in helm-b7 downloads', '5 downloads'].map((t, i) => `${i < 2 ? 'qachart' : 'alpine'}${t}`));
+    expect(chips[0]).toHaveAttribute('title', 'qachart in helm-a');
+  });
+
   it('searches from the box and offers qualifier examples', async () => {
     const user = userEvent.setup();
     const { history } = renderApp('/');
