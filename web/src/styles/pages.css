@@ -161,6 +161,7 @@
 }
 .page-header__text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .page-header__eyebrow { font-size: 14px; color: var(--ink-2); }
+.page-header__eyebrow a { display: inline-flex; align-items: center; min-height: 24px; }
 .page-header__title { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink-strong); line-height: 1.25; }
 .page-header__desc { font-size: 15px; color: var(--ink-2); }
 .page-header__actions { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -409,7 +410,7 @@
 .filter-search__input { flex: 1; min-width: 0; min-height: 40px; border: 0; background: transparent; font-size: 14px; color: var(--ink); }
 .filter-search__input:focus, .filter-search__input:focus-visible { outline: none; box-shadow: none; }
 .repo-name { display: flex; flex-direction: column; gap: 2px; min-width: 180px; }
-.repo-name__link { font-weight: 700; color: var(--ink); }
+.repo-name__link { display: inline-flex; align-items: center; min-height: 24px; font-weight: 700; color: var(--ink); }
 .repo-name__link:hover { color: var(--lake-ink); }
 .repo-name__sub { font-size: 12px; color: var(--ink-3); }
 .repo-size { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 2px; }
@@ -527,6 +528,9 @@
   .repo-create__summary { position: static; }
 }
 @media (max-width: 640px) {
+  /* Tap targets of at least 24 px on touch screens. */
+  .checkbox input, .choice input[type='radio'] { width: 24px; height: 24px; }
+  .task-name__link, .breadcrumb__link, .hub-foot__status, .link-button, .store-card__name a, .run-link, .check__action { display: inline-flex; align-items: center; min-height: 24px; }
   .form-grid, .form-grid--3 { grid-template-columns: minmax(0, 1fr); }
   .repo-toolbar__filters { width: 100%; }
   .filter-select { flex: 1 1 auto; }
