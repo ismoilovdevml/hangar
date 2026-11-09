@@ -506,6 +506,20 @@ var formatRequests = map[string][]formatRequest{
 		{Method: "PUT", Path: "/repository/R/web-1.0.0.tgz.prov", Body: "x", Write: true},
 		{Method: "DELETE", Path: "/repository/R/api/charts/web/1.0.0", Write: true},
 	},
+	"go": {
+		{Method: "GET", Path: "/repository/R/example.com/m/@v/list"},
+		{Method: "HEAD", Path: "/repository/R/example.com/m/@v/list"},
+		{Method: "GET", Path: "/repository/R/example.com/m/@latest"},
+		{Method: "GET", Path: "/repository/R/example.com/m/@v/v1.0.0.info"},
+		{Method: "GET", Path: "/repository/R/example.com/m/@v/v1.0.0.mod"},
+		{Method: "GET", Path: "/repository/R/example.com/m/@v/v1.0.0.zip"},
+		{Method: "GET", Path: "/repository/R/sumdb/sum.golang.org/supported"},
+		{Method: "HEAD", Path: "/repository/R/sumdb/sum.golang.org/supported"},
+		{Method: "GET", Path: "/repository/R/sumdb/sum.golang.org/lookup/example.com/m@v1.0.0"},
+		{Method: "PUT", Path: "/repository/R/example.com/m/@v/v1.0.0.zip", Body: "x", Write: true},
+		{Method: "PUT", Path: "/repository/R/example.com/m/@v/v1.0.0.mod", Body: "module example.com/m\n", Write: true},
+		{Method: "DELETE", Path: "/repository/R/example.com/m/@v/v1.0.0", Write: true},
+	},
 	"nuget": {
 		// The service index only lists this repository's endpoint URLs;
 		// clients read it before they are challenged for credentials.
