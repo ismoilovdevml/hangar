@@ -117,7 +117,7 @@ type Provider struct {
 	// endSession is the end_session_endpoint of the discovery document ("" if none).
 	endSession string
 	lastErr    error
-	lastTry  time.Time
+	lastTry    time.Time
 }
 
 // DeriveStateKey derives the state cookie key from the server secret key
