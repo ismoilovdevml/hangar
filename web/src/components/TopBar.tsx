@@ -1,24 +1,32 @@
 import { Link, useMatches, useRouterState } from '@tanstack/react-router';
-import { useSession, useSystemStatus } from '../api/hooks';
-import { instanceName } from '../lib/format';
+import { useOverview, useSession, useSystemStatus, useUpstreamHealth } from '../api/hooks';
+import { instanceName, isRange } from '../lib/format';
+import { overallStatus } from '../lib/overview';
 import { AccountMenu } from './AccountMenu';
 import { isMac, useCommandPalette } from './commandPaletteContext';
 import { Disclosure } from './Disclosure';
 import { IconBell, IconSearch } from './icons';
 import { TokenWarnings } from '../pages/access/AccountPage';
 
-const STATUS_TONE = { ok: 'ok', degraded: 'warn', down: 'bad' } as const;
-
-/** The system state in a few words, linking to the status page; nothing while it loads. */
+/**
+ * The Overview's state in a few words, linking to the status page; nothing
+ * while it loads. It weighs the same signals as the Overview's cards (the
+ * queries are shared), so it is never green next to a red alert.
+ */
 function StatusPill() {
+  const range = useRouterState({ select: (s) => (s.location.search as { range?: unknown }).range });
+  const r = isRange(range) ? range : 'today';
   const status = useSystemStatus();
+  const overview = useOverview(r);
+  const upstreams = useUpstreamHealth(r);
   const sys = status.data;
   if (!sys && !status.isError) return null;
-  const tone = sys ? STATUS_TONE[sys.state] : 'neutral';
+  const state = sys ? overallStatus({ system: sys, upstreams: upstreams.data?.items, metrics: overview.data }) : null;
+  const tone = state?.tone ?? 'neutral';
   return (
     <Link to="/system/status" className={`status-pill glass status-pill--${tone}`}>
       <span className={`status__dot dot-${tone}`} aria-hidden="true" />
-      <span className="status-pill__text">{sys ? sys.message : 'Status unavailable'}</span>
+      <span className="status-pill__text">{state ? state.text : 'Status unavailable'}</span>
     </Link>
   );
 }

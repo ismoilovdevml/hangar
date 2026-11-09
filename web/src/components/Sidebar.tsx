@@ -79,7 +79,8 @@ export function Sidebar() {
               <>
                 <span className="system-card__state">
                   <span className={`status__dot dot-${STATUS_TONE[sys.state]} status__dot--halo`} aria-hidden="true" />
-                  {sys.message}
+                  {/* This card speaks for the nodes only; the Overview weighs upstreams and errors as well. */}
+                  {sys.state === 'ok' ? 'All nodes healthy' : sys.message}
                 </span>
                 <span className="system-card__meta">
                   {sys.nodes_up} of {sys.nodes_total} nodes · {versionText(sys.version)}
