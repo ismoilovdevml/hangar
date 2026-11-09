@@ -158,7 +158,7 @@ func TestRoutingProxyBlockNeverReachesRemote(t *testing.T) {
 
 // TestNpmClientRouting installs a "*" range of an internal package through
 // a group that lists the proxy first (so its "latest" tag wins): unprotected
-// npm picks the public 99.0.0, with a rule the hosted 1.0.0.
+// npm and pnpm pick the public 99.0.0, with a rule the hosted 1.0.0.
 func TestNpmClientRouting(t *testing.T) {
 	npmBin, err := exec.LookPath("npm")
 	if err != nil {
@@ -181,8 +181,25 @@ func TestNpmClientRouting(t *testing.T) {
 		c.must(t, dir, npmBin, "install", "--registry", group, "--cache", t.TempDir(), "--prefer-online")
 		return filepath.Join(dir, "node_modules/@trk/utils/package.json")
 	}
+	// Recent pnpm releases skip versions younger than minimum-release-age;
+	// both versions here are seconds old, so the age check is turned off to
+	// show what the registry itself resolves to.
+	pnpmBin, pnpmErr := exec.LookPath("pnpm")
+	pnpmInstall := func() string {
+		dir := writeProject(t, map[string]string{"@trk/utils": "*"})
+		c.must(t, dir, pnpmBin, "install", "--registry", group, "--store-dir", t.TempDir(), "--prefer-offline=false", "--config.minimum-release-age=0")
+		return filepath.Join(dir, "node_modules/@trk/utils/package.json")
+	}
 	fileContains(t, install(), `"version": "99.0.0"`)
+	if pnpmErr == nil {
+		fileContains(t, pnpmInstall(), `"version": "99.0.0"`)
+	}
 
 	ts.setRouting(t, "npm-group", exclusiveTrk)
 	fileContains(t, install(), `"version": "1.0.0"`)
+	if pnpmErr == nil {
+		fileContains(t, pnpmInstall(), `"version": "1.0.0"`)
+	} else {
+		t.Log("pnpm not installed: pnpm part skipped")
+	}
 }
