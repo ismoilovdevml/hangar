@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // Search limits (nuget.org uses the same).
@@ -109,10 +110,14 @@ func (h *handler) searchRepo(ctx context.Context, repo *core.Repository, q searc
 			hits  []hit
 			index = map[string]int{}
 		)
-		err := h.eachMember(ctx, repo, depth, func(m *core.Repository) error {
+		err := h.eachMember(ctx, repo, depth, "", func(m *core.Repository) error {
 			n, hs, err := h.searchRepo(ctx, m, sub, depth+1)
 			total += n
 			for _, x := range hs {
+				if !routing.Allows(ctx, repo, m, x.lid) {
+					total--
+					continue
+				}
 				if i, ok := index[x.lid]; ok {
 					hits[i].doc = mergeHits(hits[i].doc, x.doc)
 					total--
@@ -393,16 +398,24 @@ func (h *handler) searchProxy(ctx context.Context, repo *core.Repository, q sear
 		return 0, nil, err
 	}
 	cachedOnly := func() (int, []hit, error) {
-		hits, err := h.searchHosted(ctx, repo, q)
+		all, err := h.searchHosted(ctx, repo, q)
 		if err != nil {
 			return 0, nil, err
+		}
+		hits := all[:0]
+		for _, x := range all {
+			if routing.Check(ctx, repo, x.lid) == nil {
+				hits = append(hits, x)
+			}
 		}
 		total := len(hits)
 		end := min(q.skip+q.take, len(hits))
 		return total, hits[min(q.skip, end):end], nil
 	}
-	if idx.Search == "" {
-		// No search service upstream: search the packages this proxy has cached.
+	if idx.Search == "" || (q.q != "" && repo.RoutingBlock(q.q) != nil) {
+		// No search service upstream, or the query is a name the routing
+		// rules keep from the remote (it is not sent there): search the
+		// packages this proxy has cached.
 		return cachedOnly()
 	}
 	params := url.Values{}
@@ -422,7 +435,7 @@ func (h *handler) searchProxy(ctx context.Context, repo *core.Repository, q sear
 	if strings.Contains(idx.Search, "?") {
 		sep = "&"
 	}
-	b, err := h.fetchDoc(ctx, repo, idx.Search+sep+params.Encode(), maxSearchResults)
+	b, err := h.fetchDoc(ctx, repo, idx.Search+sep+params.Encode(), "", maxSearchResults)
 	if errors.Is(err, core.ErrUpstream) {
 		// Search host down, rate limited or the repository is offline:
 		// answer from what this proxy has cached rather than fail.
@@ -440,12 +453,17 @@ func (h *handler) searchProxy(ctx context.Context, repo *core.Repository, q sear
 		return 0, nil, fmt.Errorf("upstream search: %w: %w", err, core.ErrUpstream)
 	}
 	hits := make([]hit, 0, len(res.Data))
+	total := res.TotalHits
 	for _, d := range res.Data {
 		id, _ := d["id"].(string)
 		if id == "" {
 			continue
 		}
+		if routing.Check(ctx, repo, id) != nil {
+			total--
+			continue
+		}
 		hits = append(hits, hit{lid: lowerID(id), doc: d})
 	}
-	return res.TotalHits, hits, nil
+	return total, hits, nil
 }

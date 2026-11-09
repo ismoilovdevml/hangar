@@ -19,6 +19,7 @@ package routing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -124,6 +125,28 @@ func Record(ctx context.Context, format string, b *core.RoutingBlock) {
 		_ = s.audit.Record(context.WithoutCancel(ctx), core.AuditEvent{Action: AuditAction, Target: "repo:" + b.Repository,
 			Outcome: core.OutcomeDenied, Details: details})
 	}
+}
+
+// Annotate adds the routing exclusions recorded for this request to a
+// not-found err, so a 404 body says why a member's copy was not considered
+// ("not found; blocked by routing rule ..."). Other errors, errors that
+// already are a *core.RoutingBlock and requests without exclusions are
+// returned unchanged. Formats call it in their error writers.
+func Annotate(ctx context.Context, err error) error {
+	if err == nil || !errors.Is(err, core.ErrNotFound) || errors.Is(err, core.ErrRoutingBlocked) {
+		return err
+	}
+	s := scopeFrom(ctx)
+	if s == nil {
+		return err
+	}
+	s.mu.Lock()
+	notes := s.header.Values(Header)
+	s.mu.Unlock()
+	if len(notes) == 0 {
+		return err
+	}
+	return fmt.Errorf("%w; %s", err, strings.Join(notes, "; "))
 }
 
 // rateLimiter remembers when an exclusion was last audited, per audit log.

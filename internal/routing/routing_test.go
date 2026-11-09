@@ -3,6 +3,7 @@ package routing_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -197,4 +198,27 @@ func names(rs []*core.Repository) []string {
 		out = append(out, r.Name)
 	}
 	return out
+}
+
+func TestAnnotate(t *testing.T) {
+	env, g := fixture(t)
+	ctx := routing.WithScope(context.Background(), env.Audit, env.Logger, http.Header{})
+	nf := fmt.Errorf("x: %w", core.ErrNotFound)
+	if got := routing.Annotate(ctx, nf); got != nf {
+		t.Fatalf("no exclusions: %v", got)
+	}
+	if _, err := routing.Members(ctx, env.Repos, g, "Edcom.A"); err != nil {
+		t.Fatal(err)
+	}
+	got := routing.Annotate(ctx, nf)
+	if !errors.Is(got, core.ErrNotFound) || !strings.Contains(got.Error(), `x: not found; blocked by routing rule "Edcom.*"`) {
+		t.Fatalf("annotated = %v", got)
+	}
+	other := errors.New("boom")
+	if routing.Annotate(ctx, other) != other {
+		t.Fatal("non-404 changed")
+	}
+	if routing.Annotate(context.Background(), nf) != nf {
+		t.Fatal("no scope changed")
+	}
 }

@@ -41,6 +41,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // Name is the format identifier stored in repositories.format.
@@ -272,6 +273,7 @@ func (h *handler) authorize(w http.ResponseWriter, r *http.Request, action core.
 // fail answers with the status for err; 401 carries a Basic challenge, which
 // NuGet clients answer with the credentials configured for the source.
 func (h *handler) fail(w http.ResponseWriter, r *http.Request, err error) {
+	err = routing.Annotate(r.Context(), err)
 	code := core.HTTPStatus(err)
 	msg := err.Error()
 	switch {
