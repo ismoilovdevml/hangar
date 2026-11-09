@@ -216,21 +216,55 @@ func itoa(n int) string {
 	return string(b)
 }
 
+func TestCanonicalTarball(t *testing.T) {
+	scoped := pkgName{Full: "@acme/ui", Scope: "@acme", Base: "ui"}
+	plain := pkgName{Full: "lodash", Base: "lodash"}
+	for _, tt := range []struct {
+		n             pkgName
+		in, want, alt string
+	}{
+		{scoped, "@acme/ui/-/@acme/ui-1.0.0.tgz", "@acme/ui/-/ui-1.0.0.tgz", ""},
+		{scoped, "@acme/ui/-/ui-1.0.0.tgz", "@acme/ui/-/ui-1.0.0.tgz", "@acme/ui/-/@acme/ui-1.0.0.tgz"},
+		{scoped, "@acme/ui/-/@acme/ui-2.0.0-rc.1.tgz", "@acme/ui/-/ui-2.0.0-rc.1.tgz", ""},
+		{scoped, "@acme/ui/-/@acme/other-1.0.0.tgz", "@acme/ui/-/@acme/other-1.0.0.tgz", ""},
+		{scoped, "@acme/ui/-/meta/1.0.0.json", "@acme/ui/-/meta/1.0.0.json", ""},
+		{plain, "lodash/-/lodash-4.17.21.tgz", "lodash/-/lodash-4.17.21.tgz", ""},
+	} {
+		if got := canonicalTarball(tt.n, tt.in); got != tt.want {
+			t.Errorf("canonicalTarball(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+		if got := scopedFileTarball(tt.n, tt.in); got != tt.alt {
+			t.Errorf("scopedFileTarball(%q) = %q, want %q", tt.in, got, tt.alt)
+		}
+	}
+}
+
 func TestRelativizeTarballs(t *testing.T) {
 	n := pkgName{Full: "@types/node", Scope: "@types", Base: "node"}
 	p := newPackument(n.Full)
 	p.Versions["1.0.0"] = manifest{"dist": []byte(`{"tarball":"https://registry.npmjs.org/@types/node/-/node-1.0.0.tgz"}`)}
 	p.Versions["2.0.0"] = manifest{"dist": []byte(`{"tarball":"https://cdn.example.com/files/node-2.0.0.tgz?sig=1"}`)}
 	p.Versions["3.0.0"] = manifest{"dist": []byte(`{"tarball":"https://registry.npmjs.org/@types%2fnode/-/node-3.0.0.tgz"}`)}
+	// Remotes that name scoped tarballs "@s/n/-/@s/n-<v>.tgz".
+	p.Versions["4.0.0"] = manifest{"dist": []byte(`{"tarball":"https://registry.npmjs.org/@types/node/-/@types/node-4.0.0.tgz"}`)}
+	p.Versions["5.0.0"] = manifest{"dist": []byte(`{"tarball":"https://registry.npmjs.org/@types%2fnode/-/@types%2fnode-5.0.0.tgz"}`)}
 	p.relativizeTarballs(n, "https://registry.npmjs.org/")
 	for v, want := range map[string]string{
 		"1.0.0": "@types/node/-/node-1.0.0.tgz",
 		"2.0.0": "@types/node/-/node-2.0.0.tgz",
 		"3.0.0": "@types/node/-/node-3.0.0.tgz",
+		"4.0.0": "@types/node/-/node-4.0.0.tgz",
+		"5.0.0": "@types/node/-/node-5.0.0.tgz",
 	} {
 		if got := p.Versions[v].distStr("tarball"); got != want {
 			t.Errorf("%s tarball = %q, want %q", v, got, want)
 		}
+	}
+	if got := p.origins["@types/node/-/node-4.0.0.tgz"]; got != "https://registry.npmjs.org/@types/node/-/@types/node-4.0.0.tgz" {
+		t.Errorf("origin of a renamed tarball = %q", got)
+	}
+	if _, ok := p.origins["@types/node/-/node-1.0.0.tgz"]; ok {
+		t.Error("a tarball under the remote with the conventional name needs no origin")
 	}
 	out, err := p.render("https://hangar.test/repository/npm-proxy", true)
 	if err != nil {
