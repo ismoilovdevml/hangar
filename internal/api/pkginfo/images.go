@@ -281,14 +281,18 @@ func (x *extraction) member(name string) (string, bool) {
 	return "", false
 }
 
-// listMembers lists the files of the package archive (npm tarballs; the
-// .nupkg is listed while it is read).
+// listMembers lists the files of the package archive (npm tarballs and
+// .crate files; the .nupkg is listed while it is read).
 func (x *extraction) listMembers(ctx context.Context) {
 	x.membersListed = true
-	if x.repo.Format != "npm" {
+	if x.repo.Format != "npm" && x.repo.Format != "cargo" {
 		return
 	}
-	tgz := x.assetBySuffix(ctx, ".tgz")
+	manifest := "package.json"
+	if x.repo.Format == "cargo" {
+		manifest = "Cargo.toml"
+	}
+	tgz := x.assetBySuffix(ctx, tarballSuffix(x.repo.Format))
 	if tgz == nil {
 		return
 	}
@@ -300,7 +304,7 @@ func (x *extraction) listMembers(ctx context.Context) {
 	x.members = map[string]struct{}{}
 	x.scanTarGz(ctx, rc, func(name string, _ io.Reader) bool {
 		x.members[name] = struct{}{}
-		if dir, file, nested := strings.Cut(name, "/"); nested && file == "package.json" && x.archiveRoot == "" {
+		if dir, file, nested := strings.Cut(name, "/"); nested && file == manifest && x.archiveRoot == "" {
 			x.archiveRoot = dir + "/"
 		}
 		return false

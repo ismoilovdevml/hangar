@@ -12,7 +12,10 @@ import (
 	"errors"
 	"io"
 	"net/textproto"
+	"path"
 	"strings"
+
+	"github.com/BurntSushi/toml"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 )
@@ -501,6 +504,122 @@ func (x *extraction) scanTarGz(ctx context.Context, r io.Reader, visit func(name
 			continue
 		}
 		if visit(strings.TrimPrefix(h.Name, "./"), tr) {
+			return
+		}
+	}
+}
+
+// ---------------------------------------------------------------- Cargo
+
+// cargoManifest is the [package] table of the Cargo.toml inside a .crate
+// (cargo package writes it normalised, with an explicit readme path).
+type cargoManifest struct {
+	Package struct {
+		Description string   `toml:"description"`
+		License     string   `toml:"license"`
+		LicenseFile string   `toml:"license-file"`
+		Homepage    string   `toml:"homepage"`
+		Repository  string   `toml:"repository"`
+		Keywords    []string `toml:"keywords"`
+		// Readme is a path relative to the package root, or false.
+		Readme any `toml:"readme"`
+	} `toml:"package"`
+}
+
+// cargoReadmes are the files cargo picks up as the README when Cargo.toml
+// names none, in its order.
+var cargoReadmes = []string{"README.md", "README.txt", "README"}
+
+func (x *extraction) cargo(ctx context.Context) {
+	crate := x.assetBySuffix(ctx, ".crate")
+	if crate == nil {
+		return
+	}
+	var (
+		manifest []byte
+		root     string
+		top      = map[string][]byte{} // README candidates in the package root
+	)
+	scan := func(visit func(name string, r io.Reader) bool) bool {
+		rc, ok := x.open(ctx, crate)
+		if !ok {
+			return false
+		}
+		defer rc.Close()
+		x.scanTarGz(ctx, rc, visit)
+		return true
+	}
+	if !scan(func(name string, r io.Reader) bool {
+		dir, file, nested := strings.Cut(name, "/")
+		if !nested || dir == "" || strings.Contains(file, "/") {
+			return false
+		}
+		switch {
+		case file == "Cargo.toml" && manifest == nil:
+			manifest, _ = io.ReadAll(io.LimitReader(r, maxMember))
+			root = dir + "/"
+		case isReadme(file) && len(top) < 8:
+			top[dir+"/"+file], _ = io.ReadAll(io.LimitReader(r, MaxReadme+1))
+		}
+		return false
+	}) || manifest == nil {
+		return
+	}
+	var m cargoManifest
+	if _, err := toml.Decode(string(manifest), &m); err != nil {
+		x.s.log.WarnContext(ctx, "extract package info: Cargo.toml", "component", x.c.ID, "error", err)
+		return
+	}
+	p := m.Package
+	x.setDescription(p.Description)
+	x.addLicense(p.License)
+	if p.License == "" && p.LicenseFile != "" {
+		x.addLicense("see " + p.LicenseFile)
+	}
+	x.setHomepage(p.Homepage)
+	x.setSource(p.Repository, "", "")
+	if x.info.Homepage == "" {
+		x.setHomepage(p.Repository)
+	}
+	x.addKeywords(p.Keywords...)
+	x.archiveRoot = root
+
+	var want []string
+	explicit := false
+	switch v := p.Readme.(type) {
+	case bool:
+		if !v {
+			return
+		}
+		want = cargoReadmes
+	case string:
+		rel := path.Clean("/" + v)[1:]
+		if rel == "" || strings.HasPrefix(rel, "../") {
+			return
+		}
+		want, explicit = []string{rel}, true
+	default:
+		want = cargoReadmes
+	}
+	for _, rel := range want {
+		full := root + rel
+		body, ok := top[full]
+		if !ok && explicit {
+			scan(func(name string, r io.Reader) bool {
+				if name != full {
+					return false
+				}
+				body, _ = io.ReadAll(io.LimitReader(r, MaxReadme+1))
+				ok = true
+				return true
+			})
+		}
+		if ok {
+			x.setReadme(string(body), readmeFormat(rel), rel+" in the .crate")
+			x.readmeDir = root
+			if d := path.Dir(rel); d != "." {
+				x.readmeDir = root + d + "/"
+			}
 			return
 		}
 	}

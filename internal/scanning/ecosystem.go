@@ -9,10 +9,11 @@ var ecosystems = map[string]string{
 	"pypi":  "PyPI",
 	"nuget": "NuGet",
 	"go":    "Go",
+	"cargo": "crates.io",
 }
 
 // SupportedFormats are the formats whose components are scanned.
-func SupportedFormats() []string { return []string{"go", "maven", "npm", "nuget", "pypi"} }
+func SupportedFormats() []string { return []string{"cargo", "go", "maven", "npm", "nuget", "pypi"} }
 
 // Ecosystem returns the OSV ecosystem of a format.
 func Ecosystem(format string) (string, bool) {
@@ -30,7 +31,8 @@ func UnsupportedReason(format string) string {
 
 // PackageName renders a component's package name the way its ecosystem's
 // advisories name it: npm "@scope/name", Maven "groupId:artifactId", NuGet
-// the original-case id when known, Go the module path.
+// the original-case id when known, Go the module path, PyPI and crates.io
+// the published spelling.
 func PackageName(format, namespace, name string, attrs map[string]any) string {
 	switch format {
 	case "npm":
@@ -52,7 +54,7 @@ func PackageName(format, namespace, name string, attrs map[string]any) string {
 		if namespace != "" {
 			return strings.TrimSuffix(namespace, "/") + "/" + name
 		}
-	case "pypi":
+	case "pypi", "cargo":
 		if d, ok := attrs["display_name"].(string); ok && d != "" {
 			return d
 		}

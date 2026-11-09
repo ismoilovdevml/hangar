@@ -37,8 +37,9 @@ describe('new repository form', () => {
   it('marks formats this server does not speak', async () => {
     renderApp('/repositories/new');
     const formats = await screen.findByRole('region', { name: /What will it store/ });
-    await waitFor(() => expect(within(formats).getByRole('radio', { name: /Cargo/ })).toBeDisabled());
+    await waitFor(() => expect(within(formats).getByRole('radio', { name: /APT/ })).toBeDisabled());
     expect(within(formats).getByRole('radio', { name: /npm/ })).toBeEnabled();
+    expect(within(formats).getByRole('radio', { name: /Cargo/ })).toBeEnabled();
   });
 
   it('validates the name, the remote URL and the cache durations of a proxy', async () => {

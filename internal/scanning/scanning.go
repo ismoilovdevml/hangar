@@ -1,5 +1,5 @@
 // Package scanning finds known vulnerabilities in package components (npm,
-// Maven, PyPI, NuGet and Go) by asking an OSV advisory database
+// Maven, PyPI, NuGet, Go and crates.io) by asking an OSV advisory database
 // (api.osv.dev or a mirror) about every component version, and keeps the
 // findings, the scan status of each component, waivers and the
 // quarantine_critical policy in PostgreSQL.

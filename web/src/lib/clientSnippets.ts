@@ -144,11 +144,24 @@ export function clientSetup(t: ClientTarget): ClientSetup {
           : [],
       };
     }
-    case 'cargo':
+    case 'cargo': {
+      // Proxies and groups stand in for crates.io; a hosted repository is named per dependency.
+      const replace = t.type !== 'hosted';
+      const env = `CARGO_REGISTRIES_${repo.toUpperCase().replace(/-/g, '_')}_TOKEN`;
       return {
-        setup: [c(`# ~/.cargo/config.toml: [registries.${repo}]`), l(`index = "sparse+${url}"`)],
-        publish: [],
+        setup: [
+          c('# ~/.cargo/config.toml'),
+          l('[registry]'),
+          l('global-credential-providers = ["cargo:token"]'),
+          l(`[registries.${repo}]`),
+          l(`index = "sparse+${url}index/"`),
+          ...(replace ? [l('[source.crates-io]'), l(`replace-with = "${repo}"`)] : []),
+          c(`# Then store the token (or export ${env}=${tok})`),
+          l(`echo '${tok}' | cargo login --registry ${repo}`),
+        ],
+        publish: t.publishes ? [l(`cargo publish --registry ${repo}`)] : [],
       };
+    }
     case 'apt':
       return { setup: [l(`echo "deb ${url} stable main" | sudo tee /etc/apt/sources.list.d/${repo}.list`)], publish: [] };
   }
@@ -180,7 +193,7 @@ export interface InstallCommand {
  * of the format (npm, pnpm and Yarn; dotnet and PackageReference; Maven and
  * Gradle; pip and uv; docker and Podman; curl). Empty without a repository URL.
  */
-export function installCommands(t: Pick<ClientTarget, 'format' | 'url'>, p: PackageVersion): InstallCommand[] {
+export function installCommands(t: Pick<ClientTarget, 'format' | 'url'> & { repository?: string }, p: PackageVersion): InstallCommand[] {
   if (!t.url) return [];
   const url = slash(t.url);
   const v = p.version;
@@ -237,6 +250,11 @@ export function installCommands(t: Pick<ClientTarget, 'format' | 'url'>, p: Pack
         { id: 'podman', label: 'Podman', lines: [l(`podman pull ${image}`)] },
       ];
     }
+    case 'cargo':
+      return [
+        { id: 'cargo', label: 'cargo add', lines: [l(`cargo add ${p.name}@${v} --registry ${t.repository ?? '<registry>'}`)] },
+        { id: 'toml', label: 'Cargo.toml', lines: [c('# [dependencies]'), l(`${p.name} = { version = "${v}", registry = "${t.repository ?? '<registry>'}" }`)] },
+      ];
     case 'raw':
       return [{ id: 'curl', label: 'curl', lines: [l(`curl -u <username>:${TOKEN} -fLO ${url}${full.replace(/^\/+/, '')}`)] }];
     case 'helm': {

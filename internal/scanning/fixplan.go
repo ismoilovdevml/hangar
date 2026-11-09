@@ -566,6 +566,8 @@ func UpgradeCommand(format, pkg, version string) string {
 		return "npm install " + shellWord(pkg+"@"+version)
 	case "pypi":
 		return "pip install " + shellWord(pkg+"=="+version)
+	case "cargo":
+		return "cargo update -p " + shellWord(pkg) + " --precise " + shellWord(version)
 	case "maven":
 		return "mvn versions:use-dep-version -Dincludes=" + shellWord(pkg) + " -DdepVersion=" + shellWord(version) + " -DforceVersion=true"
 	case "go":

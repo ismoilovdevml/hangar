@@ -544,6 +544,22 @@ var formatRequests = map[string][]formatRequest{
 		{Method: "PUT", Path: "/repository/R/api/v2/symbolpackage", Body: "x", Write: true},
 		{Method: "PUT", Path: "/repository/R/api/v2/symbolpackage/", Body: "x", Write: true},
 	},
+	"cargo": {
+		// config.json challenges anonymous clients of private repositories.
+		{Method: "GET", Path: "/repository/R/index/config.json"},
+		{Method: "HEAD", Path: "/repository/R/index/config.json"},
+		{Method: "GET", Path: "/repository/R/index/se/rd/serde"},
+		{Method: "HEAD", Path: "/repository/R/index/se/rd/serde"},
+		{Method: "GET", Path: "/repository/R/api/v1/crates?q=serde"},
+		{Method: "GET", Path: "/repository/R/api/v1/crates/serde/1.0.0/download"},
+		{Method: "HEAD", Path: "/repository/R/api/v1/crates/serde/1.0.0/download"},
+		{Method: "GET", Path: "/repository/R/api/v1/crates/serde/owners"},
+		{Method: "PUT", Path: "/repository/R/api/v1/crates/new", Body: "x", Write: true},
+		{Method: "DELETE", Path: "/repository/R/api/v1/crates/serde/1.0.0/yank", Write: true},
+		{Method: "PUT", Path: "/repository/R/api/v1/crates/serde/1.0.0/unyank", Write: true},
+		{Method: "PUT", Path: "/repository/R/api/v1/crates/serde/owners", Body: `{"users":["mallory"]}`, Write: true},
+		{Method: "DELETE", Path: "/repository/R/api/v1/crates/serde/owners", Body: `{"users":["alice"]}`, Write: true},
+	},
 }
 
 // sweptMethods are the methods package clients use; chi's catch-all

@@ -16,6 +16,16 @@
   Proxies pass the `sum.golang.org` checksum database through. Browse tree,
   README and licence from the module zip, OSV scanning. Guide:
   `docs/guides/go.md`.
+- **Cargo format**: Rust crate registries over the sparse index protocol.
+  Hosted repositories take `cargo publish` (crate name and SemVer rules,
+  tarball checks, versions immutable), `cargo yank` / `--undo`,
+  `cargo search` and `cargo owner --list`; index files carry ETag and
+  Last-Modified. Proxies cache crates.io index files for `metadata_ttl` and
+  `.crate` files forever (verified against the index checksum); groups merge
+  members per version and send publishes to the write member. Private
+  repositories announce `auth-required`, cargo's raw token and `Bearer` are
+  accepted. README, licence and repository come from the `.crate`; crates are
+  scanned against OSV `crates.io`. Guide: `docs/guides/cargo.md`.
 - **Automation-friendly API**: the OpenAPI document is public at
   `/api/v1/openapi.yaml` and `/api/v1/openapi.json`; `/api/v1/automation-guide.md`
   and `/llms.txt` give scripts and automated clients a short guide with the

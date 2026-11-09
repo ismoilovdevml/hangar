@@ -26,6 +26,7 @@ func TestStorageDir(t *testing.T) {
 		{"nuget", "", "v3-flatcontainer/"},
 		{"nuget", "newtonsoft.json/13.0.3/", "v3-flatcontainer/newtonsoft.json/13.0.3/"},
 		{"pypi", "acme-utils/", "packages/acme-utils/"},
+		{"cargo", "serde/1.0.0/", "crates/serde/1.0.0/"},
 		{"docker", "team/app/manifests/", "team/app/manifests/"},
 		{"raw", "releases/", "releases/"},
 	} {
@@ -51,6 +52,8 @@ func TestFolderKind(t *testing.T) {
 		{"nuget", "newtonsoft.json/", c("", "newtonsoft.json", "13.0.3"), nodePackage},
 		{"nuget", "Newtonsoft.Json/13.0.3/", c("", "newtonsoft.json", "13.0.3"), nodeVersion},
 		{"pypi", "acme_ml.utils/", c("", "Acme-ML-Utils", "0.9"), nodePackage},
+		{"cargo", "serde_json/", c("", "serde_json", "1.0.1"), nodePackage},
+		{"cargo", "serde_json/1.0.1/", c("", "serde_json", "1.0.1"), nodeVersion},
 		{"docker", "team/app/", c("team", "app", "1.0"), nodePackage},
 		{"docker", "team/", c("team", "app", "1.0"), nodeFolder},
 		{"raw", "releases/", c("releases", "app", ""), nodeFolder},

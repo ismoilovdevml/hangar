@@ -53,7 +53,7 @@ export const DEFAULT_REMOTE: Record<Format, string> = {
 };
 
 /** Formats whose clients can publish through a group (it forwards writes to one hosted member). */
-export const GROUP_WRITE_FORMATS: Format[] = ['docker', 'npm'];
+export const GROUP_WRITE_FORMATS: Format[] = ['docker', 'npm', 'cargo'];
 
 export const TYPE_META: Record<RepositoryType, { label: string; tone: Tone; explain: string; card: string }> = {
   hosted: {
