@@ -14,7 +14,10 @@ const attrSignedFor = "signature_for" // repomd.xml.asc/.key: sha256 of the repo
 
 // serveProxy answers a proxy repository: repomd.xml (and its signature
 // and key) with the metadata TTL, passed through unchanged; repodata files
-// while they match the cached repomd.xml; packages forever.
+// while they match the cached repomd.xml; packages forever. Routing rules
+// apply to packages only: repomd.xml and the documents it lists are signed
+// by the remote and passed through unchanged, so a blocked package stays
+// listed there but its download answers 404 without reaching the remote.
 func (h *handler) serveProxy(w http.ResponseWriter, r *http.Request, repo *core.Repository, p string) {
 	ctx := r.Context()
 	ttl := repokit.MetadataTTL(repo, DefaultMetadataTTL)
@@ -49,7 +52,7 @@ func (h *handler) serveProxy(w http.ResponseWriter, r *http.Request, repo *core.
 		}
 		a, err = h.ProxyGet(ctx, repo, f)
 	case strings.HasSuffix(p, ".rpm"):
-		a, err = h.ProxyGet(ctx, repo, repokit.Fetch{Path: p, Kind: core.AssetContent, ContentType: ctRPM, Describe: describeRPM})
+		a, err = h.ProxyGet(ctx, repo, repokit.Fetch{Path: p, Package: packageName(p), Kind: core.AssetContent, ContentType: ctRPM, Describe: describeRPM})
 		if err == nil {
 			err = h.CheckQuarantine(ctx, a)
 		}
