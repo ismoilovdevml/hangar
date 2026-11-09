@@ -17,6 +17,7 @@ not imply endorsement. The raw-file and generic package icons are original
 drawings.
 
 APT and RPM repositories use the generic package icon, not a distribution
-mark. In Simple Icons 13.21.0 the Debian mark is listed under CC BY-SA 3.0
-(not CC0), and the Red Hat mark carries no CC0 grant for its use as a
-trademark beyond the path data, so neither is included.
+mark. In Simple Icons 13.21.0 the Debian mark is listed under CC BY-SA 3.0,
+not CC0. The Red Hat path data has no such note, but Red Hat's trademark
+policy restricts use of its logo, and RPM repositories also serve Fedora,
+Rocky Linux and AlmaLinux, so a single vendor's mark would mislabel them.

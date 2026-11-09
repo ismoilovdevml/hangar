@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **APT and RPM repositories** (`apt`, `rpm`): hosted, proxy and group repositories
+  for Debian/Ubuntu and RHEL/Rocky/AlmaLinux/Fedora.
+  - APT: `.deb` uploads (raw `PUT` or multipart), Packages/.gz/.xz per
+    distribution, component and architecture, and a Release with every hash.
+    InRelease and Release.gpg are signed with the repository key.
+  - RPM: `.rpm` uploads with the header parsed in Go, regenerated createrepo
+    repodata (sha256, `rpm:header-range`), `repomd.xml.asc` for
+    `repo_gpgcheck=1`, and an optional per-directory layout (`repodata_depth`).
+  - Proxies pass the remote's signed metadata through unchanged. Index files
+    are checked against the cached Release or repomd.xml; by-hash files,
+    repodata files and packages are cached forever.
+  - Groups combine hosted members only and are signed with the group's key.
+  - Signing keys are OpenPGP (RSA 4096 by default, or Ed25519), one per
+    repository or one shared key, sealed with `security.secret_key`.
+    `GET`/`PUT /api/v1/repositories/{name}/signing-key` and
+    `POST .../signing-key:rotate` show, import and rotate them; rotations and
+    imports are audited. `hangar admin rotate-secrets` re-wraps them.
+  - Guides: `docs/guides/apt.md`, `docs/guides/rpm.md`.
 - **Helm chart repositories** (`helm`): hosted, proxy and group. `helm repo add`,
   `helm install`, `helm pull --verify` with provenance files, `helm cm-push` and
   `curl --upload-file` uploads, a generated and cached `index.yaml`, and the

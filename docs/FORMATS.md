@@ -67,7 +67,20 @@ proxy and group repositories.
 
 ## APT (`apt`) — M3
 - Debian repository format: https://wiki.debian.org/DebianRepository/Format — Release/InRelease (GPG-signed), Packages(.gz).
+- Must support: `.deb` upload (control from `control.tar.{gz,xz,zst}`), pool layout, Packages/.gz/.xz per
+  distribution, component and architecture (`Architecture: all` in every architecture), Release with
+  MD5Sum/SHA1/SHA256/SHA512, InRelease and Release.gpg signed with the repository key (`public.key`,
+  `public.gpg`). Proxy: Release files passed through unchanged, metadata TTL, by-hash and pool cached forever.
+  Groups combine hosted members only (re-signed with the group key).
 - Acceptance: `apt-get update && apt-get install` from hosted + proxy of deb.debian.org.
+
+## RPM (`rpm`) — M3
+- createrepo repodata: `repomd.xml`, `primary.xml.gz`, `filelists.xml.gz`, `other.xml.gz` (sha256).
+- Must support: `.rpm` upload with the header parsed (dependencies, files, changelog, `rpm:header-range`),
+  regenerated repodata, `repomd.xml.asc` for `repo_gpgcheck=1`, optional per-directory layout
+  (`repodata_depth`). Proxy: `repomd.xml` (and signature) with a TTL, content-hashed repodata and packages
+  forever. Groups combine hosted members only.
+- Acceptance: `dnf install` from hosted + proxy of a Rocky Linux mirror.
 
 ## Raw (`raw`) — M1
 - Plain PUT/GET/DELETE of arbitrary paths, directory listing HTML/JSON.
