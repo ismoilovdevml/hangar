@@ -268,6 +268,21 @@ extra = []
 		if err == nil || !strings.Contains(out, "already exists") {
 			t.Errorf("second publish: %v\n%s", err, out)
 		}
+		// The underscore spelling is the same crate: refused with a message
+		// cargo prints.
+		other := writeCrate(t, `[package]
+name = "hangar_tiny"
+version = "0.2.0"
+edition = "2021"
+description = "Other spelling"
+license = "MIT"
+publish = ["hangar-hosted"]
+`, map[string]string{"src/lib.rs": "pub fn answer() -> u32 { 0 }\n"})
+		out, err = ce.run(t, other, "publish", "--registry", "hangar-hosted", "--allow-dirty", "--no-verify")
+		t.Logf("cargo publish hangar_tiny:\n%s", out)
+		if err == nil || !strings.Contains(out, "already taken by crate `hangar-tiny`") {
+			t.Errorf("publish hangar_tiny: %v\n%s", err, out)
+		}
 	})
 
 	app := writeCrate(t, `[package]
