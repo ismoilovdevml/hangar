@@ -174,6 +174,8 @@ export interface RepoForm {
   goSumdbVia: SumdbVia;
   /** Cargo proxy: crate download template; empty = the remote's config.json "dl". */
   cargoDownloadUrl: string;
+  /** APT and RPM hosted/proxy: the distribution release advisories are checked in (config.scanning.distro); empty = unknown or detected. */
+  distro: string;
 }
 
 export type SigningKeyChoice = 'repository' | 'shared';
@@ -197,6 +199,48 @@ export function formatSettingKeys(format: Format | undefined, type: RepositoryTy
   if (format === 'go' && type === 'proxy') return ['sumdbs', 'sumdb_via'];
   if (format === 'cargo' && type === 'proxy') return ['download_url'];
   return [];
+}
+
+/** Formats scanned against the advisories of a distribution release (config.scanning.distro). */
+export const DISTRO_FORMATS: Format[] = ['apt', 'rpm'];
+
+/** Whether the form edits config.scanning.distro: APT and RPM repositories that hold packages. */
+export function hasDistroSetting(format: Format | undefined, type: RepositoryType | undefined): boolean {
+  return !!format && DISTRO_FORMATS.includes(format) && (type === 'hosted' || type === 'proxy');
+}
+
+/** OSV distribution ecosystems per format (internal/core DistroFamilies) and the common releases (internal/scanning Releases). */
+export const DISTRO_FAMILIES: Partial<Record<Format, string[]>> = {
+  apt: ['Debian', 'Ubuntu'],
+  rpm: ['AlmaLinux', 'Mageia', 'openSUSE', 'Red Hat', 'Rocky Linux', 'SUSE'],
+};
+export const DISTRO_RELEASES: Partial<Record<Format, string[]>> = {
+  apt: ['Debian:11', 'Debian:12', 'Debian:13', 'Ubuntu:20.04:LTS', 'Ubuntu:22.04:LTS', 'Ubuntu:24.04:LTS', 'Ubuntu:26.04:LTS'],
+  rpm: [
+    'AlmaLinux:8',
+    'AlmaLinux:9',
+    'AlmaLinux:10',
+    'Rocky Linux:8',
+    'Rocky Linux:9',
+    'Rocky Linux:10',
+    'Red Hat:enterprise_linux:8::baseos',
+    'Red Hat:enterprise_linux:8::appstream',
+    'Red Hat:enterprise_linux:9::baseos',
+    'Red Hat:enterprise_linux:9::appstream',
+  ],
+};
+
+/** Why a scanning.distro value is refused, as the server checks it; null when valid or empty. */
+export function distroError(format: Format | undefined, d: string): string | null {
+  if (!d) return null;
+  const families = (format && DISTRO_FAMILIES[format]) || [];
+  if (d.trim() !== d || d.length > 100 || !/^[A-Za-z][A-Za-z0-9 ._+-]*(:[A-Za-z0-9 ._+-]*)*$/.test(d)) {
+    return 'Use an OSV ecosystem such as Debian:12 or Rocky Linux:9.';
+  }
+  const [base = '', ...rest] = d.split(':');
+  if (!families.some((f) => f.toLowerCase() === base.toLowerCase())) return `Use one of ${families.join(', ')}.`;
+  if (!rest.join(':').replace(/[: ]/g, '')) return `Add the release, e.g. ${base}:${base === 'Debian' ? '12' : '9'}.`;
+  return null;
 }
 
 /** Formats whose proxies get the related hosts field (the others keep what is stored). */
@@ -236,6 +280,7 @@ export function initialRepoForm(format?: Format, type?: RepositoryType): RepoFor
     goSumdbs: [...GO_DEFAULT_SUMDBS],
     goSumdbVia: 'database',
     cargoDownloadUrl: '',
+    distro: '',
   };
 }
 
@@ -265,7 +310,8 @@ export type RepoFormField =
   | 'aptArchitectures'
   | 'rpmRepodataDepth'
   | 'goSumdbs'
-  | 'cargoDownloadUrl';
+  | 'cargoDownloadUrl'
+  | 'distro';
 
 export type RepoFormErrors = Partial<Record<RepoFormField, string>>;
 
@@ -385,6 +431,11 @@ export function validateRepoForm(
     e.cargoDownloadUrl = 'Use an absolute http:// or https:// address.';
   }
 
+  if (hasDistroSetting(f.format, f.type)) {
+    const msg = distroError(f.format, f.distro.trim());
+    if (msg) e.distro = msg;
+  }
+
   if (f.type === 'group') {
     if (f.members.length === 0) e.members = 'Add at least one member repository.';
     if (f.writeMember) {
@@ -459,6 +510,7 @@ export function toRepositoryInput(f: RepoForm): RepositoryInput {
   }
   const settings = formatSettings(f);
   if (Object.keys(settings).length) input.config.format = settings;
+  if (hasDistroSetting(format, type) && f.distro.trim()) input.config.scanning = { distro: f.distro.trim() };
   return input;
 }
 
@@ -510,6 +562,7 @@ export function repositoryYaml(input: RepositoryInput): string {
   cfg.anonymous_read = config.anonymous_read ?? false;
   cfg.scan_on_arrival = config.scan_on_arrival ?? false;
   cfg.quarantine_critical = config.quarantine_critical ?? false;
+  if (config.scanning?.distro) cfg.scanning = { distro: config.scanning.distro };
   if (config.cleanup_policies?.length) cfg.cleanup_policies = config.cleanup_policies;
   if (config.format && Object.keys(config.format).length) cfg.format = config.format as { [k: string]: YamlValue };
 

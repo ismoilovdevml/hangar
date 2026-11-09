@@ -3,6 +3,7 @@ import { clientLines, type ClientTarget, type CodeLine } from './clientSnippets'
 import {
   formatSettingKeys,
   GO_DEFAULT_SUMDBS,
+  hasDistroSetting,
   initialRepoForm,
   toRepositoryInput,
   type ProxyMode,
@@ -48,6 +49,7 @@ export function repoToForm(r: Repository): RepoForm {
     quarantineCritical: !!c.quarantine_critical,
     anonymousRead: !!c.anonymous_read,
     relatedHosts: p?.related_hosts ? [...p.related_hosts] : [],
+    distro: c.scanning?.distro ?? '',
     ...formatFields(c.format ?? {}),
   };
 }
@@ -78,6 +80,14 @@ export function toRepositoryUpdate(f: RepoForm, r: Repository, online: boolean =
   const old = r.config;
   const config = { ...base.config };
   if (old.connector) config.connector = old.connector;
+  // The form edits the release of APT and RPM repositories; other settings under scanning stay as stored.
+  const scanning = { ...(old.scanning ?? {}) };
+  if (hasDistroSetting(r.format, r.type)) {
+    delete scanning.distro;
+    Object.assign(scanning, base.config.scanning ?? {});
+  }
+  if (Object.keys(scanning).length) config.scanning = scanning;
+  else delete config.scanning;
   // Keys the form edits for this format and type come from the form; the rest stay as stored.
   const managed = formatSettingKeys(r.format, r.type);
   const format: Record<string, unknown> = { ...(old.format ?? {}) };

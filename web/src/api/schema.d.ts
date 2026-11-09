@@ -2593,6 +2593,10 @@ export interface components {
             anonymous_read?: boolean;
             scan_on_arrival?: boolean;
             quarantine_critical?: boolean;
+            scanning?: {
+                /** @description APT and RPM: the distribution release of the packages, as an OSV ecosystem (Debian:12, Ubuntu:22.04:LTS, Rocky Linux:9, AlmaLinux:9, Red Hat:enterprise_linux:9::baseos). Their advisories apply to one release only. Empty: unknown; proxies of well-known archives are detected from the remote. */
+                distro?: string;
+            };
             cleanup_policies?: string[];
             connector?: components["schemas"]["ConnectorConfig"];
             /** @description Format-specific settings (e.g. maven `version_policy`) */

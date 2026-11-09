@@ -127,6 +127,24 @@ describe('format settings round-trip', () => {
     expect(toRepositoryUpdate(repoToForm(r), r).config.proxy).toMatchObject({ related_hosts: ['.cdn.example'], offline: true, max_concurrent_requests: 8 });
   });
 
+  it('edits the distribution release of APT and RPM repositories only', () => {
+    const r: Repository = { ...apt, config: { ...apt.config, scanning: { distro: 'Debian:12' } } };
+    const f = repoToForm(r);
+    expect(f.distro).toBe('Debian:12');
+    expect(isDirty(f, r)).toBe(false);
+    expect(toRepositoryUpdate(f, r).config.scanning).toEqual({ distro: 'Debian:12' });
+    expect(toRepositoryUpdate({ ...f, distro: 'Ubuntu:24.04:LTS' }, r).config.scanning).toEqual({ distro: 'Ubuntu:24.04:LTS' });
+    expect(toRepositoryUpdate({ ...f, distro: '' }, r).config.scanning).toBeUndefined();
+    // Other formats keep whatever is stored.
+    const npm: Repository = { ...proxy, config: { ...proxy.config, scanning: { distro: 'x' } } };
+    expect(toRepositoryUpdate(repoToForm(npm), npm).config.scanning).toEqual({ distro: 'x' });
+    expect(validateRepoForm({ ...f, distro: 'Debian:12' }).distro).toBeUndefined();
+    for (const d of ['Rocky Linux:9', 'Debian', 'Debian:', 'deb;12']) expect(validateRepoForm({ ...f, distro: d }).distro).toBeDefined();
+    const rpm = { ...f, format: 'rpm' as const };
+    for (const d of ['Rocky Linux:9', 'AlmaLinux:9', 'Red Hat:enterprise_linux:9::baseos']) expect(validateRepoForm({ ...rpm, distro: d }).distro).toBeUndefined();
+    expect(validateRepoForm({ ...rpm, distro: 'Debian:12' }).distro).toBeDefined();
+  });
+
   it('validates format settings like the server', () => {
     const f = repoToForm(apt);
     expect(validateRepoForm({ ...f, aptArchitectures: ['all'] }).aptArchitectures).toMatch(/Leave out "all"/);
