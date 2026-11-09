@@ -13,14 +13,20 @@
 // # Concurrency
 //
 // Each batch runs in one transaction that locks its candidate rows with
-// FOR UPDATE SKIP LOCKED, deletes the bytes, then deletes the rows. Several
-// collectors (cluster nodes) can run at once without overlap, and a publish
-// that references a candidate concurrently either commits first (the row then
-// has ref_count > 0 and is not a candidate) or blocks on the row lock until
-// the batch commits. In the latter case the bytes are gone when its upsert
-// proceeds, so the publish path must confirm the blob still exists in the
-// store after it has upserted the row (BlobStore.Stat inside the publish
-// transaction) and fail the publish if it does not.
+// FOR UPDATE SKIP LOCKED, deletes the bytes, then deletes the rows. Under
+// that lock PostgreSQL re-evaluates the candidate condition against the
+// latest committed row, so a row that gained a reference is never deleted.
+// Several collectors (cluster nodes) can run at once without overlap.
+//
+// A publish that references a candidate concurrently either holds the row
+// lock first (GC then skips the row), or waits for the batch to commit; in
+// that case the row and the bytes are gone when its upsert proceeds and
+// inserts a new row. Every publish that takes the first reference of a blob
+// therefore confirms the bytes still exist after its upsert, under the row
+// lock and inside its transaction, and fails if they do not (see
+// internal/service/component). A Put also restarts the grace period of an
+// unreferenced row for the same digest (internal/storage/pending), so content
+// uploaded again just before a run is not collected under the publish.
 //
 // Runs are idempotent: a blob whose bytes are already gone is counted as
 // missing and its row is removed; a store error leaves the row in place for
