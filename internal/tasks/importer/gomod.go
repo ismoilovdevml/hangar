@@ -127,7 +127,9 @@ func (a *goAdapter) copy(ctx context.Context, name string, v srcVersion) (outcom
 	return uploadOutcome(r, name+"@"+v.Version)
 }
 
-func (a *goAdapter) coords(name string, v srcVersion) []string { return []string{name + "@" + v.Version} }
+func (a *goAdapter) coords(name string, v srcVersion) []string {
+	return []string{name + "@" + v.Version}
+}
 
 // warmGo fetches what the go command downloads: .info, .mod and .zip.
 func warmGo(ctx context.Context, w *warmJob, c coord) error {

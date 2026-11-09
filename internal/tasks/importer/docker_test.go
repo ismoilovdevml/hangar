@@ -2,6 +2,8 @@ package importer
 
 import (
 	"encoding/json"
+	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -27,7 +29,7 @@ type ociSource struct {
 
 func newOCISource(t *testing.T) *ociSource {
 	t.Helper()
-	reg := registry.New()
+	reg := registry.New(registry.Logger(log.New(io.Discard, "", 0)))
 	s := &ociSource{}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {

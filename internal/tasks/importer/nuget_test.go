@@ -63,6 +63,11 @@ func nugetSource(t *testing.T, pkgs map[string][]string, unlisted map[string]boo
 				"id": id, "version": v, "published": published, "listed": listed,
 				"packageHash": base64.StdEncoding.EncodeToString(sum[:]), "packageHashAlgorithm": "SHA512"}})
 		}
+		lower := make([]string, len(versions))
+		for i, v := range versions {
+			lower[i] = strings.ToLower(v)
+		}
+		src.addJSON("/v3/flat/"+lid+"/index.json", map[string]any{"versions": lower})
 		src.addJSON("/v3/reg/"+lid+"/index.json", map[string]any{"count": 1, "items": []any{
 			map[string]any{"@id": base + "/v3/reg/" + lid + "/index.json#page", "count": len(items), "items": items}}})
 		data = append(data, map[string]any{"id": id})

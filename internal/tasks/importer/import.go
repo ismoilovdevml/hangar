@@ -2,7 +2,7 @@ package importer
 
 import (
 	"context"
-	"crypto/md5" //nolint:gosec // registries publish md5 sums; compared, not trusted
+	"crypto/md5"  //nolint:gosec // registries publish md5 sums; compared, not trusted
 	"crypto/sha1" //nolint:gosec // registries publish sha1 sums; compared, not trusted
 	"crypto/sha256"
 	"crypto/sha512"

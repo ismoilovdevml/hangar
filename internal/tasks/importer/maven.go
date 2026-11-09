@@ -370,7 +370,9 @@ func (a *mavenAdapter) copyFile(ctx context.Context, rel string, have []*core.As
 	return o, dl.modified, err
 }
 
-func (a *mavenAdapter) coords(name string, v srcVersion) []string { return []string{name + ":" + v.Version} }
+func (a *mavenAdapter) coords(name string, v srcVersion) []string {
+	return []string{name + ":" + v.Version}
+}
 
 // warmMaven fetches the POM and the main artifact.
 func warmMaven(ctx context.Context, w *warmJob, c coord) error {

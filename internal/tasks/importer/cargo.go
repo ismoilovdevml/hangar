@@ -327,7 +327,9 @@ func (a *cargoAdapter) copy(ctx context.Context, name string, v srcVersion) (out
 	return o, nil
 }
 
-func (a *cargoAdapter) coords(name string, v srcVersion) []string { return []string{name + "@" + v.Version} }
+func (a *cargoAdapter) coords(name string, v srcVersion) []string {
+	return []string{name + "@" + v.Version}
+}
 
 // warmCargo fetches the index file cargo reads, then the crate.
 func warmCargo(ctx context.Context, w *warmJob, c coord) error {

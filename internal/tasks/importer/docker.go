@@ -270,7 +270,9 @@ func (a *dockerAdapter) putManifest(ctx context.Context, name, ref string, body 
 	return uploadOutcome(r, name+":"+ref)
 }
 
-func (a *dockerAdapter) coords(name string, v srcVersion) []string { return []string{name + ":" + v.Version} }
+func (a *dockerAdapter) coords(name string, v srcVersion) []string {
+	return []string{name + ":" + v.Version}
+}
 
 // warmDocker pulls like a client: the manifest, every manifest of an index
 // and every blob.

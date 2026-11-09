@@ -253,7 +253,9 @@ func (a *npmAdapter) finish(ctx context.Context, name string, all []srcVersion) 
 	return nil
 }
 
-func (a *npmAdapter) coords(name string, v srcVersion) []string { return []string{name + "@" + v.Version} }
+func (a *npmAdapter) coords(name string, v srcVersion) []string {
+	return []string{name + "@" + v.Version}
+}
 
 func jsonString(s string) string {
 	b, _ := json.Marshal(s)

@@ -136,7 +136,9 @@ func (a *helmAdapter) copy(ctx context.Context, name string, v srcVersion) (outc
 	return imported, nil
 }
 
-func (a *helmAdapter) coords(name string, v srcVersion) []string { return []string{name + "@" + v.Version} }
+func (a *helmAdapter) coords(name string, v srcVersion) []string {
+	return []string{name + "@" + v.Version}
+}
 
 // warmHelm reads the proxy's index.yaml once per run, then fetches the chart.
 func warmHelm(ctx context.Context, w *warmJob, c coord) error {

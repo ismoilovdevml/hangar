@@ -31,7 +31,7 @@ func npmSource(t *testing.T, pkgs map[string][]string) *fakeSource {
 			tb := tgz(t, map[string]string{"package/package.json": string(pj), "package/index.js": "module.exports = '" + v + "'\n"})
 			s1 := sha1.Sum(tb) //nolint:gosec // npm shasum
 			s512 := sha512.Sum512(tb)
-			tarPath := "/" + npmEscape(name) + "/-/" + base + "-" + v + ".tgz"
+			tarPath := "/" + name + "/-/" + base + "-" + v + ".tgz"
 			src.add(tarPath, tb, "application/octet-stream")
 			vers[v] = map[string]any{"name": name, "version": v, "main": "index.js", "description": "test package",
 				"_npmUser": map[string]string{"name": "someone"},
