@@ -10,6 +10,7 @@ package docker_test
 import (
 	"io"
 	"log"
+	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
@@ -249,4 +250,155 @@ func TestGGCRProxyPull(t *testing.T) {
 	if tr.env.Upstreams.Calls("hub-proxy") != calls {
 		t.Fatal("cached pull reached the remote")
 	}
+}
+
+// Regression: a push through a group failed with MANIFEST_BLOB_UNKNOWN
+// whenever a layer already existed in another member. The client's HEAD
+// probe on the group found the layer (in a second hosted member, or behind
+// a proxy member), so the client skipped uploading it, and the manifest
+// PUT then checked only the write member. The manifest is accepted and the
+// write member ends up with the whole image: it can be pulled from that
+// member alone.
+func TestGGCRGroupPushWithContentInOtherMembers(t *testing.T) {
+	tr := newTestReg(t)
+	remoteReg := registry.New(registry.Logger(log.New(io.Discard, "", 0)))
+	upSrv := httptest.NewServer(remoteReg)
+	t.Cleanup(upSrv.Close)
+	tr.env.AddRepo(t, &core.Repository{Name: "docker-base", Format: "docker", Type: core.RepoHosted})
+	tr.env.AddRepo(t, &core.Repository{Name: "remote-proxy", Format: "docker", Type: core.RepoProxy,
+		Config: core.RepoConfig{Proxy: &core.ProxyConfig{RemoteURL: "https://registry.example.com"}}})
+	tr.env.Upstreams.Set("remote-proxy", remoteReg)
+	tr.env.AddRepo(t, &core.Repository{Name: "docker-group", Format: "docker", Type: core.RepoGroup,
+		Config: core.RepoConfig{Group: &core.GroupConfig{Members: []string{"docker-hosted", "docker-base", "remote-proxy"}, WriteMember: "docker-hosted"}}})
+
+	upRef := func(s string) name.Reference {
+		r, err := name.ParseReference(strings.TrimPrefix(upSrv.URL, "http://")+"/"+s, name.Insecure)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	extend := func(base v1.Image) v1.Image {
+		t.Helper()
+		l, err := random.Layer(4096, types.OCIUncompressedLayer)
+		if err != nil {
+			t.Fatal(err)
+		}
+		img, err := mutate.AppendLayers(base, l)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return img
+	}
+	// pullFromWriteMember checks the pushed image is complete in the write
+	// member itself, every layer read and digest-verified.
+	pullFromWriteMember := func(t *testing.T, s string, want v1.Hash) {
+		t.Helper()
+		got, err := remote.Image(ref(t, tr, "docker-hosted/"+s), aliceAuth)
+		if err != nil {
+			t.Fatalf("pull from the write member: %v", err)
+		}
+		if d, _ := got.Digest(); d != want {
+			t.Fatalf("digest %s, want %s", d, want)
+		}
+		layers, _ := got.Layers()
+		for _, l := range layers {
+			rc, err := l.Compressed()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := io.Copy(io.Discard, rc); err != nil {
+				t.Fatalf("layer: %v", err)
+			}
+			_ = rc.Close()
+		}
+		if _, err := got.ConfigFile(); err != nil {
+			t.Fatalf("config: %v", err)
+		}
+	}
+
+	t.Run("base layers in another hosted member", func(t *testing.T) {
+		base, err := random.Image(2048, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := remote.Write(ref(t, tr, "docker-base/team/app:base"), base, aliceAuth); err != nil {
+			t.Fatal(err)
+		}
+		img := extend(base)
+		if err := remote.Write(ref(t, tr, "docker-group/team/app:v1"), img, aliceAuth); err != nil {
+			t.Fatalf("push through the group: %v", err)
+		}
+		d, _ := img.Digest()
+		pullFromWriteMember(t, "team/app:v1", d)
+	})
+
+	t.Run("base layers only on a proxy member's remote", func(t *testing.T) {
+		base, err := random.Image(2048, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := remote.Write(upRef("team/svc:base"), base); err != nil {
+			t.Fatal(err)
+		}
+		img := extend(base)
+		if err := remote.Write(ref(t, tr, "docker-group/team/svc:v1"), img, aliceAuth); err != nil {
+			t.Fatalf("push through the group: %v", err)
+		}
+		d, _ := img.Digest()
+		pullFromWriteMember(t, "team/svc:v1", d)
+	})
+
+	t.Run("index whose child manifest the proxy member's remote has", func(t *testing.T) {
+		child, err := random.Image(1024, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := remote.Write(upRef("team/multi:amd64"), child); err != nil {
+			t.Fatal(err)
+		}
+		other, err := random.Image(1024, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		idx := mutate.AppendManifests(mutate.IndexMediaType(empty.Index, types.OCIImageIndex),
+			mutate.IndexAddendum{Add: child, Descriptor: v1.Descriptor{Platform: &v1.Platform{OS: "linux", Architecture: "amd64"}}},
+			mutate.IndexAddendum{Add: other, Descriptor: v1.Descriptor{Platform: &v1.Platform{OS: "linux", Architecture: "arm64"}}})
+		if err := remote.WriteIndex(ref(t, tr, "docker-group/team/multi:v1"), idx, aliceAuth); err != nil {
+			t.Fatalf("push index through the group: %v", err)
+		}
+		got, err := remote.Index(ref(t, tr, "docker-hosted/team/multi:v1"), aliceAuth)
+		if err != nil {
+			t.Fatalf("index from the write member: %v", err)
+		}
+		im, err := got.IndexManifest()
+		if err != nil || len(im.Manifests) != 2 {
+			t.Fatalf("index = %+v, %v", im, err)
+		}
+		for _, m := range im.Manifests {
+			pullFromWriteMember(t, "team/multi@"+m.Digest.String(), m.Digest)
+		}
+	})
+
+	t.Run("content the pusher may not read through the group is not adopted", func(t *testing.T) {
+		tr.env.Auth.AddUser("dave", "secret")
+		tr.env.AuthZ.Grant("dave", "repo:docker-group:write", "repo:docker-hosted:write")
+		base, err := random.Image(2048, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := remote.Write(ref(t, tr, "docker-base/team/locked:base"), base, aliceAuth); err != nil {
+			t.Fatal(err)
+		}
+		m, err := base.RawManifest()
+		if err != nil {
+			t.Fatal(err)
+		}
+		mt, _ := base.MediaType()
+		resp, body := tr.do(http.MethodPut, "/v2/docker-group/team/locked/manifests/v1", m, basic("dave", "secret"), header("Content-Type", string(mt)))
+		tr.expect(resp, body, http.StatusBadRequest)
+		if errCode(body) != "MANIFEST_BLOB_UNKNOWN" {
+			t.Fatalf("code = %s", body)
+		}
+	})
 }

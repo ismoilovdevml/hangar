@@ -336,7 +336,13 @@ func (h *handler) putManifest(w http.ResponseWriter, r *http.Request, rq *reques
 		}
 		d = want
 	}
-	if missing := h.missingReferences(ctx, t, rq.image, m, mt); len(missing) > 0 {
+	missing := h.missingReferences(ctx, t, rq.image, m, mt)
+	if len(missing) > 0 {
+		// Pushed through a group: the group's probes may have reported
+		// content another member holds (see adopt.go).
+		missing = h.adoptMissing(ctx, rq, t, m, mt, missing)
+	}
+	if len(missing) > 0 {
 		var detail []map[string]string
 		for _, x := range missing {
 			detail = append(detail, map[string]string{"digest": x})
