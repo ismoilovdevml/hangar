@@ -264,7 +264,7 @@ const tasksRoute = createRoute({
 const newTaskRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/tasks/new',
-  staticData: { title: 'New task' },
+  staticData: { title: 'New task', gate: GATES.newTask },
   validateSearch: (s: Record<string, unknown>): NewTaskSearch => ({
     kind: isImportKind(s.kind) ? s.kind : undefined,
     repository: str(s.repository),

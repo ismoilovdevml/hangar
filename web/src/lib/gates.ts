@@ -32,6 +32,7 @@ export function canCreateRepositories(privileges: readonly string[]): boolean {
 
 export const GATES = {
   tasks: systemGate('tasks', 'read', 'scheduled tasks'),
+  newTask: systemGate('tasks', 'write', 'starting imports and pre-warms'),
   blobStores: systemGate('blobstores', 'read', 'blob stores'),
   cleanup: systemGate('cleanup', 'read', 'cleanup policies'),
   audit: systemGate('audit', 'read', 'the audit log'),
