@@ -257,9 +257,9 @@ contact the database directly; private modules belong in `GONOSUMDB` anyway.
 
 ## Notes
 
-- Plain HTTP: a `GOPROXY` with `http://` works, but the go command sends
-  `.netrc` credentials only over HTTPS; put credentials in the URL
-  (`http://token:<token>@host/repository/go-group`) only for local tests.
+- Plain HTTP: a `GOPROXY` with `http://` works for repositories with anonymous
+  read, but the go command never sends credentials over HTTP (neither from
+  `.netrc` nor from the URL). Private repositories need HTTPS.
 - Browse tree: module path segments, the module, `@v`, versions, then the
   `.info`, `.mod` and `.zip` of each version. The package view shows the
   README at the module root and the licence found in its `LICENSE` file.
