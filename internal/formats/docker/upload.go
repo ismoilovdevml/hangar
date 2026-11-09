@@ -98,7 +98,7 @@ func (h *handler) tryMount(w http.ResponseWriter, r *http.Request, rq *request, 
 	if err != nil || fromRepo.Format != Name || !fromRepo.Online {
 		return false
 	}
-	srcs, err := h.contentRepos(ctx, fromRepo)
+	srcs, _, err := h.servingRepos(ctx, fromRepo, fromImage)
 	if err != nil {
 		return false
 	}

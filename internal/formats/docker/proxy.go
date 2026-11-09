@@ -61,12 +61,14 @@ func closeBody(resp *core.UpstreamResponse) {
 	}
 }
 
-func (h *handler) fetch(ctx context.Context, repo *core.Repository, method, path, accept string) (*core.UpstreamResponse, error) {
+// fetch sends one request to repo's remote about the image remoteName (the
+// routing identity; the token dance of the remote runs inside Fetch).
+func (h *handler) fetch(ctx context.Context, repo *core.Repository, method, path, accept, remoteName string) (*core.UpstreamResponse, error) {
 	up, err := h.deps.Upstreams.ForRepository(ctx, repo)
 	if err != nil {
 		return nil, err
 	}
-	req := core.UpstreamRequest{Method: method, Path: path}
+	req := core.UpstreamRequest{Method: method, Path: path, Package: remoteName}
 	if accept != "" {
 		req.Header = http.Header{"Accept": []string{accept}}
 	}
@@ -98,7 +100,7 @@ func (h *handler) proxyManifest(ctx context.Context, hdr http.Header, repo *core
 	}
 	path := "v2/" + remoteName + "/manifests/" + ref
 	if local != nil {
-		resp, err := h.fetch(ctx, repo, http.MethodHead, path, acceptManifests)
+		resp, err := h.fetch(ctx, repo, http.MethodHead, path, acceptManifests, remoteName)
 		if err != nil {
 			return fromCache() // remote down: serve stale
 		}
@@ -115,7 +117,7 @@ func (h *handler) proxyManifest(ctx context.Context, hdr http.Header, repo *core
 			return fromCache()
 		}
 	}
-	resp, err := h.fetch(ctx, repo, http.MethodGet, path, acceptManifests)
+	resp, err := h.fetch(ctx, repo, http.MethodGet, path, acceptManifests, remoteName)
 	if err != nil {
 		if local != nil {
 			return fromCache()
@@ -220,7 +222,7 @@ func (h *handler) proxyBlob(w http.ResponseWriter, r *http.Request, repo *core.R
 	}
 	proxy.NoteCacheMiss(ctx)
 	if r.Method == http.MethodHead {
-		resp, err := h.fetch(ctx, repo, http.MethodHead, path, "")
+		resp, err := h.fetch(ctx, repo, http.MethodHead, path, "", remoteName)
 		if err != nil {
 			return false, err
 		}
@@ -242,7 +244,7 @@ func (h *handler) proxyBlob(w http.ResponseWriter, r *http.Request, repo *core.R
 	// Keep filling the cache if the client goes away mid-download.
 	fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), proxyBlobTimeout)
 	defer cancel()
-	resp, err := h.fetch(fctx, repo, http.MethodGet, path, "")
+	resp, err := h.fetch(fctx, repo, http.MethodGet, path, "", remoteName)
 	if err != nil {
 		return false, err
 	}
@@ -282,7 +284,7 @@ func (h *handler) proxyBlob(w http.ResponseWriter, r *http.Request, repo *core.R
 // remoteName. It returns nil if it does, ErrNotFound if it does not, and
 // ErrUpstream if the remote cannot be asked.
 func (h *handler) remoteHasBlob(ctx context.Context, hdr http.Header, repo *core.Repository, remoteName, path string, d core.Digest) error {
-	resp, err := h.fetch(ctx, repo, http.MethodHead, path, "")
+	resp, err := h.fetch(ctx, repo, http.MethodHead, path, "", remoteName)
 	if err != nil {
 		return err
 	}
@@ -307,7 +309,7 @@ func (h *handler) proxyTags(ctx context.Context, hdr http.Header, repo *core.Rep
 	if h.unknown.unknown(repo, remoteName, h.now()) {
 		return local, known, nil
 	}
-	resp, err := h.fetch(ctx, repo, http.MethodGet, "v2/"+remoteName+"/tags/list", "application/json")
+	resp, err := h.fetch(ctx, repo, http.MethodGet, "v2/"+remoteName+"/tags/list", "application/json", remoteName)
 	if err != nil {
 		// Remote down: an image we cannot rule out is reported as known.
 		return local, true, nil
@@ -331,7 +333,8 @@ func (h *handler) proxyTags(ctx context.Context, hdr http.Header, repo *core.Rep
 
 // proxyReferrers asks the remote for referrers (falling back to the cache).
 func (h *handler) proxyReferrers(ctx context.Context, repo *core.Repository, image string, subject core.Digest) []descriptor {
-	resp, err := h.fetch(ctx, repo, http.MethodGet, "v2/"+upstreamName(repo, image)+"/referrers/"+string(subject), mediaOCIIndex)
+	remoteName := upstreamName(repo, image)
+	resp, err := h.fetch(ctx, repo, http.MethodGet, "v2/"+remoteName+"/referrers/"+string(subject), mediaOCIIndex, remoteName)
 	if err != nil {
 		return nil
 	}

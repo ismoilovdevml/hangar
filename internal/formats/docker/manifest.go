@@ -184,9 +184,12 @@ func (h *handler) localManifest(ctx context.Context, repo *core.Repository, imag
 // findManifest resolves image:ref through repo (members in order for groups;
 // proxies consult their remote).
 func (h *handler) findManifest(ctx context.Context, hdr http.Header, repo *core.Repository, image, ref string) (*manifestHit, error) {
-	repos, err := h.contentRepos(ctx, repo)
+	repos, blocked, err := h.servingRepos(ctx, repo, image)
 	if err != nil {
 		return nil, err
+	}
+	if blocked != nil {
+		return nil, blocked
 	}
 	var miss memberMisses
 	for _, m := range repos {

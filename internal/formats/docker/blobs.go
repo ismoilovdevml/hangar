@@ -34,9 +34,13 @@ func (h *handler) getBlob(w http.ResponseWriter, r *http.Request, rq *request) {
 	ctx, tally := proxy.WithCacheTally(r.Context())
 	defer tally.Record(Name, r.Method)
 	r = r.WithContext(ctx)
-	repos, err := h.contentRepos(ctx, rq.repo)
+	repos, blocked, err := h.servingRepos(ctx, rq.repo, rq.image)
 	if err != nil {
 		h.internal(w, r, "resolve group", err)
+		return
+	}
+	if blocked != nil {
+		h.fail(w, r, rq, blocked, codeBlobUnknown)
 		return
 	}
 	var miss memberMisses
