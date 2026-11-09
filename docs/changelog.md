@@ -37,6 +37,31 @@
 - **Docs**: README lists the 11 formats; the roadmap, architecture and
   product spec say what is done, partial and planned; `CONTRIBUTING.md`
   explains the test suites; the changelog is split by release.
+- **npm audit answers for real** (it always reported "0 vulnerabilities"):
+  proxies pass the audit to their remote with only the names their routing
+  rules allow, hosted repositories answer from Hangar's stored OSV findings,
+  groups merge both. Bulk, quick and full audit endpoints, gzip bodies.
+  When Hangar cannot vouch for a hosted version (not scanned yet, scanning
+  off) or a remote fails, the audit fails (503/502) and npm says so instead
+  of "found 0 vulnerabilities". `pnpm audit` works the same way.
+- **npm search**: `/-/v1/search` on hosted (component search), proxy (remote
+  search, routing rules applied) and group repositories.
+- **npm logout** revokes the token `npm login` issued; personal access tokens
+  are left alone. Tokens can be revoked through `core.TokenRevoker`.
+- npm proxies serve tarballs whose upstream URL does not end in `.tgz`.
+- PyPI: upload versions are compared by PEP 440 (`1.0` no longer matches a
+  `10` file name); Simple API pages carry an `ETag` and answer `304`.
+- Cargo: `foo-bar` and `foo_bar` are one crate, as on crates.io; publishing
+  the other spelling answers `409`.
+- Helm proxies leave malformed entries of a remote `index.yaml` out instead of
+  failing the whole index; new metric `hangar_proxy_index_entries_skipped_total`.
+- Docker: proxy tag lists follow the remote's `Link: rel="next"` paging; a
+  push through a group no longer fails with `MANIFEST_BLOB_UNKNOWN` when a
+  layer or platform manifest exists in another member: the content is linked
+  into the write member.
+- Proxy upstreams accept idempotent POST queries (`UpstreamRequest.Body`).
+- The download-attribution wrapper keeps the component search, so NuGet,
+  cargo and npm search use the full-text index in production.
 - **Security fixes** (see `docs/security.md`, privilege escalation model and
   sign-in lockout):
   - Groups expose only what their author may read: adding a member needs

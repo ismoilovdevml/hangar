@@ -46,7 +46,9 @@ curl -X POST https://hangar.example.com/api/v1/repositories \
 - Crate names follow the crates.io rules: ASCII letters, digits, `-` and `_`,
   starting with a letter, at most 64 characters; names such as `std`, `core`
   and Windows device names are refused. The first published spelling of a name
-  is kept: `Serde` cannot be published once `serde` exists.
+  is kept: `Serde` cannot be published once `serde` exists. As on crates.io,
+  `-` and `_` are the same character in a name: once `foo-bar` exists,
+  publishing `foo_bar` answers `409` naming the existing crate.
 - Versions must be SemVer 2.0.0. The `.crate` must be a gzip tarball of
   `<name>-<version>/` with a `Cargo.toml` naming the same crate and version.
 - Index files are generated from the stored versions on every request, with

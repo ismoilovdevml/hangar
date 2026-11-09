@@ -81,6 +81,8 @@ curl -X POST https://hangar.example.com/api/v1/repositories \
 ```
 
 Project pages merge the members in order (first member wins per filename).
+Every Simple API page carries an `ETag`; pip and uv revalidate their cached
+copy and get `304 Not Modified` while the project is unchanged.
 Uploads to the group go to `write_member`; without one they get `405`.
 
 Name your internal projects so they cannot collide with pypi.org projects: the
@@ -175,6 +177,10 @@ twine upload --repository-url https://hangar.example.com/repository/pypi-hosted/
 
 twine only honours `--skip-existing` for some public indexes. With `allow_once`,
 re-uploading identical files succeeds anyway.
+
+The version in the file name must be the declared version under PEP 440
+normalisation: `1.0` matches `1.0.0` and `1.0-1` matches `1.0.post1`, while
+`1.0` and `10` are different versions and the upload answers `400`.
 
 ## poetry
 

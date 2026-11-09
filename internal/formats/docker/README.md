@@ -187,10 +187,16 @@ session is started.
   cache if the client disconnects. Docker Hub single-segment names get the
   `library/` prefix; the token dance is done by the core upstream. Rate-limit
   headers (`RateLimit-Limit`, `RateLimit-Remaining`, `Docker-RateLimit-Source`)
-  are passed through. Tag lists and referrers merge the remote's answer with
-  the cache. Cache fills are published as the reader; a pull through a group
+  are passed through. Tag lists (following the remote's `Link: rel="next"`
+  pages) and referrers merge the remote's answer with the cache. Cache fills are published as the reader; a pull through a group
   fills a proxy member's cache on the group's `repo:<group>:read`. Proxies are
   read-only (`405`).
+- **Push through a group**: blob and manifest probes on a group answer from
+  any member, so a client may skip uploading a layer another member holds.
+  A manifest PUT then links what the write member lacks from the member that
+  serves it (same members, routing and quarantine checks as reads, fetching
+  from a proxy's remote when needed; adopt.go), so the write member holds the
+  whole image.
 - **Remote answers for unknown names**: Docker Hub answers `401 UNAUTHORIZED`
   for repositories it does not know (they might be private), GHCR/Quay
   `403 DENIED`, some registries `400 NAME_INVALID`. All of these, and `404`,
