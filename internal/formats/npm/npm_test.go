@@ -705,3 +705,57 @@ func TestAnonymousProxyRead(t *testing.T) {
 		t.Fatalf("anonymous read did not fill the cache: %v", err)
 	}
 }
+
+// Regression: a remote whose tarball URLs do not end in ".tgz" (a download
+// endpoint) had its tarballs advertised under that name, and Hangar answered
+// 404 for every one of them. They are advertised under the conventional name
+// and fetched from the remote's URL, through the proxy and a group.
+func TestProxyTarballWithoutTgzSuffix(t *testing.T) {
+	ts := newServer(t)
+	tgz1 := makeTarball(t, "dlpkg", "1.0.0")
+	tgz2 := makeTarball(t, "dlpkg", "2.0.0")
+	sha := func(b []byte) string { s := sha1.Sum(b); return hex.EncodeToString(s[:]) }
+	var hits atomic.Int32
+	up := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/dlpkg":
+			_, _ = io.WriteString(w, `{"name":"dlpkg","dist-tags":{"latest":"2.0.0"},"versions":{
+"1.0.0":{"name":"dlpkg","version":"1.0.0","dist":{"shasum":"`+sha(tgz1)+`","tarball":"https://registry.example.org/download/dlpkg/1.0.0"}},
+"2.0.0":{"name":"dlpkg","version":"2.0.0","dist":{"shasum":"`+sha(tgz2)+`","tarball":"https://files.example.org/blob?id=dlpkg-2"}}}}`)
+		case r.Host == "registry.example.org" && r.URL.Path == "/download/dlpkg/1.0.0":
+			hits.Add(1)
+			_, _ = w.Write(tgz1)
+		case r.Host == "files.example.org" && r.URL.Path == "/blob" && r.URL.Query().Get("id") == "dlpkg-2":
+			hits.Add(1)
+			_, _ = w.Write(tgz2)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	ts.repos["npm-dl"] = ts.env.AddRepo(t, &core.Repository{Name: "npm-dl", Format: npm.Name, Type: core.RepoProxy,
+		Config: core.RepoConfig{Proxy: &core.ProxyConfig{RemoteURL: "https://registry.example.org", RelatedHosts: []string{"files.example.org"}}}})
+	ts.env.Upstreams.Set("npm-dl", up)
+	ts.env.AddRepo(t, &core.Repository{Name: "npm-dl-group", Format: npm.Name, Type: core.RepoGroup,
+		Config: core.RepoConfig{Group: &core.GroupConfig{Members: []string{"npm-hosted", "npm-dl"}}}})
+
+	for _, repo := range []string{"npm-dl", "npm-dl-group"} {
+		doc := decodeJSON(t, ts.do(t, http.MethodGet, "/repository/"+repo+"/dlpkg", "bob", nil))
+		vs := doc["versions"].(map[string]any)
+		for v, want := range map[string][]byte{"1.0.0": tgz1, "2.0.0": tgz2} {
+			tarball := vs[v].(map[string]any)["dist"].(map[string]any)["tarball"].(string)
+			if tarball != ts.url+"/repository/"+repo+"/dlpkg/-/dlpkg-"+v+".tgz" {
+				t.Fatalf("%s %s tarball = %s", repo, v, tarball)
+			}
+			resp := ts.do(t, http.MethodGet, strings.TrimPrefix(tarball, ts.url), "bob", nil)
+			if b := readAll(t, resp); resp.StatusCode != http.StatusOK || !bytes.Equal(b, want) {
+				t.Fatalf("%s %s tarball = %d (%d bytes)", repo, v, resp.StatusCode, len(b))
+			}
+		}
+	}
+	if n := hits.Load(); n != 2 {
+		t.Errorf("remote tarball fetches = %d, want 2 (then cached)", n)
+	}
+	if _, err := ts.env.Components.GetComponent(t.Context(), ts.repos["npm-dl"].ID, "", "dlpkg", "2.0.0"); err != nil {
+		t.Errorf("version component not recorded: %v", err)
+	}
+}
