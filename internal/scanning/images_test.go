@@ -391,6 +391,12 @@ func TestImageRepositoryScanSharesDigests(t *testing.T) {
 		t.Fatalf("plan finding = %+v", it)
 	}
 
+	var csv strings.Builder
+	if err := scanning.WriteFixPlanCSV(&csv, plan); err != nil || !strings.Contains(csv.String(), "rebuild (8 of 10 findings have a fixed package)") ||
+		!strings.Contains(csv.String(), "RUN apk upgrade --no-cache apk-tools libcrypto1.1 libssl1.1") {
+		t.Fatalf("csv = %s, %v", csv.String(), err)
+	}
+
 	// Assigning the image assigns every finding of every tag.
 	e.exec(`INSERT INTO users (username, display_name, kind) VALUES ('alice', 'Alice', 'user') ON CONFLICT DO NOTHING`)
 	ch, err := e.svc.AssignPackage(ctx, nil, "docker:team/api", "alice")

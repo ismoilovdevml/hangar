@@ -32,7 +32,17 @@ func WriteFixPlanCSV(w io.Writer, p *FixPlan) error {
 			ids = append(ids, id)
 		}
 		var targets, commands []string
+		if pkg.Image != nil {
+			// Images are rebuilt; the command upgrades their OS packages.
+			targets = append(targets, "rebuild ("+strconv.Itoa(pkg.Fixable)+" of "+strconv.Itoa(pkg.Findings)+" findings have a fixed package)")
+			if pkg.Image.Command != nil {
+				commands = append(commands, *pkg.Image.Command)
+			}
+		}
 		for _, u := range pkg.Upgrades {
+			if pkg.Image != nil {
+				break
+			}
 			if u.To == nil {
 				targets = append(targets, "no fix for "+strings.Join(u.From, ", "))
 				continue
