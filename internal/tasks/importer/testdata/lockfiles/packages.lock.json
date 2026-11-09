@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net8.0": {
+      "Acme.Json": {
+        "type": "Direct",
+        "requested": "[3.2.1, )",
+        "resolved": "3.2.1",
+        "contentHash": "abc"
+      },
+      "Acme.Core": {
+        "type": "Transitive",
+        "resolved": "1.1.0",
+        "contentHash": "def"
+      },
+      "app.shared": {
+        "type": "Project"
+      }
+    }
+  }
+}

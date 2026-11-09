@@ -355,11 +355,34 @@ func (c comparator) match(v string) bool {
 	case ">=":
 		return r >= 0
 	case "<":
-		return r < 0
+		// "<2" excludes the pre-releases of 2 (as npm and PEP 440 do).
+		return r < 0 && !preOf(v, c.v)
 	case "<=":
 		return r <= 0
 	}
 	return false
+}
+
+// preOf reports whether v is a pre-release of the release bound.
+func preOf(v, bound string) bool {
+	vn, vs := splitRelease(v)
+	bn, bs := splitRelease(bound)
+	if bs != "" || vs == "" || suffixKind(vs) != suffixPre {
+		return false
+	}
+	for i := 0; i < max(len(vn), len(bn)); i++ {
+		var x, y int64
+		if i < len(vn) {
+			x = vn[i]
+		}
+		if i < len(bn) {
+			y = bn[i]
+		}
+		if x != y {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *versionSpec) match(v string) bool {
