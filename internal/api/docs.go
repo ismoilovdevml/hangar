@@ -221,6 +221,9 @@ const automationGuide = "# Hangar automation guide\n\n" +
 	"  \"config\": {\"hosted\": {\"write_policy\": \"allow_once\"}}\n" +
 	"}'\n" +
 	"```\n\n" +
+	"Format settings go in `config.format`; the OpenAPI schemas `<Format>FormatConfig`\n" +
+	"(`NpmFormatConfig`, `NugetFormatConfig`, ...) list each format's keys and defaults.\n" +
+	"Groups take no `blob_store` (ignored if sent).\n\n" +
 	"Cleanup policies are saved in two steps, so nobody saves a policy without\n" +
 	"seeing what it deletes (needs `system:cleanup:admin`):\n\n" +
 	"```sh\n" +
