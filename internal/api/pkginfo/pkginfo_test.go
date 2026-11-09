@@ -347,3 +347,23 @@ func TestCargoCrate(t *testing.T) {
 		t.Errorf("readme = false still found %+v", i.Readme)
 	}
 }
+
+func TestLinuxPackages(t *testing.T) {
+	e := newEnv(t)
+	deb := repo("apt-hosted", "apt", core.RepoHosted)
+	c := e.publish(deb, &core.Component{Name: "hello", Version: "1.0", Attributes: map[string]any{
+		"summary": "greets", "description": "Long text.\n\nMore.", "homepage": "https://hello.example.org"}},
+		file{"pool/main/h/hello/hello_1.0_amd64.deb", []byte("deb")})
+	i := e.info(deb, c)
+	if i.Description != "greets" || i.Homepage != "https://hello.example.org" || len(i.Licenses) != 0 ||
+		i.Readme == nil || i.Readme.Format != "text" || i.Readme.Content != "Long text.\n\nMore." || !strings.Contains(i.Readme.Source, "control file") {
+		t.Fatalf("apt info = %+v %+v", i, i.Readme)
+	}
+	rp := repo("rpm-hosted", "rpm", core.RepoHosted)
+	c = e.publish(rp, &core.Component{Name: "tool", Version: "1.0-1", Attributes: map[string]any{
+		"summary": "a tool", "description": "Does things.", "homepage": "https://tool.example.org", "license": "MIT"}},
+		file{"tool-1.0-1.noarch.rpm", []byte("rpm")})
+	if i := e.info(rp, c); i.Description != "a tool" || !reflect.DeepEqual(i.Licenses, []string{"MIT"}) || !strings.Contains(i.Readme.Source, "RPM header") {
+		t.Fatalf("rpm info = %+v", i)
+	}
+}

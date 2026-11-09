@@ -353,3 +353,10 @@ func (s *Service) replace(ctx context.Context, repo *core.Repository, k *Key, ac
 	}
 	return info(repo, c.key, c.rec), nil
 }
+
+// SetServices supplies what the server wires after the formats: the
+// repository service and authorizer of the admin API and the cluster lock.
+// Call it before serving requests.
+func (s *Service) SetServices(repos core.RepositoryService, authz core.AuthZ, locks core.Locker) {
+	s.opts.Repos, s.opts.AuthZ, s.opts.Locks = repos, authz, locks
+}

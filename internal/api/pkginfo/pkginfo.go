@@ -165,6 +165,8 @@ func (x *extraction) run(ctx context.Context) {
 		x.gomod(ctx)
 	case "cargo":
 		x.cargo(ctx)
+	case "apt", "rpm":
+		x.linuxPackage(ctx)
 	}
 	x.resolveImages(ctx)
 }

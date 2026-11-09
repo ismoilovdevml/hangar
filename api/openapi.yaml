@@ -696,6 +696,88 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /repositories/{name}/signing-key:
+    parameters:
+      - $ref: "#/components/parameters/RepositoryName"
+    get:
+      tags: [repositories]
+      operationId: getSigningKey
+      description: >-
+        The OpenPGP key that signs the metadata of an apt or rpm hosted or
+        group repository (APT InRelease and Release.gpg, RPM repomd.xml.asc),
+        generated on first use. The private key never leaves the server.
+        Clients download the public key from /repository/{name}/public.key
+        (armored) or public.gpg (binary). Requires read access.
+      responses:
+        "200":
+          description: Key details and the armored public key
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SigningKey" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "501":
+          description: No `security.secret_key` is configured, so keys cannot be stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    put:
+      tags: [repositories]
+      operationId: importSigningKey
+      description: >-
+        Replaces the key with an existing private key (ASCII-armored or
+        binary, optionally passphrase-protected). Metadata is signed with it
+        at once; clients need the new public key. Requires repository
+        administration, or `system:repos:admin` for the shared key; audited
+        as `signing_key.import`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [private_key]
+              properties:
+                private_key: { type: string, description: The private key, e.g. `gpg --armor --export-secret-keys` }
+                passphrase: { type: string }
+      responses:
+        "200":
+          description: The imported key
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SigningKey" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /repositories/{name}/signing-key:rotate:
+    parameters:
+      - $ref: "#/components/parameters/RepositoryName"
+    post:
+      tags: [repositories]
+      operationId: rotateSigningKey
+      description: >-
+        Generates a new key (RSA 4096 by default, or Ed25519) and signs the
+        metadata with it from now on; clients need the new public key.
+        Requires repository administration, or `system:repos:admin` for the
+        shared key; audited as `signing_key.rotate`.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                algorithm: { type: string, enum: [rsa4096, ed25519] }
+      responses:
+        "200":
+          description: The new key
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SigningKey" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /repositories/{name}/browse:
     parameters:
       - $ref: "#/components/parameters/RepositoryName"
@@ -2846,7 +2928,19 @@ components:
       description: Cursor for the next page; null or absent on the last page
     Format:
       type: string
-      enum: [docker, npm, maven, pypi, go, helm, nuget, cargo, apt, raw]
+      enum: [docker, npm, maven, pypi, go, helm, nuget, cargo, apt, rpm, raw]
+    SigningKey:
+      type: object
+      required: [repository, key, algorithm, fingerprint, key_id, public_key]
+      properties:
+        repository: { type: string }
+        key: { type: string, enum: [repository, shared], description: The repository's own key or the server-wide shared key (format setting signing_key) }
+        algorithm: { type: string, examples: [rsa4096, ed25519] }
+        fingerprint: { type: string, description: Upper-case hex fingerprint }
+        key_id: { type: string, description: Long key id }
+        user_id: { type: string }
+        created_at: { type: string, format: date-time }
+        public_key: { type: string, description: ASCII-armored public key }
     FormatInfo:
       type: object
       required: [name]
