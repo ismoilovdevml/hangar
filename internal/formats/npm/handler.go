@@ -199,6 +199,8 @@ func (h *handler) routeSpecial(w http.ResponseWriter, r *http.Request, repo *cor
 		return h.logout(w, r, repo, strings.TrimPrefix(rest, "user/token/"))
 	case strings.HasPrefix(rest, "package/"):
 		return h.routeDistTags(w, r, repo, strings.TrimPrefix(rest, "package/"))
+	case rest == "v1/search":
+		return h.search(w, r, repo)
 	case strings.HasPrefix(rest, "npm/v1/security/"):
 		return h.audit(w, r, repo, strings.TrimPrefix(rest, "npm/v1/security/"))
 	}
