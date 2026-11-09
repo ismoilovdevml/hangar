@@ -48,6 +48,9 @@ proxy and group repositories.
 - Chart repo: https://helm.sh/docs/topics/chart_repository/ — `index.yaml` generation, `.tgz` upload.
 - OCI charts are covered by the docker format.
 - Acceptance: `helm repo add`, `helm install`, `helm cm-push` compatible upload.
+- Supports: hosted upload (`POST api/charts`, `PUT <name>-<version>.tgz`), provenance (`.prov`), delete, ChartMuseum read API, generated and cached `index.yaml` with relative URLs.
+- Proxy: upstream `index.yaml` cached for `metadata_ttl`, chart URLs rewritten through Hangar, archives cached forever and checked against the index digest.
+- Group: merged `index.yaml`, first member wins per name and version; uploads go to `write_member`.
 
 ## NuGet (`nuget`) — M3
 - V3 protocol: https://learn.microsoft.com/en-us/nuget/api/overview — service index, package content, registration, push.

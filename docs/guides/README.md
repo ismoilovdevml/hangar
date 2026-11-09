@@ -10,6 +10,7 @@ Practical, copy-paste guides for running Hangar and connecting package clients t
 | [Maven](maven.md) | Maven `settings.xml`, Gradle Kotlin and Groovy DSL, `maven-publish` |
 | [PyPI](pypi.md) | pip, uv, poetry and twine |
 | [NuGet](nuget.md) | `dotnet nuget`, `nuget.config`, push, restore through a group |
+| [Helm](helm.md) | `helm repo add`, `helm install`, `helm cm-push` and curl uploads, chart provenance |
 | [Raw](raw.md) | Arbitrary files with curl and wget, directory listings |
 | [CI integration](ci.md) | GitLab CI, GitHub Actions, Jenkins and Gitea Actions with tokens |
 | [REST API](api.md) | Authentication, common calls, pagination, errors |
@@ -21,7 +22,7 @@ Operators also need [docs/security.md](../security.md) (secret key, hardening,
 rate limits) and [docs/operations/monitoring.md](../operations/monitoring.md)
 (metrics, logs, tracing).
 
-Formats compiled into the server today: `docker`, `maven`, `npm`, `nuget`, `pypi` and `raw`
+Formats compiled into the server today: `docker`, `helm`, `maven`, `npm`, `nuget`, `pypi` and `raw`
 (`GET /api/v1/formats` lists them). Other formats are not supported yet.
 
 ## Concepts in one minute
@@ -93,6 +94,7 @@ repository to see its content the way clients see it:
 | NuGet | package id, version, `.nupkg` / `.nuspec` / `.snupkg` |
 | PyPI | project, files |
 | Docker | image path, then `manifests` (tags and digests) and `blobs` |
+| Helm | chart, version, `.tgz` / `.prov` |
 | raw | directories and files |
 
 A group shows the merged content of the members you can read; each entry names

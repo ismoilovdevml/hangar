@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Helm chart repositories** (`helm`): hosted, proxy and group. `helm repo add`,
+  `helm install`, `helm pull --verify` with provenance files, `helm cm-push` and
+  `curl --upload-file` uploads, a generated and cached `index.yaml`, and the
+  ChartMuseum read API. Guide: `docs/guides/helm.md`.
 - **Automation-friendly API**: the OpenAPI document is public at
   `/api/v1/openapi.yaml` and `/api/v1/openapi.json`; `/api/v1/automation-guide.md`
   and `/llms.txt` give scripts and automated clients a short guide with the
