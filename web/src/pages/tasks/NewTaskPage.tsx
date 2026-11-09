@@ -235,7 +235,7 @@ export function NewTaskPage() {
               value={kind}
               onChange={switchKind}
               options={[
-                { value: 'import', label: 'Import into a hosted repository' },
+                { value: 'import', label: 'Import packages' },
                 { value: 'prewarm', label: 'Pre-warm a proxy' },
               ]}
             />

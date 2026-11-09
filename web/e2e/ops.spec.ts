@@ -92,6 +92,28 @@ test('task run detail shows the log at desktop and phone width', async ({ page }
   }
 });
 
+test('new import task fits the screen and opens the created task', async ({ page }) => {
+  const errors = collectErrors(page);
+  for (const [w, size] of SIZES) {
+    await page.setViewportSize(size);
+    await page.goto('/tasks/new?kind=import&repository=npm-internal');
+    await expect(page.getByRole('form', { name: 'New task' })).toBeVisible();
+    await checkFrame(page, `task-new-import-${w}`);
+    await page.goto('/tasks/new?kind=prewarm&repository=npmjs-proxy');
+    await expect(page.getByLabel(/^Coordinates/)).toBeVisible();
+    await checkFrame(page, `task-new-prewarm-${w}`);
+  }
+  await page.setViewportSize(DESKTOP);
+  await page.goto('/tasks/new?kind=import&repository=npm-internal');
+  await page.getByLabel('Task name').fill('import-e2e');
+  await page.getByLabel('Source URL').fill('https://old.example.com/npm/');
+  await page.getByLabel('Run now').uncheck();
+  await page.getByRole('button', { name: 'Create task' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'import-e2e' })).toBeVisible();
+  await expect(page.getByText('https://old.example.com/npm/')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('audit log filters through the URL at desktop and phone width', async ({ page }) => {
   const errors = collectErrors(page);
   for (const [w, size] of SIZES) {
