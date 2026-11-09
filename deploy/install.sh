@@ -4,8 +4,9 @@
 #   curl -fsSL https://github.com/ismoilovdevml/hangar/releases/latest/download/install.sh | sudo bash
 #
 # It asks for a data directory and an optional domain, generates every
-# secret, starts Hangar and PostgreSQL (and Caddy for automatic TLS) and
-# prints the address and the first administrator's one-time password.
+# secret, starts Hangar and PostgreSQL (and Caddy for automatic TLS, and a
+# Trivy server for image scanning with --with-trivy) and prints the address
+# and the first administrator's one-time password.
 # Re-run it to upgrade. Run with --help for unattended use.
 # Guide: docs/deploy/install-compose.md.
 
@@ -49,6 +50,10 @@ upgrade: data, secrets and settings are kept; flags change a setting.
                            (ports 80/443); proxy runs behind your reverse proxy,
                            which terminates TLS (default caddy)
   --port PORT              host port of Hangar's HTTP listener (default 8080)
+  --with-trivy             scan Docker images for vulnerabilities: runs a Trivy
+                           server and Hangar's scan adapter (downloads a
+                           vulnerability database of several hundred MB)
+  --without-trivy          turn image scanning off again (keeps trivy/)
   -y, --yes                do not ask; use flags and defaults
 
 Advanced:
@@ -61,6 +66,9 @@ Advanced:
   --acme-email ADDR        e-mail for certificate expiry notices (caddy)
   --registry-domain NAME   separate host name for Docker clients (caddy)
   --image REF              Hangar image instead of the release image
+  --scanner-image REF      scan adapter image instead of the release image
+  --trivy-proxy URL        outbound proxy (HTTPS_PROXY) for the Trivy database
+                           downloads, e.g. http://proxy.example.com:3128
   --files-from PATH        compose files from a directory or hangar-compose.tar.gz
                            instead of downloading them (offline installs)
   --mirror URL             download release files from URL/<version>/ (an internal
@@ -83,7 +91,7 @@ die() {
 # ---- Arguments ------------------------------------------------------------------
 opt_data="" opt_domain="" opt_tls="" opt_port="" opt_yes=0 opt_version="" opt_bind=""
 opt_trusted="" opt_base_url="" opt_acme="" opt_registry="" opt_image="" opt_files=""
-opt_mirror="" opt_migrate="" uninstall=0 purge=0
+opt_mirror="" opt_migrate="" uninstall=0 purge=0 opt_trivy="" opt_scanner_image="" opt_trivy_proxy=""
 
 need_value() { [[ $# -ge 2 && -n "$2" ]] || die "$1 needs a value"; }
 while [[ $# -gt 0 ]]; do
@@ -100,6 +108,10 @@ while [[ $# -gt 0 ]]; do
 	--acme-email) need_value "$@"; opt_acme=$2; shift 2 ;;
 	--registry-domain) need_value "$@"; opt_registry=$2; shift 2 ;;
 	--image) need_value "$@"; opt_image=$2; shift 2 ;;
+	--with-trivy) opt_trivy=on; shift ;;
+	--without-trivy) opt_trivy=off; shift ;;
+	--scanner-image) need_value "$@"; opt_scanner_image=$2; shift 2 ;;
+	--trivy-proxy) need_value "$@"; opt_trivy_proxy=$2; shift 2 ;;
 	--files-from) need_value "$@"; opt_files=${2%/}; shift 2 ;;
 	--mirror) need_value "$@"; opt_mirror=${2%/}; shift 2 ;;
 	--migrate-from) need_value "$@"; opt_migrate=${2%/}; shift 2 ;;
@@ -134,6 +146,14 @@ ask() {
 	answer=${answer#"${answer%%[![:space:]]*}"}
 	answer=${answer%"${answer##*[![:space:]]}"}
 	printf '%s' "${answer:-$2}"
+}
+
+# confirm_no PROMPT: true only for an answer starting with y.
+confirm_no() {
+	((interactive)) || return 1
+	local a
+	a=$(ask "$1 [y/N] " n)
+	[[ "$a" == [yY]* ]]
 }
 
 # confirm PROMPT: true unless the answer starts with n.
@@ -397,6 +417,16 @@ fi
 insecure=false
 [[ "$base_url" == http://* ]] && insecure=true
 
+# Image scanning with Trivy: asked on a first installation only.
+trivy=$opt_trivy
+[[ -n "$trivy" ]] || trivy=$(stored HANGAR_TRIVY || true)
+if [[ -z "$trivy" && -z "$state" ]] && confirm_no "Scan Docker images for vulnerabilities with Trivy (downloads a database of several hundred MB)?"; then
+	trivy=on
+fi
+trivy=${trivy:-off}
+trivy_proxy=${opt_trivy_proxy:-$(stored TRIVY_HTTPS_PROXY || true)}
+[[ -z "$trivy_proxy" || "$trivy_proxy" =~ ^https?://[^[:space:]]+$ ]] || die "--trivy-proxy $trivy_proxy: want http://host:port"
+
 subnet=$(stored HANGAR_NETWORK_SUBNET || true)
 subnet=${subnet:-172.30.80.0/24}
 pg_user=$(stored POSTGRES_USER || true)
@@ -424,6 +454,12 @@ if [[ "$version" == latest ]]; then
 	fi
 fi
 image=${opt_image:-$DEFAULT_IMAGE_REPO:${version#v}}
+scanner_image=$opt_scanner_image
+if [[ -z "$scanner_image" && -n "$opt_image" ]]; then scanner_image=$(stored HANGAR_SCANNER_IMAGE || true); fi
+scanner_image=${scanner_image:-$DEFAULT_IMAGE_REPO-scanner:${version#v}}
+if [[ "$trivy" == on && "$scanner_image" == *:local ]]; then
+	die "--with-trivy with a local --image needs --scanner-image REF"
+fi
 
 # ---- Plan -------------------------------------------------------------------------
 if ((installed)); then
@@ -440,6 +476,7 @@ $action
   Port:  $bind:$port${tls:+ (TLS: $tls)}
 EOF
 [[ -n "$trusted" ]] && echo "  Trusted proxies: $trusted"
+[[ "$trivy" == on ]] && echo "  Image scanning: Trivy${trivy_proxy:+ (database through $trivy_proxy)}"
 echo
 confirm "Continue?" || die "cancelled"
 
@@ -530,6 +567,10 @@ make_dir "$data/blobs" 750 "$HANGAR_UID"
 make_dir "$data/nats" 750 "$HANGAR_UID"
 make_dir "$data/postgres" 700 "$POSTGRES_UID"
 make_dir "$data/backups" 700 0
+if [[ "$trivy" == on ]]; then
+	make_dir "$data/trivy" 750 "$HANGAR_UID"
+	make_dir "$data/scanner" 750 "$HANGAR_UID"
+fi
 
 if [[ -n "$legacy" ]]; then
 	# Secrets of the old .env become files; the rest of it stays behind.
@@ -553,6 +594,21 @@ fi
 write_secret postgres-password "$pg_password" "$POSTGRES_UID"
 pg_password=$(<"$data/secrets/postgres-password")
 write_secret database.url "postgres://$(urlencode "$pg_user"):$(urlencode "$pg_password")@postgres:5432/$(urlencode "$pg_db")?sslmode=disable" "$HANGAR_UID"
+# Shared by Hangar (scanner.adapter_token) and the scan adapter, which both
+# run as the hangar user.
+if [[ "$trivy" == on ]]; then write_secret scanner.adapter_token "$(rand_hex 32)" "$HANGAR_UID"; fi
+# Hangar's side of image scanning, read by compose.yaml (env_file). Empty
+# without Trivy, so that scanner.* in config/hangar.yaml applies.
+{
+	echo "# Written by install.sh: image scanning settings of the hangar service."
+	echo "# Re-run the installer with --with-trivy or --without-trivy to change them."
+	if [[ "$trivy" == on ]]; then
+		echo "HANGAR_SCANNER_TRIVY_URL=http://trivy:4954"
+		echo "HANGAR_SCANNER_ADAPTER_URL=http://hangar-scanner:4955"
+		echo "HANGAR_SCANNER_REGISTRY_URL=http://hangar:8080"
+	fi
+} >"$data/scanner.env"
+chmod 644 "$data/scanner.env"
 # Release-owned files are replaced on every run; config/hangar.yaml is yours.
 install -m 0644 "$stage/compose.yaml" "$data/compose.yaml"
 install -m 0644 "$stage/compose.connectors.example.yaml" "$data/compose.connectors.example.yaml"
@@ -607,6 +663,7 @@ trusted_all=$subnet
 [[ -n "$trusted" ]] && trusted_all=$trusted,$subnet
 profiles=""
 [[ "$tls" == caddy ]] && profiles=caddy
+[[ "$trivy" == on ]] && profiles=${profiles:+$profiles,}trivy
 env_set "$env_file" HANGAR_VERSION "$version"
 env_set "$env_file" HANGAR_IMAGE "$image"
 env_set "$env_file" HANGAR_DOMAIN "$domain"
@@ -621,6 +678,9 @@ env_set "$env_file" HANGAR_TRUSTED_PROXIES "$trusted_all"
 env_set "$env_file" HANGAR_REGISTRY_DOMAIN "$registry"
 env_set "$env_file" ACME_EMAIL "$acme"
 env_set "$env_file" COMPOSE_PROFILES "$profiles"
+env_set "$env_file" HANGAR_TRIVY "$trivy"
+env_set "$env_file" HANGAR_SCANNER_IMAGE "$scanner_image"
+env_set "$env_file" TRIVY_HTTPS_PROXY "$trivy_proxy"
 env_set "$env_file" POSTGRES_USER "$pg_user"
 env_set "$env_file" POSTGRES_DB "$pg_db"
 
@@ -759,6 +819,11 @@ cat <<EOF
   Uninstall:  $self --data-dir $data --uninstall    (keeps $data; add --purge to delete it)
   Back up:    $data (secrets/ decrypts the credentials stored in the database)
 EOF
+if [[ "$trivy" == on ]]; then
+	echo
+	echo "Image scanning: Trivy downloads its database on the first start (cd $data && docker compose logs -f trivy)."
+	echo "Images are scanned on arrival in repositories with Scan on arrival, and by the hourly rescan."
+fi
 if [[ "$tls" == proxy ]]; then
 	echo
 	echo "Point your reverse proxy at http://$(host_ip):$port (large uploads: docs/deploy/reverse-proxy.md)."

@@ -26,6 +26,16 @@ spec:
       from:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+    {{- if .Values.imageScanning.enabled }}
+    # The scan adapter pulls the images to scan.
+    - ports:
+        - port: http
+          protocol: TCP
+      from:
+        - podSelector:
+            matchLabels:
+              {{- include "hangar.scannerSelectorLabels" . | nindent 14 }}
+    {{- end }}
   {{- if .Values.networkPolicy.egress.enabled }}
   egress:
     # DNS.
@@ -43,6 +53,22 @@ spec:
         - port: 4222
           protocol: TCP
         - port: 8222
+          protocol: TCP
+    {{- end }}
+    {{- if .Values.imageScanning.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "hangar.trivySelectorLabels" . | nindent 14 }}
+      ports:
+        - port: 4954
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "hangar.scannerSelectorLabels" . | nindent 14 }}
+      ports:
+        - port: 4955
           protocol: TCP
     {{- end }}
     {{- with .Values.networkPolicy.egress.to }}

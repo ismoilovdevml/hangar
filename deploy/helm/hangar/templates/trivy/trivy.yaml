@@ -1,0 +1,263 @@
+{{- /*
+Container image scanning (imageScanning.enabled): a Trivy server holding the
+vulnerability database, and Hangar's scan adapter, which runs the Trivy client
+for each image Hangar asks to scan and pulls it from Hangar's Service by
+digest with a registry token valid for minutes. Hangar finds both through
+scanner.* (deployment.yaml).
+*/ -}}
+{{- if .Values.imageScanning.enabled }}
+{{- $s := .Values.imageScanning -}}
+{{- $trivy := include "hangar.trivyName" . -}}
+{{- $scanner := include "hangar.scannerName" . -}}
+{{- $noProxy := printf "localhost,127.0.0.1,.svc,.cluster.local,%s,%s,%s%s" (include "hangar.fullname" .) $trivy $scanner (ternary "" (printf ",%s" $s.noProxy) (empty $s.noProxy)) -}}
+{{- if not $s.adapterToken.existingSecret }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $scanner }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scanner
+type: Opaque
+data:
+  {{ $s.adapterToken.existingSecretKey }}: {{ $s.adapterToken.value | default (include "hangar.persistentRandom" (list . $scanner $s.adapterToken.existingSecretKey)) | b64enc | quote }}
+---
+{{- end }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $trivy }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: trivy
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with $s.trivy.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $s.trivy.persistence.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $trivy }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: trivy
+spec:
+  ports:
+    - name: http
+      port: 4954
+      targetPort: http
+  selector:
+    {{- include "hangar.trivySelectorLabels" . | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $trivy }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: trivy
+spec:
+  replicas: 1
+  # One pod owns the database volume.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "hangar.trivySelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hangar.labels" . | nindent 8 }}
+        {{- include "hangar.trivySelectorLabels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: trivy
+          image: "{{ $s.trivy.image.repository }}:{{ $s.trivy.image.tag }}"
+          imagePullPolicy: {{ $s.trivy.image.pullPolicy }}
+          args: ["server", "--listen", "0.0.0.0:4954", "--cache-dir", "/var/lib/trivy"]
+          ports:
+            - name: http
+              containerPort: 4954
+              protocol: TCP
+          env:
+            - name: HOME
+              value: /tmp
+            - name: TRIVY_DISABLE_TELEMETRY
+              value: "true"
+            - name: TRIVY_SKIP_VERSION_CHECK
+              value: "true"
+            {{- if $s.httpsProxy }}
+            # The database comes from mirror.gcr.io / ghcr.io.
+            - name: HTTPS_PROXY
+              value: {{ $s.httpsProxy | quote }}
+            - name: HTTP_PROXY
+              value: {{ $s.httpsProxy | quote }}
+            - name: NO_PROXY
+              value: {{ $noProxy | quote }}
+            {{- end }}
+            {{- with $s.trivy.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          # The first start downloads the database (several hundred MB).
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 90
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml $s.trivy.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: db
+              mountPath: /var/lib/trivy
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: db
+          persistentVolumeClaim:
+            claimName: {{ $trivy }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 4Gi
+      {{- with $s.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $s.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $scanner }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scanner
+spec:
+  ports:
+    - name: http
+      port: 4955
+      targetPort: http
+  selector:
+    {{- include "hangar.scannerSelectorLabels" . | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $scanner }}
+  labels:
+    {{- include "hangar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scanner
+spec:
+  replicas: {{ $s.scanner.replicas }}
+  selector:
+    matchLabels:
+      {{- include "hangar.scannerSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hangar.labels" . | nindent 8 }}
+        {{- include "hangar.scannerSelectorLabels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: scanner
+          image: "{{ $s.scanner.image.repository }}:{{ $s.scanner.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ $s.scanner.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 4955
+              protocol: TCP
+          env:
+            - name: HOME
+              value: /var/lib/hangar-scanner
+            - name: HANGAR_SCANNER_CONCURRENCY
+              value: {{ $s.scanner.concurrency | quote }}
+            - name: HANGAR_SCANNER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hangar.scannerSecret" . }}
+                  key: {{ $s.adapterToken.existingSecretKey }}
+            {{- if $s.httpsProxy }}
+            # The Java index database (for jar files) is downloaded here.
+            - name: HTTPS_PROXY
+              value: {{ $s.httpsProxy | quote }}
+            - name: HTTP_PROXY
+              value: {{ $s.httpsProxy | quote }}
+            - name: NO_PROXY
+              value: {{ $noProxy | quote }}
+            {{- end }}
+            {{- with $s.scanner.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          resources:
+            {{- toYaml $s.scanner.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: cache
+              mountPath: /var/lib/hangar-scanner
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: cache
+          emptyDir:
+            sizeLimit: 4Gi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 8Gi
+      {{- with $s.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $s.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

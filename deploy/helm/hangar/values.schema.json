@@ -5,7 +5,7 @@
   "definitions": {
     "duration": {
       "type": "string",
-      "pattern": "^(0|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$",
+      "pattern": "^(0|([0-9]+(\\.[0-9]+)?(ns|us|\u00b5s|ms|s|m|h))+)$",
       "description": "Go duration, e.g. 30s, 15m, 48h"
     },
     "secretKey": {
@@ -220,6 +220,26 @@
           "properties": {
             "trivy_url": {
               "type": "string"
+            },
+            "adapter_url": {
+              "type": "string"
+            },
+            "registry_url": {
+              "type": "string"
+            },
+            "platforms": {
+              "enum": [
+                "all",
+                "default"
+              ]
+            },
+            "timeout": {
+              "$ref": "#/definitions/duration"
+            },
+            "workers": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16
             }
           }
         },
@@ -1041,6 +1061,132 @@
       "properties": {
         "enabled": {
           "type": "boolean"
+        }
+      }
+    },
+    "imageScanning": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "platforms": {
+          "enum": [
+            "all",
+            "default"
+          ]
+        },
+        "httpsProxy": {
+          "type": "string",
+          "pattern": "^(|https?://.+)$"
+        },
+        "noProxy": {
+          "type": "string"
+        },
+        "adapterToken": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "string"
+            },
+            "existingSecret": {
+              "type": "string"
+            },
+            "existingSecretKey": {
+              "$ref": "#/definitions/secretKey"
+            }
+          }
+        },
+        "trivy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "image": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "repository": {
+                  "type": "string"
+                },
+                "tag": {
+                  "type": "string"
+                },
+                "pullPolicy": {
+                  "enum": [
+                    "Always",
+                    "IfNotPresent",
+                    "Never"
+                  ]
+                }
+              }
+            },
+            "extraEnv": {
+              "type": "array"
+            },
+            "persistence": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "storageClass": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "string"
+                }
+              }
+            },
+            "resources": {
+              "type": "object"
+            }
+          }
+        },
+        "scanner": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "replicas": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "image": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "repository": {
+                  "type": "string"
+                },
+                "tag": {
+                  "type": "string"
+                },
+                "pullPolicy": {
+                  "enum": [
+                    "Always",
+                    "IfNotPresent",
+                    "Never"
+                  ]
+                }
+              }
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 32
+            },
+            "extraEnv": {
+              "type": "array"
+            },
+            "resources": {
+              "type": "object"
+            }
+          }
+        },
+        "nodeSelector": {
+          "type": "object"
+        },
+        "tolerations": {
+          "type": "array"
         }
       }
     }

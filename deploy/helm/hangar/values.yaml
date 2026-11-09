@@ -267,6 +267,66 @@ nats:
     affinity: {}
     priorityClassName: ""
 
+# Container image scanning with Trivy (docs/guides/vulnerabilities.md): a
+# Trivy server holding the vulnerability database and Hangar's scan adapter
+# (hangar-scanner), which runs the Trivy client and pulls each image to scan
+# from Hangar's Service by digest with a registry token valid for minutes.
+# Wires config.scanner itself; leave config.scanner.trivy_url empty.
+imageScanning:
+  enabled: false
+  # all: every platform of multi-platform images; default: linux/amd64 (or
+  # the first platform) only.
+  platforms: all
+  # Outbound proxy for the database downloads (mirror.gcr.io, ghcr.io):
+  # HTTPS_PROXY of both pods. In-cluster names are never proxied; noProxy
+  # adds more (comma-separated).
+  httpsProxy: ""
+  noProxy: ""
+  # Shared by Hangar and the adapter. Generated and kept across upgrades
+  # when empty; set value or existingSecret for GitOps tools that render
+  # offline.
+  adapterToken:
+    value: ""
+    existingSecret: ""
+    existingSecretKey: scanner-adapter-token
+  trivy:
+    image:
+      repository: aquasec/trivy
+      # Keep it on the Trivy version of the scanner image.
+      tag: 0.76.1
+      pullPolicy: IfNotPresent
+    # E.g. TRIVY_DB_REPOSITORY (a mirror of the database) or
+    # TRIVY_SKIP_DB_UPDATE=true with a database copied into the volume.
+    extraEnv: []
+    persistence:
+      storageClass: ""
+      size: 5Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        memory: 2Gi
+  scanner:
+    replicas: 1
+    image:
+      repository: ghcr.io/ismoilovdevml/hangar-scanner
+      # Defaults to the chart's appVersion.
+      tag: ""
+      pullPolicy: IfNotPresent
+    # Scans at once per pod.
+    concurrency: 2
+    # E.g. TRIVY_JAVA_DB_REPOSITORY or TRIVY_SKIP_JAVA_DB_UPDATE=true.
+    extraEnv: []
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 2Gi
+  nodeSelector: {}
+  tolerations: []
+
 serviceAccount:
   create: true
   name: ""

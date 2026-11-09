@@ -13,6 +13,10 @@
 #   blobs/              package files
 #   nats/               job queue state
 #   caddy/              certificates and Caddyfile (with --tls caddy)
+#   scanner.env         image scanning wiring of the hangar service (written
+#                       by install.sh; empty without --with-trivy)
+#   trivy/              Trivy vulnerability database (with --with-trivy)
+#   scanner/            Trivy client cache of the scan adapter (Java index)
 #
 # Everything is a bind mount of a sub-directory: back up the directory and
 # you have backed up Hangar. :Z / :z relabel the directories for SELinux
@@ -79,6 +83,10 @@ services:
     ulimits:
       nofile: { soft: 65536, hard: 65536 }
     stop_grace_period: 60s
+    # scanner.* settings for the trivy profile; the adapter token is
+    # secrets/scanner.adapter_token. Empty without image scanning, so that
+    # scanner.* in config/hangar.yaml applies.
+    env_file: [./scanner.env]
     # Settings tied to this layout. Everything else lives in
     # config/hangar.yaml; secrets are files in secrets/ named after their
     # setting (security.secret_key, database.url, auth.oidc.client_secret).
@@ -182,6 +190,81 @@ services:
         limits:
           cpus: "${POSTGRES_CPUS:-2}"
           memory: ${POSTGRES_MEMORY:-3g}
+
+  # Container image scanning (install.sh --with-trivy): a Trivy server
+  # holding the vulnerability database, and Hangar's scan adapter, which runs
+  # the Trivy client for each image Hangar asks to scan and pulls it from
+  # Hangar by digest with a registry token valid for minutes. Keep both on
+  # the same Trivy version. Guide: docs/guides/vulnerabilities.md.
+  trivy:
+    container_name: hangar-trivy
+    <<: *hardening
+    profiles: [trivy]
+    image: ${TRIVY_IMAGE:-aquasec/trivy:0.76.1}
+    restart: unless-stopped
+    networks: [hangar]
+    user: "65532:65532"
+    cap_drop: [ALL]
+    command: ["server", "--listen", "0.0.0.0:4954", "--cache-dir", "/var/lib/trivy"]
+    environment:
+      HOME: /var/lib/trivy
+      TRIVY_DISABLE_TELEMETRY: "true"
+      TRIVY_SKIP_VERSION_CHECK: "true"
+      # The database comes from mirror.gcr.io / ghcr.io; behind a corporate
+      # proxy set it with install.sh --trivy-proxy. Offline: see the guide.
+      HTTPS_PROXY: ${TRIVY_HTTPS_PROXY:-}
+      HTTP_PROXY: ${TRIVY_HTTPS_PROXY:-}
+      NO_PROXY: ${TRIVY_NO_PROXY:-localhost,127.0.0.1,hangar,trivy,hangar-scanner}
+    volumes:
+      - type: bind
+        source: ./trivy
+        target: /var/lib/trivy
+        bind: { create_host_path: false, selinux: Z }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4954/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      # The first start downloads the database (several hundred MB).
+      start_period: 10m
+    deploy:
+      resources:
+        limits:
+          cpus: "${TRIVY_CPUS:-2}"
+          memory: ${TRIVY_MEMORY:-2g}
+
+  hangar-scanner:
+    container_name: hangar-scanner
+    <<: *hardening
+    profiles: [trivy]
+    image: ${HANGAR_SCANNER_IMAGE:?run install.sh, which writes .env}
+    restart: unless-stopped
+    networks: [hangar]
+    user: "65532:65532"
+    cap_drop: [ALL]
+    environment:
+      HOME: /var/lib/hangar-scanner
+      HANGAR_SCANNER_TOKEN_FILE: /run/secrets/scanner-token
+      HANGAR_SCANNER_CONCURRENCY: ${HANGAR_SCANNER_CONCURRENCY:-2}
+      # The Java index database for jar files is downloaded here too.
+      HTTPS_PROXY: ${TRIVY_HTTPS_PROXY:-}
+      HTTP_PROXY: ${TRIVY_HTTPS_PROXY:-}
+      NO_PROXY: ${TRIVY_NO_PROXY:-localhost,127.0.0.1,hangar,trivy,hangar-scanner}
+    volumes:
+      - type: bind
+        source: ./scanner
+        target: /var/lib/hangar-scanner
+        bind: { create_host_path: false, selinux: Z }
+      - type: bind
+        source: ./secrets/scanner.adapter_token
+        target: /run/secrets/scanner-token
+        read_only: true
+        bind: { create_host_path: false, selinux: z }
+    deploy:
+      resources:
+        limits:
+          cpus: "${HANGAR_SCANNER_CPUS:-2}"
+          memory: ${HANGAR_SCANNER_MEMORY:-2g}
 
   caddy:
     container_name: hangar-caddy

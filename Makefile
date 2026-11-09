@@ -108,11 +108,17 @@ helm-template: ## Render the chart with every CI value set (kubeconform validate
 
 .PHONY: compose-config
 compose-config: ## Validate deploy/compose with the settings install.sh writes
-	@tmp=$$(mktemp); trap 'rm -f $$tmp' EXIT; \
-	printf 'HANGAR_IMAGE=ghcr.io/ismoilovdevml/hangar:check\nHANGAR_BASE_URL=https://hangar.example.com\nCOMPOSE_PROFILES=caddy\n' > $$tmp; \
-	docker compose -f deploy/compose/compose.yaml --env-file $$tmp config --quiet && \
-	docker compose -f deploy/compose/compose.yaml -f deploy/compose/compose.connectors.example.yaml --env-file $$tmp config --quiet && \
+	@tmp=$$(mktemp -d); trap 'rm -r "$$tmp"' EXIT; \
+	cp deploy/compose/compose.yaml deploy/compose/compose.connectors.example.yaml "$$tmp/"; \
+	printf 'HANGAR_SCANNER_TRIVY_URL=http://trivy:4954\n' > "$$tmp/scanner.env"; \
+	printf 'HANGAR_IMAGE=ghcr.io/ismoilovdevml/hangar:check\nHANGAR_SCANNER_IMAGE=ghcr.io/ismoilovdevml/hangar-scanner:check\nHANGAR_BASE_URL=https://hangar.example.com\nCOMPOSE_PROFILES=caddy,trivy\n' > "$$tmp/.env"; \
+	docker compose -f "$$tmp/compose.yaml" --env-file "$$tmp/.env" config --quiet && \
+	docker compose -f "$$tmp/compose.yaml" -f "$$tmp/compose.connectors.example.yaml" --env-file "$$tmp/.env" config --quiet && \
 	echo "deploy/compose: ok"
+
+.PHONY: docker-scanner
+docker-scanner: ## Build the scan adapter image (hangar-scanner:dev)
+	docker build -f deploy/scanner/Dockerfile -t hangar-scanner:dev --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) .
 
 .PHONY: deploy-scripts-check
 deploy-scripts-check: ## shellcheck the deploy scripts and run the installer tests
