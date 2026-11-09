@@ -47,14 +47,18 @@ func gaPath(group, artifact string) string {
 	return strings.ReplaceAll(group, ".", "/") + "/" + artifact + "/"
 }
 
-// listing returns the entries of a directory listing (names, "/" suffix
-// for directories), or nil when the source serves none.
 func (a *mavenAdapter) listing(ctx context.Context, dir string) ([]string, error) {
-	u, err := a.j.src.resolve(dir)
+	return a.j.listing(ctx, dir)
+}
+
+// listing returns the entries of a directory listing of the source (names,
+// "/" suffix for directories), or nil when the source serves none.
+func (j *job) listing(ctx context.Context, dir string) ([]string, error) {
+	u, err := j.src.resolve(dir)
 	if err != nil {
 		return nil, err
 	}
-	body, hdr, err := a.j.src.bytes(ctx, dir, http.Header{"Accept": {"text/html"}})
+	body, hdr, err := j.src.bytes(ctx, dir, http.Header{"Accept": {"text/html"}})
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +81,7 @@ func (a *mavenAdapter) listing(ctx context.Context, dir string) ([]string, error
 			continue
 		}
 		abs := u.ResolveReference(ref)
-		if !a.j.src.sameHost(abs) || !strings.HasPrefix(abs.Path, u.Path) || abs.Path == u.Path {
+		if !j.src.sameHost(abs) || !strings.HasPrefix(abs.Path, u.Path) || abs.Path == u.Path {
 			continue // parent, sibling or external link
 		}
 		rest := strings.TrimPrefix(abs.Path, u.Path)
