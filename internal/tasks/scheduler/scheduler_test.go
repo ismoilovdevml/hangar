@@ -82,6 +82,8 @@ func TestTickersRunOnlyOnLeader(t *testing.T) {
 		leader  atomic.Bool
 		cancel  context.CancelFunc
 		stopped chan struct{}
+		mu      sync.Mutex
+		at      []time.Time
 	}
 	start := func() *node {
 		n := &node{stopped: make(chan struct{})}
@@ -89,6 +91,9 @@ func TestTickersRunOnlyOnLeader(t *testing.T) {
 			if !n.leader.Load() {
 				t.Error("ticker called on a follower")
 			}
+			n.mu.Lock()
+			n.at = append(n.at, time.Now())
+			n.mu.Unlock()
 			n.ticks.Add(1)
 			return now.Add(10 * time.Millisecond), nil // clamped to >= 1s
 		})
@@ -107,10 +112,15 @@ func TestTickersRunOnlyOnLeader(t *testing.T) {
 	b := start()
 	var once sync.Once
 	t.Cleanup(func() { once.Do(a.cancel); b.cancel(); <-b.stopped })
-	waitFor(t, "leader ticks", func() bool { return a.ticks.Load() >= 1 })
-	time.Sleep(300 * time.Millisecond)
-	if n := a.ticks.Load(); n > 2 {
-		t.Fatalf("ticker ran %d times in ~0.3s; minimum gap ignored", n)
+	// The ticker asks to run again after 10ms; the scheduler holds it to at
+	// least a second. Measured between two real ticks, so a slow machine
+	// cannot make this pass by accident.
+	waitFor(t, "two leader ticks", func() bool { return a.ticks.Load() >= 2 })
+	a.mu.Lock()
+	gap := a.at[1].Sub(a.at[0])
+	a.mu.Unlock()
+	if gap < time.Second {
+		t.Fatalf("second tick %v after the first; minimum gap ignored", gap)
 	}
 	if b.ticks.Load() != 0 {
 		t.Fatalf("follower ticked %d times", b.ticks.Load())
