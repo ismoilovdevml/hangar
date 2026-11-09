@@ -321,7 +321,7 @@ func redactSource(src *Source) {
 func (s *Service) authorizeTarget(ctx context.Context, name string, prewarm bool) (*core.Repository, error) {
 	repo, err := s.opts.Repos.Get(ctx, name)
 	if err != nil {
-		return nil, fmt.Errorf("repository %q: %w", name, err)
+		return nil, err // names the repository
 	}
 	if prewarm {
 		if repo.Type != core.RepoProxy && repo.Type != core.RepoGroup {

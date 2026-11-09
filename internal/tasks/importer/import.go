@@ -336,7 +336,7 @@ type importState struct {
 func (s *Service) runImport(ctx context.Context, x reporter, cfg *ImportConfig) error {
 	repo, err := s.opts.Repos.Get(ctx, cfg.Repository)
 	if err != nil {
-		return fmt.Errorf("repository %q: %w", cfg.Repository, err)
+		return err // names the repository
 	}
 	if repo.Type != core.RepoHosted {
 		return fmt.Errorf("repository %q is %s, not hosted: %w", repo.Name, repo.Type, core.ErrInvalid)

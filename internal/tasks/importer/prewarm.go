@@ -191,7 +191,7 @@ type prewarmState struct {
 func (s *Service) runPrewarm(ctx context.Context, x reporter, cfg *PrewarmConfig) error {
 	repo, err := s.opts.Repos.Get(ctx, cfg.Repository)
 	if err != nil {
-		return fmt.Errorf("repository %q: %w", cfg.Repository, err)
+		return err // names the repository
 	}
 	if repo.Type != core.RepoProxy && repo.Type != core.RepoGroup {
 		return fmt.Errorf("repository %q is %s, not a proxy or group: %w", repo.Name, repo.Type, core.ErrInvalid)
