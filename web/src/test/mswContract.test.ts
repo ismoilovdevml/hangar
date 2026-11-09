@@ -79,6 +79,7 @@ function mockedRoutes(): Mocked[] {
       out.push({ key: `${method} ${path.source}`, method, matches: (rel) => path.test(PREFIX + rel) });
       continue;
     }
+    if (typeof path !== 'string') throw new Error(`mock handler with a predicate path: ${method}`);
     const i = path.indexOf(PREFIX);
     if (i < 0) continue; // package endpoints (/repository/..., /v2/...) are not part of this contract
     const rel = path.slice(i + PREFIX.length);

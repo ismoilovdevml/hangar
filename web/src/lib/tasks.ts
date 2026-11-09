@@ -5,6 +5,7 @@ export const TASK_TYPES: Record<TaskType, { label: string; hint: string }> = {
   cleanup: { label: 'Cleanup', hint: 'Applies a cleanup policy' },
   blob_compaction: { label: 'Blob compaction', hint: 'Frees space held by soft-deleted blobs' },
   docker_gc: { label: 'Docker GC', hint: 'Removes unreferenced layers' },
+  docker_upload_cleanup: { label: 'Docker upload cleanup', hint: 'Ends abandoned docker uploads and frees their chunks' },
   auth_purge: { label: 'Expired sessions purge', hint: 'Deletes expired sessions and session tokens' },
   audit_partitions: { label: 'Audit partitions', hint: 'Creates the next monthly audit log partitions' },
   rescan: { label: 'Rescan', hint: 'Scans packages against the latest advisories' },
