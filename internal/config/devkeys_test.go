@@ -12,10 +12,9 @@ import (
 func TestDevKeysRefused(t *testing.T) {
 	hexDev := hex.EncodeToString([]byte("dev-only-secret-key-32-bytes-!!!"))
 	for name, env := range map[string]map[string]string{
-		"secret key":          {"HANGAR_SECRET_KEY": devSecretKey},
-		"secret key as hex":   {"HANGAR_SECRET_KEY": hexDev},
-		"token key":           {"HANGAR_DOCKER_TOKEN_KEY": devTokenKey},
-		"previous secret key": {"HANGAR_SECRET_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=", "HANGAR_SECURITY_PREVIOUS_SECRET_KEYS": devSecretKey},
+		"secret key":        {"HANGAR_SECRET_KEY": devSecretKey},
+		"secret key as hex": {"HANGAR_SECRET_KEY": hexDev},
+		"token key":         {"HANGAR_DOCKER_TOKEN_KEY": devTokenKey},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := loadWith(t, env)
@@ -26,8 +25,10 @@ func TestDevKeysRefused(t *testing.T) {
 			}
 		})
 	}
+	// Rotating away from the development key keeps it as a previous key.
 	if _, err := loadWith(t, map[string]string{"HANGAR_SECRET_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
-		"HANGAR_DOCKER_TOKEN_KEY": "a-real-random-token-key-of-enough-length-0001"}); err != nil {
+		"HANGAR_SECURITY_PREVIOUS_SECRET_KEYS": devSecretKey,
+		"HANGAR_DOCKER_TOKEN_KEY":              "a-real-random-token-key-of-enough-length-0001"}); err != nil {
 		t.Fatalf("own keys: %v", err)
 	}
 }

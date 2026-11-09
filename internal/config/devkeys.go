@@ -23,16 +23,12 @@ func (c *Config) devKeys() []error {
 		return nil
 	}
 	var errs []error
-	keys := append([]string{c.Security.SecretKey}, c.Security.PreviousSecretKeys...)
-	for i, k := range keys {
-		if sameKey(k, devSecretKey) {
-			name := "security.secret_key (HANGAR_SECRET_KEY)"
-			if i > 0 {
-				name = "security.previous_secret_keys"
-			}
-			errs = append(errs, fmt.Errorf("%s is the public development key from deploy/docker-compose.yml; "+
-				"generate one with `openssl rand -base64 32` (or set server.dev_mode on a development server)", name))
-		}
+	// The development key may stay in security.previous_secret_keys while
+	// `hangar admin rotate-secrets` re-encrypts what it sealed.
+	if sameKey(c.Security.SecretKey, devSecretKey) {
+		errs = append(errs, fmt.Errorf("security.secret_key (HANGAR_SECRET_KEY) is the public development key from "+
+			"deploy/docker-compose.yml; generate one with `openssl rand -base64 32`, keep the old one in "+
+			"security.previous_secret_keys and run `hangar admin rotate-secrets` (or set server.dev_mode on a development server)"))
 	}
 	if strings.TrimSpace(c.Docker.TokenKey) == devTokenKey {
 		errs = append(errs, fmt.Errorf("docker.token_key (HANGAR_DOCKER_TOKEN_KEY) is the public development key from "+
