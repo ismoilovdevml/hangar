@@ -211,9 +211,21 @@ disabled with the reason. Without `HANGAR_SECRET_KEY` the panel says so.
 
 ## Vulnerability scanning
 
-APT packages are listed as "No advisory source". Debian and Ubuntu advisories
-(OSV `Debian:<release>`, `Ubuntu:<release>`) only apply to a known
-distribution release, which custom hosted packages do not have.
+Debian and Ubuntu advisories (OSV `Debian:12`, `Ubuntu:22.04:LTS`, ...) only
+apply to one distribution release, so a repository is scanned once its
+release is known:
+
+- a proxy of a Debian or Ubuntu archive detects it from the suites clients
+  fetch through it (`bookworm`, `bookworm-updates` and `bookworm-security`
+  are `Debian:12`); one proxy serving two releases is not guessed;
+- otherwise set **Distribution release** in the repository settings, or in
+  the API `"config": {"scanning": {"distro": "Debian:12"}}`. The setting
+  wins over the detection.
+
+Packages are checked by their source package (`libssl3` as `openssl`) and
+version, the fix plan suggests `apt-get install --only-upgrade <packages>`.
+Until the release is known the packages show "No advisory source". Details:
+[vulnerabilities.md](vulnerabilities.md#apt-and-rpm-distribution-releases).
 
 ## Limits
 

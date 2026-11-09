@@ -188,6 +188,37 @@ If the provider is unreachable when Hangar starts, Hangar starts anyway and
 retries discovery on the next sign-in. `GET /api/v1/identity-providers`
 shows the provider state.
 
+### Sign-out
+
+Signing out of Hangar ends the Hangar session. With `auth.oidc.logout:
+provider` (the default; *Sign out* in *Settings → Authentication*) a single
+sign-on session also ends at the provider, through OpenID Connect
+RP-Initiated Logout: the browser is sent to the provider's
+`end_session_endpoint` (from its discovery document) with
+
+| Parameter | Value |
+|---|---|
+| `id_token_hint` | the ID token the session started with |
+| `client_id` | the client ID |
+| `post_logout_redirect_uri` | `<server.base_url>/login` |
+
+so the provider signs the user out without asking and returns to the Hangar
+login page. Register `<server.base_url>/login` as a post-logout redirect URI
+at the provider. With `auth.oidc.logout: local`, or when the provider has no
+`end_session_endpoint` (or cannot be reached at sign-out), only the Hangar
+session ends and the next *Continue with SSO* may sign in again without a
+password. The *Test* button reports which applies.
+
+The ID token is kept with the session, sealed (AES-256-GCM) with a key
+derived from the session cookie's secret, which Hangar never stores: the
+database alone does not reveal it. `POST /api/v1/auth/logout` answers `200`
+with `{"logout_url": "..."}` for a provider sign-out, `204` otherwise.
+
+Back-channel and front-channel logout are not supported: ending the session
+at the provider (or in its admin console) does not end the Hangar session,
+which runs until it expires (`auth.session.ttl`) or the user signs out of
+Hangar. Disable or remove the user in Hangar to cut access at once.
+
 ### Keycloak
 
 1. *Clients → Create client*: type **OpenID Connect**, client ID `hangar`.
@@ -196,6 +227,7 @@ shows the provider state.
    Service accounts and Device authorization.
 3. *Login settings*:
    - Valid redirect URIs: `https://hangar.example.com/api/v1/auth/oidc/callback`
+   - Valid post logout redirect URIs: `https://hangar.example.com/login`
    - Web origins: `https://hangar.example.com`
 4. *Advanced → Advanced settings*: **Proof Key for Code Exchange Code
    Challenge Method: S256**.
@@ -214,6 +246,7 @@ auth:
     client_id: hangar
     # client_secret from HANGAR_AUTH_OIDC_CLIENT_SECRET
     client_auth: basic          # or post
+    logout: provider            # or local: sign out of Hangar only
     display_name: Acme SSO
     group_roles:
       hangar-admins: [Admin]
@@ -318,5 +351,21 @@ The audit log (`auth.login.failed`) and the server log carry the detail.
 | LDAP: 409 conflict | A local member has that username; LDAP never signs in as a local account. |
 | Roles do not change | Mapped roles change at the next sign-in. Package clients using a cached Basic login pick changes up after `auth.basic_cache_ttl`. |
 
-An LDAP integration test runs against a real directory when
+### Testing against real directories
+
+`test/e2e/ldap/run.sh` checks LDAP sign-in end to end against an OpenLDAP
+server and a Samba Active Directory domain controller in Docker (Linux host):
+the settings *Test* endpoint, sign-in with `realm: ldap`, group to role
+mapping including AD nested groups (`LDAP_MATCHING_RULE_IN_CHAIN`, and that
+`memberOf` alone does not see them), StartTLS and ldaps with certificate
+verification, `401` for a wrong password, the lockout, and HTTP Basic from a
+package client. It starts the directories, seeds users and groups, starts a
+Hangar server unless `HANGAR_E2E_URL` is set, and runs `TestLDAP`:
+
+```sh
+test/e2e/ldap/run.sh                         # everything, on a fresh server
+LDAP_E2E_DIRECTORIES=ad test/e2e/ldap/run.sh # Active Directory only
+```
+
+A unit-level integration test also runs against any directory when
 `HANGAR_TEST_LDAP_URL` is set (see `internal/auth/ldap/ldap_test.go`).

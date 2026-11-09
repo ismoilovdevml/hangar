@@ -1,14 +1,16 @@
 # Vulnerability scanning
 
-Hangar checks every npm, Maven, PyPI, NuGet and Go package version it stores
-against the public [OSV](https://osv.dev) advisory database (or a mirror of
-it) and lists what it finds on the **Vulnerabilities** screen as a fix plan
+Hangar checks every npm, Maven, PyPI, NuGet, Go and Cargo package version it
+stores, and the APT and RPM packages of repositories whose distribution
+release is known, against the public [OSV](https://osv.dev) advisory
+database (or a mirror of it) and lists what it finds on the **Vulnerabilities** screen as a fix plan
 (what to upgrade, and whether builds still pull the vulnerable versions), on
 the package page and in search (`security:findings`, `cve:CVE-2024-21907`).
 
 Docker images are **not** scanned yet. They show *Image scanning not
 configured*, never *Clean*. Raw files have no advisory source and show *No
-advisory source*.
+advisory source*, and so do APT and RPM packages until their repository
+names a [distribution release](#apt-and-rpm-distribution-releases).
 
 ## How it works
 
@@ -29,7 +31,55 @@ error; the package shows *Scan failed* and the hourly task retries it.
 
 Package names are sent the way advisories name them: npm `@scope/name`, Maven
 `groupId:artifactId`, NuGet the original-case package id, PyPI the project
-name, Go the module path.
+name, Go the module path, APT the source package and RPM the source RPM (see
+below).
+
+### APT and RPM: distribution releases
+
+Distribution advisories apply to one release: OSV keeps `Debian:12` and
+`Debian:13`, `Ubuntu:22.04:LTS` and `Ubuntu:24.04:LTS` apart, and the same
+`openssl` build is fixed in one and not the other. An APT or RPM repository
+is therefore scanned only once its release is known:
+
+- **Setting**: *Distribution release* in the repository settings
+  (`config.scanning.distro`), an OSV ecosystem. The picker offers the common
+  ones; any other OSV ecosystem of the format is accepted.
+
+  | Format | Examples |
+  |---|---|
+  | APT | `Debian:11`, `Debian:12`, `Debian:13`, `Ubuntu:20.04:LTS`, `Ubuntu:22.04:LTS`, `Ubuntu:24.04:LTS`, `Ubuntu:24.10` |
+  | RPM | `Rocky Linux:8`, `Rocky Linux:9`, `AlmaLinux:9`, `Red Hat:enterprise_linux:9::baseos`, `Red Hat:enterprise_linux:9::appstream`, `openSUSE:Leap 15.6` |
+
+  Red Hat keeps BaseOS and AppStream apart: use one repository per stream.
+- **Detected** for proxies when the setting is empty: an APT proxy of a
+  Debian or Ubuntu archive (`deb.debian.org`, `security.debian.org`,
+  `archive.ubuntu.com`, `ports.ubuntu.com`, or a mirror whose path ends in
+  `/debian` or `/ubuntu`) takes the release of the suites its clients have
+  fetched (`bookworm` and `bookworm-updates` are `Debian:12`, `jammy` is
+  `Ubuntu:22.04:LTS`); a proxy that serves suites of two releases is left
+  alone. An RPM proxy of a Rocky Linux or AlmaLinux mirror takes the major
+  version in its URL (`https://dl.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os`
+  is `Rocky Linux:9`), a Red Hat CDN URL its release and stream. Detection
+  runs every ten minutes and when the repository changes; the setting always
+  wins.
+
+When the release of a repository is set or changes, the repository is
+rescanned. What is asked:
+
+| | Package name | Version |
+|---|---|---|
+| APT | the source package (`Source:` of the control file, else the package): `libssl3` is checked as `openssl` | the source version when `Source:` names one (binNMUs), else the package version, with its epoch |
+| RPM | the source RPM name (`openssl-libs-3.0.7-27.el9` comes from `openssl-3.0.7-27.el9.src.rpm`) | `[epoch:]version-release` of the package |
+
+Versions are compared the way the package manager does (`dpkg
+--compare-versions`, rpm's `rpmvercmp`) for *Fixed in* and the fix plan, so
+`2.36-9+deb12u4` fixes `2.36-9+deb12u3` and an epoch outranks everything.
+The fix plan's command upgrades the installed binary packages:
+`apt-get install --only-upgrade libssl3 openssl`, `dnf upgrade openssl-libs`.
+
+Packages you build yourself and upload to a hosted repository are usually
+not in the distribution's advisories (unless they reuse a distribution
+package name); leave the setting empty for such repositories.
 
 ### Severity
 
@@ -235,6 +285,8 @@ curl -s -H "Authorization: Bearer $HANGAR_TOKEN" -H "Accept: text/csv" \
 ## Not covered yet
 
 - Container images (and the `scanner.trivy_url` setting, which is reserved).
+- APT and RPM repositories whose release cannot be detected and is not set,
+  and group repositories (their members are scanned).
 - Licence policies and signature requirements.
 - Findings inside a package's dependencies: Hangar checks the version itself,
   not what it depends on.

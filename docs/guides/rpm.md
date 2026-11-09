@@ -194,9 +194,21 @@ see [apt.md](apt.md#signing-keys).
 
 ## Vulnerability scanning
 
-RPM packages are listed as "No advisory source". Red Hat, Rocky Linux and
-AlmaLinux advisories apply to a known distribution release, which custom
-hosted packages do not have.
+Rocky Linux, AlmaLinux and Red Hat advisories (OSV `Rocky Linux:9`,
+`AlmaLinux:9`, `Red Hat:enterprise_linux:9::baseos`, ...) apply to one
+release, so a repository is scanned once its release is known:
+
+- a proxy of a Rocky Linux or AlmaLinux mirror detects it from the major
+  version in the remote URL (`https://dl.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os`
+  is `Rocky Linux:9`), a Red Hat CDN URL from its release and stream;
+- otherwise set **Distribution release** in the repository settings, or in
+  the API `"config": {"scanning": {"distro": "Rocky Linux:9"}}`. The setting
+  wins over the detection.
+
+Packages are checked by their source RPM (`openssl-libs` as `openssl`) with
+`[epoch:]version-release`; the fix plan suggests `dnf upgrade <packages>`.
+Until the release is known the packages show "No advisory source". Details:
+[vulnerabilities.md](vulnerabilities.md#apt-and-rpm-distribution-releases).
 
 ## Limits
 
