@@ -2,6 +2,7 @@ package repository_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -98,5 +99,59 @@ func TestRemoteCheck(t *testing.T) {
 	}
 	if len(seen) != 1 {
 		t.Errorf("remote check calls = %v (hosted repositories have no remote)", seen)
+	}
+}
+
+func TestUpdateAuditsCredentialChangesWithoutSecrets(t *testing.T) {
+	f := newFixture(t)
+	in := proxy("npm-gitlab", "npm")
+	in.Config.Proxy.Auth = &core.UpstreamAuth{Kind: core.UpstreamAuthBasic, Username: "ci", Password: "gl-first"}
+	out := f.mustCreate(t, in)
+
+	update := func(auth *core.UpstreamAuth) {
+		t.Helper()
+		r := *out
+		p := *out.Config.Proxy
+		p.Auth = auth
+		r.Config.Proxy = &p
+		got, err := f.svc.Update(f.ctx, &r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = got
+	}
+	update(out.Config.Proxy.Auth) // the stored (sealed) secret sent back
+	update(&core.UpstreamAuth{Kind: core.UpstreamAuthBasic, Username: "ci", Password: "gl-second"})
+	update(nil)
+	update(&core.UpstreamAuth{Kind: core.UpstreamAuthBearer, Token: "gl-third"})
+	r := *out
+	r.Description = "no proxy auth change"
+	r.Config.Proxy = &core.ProxyConfig{RemoteURL: out.Config.Proxy.RemoteURL}
+	if _, err := f.svc.Update(f.ctx, &r); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Update(f.ctx, &r); err != nil {
+		t.Fatal(err)
+	}
+
+	events := f.audit.Events("repository.update")
+	var got []any
+	for _, e := range events {
+		got = append(got, e.Details["upstream_auth"])
+	}
+	want := []any{"unchanged", "replaced", "removed", "added", "removed", nil}
+	if len(got) != len(want) {
+		t.Fatalf("update audit = %+v", events)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("update %d upstream_auth = %v, want %v", i, got[i], want[i])
+		}
+	}
+	raw, _ := json.Marshal(events)
+	for _, s := range []string{"gl-first", "gl-second", "gl-third", "hgs1."} {
+		if strings.Contains(string(raw), s) {
+			t.Errorf("audit trail contains %q: %s", s, raw)
+		}
 	}
 }
