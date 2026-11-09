@@ -4,6 +4,8 @@ name: Release
 #   - container image ghcr.io/<owner>/hangar (linux/amd64 + linux/arm64, built
 #     natively per architecture, web UI embedded), smoke-tested per architecture
 #     against PostgreSQL before it is tagged <version>, <major>.<minor> and latest
+#   - the image scan adapter ghcr.io/<owner>/hangar-scanner (same tags; the
+#     official Trivy image plus a cross-compiled binary)
 #   - hangar binaries for linux (amd64, arm64) with SHA256SUMS
 #   - a GitHub Release with the binaries, the compose stack (one archive) and deploy/install.sh
 #
@@ -220,6 +222,67 @@ jobs:
             "${sources[@]}"
           docker buildx imagetools inspect "$IMAGE:$SEMVER"
 
+  scanner:
+    name: Scan adapter image
+    needs: meta
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.version }}
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: tags
+        env:
+          IMAGE: ${{ needs.meta.outputs.image }}-scanner
+          SEMVER: ${{ needs.meta.outputs.semver }}
+          MINOR: ${{ needs.meta.outputs.minor }}
+          PRERELEASE: ${{ needs.meta.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          {
+            echo "tags<<EOF"
+            echo "$IMAGE:$SEMVER"
+            if [[ "$PRERELEASE" == false ]]; then
+              echo "$IMAGE:$MINOR"
+              echo "$IMAGE:latest"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      # The target stage only copies files onto the Trivy image, so both
+      # architectures build on one runner without emulation.
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/scanner/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            VERSION=${{ needs.meta.outputs.version }}
+            COMMIT=${{ needs.meta.outputs.commit }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.meta.outputs.commit }}
+            org.opencontainers.image.created=${{ needs.meta.outputs.date }}
+          tags: ${{ steps.tags.outputs.tags }}
+          push: true
+          cache-from: type=gha,scope=release-scanner
+          cache-to: type=gha,scope=release-scanner,mode=max
+      - name: Smoke test
+        env:
+          REF: ${{ needs.meta.outputs.image }}-scanner:${{ needs.meta.outputs.semver }}
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          docker run --rm "$REF" version | grep -q "hangar-scanner $VERSION "
+          docker run --rm --entrypoint trivy "$REF" --version
+
   binaries:
     name: Binaries
     needs: meta
@@ -269,7 +332,7 @@ jobs:
 
   release:
     name: GitHub Release
-    needs: [meta, manifest, binaries]
+    needs: [meta, manifest, scanner, binaries]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -313,7 +376,8 @@ jobs:
             sudo bash -s -- --version $VERSION
           \`\`\`
 
-          Container image: \`$IMAGE:$SEMVER\` (linux/amd64, linux/arm64).
+          Container image: \`$IMAGE:$SEMVER\` (linux/amd64, linux/arm64); image scan adapter
+          \`$IMAGE-scanner:$SEMVER\` (with \`install.sh --with-trivy\`).
           Upgrade an installation: re-run the installer with \`--data-dir <dir> --version $VERSION\`.
           Deployment guides: [docs/deploy](https://github.com/$REPO/tree/$VERSION/docs/deploy).
           Verify downloads with \`sha256sum -c SHA256SUMS\`.
