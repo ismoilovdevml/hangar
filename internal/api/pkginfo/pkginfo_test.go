@@ -301,3 +301,49 @@ func TestHelmChart(t *testing.T) {
 		t.Fatalf("bare = %+v", i)
 	}
 }
+
+func TestCargoCrate(t *testing.T) {
+	e := newEnv(t)
+	r := repo("cargo-hosted", "cargo", core.RepoHosted)
+	// The readme field names the README; images resolve inside the .crate.
+	c := e.publish(r, &core.Component{Name: "hangar-tiny", Version: "0.1.0"},
+		file{"crates/hangar-tiny/0.1.0/hangar-tiny-0.1.0.crate", tgz(t, map[string]string{
+			"hangar-tiny-0.1.0/Cargo.toml": "[package]\nname = \"hangar-tiny\"\nversion = \"0.1.0\"\ndescription = \"Tiny crate\"\n" +
+				"license = \"MIT OR Apache-2.0\"\nrepository = \"https://github.com/acme/hangar-tiny\"\nkeywords = [\"tiny\", \"test\"]\nreadme = \"docs/INTRO.md\"\n",
+			"hangar-tiny-0.1.0/README.md":       "# root readme, not chosen",
+			"hangar-tiny-0.1.0/docs/INTRO.md":   "# Intro\n\n![logo](logo.png)\n",
+			"hangar-tiny-0.1.0/docs/logo.png":   "png",
+			"hangar-tiny-0.1.0/src/lib.rs":      "",
+			"hangar-tiny-0.1.0/Cargo.toml.orig": "",
+		})})
+	i := e.info(r, c)
+	if i.Description != "Tiny crate" || !reflect.DeepEqual(i.Licenses, []string{"MIT OR Apache-2.0"}) || !reflect.DeepEqual(i.Keywords, []string{"tiny", "test"}) ||
+		i.Homepage != "https://github.com/acme/hangar-tiny" || i.Readme == nil || i.Readme.Content != "# Intro\n\n![logo](logo.png)" ||
+		i.Readme.Format != FormatMarkdown || i.Readme.Source != "docs/INTRO.md in the .crate" {
+		t.Fatalf("info = %+v (%+v)", i, i.Readme)
+	}
+	if img := i.Readme.Images["logo.png"]; img.Member != "hangar-tiny-0.1.0/docs/logo.png" {
+		t.Errorf("image = %+v", i.Readme.Images)
+	}
+	if b, err := e.svc.Member(context.Background(), r, c, "hangar-tiny-0.1.0/docs/logo.png", 1024); err != nil || string(b) != "png" {
+		t.Errorf("member = %q %v", b, err)
+	}
+	// Without a readme field: README.md; readme = false: none.
+	c2 := e.publish(r, &core.Component{Name: "plain", Version: "1.0.0"},
+		file{"crates/plain/1.0.0/plain-1.0.0.crate", tgz(t, map[string]string{
+			"plain-1.0.0/Cargo.toml": "[package]\nname = \"plain\"\nversion = \"1.0.0\"\nlicense-file = \"LICENSE\"\nhomepage = \"https://plain.example\"\n",
+			"plain-1.0.0/README.md":  "plain readme",
+		})})
+	if i := e.info(r, c2); i.Readme == nil || i.Readme.Content != "plain readme" || i.Homepage != "https://plain.example" ||
+		!reflect.DeepEqual(i.Licenses, []string{"see LICENSE"}) {
+		t.Errorf("default readme = %+v (%+v)", i, i.Readme)
+	}
+	c3 := e.publish(r, &core.Component{Name: "noreadme", Version: "1.0.0"},
+		file{"crates/noreadme/1.0.0/noreadme-1.0.0.crate", tgz(t, map[string]string{
+			"noreadme-1.0.0/Cargo.toml": "[package]\nname = \"noreadme\"\nversion = \"1.0.0\"\nreadme = false\n",
+			"noreadme-1.0.0/README.md":  "should be ignored",
+		})})
+	if i := e.info(r, c3); i.Readme != nil {
+		t.Errorf("readme = false still found %+v", i.Readme)
+	}
+}

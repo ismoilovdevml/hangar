@@ -1,7 +1,8 @@
 // Package pkginfo extracts the package facts the browse view shows from a
 // version's stored files: README, description, licences, keywords and home
 // page. Each format keeps them in its own place (npm manifests and tarballs,
-// the .nuspec inside a .nupkg, PyPI core metadata, the Maven POM), so the
+// the .nuspec inside a .nupkg, PyPI core metadata, the Maven POM, Cargo.toml
+// inside a .crate), so the
 // extraction runs lazily on first view and its result is cached in the
 // component_info table until the version is deleted.
 package pkginfo
@@ -162,6 +163,8 @@ func (x *extraction) run(ctx context.Context) {
 		x.helm(ctx)
 	case "go":
 		x.gomod(ctx)
+	case "cargo":
+		x.cargo(ctx)
 	}
 	x.resolveImages(ctx)
 }
@@ -383,8 +386,8 @@ func (s *Service) Member(ctx context.Context, repo *core.Repository, c *core.Com
 				break
 			}
 		}
-	case "npm", "helm":
-		tgz := x.assetBySuffix(ctx, ".tgz")
+	case "npm", "helm", "cargo":
+		tgz := x.assetBySuffix(ctx, tarballSuffix(repo.Format))
 		if tgz == nil {
 			return nil, notFound
 		}
@@ -409,6 +412,14 @@ func (s *Service) Member(ctx context.Context, repo *core.Repository, c *core.Com
 		return nil, tooLarge
 	}
 	return out, nil
+}
+
+// tarballSuffix is the file suffix of a tarball-packaged format's package archive.
+func tarballSuffix(format string) string {
+	if format == "cargo" {
+		return ".crate"
+	}
+	return ".tgz"
 }
 
 // memberErr reports a blob store failure as such, else fallback.

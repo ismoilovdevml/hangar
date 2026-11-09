@@ -75,14 +75,16 @@ type browsePageJSON struct {
 }
 
 // browseRoot is the storage directory a format's browse tree starts at:
-// NuGet packages live under the flat container and PyPI files under
-// packages/, next to cached upstream documents that are not browsed.
+// NuGet packages live under the flat container, PyPI files under
+// packages/ and crates under crates/, next to cached upstream documents that are not browsed.
 func browseRoot(format string) string {
 	switch format {
 	case "nuget":
 		return "v3-flatcontainer/"
 	case "pypi":
 		return "packages/"
+	case "cargo":
+		return "crates/"
 	}
 	return ""
 }
@@ -135,6 +137,9 @@ func componentFolders(format string, c *catalog.BrowseComponent) (pkg, version s
 		return pypiSeparators.ReplaceAllString(strings.ToLower(c.Name), "-") + "/", ""
 	case "go": // module path segments, the module, @v, versions, files
 		return c.Name + "/", c.Name + "/@v/" + c.Version + "/"
+	case "cargo":
+		pkg = strings.ToLower(c.Name) + "/"
+		return pkg, pkg + c.Version + "/"
 	}
 	return "", ""
 }
@@ -161,7 +166,7 @@ func folderKind(format, tree string, c *catalog.BrowseComponent) string {
 // browseFormatsWithPackages are the formats whose folders can be packages
 // or versions; raw folders are plain directories and are not annotated.
 var browseFormatsWithPackages = map[string]bool{"npm": true, "maven": true, "nuget": true, "pypi": true, "docker": true,
-	"helm": true, "go": true}
+	"helm": true, "go": true, "cargo": true}
 
 type browseCursor struct {
 	K string `json:"k"`
