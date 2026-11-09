@@ -158,7 +158,7 @@ func TestEscalationMatrix(t *testing.T) {
 		}
 	}
 
-	// The take-over of the QA reproduction: the admin's password is
+	// No take-over happened: the admin's password is
 	// unchanged, the admin still holds Admin, and every refusal was audited.
 	if _, err := e.Svc.Login(context.Background(), "admin", authtest.AdminPassword); err != nil {
 		t.Fatalf("admin password changed: %v", err)
