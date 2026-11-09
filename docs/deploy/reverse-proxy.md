@@ -16,8 +16,10 @@ it. Whatever the proxy, four things must hold:
 3. **Large, slow transfers**: no request body limit, no buffering of request
    or response bodies, and timeouts measured between reads rather than for the
    whole request. Docker layers and Maven or raw artifacts can be many GiB.
-4. **`/metrics` stays internal**: it has no authentication. Block it on public
-   hosts and let Prometheus scrape the nodes directly.
+4. **`/metrics` stays internal**: by default it has no authentication
+   (`metrics.auth: none`). Block it on public hosts and let Prometheus scrape
+   the nodes directly; `metrics.auth` and `metrics.allowed_cidrs` protect it
+   further ([monitoring.md](../operations/monitoring.md#protecting-metrics)).
 
 ## Docker clients and the registry host
 

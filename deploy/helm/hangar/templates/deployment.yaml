@@ -143,6 +143,24 @@ spec:
                   name: {{ include "hangar.proxyPasswordSecret" . }}
                   key: {{ .Values.httpProxyPassword.existingSecretKey }}
             {{- end }}
+            {{- if eq .Values.metrics.auth.mode "bearer" }}
+            - name: HANGAR_METRICS_BEARER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.metrics.auth.existingSecret }}
+                  key: {{ .Values.metrics.auth.tokenKey }}
+            {{- else if eq .Values.metrics.auth.mode "basic" }}
+            - name: HANGAR_METRICS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.metrics.auth.existingSecret }}
+                  key: {{ .Values.metrics.auth.usernameKey }}
+            - name: HANGAR_METRICS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.metrics.auth.existingSecret }}
+                  key: {{ .Values.metrics.auth.passwordKey }}
+            {{- end }}
             {{- if eq .Values.nats.mode "bundled" }}
             - name: NATS_PASSWORD
               valueFrom:

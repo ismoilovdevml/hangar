@@ -207,7 +207,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	}
 	a.onClose(rt.Close)
 	bus := events.NewBus(rt.Conn, log)
-	queue, err := events.NewQueue(ctx, rt.JS, events.QueueOptions{MaxAttempts: jobMaxAttempts}, log)
+	queue, err := events.NewQueue(ctx, rt.JS, events.QueueOptions{MaxAttempts: jobMaxAttempts, Replicas: cfg.NATS.Replicas}, log)
 	if err != nil {
 		return nil, err
 	}
@@ -503,8 +503,15 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	if cfg.Metrics.Enabled {
 		metricsPath = cfg.Metrics.Path
 	}
+	metricsAuth, err := server.NewMetricsAuth(server.MetricsAuthOptions{
+		Mode: cfg.Metrics.Auth, BearerToken: cfg.Metrics.BearerToken,
+		Username: cfg.Metrics.Username, Password: cfg.Metrics.Password, AllowedCIDRs: cfg.Metrics.AllowedCIDRs,
+	})
+	if err != nil {
+		return nil, err
+	}
 	a.router = server.NewRouter(server.RouterOptions{
-		Logger: log, Metrics: metrics, MetricsPath: metricsPath,
+		Logger: log, Metrics: metrics, MetricsPath: metricsPath, MetricsAuth: metricsAuth,
 		AccessLogSampleRatio: cfg.Observability.AccessLog.SampleRatio,
 		Health:               hc, TrustedProxies: trusted,
 		API: restAPI, Formats: reg, Deps: formatDeps,

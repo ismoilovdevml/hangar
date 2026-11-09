@@ -208,3 +208,42 @@ func TestRunGracefulShutdown(t *testing.T) {
 		t.Fatal("server still accepting after shutdown")
 	}
 }
+
+// With a drain delay the node keeps answering new requests (closing their
+// connections) while /readyz fails, and stops listening only afterwards.
+func TestRunDrainDelay(t *testing.T) {
+	const delay = 600 * time.Millisecond
+	hc := health.New(0)
+	h := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") })
+	ctx, cancel := context.WithCancel(context.Background())
+	addrc := make(chan net.Addr, 1)
+	errc := make(chan error, 1)
+	go func() {
+		errc <- Run(ctx, Config{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second, DrainDelay: delay}, h, hc, discard(), func(a net.Addr) { addrc <- a })
+	}()
+	addr := (<-addrc).String()
+	stopped := time.Now()
+	cancel()
+	time.Sleep(100 * time.Millisecond)
+	if rep := hc.Run(context.Background()); rep.Status != health.StatusDraining {
+		t.Errorf("readiness while draining = %s", rep.Status)
+	}
+	resp, err := http.Get("http://" + addr + "/")
+	if err != nil {
+		t.Fatalf("new request while draining: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !resp.Close {
+		t.Errorf("request while draining: status %d, connection close %v", resp.StatusCode, resp.Close)
+	}
+	if err := <-errc; err != nil {
+		t.Fatalf("Run = %v", err)
+	}
+	if took := time.Since(stopped); took < delay {
+		t.Errorf("stopped after %s, before the %s drain delay", took, delay)
+	}
+	if resp, err := http.Get("http://" + addr + "/"); err == nil {
+		_ = resp.Body.Close()
+		t.Fatal("still accepting after the drain delay")
+	}
+}

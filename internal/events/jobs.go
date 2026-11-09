@@ -3,8 +3,10 @@ package events
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +23,9 @@ const (
 	JobSubjectPrefix = "hangar.jobs."
 )
 
+// MaxReplicas is the largest JetStream replica count (a NATS limit).
+const MaxReplicas = 5
+
 // QueueOptions tune the job queue.
 type QueueOptions struct {
 	// MaxAttempts before a job is dropped (and logged). Default 5.
@@ -28,7 +33,9 @@ type QueueOptions struct {
 	// AckWait is how long a running job may go without finishing before it is
 	// redelivered to another worker. Default 10 minutes.
 	AckWait time.Duration
-	// Replicas of the stream in a NATS cluster. Default 1.
+	// Replicas of the job stream in a NATS cluster, 1 to MaxReplicas
+	// (nats.replicas). Default 1. An existing stream with another count is
+	// scaled to it; its consumers follow the stream.
 	Replicas int
 }
 
@@ -47,7 +54,8 @@ type Queue struct {
 
 var _ core.JobQueue = (*Queue)(nil)
 
-// NewQueue creates or updates the job stream.
+// NewQueue creates the job stream, or updates it when its settings (such as
+// the replica count) differ from opts.
 func NewQueue(ctx context.Context, js jetstream.JetStream, opts QueueOptions, log *slog.Logger) (*Queue, error) {
 	if opts.MaxAttempts <= 0 {
 		opts.MaxAttempts = 5
@@ -58,22 +66,69 @@ func NewQueue(ctx context.Context, js jetstream.JetStream, opts QueueOptions, lo
 	if opts.Replicas <= 0 {
 		opts.Replicas = 1
 	}
+	if opts.Replicas > MaxReplicas {
+		return nil, fmt.Errorf("job stream replicas %d: at most %d", opts.Replicas, MaxReplicas)
+	}
 	if log == nil {
 		log = slog.Default()
 	}
-	stream, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
+	stream, err := ensureStream(ctx, js, jobStreamConfig(opts.Replicas), log)
+	if err != nil {
+		return nil, err
+	}
+	return &Queue{js: js, stream: stream, opts: opts, log: log, handlers: map[string]jetstream.ConsumeContext{}}, nil
+}
+
+func jobStreamConfig(replicas int) jetstream.StreamConfig {
+	return jetstream.StreamConfig{
 		Name:        JobStream,
 		Description: "Hangar background jobs",
 		Subjects:    []string{JobSubjectPrefix + ">"},
 		Retention:   jetstream.WorkQueuePolicy,
 		Storage:     jetstream.FileStorage,
-		Replicas:    opts.Replicas,
+		Replicas:    replicas,
 		Duplicates:  10 * time.Minute,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create job stream: %w", err)
 	}
-	return &Queue{js: js, stream: stream, opts: opts, log: log, handlers: map[string]jetstream.ConsumeContext{}}, nil
+}
+
+// ensureStream creates the stream cfg names, or updates it in place when
+// the managed settings differ (every node runs this on start, so the stream
+// follows the configuration of the last node started).
+func ensureStream(ctx context.Context, js jetstream.JetStream, cfg jetstream.StreamConfig, log *slog.Logger) (jetstream.Stream, error) {
+	stream, err := js.Stream(ctx, cfg.Name)
+	if errors.Is(err, jetstream.ErrStreamNotFound) {
+		stream, err = js.CreateStream(ctx, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("create job stream %s (replicas %d): %w", cfg.Name, cfg.Replicas, err)
+		}
+		log.Info("job stream created", "stream", cfg.Name, "replicas", cfg.Replicas)
+		return stream, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("job stream %s: %w", cfg.Name, err)
+	}
+	cur := stream.CachedInfo().Config
+	if streamMatches(cur, cfg) {
+		return stream, nil
+	}
+	stream, err = js.UpdateStream(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("update job stream %s (replicas %d to %d): %w", cfg.Name, cur.Replicas, cfg.Replicas, err)
+	}
+	if cur.Replicas != cfg.Replicas {
+		log.Info("job stream replicas changed", "stream", cfg.Name, "from", cur.Replicas, "to", cfg.Replicas)
+	} else {
+		log.Info("job stream updated", "stream", cfg.Name)
+	}
+	return stream, nil
+}
+
+// streamMatches reports whether the settings Hangar manages are already as
+// wanted. Fields the server fills in (limits, placement) are not compared.
+func streamMatches(cur, want jetstream.StreamConfig) bool {
+	return cur.Replicas == want.Replicas && cur.Description == want.Description &&
+		slices.Equal(cur.Subjects, want.Subjects) && cur.Retention == want.Retention &&
+		cur.Storage == want.Storage && cur.Duplicates == want.Duplicates
 }
 
 func validJobType(t string) error {

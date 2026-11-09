@@ -20,4 +20,19 @@ spec:
       path: {{ dig "metrics" "path" "/metrics" .Values.config }}
       interval: {{ .Values.metrics.serviceMonitor.interval }}
       scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
+      {{- if eq .Values.metrics.auth.mode "bearer" }}
+      authorization:
+        type: Bearer
+        credentials:
+          name: {{ .Values.metrics.auth.existingSecret }}
+          key: {{ .Values.metrics.auth.tokenKey }}
+      {{- else if eq .Values.metrics.auth.mode "basic" }}
+      basicAuth:
+        username:
+          name: {{ .Values.metrics.auth.existingSecret }}
+          key: {{ .Values.metrics.auth.usernameKey }}
+        password:
+          name: {{ .Values.metrics.auth.existingSecret }}
+          key: {{ .Values.metrics.auth.passwordKey }}
+      {{- end }}
 {{- end }}

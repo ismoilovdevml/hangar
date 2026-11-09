@@ -91,6 +91,7 @@ func serveCmd(args []string, stderr io.Writer) error {
 		ReadHeaderTimeout: cfg.Server.ReadHeaderTimeout,
 		IdleTimeout:       cfg.Server.IdleTimeout,
 		ShutdownTimeout:   cfg.Server.ShutdownTimeout,
+		DrainDelay:        cfg.Server.DrainDelay,
 		MaxHeaderBytes:    cfg.Security.Limits.MaxHeaderBytes,
 	}
 	// Dedicated ports of docker repository connectors open and close as
@@ -120,7 +121,7 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool, migrate bool, log *sl
 	if migrate {
 		return m.Up(ctx, log)
 	}
-	pending, err := m.HasPending(ctx)
+	pending, err := m.HasPending(ctx, log)
 	if err != nil {
 		return err
 	}

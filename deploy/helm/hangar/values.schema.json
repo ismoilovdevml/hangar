@@ -105,6 +105,9 @@
             "shutdown_timeout": {
               "$ref": "#/definitions/duration"
             },
+            "drain_delay": {
+              "$ref": "#/definitions/duration"
+            },
             "trusted_proxies": {
               "$ref": "#/definitions/stringList"
             }
@@ -134,7 +137,7 @@
           "properties": {
             "max_conns": {
               "type": "integer",
-              "minimum": 1
+              "minimum": 2
             },
             "min_conns": {
               "type": "integer",
@@ -229,6 +232,9 @@
             "path": {
               "type": "string",
               "pattern": "^/"
+            },
+            "allowed_cidrs": {
+              "$ref": "#/definitions/stringList"
             }
           }
         },
@@ -593,6 +599,11 @@
             "embedded"
           ]
         },
+        "streamReplicas": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
         "external": {
           "type": "object",
           "additionalProperties": false,
@@ -955,6 +966,31 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "auth": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "enum": [
+                "none",
+                "bearer",
+                "basic"
+              ]
+            },
+            "existingSecret": {
+              "type": "string"
+            },
+            "tokenKey": {
+              "$ref": "#/definitions/secretKey"
+            },
+            "usernameKey": {
+              "$ref": "#/definitions/secretKey"
+            },
+            "passwordKey": {
+              "$ref": "#/definitions/secretKey"
+            }
+          }
+        },
         "serviceMonitor": {
           "type": "object",
           "additionalProperties": false,

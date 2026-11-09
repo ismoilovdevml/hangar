@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+- **Cluster operations** (issue #34):
+  - `nats.replicas` (1 to 5, default 1) sets the replica count of the
+    JetStream job stream. Every node creates or scales the stream on start,
+    so changing it updates an existing stream in place; embedded NATS accepts
+    only 1. Helm: `nats.streamReplicas`, which defaults to
+    `nats.bundled.replicas`, so **upgrading a release with the bundled NATS
+    cluster scales the job stream from 1 to 3 replicas**.
+  - Migrations hold a PostgreSQL advisory lock (per schema). Nodes that start
+    together with `migrate_on_start`, or `hangar migrate up` next to starting
+    nodes, no longer fail with `duplicate key value violates unique constraint`:
+    one process migrates and the others wait, then find nothing pending.
+    Nodes without `migrate_on_start` wait for a running migration instead of
+    refusing to start. The Helm chart now allows `migrations.mode: onStart`
+    with several replicas. The lock needs a session-level connection (not
+    PgBouncer in transaction pooling mode), and `database.max_conns` must be
+    at least 2.
+  - `/metrics` authentication: `metrics.auth` `none` (default), `bearer`
+    (`metrics.bearer_token` or `metrics.bearer_token_file`) or `basic`
+    (`metrics.username`, `metrics.password` or `metrics.password_file`), plus
+    an optional `metrics.allowed_cidrs` allowlist that uses the trusted-proxy
+    aware client address. Credentials are compared in constant time and count
+    towards the failed authentication limit. Helm: `metrics.auth.mode` and
+    `metrics.auth.existingSecret`, also used by the ServiceMonitor. Scrape
+    configurations: `docs/operations/monitoring.md#protecting-metrics`.
+  - `server.drain_delay` (0s to 5m, default 0s): after SIGTERM a node keeps
+    serving with `/readyz` failing (and `Connection: close`) before the
+    listener closes, for load balancers that poll `/readyz`.
+    `server.shutdown_timeout` is now validated (1s to 24h). Kubernetes
+    guidance: `docs/deploy/high-availability.md#draining-nodes`.
 - **Web UI: format settings and signing keys.** The repository form edits
   APT `architectures`, RPM `repodata_depth`, the APT/RPM `signing_key`, Go
   proxy `sumdbs` and `sumdb_via`, Cargo proxy `download_url` and Helm proxy

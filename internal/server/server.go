@@ -29,6 +29,8 @@ type RouterOptions struct {
 	// MetricsPath serves Metrics.Registry for Prometheus; empty serves no
 	// endpoint (metrics are still recorded, e.g. for the Overview screen).
 	MetricsPath string
+	// MetricsAuth guards MetricsPath; nil leaves it open.
+	MetricsAuth *MetricsAuth
 	// AccessLogSampleRatio is the share of requests written to the access
 	// log (0 to 1); server errors are always logged.
 	AccessLogSampleRatio float64
@@ -73,7 +75,13 @@ func NewRouter(o RouterOptions) http.Handler {
 			ops.Get("/readyz", o.Health.Readiness)
 		}
 		if o.Metrics != nil && o.MetricsPath != "" {
-			ops.Method(http.MethodGet, o.MetricsPath, promhttp.HandlerFor(o.Metrics.Registry, promhttp.HandlerOpts{Registry: o.Metrics.Registry}))
+			h := o.MetricsAuth.Wrap(promhttp.HandlerFor(o.Metrics.Registry, promhttp.HandlerOpts{Registry: o.Metrics.Registry}))
+			if o.MetricsAuth.RequiresCredentials() {
+				// Wrong credentials count towards the per-IP failed
+				// authentication limit, like every other endpoint.
+				h = sec.failedAuthLimit(h)
+			}
+			ops.Method(http.MethodGet, o.MetricsPath, h)
 		}
 	})
 
@@ -122,12 +130,14 @@ type Config struct {
 	// MaxHeaderBytes bounds the request line and headers (0 = 1 MiB).
 	MaxHeaderBytes int
 	// DrainDelay keeps serving (with /readyz failing) before shutdown starts,
-	// so load balancers notice. 0 in tests and single-node setups.
+	// so load balancers notice (server.drain_delay). 0 stops listening at once.
 	DrainDelay time.Duration
 }
 
 // Run listens on cfg.Addr and serves h until ctx is cancelled, then shuts
-// down gracefully: readiness fails, in-flight requests get ShutdownTimeout.
+// down gracefully: readiness fails, new requests are still served for
+// DrainDelay, then the listener closes and in-flight requests get
+// ShutdownTimeout.
 // ready (may be nil) is called with the bound address once listening.
 func Run(ctx context.Context, cfg Config, h http.Handler, hc *health.Checker, log *slog.Logger, ready func(net.Addr)) error {
 	srv := &http.Server{
@@ -165,6 +175,9 @@ func Run(ctx context.Context, cfg Config, h http.Handler, hc *health.Checker, lo
 		hc.SetDraining()
 	}
 	if cfg.DrainDelay > 0 {
+		// Answer "Connection: close" while draining, so clients and load
+		// balancers reconnect, and land on another node, for their next request.
+		srv.SetKeepAlivesEnabled(false)
 		time.Sleep(cfg.DrainDelay)
 	}
 	sctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)

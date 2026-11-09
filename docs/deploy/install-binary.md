@@ -51,7 +51,7 @@ nats:
   embedded: true
   data_dir: /var/lib/hangar/nats
 database:
-  migrate_on_start: true            # single node; see upgrade.md for several
+  migrate_on_start: true            # safe on several nodes too (advisory lock)
 ```
 
 `/etc/hangar/hangar.env` (secrets, `VAR=value` per line, no quotes needed):
@@ -87,9 +87,11 @@ sign in, and remove the bootstrap lines from `hangar.env`
   it 1.4 ("OK").
 - `ExecStart=/usr/local/bin/hangar serve`, configuration from
   `HANGAR_CONFIG=/etc/hangar/hangar.yaml` and `EnvironmentFile=/etc/hangar/hangar.env`.
-- On stop, Hangar fails readiness first and lets in-flight uploads finish
-  within `server.shutdown_timeout` (30 s); `TimeoutStopSec=60s` leaves room
-  for it.
+- On stop, Hangar fails readiness first, keeps serving for
+  `server.drain_delay` (0 s by default; set it when a load balancer polls
+  `/readyz`) and lets in-flight uploads finish within
+  `server.shutdown_timeout` (30 s); `TimeoutStopSec=60s` leaves room for
+  both while `drain_delay + shutdown_timeout` stays below 60 s.
 - `Restart=on-failure`: a failed start (for example PostgreSQL unreachable) is
   retried every 5 s.
 - Blobs on NFS or another mount outside `/var/lib/hangar`: add the path to
@@ -105,11 +107,14 @@ sign in, and remove the bootstrap lines from `hangar.env`
 Run the same binary and configuration on each node with:
 
 - `storage.kind: s3` (or a shared filesystem mounted at the same path),
-- `nats.embedded: false` and `nats.url` pointing at a 3-node NATS cluster
-  with JetStream,
+- `nats.embedded: false`, `nats.url` pointing at a 3-node NATS cluster
+  with JetStream, and `nats.replicas: 3`,
 - the same `HANGAR_SECRET_KEY` and `HANGAR_DOCKER_TOKEN_KEY` everywhere,
-- `database.migrate_on_start: false`, migrations run once per upgrade
-  ([upgrade.md](upgrade.md)),
-- a load balancer in front that checks `/readyz` (no sticky sessions needed).
+- migrations once per upgrade with `hangar migrate up`, or
+  `database.migrate_on_start: true` on every node (an advisory lock lets one
+  node migrate while the others wait; [upgrade.md](upgrade.md)),
+- a load balancer in front that checks `/readyz` (no sticky sessions needed),
+  and `server.drain_delay` covering its health check interval x unhealthy
+  threshold.
 
 See [high-availability.md](high-availability.md).
