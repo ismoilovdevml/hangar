@@ -174,3 +174,5 @@ select.input--sm { padding-right: 32px; background-position: right 10px center; 
   .dialog--drawer { border-radius: 0; }
   .system-grid__row .select { width: 110px; }
 }
+.perm-list__toggle { align-self: flex-start; margin-top: 8px; }
+.perm-list__all { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }

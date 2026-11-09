@@ -6,6 +6,8 @@ import {
   describePrivilege,
   describeUserAgent,
   expiryPresets,
+  groupRepoAccess,
+  nameList,
   expiryText,
   globMatch,
   parseGoDuration,
@@ -110,3 +112,24 @@ describe('users and audit', () => {
     expect(describeAudit('auth.login.failed', 'user:admin')).toBe('failed to sign in');
   });
 });
+
+describe('groupRepoAccess', () => {
+  const repo = (name: string, privilege: string, anonymous = false) => ({
+    name,
+    actions: ['read'],
+    grants: [{ action: 'read', source: 'role', role: 'Reader', privilege }, ...(anonymous ? [{ action: 'read', source: 'anonymous' }] : [])],
+  });
+
+  it('puts repositories granted the same way together, largest group first', () => {
+    const groups = groupRepoAccess([repo('a', 'repo:*:read'), repo('pub', 'repo:*:read', true), repo('b', 'repo:*:read'), repo('c', 'repo:*:read')]);
+    expect(groups.map((g) => g.repos.map((r) => r.name))).toEqual([['a', 'b', 'c'], ['pub']]);
+  });
+
+  it('names a few and counts the rest', () => {
+    expect(nameList(['a'])).toBe('a');
+    expect(nameList(['a', 'b'])).toBe('a and b');
+    expect(nameList(['a', 'b', 'c'])).toBe('a, b and c');
+    expect(nameList(['a', 'b', 'c', 'd', 'e'])).toBe('a, b, c and 2 more');
+  });
+});
+
