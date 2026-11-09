@@ -236,7 +236,7 @@ export const clientEndpoints: ClientEndpoint[] = [
 /* ---------- repositories, blob stores, cleanup policies ---------- */
 
 /** Formats the mock server speaks (the same set a default build serves). */
-export const formats: Format[] = ['docker', 'go', 'helm', 'maven', 'npm', 'nuget', 'pypi', 'raw'];
+export const formats: Format[] = ['cargo', 'docker', 'go', 'helm', 'maven', 'npm', 'nuget', 'pypi', 'raw'];
 
 const BASE_URL = 'https://pkg.acme.io';
 const REGISTRY_HOST = 'cr.acme.io';

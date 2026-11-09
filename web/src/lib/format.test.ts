@@ -58,5 +58,20 @@ describe('format helpers', () => {
       expect.arrayContaining(['go env -w GOPROXY=https://hangar.example.com/repository/go-hosted,direct', 'machine hangar.example.com login token password <token>']),
     );
     expect(text(gomod.publish).join('\n')).toContain('--upload-file <version>.zip https://hangar.example.com/repository/go-hosted/<module>/@v/<version>.zip');
+
+    const crates = clientSetup({ format: 'cargo', repository: 'cargo-group', url: 'https://hangar.example.com/repository/cargo-group/', type: 'group' });
+    expect(text(crates.setup)).toEqual(
+      expect.arrayContaining([
+        'global-credential-providers = ["cargo:token"]',
+        '[registries.cargo-group]',
+        'index = "sparse+https://hangar.example.com/repository/cargo-group/index/"',
+        'replace-with = "cargo-group"',
+        "echo '<token>' | cargo login --registry cargo-group",
+      ]),
+    );
+    expect(text(crates.setup).join('\n')).toContain('CARGO_REGISTRIES_CARGO_GROUP_TOKEN');
+    const crateHost = clientSetup({ format: 'cargo', repository: 'cargo-hosted', url: 'https://hangar.example.com/repository/cargo-hosted', type: 'hosted', publishes: true });
+    expect(text(crateHost.setup).join('\n')).not.toContain('replace-with');
+    expect(text(crateHost.publish)).toEqual(['cargo publish --registry cargo-hosted']);
   });
 });

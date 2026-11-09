@@ -112,6 +112,8 @@ describe('package helpers', () => {
     expect(installCommands({ format: 'docker', url: 'cr.example.com/docker-hosted' }, { name: 'app', version: '1.0' })[0]!.lines[0]!.text).toBe(
       'docker pull cr.example.com/docker-hosted/app:1.0',
     );
+    const crate = installCommands({ format: 'cargo', url: 'https://pkg/repository/cargo-hosted/', repository: 'cargo-hosted' }, { name: 'serde', version: '1.0.0' });
+    expect(crate.map((o) => o.lines.at(-1)!.text)).toEqual(['cargo add serde@1.0.0 --registry cargo-hosted', 'serde = { version = "1.0.0", registry = "cargo-hosted" }']);
     expect(installCommands({ format: 'go', url: 'u' }, d)).toEqual([]);
     expect(installCommands({ format: 'npm' }, d)).toEqual([]);
   });

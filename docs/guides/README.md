@@ -12,18 +12,19 @@ Practical, copy-paste guides for running Hangar and connecting package clients t
 | [Go modules](go.md) | `GOPROXY`, private modules with `GOPRIVATE` and `.netrc`, publishing module zips, checksum database |
 | [NuGet](nuget.md) | `dotnet nuget`, `nuget.config`, push, restore through a group |
 | [Helm](helm.md) | `helm repo add`, `helm install`, `helm cm-push` and curl uploads, chart provenance |
+| [Cargo](cargo.md) | Sparse registry: `.cargo/config.toml`, `cargo login`, publish, yank, crates.io proxy |
 | [Raw](raw.md) | Arbitrary files with curl and wget, directory listings |
 | [CI integration](ci.md) | GitLab CI, GitHub Actions, Jenkins and Gitea Actions with tokens |
 | [REST API](api.md) | Authentication, common calls, pagination, errors |
 | [Access management](access.md) | Members, service accounts, roles, privileges and token scopes |
-| [Vulnerability scanning](vulnerabilities.md) | OSV scanning of npm, Maven, PyPI, NuGet and Go packages, waivers, quarantine, mirrors |
+| [Vulnerability scanning](vulnerabilities.md) | OSV scanning of npm, Maven, PyPI, NuGet, Go and Cargo packages, waivers, quarantine, mirrors |
 | [Single sign-on](sso.md) | OIDC (Keycloak example) and LDAP / Active Directory sign-in, group to role mapping, troubleshooting |
 
 Operators also need [docs/security.md](../security.md) (secret key, hardening,
 rate limits) and [docs/operations/monitoring.md](../operations/monitoring.md)
 (metrics, logs, tracing).
 
-Formats compiled into the server today: `docker`, `go`, `helm`, `maven`, `npm`, `nuget`, `pypi` and `raw`
+Formats compiled into the server today: `cargo`, `docker`, `go`, `helm`, `maven`, `npm`, `nuget`, `pypi` and `raw`
 (`GET /api/v1/formats` lists them). Other formats are not supported yet.
 
 ## Concepts in one minute
@@ -34,7 +35,7 @@ Formats compiled into the server today: `docker`, `go`, `helm`, `maven`, `npm`, 
   - `hosted`: clients publish into it.
   - `proxy`: fetches from a remote registry on demand and caches what it fetched.
   - `group`: an ordered list of repositories of the same format behind one URL.
-    Reads try the members in order. Docker, npm, NuGet, PyPI and Go groups can forward
+    Reads try the members in order. Docker, npm, NuGet, PyPI, Go and Cargo groups can forward
     writes to one hosted member (`write_member`). Maven and raw groups are read-only.
 - **URLs**: every format except Docker is served at
   `<base_url>/repository/<repo>/...`. Docker/OCI is served at `<base_url>/v2/`,
@@ -95,6 +96,7 @@ repository to see its content the way clients see it:
 | NuGet | package id, version, `.nupkg` / `.nuspec` / `.snupkg` |
 | PyPI | project, files |
 | Go | module path segments, module, `@v`, version, `.info` / `.mod` / `.zip` |
+| Cargo | crate, version, `.crate` |
 | Docker | image path, then `manifests` (tags and digests) and `blobs` |
 | Helm | chart, version, `.tgz` / `.prov` |
 | raw | directories and files |

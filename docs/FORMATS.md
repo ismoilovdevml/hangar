@@ -59,6 +59,10 @@ proxy and group repositories.
 ## Cargo (`cargo`) — M3
 - Sparse registry: https://doc.rust-lang.org/cargo/reference/registry-index.html#sparse-protocol
 - Web API: https://doc.rust-lang.org/cargo/reference/registry-web-api.html
+- Must support: `config.json` (`dl`, `api`, `auth-required`), index files at `1/`, `2/`, `3/{c}/`,
+  `{ab}/{cd}/` with ETag / Last-Modified, publish framing (u32 JSON + u32 `.crate`), yank/unyank,
+  download, search, owners list; raw-token and Bearer `Authorization`.
+  Proxy: crates.io index (TTL) and `.crate` (forever, cksum-verified), `dl` rewritten to Hangar.
 - Acceptance: `cargo publish`, `cargo build` with sparse index.
 
 ## APT (`apt`) — M3

@@ -27,7 +27,7 @@ const api = (path: string) => `*/api/v1${path}`;
 type Guard = (request: Request, mutating?: boolean) => Response | null;
 
 const DAY = 86_400_000;
-const SCANNED_FORMATS: Format[] = ['go', 'maven', 'npm', 'nuget', 'pypi'];
+const SCANNED_FORMATS: Format[] = ['cargo', 'go', 'maven', 'npm', 'nuget', 'pypi'];
 
 interface Seed {
   id: string;
