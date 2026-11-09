@@ -268,3 +268,10 @@ contact the database directly; private modules belong in `GONOSUMDB` anyway.
   `.info`, `.mod` and `.zip` of each version. The package view shows the
   README at the module root and the licence found in its `LICENSE` file.
 - Vulnerability scanning uses the OSV `Go` ecosystem (module path and version).
+
+## Routing rules
+
+A group that combines a hosted repository with a public proxy can serve a
+public package published under one of your internal names. Block internal
+names on the proxy and reserve them for the hosted member (for example `git.example.com/corp`);
+see [routing-rules.md](routing-rules.md).

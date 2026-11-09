@@ -234,3 +234,9 @@ Sign-in with an OIDC provider or LDAP / Active Directory is configured under
   anything still uses it.
 - Restrict long-lived automation tokens to the runners' networks, and make
   tokens read-only when the job only downloads.
+
+## Related
+
+- [Routing rules](routing-rules.md): keep internal package names away from
+  public proxies (dependency confusion); changes are audited as
+  `repository.routing.update`, exclusions as `routing.blocked`.

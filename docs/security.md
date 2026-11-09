@@ -65,6 +65,10 @@ A lost key cannot be recovered: re-enter the affected credentials.
 
 ## Hardening checklist for operators
 
+- **Dependency confusion**: on every proxy of a public registry, block the names
+  your hosted repositories publish, and reserve them for the hosted member in
+  groups. See [guides/routing-rules.md](guides/routing-rules.md).
+
 - [ ] Serve Hangar over HTTPS only. Terminate TLS at a reverse proxy, list
       it in `server.trusted_proxies` so `X-Forwarded-Proto` is believed, and
       set `server.base_url` to the `https://` URL. HSTS is then sent

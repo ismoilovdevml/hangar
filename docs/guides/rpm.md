@@ -217,3 +217,10 @@ Until the release is known the packages show "No advisory source". Details:
   through when the remote lists them.
 - Packages are not re-signed. Sign them with `rpmsign` before uploading to use
   `gpgcheck=1`.
+
+## Routing rules
+
+A group that combines a hosted repository with a public proxy can serve a
+public package published under one of your internal names. Block internal
+names on the proxy and reserve them for the hosted member (for example `edcom-*`);
+see [routing-rules.md](routing-rules.md).

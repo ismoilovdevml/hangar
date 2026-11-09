@@ -206,3 +206,10 @@ Helm charts have no vulnerability advisory source, so the scanner marks them
 Permissions: reading the index and charts needs `repo:<name>:read` (or anonymous
 read on the repository); uploads need `repo:<name>:write`; delete needs
 `repo:<name>:delete`.
+
+## Routing rules
+
+A group that combines a hosted repository with a public proxy can serve a
+public package published under one of your internal names. Block internal
+names on the proxy and reserve them for the hosted member (for example `edcom-*`);
+see [routing-rules.md](routing-rules.md).

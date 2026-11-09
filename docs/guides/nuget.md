@@ -166,3 +166,10 @@ with the token in `X-NuGet-ApiKey`.
 
 Permissions: push needs `repo:<name>:write`, unlist needs `delete` and `write`,
 relist needs `write`.
+
+## Routing rules
+
+A group that combines a hosted repository with a public proxy can serve a
+public package published under one of your internal names. Block internal
+names on the proxy and reserve them for the hosted member (for example `Edcom.*`);
+see [routing-rules.md](routing-rules.md).
