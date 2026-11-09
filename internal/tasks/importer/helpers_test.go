@@ -130,6 +130,9 @@ func (r *memReporter) log() string {
 func (h *hangar) runImport(t *testing.T, cfg ImportConfig) (*memReporter, ImportResult, error) {
 	t.Helper()
 	rep := &memReporter{}
+	if cfg.RequestsPerSecond == 0 {
+		cfg.RequestsPerSecond = MaxRequestsPerSecond
+	}
 	err := h.svc.runImport(systemCtx(t), rep, &cfg)
 	res, _ := rep.result.(ImportResult)
 	if testing.Verbose() {
@@ -141,6 +144,9 @@ func (h *hangar) runImport(t *testing.T, cfg ImportConfig) (*memReporter, Import
 func (h *hangar) runPrewarm(t *testing.T, cfg PrewarmConfig) (*memReporter, PrewarmResult, error) {
 	t.Helper()
 	rep := &memReporter{}
+	if cfg.RequestsPerSecond == 0 {
+		cfg.RequestsPerSecond = MaxRequestsPerSecond
+	}
 	err := h.svc.runPrewarm(systemCtx(t), rep, &cfg)
 	res, _ := rep.result.(PrewarmResult)
 	if testing.Verbose() {
