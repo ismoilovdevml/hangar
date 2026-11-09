@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../api/opsTypes';
-import type { UpstreamHealth } from '../api/types';
 import { overview } from '../mocks/data';
 import type { OverviewMetrics, UpstreamHealth } from '../api/types';
 import { headlineUpstream, overallStatus, ratioPercent, storageNote, successRatio, todoItems, urlHost } from './overview';
@@ -183,6 +182,13 @@ describe('overallStatus', () => {
     expect(overallStatus({ system: { state: 'degraded', message: 'Search degraded' }, metrics: metrics(13) })).toEqual({ tone: 'warn', text: 'Search degraded' });
     expect(overallStatus({ system, metrics: metrics(13) })).toEqual({ tone: 'warn', text: '13 server errors today' });
     expect(overallStatus({ system: { state: 'down', message: 'Database down' }, upstreams: [up('a', 'blocked')] })).toEqual({ tone: 'bad', text: 'Database down' });
+  });
+
+  it('names a refused credential the way the to-do list does', () => {
+    expect(overallStatus({ system, upstreams: [{ ...up('ghcr', 'blocked'), reason: 'auth_failed' }] })).toEqual({
+      tone: 'bad',
+      text: 'ghcr upstream: authentication failed (401)',
+    });
   });
 
   it('does not invent errors the server does not count', () => {

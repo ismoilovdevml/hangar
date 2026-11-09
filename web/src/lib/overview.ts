@@ -153,7 +153,12 @@ export function overallStatus(input: {
   const { system, upstreams = [], metrics } = input;
   if (system.state === 'down') return { tone: 'bad', text: system.message };
   const unreachable = upstreams.filter((u) => u.state === 'offline' || u.state === 'blocked');
-  if (unreachable.length === 1) return { tone: 'bad', text: `${unreachable[0]!.name} upstream is ${unreachable[0]!.state}` };
+  if (unreachable.length === 1) {
+    const u = unreachable[0]!;
+    // Worded like the to-do item: a refused credential is named as such.
+    const auth = u.state === 'blocked' ? upstreamAuthProblem(u.reason) : null;
+    return { tone: 'bad', text: auth ? `${u.name} upstream: ${auth.label}` : `${u.name} upstream is ${u.state}` };
+  }
   if (unreachable.length > 1) return { tone: 'bad', text: `${unreachable.length} upstreams unreachable` };
   if (system.state === 'degraded') return { tone: 'warn', text: system.message };
   const errors = metrics?.requests.server_errors ?? 0;

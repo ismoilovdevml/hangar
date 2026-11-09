@@ -79,7 +79,7 @@ describe('overview', () => {
     first.unmount();
     renderApp('/');
     const again = await screen.findByRole('region', { name: 'To do' });
-    await within(again).findByText('ghcr-proxy is blocked');
+    await within(again).findByText('ghcr-proxy: authentication failed (401)');
     expect(within(again).queryByText('Back up the database')).not.toBeInTheDocument();
   });
 

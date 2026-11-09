@@ -58,8 +58,11 @@
 .vplan td.col-last { padding-right: 18px; }
 .vplan__row { cursor: pointer; transition: background var(--t-fast), opacity var(--t-fast); }
 .vplan__row:hover { background: rgba(255, 255, 255, 0.7); }
-.vplan__row.is-unused { opacity: 0.62; }
-.vplan__row.is-unused:hover, .vplan__row.is-unused:focus-within { opacity: 1; }
+/* Unused packages read quieter without losing contrast: muted text and no tinted badges (opacity failed WCAG AA). */
+.vplan__row.is-unused { background: rgba(255, 255, 255, 0.25); }
+.vplan__row.is-unused td, .vplan__row.is-unused .vplan__name, .vplan__row.is-unused .vplan__upgrade { color: var(--ink-3); }
+.vplan__row.is-unused .pill, .vplan__row.is-unused .vplan__versions { background: var(--surface-muted); color: var(--ink-2); }
+.vplan__row.is-unused:hover, .vplan__row.is-unused:focus-within { background: rgba(255, 255, 255, 0.7); }
 .vplan__row.is-open { background: var(--glass-bg-strong); }
 .vplan__pkg { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .vplan__toggle {

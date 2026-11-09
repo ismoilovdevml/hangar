@@ -65,7 +65,8 @@ function RepoCards({ rows, empty, busy }: { rows: Repository[]; empty: ReactNode
     <ul className="repo-cards" aria-label="Repositories" aria-busy={busy || undefined}>
       {rows.map((r) => {
         const Icon = CARD_ICON[r.type];
-        const s = STATUS_META[r.status];
+        // Same wording as the table: an upstream refusing credentials reads "authentication failed (401)".
+        const s = repoStatusMeta(r);
         return (
           <li key={r.id} className="repo-card">
             <div className="repo-card__head">
@@ -101,7 +102,7 @@ function RepoCards({ rows, empty, busy }: { rows: Repository[]; empty: ReactNode
               <div>
                 <dt className="visually-hidden">Status</dt>
                 <dd>
-                  <StatusDot tone={s.tone} label={s.label} />
+                  <StatusDot tone={s.tone} label={s.label} title={s.hint} />
                 </dd>
               </div>
               <div className="repo-card__size">
@@ -111,6 +112,7 @@ function RepoCards({ rows, empty, busy }: { rows: Repository[]; empty: ReactNode
                 </dd>
               </div>
             </dl>
+            {s.hint && <p className="repo-card__hint">{s.hint}</p>}
           </li>
         );
       })}

@@ -132,8 +132,8 @@ test('the overview status follows its own alerts', async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await page.goto('/');
   const todo = page.getByRole('region', { name: 'To do' });
-  await expect(todo.getByText('ghcr-proxy is blocked')).toBeVisible();
-  const pill = page.getByRole('link', { name: 'ghcr-proxy upstream is blocked' });
+  await expect(todo.getByText('ghcr-proxy: authentication failed (401)')).toBeVisible();
+  const pill = page.getByRole('link', { name: 'ghcr-proxy upstream: authentication failed (401)' });
   await expect(pill).toHaveClass(/status-pill--bad/);
   await expect(page.getByText('All systems normal')).toHaveCount(0);
   await frame(page, 'overview-status-1440');

@@ -22,7 +22,7 @@ describe('app shell', () => {
     expect(screen.getByRole('button', { name: 'Notifications, 1 waiting' })).toBeInTheDocument();
     // The Overview's header shows the state instead of the search button, weighing the same
     // signals as its cards: a blocked upstream is not "All systems normal".
-    const pill = await screen.findByRole('link', { name: 'ghcr-proxy upstream is blocked' });
+    const pill = await screen.findByRole('link', { name: 'ghcr-proxy upstream: authentication failed (401)' });
     expect(pill).toHaveAttribute('href', '/system/status');
     expect(pill).toHaveClass('status-pill--bad');
     expect(screen.queryByText('All systems normal')).not.toBeInTheDocument();

@@ -434,6 +434,7 @@
 .repo-card__facts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0; font-size: 13px; color: var(--ink-2); }
 .repo-card__facts dd { margin: 0; }
 .repo-card__size { margin-left: auto; }
+.repo-card__hint { margin: 0; font-size: 12px; color: var(--bad-ink); }
 
 /* ---------- new repository ---------- */
 .repo-create { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: var(--gap); align-items: start; }
