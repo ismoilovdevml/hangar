@@ -332,3 +332,35 @@ func TestBootstrapPasswordChangeSettings(t *testing.T) {
 		t.Fatalf("from env = %+v", cfg.Bootstrap)
 	}
 }
+
+func TestDNSCacheSettings(t *testing.T) {
+	t.Setenv("HANGAR_CONFIG", "")
+	t.Setenv("HANGAR_DATABASE_URL", "postgres://x/y")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := cfg.HTTP.DNS; !d.Cache || d.TTL != time.Minute || d.NegativeTTL != 5*time.Second || d.StaleTTL != 10*time.Minute {
+		t.Errorf("dns defaults = %+v", d)
+	}
+	t.Setenv("HANGAR_HTTP_DNS_TTL", "2m")
+	t.Setenv("HANGAR_HTTP_DNS_NEGATIVE_TTL", "0s")
+	t.Setenv("HANGAR_HTTP_DNS_STALE_TTL", "30m")
+	if cfg, err = Load(""); err != nil {
+		t.Fatal(err)
+	}
+	if d := cfg.HTTP.DNS; d.TTL != 2*time.Minute || d.NegativeTTL != 0 || d.StaleTTL != 30*time.Minute {
+		t.Errorf("dns from env = %+v", d)
+	}
+	t.Setenv("HANGAR_HTTP_DNS_TTL", "500ms")
+	t.Setenv("HANGAR_HTTP_DNS_STALE_TTL", "48h")
+	_, err = Load("")
+	if err == nil || !strings.Contains(err.Error(), "http.dns.ttl") || !strings.Contains(err.Error(), "http.dns.stale_ttl") {
+		t.Errorf("validation = %v", err)
+	}
+	// Off: the bounds do not apply.
+	t.Setenv("HANGAR_HTTP_DNS_CACHE", "false")
+	if cfg, err = Load(""); err != nil || cfg.HTTP.DNS.Cache {
+		t.Errorf("cache off = %+v, %v", cfg.HTTP.DNS, err)
+	}
+}

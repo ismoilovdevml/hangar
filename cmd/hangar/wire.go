@@ -346,6 +346,11 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		MaxIdleConnsPerHost: cfg.HTTP.MaxIdleConnsPerHost, UserAgent: userAgent,
 		DialGuard: guard.CheckAddr, DialAllowHost: guard.AllowsHost,
 	}
+	if d := cfg.HTTP.DNS; d.Cache {
+		// One cache for every outbound client and the SSRF guard.
+		httpOpts.DNS = httpclient.NewDNSCache(nil, httpclient.DNSOptions{TTL: d.TTL, NegativeTTL: offIfZero(d.NegativeTTL), StaleTTL: offIfZero(d.StaleTTL)})
+		guard.UseResolver(httpOpts.DNS)
+	}
 	clients, err := httpclient.New(httpOpts)
 	if err != nil {
 		return nil, err
@@ -401,6 +406,9 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	// Metrics are always collected (the Overview screen reads them);
 	// metrics.enabled only controls the /metrics endpoint.
 	if err := proxy.RegisterMetrics(metrics.Registry); err != nil {
+		return nil, err
+	}
+	if err := httpclient.RegisterMetrics(metrics.Registry); err != nil {
 		return nil, err
 	}
 	if err := routing.RegisterMetrics(metrics.Registry); err != nil {
@@ -816,4 +824,13 @@ func writeInitialAdminBanner(w io.Writer, a *auth.InitialAdmin) {
 	}
 	lines = append(lines, rule)
 	_, _ = fmt.Fprintln(w, strings.Join(lines, "\n"))
+}
+
+// offIfZero maps a configured 0 ("off") to the negative value that turns a
+// cache feature off (0 there selects the default).
+func offIfZero(d time.Duration) time.Duration {
+	if d == 0 {
+		return -1
+	}
+	return d
 }

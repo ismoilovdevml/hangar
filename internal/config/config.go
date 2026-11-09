@@ -252,6 +252,23 @@ type HTTP struct {
 	// link-local and cloud metadata ranges): CIDRs, IPs, host names or domain
 	// suffixes starting with "." (e.g. an internal mirror).
 	AllowPrivateNetworks []string `yaml:"allow_private_networks"`
+	// DNS caches the host name lookups of outbound requests.
+	DNS DNS `yaml:"dns"`
+}
+
+// DNS configures the in-process cache of upstream host name lookups, which
+// keeps bursts of proxy requests from each asking the DNS servers.
+type DNS struct {
+	// Cache turns the cache on (default true).
+	Cache bool `yaml:"cache"`
+	// TTL is how long an answer is used (1s to 1h, default 60s).
+	TTL time.Duration `yaml:"ttl"`
+	// NegativeTTL is how long a failed lookup is remembered (0 to 5m,
+	// default 5s; 0 turns negative caching off).
+	NegativeTTL time.Duration `yaml:"negative_ttl"`
+	// StaleTTL is how long past TTL the last answer is still used while the
+	// DNS servers time out or fail (0 to 24h, default 10m; 0 turns it off).
+	StaleTTL time.Duration `yaml:"stale_ttl"`
 }
 
 // Scanner configures container image scanning with Trivy in client/server
@@ -507,6 +524,7 @@ func Default() Config {
 			IdleConnTimeout:     90 * time.Second,
 			MaxIdleConns:        200,
 			MaxIdleConnsPerHost: 32,
+			DNS:                 DNS{Cache: true, TTL: 60 * time.Second, NegativeTTL: 5 * time.Second, StaleTTL: 10 * time.Minute},
 		},
 		Metrics:  Metrics{Enabled: true, Path: "/metrics", Auth: MetricsAuthNone},
 		Scanning: Scanning{Enabled: true, RescanInterval: 24 * time.Hour, InUseWindow: 30 * 24 * time.Hour, OSV: OSV{URL: "https://api.osv.dev"}},
@@ -636,6 +654,17 @@ func (c *Config) Validate() error {
 		u, err := url.Parse(c.HTTP.Proxy)
 		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https" && u.Scheme != "socks5" && u.Scheme != "socks5h") {
 			errs = append(errs, fmt.Errorf("http.proxy %q must be an http://, https:// or socks5:// URL", redactURL(c.HTTP.Proxy)))
+		}
+	}
+	if d := c.HTTP.DNS; d.Cache {
+		if d.TTL < time.Second || d.TTL > time.Hour {
+			errs = append(errs, fmt.Errorf("http.dns.ttl %s: want 1s to 1h", d.TTL))
+		}
+		if d.NegativeTTL < 0 || d.NegativeTTL > 5*time.Minute {
+			errs = append(errs, fmt.Errorf("http.dns.negative_ttl %s: want 0 to 5m", d.NegativeTTL))
+		}
+		if d.StaleTTL < 0 || d.StaleTTL > 24*time.Hour {
+			errs = append(errs, fmt.Errorf("http.dns.stale_ttl %s: want 0 to 24h", d.StaleTTL))
 		}
 	}
 	for _, cidr := range c.Server.TrustedProxies {
