@@ -115,6 +115,10 @@ func TestSweep(t *testing.T) {
 func TestSweepTaskCredentials(t *testing.T) {
 	pool := pgtest.Pool(t)
 	ctx := context.Background()
+	// Rows from before the guard (it is NOT VALID, as for repositories).
+	if _, err := pool.Exec(ctx, `ALTER TABLE tasks DROP CONSTRAINT tasks_source_secrets_sealed`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := pool.Exec(ctx, `INSERT INTO tasks (name, type, config) VALUES
 		('imp', 'repository_import', '{"repository":"r","source":{"url":"https://old.example.com","username":"u","password":"task-pw"}}'),
 		('warm', 'proxy_prewarm', '{"repository":"p","inventory":{"source":{"url":"https://old.example.com","token":"task-tok"}}}')`); err != nil {
@@ -131,5 +135,14 @@ func TestSweepTaskCredentials(t *testing.T) {
 	}
 	if strings.Contains(cfg, "task-pw") || strings.Contains(cfg, "task-tok") || strings.Count(cfg, Prefix) != 2 {
 		t.Fatalf("not sealed: %s", cfg)
+	}
+}
+
+func TestTaskSecretsGuard(t *testing.T) {
+	pool := pgtest.Pool(t)
+	_, err := pool.Exec(context.Background(), `INSERT INTO tasks (name, type, config) VALUES
+		('plain', 'repository_import', '{"source":{"url":"https://x.example.com","username":"u","password":"plaintext"}}')`)
+	if err == nil || !strings.Contains(err.Error(), "tasks_source_secrets_sealed") {
+		t.Fatalf("plaintext password stored: %v", err)
 	}
 }
