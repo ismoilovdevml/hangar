@@ -190,8 +190,6 @@ func TestCreateValidation(t *testing.T) {
 	badPolicy.Config.Hosted = &core.HostedConfig{WritePolicy: "sometimes"}
 	hostedWithProxy := hosted("npm-x", "npm")
 	hostedWithProxy.Config.Proxy = &core.ProxyConfig{RemoteURL: "https://x.example"}
-	groupWithStore := group("npm-g", "npm", "npm-h")
-	groupWithStore.BlobStore = "default"
 	writeNotMember := group("npm-g", "npm", "npm-h")
 	writeNotMember.Config.Group.WriteMember = "raw-h"
 	writeProxy := group("npm-g", "npm", "npm-h", "npm-p")
@@ -215,7 +213,6 @@ func TestCreateValidation(t *testing.T) {
 		{"hosted with proxy config", hostedWithProxy, core.ErrInvalid},
 		{"unknown blob store", noStore, core.ErrInvalid},
 		{"proxy remote scheme", badRemote, core.ErrInvalid},
-		{"group with blob store", groupWithStore, core.ErrInvalid},
 		{"group without members", group("npm-g", "npm"), core.ErrInvalid},
 		{"group missing member", group("npm-g", "npm", "npm-h", "nope"), core.ErrInvalid},
 		{"group mixed formats", group("npm-g", "npm", "npm-h", "raw-h"), core.ErrInvalid},
@@ -237,6 +234,33 @@ func TestCreateValidation(t *testing.T) {
 	page, err := f.svc.List(f.ctx, core.RepositoryQuery{})
 	if err != nil || len(page.Items) != 3 {
 		t.Fatalf("rejected creates left rows: %d, %v", len(page.Items), err)
+	}
+}
+
+// A group takes no blob store: one sent anyway (scripts that set it on every
+// repository) is ignored on create and update, not an error.
+func TestGroupIgnoresBlobStore(t *testing.T) {
+	f := newFixture(t)
+	f.mustCreate(t, hosted("npm-h", "npm"))
+	in := group("npm-g", "npm", "npm-h")
+	in.BlobStore = "default"
+	g, err := f.svc.Create(f.ctx, in)
+	if err != nil {
+		t.Fatalf("create group with blob store: %v", err)
+	}
+	if g.BlobStore != "" {
+		t.Errorf("created group blob store = %q, want none", g.BlobStore)
+	}
+	g.BlobStore = "missing"
+	g.Description = "all npm"
+	if g, err = f.svc.Update(f.ctx, g); err != nil {
+		t.Fatalf("update group with blob store: %v", err)
+	}
+	if g.BlobStore != "" || g.Description != "all npm" {
+		t.Errorf("updated group = %+v", g)
+	}
+	if in.BlobStore != "default" {
+		t.Error("the caller's repository was modified")
 	}
 }
 

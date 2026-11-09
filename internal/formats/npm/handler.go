@@ -154,12 +154,14 @@ func (h *handler) route(w http.ResponseWriter, r *http.Request, repo *core.Repos
 			if i := strings.Index(file, "/-rev/"); i >= 0 {
 				file = file[:i]
 			}
-			return h.deleteTarball(w, r, repo, name, name.Full+"/-/"+file)
+			return h.deleteTarball(w, r, repo, name, canonicalTarball(name, name.Full+"/-/"+file))
 		}
 		if !isRead(r.Method) {
 			return errMethod
 		}
-		return h.getTarball(w, r, repo, name.Full+"/-/"+file)
+		// "@s/n/-/@s/n-1.0.0.tgz" (older lockfiles) is the same tarball as
+		// the conventional "@s/n/-/n-1.0.0.tgz".
+		return h.getTarball(w, r, repo, canonicalTarball(name, name.Full+"/-/"+file))
 	case len(segs) == 1:
 		if !isRead(r.Method) {
 			return errMethod

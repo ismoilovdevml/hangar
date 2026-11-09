@@ -28,7 +28,10 @@ character, `[ab]` a set. `npm-*` matches `npm-internal` and `npm-public`.
 A request is allowed when one of the principal's role privileges allows it
 **and**, for a token, one of the token's scopes allows it too. A token can
 therefore never do more than its owner. Repositories with **anonymous read**
-can be read by everyone, signed in or not.
+can be read by everyone, signed in or not. A request that sends credentials must
+send valid ones, though: a wrong, expired or revoked token or password answers
+`401` on every endpoint, public ones included, rather than falling back to
+anonymous access.
 
 ### Built-in roles
 

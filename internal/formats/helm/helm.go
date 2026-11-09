@@ -97,6 +97,11 @@ func New() *Format { return &Format{now: time.Now} }
 // Name implements core.Format.
 func (f *Format) Name() string { return Name }
 
+// Challenge implements core.Challenger: a JSON error with a Basic challenge.
+func (f *Format) Challenge(w http.ResponseWriter, r *http.Request, deps core.Deps, err error) {
+	(&handler{deps: deps, log: slog.New(slog.DiscardHandler)}).fail(w, r, err)
+}
+
 // Validate implements core.Format. Helm repositories take no format settings.
 func (f *Format) Validate(repo *core.Repository) error {
 	if repo.Format != Name {

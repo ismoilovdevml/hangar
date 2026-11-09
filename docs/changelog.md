@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+- **API and client feedback** (issues #67, #69, #70, #71, #75):
+  - A request with a wrong, expired or revoked token or password answers
+    `401` on every endpoint, public ones included: a NuGet service index, apt
+    and rpm signing keys, cargo `config.json`, unknown paths and offline
+    repositories of anonymous-read repositories, and `GET /system/status` or
+    `GET /auth/providers` in the REST API. Each format answers with its usual
+    challenge (`Basic realm="Hangar NuGet"`, `Cargo login_url=...`, ...); the
+    REST API sends `WWW-Authenticate: Bearer realm="Hangar API"`. Requests
+    without credentials are served as before, and the failures count towards
+    `security.rate_limit.failed_auth`. The credentials are checked once per
+    request. A NuGet push that sends a valid `X-NuGet-ApiKey` together with
+    wrong Basic credentials now gets `401`.
+  - Creating or updating a group with `blob_store` no longer fails: the field
+    is ignored (logged at debug level) and left out of the answer.
+  - The API guide and `/api/v1/automation-guide.md` explain the
+    `X-CSRF-Token` header (the `hangar_csrf` cookie's value) for session
+    writes and show the first sign-in from a script: `POST /auth/login`,
+    `PUT /me/password`, then `POST /tokens`, plus `hangar admin token create`
+    and `hangar admin reset-password`.
+  - The OpenAPI document describes each format's `config.format` keys in its
+    own schema (`NugetFormatConfig`, `GoFormatConfig`, ...), referenced from
+    `RepositoryConfig.format` (`anyOf`, `x-format-schemas`); the wire format
+    and generated client types stay compatible. A test keeps these schemas,
+    and `RepositoryConfig`, in step with the Go structs.
+  - npm scoped tarballs are advertised as `@scope/name/-/name-<version>.tgz`
+    in every repository type, also for proxies of remotes that name them
+    `@scope/name/-/@scope/name-<version>.tgz`; that form is still served, so
+    existing lockfiles keep installing, and tarballs a proxy cached under it
+    are reused.
+
 - **Cluster operations** (issue #34):
   - `nats.replicas` (1 to 5, default 1) sets the replica count of the
     JetStream job stream. Every node creates or scales the stream on start,

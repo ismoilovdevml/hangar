@@ -8,6 +8,8 @@ package maven
 
 import (
 	"fmt"
+	"log/slog"
+	"net/http"
 	"slices"
 
 	"github.com/go-chi/chi/v5"
@@ -106,6 +108,12 @@ func (f *Format) Mount(r chi.Router, deps core.Deps) {
 	r.Head("/*", h.get)
 	r.Put("/*", h.put)
 	r.Delete("/*", h.delete)
+}
+
+// Challenge implements core.Challenger: the Basic challenge that makes Maven
+// and Gradle send their configured credentials.
+func (f *Format) Challenge(w http.ResponseWriter, r *http.Request, deps core.Deps, err error) {
+	(&handler{deps: deps, log: slog.New(slog.DiscardHandler)}).fail(w, r, err)
 }
 
 // Validate implements core.Format.

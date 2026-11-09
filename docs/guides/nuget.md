@@ -103,7 +103,8 @@ directory upwards):
 - `<clear />` makes Hangar the only source; restore of public packages then goes
   through the group's nuget.org proxy.
 - The service index is public; every other request needs credentials unless the
-  repository allows anonymous read.
+  repository allows anonymous read. A request that sends a wrong, expired or
+  revoked token answers `401 (Unauthorized)`, the service index included.
 
 ### `dotnet nuget add source`
 

@@ -168,6 +168,9 @@ func Middleware(svc *auth.Service, opts Options) func(http.Handler) http.Handler
 			if creds := core.CredentialsFromRequest(r); !creds.Empty() {
 				var err error
 				if p, err = svc.AuthenticateRequest(ctx, creds); err != nil {
+					if core.HTTPStatus(err) == http.StatusUnauthorized && !errors.As(err, new(*auth.LockedError)) {
+						w.Header().Set("WWW-Authenticate", challenge)
+					}
 					h.writeError(w, r, err)
 					return
 				}
@@ -211,6 +214,11 @@ func Middleware(svc *auth.Service, opts Options) func(http.Handler) http.Handler
 		})
 	}
 }
+
+// challenge is the WWW-Authenticate value of 401 answers to requests whose
+// Authorization header failed: Bearer, so browsers never open a password
+// dialog for the web UI's requests.
+const challenge = `Bearer realm="Hangar API"`
 
 // codePasswordChangeRequired is the Error code for requests of a user who
 // must change their password first.

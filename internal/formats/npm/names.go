@@ -67,6 +67,34 @@ func manifestPath(n pkgName, version string) string { return n.Full + "/-/meta/"
 func statePath(n pkgName) string                    { return n.Full + "/-/package.json" }
 func tarballFile(n pkgName, version string) string  { return n.Base + "-" + version + ".tgz" }
 func tarballPath(n pkgName, version string) string  { return n.Full + "/-/" + tarballFile(n, version) }
+
+// canonicalTarball maps the scoped file form some registries use,
+// "@s/n/-/@s/n-1.0.0.tgz", to the conventional "@s/n/-/n-1.0.0.tgz". Other
+// paths are returned unchanged. Hangar advertises and stores the
+// conventional form and still answers the other, which older lockfiles name.
+func canonicalTarball(n pkgName, rel string) string {
+	if n.Scope == "" {
+		return rel
+	}
+	if rest, ok := strings.CutPrefix(rel, n.Full+"/-/"+n.Full+"-"); ok && strings.HasSuffix(rest, ".tgz") && !strings.Contains(rest, "/") {
+		return n.Full + "/-/" + n.Base + "-" + rest
+	}
+	return rel
+}
+
+// scopedFileTarball is the scoped file form of a conventional tarball path
+// ("@s/n/-/n-1.0.0.tgz" -> "@s/n/-/@s/n-1.0.0.tgz"), or "" when rel is not
+// a scoped package's conventional tarball path.
+func scopedFileTarball(n pkgName, rel string) string {
+	if n.Scope == "" {
+		return ""
+	}
+	if rest, ok := strings.CutPrefix(rel, n.Full+"/-/"+n.Base+"-"); ok && strings.HasSuffix(rest, ".tgz") && !strings.Contains(rest, "/") {
+		return n.Full + "/-/" + n.Full + "-" + rest
+	}
+	return ""
+}
+
 func proxyDocPath(n pkgName, abbreviated bool) string {
 	if abbreviated {
 		return n.Full + "/-/packument.abbreviated.json"

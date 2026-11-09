@@ -3633,7 +3633,170 @@ components:
         format:
           type: object
           additionalProperties: true
-          description: Format-specific settings (e.g. maven `version_policy`)
+          description: |
+            Format-specific settings. The keys depend on the repository's
+            `format`; each format's keys are described by its own schema:
+            apt `AptFormatConfig`, cargo `CargoFormatConfig`, docker
+            `DockerFormatConfig`, go `GoFormatConfig`, helm `HelmFormatConfig`,
+            maven `MavenFormatConfig`, npm `NpmFormatConfig`, nuget
+            `NugetFormatConfig`, pypi `PypiFormatConfig`, raw `RawFormatConfig`,
+            rpm `RpmFormatConfig` (also listed in `x-format-schemas`). Absent keys
+            take the defaults shown there.
+          x-format-schemas:
+            apt: "#/components/schemas/AptFormatConfig"
+            cargo: "#/components/schemas/CargoFormatConfig"
+            docker: "#/components/schemas/DockerFormatConfig"
+            go: "#/components/schemas/GoFormatConfig"
+            helm: "#/components/schemas/HelmFormatConfig"
+            maven: "#/components/schemas/MavenFormatConfig"
+            npm: "#/components/schemas/NpmFormatConfig"
+            nuget: "#/components/schemas/NugetFormatConfig"
+            pypi: "#/components/schemas/PypiFormatConfig"
+            raw: "#/components/schemas/RawFormatConfig"
+            rpm: "#/components/schemas/RpmFormatConfig"
+          anyOf:
+            - $ref: "#/components/schemas/AptFormatConfig"
+            - $ref: "#/components/schemas/CargoFormatConfig"
+            - $ref: "#/components/schemas/DockerFormatConfig"
+            - $ref: "#/components/schemas/GoFormatConfig"
+            - $ref: "#/components/schemas/HelmFormatConfig"
+            - $ref: "#/components/schemas/MavenFormatConfig"
+            - $ref: "#/components/schemas/NpmFormatConfig"
+            - $ref: "#/components/schemas/NugetFormatConfig"
+            - $ref: "#/components/schemas/PypiFormatConfig"
+            - $ref: "#/components/schemas/RawFormatConfig"
+            - $ref: "#/components/schemas/RpmFormatConfig"
+    AptFormatConfig:
+      type: object
+      description: "`config.format` of apt repositories. Both keys apply to hosted and group repositories; a proxy serves the remote's metadata."
+      x-format: apt
+      additionalProperties: true
+      properties:
+        architectures:
+          type: array
+          items: { type: string, examples: [amd64, arm64, i386] }
+          description: Architectures listed in every distribution besides those of the uploaded packages (not `all`). Default `[amd64, arm64]`.
+        signing_key:
+          type: string
+          enum: [repository, shared]
+          description: Key that signs the metadata. Default `repository` (the repository's own key).
+    CargoFormatConfig:
+      type: object
+      description: "`config.format` of cargo repositories."
+      x-format: cargo
+      additionalProperties: true
+      properties:
+        download_url:
+          type: string
+          format: uri
+          description: |
+            Proxy only: the remote's crate download template, as `dl` in its
+            `config.json` (markers `{crate}`, `{version}`, `{prefix}`,
+            `{lowerprefix}`, `{sha256-checksum}`; without markers
+            `/{crate}/{version}/download` is appended). Default: the remote's own `dl`.
+          examples: ["https://static.crates.io/crates"]
+    DockerFormatConfig:
+      type: object
+      description: "`config.format` of docker repositories: none. Host and port connectors are `config.connector`."
+      x-format: docker
+      additionalProperties: true
+      properties: {}
+    GoFormatConfig:
+      type: object
+      description: "`config.format` of go repositories."
+      x-format: go
+      additionalProperties: true
+      properties:
+        sumdbs:
+          type: array
+          items: { type: string, examples: [sum.golang.org] }
+          description: Proxy only. Checksum databases served under `sumdb/<name>/`. Absent means `[sum.golang.org]`; an empty list turns the pass-through off.
+        sumdb_via:
+          type: string
+          enum: [database, remote]
+          description: Proxy only. Where checksum database requests go. `database` (default) asks `https://<name>/` itself; `remote` asks `<remote_url>/sumdb/<name>/`, for remotes that proxy the database (an inner Hangar, Athens).
+    HelmFormatConfig:
+      type: object
+      description: "`config.format` of helm repositories: none; any key is rejected."
+      x-format: helm
+      additionalProperties: true
+      maxProperties: 0
+      properties: {}
+    MavenFormatConfig:
+      type: object
+      description: "`config.format` of maven repositories. Other keys are rejected."
+      x-format: maven
+      additionalProperties: true
+      properties:
+        version_policy:
+          type: string
+          enum: [release, snapshot, mixed]
+          description: Versions the repository accepts. Default `mixed`.
+        layout_policy:
+          type: string
+          enum: [strict, permissive]
+          description: "`strict` stores only Maven-layout paths; `permissive` also stores other files. Default `strict`."
+    NpmFormatConfig:
+      type: object
+      description: "`config.format` of npm repositories."
+      x-format: npm
+      additionalProperties: true
+      properties:
+        unpublish_window:
+          allOf: [{ $ref: "#/components/schemas/Duration" }]
+          description: How long after publishing a holder of `repo:<name>:delete` may unpublish a version (`repo:<name>:admin` always may). Default `72h`; `0s` means administrators only.
+        login_token_ttl:
+          allOf: [{ $ref: "#/components/schemas/Duration" }]
+          description: Lifetime of tokens issued by `npm login`. Default `720h` (30 days).
+        reuse_unpublished_versions:
+          type: boolean
+          description: Let a version number be published again after it was unpublished. Default false (a version always names the same bytes).
+    NugetFormatConfig:
+      type: object
+      description: "`config.format` of nuget repositories."
+      x-format: nuget
+      additionalProperties: true
+      properties:
+        delete_mode:
+          type: string
+          enum: [unlist, delete]
+          description: What `DELETE api/v2/package/{id}/{version}` (`dotnet nuget delete`) does. Default `unlist`.
+        service_index:
+          type: string
+          description: Proxy only. The remote's service index path, relative to `remote_url`. Default `v3/index.json`.
+          examples: [v3/index.json, index.json]
+    PypiFormatConfig:
+      type: object
+      description: "`config.format` of pypi repositories."
+      x-format: pypi
+      additionalProperties: true
+      properties:
+        file_hosts:
+          type: array
+          items: { type: string, examples: [files.pythonhosted.org, .example.com] }
+          description: Proxy only. Hosts (`host`, `host:port`, or `.domain` for its subdomains) distribution files may be downloaded from when the remote links elsewhere. Default `[files.pythonhosted.org]`; the remote's own host is always allowed.
+    RawFormatConfig:
+      type: object
+      description: "`config.format` of raw repositories: none; any key is rejected."
+      x-format: raw
+      additionalProperties: true
+      maxProperties: 0
+      properties: {}
+    RpmFormatConfig:
+      type: object
+      description: "`config.format` of rpm repositories. Both keys apply to hosted and group repositories; a proxy serves the remote's metadata."
+      x-format: rpm
+      additionalProperties: true
+      properties:
+        repodata_depth:
+          type: integer
+          minimum: 0
+          maximum: 4
+          description: Directory depth that holds `repodata/`. Default 0 (one yum repository); 2 serves e.g. `el9/x86_64/repodata/` for packages uploaded below `el9/x86_64/`.
+        signing_key:
+          type: string
+          enum: [repository, shared]
+          description: Key that signs the metadata. Default `repository` (the repository's own key).
     RepositoryInput:
       type: object
       required: [name, format, type, config]
@@ -3644,7 +3807,9 @@ components:
         description: { type: string }
         blob_store:
           type: string
-          description: Required for hosted and proxy repositories
+          description: |
+            Required for hosted and proxy repositories. Ignored for groups,
+            which store nothing; their responses leave it out.
         online:
           type: boolean
           description: Optional; true when omitted

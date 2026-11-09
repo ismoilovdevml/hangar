@@ -260,7 +260,9 @@ func renderVersion(m manifest, tarballBase string) ([]byte, error) {
 // relativizeTarballs rewrites absolute upstream tarball URLs to paths
 // relative to the repository: a URL under remote keeps its suffix
 // ("https://registry.npmjs.org/@s/n/-/n-1.0.0.tgz" -> "@s/n/-/n-1.0.0.tgz");
-// any other URL maps to "<pkg>/-/<file name>".
+// any other URL maps to "<pkg>/-/<file name>". Scoped tarballs always get
+// the conventional file name ("@s/n/-/n-1.0.0.tgz"), whatever the remote
+// calls them (canonicalTarball).
 func (p *packument) relativizeTarballs(n pkgName, remote string) {
 	remote = strings.TrimSuffix(remote, "/") + "/"
 	for _, m := range p.Versions {
@@ -274,18 +276,33 @@ func (p *packument) relativizeTarballs(n pkgName, remote string) {
 				rel = d
 			}
 		}
+		absolute := strings.HasPrefix(t, "https://") || strings.HasPrefix(t, "http://")
 		if rel == "" {
 			name, _, _ := strings.Cut(t, "?")
 			rel = n.Full + "/-/" + name[strings.LastIndex(name, "/")+1:]
-			if strings.HasPrefix(t, "https://") || strings.HasPrefix(t, "http://") {
-				if p.origins == nil {
-					p.origins = map[string]string{}
-				}
-				p.origins[rel] = t
+			if absolute {
+				p.origin(rel, t)
 			}
+		}
+		// A remote that names scoped tarballs "@s/n/-/@s/n-1.0.0.tgz" is
+		// still advertised in the conventional form; the remote's own URL is
+		// kept to fetch it.
+		if c := canonicalTarball(n, rel); c != rel {
+			if absolute {
+				p.origin(c, t)
+			}
+			rel = c
 		}
 		m.setDist("tarball", rel)
 	}
+}
+
+// origin records the absolute upstream URL of the tarball at rel.
+func (p *packument) origin(rel, url string) {
+	if p.origins == nil {
+		p.origins = map[string]string{}
+	}
+	p.origins[rel] = url
 }
 
 // versionForTarball finds the version whose (relative) tarball path is rel.

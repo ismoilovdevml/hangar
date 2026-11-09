@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -373,4 +374,98 @@ func TestDotnetNuGetOrgProxy(t *testing.T) {
 	if !strings.Contains(out, "Newtonsoft.Json") {
 		t.Errorf("search:\n%s", out)
 	}
+}
+
+// TestDotnetWrongCredentials drives the real dotnet CLI with wrong source
+// credentials. NuGet sends configured credentials only when challenged:
+// on a private repository the challenge comes on the first package request,
+// the wrong credentials answer 401 and restore reports it (not a later,
+// unrelated error); the right ones restore. On an anonymous-read repository
+// nothing challenges, so the client never sends them and restores
+// anonymously. Clients that send credentials up front get 401 on every
+// route, the service index included (TestInvalidCredentialsAnswer401 in
+// package builtin).
+func TestDotnetWrongCredentials(t *testing.T) {
+	d := newDotnet(t)
+	s := newServer(t)
+	var (
+		mu       sync.Mutex
+		rejected int // requests with an Authorization header that answered 401
+	)
+	inner := s.srv.Config.Handler
+	s.srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rec := &statusRecorder{ResponseWriter: w, code: http.StatusOK}
+		inner.ServeHTTP(rec, r)
+		if r.Header.Get("Authorization") != "" && rec.code == http.StatusUnauthorized {
+			mu.Lock()
+			rejected++
+			mu.Unlock()
+		}
+	})
+	s.env.AddRepo(t, &core.Repository{Name: "nuget-public", Format: nuget.Name, Type: core.RepoHosted,
+		Config: core.RepoConfig{AnonymousRead: true}})
+	s.env.AddRepo(t, &core.Repository{Name: "nuget-private", Format: nuget.Name, Type: core.RepoHosted})
+	token := s.env.Auth.AddToken("ci")
+	s.env.AuthZ.Grant("ci", "repo:nuget-*:read", "repo:nuget-*:write")
+	wrong := core.TokenPrefix + "0000000000000000000000000000000000000000"
+
+	pubCfg := filepath.Join(d.root, "publish.config")
+	writeConfig(t, pubCfg, s.source("nuget-public"), "", "")
+	pkg := d.pack("Acme.Auth", "1.0.0", pubCfg, nil)
+	for _, repo := range []string{"nuget-public", "nuget-private"} {
+		d.run(d.root, "nuget", "push", "--allow-insecure-connections", pkg, "-s", s.source(repo), "-k", token)
+	}
+
+	restore := func(repo, password string) (string, error) {
+		app := filepath.Join(d.root, "app-"+repo)
+		if err := os.MkdirAll(app, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		proj := filepath.Join(app, "app.csproj")
+		if err := os.WriteFile(proj, []byte(`<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+  <ItemGroup><PackageReference Include="Acme.Auth" Version="1.0.0" /></ItemGroup>
+</Project>
+`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		cfg := filepath.Join(app, "nuget.config")
+		writeConfig(t, cfg, s.source(repo), "ci", password)
+		for _, dir := range []string{"packages", "http-cache"} {
+			if err := os.RemoveAll(filepath.Join(d.root, dir)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return d.try(app, "restore", "--configfile", cfg, "--no-cache", "--force")
+	}
+
+	out, err := restore("nuget-private", wrong)
+	if err == nil {
+		t.Fatalf("restore from a private repository with a wrong token succeeded:\n%s", out)
+	}
+	if !strings.Contains(out, "401 (Unauthorized)") || strings.Contains(out, "Value cannot be null") {
+		t.Errorf("restore with a wrong token should report 401:\n%s", out)
+	}
+	mu.Lock()
+	sent := rejected
+	mu.Unlock()
+	if sent == 0 {
+		t.Error("the client never sent the wrong credentials")
+	}
+	if out, err := restore("nuget-private", token); err != nil {
+		t.Errorf("restore with the right token: %v\n%s", err, out)
+	}
+	if out, err := restore("nuget-public", wrong); err != nil {
+		t.Errorf("restore from an anonymous-read repository (credentials never challenged): %v\n%s", err, out)
+	}
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	code int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.code = code
+	r.ResponseWriter.WriteHeader(code)
 }

@@ -82,6 +82,12 @@ func (f *Format) Mount(r chi.Router, deps core.Deps) {
 	r.Delete("/yank/{project}/{version}", h.unyank)
 }
 
+// Challenge implements core.Challenger: the Basic challenge pip and twine
+// answer with their configured credentials.
+func (f *Format) Challenge(w http.ResponseWriter, r *http.Request, deps core.Deps, err error) {
+	newHandler(deps).writeError(w, r, err)
+}
+
 // Validate implements core.Format.
 func (f *Format) Validate(repo *core.Repository) error {
 	if repo.Format != Name {

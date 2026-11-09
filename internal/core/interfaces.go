@@ -62,6 +62,17 @@ type RootMounter interface {
 	MountRoot(r chi.Router, deps Deps)
 }
 
+// Challenger is implemented by formats whose clients expect the format's own
+// 401 answer. A request to a repository that carries Basic or Bearer
+// credentials which fail authentication answers 401 on every route, public
+// ones included (a service index, a signing key), before any route runs, so
+// clients report the bad credentials instead of failing later. The dispatcher
+// calls Challenge to write that answer; err wraps ErrUnauthenticated. Formats
+// without it answer a JSON error with a Basic challenge.
+type Challenger interface {
+	Challenge(w http.ResponseWriter, r *http.Request, deps Deps, err error)
+}
+
 // Conditional carries validators for conditional upstream requests.
 type Conditional struct {
 	ETag         string

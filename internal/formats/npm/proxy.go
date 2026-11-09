@@ -187,8 +187,16 @@ func (h *handler) expectedDist(ctx context.Context, repo *core.Repository, bs co
 // packument named when that host is one of the repository's related hosts
 // (registries that serve tarballs from another host). Without a related
 // host the remote is asked for the tarball under its own URL, as before.
+// An origin under the remote URL (a remote that names the tarball
+// differently, see canonicalTarball) is requested under its own path.
 func tarballRequest(repo *core.Repository, rel, origin string) core.UpstreamRequest {
 	if origin != "" {
+		remote := strings.TrimSuffix(repo.Config.Proxy.RemoteURL, "/") + "/"
+		if s, ok := strings.CutPrefix(origin, remote); ok {
+			if p, err := decodePath(s); err == nil && !strings.Contains(p, "?") {
+				return core.UpstreamRequest{Path: p}
+			}
+		}
 		if u, err := url.Parse(origin); err == nil && core.MatchHost(repo.Config.Proxy.RelatedHosts, u.Host) {
 			return core.UpstreamRequest{URL: origin}
 		}
@@ -213,21 +221,28 @@ func (h *handler) proxyTarball(ctx context.Context, repo *core.Repository, rel s
 	if err != nil {
 		return nil, nil, err
 	}
-	a, err := h.deps.Components.GetAsset(ctx, repo.ID, rel)
-	if err == nil && a.Kind == core.AssetContent {
-		if err := h.checkQuarantine(ctx, a); err != nil {
-			return nil, nil, err
-		}
-		proxy.NoteCacheHit(ctx, a.Size)
-		return a, bs, nil
-	}
-	if err != nil && !errors.Is(err, core.ErrNotFound) {
-		return nil, nil, err
-	}
 	pkgPath, _, _ := strings.Cut(rel, "/-/")
 	name, err := parseName(pkgPath)
 	if err != nil {
 		return nil, nil, err
+	}
+	// Tarballs cached before scoped paths were made conventional are kept
+	// under the remote's scoped file name.
+	for _, p := range []string{rel, scopedFileTarball(name, rel)} {
+		if p == "" {
+			continue
+		}
+		a, err := h.deps.Components.GetAsset(ctx, repo.ID, p)
+		if err == nil && a.Kind == core.AssetContent {
+			if err := h.checkQuarantine(ctx, a); err != nil {
+				return nil, nil, err
+			}
+			proxy.NoteCacheHit(ctx, a.Size)
+			return a, bs, nil
+		}
+		if err != nil && !errors.Is(err, core.ErrNotFound) {
+			return nil, nil, err
+		}
 	}
 	version, exp, origin := h.expectedDist(ctx, repo, bs, name, rel)
 	if version == "" {
@@ -241,6 +256,15 @@ func (h *handler) proxyTarball(ctx context.Context, repo *core.Repository, rel s
 	resp, err := up.Fetch(ctx, tarballRequest(repo, rel, origin))
 	if err != nil {
 		return nil, nil, err
+	}
+	// Without a cached packument (a lockfile install) the remote's own name
+	// for a scoped tarball is unknown: try the scoped file form too.
+	if alt := scopedFileTarball(name, rel); origin == "" && alt != "" &&
+		(resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone) {
+		_ = resp.Body.Close()
+		if resp, err = up.Fetch(ctx, core.UpstreamRequest{Path: alt}); err != nil {
+			return nil, nil, err
+		}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	switch resp.StatusCode {

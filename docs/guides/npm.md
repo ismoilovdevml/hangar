@@ -61,6 +61,13 @@ served while the remote is down. Tarballs are verified against the upstream
 checksums and cached. Tarball URLs in the documents point at Hangar, so lockfiles
 record Hangar URLs.
 
+Tarball URLs follow the public registry's layout in every repository type:
+`<repository>/@scope/name/-/name-1.0.0.tgz` for scoped packages, also when the
+remote names them `@scope/name/-/@scope/name-1.0.0.tgz` (some self-hosted
+registries do). That older form is still answered, so lockfiles that recorded
+it keep installing; npm, pnpm, yarn and update bots such as Renovate resolve
+the conventional one.
+
 ### Group
 
 ```bash

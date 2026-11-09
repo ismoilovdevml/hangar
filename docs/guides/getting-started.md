@@ -199,7 +199,7 @@ Repository fields:
 | `name` | `^[a-z0-9][a-z0-9-]{1,62}$`, immutable |
 | `format` | `docker`, `maven`, `npm`, `nuget`, `pypi` or `raw`, immutable |
 | `type` | `hosted`, `proxy` or `group`, immutable |
-| `blob_store` | required for hosted and proxy (the store created on first start is `default`); must be absent for groups |
+| `blob_store` | required for hosted and proxy (the store created on first start is `default`); ignored for groups, which store nothing |
 | `online` | default `true`; offline repositories answer 503 |
 | `config.hosted.write_policy` | `allow` (default), `allow_once` (a path can be written once; identical re-uploads are accepted) or `deny` |
 | `config.proxy` | `remote_url` (required), `metadata_ttl`, `content_ttl`, `negative_cache_ttl`, `auth` |
