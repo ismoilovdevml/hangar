@@ -280,7 +280,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	a.onClose(func() { _ = signWatch.Unsubscribe() })
 
 	// Formats (repositories validate against them).
-	reg, err := builtin.RegistryWith(builtin.Options{Docker: docker.Options{TokenKey: []byte(cfg.Docker.TokenKey)}, Signing: signer})
+	reg, err := builtin.RegistryWith(builtin.Options{Docker: docker.Options{TokenKey: []byte(cfg.Docker.TokenKey), Reload: authSvc.ReloadPrincipal}, Signing: signer})
 	if err != nil {
 		return nil, err
 	}

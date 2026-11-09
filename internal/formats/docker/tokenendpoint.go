@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"slices"
 	"strings"
@@ -54,14 +55,27 @@ func (h *handler) serveToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var p *core.Principal
+	chainEnd := int64(0) // 0: a new chain, from credentials
 	if creds.Token != "" && looksLikeJWT(creds.Token) {
+		// A registry token is not a credential: renewing one only changes
+		// its scope. The principal is reloaded from the account, so a
+		// disabled user, a revoked token or a removed role is not carried
+		// forward, and the renewed token expires no later than the chain
+		// it belongs to. Scanner tokens are not renewable.
 		c, err := h.sign.verify(creds.Token, h.service(r), h.now())
-		if err != nil || c.Scanner {
-			// Scanner tokens are not renewable.
+		if err != nil || c.Scanner || h.reload == nil {
 			h.tokenUnauthorized(w)
 			return
 		}
-		p = c.original()
+		if p, err = h.reload(ctx, c.original()); err != nil {
+			if !errors.Is(err, core.ErrUnauthenticated) {
+				h.internal(w, r, "renew registry token", err)
+				return
+			}
+			h.tokenUnauthorized(w)
+			return
+		}
+		chainEnd = c.chainExpiry()
 	} else {
 		var err error
 		p, err = h.deps.Auth.Authenticate(ctx, creds)
@@ -87,15 +101,21 @@ func (h *handler) serveToken(w http.ResponseWriter, r *http.Request) {
 	scopes = slices.Compact(slices.Sorted(slices.Values(scopes)))
 
 	now := h.now()
+	expires := now.Add(h.tokenTTL).Unix()
+	if chainEnd == 0 {
+		chainEnd = expires
+	}
+	expires = min(expires, chainEnd)
 	claims := &tokenClaims{
-		Issuer:    tokenIssuer,
-		Subject:   p.Name,
-		Audience:  h.service(r),
-		IssuedAt:  now.Unix(),
-		NotBefore: now.Unix(),
-		ExpiresAt: now.Add(h.tokenTTL).Unix(),
-		ID:        newUUID(),
-		Access:    []accessEntry{},
+		Issuer:         tokenIssuer,
+		Subject:        p.Name,
+		Audience:       h.service(r),
+		IssuedAt:       now.Unix(),
+		NotBefore:      now.Unix(),
+		ExpiresAt:      expires,
+		ChainExpiresAt: chainEnd,
+		ID:             newUUID(),
+		Access:         []accessEntry{},
 		Principal: tokenPrincipal{
 			ID: p.ID, Name: p.Name, Kind: p.Kind, Source: p.Source, Roles: p.Roles,
 			TokenID: p.TokenID, Scopes: p.Scopes,
@@ -112,7 +132,7 @@ func (h *handler) serveToken(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, tokenResponse{
 		Token: tok, AccessToken: tok,
-		ExpiresIn: int(h.tokenTTL / time.Second),
+		ExpiresIn: int(max(expires-now.Unix(), 0)),
 		IssuedAt:  now.UTC().Format(time.RFC3339),
 	})
 }
