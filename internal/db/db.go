@@ -100,7 +100,7 @@ const migrationLockKeySQL = `hashtextextended('hangar.migrations:' || coalesce(c
 
 // withLock runs fn holding the migration lock on a dedicated connection of
 // the pool. It waits as long as ctx allows for another holder.
-func (m *Migrator) withLock(ctx context.Context, log *slog.Logger, fn func() error) (err error) {
+func (m *Migrator) withLock(ctx context.Context, log *slog.Logger, fn func() error) error {
 	conn, err := m.pool.Acquire(ctx)
 	if err != nil {
 		return fmt.Errorf("migration lock: %w", err)
