@@ -532,6 +532,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repositories/{name}/routing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        /** @description Routing rules of a proxy or group repository, the guard against dependency confusion (an internal package name published with a higher version on a public registry). The same rules are `config.routing` of the repository. Requires read access. */
+        get: operations["getRepositoryRouting"];
+        /** @description Replaces the routing rules. Proxy repositories take `allow` and `block`; groups take `members` (rules for direct members only). Patterns use `*` and `?` on the format's package identity (NuGet ids and PyPI names case-insensitive and normalized, npm `@scope/name`, Maven `groupId:artifactId` or a bare groupId, Go module path prefixes in GOPRIVATE syntax, Cargo crates, Docker image paths, Helm charts, APT/RPM package names, raw paths). Empty rules clear them (204). Requires repository administration; audited as `repository.routing.update` with the rules before and after. */
+        put: operations["putRepositoryRouting"];
+        post?: never;
+        /** @description Clears the routing rules. Requires repository administration; audited as `repository.routing.update`. */
+        delete: operations["deleteRepositoryRouting"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repositories/{name}/routing:test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Evaluates the stored rules for one package name without serving anything: for a proxy whether it may fetch and serve the name, for a group every member (nested groups depth-first) with the rule that excludes it and the first member that would serve it. Requires read access. */
+        post: operations["testRepositoryRouting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repositories/{name}/routing:suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        /** @description Suggests patterns from the names hosted repositories publish: for a group its hosted members (to make exclusive to the member named in `member`), for a proxy every hosted repository of the same format (to block on the proxy). Only repositories the caller may read are looked at, up to 5000 components each. Requires repository administration. */
+        get: operations["suggestRepositoryRouting"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repositories/{name}:scan": {
         parameters: {
             query?: never;
@@ -2609,6 +2668,7 @@ export interface components {
             };
             cleanup_policies?: string[];
             connector?: components["schemas"]["ConnectorConfig"];
+            routing?: components["schemas"]["RoutingRules"];
             /**
              * @description Format-specific settings. The keys depend on the repository's
              *     `format`; each format's keys are described by its own schema:
@@ -2733,6 +2793,81 @@ export interface components {
             signing_key?: "repository" | "shared";
         } & {
             [key: string]: unknown;
+        };
+        /** @description Dependency-confusion guard. A name a rule excludes is never fetched from a proxy's remote, not served from its cache, and left out of a group's merged metadata (version lists, indexes, search); downloads answer 404 with the reason in the body and the `X-Hangar-Routing` header. Block wins over allow and exclusive. */
+        RoutingRules: {
+            /** @description Proxy repositories. When set, only names matching one of these are fetched and served. */
+            allow?: string[];
+            /**
+             * @description Proxy repositories. Names matching one of these are never fetched nor served.
+             * @example [
+             *       "Edcom.*"
+             *     ]
+             */
+            block?: string[];
+            /** @description Group repositories. Rules for direct members; each member must be in the group. */
+            members?: components["schemas"]["MemberRouting"][];
+        };
+        MemberRouting: {
+            member: components["schemas"]["RepositoryName"];
+            /**
+             * @description Names reserved for this member: a name matching the exclusive patterns of one or more members is served only by them.
+             * @example [
+             *       "Edcom.*"
+             *     ]
+             */
+            exclusive?: string[];
+            /** @description Names this member never serves through the group. */
+            block?: string[];
+        };
+        RoutingBlock: {
+            /** @description Repository holding the rule (the proxy or the group) */
+            repository: string;
+            /** @description Group member the rule excludes */
+            member?: string;
+            /** @enum {string} */
+            rule: "block" | "allow" | "exclusive";
+            /** @description The pattern that matched; empty when no allow pattern matched */
+            pattern?: string;
+            /** @description Members reserving the name (exclusive rules) */
+            owners?: string[];
+            name: string;
+        };
+        RoutingTest: {
+            repository: string;
+            format: components["schemas"]["Format"];
+            name: string;
+            /** @description The name as the rules compare it */
+            normalized: string;
+            /** @description At least one source may serve the name */
+            allowed: boolean;
+            block?: components["schemas"]["RoutingBlock"];
+            /** @description First hosted or proxy member */
+            served_by?: string;
+            members: {
+                repository: string;
+                type: components["schemas"]["RepositoryType"];
+                /** @description Groups between the tested repository and this member */
+                via: string[];
+                allowed: boolean;
+                online: boolean;
+                block?: components["schemas"]["RoutingBlock"];
+            }[];
+        };
+        RoutingSuggestions: {
+            repository: string;
+            /** @description A source had more components than were read */
+            truncated: boolean;
+            suggestions: {
+                /** @example Edcom.* */
+                pattern: string;
+                matches: number;
+                examples: string[];
+                /** @description Hosted repository publishing the names */
+                source: string;
+                /** @description Groups only; the direct member the source is reached through */
+                member?: string;
+            }[];
         };
         RepositoryInput: {
             name: components["schemas"]["RepositoryName"];
@@ -5150,6 +5285,145 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CacheInvalidation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getRepositoryRouting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rules; empty lists when none are set */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingRules"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putRepositoryRouting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoutingRules"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingRules"];
+                };
+            };
+            /** @description Rules cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteRepositoryRouting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rules cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    testRepositoryRouting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @example Edcom.Common.Utils */
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Evaluation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingTest"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    suggestRepositoryRouting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["RepositoryName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suggestions, most common first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingSuggestions"];
                 };
             };
             400: components["responses"]["BadRequest"];

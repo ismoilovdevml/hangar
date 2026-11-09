@@ -88,6 +88,8 @@ export function toRepositoryUpdate(f: RepoForm, r: Repository, online: boolean =
   }
   if (Object.keys(scanning).length) config.scanning = scanning;
   else delete config.scanning;
+  // Routing rules are edited in their own panel (PUT .../routing) and kept here.
+  if (old.routing) config.routing = old.routing;
   // Keys the form edits for this format and type come from the form; the rest stay as stored.
   const managed = formatSettingKeys(r.format, r.type);
   const format: Record<string, unknown> = { ...(old.format ?? {}) };

@@ -32,6 +32,7 @@ import {
 } from '../../../lib/repositories';
 import { RepoSettingsFields } from '../RepoFormFields';
 import { focusFirstError } from '../repoFormHelpers';
+import { RoutingPanel } from './RoutingPanel';
 import { SigningKeyPanel } from './SigningKeyPanel';
 import '../../../styles/catalog.css';
 import './settings.css';
@@ -203,6 +204,8 @@ function SettingsForm({ repo }: { repo: Repository }) {
           </Panel>
 
           {isFormat(repo.format) && SIGNED_FORMATS.includes(repo.format) && repo.type !== 'proxy' && <SigningKeyPanel repo={repo} />}
+
+          {repo.type !== 'hosted' && <RoutingPanel repo={repo} memberTypes={memberTypes} />}
 
           <Panel title="Delete repository" titleId="danger-title" className="danger-zone">
             <p className="danger-zone__text">

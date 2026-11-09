@@ -16,3 +16,27 @@
 .signing-key__files { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; }
 .signing-key__files .meta { font-weight: 400; }
 .signing-key__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.routing { gap: 12px; }
+.routing__intro { font-size: 14px; color: var(--ink-2); line-height: 1.5; margin: 0; }
+.routing__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.routing__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.routing__table td, .routing__table th { padding: 8px 10px; vertical-align: middle; }
+.routing__table .input { min-width: 140px; width: 100%; }
+.routing__member { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--ink); white-space: nowrap; text-align: left; }
+.routing__test { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--hairline); font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.routing__test-row { display: flex; gap: 8px; }
+.routing__test-row .input { flex: 1; min-width: 0; }
+.routing__result { display: flex; flex-direction: column; gap: 6px; font-weight: 500; }
+.routing__verdict { margin: 0; color: var(--ink); font-weight: 700; overflow-wrap: anywhere; }
+.routing__hops { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
+.routing__hops .is-allowed > span:first-child { color: var(--good, var(--lake-ink)); }
+.routing__hops .is-blocked > span:first-child { color: var(--bad); }
+.routing__actions .button { white-space: normal; text-align: left; max-width: 100%; }
+@media (max-width: 640px) {
+  .routing__table thead { display: none; }
+  .routing__table tr, .routing__table th, .routing__table td { display: block; width: 100%; }
+  .routing__table tr { padding: 6px 0; border-top: 1px solid var(--hairline); }
+  .data-table.routing__table td { border-top: 0; padding: 4px 0; }
+  .data-table.routing__table th { padding: 4px 0; }
+  .routing__table td::before { content: attr(data-label); display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--ink-3); }
+}

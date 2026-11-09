@@ -56,6 +56,11 @@ export type Repository = Schemas['Repository'];
 export type RepositoryList = Schemas['RepositoryList'];
 export type RepositoryCounts = RepositoryList['counts'];
 export type SigningKey = Schemas['SigningKey'];
+export type RoutingRules = Schemas['RoutingRules'];
+export type MemberRouting = Schemas['MemberRouting'];
+export type RoutingBlock = Schemas['RoutingBlock'];
+export type RoutingTest = Schemas['RoutingTest'];
+export type RoutingSuggestions = Schemas['RoutingSuggestions'];
 export type ListRepositoriesQuery = NonNullable<operations['listRepositories']['parameters']['query']>;
 
 /* ---------- blob stores / cleanup ---------- */
