@@ -17,6 +17,14 @@ type groupIndex struct {
 	key   string
 	files map[string]repokit.File
 	date  time.Time
+	// stale are by-hash files of earlier generations, served until their
+	// expiry so a client that read an earlier Release finds its indexes.
+	stale map[string]staleFile
+}
+
+type staleFile struct {
+	f     repokit.File
+	until time.Time
 }
 
 // groupFiles returns the merged indexes of a group of hosted repositories.
@@ -76,7 +84,21 @@ func (h *handler) groupFiles(ctx context.Context, group *core.Repository) (*grou
 	if err != nil {
 		return nil, err
 	}
-	gi = &groupIndex{key: key.String(), files: files, date: latest}
+	next := &groupIndex{key: key.String(), files: files, date: latest, stale: map[string]staleFile{}}
+	if gi != nil {
+		now := h.clock()
+		for p, sf := range gi.stale {
+			if _, current := files[p]; !current && now.Before(sf.until) {
+				next.stale[p] = sf
+			}
+		}
+		for p, f := range gi.files {
+			if _, current := files[p]; !current && isByHash(p) {
+				next.stale[p] = staleFile{f: f, until: now.Add(h.byHashGrace)}
+			}
+		}
+	}
+	gi = next
 	h.groupMu.Lock()
 	h.groups[group.ID] = gi
 	h.groupMu.Unlock()
@@ -89,9 +111,17 @@ func (h *handler) groupDists(w http.ResponseWriter, r *http.Request, group *core
 		h.Fail(w, r, err)
 		return
 	}
+	files := gi.files
+	if len(files) == 0 && suiteRE.MatchString(dist) {
+		// No member has packages: an empty distribution, not a 404.
+		if files, err = emptyIndexes(dist, indexOptions{Label: group.Name, Architectures: formatConfig(group).Architectures, Date: gi.date}); err != nil {
+			h.Fail(w, r, err)
+			return
+		}
+	}
 	switch rest {
 	case "InRelease", "Release.gpg":
-		rel, ok := gi.files["dists/"+dist+"/Release"]
+		rel, ok := files["dists/"+dist+"/Release"]
 		if !ok {
 			h.Fail(w, r, fmt.Errorf("distribution %q: %w", dist, core.ErrNotFound))
 			return
@@ -99,7 +129,12 @@ func (h *handler) groupDists(w http.ResponseWriter, r *http.Request, group *core
 		h.serveSigned(w, r, group, rest, rel.Data, gi.date)
 		return
 	}
-	f, ok := gi.files[p]
+	f, ok := files[p]
+	if !ok {
+		if sf, found := gi.stale[p]; found && h.clock().Before(sf.until) {
+			f, ok = sf.f, true
+		}
+	}
 	if !ok {
 		h.Fail(w, r, fmt.Errorf("%s: %w", p, core.ErrNotFound))
 		return
