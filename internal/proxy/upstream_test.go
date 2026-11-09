@@ -407,7 +407,7 @@ func TestHealthReporter(t *testing.T) {
 	if it := page.Items[0]; it.Name != "a-slow" || it.State != StateSlow || it.LatencyMS == nil || *it.LatencyMS < 20 {
 		t.Errorf("slow item: %+v", it)
 	}
-	if it := page.Items[1]; it.State != StateBlocked {
+	if it := page.Items[1]; it.State != StateBlocked || it.Reason != ReasonAccessDenied {
 		t.Errorf("denied item: %+v", it)
 	}
 	page, err = h.List(context.Background(), page.NextCursor, 2)

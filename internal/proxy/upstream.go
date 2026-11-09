@@ -248,7 +248,7 @@ func (u *upstream) fetch(ctx context.Context, method string, target *url.URL, re
 			return nil, rateLimited(u.name, host, tr.after)
 		case errors.Is(err, ErrBlocked):
 			done(err)
-			u.stats.setBlocked(true)
+			u.stats.setBlocked(ReasonAddressBlocked)
 		case transientDNS(err):
 			upstreamDNSFailures.WithLabelValues(u.name).Inc()
 			if u.dns.count(u.now()) {
@@ -275,10 +275,12 @@ func (u *upstream) fetch(ctx context.Context, method string, target *url.URL, re
 	if primary {
 		u.stats.observe(now.Sub(start), now)
 		switch {
-		case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-			u.stats.setBlocked(true)
+		case resp.StatusCode == http.StatusUnauthorized:
+			u.stats.setBlocked(ReasonAuthFailed)
+		case resp.StatusCode == http.StatusForbidden:
+			u.stats.setBlocked(ReasonAccessDenied)
 		case resp.StatusCode < http.StatusInternalServerError:
-			u.stats.setBlocked(false)
+			u.stats.setBlocked("")
 		}
 	}
 	if resp.StatusCode == http.StatusNotFound && u.negTTL > 0 {

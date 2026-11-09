@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/netip"
 	"net/url"
 	"sync"
@@ -145,5 +147,38 @@ func TestDNSTimeoutBurstDoesNotOpenBreaker(t *testing.T) {
 	}
 	if st := u2.health().State; st != StateOffline {
 		t.Errorf("after 3 NXDOMAIN: state %s, want offline", st)
+	}
+}
+
+// TestBlockedReason: 401 and 403 are told apart from each other and from
+// the address policy, and a later success clears them.
+func TestBlockedReason(t *testing.T) {
+	var status atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(int(status.Load()))
+	}))
+	defer srv.Close()
+	m := newManager(t, nil)
+	repo := proxyRepo("nuget-gitlab", srv.URL, nil)
+	u := upstreamFor(t, m, repo)
+	for _, tc := range []struct {
+		status int
+		state  State
+		reason Reason
+	}{
+		{http.StatusUnauthorized, StateBlocked, ReasonAuthFailed},
+		{http.StatusForbidden, StateBlocked, ReasonAccessDenied},
+		{http.StatusNotFound, StateHealthy, ""},
+		{http.StatusUnauthorized, StateBlocked, ReasonAuthFailed},
+		{http.StatusOK, StateHealthy, ""},
+	} {
+		status.Store(int32(tc.status))
+		resp, _ := fetchOK(t, u, core.UpstreamRequest{Path: fmt.Sprint("x", tc.status)})
+		if resp.StatusCode != tc.status {
+			t.Fatalf("status %d", resp.StatusCode)
+		}
+		if h := m.Health(repo); h.State != tc.state || h.Reason != tc.reason {
+			t.Errorf("after %d: %+v, want %s %q", tc.status, h, tc.state, tc.reason)
+		}
 	}
 }
