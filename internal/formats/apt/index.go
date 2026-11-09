@@ -169,7 +169,7 @@ func buildIndexes(entries []entry, opt indexOptions) (map[string]repokit.File, e
 					data []byte
 					ct   string
 				}{{rel, plain, ctText}, {rel + ".gz", gz, ctGzip}, {rel + ".xz", xzb, ctXz}} {
-					files["dists/"+dist+"/"+f.name] = repokit.File{Data: f.data, ContentType: f.ct}
+					addIndex(files, dist, f.name, f.data, f.ct)
 					indexed = append(indexed, indexFile{name: f.name, data: f.data})
 				}
 			}
@@ -178,6 +178,79 @@ func buildIndexes(entries []entry, opt indexOptions) (map[string]repokit.File, e
 			Data:        releaseFile(dist, arches, comps, indexed, opt),
 			ContentType: ctText,
 		}
+	}
+	return files, nil
+}
+
+// byHashAlgos are the by-hash directories published next to every index
+// file. apt fetches by-hash/<strongest hash in the Release>/<digest>, which
+// is SHA512 for the Release files written here; SHA256 is the directory
+// Debian archives publish.
+var byHashAlgos = []struct {
+	dir string
+	h   func() hash.Hash
+}{{"SHA256", sha256.New}, {"SHA512", sha512.New}}
+
+// addIndex adds an index file at its name and at its by-hash paths. A
+// client that read a Release fetches by-hash, so an upload that replaces
+// the index between the two requests does not break its update (the
+// superseded by-hash files stay for byHashGrace).
+func addIndex(files map[string]repokit.File, dist, name string, data []byte, ct string) {
+	files["dists/"+dist+"/"+name] = repokit.File{Data: data, ContentType: ct}
+	dir := name[:strings.LastIndexByte(name, '/')+1]
+	for _, a := range byHashAlgos {
+		h := a.h()
+		_, _ = h.Write(data)
+		files["dists/"+dist+"/"+dir+"by-hash/"+a.dir+"/"+hex.EncodeToString(h.Sum(nil))] = repokit.File{Data: data, ContentType: ct}
+	}
+}
+
+// byHashPaths are the by-hash paths of every index file a Release lists.
+func byHashPaths(dist string, release []byte) map[string]bool {
+	out := map[string]bool{}
+	for _, a := range byHashAlgos {
+		for name, sum := range releaseSection(release, a.dir+":") {
+			dir := name[:strings.LastIndexByte(name, '/')+1]
+			out["dists/"+dist+"/"+dir+"by-hash/"+a.dir+"/"+sum] = true
+		}
+	}
+	return out
+}
+
+// isByHash reports whether p is a by-hash index path.
+func isByHash(p string) bool { return strings.Contains(p, "/by-hash/") }
+
+// emptyIndexes is the dists/ tree of a distribution without packages: a
+// Release listing the default component and the configured architectures,
+// and empty Packages files, so "apt-get update" succeeds against a
+// repository before its first upload (or after its last delete).
+func emptyIndexes(dist string, opt indexOptions) (map[string]repokit.File, error) {
+	files := map[string]repokit.File{}
+	gz, err := gzipBytes(nil)
+	if err != nil {
+		return nil, err
+	}
+	xzb, err := xzBytes(nil)
+	if err != nil {
+		return nil, err
+	}
+	arches := append([]string(nil), opt.Architectures...)
+	sort.Strings(arches)
+	var indexed []indexFile
+	for _, arch := range arches {
+		rel := DefaultComponent + "/binary-" + arch + "/Packages"
+		for _, f := range []struct {
+			name string
+			data []byte
+			ct   string
+		}{{rel, []byte{}, ctText}, {rel + ".gz", gz, ctGzip}, {rel + ".xz", xzb, ctXz}} {
+			addIndex(files, dist, f.name, f.data, f.ct)
+			indexed = append(indexed, indexFile{name: f.name, data: f.data})
+		}
+	}
+	files["dists/"+dist+"/Release"] = repokit.File{
+		Data:        releaseFile(dist, arches, []string{DefaultComponent}, indexed, opt),
+		ContentType: ctText,
 	}
 	return files, nil
 }
@@ -193,6 +266,7 @@ func releaseFile(dist string, arches, comps []string, files []indexFile, opt ind
 	fmt.Fprintf(&b, "Date: %s\n", opt.Date.UTC().Format(releaseDateFormat))
 	fmt.Fprintf(&b, "Architectures: %s\nComponents: %s\n", strings.Join(arches, " "), strings.Join(comps, " "))
 	fmt.Fprintf(&b, "Description: %s %s\n", opt.Label, dist)
+	b.WriteString("Acquire-By-Hash: yes\n")
 	sort.Slice(files, func(i, j int) bool { return files[i].name < files[j].name })
 	for _, alg := range []struct {
 		field string
@@ -257,7 +331,11 @@ func xzBytes(b []byte) ([]byte, error) {
 
 // releaseHashes parses the SHA256 section of a Release file: the expected
 // digest of every index file, by path relative to the distribution.
-func releaseHashes(release []byte) map[string]string {
+func releaseHashes(release []byte) map[string]string { return releaseSection(release, "SHA256:") }
+
+// releaseSection parses one checksum section of a Release file ("SHA256:",
+// "SHA512:"): digest by path relative to the distribution.
+func releaseSection(release []byte, field string) map[string]string {
 	out := map[string]string{}
 	in := false
 	for _, line := range strings.Split(string(release), "\n") {
@@ -268,7 +346,7 @@ func releaseHashes(release []byte) map[string]string {
 			if len(f) == 3 {
 				out[f[2]] = strings.ToLower(f[0])
 			}
-		case strings.HasPrefix(line, "SHA256:"):
+		case strings.HasPrefix(line, field):
 			in = true
 		case line != "" && line[0] != ' ':
 			in = false

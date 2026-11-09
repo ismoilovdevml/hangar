@@ -190,7 +190,7 @@ func TestPushAndDownload(t *testing.T) {
 		{"bad id", "nuget-hosted", nupkg(t, "bad id", "1.0.0", ""), f.token, http.StatusBadRequest},
 		{"bad version", "nuget-hosted", nupkg(t, "Good.Id", "1.0.0-", ""), f.token, http.StatusBadRequest},
 		{"ok", "nuget-hosted", pkg, f.token, http.StatusCreated},
-		{"same bytes again", "nuget-hosted", pkg, f.token, http.StatusCreated},
+		{"same bytes again, allow_once", "nuget-hosted", pkg, f.token, http.StatusConflict},
 		{"different bytes, allow_once", "nuget-hosted", nupkg(t, "Acme.Json", "1.0.0-beta+other", ""), f.token, http.StatusConflict},
 	}
 	for _, tt := range tests {

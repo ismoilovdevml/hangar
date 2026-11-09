@@ -35,7 +35,7 @@ func (f stubFormat) Validate(r *core.Repository) error {
 
 func formats(name string) (core.Format, bool) {
 	switch name {
-	case "raw", "npm", "maven":
+	case "raw", "npm", "maven", "docker":
 		return stubFormat{name}, true
 	}
 	return nil, false
@@ -167,7 +167,7 @@ func TestCreateGetRoundTrip(t *testing.T) {
 	}
 	// Hosted without a policy is stored with the explicit default.
 	r := f.mustCreate(t, hosted("raw-hosted", "raw"))
-	if r.Config.Hosted == nil || r.Config.Hosted.WritePolicy != core.WriteAllow {
+	if r.Config.Hosted == nil || r.Config.Hosted.WritePolicy != core.WriteAllowOnce {
 		t.Errorf("default write policy = %+v", r.Config.Hosted)
 	}
 	if ev := f.events.Published(core.EventRepositoryCreated); len(ev) != 4 {

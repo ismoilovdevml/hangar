@@ -60,13 +60,17 @@ func (h *handler) storePackage(ctx context.Context, repo *core.Repository, bs co
 	}
 	v, _ := ParseVersion(md.Version) // validated by ParseNuspec
 	lid, lver := lowerID(md.ID), v.Lower()
+	listed, err := h.pushListed(ctx, repo, md, lid, lver)
+	if err != nil {
+		return md, nil, err
+	}
 	assetAttrs := map[string]any{attrID: md.ID, attrVersion: md.Version}
 	req := core.PublishRequest{
 		Component: &core.Component{
 			Name:    lid,
 			Version: lver,
 			Attributes: map[string]any{
-				attrID: md.ID, attrVersion: md.Version, attrListed: true, attrSemVer2: md.IsSemVer2(),
+				attrID: md.ID, attrVersion: md.Version, attrListed: listed, attrSemVer2: md.IsSemVer2(),
 				attrMeta: md.catalog(), attrSHA512: up.sha512,
 				"description": md.Description, "authors": md.Authors,
 			},
@@ -86,6 +90,37 @@ func (h *handler) storePackage(ctx context.Context, repo *core.Repository, bs co
 		return md, req.Assets, err
 	}
 	return md, req.Assets, nil
+}
+
+// pushListed decides whether a push of lid/lver may go ahead and returns the
+// listed flag the version gets. A version that already exists is a conflict
+// (409, which "dotnet nuget push --skip-duplicate" skips) unless the write
+// policy is allow; an allowed re-push keeps the version's listed state, so
+// it never relists an unlisted version as a side effect.
+func (h *handler) pushListed(ctx context.Context, repo *core.Repository, md *Metadata, lid, lver string) (bool, error) {
+	if repo.Type != core.RepoHosted {
+		return true, nil // a proxy cache fill
+	}
+	if _, err := h.deps.Components.GetAsset(ctx, repo.ID, nupkgPath(lid, lver)); errors.Is(err, core.ErrNotFound) {
+		return true, nil
+	} else if err != nil {
+		return false, err
+	}
+	if repo.WritePolicy() != core.WriteAllow {
+		return false, fmt.Errorf("%s %s already exists in %s (write policy %s): %w",
+			md.ID, md.Version, repo.Name, repo.WritePolicy(), core.ErrWriteDenied)
+	}
+	c, err := h.deps.Components.GetComponent(ctx, repo.ID, "", lid, lver)
+	if errors.Is(err, core.ErrNotFound) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if b, ok := c.Attributes[attrListed].(bool); ok {
+		return b, nil
+	}
+	return true, nil
 }
 
 func isSymbolPackage(md *Metadata) bool {

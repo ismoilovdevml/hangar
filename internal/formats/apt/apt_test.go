@@ -360,14 +360,15 @@ func TestDeleteRegenerates(t *testing.T) {
 	if err := f.env.Components.DeleteComponent(coretest.AsUser(t.Context(), "alice"), f.hosted, c.ID); err != nil {
 		t.Fatal(err)
 	}
+	// The repository is empty again: an empty distribution, not a 404.
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		rec := f.do(t, http.MethodGet, "/repository/apt-hosted/dists/stable/Release", nil)
-		if rec.Code == http.StatusNotFound {
+		rec := f.do(t, http.MethodGet, "/repository/apt-hosted/dists/stable/main/binary-amd64/Packages", nil)
+		if rec.Code == http.StatusOK && rec.Body.Len() == 0 {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("Release still served after the last package was deleted: %d", rec.Code)
+			t.Fatalf("Packages still list the deleted package: %d %s", rec.Code, rec.Body)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}

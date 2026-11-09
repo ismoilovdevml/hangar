@@ -136,6 +136,82 @@ func (h *handler) fetchRemote(ctx context.Context, repo *core.Repository, mp *ma
 	return assetEntity(repo, stored[0]), nil
 }
 
+// proxyChecksum answers a checksum request of a proxy repository without
+// downloading the file it describes: from the cached file when there is a
+// current copy, otherwise from the remote's side file. ok is false when
+// neither is available (the remote has no side file); the caller then
+// derives the checksum from the file itself.
+func (h *handler) proxyChecksum(ctx context.Context, repo *core.Repository, mp *mavenPath) (*entity, bool, error) {
+	cfg, err := ConfigOf(repo)
+	if err != nil {
+		return nil, false, err
+	}
+	if v := mp.base.version; v != "" && !cfg.allowsVersion(v) {
+		return nil, false, fmt.Errorf("%s: version %s is outside the %s policy of %s: %w", mp.path, v, cfg.VersionPolicy, repo.Name, core.ErrNotFound)
+	}
+	if err := checkProxy(ctx, repo, mp); err != nil {
+		return nil, false, err
+	}
+	cached, err := h.deps.Components.GetAsset(ctx, repo.ID, mp.base.path)
+	switch {
+	case err == nil:
+		if proxy.FreshnessOf(repo.Config.Proxy).IsFresh(cached.Kind, cached.UpdatedAt) {
+			e, err := h.checksumEntity(ctx, assetEntity(repo, cached), mp)
+			return e, err == nil, err
+		}
+	case errors.Is(err, core.ErrNotFound):
+		cached = nil
+	default:
+		return nil, false, err
+	}
+	fromCache := func() (*entity, bool, error) {
+		if cached == nil {
+			return nil, false, nil
+		}
+		e, err := h.checksumEntity(ctx, assetEntity(repo, cached), mp)
+		return e, err == nil, err
+	}
+	up, err := h.deps.Upstreams.ForRepository(ctx, repo)
+	if err != nil {
+		return nil, false, err
+	}
+	pkg, index := upstreamPackage(mp)
+	resp, err := up.Fetch(ctx, core.UpstreamRequest{Method: http.MethodGet, Path: mp.path, Package: pkg, Index: index})
+	if err != nil {
+		h.log.Debug("remote checksum unavailable", "repository", repo.Name, "path", mp.path, "err", err)
+		return fromCache()
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fromCache()
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxChecksumBody+1))
+	if err != nil || len(body) > maxChecksumBody {
+		return fromCache()
+	}
+	sum, err := parseChecksum(mp.algo, string(body))
+	if err != nil {
+		h.log.Warn("remote published a malformed checksum", "repository", repo.Name, "path", mp.path)
+		return fromCache()
+	}
+	mod := resp.LastModified
+	if mod.IsZero() {
+		mod = time.Now()
+	}
+	proxy.NoteCacheMiss(ctx)
+	return dataEntity([]byte(sum), contentType(mp.path), mod), true, nil
+}
+
+// checksumEntity is the side file of base for mp's algorithm.
+func (h *handler) checksumEntity(ctx context.Context, base *entity, mp *mavenPath) (*entity, error) {
+	sum, err := h.checksum(ctx, base, mp.algo)
+	if err != nil {
+		return nil, err
+	}
+	proxy.NoteCacheHit(ctx, int64(len(sum)))
+	return dataEntity([]byte(sum), contentType(mp.path), base.lastModified()), nil
+}
+
 // touch restarts a cached document's TTL after the remote confirmed it (304).
 func (h *handler) touch(ctx context.Context, repo *core.Repository, a *core.Asset) {
 	c := *a

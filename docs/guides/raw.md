@@ -29,7 +29,8 @@ curl -X POST https://hangar.example.com/api/v1/repositories \
 ```
 
 Write policies: `allow` (overwrite freely), `allow_once` (identical re-uploads are
-accepted, changed content is `409`), `deny` (read-only). Add
+accepted, changed content is `409`; the default for repositories created
+without a policy), `deny` (read-only). Add
 `"anonymous_read": true` to `config` to serve downloads without credentials.
 
 ### Proxy

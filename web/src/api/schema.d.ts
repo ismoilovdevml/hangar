@@ -2656,7 +2656,10 @@ export interface components {
             items: components["schemas"]["UpstreamHealth"][];
             next_cursor?: components["schemas"]["NextCursor"];
         };
-        /** @enum {string} */
+        /**
+         * @description Publishing into a hosted repository. allow overwrites freely; allow_once accepts a path once (identical bytes again are accepted, different bytes answer 409); deny is read-only. Default for a new hosted repository: allow_once, except docker (allow: tags move). An update that leaves it out keeps the stored policy.
+         * @enum {string}
+         */
         WritePolicy: "allow" | "allow_once" | "deny";
         /** @description Credentials sent only to the remote's own host. Secrets are write-only. */
         UpstreamAuth: {

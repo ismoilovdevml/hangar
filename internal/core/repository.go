@@ -47,6 +47,18 @@ func (p WritePolicy) Valid() bool {
 	return p == WriteAllow || p == WriteAllowOnce || p == WriteDeny
 }
 
+// DefaultWritePolicy is the policy a new hosted repository of format gets
+// when none is given: allow_once, so a published release cannot be replaced
+// by different bytes. Docker is the exception: a tag is a mutable pointer
+// (latest, a branch name) that clients expect to move, and image content is
+// addressed by digest anyway.
+func DefaultWritePolicy(format string) WritePolicy {
+	if format == "docker" {
+		return WriteAllow
+	}
+	return WriteAllowOnce
+}
+
 var repoNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,62}$`)
 
 // ValidateRepositoryName enforces the repository naming rule `^[a-z0-9][a-z0-9-]{1,62}$`.

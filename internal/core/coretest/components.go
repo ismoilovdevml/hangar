@@ -99,7 +99,7 @@ func (s *Components) Publish(ctx context.Context, repo *core.Repository, req cor
 	now := time.Now().UTC()
 	s.mu.Lock()
 	// Check the write policy for every asset before changing anything (atomicity).
-	if repo.Type == core.RepoHosted && repo.WritePolicy() == core.WriteAllowOnce {
+	if repo.Type == core.RepoHosted && repo.WritePolicy() == core.WriteAllowOnce && !req.Replace {
 		for _, a := range req.Assets {
 			old, ok := s.assets[assetKey(repo.ID, a.Path)]
 			if ok && a.Kind != core.AssetMetadata && old.BlobDigest != a.BlobDigest {
@@ -232,7 +232,8 @@ func (s *Components) ListComponents(_ context.Context, q core.ComponentQuery) (c
 	s.mu.RLock()
 	var all []*core.Component
 	for _, c := range s.components {
-		if c.RepositoryID != q.RepositoryID || (q.Namespace != nil && c.Namespace != *q.Namespace) || (q.Name != "" && c.Name != q.Name) {
+		if c.RepositoryID != q.RepositoryID || (q.Namespace != nil && c.Namespace != *q.Namespace) || (q.Name != "" && c.Name != q.Name) ||
+			(q.QuarantinedOnly && !c.Quarantined) {
 			continue
 		}
 		all = append(all, cloneComponent(c))
@@ -354,4 +355,16 @@ func (s *Components) Downloads() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.downloads
+}
+
+// SetQuarantined sets the quarantine flag of a stored component, as the
+// scanner does. It reports whether the component exists.
+func (s *Components) SetQuarantined(id string, quarantined bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.components[id]
+	if ok {
+		c.Quarantined = quarantined
+	}
+	return ok
 }

@@ -93,10 +93,11 @@ func (f *Format) Coordinates(a *core.Asset) core.Coordinates {
 
 // handler serves every repository of this format.
 type handler struct {
-	deps core.Deps
-	now  func() time.Time
-	neg  *negativeCache
-	fill singleflight.Group
+	deps  core.Deps
+	now   func() time.Time
+	neg   *negativeCache
+	fill  singleflight.Group
+	trees sync.Map // in-process tree locks when deps.Locks is nil
 }
 
 // negativeCache remembers upstream 404s per repository path until they expire.

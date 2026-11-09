@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
@@ -79,7 +80,7 @@ func (h *handler) put(w http.ResponseWriter, r *http.Request, repo *core.Reposit
 		h.fail(w, r, err)
 		return
 	}
-	asset, err = h.publish(ctx, repo, asset)
+	asset, err = h.publishInTree(ctx, repo, asset)
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -118,6 +119,33 @@ func (h *handler) checkConflict(ctx context.Context, repo *core.Repository, clea
 		}
 	}
 	return nil
+}
+
+// publishInTree publishes asset after checking again, under the lock of its
+// top-level directory, that the tree stays a tree. The check before the
+// upload fails fast; this one closes the race between concurrent uploads
+// of a and a/b, which share their first path segment and so the lock.
+func (h *handler) publishInTree(ctx context.Context, repo *core.Repository, asset *core.Asset) (*core.Asset, error) {
+	top, _, _ := strings.Cut(asset.Path, "/")
+	unlock, err := h.lockTree(ctx, repo.ID+"/"+top)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	if err := h.checkConflict(ctx, repo, asset.Path); err != nil {
+		return nil, err
+	}
+	return h.publish(ctx, repo, asset)
+}
+
+func (h *handler) lockTree(ctx context.Context, key string) (func(), error) {
+	if h.deps.Locks != nil {
+		return h.deps.Locks.Lock(ctx, "raw:tree:"+key)
+	}
+	v, _ := h.trees.LoadOrStore(key, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock, nil
 }
 
 // store streams body into repo's blob store while computing every checksum,

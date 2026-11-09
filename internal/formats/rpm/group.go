@@ -17,10 +17,11 @@ import (
 // generation kept so a client that fetched the old repomd.xml still finds
 // its files.
 type groupData struct {
-	key  string
-	rd   *repoData
-	prev *repoData
-	at   time.Time
+	key   string
+	rd    *repoData
+	prev  *repoData
+	at    time.Time
+	built time.Time // when this generation replaced the previous one
 }
 
 // groupRepodata returns the merged repodata of root over the group's hosted
@@ -69,7 +70,7 @@ func (h *handler) groupRepodata(ctx context.Context, group *core.Repository, roo
 	if err != nil {
 		return nil, err
 	}
-	next := &groupData{key: key.String(), rd: rd, at: time.Unix(latest, 0)}
+	next := &groupData{key: key.String(), rd: rd, at: time.Unix(latest, 0), built: time.Now()}
 	if gd != nil {
 		next.prev = gd.rd
 	}
@@ -122,13 +123,17 @@ func (h *handler) serveGroup(w http.ResponseWriter, r *http.Request, group *core
 		return
 	}
 	if file == "repomd.xml.asc" {
-		h.serveSignature(w, r, group, gd.rd.Files["repodata/repomd.xml"].Data)
+		doc := h.pins.document(pinKey(r, group, root), gd.rd.Files["repodata/repomd.xml"].Data, gd.built, time.Now())
+		h.serveSignature(w, r, group, doc)
 		return
 	}
 	f, ok := gd.rd.Files["repodata/"+file]
 	if !ok {
 		h.Fail(w, r, fmt.Errorf("%s: %w", p, core.ErrNotFound))
 		return
+	}
+	if file == "repomd.xml" {
+		h.pins.served(pinKey(r, group, root), f.Data, time.Now())
 	}
 	h.ServeBytes(w, r, f.Data, f.ContentType, gd.at)
 }

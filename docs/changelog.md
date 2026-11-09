@@ -197,6 +197,46 @@
   `hangar_proxy_negative_cache_evictions_total{repository}`.
 - **Docs**: `docs/security.md` explains that other cluster nodes keep
   accepting an old password for up to `auth.basic_cache_ttl` after a change.
+- **Write policy default, upgrade note**: a hosted repository created through
+  the API without `write_policy` now gets `allow_once` (as the web UI already
+  did), so a published release cannot be replaced by different bytes;
+  `docker` keeps `allow`, because tags such as `latest` are meant to move.
+  Existing repositories keep their stored policy, and an update that leaves
+  `write_policy` out keeps it too. Scripts that relied on overwriting releases
+  must now set `"write_policy": "allow"` explicitly. Re-publishing different
+  bytes answers `409` in every format (identical bytes stay idempotent);
+  Maven SNAPSHOTs remain redeployable.
+- **NuGet**: a push of a version that already exists answers `409` under
+  `allow_once` and `deny` (what `dotnet nuget push --skip-duplicate` skips),
+  and a re-push under `allow` no longer relists an unlisted version. New
+  `VulnerabilityInfo/6.7.0` resource, so NuGet Audit (`dotnet restore`)
+  reports vulnerable packages: hosted repositories serve this server's open
+  scan findings, proxies pass the remote's pages through (nuget.org publishes
+  them), groups list their members' pages.
+- **Quarantined versions are no longer advertised** in NuGet (flat container
+  list, registration, search), Maven (`maven-metadata.xml` of hosted and
+  proxy repositories; the build list of a quarantined SNAPSHOT answers `403`)
+  and Go proxies (`@v/list`, `@latest` falls back to the newest other version,
+  a query resolving to a quarantined version answers `403`). Clients now pick
+  a version they can download instead of failing on its content.
+- **Maven**: a non-unique SNAPSHOT file is replaced in one transaction (no
+  window without the file, and no `delete` privilege needed). A proxy answers
+  `.sha1`/`.md5` requests from the remote's side file instead of downloading
+  the whole artifact first.
+- **APT**: `Release` files declare `Acquire-By-Hash: yes` and every index is
+  also served at `by-hash/SHA256/<digest>` and `by-hash/SHA512/<digest>`;
+  superseded by-hash files stay for an hour, so `apt-get update` racing an
+  upload no longer fails with "Hash Sum mismatch". A repository without
+  packages (new, or after the last delete) serves a valid, signed, empty
+  distribution instead of `404`.
+- **RPM**: `repomd.xml.asc` always verifies the `repomd.xml` the same client
+  was served, also when an upload replaces it between dnf's two requests.
+  The same name-epoch-version-release.arch stored at two paths is listed once
+  in `primary.xml` (the newest copy); under `allow_once` the second path is
+  refused with `409`.
+- **Raw**: concurrent uploads of `a` and `a/b` can no longer both succeed;
+  the file/directory check and the write are serialized per top-level
+  directory.
 - **Routing rules against dependency confusion** (issue #73):
   - Proxy repositories take `config.routing.block` and `allow` name patterns:
     a blocked name is never requested from the remote nor served from the

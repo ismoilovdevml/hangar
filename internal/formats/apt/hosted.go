@@ -216,21 +216,66 @@ func (h *handler) reindex(ctx context.Context, repo *core.Repository) error {
 	if err != nil {
 		return err
 	}
-	for p, f := range files {
-		if !strings.HasSuffix(p, "/Release") {
-			continue
-		}
-		old, err := h.Deps.Components.GetAsset(ctx, repo.ID, p)
-		if err != nil {
+	existing, err := h.AllAssets(ctx, repo.ID, "dists/")
+	if err != nil {
+		return err
+	}
+	// The by-hash files of every Release being replaced (or dropped) are
+	// superseded now; they stay for the grace period.
+	superseded := map[string]bool{}
+	for _, old := range existing {
+		if !strings.HasSuffix(old.Path, "/Release") {
 			continue
 		}
 		prev, err := h.ReadAsset(ctx, repo, old, maxReleaseBytes)
-		if err == nil && withoutDate(prev) == withoutDate(f.Data) {
-			files[p] = repokit.File{Data: prev, ContentType: f.ContentType}
+		if err != nil {
+			continue
+		}
+		if f, ok := files[old.Path]; ok && withoutDate(prev) == withoutDate(f.Data) {
+			files[old.Path] = repokit.File{Data: prev, ContentType: f.ContentType}
+			continue
+		}
+		dist, _, _ := splitDists(old.Path)
+		for p := range byHashPaths(dist, prev) {
+			superseded[p] = true
 		}
 	}
-	_, err = h.Sync(ctx, repo, "dists/", files, nil)
-	return err
+	// Restart their clock: the grace counts from when they were superseded,
+	// not from when they were written.
+	var touch []*core.Asset
+	for _, a := range existing {
+		if _, current := files[a.Path]; !current && superseded[a.Path] && a.Kind == core.AssetMetadata {
+			c := *a
+			c.ID = ""
+			touch = append(touch, &c)
+		}
+	}
+	if len(touch) > 0 {
+		if _, _, err := h.Deps.Components.Publish(ctx, repo, core.PublishRequest{Assets: touch}); err != nil {
+			return err
+		}
+	}
+	if _, err := h.Sync(ctx, repo, "dists/", files, func(a *core.Asset) bool { return isByHash(a.Path) }); err != nil {
+		return err
+	}
+	h.pruneByHash(ctx, repo, existing, files, superseded)
+	return nil
+}
+
+// pruneByHash deletes by-hash files superseded longer than the grace ago.
+// It is housekeeping of the server's own metadata, so it does not need the
+// uploader's delete privilege, and a failure does not fail the upload.
+func (h *handler) pruneByHash(ctx context.Context, repo *core.Repository, existing []*core.Asset, files map[string]repokit.File, superseded map[string]bool) {
+	now := h.clock()
+	sys := core.WithPrincipal(ctx, systemPrincipal())
+	for _, a := range existing {
+		if _, current := files[a.Path]; current || !isByHash(a.Path) || superseded[a.Path] || now.Sub(a.UpdatedAt) < h.byHashGrace {
+			continue
+		}
+		if err := h.Deps.Components.DeleteAsset(sys, repo, a.Path); err != nil && !errors.Is(err, core.ErrNotFound) {
+			h.Log.WarnContext(ctx, "prune superseded by-hash file", "repository", repo.Name, "path", a.Path, "err", err)
+		}
+	}
 }
 
 // splitDists splits a dists/ path into the distribution and the rest.
@@ -271,6 +316,16 @@ func (h *handler) hostedDists(w http.ResponseWriter, r *http.Request, repo *core
 	switch rest {
 	case "InRelease", "Release.gpg":
 		a, err := h.Deps.Components.GetAsset(ctx, repo.ID, "dists/"+dist+"/Release")
+		if errors.Is(err, core.ErrNotFound) {
+			if f, ok, eerr := h.emptyFile(ctx, repo, dist, "dists/"+dist+"/Release"); eerr != nil || ok {
+				if eerr != nil {
+					h.Fail(w, r, eerr)
+					return
+				}
+				h.serveSigned(w, r, repo, rest, f.Data, time.Unix(0, 0))
+				return
+			}
+		}
 		if err != nil {
 			h.Fail(w, r, err)
 			return
@@ -284,11 +339,44 @@ func (h *handler) hostedDists(w http.ResponseWriter, r *http.Request, repo *core
 		return
 	}
 	a, err := h.Deps.Components.GetAsset(ctx, repo.ID, p)
+	if errors.Is(err, core.ErrNotFound) {
+		if f, ok, eerr := h.emptyFile(ctx, repo, dist, p); eerr != nil || ok {
+			if eerr != nil {
+				h.Fail(w, r, eerr)
+				return
+			}
+			h.ServeBytes(w, r, f.Data, f.ContentType, time.Unix(0, 0))
+			return
+		}
+	}
 	if err != nil {
 		h.Fail(w, r, err)
 		return
 	}
 	h.ServeAsset(w, r, repo, a)
+}
+
+// emptyFile returns file p of the empty distribution dist when the hosted
+// repository has no distribution at all (no packages yet, or all deleted).
+func (h *handler) emptyFile(ctx context.Context, repo *core.Repository, dist, p string) (repokit.File, bool, error) {
+	if !suiteRE.MatchString(dist) {
+		return repokit.File{}, false, nil
+	}
+	assets, err := h.AllAssets(ctx, repo.ID, "dists/")
+	if err != nil {
+		return repokit.File{}, false, err
+	}
+	for _, a := range assets {
+		if strings.HasSuffix(a.Path, "/Release") {
+			return repokit.File{}, false, nil // the repository has distributions
+		}
+	}
+	files, err := emptyIndexes(dist, indexOptions{Label: repo.Name, Architectures: formatConfig(repo).Architectures, Date: time.Unix(0, 0)})
+	if err != nil {
+		return repokit.File{}, false, err
+	}
+	f, ok := files[p]
+	return f, ok, nil
 }
 
 // serveSigned answers InRelease (the Release clearsigned) or Release.gpg

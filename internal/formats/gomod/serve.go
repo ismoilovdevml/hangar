@@ -16,6 +16,7 @@ import (
 	"golang.org/x/mod/semver"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/quarantine"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 	"github.com/ismoilovdevml/hangar/internal/routing"
 )
@@ -240,23 +241,33 @@ func (h *handler) hostedVersions(ctx context.Context, repo *core.Repository, mod
 // quarantined returns the cached versions of mod in a proxy repository
 // whose component is quarantined.
 func (h *handler) quarantined(ctx context.Context, repo *core.Repository, mod string) (map[string]bool, error) {
-	out := map[string]bool{}
-	cursor := ""
-	for {
-		page, err := h.deps.Components.ListComponents(ctx, core.ComponentQuery{RepositoryID: repo.ID, Name: mod, Limit: core.MaxPageSize, Cursor: cursor})
-		if err != nil {
-			return nil, err
-		}
-		for _, c := range page.Items {
-			if c.Quarantined {
-				out[c.Version] = true
-			}
-		}
-		if page.NextCursor == "" {
-			return out, nil
-		}
-		cursor = page.NextCursor
+	empty := ""
+	return quarantine.Versions(ctx, h.deps.Components, repo.ID, &empty, mod)
+}
+
+// latestAllowed answers @latest of a proxy whose remote names a version
+// that is quarantined here: the newest other listed version, so that
+// "go get mod@latest" resolves to something it can download instead of
+// failing on the quarantined zip. ErrQuarantined when there is none.
+func (h *handler) latestAllowed(ctx context.Context, repo *core.Repository, mod, blocked string) ([]byte, error) {
+	vs, err := h.versions(ctx, repo, mod, 0) // without quarantined versions
+	if err != nil && !errors.Is(err, core.ErrNotFound) {
+		return nil, err
 	}
+	best := ""
+	for _, v := range vs {
+		if v != blocked && (best == "" || newer(v, best)) {
+			best = v
+		}
+	}
+	if best == "" {
+		return nil, fmt.Errorf("%s@latest is %s, which is quarantined by a security policy: %w", mod, blocked, core.ErrQuarantined)
+	}
+	a, err := h.proxyFile(ctx, repo, mod, best, kindInfo)
+	if err != nil {
+		return nil, err
+	}
+	return h.readAsset(ctx, repo, a, maxInfoBytes)
 }
 
 func complete(c *core.Component) bool {
@@ -311,7 +322,15 @@ func (h *handler) latest(ctx context.Context, repo *core.Repository, mod string,
 		if err != nil {
 			return nil, err
 		}
-		return b, nil
+		v, ok := infoVersion(b)
+		if !ok {
+			return b, nil
+		}
+		blocked, err := h.quarantined(ctx, repo, mod)
+		if err != nil || !blocked[v] {
+			return b, err
+		}
+		return h.latestAllowed(ctx, repo, mod, v)
 	default:
 		comps, err := h.hostedVersions(ctx, repo, mod)
 		if err != nil {
@@ -386,6 +405,15 @@ func (h *handler) open(ctx context.Context, repo *core.Repository, mod, ver stri
 			b, err := h.resolveQuery(ctx, repo, mod, ver)
 			if err != nil {
 				return nil, err
+			}
+			if v, ok := infoVersion(b); ok {
+				blocked, err := h.quarantined(ctx, repo, mod)
+				if err != nil {
+					return nil, err
+				}
+				if blocked[v] {
+					return nil, fmt.Errorf("%s@%s resolves to %s, which is quarantined by a security policy: %w", mod, ver, v, core.ErrQuarantined)
+				}
 			}
 			return &served{body: b}, nil
 		}

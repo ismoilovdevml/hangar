@@ -268,6 +268,10 @@ contact the database directly; private modules belong in `GONOSUMDB` anyway.
   `.info`, `.mod` and `.zip` of each version. The package view shows the
   README at the module root and the licence found in its `LICENSE` file.
 - Vulnerability scanning uses the OSV `Go` ecosystem (module path and version).
+- Quarantined versions are not advertised: they leave `@v/list`; when a
+  proxy's remote names a quarantined version as `@latest`, Hangar answers with
+  the newest other version; a query such as `@v1.5` that resolves to a
+  quarantined version answers `403`.
 
 ## Routing rules
 

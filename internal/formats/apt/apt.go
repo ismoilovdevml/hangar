@@ -16,8 +16,11 @@
 // packages change: Packages, Packages.gz and Packages.xz per distribution,
 // component and architecture ("Architecture: all" packages are listed
 // under every architecture), and a Release file with MD5Sum, SHA1, SHA256
-// and SHA512 sections. InRelease and Release.gpg are signed on request
-// with the repository key (package signing).
+// and SHA512 sections and Acquire-By-Hash: yes; every index is also stored
+// under by-hash/SHA256/ and by-hash/SHA512/, and superseded by-hash files
+// stay for ByHashGrace. A repository without packages serves an empty
+// distribution. InRelease and Release.gpg are signed on request with the
+// repository key (package signing).
 //
 // Proxy repositories mirror a remote archive (http://deb.debian.org/debian,
 // http://archive.ubuntu.com/ubuntu). InRelease, Release and Release.gpg are
@@ -83,8 +86,9 @@ func formatConfig(repo *core.Repository) Config {
 
 // Format implements core.Format for APT.
 type Format struct {
-	signer signing.Signer
-	now    func() time.Time
+	signer      signing.Signer
+	now         func() time.Time
+	byHashGrace time.Duration // 0 = ByHashGrace
 }
 
 var _ core.Format = (*Format)(nil)
@@ -152,8 +156,15 @@ func (f *Format) Coordinates(a *core.Asset) core.Coordinates {
 	return c
 }
 
+// ByHashGrace is how long a superseded by-hash index file stays available,
+// so a client that read the previous Release can still fetch its indexes.
+const ByHashGrace = time.Hour
+
 type handler struct {
 	*repokit.Base
+
+	byHashGrace time.Duration
+	clock       func() time.Time // compared with asset times (wall clock)
 
 	groupMu sync.Mutex
 	groups  map[string]*groupIndex // by group id
@@ -161,9 +172,13 @@ type handler struct {
 
 // Mount implements core.Format. Routes are relative to /repository/{repo}/.
 func (f *Format) Mount(r chi.Router, deps core.Deps) {
-	h := &handler{Base: repokit.NewBase(Name, deps, f.signer), groups: map[string]*groupIndex{}}
+	h := &handler{Base: repokit.NewBase(Name, deps, f.signer), groups: map[string]*groupIndex{},
+		byHashGrace: ByHashGrace, clock: time.Now}
 	if f.now != nil {
 		h.Now = f.now
+	}
+	if f.byHashGrace != 0 {
+		h.byHashGrace = f.byHashGrace
 	}
 	get := func(p string, fn http.HandlerFunc) {
 		r.Get(p, fn)

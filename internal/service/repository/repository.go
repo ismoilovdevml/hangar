@@ -329,6 +329,9 @@ func (s *Service) Update(ctx context.Context, in *core.Repository) (*core.Reposi
 	if err := s.authorize(ctx, "repository.update", in.Name); err != nil {
 		return nil, err
 	}
+	// An update that leaves the write policy out keeps the stored one rather
+	// than taking the default for new repositories.
+	keepPolicy := in.Type == core.RepoHosted && (in.Config.Hosted == nil || in.Config.Hosted.WritePolicy == "")
 	r, err := s.prepare(ctx, in)
 	if err != nil {
 		return nil, err
@@ -355,6 +358,9 @@ SELECT r.id::text, r.format, r.type, coalesce(bs.name, ''), r.config
 		}
 		if store != r.BlobStore {
 			return fmt.Errorf("repository %q: blob store cannot be changed (%q to %q): %w", r.Name, store, r.BlobStore, core.ErrInvalid)
+		}
+		if keepPolicy {
+			r.Config.Hosted.WritePolicy = storedWritePolicy(oldCfg)
 		}
 		_, members, err := s.resolveRefs(ctx, tx, r, id)
 		if err != nil {
@@ -475,6 +481,20 @@ UPDATE blobs b
 	return err
 }
 
+// storedWritePolicy is the write policy in a stored repository config. A
+// repository stored without one behaved as allow.
+func storedWritePolicy(cfg []byte) core.WritePolicy {
+	var c struct {
+		Hosted *struct {
+			WritePolicy core.WritePolicy `json:"write_policy"`
+		} `json:"hosted"`
+	}
+	if json.Unmarshal(cfg, &c) == nil && c.Hosted != nil && c.Hosted.WritePolicy.Valid() {
+		return c.Hosted.WritePolicy
+	}
+	return core.WriteAllow
+}
+
 // prepare validates in and returns a normalised copy.
 func (s *Service) prepare(ctx context.Context, in *core.Repository) (*core.Repository, error) {
 	r := cloneRepo(in)
@@ -488,7 +508,7 @@ func (s *Service) prepare(ctx context.Context, in *core.Repository) (*core.Repos
 			c.Hosted = &core.HostedConfig{}
 		}
 		if c.Hosted.WritePolicy == "" {
-			c.Hosted.WritePolicy = core.WriteAllow
+			c.Hosted.WritePolicy = core.DefaultWritePolicy(r.Format)
 		}
 	case core.RepoProxy:
 		if c.Hosted != nil || c.Group != nil {

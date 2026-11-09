@@ -214,8 +214,16 @@ func TestDotnetClient(t *testing.T) {
 	pre := d.pack("Acme.Widgets", "1.3.0-beta.1", groupCfg, map[string]string{"Upstream.Dep": "2.0.0"})
 	d.run(d.root, "nuget", "push", "--allow-insecure-connections", pre, "-s", s.source("nuget-group"), "-k", token) // via the group's write member
 
-	// Re-pushing identical bytes to an allow_once repo is accepted; a wrong key is not.
-	d.run(d.root, "nuget", "push", "--allow-insecure-connections", pkg, "-s", s.source("nuget-hosted"), "-k", token)
+	// Re-pushing an existing version to an allow_once repo is a conflict,
+	// which --skip-duplicate skips; a wrong key is refused.
+	if out, err := d.try(d.root, "nuget", "push", "--allow-insecure-connections", pkg, "-s", s.source("nuget-hosted"), "-k", token); err == nil ||
+		!strings.Contains(out, "409") {
+		t.Errorf("re-push of an existing version: err %v\n%s", err, out)
+	}
+	out = d.run(d.root, "nuget", "push", "--allow-insecure-connections", "--skip-duplicate", pkg, "-s", s.source("nuget-hosted"), "-k", token)
+	if !strings.Contains(out, "already exists") && !strings.Contains(out, "Conflict") {
+		t.Errorf("--skip-duplicate output:\n%s", out)
+	}
 	if out, err := d.try(d.root, "nuget", "push", "--allow-insecure-connections", pkg, "-s", s.source("nuget-hosted"), "-k", "hgr_wrong"); err == nil {
 		t.Errorf("push with a bad key succeeded:\n%s", out)
 	}

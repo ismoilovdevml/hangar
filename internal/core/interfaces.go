@@ -187,8 +187,11 @@ type ComponentQuery struct {
 	RepositoryID string
 	Namespace    *string // nil = any; pointer so "" (no namespace) can be selected
 	Name         string  // exact; empty = all
-	Limit        int
-	Cursor       string
+	// QuarantinedOnly selects only quarantined components (formats use it to
+	// leave those versions out of the metadata they advertise).
+	QuarantinedOnly bool
+	Limit           int
+	Cursor          string
 }
 
 // AssetQuery filters ComponentService.ListAssets. RepositoryID is required.
@@ -209,6 +212,12 @@ type PublishRequest struct {
 	// policy. RepositoryID and ComponentID are filled by the service.
 	// BlobDigest must already be in the repository's blob store.
 	Assets []*Asset
+	// Replace lets these assets overwrite existing ones with different
+	// content under the allow_once write policy. Formats set it for paths
+	// that are mutable by protocol (a non-unique Maven SNAPSHOT file), so the
+	// replacement is one transaction instead of a delete and a publish.
+	// It has no effect under deny.
+	Replace bool
 }
 
 // ComponentService manages components and assets. Reads do not authorize.

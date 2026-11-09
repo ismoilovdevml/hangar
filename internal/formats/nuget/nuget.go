@@ -87,7 +87,8 @@ func decodeConfig(repo *core.Repository) (Config, error) {
 
 // Format implements core.Format for NuGet.
 type Format struct {
-	now func() time.Time
+	now        func() time.Time
+	advisories advisoryHolder
 }
 
 var _ core.Format = (*Format)(nil)
@@ -159,7 +160,7 @@ func (f *Format) Mount(r chi.Router, deps core.Deps) {
 	if now == nil {
 		now = time.Now
 	}
-	h := &handler{deps: deps, now: now}
+	h := &handler{deps: deps, now: now, advisories: &f.advisories}
 	get := func(pattern string, fn http.HandlerFunc) {
 		r.Get(pattern, fn)
 		r.Head(pattern, fn)
@@ -171,6 +172,8 @@ func (f *Format) Mount(r chi.Router, deps core.Deps) {
 	get("/v3/{hive}/{id}/page/{lower}/{upper}", h.registrationPage)
 	get("/v3/{hive}/{id}/{leaf}", h.registrationLeaf)
 	get("/query", h.search)
+	get("/vulnerabilities/index.json", h.vulnerabilityIndex)
+	get("/vulnerabilities/{source}/{page}", h.vulnerabilityPage)
 	r.Put("/api/v2/package", h.push)
 	r.Put("/api/v2/package/", h.push)
 	r.Delete("/api/v2/package/{id}/{version}", h.unlist)
@@ -211,8 +214,9 @@ func snupkgPath(lid, lver string) string {
 }
 
 type handler struct {
-	deps core.Deps
-	now  func() time.Time
+	deps       core.Deps
+	now        func() time.Time
+	advisories *advisoryHolder // nil in handlers built for errors only
 }
 
 func (h *handler) log() *slog.Logger {

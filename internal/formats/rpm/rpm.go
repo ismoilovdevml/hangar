@@ -148,6 +148,8 @@ type handler struct {
 
 	groupMu sync.Mutex
 	groups  map[string]*groupData // by group id + "/" + root
+
+	pins repomdPins
 }
 
 type cachedHeader struct {
