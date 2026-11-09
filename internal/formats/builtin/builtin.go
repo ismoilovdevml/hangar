@@ -6,6 +6,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/formats"
 	"github.com/ismoilovdevml/hangar/internal/formats/docker"
+	"github.com/ismoilovdevml/hangar/internal/formats/helm"
 	"github.com/ismoilovdevml/hangar/internal/formats/maven"
 	"github.com/ismoilovdevml/hangar/internal/formats/npm"
 	"github.com/ismoilovdevml/hangar/internal/formats/nuget"
@@ -25,6 +26,7 @@ func Formats() []core.Format { return FormatsWith(Options{}) }
 func FormatsWith(o Options) []core.Format {
 	return []core.Format{
 		docker.NewWithOptions(o.Docker),
+		helm.New(),
 		maven.New(),
 		npm.New(),
 		nuget.New(),
