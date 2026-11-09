@@ -120,3 +120,35 @@ describe('app shell', () => {
     expect(history.location.pathname).toBe('/login');
   });
 });
+
+describe('versions', () => {
+  it('shows a server version that already starts with v once, everywhere', async () => {
+    server.use(http.get('*/api/v1/system/status', () => HttpResponse.json({ ...data.systemStatus, version: 'v0.1.6' })));
+    renderApp('/settings/system');
+    const nav = await screen.findByRole('navigation', { name: 'Primary' });
+    expect(await within(nav).findByText(/nodes · v0\.1\.6$/)).toBeInTheDocument();
+    const status = await screen.findByRole('region', { name: 'System status' });
+    expect(await within(status).findByText('v0.1.6')).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('vv0.1.6');
+  });
+
+  it('adds the v only where it is missing', async () => {
+    const { versionText } = await import('../lib/format');
+    expect(versionText('0.1.6')).toBe('v0.1.6');
+    expect(versionText('v0.1.6')).toBe('v0.1.6');
+    expect(versionText('V0.1.6')).toBe('v0.1.6');
+    expect(versionText('dev')).toBe('dev');
+    expect(versionText(' v1.0.0-rc.1 ')).toBe('v1.0.0-rc.1');
+  });
+});
+
+describe('avatars', () => {
+  it('tells prefixed usernames apart', async () => {
+    const { initials } = await import('../lib/format');
+    expect(['qa-bob', 'qa-help', 'qa-lead'].map(initials)).toEqual(['QB', 'QH', 'QL']);
+    expect(initials('Dilshod Ismoilov')).toBe('DI');
+    expect(initials('d.ismoilov@acme.example')).toBe('DI');
+    expect(initials('admin')).toBe('AD');
+  });
+});
+
