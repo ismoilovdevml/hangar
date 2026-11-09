@@ -39,6 +39,7 @@ const (
 	MethodLogin = "login" // interactive /auth/login
 	MethodBasic = "basic" // HTTP Basic on API or package requests
 	MethodToken = "token"
+	MethodRenew = "renew" // registry token renewal (ReloadPrincipal)
 )
 
 var errBadCredentials = fmt.Errorf("invalid credentials: %w", core.ErrUnauthenticated)
@@ -270,6 +271,19 @@ func (s *Service) authenticateToken(ctx context.Context, secret string) (*core.P
 	if !wellFormedToken(secret) {
 		return fail("malformed")
 	}
+	p, reason, err := s.tokenPrincipal(ctx, `t.hash = $1`, hashSecret(secret))
+	if err != nil {
+		return nil, err
+	}
+	if reason != "" {
+		return fail(reason)
+	}
+	return p, nil
+}
+
+// tokenPrincipal loads the principal of the live token matching cond ($1 is
+// arg) whose owner is enabled. A refusal returns a reason and no principal.
+func (s *Service) tokenPrincipal(ctx context.Context, cond string, arg any) (*core.Principal, string, error) {
 	now := s.now()
 	var (
 		tokenID  string
@@ -285,17 +299,17 @@ func (s *Service) authenticateToken(ctx context.Context, secret string) (*core.P
 		FROM tokens t
 		JOIN users u ON u.id = t.user_id
 		LEFT JOIN tokens pt ON pt.id = t.parent_id
-		WHERE t.hash = $1 AND t.revoked_at IS NULL AND t.expires_at > $2 AND NOT u.disabled
+		WHERE `+cond+` AND t.revoked_at IS NULL AND t.expires_at > $2 AND NOT u.disabled
 		  AND (t.parent_id IS NULL OR (pt.revoked_at IS NULL AND pt.expires_at > $2))`,
-		hashSecret(secret), now), &tokenID, &scopes, &claims, &readOnly, &cidrs)
+		arg, now), &tokenID, &scopes, &claims, &readOnly, &cidrs)
 	if err != nil {
 		if err = dbErr(err, "token"); errors.Is(err, core.ErrNotFound) {
-			return fail("unknown_expired_or_revoked")
+			return nil, "unknown_expired_or_revoked", nil
 		}
-		return nil, err
+		return nil, "", err
 	}
 	if cidrs != nil && !addressAllowed(cidrs, core.RequestInfoFrom(ctx).RemoteIP) {
-		return fail("address_not_allowed")
+		return nil, "address_not_allowed", nil
 	}
 	p := u.principal(SourceToken)
 	p.TokenID = tokenID
@@ -312,7 +326,65 @@ func (s *Service) authenticateToken(ctx context.Context, secret string) (*core.P
 		}
 	}
 	s.noteTokenUse(tokenID, u.ID, core.RequestInfoFrom(ctx).RemoteIP)
-	return p, nil
+	return p, "", nil
+}
+
+// ReloadPrincipal rebuilds a principal that authenticated earlier from the
+// database, as it would authenticate now: the token it used must still be
+// live (not revoked or expired, its address restrictions met), the account
+// must exist and be enabled and must not be waiting for a password change,
+// and roles are the current ones. The registry token service calls it
+// before renewing a registry token, so disabling a user, revoking a token or
+// removing a role ends registry access at the latest when the current token
+// expires. A refusal is audited and returns ErrUnauthenticated.
+func (s *Service) ReloadPrincipal(ctx context.Context, p *core.Principal) (*core.Principal, error) {
+	if p.IsAnonymous() {
+		return core.Anonymous(), nil
+	}
+	fail := func(reason string) (*core.Principal, error) {
+		s.record(ctx, core.AuditEvent{
+			Actor: auditName(p.Name), Action: AuditTokenAuthFailed, Target: "user:" + auditName(p.Name),
+			Outcome: core.OutcomeDenied, Details: map[string]any{"method": MethodRenew, "reason": reason},
+		})
+		return nil, errBadCredentials
+	}
+	if !validUUID(p.ID) {
+		return fail("unknown_user")
+	}
+	if p.TokenID != "" {
+		if !validUUID(p.TokenID) {
+			return fail("unknown_expired_or_revoked")
+		}
+		np, reason, err := s.tokenPrincipal(ctx, `t.id = $1`, p.TokenID)
+		if err != nil {
+			return nil, err
+		}
+		if reason != "" {
+			return fail(reason)
+		}
+		if np.ID != p.ID {
+			return fail("token_owner_changed")
+		}
+		return np, nil
+	}
+	u, err := s.userByID(ctx, s.pool, p.ID)
+	if errors.Is(err, core.ErrNotFound) {
+		return fail("unknown_user")
+	}
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case u.Disabled:
+		return fail("disabled")
+	case u.MustChangePassword:
+		return fail("password_change_required")
+	}
+	source := p.Source
+	if source == "" || source == SourceToken {
+		source = u.Source
+	}
+	return u.principal(source), nil
 }
 
 // auditName bounds attacker-supplied usernames written to the audit log.
