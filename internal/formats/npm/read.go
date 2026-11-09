@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // maxGroupDepth bounds nested groups (and breaks accidental cycles).
@@ -55,11 +56,14 @@ func (h *handler) loadDoc(ctx context.Context, repo *core.Repository, name pkgNa
 	return nil, fmt.Errorf("repository type %q: %w", repo.Type, core.ErrInvalid)
 }
 
-func (h *handler) members(ctx context.Context, group *core.Repository, depth int) ([]*core.Repository, error) {
+// members returns group's online npm members that its routing rules let
+// serve package name, in resolution order. When the rules exclude every
+// member the error is the *core.RoutingBlock (a 404 naming the rule).
+func (h *handler) members(ctx context.Context, group *core.Repository, depth int, name pkgName) ([]*core.Repository, error) {
 	if depth >= maxGroupDepth {
 		return nil, fmt.Errorf("group %q: nesting deeper than %d: %w", group.Name, maxGroupDepth, core.ErrInvalid)
 	}
-	ms, err := h.deps.Repos.Members(ctx, group)
+	ms, err := routing.Members(ctx, h.deps.Repos, group, name.Full)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +79,7 @@ func (h *handler) members(ctx context.Context, group *core.Repository, depth int
 // groupDoc merges the members' packuments: the first member that has a
 // version (or dist-tag) wins.
 func (h *handler) groupDoc(ctx context.Context, group *core.Repository, name pkgName, abbreviated bool, depth int) (*packument, error) {
-	ms, err := h.members(ctx, group, depth)
+	ms, err := h.members(ctx, group, depth, name)
 	if err != nil {
 		return nil, err
 	}
@@ -401,7 +405,12 @@ func (h *handler) findTarball(ctx context.Context, repo *core.Repository, rel st
 	case core.RepoProxy:
 		return h.proxyTarball(ctx, repo, rel)
 	case core.RepoGroup:
-		ms, err := h.members(ctx, repo, depth)
+		pkgPath, _, _ := strings.Cut(rel, "/-/")
+		name, err := parseName(pkgPath)
+		if err != nil {
+			return nil, nil, err
+		}
+		ms, err := h.members(ctx, repo, depth, name)
 		if err != nil {
 			return nil, nil, err
 		}

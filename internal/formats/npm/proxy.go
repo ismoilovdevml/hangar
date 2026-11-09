@@ -16,6 +16,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 // Asset attributes of cached upstream packuments.
@@ -86,6 +87,9 @@ func (h *handler) storeProxyDoc(ctx context.Context, repo *core.Repository, path
 // younger than MetadataTTL and revalidated (conditional GET) afterwards. If
 // the remote is unreachable a stale cached copy is served.
 func (h *handler) proxyDoc(ctx context.Context, repo *core.Repository, name pkgName, abbreviated bool) (*packument, error) {
+	if err := routing.Check(ctx, repo, name.Full); err != nil {
+		return nil, err
+	}
 	path := proxyDocPath(name, abbreviated)
 	bs, err := h.deps.Blobs.ForRepository(ctx, repo)
 	if err != nil {
@@ -120,7 +124,7 @@ func (h *handler) proxyDoc(ctx context.Context, repo *core.Repository, name pkgN
 	if abbreviated {
 		accept = mediaAbbreviated + "; q=1.0, " + mediaJSON + "; q=0.8"
 	}
-	req := core.UpstreamRequest{Path: name.Escaped(), Header: http.Header{"Accept": {accept}}}
+	req := core.UpstreamRequest{Path: name.Escaped(), Header: http.Header{"Accept": {accept}}, Package: name.Full}
 	if cached != nil {
 		req.Conditional.ETag = attrString(cached, attrETag)
 		req.Conditional.LastModified, _ = http.ParseTime(attrString(cached, attrLastModified))
@@ -188,20 +192,21 @@ func (h *handler) expectedDist(ctx context.Context, repo *core.Repository, bs co
 // (registries that serve tarballs from another host). Without a related
 // host the remote is asked for the tarball under its own URL, as before.
 // An origin under the remote URL (a remote that names the tarball
-// differently, see canonicalTarball) is requested under its own path.
-func tarballRequest(repo *core.Repository, rel, origin string) core.UpstreamRequest {
+// differently, see canonicalTarball) is requested under its own path. pkg is
+// the package's routing identity.
+func tarballRequest(repo *core.Repository, rel, origin, pkg string) core.UpstreamRequest {
 	if origin != "" {
 		remote := strings.TrimSuffix(repo.Config.Proxy.RemoteURL, "/") + "/"
 		if s, ok := strings.CutPrefix(origin, remote); ok {
 			if p, err := decodePath(s); err == nil && !strings.Contains(p, "?") {
-				return core.UpstreamRequest{Path: p}
+				return core.UpstreamRequest{Path: p, Package: pkg}
 			}
 		}
 		if u, err := url.Parse(origin); err == nil && core.MatchHost(repo.Config.Proxy.RelatedHosts, u.Host) {
-			return core.UpstreamRequest{URL: origin}
+			return core.UpstreamRequest{URL: origin, Package: pkg}
 		}
 	}
-	return core.UpstreamRequest{Path: rel}
+	return core.UpstreamRequest{Path: rel, Package: pkg}
 }
 
 // tarballHashes collects the digests npm declares for tarballs.
@@ -217,12 +222,15 @@ func (t *tarballHashes) writer() io.Writer { return io.MultiWriter(t.sha1, t.sha
 
 // proxyTarball serves a tarball from cache or fetches, verifies and caches it.
 func (h *handler) proxyTarball(ctx context.Context, repo *core.Repository, rel string) (*core.Asset, core.BlobStore, error) {
-	bs, err := h.deps.Blobs.ForRepository(ctx, repo)
+	pkgPath, _, _ := strings.Cut(rel, "/-/")
+	name, err := parseName(pkgPath)
 	if err != nil {
 		return nil, nil, err
 	}
-	pkgPath, _, _ := strings.Cut(rel, "/-/")
-	name, err := parseName(pkgPath)
+	if err := routing.Check(ctx, repo, name.Full); err != nil {
+		return nil, nil, err
+	}
+	bs, err := h.deps.Blobs.ForRepository(ctx, repo)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -253,7 +261,7 @@ func (h *handler) proxyTarball(ctx context.Context, repo *core.Repository, rel s
 		return nil, nil, err
 	}
 	proxy.NoteCacheMiss(ctx)
-	resp, err := up.Fetch(ctx, tarballRequest(repo, rel, origin))
+	resp, err := up.Fetch(ctx, tarballRequest(repo, rel, origin, name.Full))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -262,7 +270,7 @@ func (h *handler) proxyTarball(ctx context.Context, repo *core.Repository, rel s
 	if alt := scopedFileTarball(name, rel); origin == "" && alt != "" &&
 		(resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone) {
 		_ = resp.Body.Close()
-		if resp, err = up.Fetch(ctx, core.UpstreamRequest{Path: alt}); err != nil {
+		if resp, err = up.Fetch(ctx, core.UpstreamRequest{Path: alt, Package: name.Full}); err != nil {
 			return nil, nil, err
 		}
 	}
