@@ -47,6 +47,10 @@ interface Seed {
   /** Ranges for the fix plan; defaults to `affected`. */
   fixedVersions?: string[];
   assignee?: string;
+  /** Image findings: the package version inside the image and what Trivy reported. */
+  installed?: string;
+  location?: string;
+  image?: NonNullable<Finding['image']>;
 }
 
 const log4j = { id: 'c_log4j', repository: 'maven-central', format: 'maven' as const, namespace: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.24.1' };
@@ -82,6 +86,28 @@ const SEEDS: Seed[] = [
     comp: nethttp, pkg: 'System.Net.Http', fixedIn: '4.3.4', affected: '<4.3.4', daysAgo: 40 },
 ];
 
+// Image findings (Trivy), present while findingsState.images is on.
+const gateway = { id: 'c_8790', repository: 'docker-prod', format: 'docker' as const, namespace: '', name: 'auth-gateway', version: '3.2.0' };
+const alpine = (layer: string, status = 'fixed'): NonNullable<Finding['image']> => ({
+  class: 'os-pkgs', type: 'alpine', target: 'docker-prod/auth-gateway:3.2.0 (alpine 3.20.2)', os: 'alpine 3.20.2',
+  layer, platforms: ['linux/amd64', 'linux/arm64'], fix_status: status, data_source: 'Alpine Secdb',
+});
+const BASE_LAYER = 'sha256:396c31837116ac290458afcb928f68b6cc1c7bdd6963fc72f52f365a2a89c1b5';
+const IMAGE_SEEDS: Seed[] = [
+  { id: 'f_i1', advisory: 'CVE-2024-6119', aliases: [], title: 'openssl: Possible denial of service in X.509 name checks', severity: 'high', cvss: 7.5,
+    comp: gateway, pkg: 'libssl3', installed: '3.3.1-r0', fixedIn: '3.3.2-r0', affected: '', daysAgo: 3,
+    image: { ...alpine(BASE_LAYER), primary_url: 'https://avd.aquasec.com/nvd/cve-2024-6119' } },
+  { id: 'f_i2', advisory: 'CVE-2024-6119', aliases: [], title: 'openssl: Possible denial of service in X.509 name checks', severity: 'high', cvss: 7.5,
+    comp: gateway, pkg: 'libcrypto3', installed: '3.3.1-r0', fixedIn: '3.3.2-r0', affected: '', daysAgo: 3,
+    image: { ...alpine(BASE_LAYER), primary_url: 'https://avd.aquasec.com/nvd/cve-2024-6119' } },
+  { id: 'f_i3', advisory: 'CVE-2023-42363', aliases: [], title: 'busybox: use-after-free in awk', severity: 'medium', cvss: 5.5,
+    comp: gateway, pkg: 'busybox', installed: '1.36.1-r29', fixedIn: null, affected: '', daysAgo: 3, image: alpine(BASE_LAYER, 'affected') },
+  { id: 'f_i4', advisory: 'CVE-2024-24790', aliases: [], title: 'golang: net/netip: Unexpected behavior from Is methods for IPv4-mapped IPv6 addresses', severity: 'critical', cvss: 9.8,
+    comp: gateway, pkg: 'stdlib', installed: '1.22.3', fixedIn: '1.22.4', affected: '', daysAgo: 3, location: 'usr/local/bin/auth-gateway',
+    image: { class: 'lang-pkgs', type: 'gobinary', target: 'usr/local/bin/auth-gateway', layer: 'sha256:7e1f2c3d4b5a69788796a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4',
+      platforms: ['linux/amd64', 'linux/arm64'], fix_status: 'fixed', data_source: 'Go Vulnerability Database', primary_url: 'https://avd.aquasec.com/nvd/cve-2024-24790' } },
+];
+
 /** Downloads of the vulnerable versions: days since the last one, and who pulled them in the last 7 days. */
 const USAGE: Record<string, { lastDays: number; pullers: Omit<Puller, 'last_at'>[] }> = {
   c_xml8: {
@@ -96,6 +122,7 @@ const USAGE: Record<string, { lastDays: number; pullers: Omit<Puller, 'last_at'>
   c_ledger: { lastDays: 4, pullers: [{ label: 'j.karimov', principal: 'j.karimov', kind: 'user', address: '10.0.7.3', agent: 'Maven', pulls: 6 }] },
   c_309: { lastDays: 20, pullers: [] },
   c_http: { lastDays: 200, pullers: [] },
+  c_8790: { lastDays: 0, pullers: [{ label: 'deploy-bot', principal: 'deploy-bot', kind: 'service_account', address: '10.0.9.4', agent: 'Docker', pulls: 41 }] },
 };
 
 export const ASSIGNEES: Assignee[] = [
@@ -119,7 +146,7 @@ function toFinding(s: Seed, now: number): Finding {
     cvss: s.cvss,
     cvss_vector: s.vector ?? null,
     package: s.pkg,
-    installed: s.comp.version,
+    installed: s.installed ?? s.comp.version,
     fixed_in: s.fixedIn,
     fixed_versions: s.fixedVersions ?? (s.fixedIn ? [s.fixedIn] : []),
     affected_versions: s.affected,
@@ -137,7 +164,9 @@ function toFinding(s: Seed, now: number): Finding {
     assignee: s.assignee ?? null,
     assigned_by: s.assignee ? 'd.ismoilov' : null,
     assigned_at: s.assignee ? new Date(now - DAY).toISOString() : null,
-    source: 'osv',
+    source: s.image ? 'trivy' : 'osv',
+    location: s.location ?? '',
+    image: s.image ?? null,
     first_seen_at: first,
     last_seen_at: new Date(now - 3_600_000).toISOString(),
     resolved_at: s.status === 'fixed' ? new Date(now - 4 * DAY).toISOString() : null,
@@ -153,6 +182,8 @@ const initialState = () => ({
   rescan: null as Rescan | null,
   /** Repeated pulls of the fix plan are failed (error state tests). */
   planFails: false,
+  /** Image scanning (Trivy) is configured: docker images are scanned. */
+  images: false,
 });
 let state = initialState();
 
@@ -170,6 +201,12 @@ export const findingsState = {
   },
   set planFails(v: boolean) {
     state.planFails = v;
+  },
+  /** Turns image scanning on: the docker findings appear. */
+  set images(v: boolean) {
+    state.images = v;
+    state.findings = state.findings.filter((f) => !f.image);
+    if (v) state.findings.push(...IMAGE_SEEDS.map((x) => toFinding(x, Date.now())));
   },
   get rescan(): Rescan | null {
     return state.rescan;
@@ -226,20 +263,32 @@ function buildPlan(list: Finding[], tab: string, now: number): FixPlan {
       in_use: !!use && use.lastDays <= 30,
       pulls: use?.pullers.reduce((n, p) => n + p.pulls, 0) ?? 0,
       clients: use?.pullers.length ?? 0,
+      package: f.package,
+      version: f.component!.version,
+      location: f.location ?? '',
+      image: f.image ?? null,
     };
+  };
+  const keyOf = (f: Finding) => {
+    const c = f.component!;
+    return c.format === 'docker' ? `docker:${c.namespace ? `${c.namespace}/` : ''}${c.name}` : `${c.format}:${f.package}`;
   };
   const group = (keep: (f: Finding) => boolean): PackagePlan[] => {
     const by = new Map<string, Finding[]>();
     for (const f of list.filter(keep)) {
-      const key = `${f.component!.format}:${f.package}`;
+      const key = keyOf(f);
       by.set(key, [...(by.get(key) ?? []), f]);
     }
     return [...by.entries()].map(([key, fs]) => {
       const items = fs.map(planFinding).sort((a, b) => RANK[a.severity] - RANK[b.severity] || (b.cvss ?? -1) - (a.cvss ?? -1));
       const format = fs[0]!.component!.format;
+      const image = format === 'docker' ? imagePlan(items) : null;
       const lines = new Map<number, PlanFinding[]>();
       for (const f of items) lines.set(RANK_MAJOR(f.installed), [...(lines.get(RANK_MAJOR(f.installed)) ?? []), f]);
-      const upgrades: UpgradeLine[] = [...lines.entries()]
+      const upgrades: UpgradeLine[] = image
+        ? [{ line: '', from: [...new Set(items.map((f) => f.version!))], to: null, command: image.command, fixes: items.filter((f) => f.fixed_in).length,
+            unfixed: items.filter((f) => !f.fixed_in).length }]
+        : [...lines.entries()]
         .sort((a, b) => a[0] - b[0])
         .map(([line, lf]) => {
           const fixes = lf.filter((f) => f.fixed_in).map((f) => f.fixed_in!);
@@ -262,10 +311,10 @@ function buildPlan(list: Finding[], tab: string, now: number): FixPlan {
       return {
         key,
         format,
-        package: fs[0]!.package,
+        package: image ? key.slice('docker:'.length) : fs[0]!.package,
         repositories: [...new Set(items.map((f) => f.repository))].sort(),
         advisories,
-        versions: [...new Set(items.map((f) => f.installed))].sort(cmpVersion),
+        versions: image ? [...new Set(items.map((f) => f.version!))] : [...new Set(items.map((f) => f.installed))].sort(cmpVersion),
         findings: items.length,
         max_severity: items[0]!.severity,
         max_cvss: items.reduce<number | null>((m, f) => (f.cvss != null && (m == null || f.cvss > m) ? f.cvss : m), null),
@@ -279,6 +328,7 @@ function buildPlan(list: Finding[], tab: string, now: number): FixPlan {
         assignee: assignees.size === 1 ? (items[0]!.assignee ?? null) : null,
         assignee_mixed: assignees.size > 1,
         items,
+        image,
       };
     });
   };
@@ -313,6 +363,27 @@ function buildPlan(list: Finding[], tab: string, now: number): FixPlan {
   };
 }
 
+/** The rebuild advice of an image, as the server builds it (simplified). */
+function imagePlan(items: PlanFinding[]): NonNullable<PackagePlan['image']> {
+  const by = new Map<string, NonNullable<PackagePlan['image']>['packages'][number]>();
+  let os = '';
+  for (const f of items) {
+    const cls = f.image?.class === 'os-pkgs' ? 'os' : 'library';
+    if (cls === 'os' && f.image?.os) os = f.image.os;
+    const k = `${cls}:${f.package}:${f.location}`;
+    const p = by.get(k) ?? { name: f.package!, class: cls, type: f.image?.type ?? '', location: f.location ?? '', installed: [], fixed_in: null, findings: 0, unfixed: 0, max_severity: f.severity };
+    if (!p.installed.includes(f.installed)) p.installed.push(f.installed);
+    p.findings++;
+    if (!f.fixed_in) p.unfixed++;
+    else if (!p.fixed_in || cmpVersion(f.fixed_in, p.fixed_in) > 0) p.fixed_in = f.fixed_in;
+    if (RANK[f.severity] < RANK[p.max_severity]) p.max_severity = f.severity;
+    by.set(k, p);
+  }
+  const packages = [...by.values()].sort((a, b) => RANK[a.max_severity] - RANK[b.max_severity] || a.name.localeCompare(b.name));
+  const osFixed = [...new Set(packages.filter((p) => p.class === 'os' && p.fixed_in).map((p) => p.name))].sort();
+  return { os, packages, command: osFixed.length && os.startsWith('alpine') ? `RUN apk upgrade --no-cache ${osFixed.join(' ')}` : null };
+}
+
 function planCsv(plan: FixPlan): string {
   const q = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
   const rows = [['package', 'format', 'repositories', 'advisories', 'vulnerable_versions', 'findings', 'max_severity', 'max_cvss', 'upgrade_to', 'upgrade_commands', 'pulls_7d', 'clients_7d', 'in_use', 'assignee', 'status']];
@@ -327,6 +398,10 @@ function planCsv(plan: FixPlan): string {
 }
 
 const error = (status: number, body: ApiError) => HttpResponse.json(body, { status });
+const planKey = (f: Finding) => {
+  const c = f.component!;
+  return c.format === 'docker' ? `docker:${c.namespace ? `${c.namespace}/` : ''}${c.name}` : `${c.format}:${f.package}`;
+};
 const open = (f: Finding) => f.status === 'open' || f.status === 'assigned';
 
 function counts(list: Finding[], pick: (f: Finding) => boolean) {
@@ -425,7 +500,7 @@ export function findingsHandlers(guard: Guard, readableRepos: () => string[], re
       api('/vulnerabilities/fix-plan/assign'),
       withGuard(async ({ request }) => {
         const body = (await request.json()) as { package: string; assignee: string | null };
-        const list = readable().filter((f) => f.status !== 'fixed' && `${f.component!.format}:${f.package}` === body.package);
+        const list = readable().filter((f) => f.status !== 'fixed' && planKey(f) === body.package);
         if (!list.length) return error(404, { code: 'not_found', message: `package "${body.package}" has no unresolved findings` });
         if (body.assignee && !ASSIGNEES.some((u) => u.username === body.assignee)) {
           return error(400, { code: 'invalid_argument', message: `assignee "${body.assignee}" is not an active user` });
@@ -442,7 +517,7 @@ export function findingsHandlers(guard: Guard, readableRepos: () => string[], re
         if ((body.reason ?? '').trim().length < 3) return error(400, { code: 'invalid_argument', message: 'waiver reason must be at least 3 characters' });
         const until = Date.parse(body.until ?? '');
         if (!(until > Date.now())) return error(400, { code: 'invalid_argument', message: 'waiver expiry must be in the future' });
-        let list = readable().filter((f) => f.status !== 'fixed' && `${f.component!.format}:${f.package}` === body.package);
+        let list = readable().filter((f) => f.status !== 'fixed' && planKey(f) === body.package);
         if (!list.length) return error(404, { code: 'not_found', message: `package "${body.package}" has no unresolved findings` });
         if (body.finding_ids?.length) {
           if (body.finding_ids.some((id) => !list.some((f) => f.id === id))) return error(400, { code: 'invalid_argument', message: 'finding is not an unresolved finding of the package' });
@@ -584,8 +659,11 @@ export function findingsHandlers(guard: Guard, readableRepos: () => string[], re
           source: 'osv',
           source_url: 'https://api.osv.dev',
           rescan_interval: '24h0m0s',
-          supported_formats: SCANNED_FORMATS,
+          supported_formats: state.images ? [...SCANNED_FORMATS, 'docker'] : SCANNED_FORMATS,
           coverage: { scanned: 9, failed: 1, never: 2, unsupported: 6, last_scan_at: new Date(Date.now() - 40 * 60_000).toISOString() },
+          images: state.images
+            ? { enabled: true, scanner: 'trivy', server_url: 'http://trivy:4954', platforms: 'all', version: '0.76.1', db_updated_at: new Date(Date.now() - 5 * 3_600_000).toISOString() }
+            : { enabled: false, scanner: 'trivy' },
         };
         return HttpResponse.json(status);
       }),
@@ -620,7 +698,7 @@ export function findingsHandlers(guard: Guard, readableRepos: () => string[], re
         const name = decodeURIComponent(/repositories\/([^/]+):scan$/.exec(new URL(request.url).pathname)![1]!);
         if (!readableRepos().includes(name)) return error(404, { code: 'not_found', message: `repository "${name}" not found` });
         const format = repoFormat(name);
-        if (format && !SCANNED_FORMATS.includes(format)) {
+        if (format && !SCANNED_FORMATS.includes(format) && !(format === 'docker' && state.images)) {
           return error(400, { code: 'invalid_argument', message: `repository "${name}": ${format === 'docker' ? 'image scanning not configured' : `no advisory database for ${format} packages`}` });
         }
         return HttpResponse.json({ repository: name, components: 12 }, { status: 202 });
@@ -631,9 +709,9 @@ export function findingsHandlers(guard: Guard, readableRepos: () => string[], re
 
 const DOCKER_IDS = new Set(['c_8812', 'c_8790_p', 'c_8701_p', 'c_8790']);
 
-/** Docker images and raw files are not scanned; c_312 waits for its first scan; the rest were scanned an hour ago. */
+/** Docker images are scanned only with image scanning on, raw files never; c_312 waits for its first scan; the rest were scanned an hour ago. */
 function scanFor(componentId: string) {
-  if (DOCKER_IDS.has(componentId)) return { status: 'unsupported' as const, error: 'image scanning not configured', scanned_at: null };
+  if (DOCKER_IDS.has(componentId) && !state.images) return { status: 'unsupported' as const, error: 'image scanning not configured', scanned_at: null };
   if (componentId === 'c_raw') return { status: 'unsupported' as const, error: 'no advisory database for raw packages', scanned_at: null };
   if (componentId === 'c_312') return { status: 'never' as const, scanned_at: null };
   return { status: 'ok' as const, scanned_at: new Date(Date.now() - 3_600_000).toISOString() };

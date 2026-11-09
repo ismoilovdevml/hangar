@@ -4301,7 +4301,16 @@ components:
         assignee: { type: [string, "null"], description: Username of the Hangar user responsible }
         assigned_by: { type: [string, "null"] }
         assigned_at: { type: [string, "null"], format: date-time }
-        source: { type: string, examples: ["osv"] }
+        source: { type: string, enum: [osv, trivy], description: "`osv` for packages, `trivy` for container images" }
+        location:
+          type: string
+          description: File of a library inside an image (a jar, a lock file, a binary); empty otherwise
+          examples: ["app/lib/log4j-core-2.14.1.jar"]
+        image:
+          oneOf:
+            - $ref: "#/components/schemas/ImageFindingDetails"
+            - type: "null"
+          description: Container image findings only
         first_seen_at: { $ref: "#/components/schemas/Timestamp" }
         last_seen_at: { $ref: "#/components/schemas/Timestamp" }
         resolved_at:
@@ -4320,6 +4329,30 @@ components:
             namespace: { type: string }
             name: { type: string }
             version: { type: string }
+    ImageFindingDetails:
+      type: object
+      description: What the image scanner reported about a vulnerable package inside an image
+      required: [class, type, target, platforms]
+      properties:
+        class:
+          type: string
+          enum: [os-pkgs, lang-pkgs]
+          description: "`os-pkgs`: installed by the distribution; `lang-pkgs`: a library of an application"
+        type: { type: string, examples: ["alpine", "debian", "jar", "node-pkg", "gobinary"] }
+        target: { type: string, description: The scanned part (the OS, or the file a library was read from) }
+        os: { type: string, examples: ["alpine 3.10.9"] }
+        layer: { type: string, description: Digest of the layer that installed the package }
+        diff_id: { type: string }
+        platforms:
+          type: array
+          description: Platforms of a multi-platform image the package was found in
+          items: { type: string, examples: ["linux/amd64"] }
+        fix_status:
+          type: string
+          description: The distribution's verdict
+          examples: ["fixed", "affected", "will_not_fix", "fix_deferred", "end_of_life"]
+        data_source: { type: string, examples: ["Alpine Secdb"] }
+        primary_url: { type: string }
     ComponentScan:
       type: object
       required: [status, scanned_at]
@@ -4329,7 +4362,7 @@ components:
           enum: [never, ok, failed, unsupported]
         error:
           type: string
-          description: Why the last scan failed, or why the format is not scanned
+          description: Why the last scan failed, or why the component is not scanned (no advisory source, image scanning not configured, not a container image)
         scanned_at: { type: [string, "null"], format: date-time }
     ComponentFindings:
       allOf:
@@ -4409,6 +4442,19 @@ components:
             never: { type: integer }
             unsupported: { type: integer }
             last_scan_at: { type: [string, "null"], format: date-time }
+        images: { $ref: "#/components/schemas/ImageScanningStatus" }
+    ImageScanningStatus:
+      type: object
+      description: Container image scanning with Trivy (scanner.trivy_url)
+      required: [enabled, scanner]
+      properties:
+        enabled: { type: boolean, description: A Trivy server and the scan adapter are configured }
+        scanner: { type: string, examples: ["trivy"] }
+        server_url: { type: string, examples: ["http://trivy:4954"] }
+        platforms: { type: string, enum: [all, default] }
+        version: { type: string, description: Trivy server version, examples: ["0.76.1"] }
+        db_updated_at: { type: [string, "null"], format: date-time, description: When the server's vulnerability database was built }
+        error: { type: string, description: Why the Trivy server could not be asked }
     FindingPage:
       type: object
       required: [items]
@@ -4563,6 +4609,43 @@ components:
         in_use: { type: boolean }
         pulls: { type: integer }
         clients: { type: integer }
+        package: { type: string, description: The vulnerable package (for an image, the package inside it) }
+        version: { type: string, description: The component version (the tag of an image) }
+        location: { type: string }
+        image:
+          oneOf:
+            - $ref: "#/components/schemas/ImageFindingDetails"
+            - type: "null"
+    ImagePlan:
+      type: object
+      description: |
+        How to fix an image: rebuild it on a base image whose distribution
+        ships the fixed OS packages (or with them upgraded in the
+        Dockerfile), with the application's libraries upgraded.
+      required: [os, packages, command]
+      properties:
+        os: { type: string, examples: ["alpine 3.10.9"] }
+        packages:
+          type: array
+          items:
+            type: object
+            required: [name, class, type, location, installed, fixed_in, findings, unfixed, max_severity]
+            properties:
+              name: { type: string }
+              class: { type: string, enum: [os, library] }
+              type: { type: string }
+              location: { type: string }
+              installed:
+                type: array
+                items: { type: string }
+              fixed_in: { type: [string, "null"], description: Version that fixes every finding of the package with a fix }
+              findings: { type: integer }
+              unfixed: { type: integer }
+              max_severity: { $ref: "#/components/schemas/Severity" }
+        command:
+          type: [string, "null"]
+          description: Dockerfile line upgrading the OS packages with a fix
+          examples: ["RUN apk upgrade --no-cache libcrypto3 libssl3"]
     PackagePlan:
       type: object
       required: [key, format, package, repositories, advisories, versions, findings, max_severity, max_cvss, severities, upgrades, fixable, pulls, clients, in_use, last_pulled_at, assignee, assignee_mixed, items]
@@ -4607,6 +4690,11 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/PlanFinding" }
+        image:
+          oneOf:
+            - $ref: "#/components/schemas/ImagePlan"
+            - type: "null"
+          description: "Container images (format docker): the key is `docker:<image>` and versions are its tags"
     Rescan:
       type: object
       required: [id, started_at, started_by, repositories, total, done, state]

@@ -166,3 +166,101 @@ export function validateWaiver(reason: string, dateValue: string, now: Date = ne
 
 /** The message of a failed request, for an inline error. */
 export const errorText = (err: unknown) => (err instanceof ApiRequestError ? err.message : 'Something went wrong. Try again.');
+
+// ---- Container images ----
+
+type ImageDetails = NonNullable<Finding['image']>;
+type FindingComponent = NonNullable<Finding['component']>;
+
+/** The fix plan key of a finding: `docker:<image>` for images, `<format>:<package>` otherwise. */
+export function planKeyOf(f: Pick<Finding, 'package' | 'component'>): string {
+  const c = f.component;
+  if (c?.format === 'docker') return `docker:${c.namespace ? `${c.namespace}/${c.name}` : c.name}`;
+  return `${c?.format ?? ''}:${f.package}`;
+}
+
+/** "team/app:1.0": the image and tag of a finding's component. */
+export function imageRef(c: Pick<FindingComponent, 'namespace' | 'name' | 'version'>): string {
+  return `${c.namespace ? `${c.namespace}/` : ''}${c.name}:${c.version}`;
+}
+
+const shortDigest = (d: string) => d.replace(/^sha256:/, '').slice(0, 12);
+
+/**
+ * Where an image finding sits: the library's file or the distribution, the
+ * layer that added it and, for multi-platform images, the platforms:
+ * "alpine 3.10.9 · layer 396c31837116 · linux/amd64, linux/arm64".
+ */
+export function imageWhere(f: { location?: string; image?: ImageDetails | null }): string {
+  const i = f.image;
+  if (!i) return '';
+  const parts = [f.location || (i.class === 'os-pkgs' ? i.os || 'OS package' : i.target)];
+  if (i.layer) parts.push(`layer ${shortDigest(i.layer)}`);
+  if (i.platforms.length) parts.push(i.platforms.join(', '));
+  return parts.filter(Boolean).join(' · ');
+}
+
+/** The distribution's verdict on an image finding without a fix, in words. */
+export function fixStatusText(status: string | undefined): string {
+  switch (status) {
+    case 'will_not_fix':
+      return 'The distribution will not fix it.';
+    case 'fix_deferred':
+      return 'The distribution deferred the fix.';
+    case 'end_of_life':
+      return 'This distribution release is end of life.';
+    case 'under_investigation':
+      return 'The distribution is still investigating.';
+    default:
+      return '';
+  }
+}
+
+const quote = (s: string) => (/^[A-Za-z0-9@%+=:,./_-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
+
+/** A Dockerfile line upgrading OS packages, worded as the server does; "" for an unknown distribution. */
+export function dockerfileUpgrade(os: string, pkgs: string[]): string {
+  if (!pkgs.length) return '';
+  const list = pkgs.map(quote).join(' ');
+  switch (os.toLowerCase().split(' ')[0]) {
+    case 'alpine':
+    case 'wolfi':
+    case 'chainguard':
+      return `RUN apk upgrade --no-cache ${list}`;
+    case 'debian':
+    case 'ubuntu':
+      return `RUN apt-get update && apt-get install -y --only-upgrade ${list} && rm -rf /var/lib/apt/lists/*`;
+    case 'redhat':
+    case 'centos':
+    case 'rocky':
+    case 'alma':
+    case 'oracle':
+    case 'amazon':
+    case 'fedora':
+      return `RUN yum update -y ${list} && yum clean all`;
+    case 'photon':
+    case 'azurelinux':
+    case 'cbl-mariner':
+      return `RUN tdnf update -y ${list} && tdnf clean all`;
+    case 'suse':
+    case 'opensuse':
+    case 'opensuse.leap':
+    case 'opensuse.tumbleweed':
+    case 'sles':
+      return `RUN zypper --non-interactive update ${list} && zypper clean --all`;
+    default:
+      return '';
+  }
+}
+
+/** "Rebuild · 4 packages": the upgrade cell of an image row; null when no package has a fix. */
+export function imageUpgradeText(p: Pick<PackagePlan, 'image'>): string | null {
+  const n = (p.image?.packages ?? []).filter((x) => x.fixed_in).length;
+  return n ? `Rebuild · ${n === 1 ? '1 package' : `${n} packages`}` : null;
+}
+
+/** The advisory link of a finding: the scanner's page for image findings, OSV otherwise. */
+export function advisoryLink(f: Pick<Finding, 'advisory_id' | 'image'>): { href: string; label: string } {
+  if (f.image?.primary_url) return { href: f.image.primary_url, label: 'Full advisory ↗' };
+  return { href: advisoryUrl(f.advisory_id), label: 'Full advisory on osv.dev ↗' };
+}

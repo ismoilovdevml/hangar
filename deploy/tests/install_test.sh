@@ -346,7 +346,7 @@ test_latest_version_lookup() {
 
 test_interactive_domain_with_caddy() {
 	local D=$T/data
-	printf '%s\n' "$D" hangar.example.com 1 y >"$T/answers"
+	printf '%s\n' "$D" hangar.example.com 1 "" y >"$T/answers"
 	export HANGAR_INSTALL_TTY=$T/answers
 	run_install --version v9.9.9
 	check "exit 0" ok
@@ -355,6 +355,9 @@ test_interactive_domain_with_caddy() {
 	check "asked about TLS" contains "$OUT" "How does hangar.example.com get HTTPS?"
 	check "tls caddy" env_is "$D" HANGAR_TLS caddy
 	check "caddy profile" env_is "$D" COMPOSE_PROFILES caddy
+	check "asked about image scanning" contains "$OUT" "Scan Docker images for vulnerabilities with Trivy"
+	check "no image scanning by default" env_is "$D" HANGAR_TRIVY off
+	check "scanner.env without settings" absent "$D/scanner.env" "HANGAR_SCANNER_TRIVY_URL"
 	check "loopback behind caddy" env_is "$D" HANGAR_BIND_ADDR 127.0.0.1
 	check "https base URL" env_is "$D" HANGAR_BASE_URL https://hangar.example.com
 	check "secure cookies" env_is "$D" HANGAR_SESSION_INSECURE false
@@ -367,7 +370,7 @@ test_interactive_domain_with_caddy() {
 
 test_interactive_domain_behind_proxy() {
 	local D=$T/data
-	printf '%s\n' "$D" hangar.example.com 2 y >"$T/answers"
+	printf '%s\n' "$D" hangar.example.com 2 y y >"$T/answers"
 	export HANGAR_INSTALL_TTY=$T/answers
 	run_install --version v9.9.9 --port 8090
 	check "exit 0" ok
@@ -375,13 +378,13 @@ test_interactive_domain_behind_proxy() {
 	check "port" env_is "$D" HANGAR_HTTP_PORT 8090
 	check "reachable by a remote proxy" env_is "$D" HANGAR_BIND_ADDR 0.0.0.0
 	check "https base URL" env_is "$D" HANGAR_BASE_URL https://hangar.example.com
-	check "no caddy profile" env_is "$D" COMPOSE_PROFILES ""
+	check "trivy profile when answered yes" env_is "$D" COMPOSE_PROFILES trivy
 	check "no caddy/" test ! -e "$D/caddy"
 	check "trusted proxies hint" contains "$OUT" "--trusted-proxies"
 }
 
 test_interactive_cancel() {
-	printf '%s\n' "$T/data" "" n >"$T/answers"
+	printf '%s\n' "$T/data" "" "" n >"$T/answers"
 	export HANGAR_INSTALL_TTY=$T/answers
 	run_install --version v9.9.9
 	check "cancelled" failed_with "cancelled"
@@ -392,7 +395,7 @@ test_interactive_cancel() {
 test_unattended_flags() {
 	local D=$T/d
 	run_install --data-dir "$D" --domain hangar.example.com --tls caddy --acme-email ops@corp.example \
-		--registry-domain registry.example.org --trusted-proxies 10.0.0.5/32 --version v9.9.9 --yes
+		--registry-domain registry.example.org --trusted-proxies 10.0.0.5/32 --with-trivy --version v9.9.9 --yes
 	check "exit 0" ok
 	check "e-mail kept in Caddyfile" contains "$D/caddy/Caddyfile" "$EMAIL_LINE"
 	check "acme e-mail" env_is "$D" ACME_EMAIL ops@corp.example
@@ -637,6 +640,51 @@ test_password_after_failed_first_run() {
 	run_install --data-dir "$D" --version v9.9.9 --yes
 	check "third run" ok
 	check "not again" absent "$OUT" "Password:"
+}
+
+test_image_scanning() {
+	local D=$T/d
+	run_install --data-dir "$D" --domain hangar.example.com --tls caddy --with-trivy \
+		--trivy-proxy http://proxy.corp.example:3128 --version v9.9.9 --yes
+	check "exit 0" ok
+	check "profiles" env_is "$D" COMPOSE_PROFILES caddy,trivy
+	check "trivy recorded" env_is "$D" HANGAR_TRIVY on
+	check "scanner image pinned to the release" env_is "$D" HANGAR_SCANNER_IMAGE ghcr.io/ismoilovdevml/hangar-scanner:9.9.9
+	check "proxy for the database" env_is "$D" TRIVY_HTTPS_PROXY http://proxy.corp.example:3128
+	for d in trivy scanner; do
+		check "$d/ is 750" mode_is "$D/$d" 750
+		check "$d/ owned by the hangar user" contains "$T/log/chown.log" "65532:65532 $D/$d"
+	done
+	check "adapter token is 600" mode_is "$D/secrets/scanner.adapter_token" 600
+	check "adapter token is 64 hex" matches "$(<"$D/secrets/scanner.adapter_token")" '^[0-9a-f]{64}$'
+	check ".env has no adapter token" absent "$D/.env" "$(<"$D/secrets/scanner.adapter_token")"
+	check "scanner.env wires the Trivy server" contains "$D/scanner.env" "HANGAR_SCANNER_TRIVY_URL=http://trivy:4954"
+	check "scanner.env wires the adapter" contains "$D/scanner.env" "HANGAR_SCANNER_ADAPTER_URL=http://hangar-scanner:4955"
+	check "scanner.env wires the registry" contains "$D/scanner.env" "HANGAR_SCANNER_REGISTRY_URL=http://hangar:8080"
+	check "plan mentions scanning" contains "$OUT" "Image scanning: Trivy (database through http://proxy.corp.example:3128)"
+
+	# Upgrades keep it on; --without-trivy turns it off and keeps the data.
+	local token
+	token=$(<"$D/secrets/scanner.adapter_token")
+	make_release v9.9.10
+	run_install --data-dir "$D" --version v9.9.10 --yes
+	check "upgrade ok" ok
+	check "still on" env_is "$D" COMPOSE_PROFILES caddy,trivy
+	check "scanner image follows the release" env_is "$D" HANGAR_SCANNER_IMAGE ghcr.io/ismoilovdevml/hangar-scanner:9.9.10
+	check "token kept" test "$(<"$D/secrets/scanner.adapter_token")" = "$token"
+	check "proxy kept" env_is "$D" TRIVY_HTTPS_PROXY http://proxy.corp.example:3128
+	run_install --data-dir "$D" --version v9.9.10 --without-trivy --yes
+	check "turned off" env_is "$D" COMPOSE_PROFILES caddy
+	check "off recorded" env_is "$D" HANGAR_TRIVY off
+	check "scanner.env emptied" absent "$D/scanner.env" "HANGAR_SCANNER_TRIVY_URL"
+	check "database kept" test -d "$D/trivy"
+
+	run_install --data-dir "$T/e" --with-trivy --trivy-proxy "not a url" --version v9.9.9 --yes
+	check "bad proxy refused" failed_with "--trivy-proxy"
+	run_install --data-dir "$T/f" --with-trivy --image hangar:dev --files-from "$COMPOSE_SRC" --yes
+	check "local image needs a scanner image" failed_with "--scanner-image"
+	run_install --data-dir "$T/f" --with-trivy --image hangar:dev --scanner-image hangar-scanner:dev --files-from "$COMPOSE_SRC" --yes
+	check "local scanner image" env_is "$T/f" HANGAR_SCANNER_IMAGE hangar-scanner:dev
 }
 
 # The database already had an administrator: no one-time password, and the

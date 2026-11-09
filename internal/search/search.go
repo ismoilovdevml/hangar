@@ -85,13 +85,15 @@ func New(pool *pgxpool.Pool) *Service {
 
 // ScanStateSQL is the SQL expression for a component's scan state given
 // the components alias c: quarantined wins, then any open or assigned
-// finding; components of formats without an advisory source are
-// unsupported; otherwise the last scan decides (clean or failed), and a
+// finding; components of formats without an advisory source, and those
+// the scanner found it cannot scan (a Helm chart in a docker repository),
+// are unsupported; otherwise the last scan decides (clean or failed), and a
 // component never scanned is pending.
 func ScanStateSQL(c string) string {
 	return `CASE WHEN ` + c + `.quarantined THEN 'quarantined'
 		WHEN EXISTS (SELECT 1 FROM findings sf WHERE sf.component_id = ` + c + `.id AND sf.status IN ('open', 'assigned')) THEN 'findings'
 		WHEN NOT EXISTS (SELECT 1 FROM repositories sr WHERE sr.id = ` + c + `.repo_id AND ` + scanning.ScannableSQL("sr") + `) THEN 'unsupported'
+		WHEN (SELECT ss.status FROM component_scans ss WHERE ss.component_id = ` + c + `.id) = 'unsupported' THEN 'unsupported'
 		WHEN (SELECT ss.status FROM component_scans ss WHERE ss.component_id = ` + c + `.id) = 'ok' THEN 'clean'
 		WHEN (SELECT ss.status FROM component_scans ss WHERE ss.component_id = ` + c + `.id) = 'failed' THEN 'failed'
 		ELSE 'pending' END`

@@ -13,8 +13,14 @@
          (metadata,           │
           audit, jobs)   NATS JetStream (events, job queue, replication stream)
                               │
-                 Trivy server · OpenSearch (optional) · OIDC/LDAP
+        Trivy server + scan adapter (optional) · OpenSearch (optional) · OIDC/LDAP
 ```
+
+- Image scanning: Hangar asks the scan adapter (`cmd/hangar-scanner`) to scan
+  an image by digest; the adapter runs the Trivy client against the Trivy
+  server and pulls the image back from Hangar's `/v2/` with a short-lived,
+  pull-only registry token for that repository
+  ([vulnerabilities.md](guides/vulnerabilities.md#design-how-hangar-talks-to-trivy)).
 
 - Nodes are stateless apart from a local read-through blob cache (LRU on disk).
 - Leader (via PostgreSQL advisory lock) starts scheduled task runs (cron schedules in `tasks`); any node executes runs, heart-beating progress, and takes over runs whose node went silent (resuming from checkpoints).

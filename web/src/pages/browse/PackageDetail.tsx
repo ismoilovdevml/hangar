@@ -32,6 +32,7 @@ import { downloadHref, hasVersion, securityPill, type BrowseTab } from '../../li
 import { repoClientTarget } from '../../lib/repoSettings';
 import { TYPE_META } from '../../lib/repositories';
 import { useNow } from '../../lib/useNow';
+import { imageWhere, packageAt } from '../../lib/vulnerabilities';
 import { Fact } from './AssetDetail';
 import { dateTime, deleteMessage, shortDigest } from './detailUtil';
 import { FormatIcon } from '../../components/FormatIcon';
@@ -724,7 +725,20 @@ function FindingsTable({ items }: { items: Finding[] }) {
       ),
     },
     { key: 'sev', header: 'Severity', cell: (f) => <Pill tone={SEVERITY_TONE[f.severity as keyof typeof SEVERITY_TONE] ?? 'neutral'}>{f.severity}</Pill> },
-    { key: 'pkg', header: 'In', className: 'muted', cell: (f) => `${f.package}@${f.installed}` },
+    {
+      key: 'pkg',
+      header: 'In',
+      className: 'muted',
+      cell: (f) =>
+        f.image ? (
+          <div className="asset-path">
+            <span>{packageAt(f)}</span>
+            <span className="meta">{imageWhere(f)}</span>
+          </div>
+        ) : (
+          packageAt(f)
+        ),
+    },
     { key: 'fix', header: 'Fixed in', className: 'muted', cell: (f) => f.fixed_in ?? 'No fix yet' },
     { key: 'status', header: 'Status', className: 'col-last muted', cell: (f) => f.status },
   ];

@@ -10,7 +10,7 @@
 | NATS with JetStream | yes | Events and the job queue. Embedded in the process for a single node; an external cluster (3 nodes) for several nodes. |
 | Reverse proxy / ingress | for TLS | Hangar serves plain HTTP. Terminate TLS in Caddy, Traefik, a cloud load balancer or an ingress controller. |
 | OSV API (`api.osv.dev:443`) or a mirror | no | Vulnerability scanning of npm, Maven, PyPI, NuGet and Go packages (`scanning.osv.url`); without it scans fail and are retried. |
-| Trivy server | no | `scanner.trivy_url` is reserved for container image scanning, which is not active yet. |
+| Trivy server and the scan adapter | no | Container image scanning (`scanner.trivy_url`, `install.sh --with-trivy`, Helm `imageScanning`). The Trivy server downloads its database from `mirror.gcr.io:443` (or `ghcr.io`) through `HTTPS_PROXY`; about 1 GiB of disk and 2 GiB of memory. Without it images show *Image scanning not configured*. |
 
 PostgreSQL user rights: Hangar needs to own its schema (create tables,
 indexes, partitions and run migrations). Create a dedicated database and

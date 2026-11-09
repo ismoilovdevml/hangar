@@ -137,7 +137,7 @@ func (h *handler) serveAsset(w http.ResponseWriter, r *http.Request, repo *core.
 	defer func() { _ = rc.Close() }()
 	hd.Set("Accept-Ranges", "bytes")
 	http.ServeContent(w, r, "", time.Time{}, rc)
-	if a.ID != "" {
+	if a.ID != "" && !isScanner(ctx) {
 		h.deps.Components.RecordDownload(ctx, a)
 	}
 }

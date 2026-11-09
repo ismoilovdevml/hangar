@@ -214,7 +214,7 @@ const componentSelect = `
 	SELECT c.id::text, c.repo_id::text, r.name, r.format, c.namespace, c.name, c.version, c.created_at,
 		c.published_by, c.last_downloaded_at, c.download_count, c.quarantined, c.attributes,
 		COALESCE(u.kind, 'user'), f.critical, f.high, f.medium, f.low, (` + "%s" + `), cs.scanned_at,
-		CASE WHEN cs.status = 'failed' THEN cs.error ELSE '' END
+		CASE WHEN cs.status IN ('failed', 'unsupported') THEN cs.error ELSE '' END
 	FROM components c
 	JOIN repositories r ON r.id = c.repo_id
 	LEFT JOIN users u ON u.username = c.published_by AND c.published_by <> ''
@@ -243,7 +243,7 @@ func scanComponent(row pgx.Row) (*ComponentRow, error) {
 		t := r.Scan.ScannedAt.UTC()
 		r.Scan.ScannedAt = &t
 	}
-	if r.Scan.State == scanning.StatusUnsupported {
+	if r.Scan.State == scanning.StatusUnsupported && r.Scan.Error == "" {
 		r.Scan.Error = scanning.UnsupportedReason(r.Format)
 	}
 	if r.LastDownloadedAt != nil {

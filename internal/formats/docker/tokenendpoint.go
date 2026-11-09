@@ -56,7 +56,8 @@ func (h *handler) serveToken(w http.ResponseWriter, r *http.Request) {
 	var p *core.Principal
 	if creds.Token != "" && looksLikeJWT(creds.Token) {
 		c, err := h.sign.verify(creds.Token, h.service(r), h.now())
-		if err != nil {
+		if err != nil || c.Scanner {
+			// Scanner tokens are not renewable.
 			h.tokenUnauthorized(w)
 			return
 		}

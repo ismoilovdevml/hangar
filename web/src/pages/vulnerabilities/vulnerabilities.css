@@ -11,6 +11,7 @@
 .vhead__spacer { flex: 1; }
 .vhead__scan { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; justify-content: flex-end; }
 .vhead__meta { font-size: 13px; color: var(--ink-2); }
+.vhead__warn { color: var(--warn-ink); font-weight: 600; }
 .vhead__rescan { min-height: 38px; padding: 0 14px; border-radius: 11px; font-weight: 700; color: var(--lake-ink); }
 .vhead__rescan:disabled { color: var(--ink-2); }
 .vhead__progress { flex-basis: 100%; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; display: block; }

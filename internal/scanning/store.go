@@ -19,10 +19,30 @@ import (
 // Scan statuses (component_scans.status, plus the derived ones).
 const (
 	StatusNever       = "never"       // no scan yet
-	StatusOK          = "ok"          // the advisory database answered
+	StatusOK          = "ok"          // the advisory database (or image scanner) answered
 	StatusFailed      = "failed"      // the last attempt failed
-	StatusUnsupported = "unsupported" // the format has no advisory source
+	StatusUnsupported = "unsupported" // the format has no advisory source, or the component is not an image
 )
+
+// planKeyExpr is the package a finding belongs to in the fix plan, given
+// the aliases of findings, components and repositories: the package for
+// package formats, the image ("team/app") for container images, whose
+// findings are about the packages inside them.
+func planKeyExpr(f, c, r string) string {
+	return `CASE WHEN ` + r + `.format = '` + FormatDocker + `' THEN concat_ws('/', NULLIF(` + c + `.namespace, ''), ` + c + `.name) ELSE ` +
+		f + `.package END`
+}
+
+// planKey is planKeyExpr for a target.
+func (t *Target) planKey(pkg string) string {
+	if t.Format != FormatDocker {
+		return pkg
+	}
+	if t.Namespace == "" {
+		return t.Name
+	}
+	return t.Namespace + "/" + t.Name
+}
 
 // Finding statuses.
 const (
@@ -117,31 +137,34 @@ func (s *store) target(ctx context.Context, componentID string) (*Target, error)
 }
 
 // repoTargets pages through the scannable components of one repository by id.
-func (s *store) repoTargets(ctx context.Context, repoID, after string, limit int) ([]*Target, error) {
+func (s *store) repoTargets(ctx context.Context, scannable, repoID, after string, limit int) ([]*Target, error) {
 	return collectTargets(s.pool.Query(ctx, `SELECT `+targetCols+targetFrom+`
-		WHERE c.repo_id = $1 AND `+ScannableSQL("r")+` AND c.id > $2::uuid ORDER BY c.id LIMIT $3`,
+		WHERE c.repo_id = $1 AND `+scannable+` AND c.id > $2::uuid ORDER BY c.id LIMIT $3`,
 		repoID, afterID(after), limit))
 }
 
-// dueTargets pages through the components that need a scan: never scanned,
-// failed more than retryAfter ago, or last scanned successfully more than
-// interval ago.
-func (s *store) dueTargets(ctx context.Context, interval, retryAfter time.Duration, after string, limit int) ([]*Target, error) {
+// dueCond selects the components of scannable repositories that need a
+// scan: never scanned, failed more than retryAfter ($1) ago, or last
+// scanned (successfully, or found not to be scannable) more than interval
+// ($2) ago.
+func dueCond(scannable string) string {
+	return scannable + ` AND (s.component_id IS NULL
+	OR (s.status = 'failed' AND s.scanned_at < now() - $1::interval)
+	OR (s.status = 'ok' AND s.ok_at < now() - $2::interval)
+	OR (s.status = 'unsupported' AND s.scanned_at < now() - $2::interval))`
+}
+
+// dueTargets pages through the components that need a scan (dueCond).
+func (s *store) dueTargets(ctx context.Context, scannable string, interval, retryAfter time.Duration, after string, limit int) ([]*Target, error) {
 	return collectTargets(s.pool.Query(ctx, `SELECT `+targetCols+targetFrom+`
-		WHERE `+ScannableSQL("r")+` AND c.id > $1::uuid AND (s.component_id IS NULL
-			OR (s.status = 'failed' AND s.scanned_at < now() - $2::interval)
-			OR (s.status = 'ok' AND s.ok_at < now() - $3::interval))
-		ORDER BY c.id LIMIT $4`,
-		afterID(after), pgInterval(retryAfter), pgInterval(interval), limit))
+		WHERE `+dueCond(scannable)+` AND c.id > $3::uuid ORDER BY c.id LIMIT $4`,
+		pgInterval(retryAfter), pgInterval(interval), afterID(after), limit))
 }
 
 // countDue counts what dueTargets would return in total.
-func (s *store) countDue(ctx context.Context, interval, retryAfter time.Duration) (int64, error) {
+func (s *store) countDue(ctx context.Context, scannable string, interval, retryAfter time.Duration) (int64, error) {
 	var n int64
-	err := s.pool.QueryRow(ctx, `SELECT count(*)`+targetFrom+`
-		WHERE `+ScannableSQL("r")+` AND (s.component_id IS NULL
-			OR (s.status = 'failed' AND s.scanned_at < now() - $1::interval)
-			OR (s.status = 'ok' AND s.ok_at < now() - $2::interval))`,
+	err := s.pool.QueryRow(ctx, `SELECT count(*)`+targetFrom+` WHERE `+dueCond(scannable),
 		pgInterval(retryAfter), pgInterval(interval)).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("count components due for a scan: %w", err)
@@ -177,6 +200,9 @@ type detected struct {
 	References    []Reference
 	Published     *time.Time
 	Modified      *time.Time
+	// Location and Image are set for findings inside container images.
+	Location string
+	Image    *ImageDetails
 }
 
 // Reference is a link about an advisory.
@@ -188,48 +214,58 @@ type Reference struct {
 // saveResult records a successful scan of t: upserts what was found,
 // marks what is no longer reported as fixed. It returns how many findings
 // are new to the component.
-func (s *store) saveResult(ctx context.Context, t *Target, found []detected) (int, error) {
+func (s *store) saveResult(ctx context.Context, t *Target, found []detected, source string) (int, error) {
 	added := 0
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		b := &pgx.Batch{}
 		ids := make([]string, 0, len(found))
+		pkgs := make([]string, 0, len(found))
+		locs := make([]string, 0, len(found))
 		for _, f := range found {
-			ids = append(ids, f.AdvisoryID)
+			ids, pkgs, locs = append(ids, f.AdvisoryID), append(pkgs, f.Package), append(locs, f.Location)
 			refs, _ := json.Marshal(nonNil(f.References))
+			var image []byte
+			if f.Image != nil {
+				image, _ = json.Marshal(f.Image)
+			}
 			b.Queue(`
 WITH owner AS (
 	-- A new finding of a package someone is assigned to goes to them too.
 	SELECT f2.assignee, f2.assigned_by FROM findings f2
 	JOIN components c2 ON c2.id = f2.component_id JOIN repositories r2 ON r2.id = c2.repo_id
-	WHERE f2.package = $9 AND r2.format = $17 AND f2.assignee IS NOT NULL AND f2.status <> 'fixed'
+	WHERE `+planKeyExpr("f2", "c2", "r2")+` = $18 AND r2.format = $17 AND f2.assignee IS NOT NULL AND f2.status <> 'fixed'
 	ORDER BY f2.assigned_at DESC NULLS LAST LIMIT 1)
 INSERT INTO findings (component_id, kind, advisory_id, aliases, title, details, severity, cvss, cvss_vector, package,
 	installed, fixed_in, fixed_versions, affected, refs, source, advisory_published_at, advisory_modified_at,
-	assignee, assigned_by, assigned_at)
-SELECT $1, 'vulnerability', $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9, $10, NULLIF($11, ''), $12, $13, $14, 'osv', $15, $16,
-	o.assignee, o.assigned_by, CASE WHEN o.assignee IS NOT NULL THEN now() END
+	location, image, assignee, assigned_by, assigned_at)
+SELECT $1, 'vulnerability', $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9, $10, NULLIF($11, ''), $12, $13, $14, $19, $15, $16,
+	$20, $21::jsonb, o.assignee, o.assigned_by, CASE WHEN o.assignee IS NOT NULL THEN now() END
 FROM (SELECT 1) one LEFT JOIN owner o ON true
-ON CONFLICT (component_id, advisory_id, package) DO UPDATE SET
+ON CONFLICT (component_id, advisory_id, package, location) DO UPDATE SET
 	aliases = EXCLUDED.aliases, title = EXCLUDED.title, details = EXCLUDED.details, severity = EXCLUDED.severity,
 	cvss = EXCLUDED.cvss, cvss_vector = EXCLUDED.cvss_vector, installed = EXCLUDED.installed,
 	fixed_in = EXCLUDED.fixed_in, fixed_versions = EXCLUDED.fixed_versions, affected = EXCLUDED.affected,
 	refs = EXCLUDED.refs, advisory_published_at = EXCLUDED.advisory_published_at,
-	advisory_modified_at = EXCLUDED.advisory_modified_at, last_seen_at = now(), resolved_at = NULL,
+	advisory_modified_at = EXCLUDED.advisory_modified_at, image = EXCLUDED.image, source = EXCLUDED.source,
+	last_seen_at = now(), resolved_at = NULL,
 	status = CASE
 		WHEN findings.status <> 'fixed' THEN findings.status
 		WHEN findings.waiver_reason IS NOT NULL AND findings.waiver_until > now() THEN 'waived'
 		ELSE 'open' END
 RETURNING (xmax = 0)`,
 				t.ComponentID, f.AdvisoryID, nonNil(f.Aliases), f.Title, f.Details, f.Severity, f.CVSS, f.CVSSVector,
-				f.Package, f.Installed, f.FixedIn, nonNil(f.FixedVersions), f.Affected, refs, f.Published, f.Modified, t.Format)
+				f.Package, f.Installed, f.FixedIn, nonNil(f.FixedVersions), f.Affected, refs, f.Published, f.Modified, t.Format,
+				t.planKey(f.Package), source, f.Location, image)
 		}
+		// What this scanner no longer reports is fixed.
 		b.Queue(`UPDATE findings SET status = 'fixed', resolved_at = now()
-			WHERE component_id = $1 AND source = 'osv' AND kind = 'vulnerability' AND status <> 'fixed'
-				AND NOT (advisory_id = ANY($2))`, t.ComponentID, ids)
+			WHERE component_id = $1 AND source = $5 AND kind = 'vulnerability' AND status <> 'fixed'
+				AND (advisory_id, package, location) NOT IN (SELECT * FROM unnest($2::text[], $3::text[], $4::text[]))`,
+			t.ComponentID, ids, pkgs, locs, source)
 		b.Queue(`INSERT INTO component_scans (component_id, status, error, scanner, scanned_at, ok_at)
-			VALUES ($1, 'ok', '', 'osv', now(), now())
-			ON CONFLICT (component_id) DO UPDATE SET status = 'ok', error = '', scanner = 'osv', scanned_at = now(), ok_at = now()`,
-			t.ComponentID)
+			VALUES ($1, 'ok', '', $2, now(), now())
+			ON CONFLICT (component_id) DO UPDATE SET status = 'ok', error = '', scanner = $2, scanned_at = now(), ok_at = now()`,
+			t.ComponentID, source)
 		br := tx.SendBatch(ctx, b)
 		for range found {
 			var inserted bool
@@ -256,19 +292,39 @@ RETURNING (xmax = 0)`,
 }
 
 // saveFailure records a failed scan attempt; earlier findings are kept.
-func (s *store) saveFailure(ctx context.Context, componentIDs []string, reason string) error {
+func (s *store) saveFailure(ctx context.Context, componentIDs []string, reason, scanner string) error {
 	if len(componentIDs) == 0 {
 		return nil
 	}
 	_, err := s.pool.Exec(ctx, `
 INSERT INTO component_scans (component_id, status, error, scanner, scanned_at)
-SELECT id, 'failed', $2, 'osv', now() FROM components WHERE id = ANY($1::uuid[])
-ON CONFLICT (component_id) DO UPDATE SET status = 'failed', error = EXCLUDED.error, scanner = 'osv', scanned_at = now()`,
-		componentIDs, truncate(reason, 1000))
+SELECT id, 'failed', $2, $3, now() FROM components WHERE id = ANY($1::uuid[])
+ON CONFLICT (component_id) DO UPDATE SET status = 'failed', error = EXCLUDED.error, scanner = $3, scanned_at = now()`,
+		componentIDs, truncate(reason, 1000), scanner)
 	if err != nil {
 		return fmt.Errorf("record failed scan: %w", err)
 	}
 	return nil
+}
+
+// saveUnsupported records that a component cannot be scanned (a docker
+// tag that is no container image); image findings it had are fixed.
+func (s *store) saveUnsupported(ctx context.Context, componentID, reason string) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE findings SET status = 'fixed', resolved_at = now()
+			WHERE component_id = $1 AND source = $2 AND status <> 'fixed'`, componentID, SourceTrivy); err != nil {
+			return fmt.Errorf("record unsupported component: %w", err)
+		}
+		_, err := tx.Exec(ctx, `
+INSERT INTO component_scans (component_id, status, error, scanner, scanned_at)
+VALUES ($1, 'unsupported', $2, $3, now())
+ON CONFLICT (component_id) DO UPDATE SET status = 'unsupported', error = EXCLUDED.error, scanner = $3, scanned_at = now()`,
+			componentID, truncate(reason, 1000), SourceTrivy)
+		if err != nil {
+			return fmt.Errorf("record unsupported component: %w", err)
+		}
+		return nil
+	})
 }
 
 func truncate(s string, n int) string {
@@ -276,6 +332,19 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n]
+}
+
+// decodeImage reads the image column (nil for package findings).
+func decodeImage(b []byte) *ImageDetails {
+	if len(b) == 0 {
+		return nil
+	}
+	var d ImageDetails
+	if json.Unmarshal(b, &d) != nil {
+		return nil
+	}
+	d.Platforms = nonNil(d.Platforms)
+	return &d
 }
 
 func nonNil[T any](s []T) []T {
@@ -405,38 +474,42 @@ func (s *store) reopenExpired(ctx context.Context) ([]expiredWaiver, error) {
 
 // Finding is schema Finding.
 type Finding struct {
-	ID                  string           `json:"id"`
-	Kind                string           `json:"kind"`
-	AdvisoryID          string           `json:"advisory_id"`
-	Aliases             []string         `json:"aliases"`
-	Title               string           `json:"title"`
-	Details             string           `json:"details,omitempty"`
-	Severity            string           `json:"severity"`
-	CVSS                *float64         `json:"cvss"`
-	CVSSVector          *string          `json:"cvss_vector"`
-	Package             string           `json:"package"`
-	Installed           string           `json:"installed"`
-	FixedIn             *string          `json:"fixed_in"`
-	FixedVersions       []string         `json:"fixed_versions"`
-	AffectedVersions    string           `json:"affected_versions"`
-	References          []Reference      `json:"references"`
-	Status              string           `json:"status"`
-	Quarantined         bool             `json:"quarantined"`
-	AffectedComponents  int              `json:"affected_components"`
-	WaiverReason        *string          `json:"waiver_reason"`
-	WaiverUntil         *time.Time       `json:"waiver_until"`
-	WaivedBy            *string          `json:"waived_by"`
-	WaivedAt            *time.Time       `json:"waived_at"`
-	Assignee            *string          `json:"assignee"`
-	AssignedBy          *string          `json:"assigned_by"`
-	AssignedAt          *time.Time       `json:"assigned_at"`
-	Source              string           `json:"source"`
-	FirstSeenAt         time.Time        `json:"first_seen_at"`
-	LastSeenAt          time.Time        `json:"last_seen_at"`
-	ResolvedAt          *time.Time       `json:"resolved_at"`
-	AdvisoryPublishedAt *time.Time       `json:"advisory_published_at"`
-	AdvisoryModifiedAt  *time.Time       `json:"advisory_modified_at"`
-	Component           FindingComponent `json:"component"`
+	ID                  string      `json:"id"`
+	Kind                string      `json:"kind"`
+	AdvisoryID          string      `json:"advisory_id"`
+	Aliases             []string    `json:"aliases"`
+	Title               string      `json:"title"`
+	Details             string      `json:"details,omitempty"`
+	Severity            string      `json:"severity"`
+	CVSS                *float64    `json:"cvss"`
+	CVSSVector          *string     `json:"cvss_vector"`
+	Package             string      `json:"package"`
+	Installed           string      `json:"installed"`
+	FixedIn             *string     `json:"fixed_in"`
+	FixedVersions       []string    `json:"fixed_versions"`
+	AffectedVersions    string      `json:"affected_versions"`
+	References          []Reference `json:"references"`
+	Status              string      `json:"status"`
+	Quarantined         bool        `json:"quarantined"`
+	AffectedComponents  int         `json:"affected_components"`
+	WaiverReason        *string     `json:"waiver_reason"`
+	WaiverUntil         *time.Time  `json:"waiver_until"`
+	WaivedBy            *string     `json:"waived_by"`
+	WaivedAt            *time.Time  `json:"waived_at"`
+	Assignee            *string     `json:"assignee"`
+	AssignedBy          *string     `json:"assigned_by"`
+	AssignedAt          *time.Time  `json:"assigned_at"`
+	Source              string      `json:"source"`
+	FirstSeenAt         time.Time   `json:"first_seen_at"`
+	LastSeenAt          time.Time   `json:"last_seen_at"`
+	ResolvedAt          *time.Time  `json:"resolved_at"`
+	AdvisoryPublishedAt *time.Time  `json:"advisory_published_at"`
+	AdvisoryModifiedAt  *time.Time  `json:"advisory_modified_at"`
+	// Location is the file of a language package inside an image ("" otherwise).
+	Location string `json:"location"`
+	// Image is what the image scanner reported (nil for package findings).
+	Image     *ImageDetails    `json:"image"`
+	Component FindingComponent `json:"component"`
 	// RepositoryID is the id of the repository the component is in.
 	RepositoryID string `json:"-"`
 }
@@ -500,24 +573,25 @@ type FindingList struct {
 const findingCols = `f.id::text, f.kind, f.advisory_id, f.aliases, f.title, %s, f.severity, f.cvss::float8, f.cvss_vector,
 	f.package, f.installed, f.fixed_in, f.fixed_versions, f.affected, f.refs, f.status, c.quarantined, %s,
 	f.waiver_reason, f.waiver_until, f.waived_by, f.waived_at, f.assignee, f.assigned_by, f.assigned_at, f.source, f.first_seen_at, f.last_seen_at,
-	f.resolved_at, f.advisory_published_at, f.advisory_modified_at,
+	f.resolved_at, f.advisory_published_at, f.advisory_modified_at, f.location, f.image,
 	c.id::text, r.id::text, r.name, r.format, c.namespace, c.name, c.version`
 
 const findingFrom = ` FROM findings f JOIN components c ON c.id = f.component_id JOIN repositories r ON r.id = c.repo_id`
 
 func scanFinding(row pgx.Row) (*Finding, error) {
 	var f Finding
-	var refs []byte
+	var refs, image []byte
 	err := row.Scan(&f.ID, &f.Kind, &f.AdvisoryID, &f.Aliases, &f.Title, &f.Details, &f.Severity, &f.CVSS, &f.CVSSVector,
 		&f.Package, &f.Installed, &f.FixedIn, &f.FixedVersions, &f.AffectedVersions, &refs, &f.Status, &f.Quarantined,
 		&f.AffectedComponents, &f.WaiverReason, &f.WaiverUntil, &f.WaivedBy, &f.WaivedAt, &f.Assignee, &f.AssignedBy, &f.AssignedAt, &f.Source,
-		&f.FirstSeenAt, &f.LastSeenAt, &f.ResolvedAt, &f.AdvisoryPublishedAt, &f.AdvisoryModifiedAt,
+		&f.FirstSeenAt, &f.LastSeenAt, &f.ResolvedAt, &f.AdvisoryPublishedAt, &f.AdvisoryModifiedAt, &f.Location, &image,
 		&f.Component.ID, &f.RepositoryID, &f.Component.Repository, &f.Component.Format, &f.Component.Namespace,
 		&f.Component.Name, &f.Component.Version)
 	if err != nil {
 		return nil, err
 	}
 	_ = json.Unmarshal(refs, &f.References)
+	f.Image = decodeImage(image)
 	f.Aliases, f.FixedVersions, f.References = nonNil(f.Aliases), nonNil(f.FixedVersions), nonNil(f.References)
 	for _, t := range []*time.Time{&f.FirstSeenAt, &f.LastSeenAt} {
 		*t = t.UTC()
@@ -613,8 +687,8 @@ func (s *store) listFindings(ctx context.Context, q FindingQuery) (*FindingList,
 	if t := strings.TrimSpace(q.Q); t != "" {
 		like := b.arg("%" + likeEscape(strings.ToLower(t)) + "%")
 		where = append(where, "(lower(f.advisory_id) LIKE "+like+` ESCAPE '\' OR lower(f.package) LIKE `+like+
-			` ESCAPE '\' OR lower(f.title) LIKE `+like+` ESCAPE '\' OR EXISTS (SELECT 1 FROM unnest(f.aliases) a WHERE lower(a) LIKE `+
-			like+` ESCAPE '\'))`)
+			` ESCAPE '\' OR lower(f.title) LIKE `+like+` ESCAPE '\' OR lower(f.location) LIKE `+like+
+			` ESCAPE '\' OR EXISTS (SELECT 1 FROM unnest(f.aliases) a WHERE lower(a) LIKE `+like+` ESCAPE '\'))`)
 	}
 	cond := ""
 	if len(where) > 0 {
@@ -759,10 +833,10 @@ type Coverage struct {
 	LastScanAt  *time.Time `json:"last_scan_at"`
 }
 
-// coverage counts the components of the allowed repositories by scan status.
-func (s *store) coverage(ctx context.Context, repoIDs []string) (*Coverage, error) {
+// coverage counts the components of the allowed repositories by scan
+// status; scannable is the SQL condition of a scanned repository (alias r).
+func (s *store) coverage(ctx context.Context, scannable string, repoIDs []string) (*Coverage, error) {
 	var b builder
-	scannable := ScannableSQL("r")
 	cond := ""
 	if repoIDs != nil {
 		cond = " WHERE c.repo_id = ANY(" + b.arg(repoIDs) + "::uuid[])"
@@ -772,7 +846,7 @@ func (s *store) coverage(ctx context.Context, repoIDs []string) (*Coverage, erro
 		count(*) FILTER (WHERE `+scannable+` AND s.status = 'ok'),
 		count(*) FILTER (WHERE `+scannable+` AND s.status = 'failed'),
 		count(*) FILTER (WHERE `+scannable+` AND s.component_id IS NULL),
-		count(*) FILTER (WHERE NOT `+scannable+`),
+		count(*) FILTER (WHERE NOT `+scannable+` OR s.status = 'unsupported'),
 		max(s.ok_at)`+targetFrom+cond, b.args...).Scan(&c.Scanned, &c.Failed, &c.Never, &c.Unsupported, &c.LastScanAt)
 	if err != nil {
 		return nil, fmt.Errorf("scan coverage: %w", err)
@@ -794,8 +868,8 @@ type ComponentScan struct {
 // componentScan reads the scan row of a component of format.
 func (s *store) componentScan(ctx context.Context, componentID, format string) (*ComponentScan, error) {
 	scanned := false
-	if _, ok := Ecosystem(format); ok {
-		scanned = true
+	if _, ok := Ecosystem(format); ok || format == FormatDocker {
+		scanned = true // docker: the service checks that images are scanned
 	} else if IsDistroFormat(format) {
 		t, err := s.target(ctx, componentID)
 		if err != nil {

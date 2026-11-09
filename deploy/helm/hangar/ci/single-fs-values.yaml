@@ -23,3 +23,8 @@ httpRoute:
       namespace: gateway-system
   hostnames: [hangar.lab.example]
   registryHostnames: [registry.lab.example]
+imageScanning:
+  enabled: true
+  httpsProxy: http://proxy.lab.example:3128
+  adapterToken:
+    value: ci-adapter-token-0123456789

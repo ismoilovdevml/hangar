@@ -328,10 +328,34 @@ bootstrap:
   require_password_change: true
   initial_password_file: "" # e.g. /var/lib/hangar/secrets/initial-admin-password
 
+# Container image scanning with Trivy in client/server mode. Hangar asks the
+# scan adapter (the hangar-scanner image) to scan each image by digest; the
+# adapter runs the Trivy client against the Trivy server and pulls the image
+# from Hangar with a registry token valid for minutes. install.sh
+# --with-trivy and the Helm chart (imageScanning) set all of this.
+# Guide: docs/guides/vulnerabilities.md#container-images.
 scanner:
-  # Reserved for container image scanning (not active yet): Docker images
-  # show "image scanning not configured".
+  # The Trivy server (trivy server --listen). Empty: Docker images are not
+  # scanned and show "image scanning not configured". HANGAR_SCANNER_TRIVY_URL.
   trivy_url: ""
+  # The server's --token, if it has one (secret: HANGAR_SCANNER_TRIVY_TOKEN
+  # or secrets/scanner.trivy_token).
+  trivy_token: ""
+  # The scan adapter, required with trivy_url. HANGAR_SCANNER_ADAPTER_URL.
+  adapter_url: ""
+  # Shared with the adapter's HANGAR_SCANNER_TOKEN, at least 16 characters
+  # (secret: HANGAR_SCANNER_ADAPTER_TOKEN or secrets/scanner.adapter_token).
+  adapter_token: ""
+  # Hangar's /v2/ endpoint as the adapter reaches it (not a connector),
+  # e.g. http://hangar:8080. Default: server.base_url.
+  registry_url: ""
+  # Multi-platform images: "all" scans every platform, "default" only
+  # linux/amd64 (or the first platform).
+  platforms: all
+  # Longest scan of one image (1m to 2h); the first scan pulls every layer.
+  timeout: 15m
+  # Images scanned at once (1 to 16).
+  workers: 2
 
 # Vulnerability scanning of npm, Maven, PyPI, NuGet and Go packages against
 # the OSV advisory database. Guide: docs/guides/vulnerabilities.md.

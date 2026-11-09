@@ -6,7 +6,22 @@ import type { Finding, PackagePlan } from '../../api/types';
 import { ErrorNote } from '../../components/ErrorNote';
 import { Pill } from '../../components/Pill';
 import { plural } from '../../lib/overview';
-import { advisoryUrl, errorText, findingStatus, lineFor, packageAt, PULL_WINDOW, SEVERITY_META, shortDate, sortedAliases } from '../../lib/vulnerabilities';
+import {
+  advisoryLink,
+  dockerfileUpgrade,
+  errorText,
+  findingStatus,
+  fixStatusText,
+  imageRef,
+  imageWhere,
+  lineFor,
+  packageAt,
+  planKeyOf,
+  PULL_WINDOW,
+  SEVERITY_META,
+  shortDate,
+  sortedAliases,
+} from '../../lib/vulnerabilities';
 import { CopyTextButton } from './CopyTextButton';
 import { Drawer } from './Drawer';
 import { AssignDialog, WaiveDialog } from './PlanDialogs';
@@ -89,8 +104,8 @@ export function FindingDrawer({ id, plan, onClose, canWrite, canSeePullers }: Fi
       )}
       {f && f.component && dialog === 'waive' && (
         <WaiveDialog
-          packageKey={`${f.component.format}:${f.package}`}
-          packageName={f.package}
+          packageKey={planKeyOf(f)}
+          packageName={f.image ? planKeyOf(f).slice('docker:'.length) : f.package}
           findings={[{ id: f.id, label: `${f.advisory_id} on ${f.installed}` }]}
           initial={f.id}
           onClose={() => setDialog(null)}
@@ -102,10 +117,16 @@ export function FindingDrawer({ id, plan, onClose, canWrite, canSeePullers }: Fi
 
 function FindingBody({ f, plan, canWrite, canSeePullers }: { f: Finding; plan?: PackagePlan; canWrite: boolean; canSeePullers: boolean }) {
   const c = f.component;
-  const line = plan ? lineFor(plan, f.installed) : undefined;
+  const line = plan && !f.image ? lineFor(plan, f.installed) : undefined;
+  const advisory = advisoryLink(f);
   return (
     <div className="vfinding">
-      {f.status !== 'fixed' && <HowToFix f={f} target={line?.to ?? f.fixed_in} command={line?.command ?? null} lineFixes={line?.fixes ?? 0} />}
+      {f.status !== 'fixed' &&
+        (f.image ? (
+          <ImageHowToFix f={f} />
+        ) : (
+          <HowToFix f={f} target={line?.to ?? f.fixed_in} command={line?.command ?? null} lineFixes={line?.fixes ?? 0} />
+        ))}
 
       <section className="vfinding__section vfinding__section--first" aria-label={`Who pulls it, last ${PULL_WINDOW.replace('d', ' days')}`}>
         <h3 className="vfinding__heading">Who pulls it · last {PULL_WINDOW.replace('d', ' days')}</h3>
@@ -113,18 +134,37 @@ function FindingBody({ f, plan, canWrite, canSeePullers }: { f: Finding; plan?: 
       </section>
 
       <dl className="facts vfinding__facts">
-        <div>
-          <dt>Affected</dt>
-          <dd className="facts__mono">{f.affected_versions || <span className="muted">Not in the advisory</span>}</dd>
-        </div>
+        {f.image ? (
+          <div className="facts__wide">
+            <dt>Found in</dt>
+            <dd className="facts__mono">{imageWhere(f)}</dd>
+          </div>
+        ) : (
+          <div>
+            <dt>Affected</dt>
+            <dd className="facts__mono">{f.affected_versions || <span className="muted">Not in the advisory</span>}</dd>
+          </div>
+        )}
         <div>
           <dt>Published</dt>
           <dd>{f.advisory_published_at ? <time dateTime={f.advisory_published_at}>{shortDate(f.advisory_published_at)}</time> : '—'}</dd>
         </div>
+        {f.image && c && (
+          <div>
+            <dt>Image</dt>
+            <dd>
+              <Link to="/browse" search={{ repo: c.repository, ns: c.namespace || undefined, name: c.name, version: c.version || undefined }}>
+                {imageRef(c)}
+              </Link>
+            </dd>
+          </div>
+        )}
         <div>
           <dt>Package</dt>
           <dd>
-            {c ? (
+            {f.image ? (
+              packageAt(f)
+            ) : c ? (
               <Link to="/browse" search={{ repo: c.repository, ns: c.namespace || undefined, name: c.name, version: c.version || undefined }}>
                 {packageAt(f)}
               </Link>
@@ -161,8 +201,8 @@ function FindingBody({ f, plan, canWrite, canSeePullers }: { f: Finding; plan?: 
       <section className="vfinding__section" aria-label="Summary">
         <h3 className="vfinding__heading">Summary</h3>
         <p className="vfinding__details">{f.details || f.title || 'The advisory has no description.'}</p>
-        <a className="vfinding__osv" href={advisoryUrl(f.advisory_id)} target="_blank" rel="noreferrer noopener">
-          Full advisory on osv.dev ↗
+        <a className="vfinding__osv" href={advisory.href} target="_blank" rel="noreferrer noopener">
+          {advisory.label}
         </a>
       </section>
 
@@ -194,6 +234,54 @@ function HowToFix({ f, target, command, lineFixes }: { f: Finding; target: strin
         <div className="vfix__cmd">
           <code title={command}>{command}</code>
           <CopyTextButton text={command} label="Copy" copiedLabel="Copied" className="vfix__copy" ariaLabel="Copy the upgrade command" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** How to fix a finding inside an image: rebuild it with the fixed package. */
+function ImageHowToFix({ f }: { f: Finding }) {
+  const img = f.image!;
+  const image = f.component ? imageRef(f.component) : 'the image';
+  if (!f.fixed_in) {
+    return (
+      <div className="vfix vfix--none" role="note" aria-label="How to fix">
+        <span className="vfix__title">No fix yet</span>
+        <span>
+          {img.class === 'os-pkgs' ? (
+            <>
+              {img.os || 'The distribution'} has no fixed <b>{f.package}</b> yet. {fixStatusText(img.fix_status)} A newer base image may not
+              include it; otherwise waive it with a reason.
+            </>
+          ) : (
+            <>
+              No release of <b>{f.package}</b> fixes this advisory yet. Waive it with a reason if the vulnerable code is not reachable, or
+              replace the library.
+            </>
+          )}
+        </span>
+      </div>
+    );
+  }
+  const command = img.class === 'os-pkgs' ? dockerfileUpgrade(img.os ?? '', [f.package]) : '';
+  return (
+    <div className="vfix" role="note" aria-label="How to fix">
+      <span className="vfix__title">How to fix</span>
+      {img.class === 'os-pkgs' ? (
+        <span>
+          Rebuild <b>{image}</b> on a base image that ships <b>{f.package}</b> {f.fixed_in} or later, or upgrade it in the Dockerfile.
+        </span>
+      ) : (
+        <span>
+          Upgrade <b>{f.package}</b> to <b>{f.fixed_in}</b> or later in the application{f.location ? ` (${f.location})` : ''}, then rebuild{' '}
+          <b>{image}</b>.
+        </span>
+      )}
+      {command && (
+        <div className="vfix__cmd">
+          <code title={command}>{command}</code>
+          <CopyTextButton text={command} label="Copy" copiedLabel="Copied" className="vfix__copy" ariaLabel="Copy the Dockerfile line" />
         </div>
       )}
     </div>

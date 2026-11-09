@@ -20,6 +20,14 @@
 {{- printf "%s-nats" (include "hangar.fullname" .) | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{- define "hangar.trivyName" -}}
+{{- printf "%s-trivy" (include "hangar.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "hangar.scannerName" -}}
+{{- printf "%s-scanner" (include "hangar.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
 {{- define "hangar.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create -}}
 {{- default (include "hangar.fullname" .) .Values.serviceAccount.name -}}
@@ -51,6 +59,18 @@ app.kubernetes.io/component: server
 app.kubernetes.io/name: {{ include "hangar.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/component: nats
+{{- end -}}
+
+{{- define "hangar.trivySelectorLabels" -}}
+app.kubernetes.io/name: {{ include "hangar.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: trivy
+{{- end -}}
+
+{{- define "hangar.scannerSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "hangar.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: scanner
 {{- end -}}
 
 {{/* Image */}}
@@ -85,6 +105,7 @@ app.kubernetes.io/component: nats
 {{- define "hangar.bootstrapSecret" -}}{{ .Values.bootstrapAdmin.existingSecret | default (include "hangar.secretName" .) }}{{- end -}}
 {{- define "hangar.proxyPasswordSecret" -}}{{ .Values.httpProxyPassword.existingSecret | default (include "hangar.secretName" .) }}{{- end -}}
 {{- define "hangar.natsExternalSecret" -}}{{ .Values.nats.external.existingSecret | default (include "hangar.secretName" .) }}{{- end -}}
+{{- define "hangar.scannerSecret" -}}{{ .Values.imageScanning.adapterToken.existingSecret | default (include "hangar.scannerName" .) }}{{- end -}}
 {{- define "hangar.natsPasswordSecret" -}}{{ .Values.nats.bundled.existingSecret | default (include "hangar.natsName" .) }}{{- end -}}
 
 {{- define "hangar.s3StaticCredentials" -}}
@@ -120,7 +141,7 @@ change. Generated values are left out on purpose: they would differ on every
 offline render.
 */}}
 {{- define "hangar.secretValuesChecksum" -}}
-{{- $v := list .Values.database .Values.storage.s3 .Values.secretKey .Values.dockerTokenKey .Values.bootstrapAdmin .Values.httpProxyPassword .Values.nats.external .Values.nats.bundled.password .Values.nats.bundled.existingSecret -}}
+{{- $v := list .Values.database .Values.storage.s3 .Values.secretKey .Values.dockerTokenKey .Values.bootstrapAdmin .Values.httpProxyPassword .Values.nats.external .Values.nats.bundled.password .Values.nats.bundled.existingSecret .Values.imageScanning.adapterToken -}}
 {{- toJson $v | sha256sum -}}
 {{- end -}}
 
@@ -176,7 +197,7 @@ offline render.
 {{- if not (or .Values.database.url .Values.database.existingSecret) -}}
 {{- fail "set database.url or database.existingSecret (PostgreSQL connection URL)" -}}
 {{- end -}}
-{{- range $path := list "database.url" "storage.s3.access_key_id" "storage.s3.secret_access_key" "storage.s3.session_token" "http.proxy_password" "docker.token_key" "bootstrap.admin_password" "security.secret_key" "security.previous_secret_keys" "metrics.bearer_token" "metrics.password" -}}
+{{- range $path := list "database.url" "storage.s3.access_key_id" "storage.s3.secret_access_key" "storage.s3.session_token" "http.proxy_password" "docker.token_key" "bootstrap.admin_password" "security.secret_key" "security.previous_secret_keys" "metrics.bearer_token" "metrics.password" "scanner.adapter_token" "scanner.trivy_token" -}}
 {{- $parts := splitList "." $path -}}
 {{- $v := $.Values.config -}}
 {{- range $parts -}}{{- if kindIs "map" $v -}}{{- $v = get $v . -}}{{- else -}}{{- $v = "" -}}{{- end -}}{{- end -}}
@@ -207,6 +228,12 @@ offline render.
 {{- end -}}
 {{- if and (eq .Values.nats.mode "bundled") .Values.nats.bundled.password (not (regexMatch "^[A-Za-z0-9]+$" .Values.nats.bundled.password)) -}}
 {{- fail "nats.bundled.password may contain only letters and digits (it is embedded in a URL)" -}}
+{{- end -}}
+{{- if and .Values.imageScanning.enabled (dig "scanner" "trivy_url" "" .Values.config) -}}
+{{- fail "imageScanning.enabled wires config.scanner itself: leave config.scanner.trivy_url empty" -}}
+{{- end -}}
+{{- if and .Values.imageScanning.enabled .Values.imageScanning.adapterToken.value (lt (len .Values.imageScanning.adapterToken.value) 16) -}}
+{{- fail "imageScanning.adapterToken.value must be at least 16 characters" -}}
 {{- end -}}
 {{- if not (has .Values.migrations.mode (list "job" "onStart" "none")) -}}
 {{- fail "migrations.mode must be job, onStart or none" -}}

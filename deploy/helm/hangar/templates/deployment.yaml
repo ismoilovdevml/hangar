@@ -176,6 +176,23 @@ spec:
                   name: {{ include "hangar.natsExternalSecret" . }}
                   key: {{ .Values.nats.external.existingSecretKey }}
             {{- end }}
+            {{- if .Values.imageScanning.enabled }}
+            # Image scanning: the Trivy server, the scan adapter, and this
+            # Service as the registry the adapter pulls from.
+            - name: HANGAR_SCANNER_TRIVY_URL
+              value: "http://{{ include "hangar.trivyName" . }}.{{ .Release.Namespace }}.svc:4954"
+            - name: HANGAR_SCANNER_ADAPTER_URL
+              value: "http://{{ include "hangar.scannerName" . }}.{{ .Release.Namespace }}.svc:4955"
+            - name: HANGAR_SCANNER_REGISTRY_URL
+              value: "http://{{ include "hangar.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}"
+            - name: HANGAR_SCANNER_PLATFORMS
+              value: {{ .Values.imageScanning.platforms | quote }}
+            - name: HANGAR_SCANNER_ADAPTER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hangar.scannerSecret" . }}
+                  key: {{ .Values.imageScanning.adapterToken.existingSecretKey }}
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

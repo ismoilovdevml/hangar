@@ -74,7 +74,13 @@ function ScanState({ status, canRescan, canFollow }: { status?: ScanningStatus; 
           ? 'Scanning is turned off on this server'
           : running
             ? `Rescanning · ${run.done.toLocaleString('en-US')} of ${plural(run.total, 'package')}`
-            : `${c.scanned.toLocaleString('en-US')} scanned · OSV · ${c.last_scan_at ? `checked ${relativeTime(c.last_scan_at).toLowerCase()}` : 'not checked yet'}`}
+            : `${c.scanned.toLocaleString('en-US')} scanned · ${status.images?.enabled ? 'OSV + Trivy' : 'OSV'} · ${c.last_scan_at ? `checked ${relativeTime(c.last_scan_at).toLowerCase()}` : 'not checked yet'}`}
+        {status.enabled && status.images?.enabled && status.images.error && (
+          <span className="vhead__warn" title={status.images.error}>
+            {' '}
+            · Trivy unreachable
+          </span>
+        )}
         {!running && run?.state === 'stalled' && ` · the last rescan stopped at ${run.done} of ${run.total}`}
       </span>
       {canRescan && status.enabled && (

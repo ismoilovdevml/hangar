@@ -2,7 +2,17 @@ import { Fragment, type ReactNode } from 'react';
 import type { PackagePlan, PlanFinding } from '../../api/types';
 import { Pill } from '../../components/Pill';
 import { plural } from '../../lib/overview';
-import { advisoryIds, findingsSummary, findingStatus, SEVERITY_META, sortedAliases, upgradeCommands, upgradeTargets } from '../../lib/vulnerabilities';
+import {
+  advisoryIds,
+  findingsSummary,
+  findingStatus,
+  imageUpgradeText,
+  imageWhere,
+  SEVERITY_META,
+  sortedAliases,
+  upgradeCommands,
+  upgradeTargets,
+} from '../../lib/vulnerabilities';
 import { CopyTextButton } from './CopyTextButton';
 
 interface FixPlanTableProps {
@@ -62,7 +72,7 @@ export function FixPlanTable({ items, tab, windowDays, inUseDays, expanded, onTo
             items.map((p) => {
               const open = expanded.includes(p.key);
               const rowId = `vplan-${p.key.replace(/[^A-Za-z0-9_-]/g, '_')}`;
-              const target = upgradeTargets(p);
+              const target = p.image ? imageUpgradeText(p) : upgradeTargets(p);
               const commands = upgradeCommands(p);
               const sev = SEVERITY_META[p.max_severity];
               return (
@@ -99,7 +109,9 @@ export function FixPlanTable({ items, tab, windowDays, inUseDays, expanded, onTo
                     </td>
                     <td>
                       {target ? (
-                        <span className="vplan__upgrade">→ {target}</span>
+                        <span className="vplan__upgrade" title={p.image ? 'Rebuild the image with the fixed packages' : undefined}>
+                          {p.image ? target : `→ ${target}`}
+                        </span>
                       ) : (
                         <span className="muted">No fix yet</span>
                       )}
@@ -135,7 +147,7 @@ export function FixPlanTable({ items, tab, windowDays, inUseDays, expanded, onTo
                             text={commands}
                             label="Copy upgrade"
                             className="button button--sm vplan__copy"
-                            ariaLabel={`Copy the upgrade command for ${p.package}`}
+                            ariaLabel={p.image ? `Copy the Dockerfile line for ${p.package}` : `Copy the upgrade command for ${p.package}`}
                           />
                         )}
                         {canWrite && tab !== 'waived' && (
@@ -152,11 +164,12 @@ export function FixPlanTable({ items, tab, windowDays, inUseDays, expanded, onTo
                         <ul className="vplan__findings" aria-label={`Findings of ${p.package}`}>
                           {p.items.map((f) => (
                             <li key={f.id}>
-                              <FindingRow f={f} pkg={p.package} onOpen={() => onOpenFinding(f.id)} />
+                              <FindingRow f={f} pkg={p.image ? (f.package ?? p.package) : p.package} image={!!p.image} onOpen={() => onOpenFinding(f.id)} />
                             </li>
                           ))}
                         </ul>
-                        {p.upgrades.length > 1 && (
+                        {p.image && <ImageAdvice p={p} />}
+                        {!p.image && p.upgrades.length > 1 && (
                           <p className="meta vplan__lines">
                             {p.upgrades
                               .map((u) => `${u.from.join(', ')} → ${u.to ?? 'no fix yet'}`)
@@ -201,7 +214,28 @@ function PulledCell({ p, inUseDays }: { p: PackagePlan; inUseDays: number }) {
   );
 }
 
-function FindingRow({ f, pkg, onOpen }: { f: PlanFinding; pkg: string; onOpen: () => void }) {
+/** How to fix an image: rebuild it, with the packages that have a fix. */
+function ImageAdvice({ p }: { p: PackagePlan }) {
+  const fixed = (p.image?.packages ?? []).filter((x) => x.fixed_in);
+  if (!fixed.length) {
+    return <p className="meta vplan__lines">No package in {p.package} has a fixed version yet; a newer base image may drop them.</p>;
+  }
+  const list = (xs: typeof fixed) => {
+    const shown = xs.slice(0, 5).map((x) => `${x.name} ${x.fixed_in}`);
+    return shown.join(' · ') + (xs.length > shown.length ? ` + ${xs.length - shown.length} more` : '');
+  };
+  const os = fixed.filter((x) => x.class === 'os');
+  const libs = fixed.filter((x) => x.class !== 'os');
+  return (
+    <p className="meta vplan__lines">
+      {os.length > 0 && `Rebuild on an updated ${p.image?.os || 'base'} image, or upgrade in the Dockerfile: ${list(os)}.`}
+      {os.length > 0 && libs.length > 0 && ' '}
+      {libs.length > 0 && `Upgrade in the application, then rebuild: ${list(libs)}.`}
+    </p>
+  );
+}
+
+function FindingRow({ f, pkg, image, onOpen }: { f: PlanFinding; pkg: string; image: boolean; onOpen: () => void }) {
   const sev = SEVERITY_META[f.severity];
   const cve = sortedAliases(f.aliases).find((a) => a.startsWith('CVE-'));
   const status = findingStatus({ status: f.status, waiver_until: f.waiver_until, quarantined: false });
@@ -215,7 +249,8 @@ function FindingRow({ f, pkg, onOpen }: { f: PlanFinding; pkg: string; onOpen: (
           <span className="vfrow__pkg">
             {pkg}@{f.installed}
           </span>
-          <span className="muted">{f.repository}</span>
+          <span className="muted">{image ? `${f.repository} · ${f.version}` : f.repository}</span>
+          {image && <span className="muted">{imageWhere(f)}</span>}
           {f.fixed_in && <span className="vfrow__fix">fixed in {f.fixed_in}</span>}
           {f.assignee && <span className="muted">· {f.assignee}</span>}
           {f.status !== 'open' && <span className="muted">· {status.label}</span>}

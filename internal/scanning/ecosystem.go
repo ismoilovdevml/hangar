@@ -1,6 +1,9 @@
 package scanning
 
-import "strings"
+import (
+	"strings"
+	"sync/atomic"
+)
 
 // ecosystems maps the formats the scanner covers to OSV ecosystem names.
 var ecosystems = map[string]string{
@@ -12,17 +15,44 @@ var ecosystems = map[string]string{
 	"cargo": "crates.io",
 }
 
-// SupportedFormats are the formats whose components are scanned. APT and
+// FormatDocker is the container image format, scanned by an image
+// scanner (Trivy) rather than an advisory database.
+const FormatDocker = "docker"
+
+// imageScanning records whether this server scans container images; set
+// once at start by SetImageScanning.
+var imageScanning atomic.Bool
+
+// SetImageScanning tells SupportedFormats, ScannableSQL and
+// UnsupportedReason whether container images are scanned on this server
+// (scanner.trivy_url is set). The server calls it once while starting.
+func SetImageScanning(on bool) { imageScanning.Store(on) }
+
+// packageFormats are the formats checked against the advisory database.
+func packageFormats() []string { return []string{"cargo", "go", "maven", "npm", "nuget", "pypi"} }
+
+// SupportedFormats are the formats whose components are scanned: the
+// package formats, and docker when image scanning is configured. APT and
 // RPM repositories are scanned too once their distribution release is
 // known (IsDistroFormat, ScannableSQL).
-func SupportedFormats() []string { return []string{"cargo", "go", "maven", "npm", "nuget", "pypi"} }
+func SupportedFormats() []string { return withImages(imageScanning.Load()) }
+
+func withImages(images bool) []string {
+	f := packageFormats()
+	if images {
+		f = append(f, FormatDocker)
+	}
+	return f
+}
 
 // ScannableSQL is the SQL condition that a repository (alias r) is
-// scanned: a format with an advisory database, or an APT or RPM repository
-// with a known distribution release (scanning.distro, or detected and
-// recorded in repository_distros).
-func ScannableSQL(r string) string {
-	return `(` + r + `.format IN ('` + strings.Join(SupportedFormats(), "', '") + `') OR (` + r + `.format IN ('` +
+// scanned: a format with an advisory database (or docker, with image
+// scanning), or an APT or RPM repository with a known distribution release
+// (scanning.distro, or detected and recorded in repository_distros).
+func ScannableSQL(r string) string { return scannableSQL(r, imageScanning.Load()) }
+
+func scannableSQL(r string, images bool) string {
+	return `(` + r + `.format IN ('` + strings.Join(withImages(images), "', '") + `') OR (` + r + `.format IN ('` +
 		strings.Join(distroFormats, "', '") + `') AND (COALESCE(` + r + `.config->'scanning'->>'distro', '') <> ''
 		OR EXISTS (SELECT 1 FROM repository_distros rd WHERE rd.repo_id = ` + r + `.id AND rd.source = '` + DistroFromRemote + `'))))`
 }
@@ -35,7 +65,10 @@ func Ecosystem(format string) (string, bool) {
 
 // UnsupportedReason explains why components of format are not scanned.
 func UnsupportedReason(format string) string {
-	if format == "docker" {
+	if format == FormatDocker {
+		if imageScanning.Load() {
+			return "not a container image"
+		}
 		return "image scanning not configured"
 	}
 	// Distribution advisories (OSV "Debian:12", "Rocky Linux:9", ...) only

@@ -310,6 +310,9 @@ func (h *handler) refsFromAsset(ctx context.Context, repo *core.Repository, a *c
 // allowContent answers 403 DENIED (or 500) and returns false when content d
 // of rq.image in repo is blocked by quarantine.
 func (h *handler) allowContent(w http.ResponseWriter, r *http.Request, rq *request, repo *core.Repository, d core.Digest) bool {
+	if isScanner(r.Context()) {
+		return true // a quarantined image must stay scannable to be released
+	}
 	tag, blocked, err := h.quarantined(r.Context(), repo, rq.image, d)
 	if err != nil {
 		h.internal(w, r, "quarantine check", err)

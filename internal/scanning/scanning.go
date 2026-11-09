@@ -9,8 +9,12 @@
 // scan_on_arrival), on demand (a component or a whole repository), and in
 // the built-in "vulnerability-rescan" task, which rechecks every component
 // whose last scan is older than the rescan interval so new advisories are
-// picked up. Container images are not scanned: their components report
-// "image scanning not configured".
+// picked up.
+//
+// Container images (docker components) are scanned by an image scanner,
+// Trivy in client/server mode through the scan adapter (package trivy),
+// when one is configured; otherwise they report "image scanning not
+// configured". Their findings live in the same tables.
 package scanning
 
 import (
@@ -90,6 +94,19 @@ type Options struct {
 	InUseWindow time.Duration
 	// Now is the clock (tests); time.Now when nil.
 	Now func() time.Time
+
+	// Images and Registry scan container images (docker components); both
+	// nil = images are not scanned ("image scanning not configured").
+	Images   ImageScanner
+	Registry ImageRegistry
+	// RegistryHost is the host[:port] the image scanner pulls images from
+	// (Hangar's own /v2/ endpoint); RegistryInsecure allows plain HTTP.
+	RegistryHost     string
+	RegistryInsecure bool
+	// ImagePlatforms is PlatformsAll (default) or PlatformsDefault.
+	ImagePlatforms string
+	// ImageWorkers is how many images are scanned at once (DefaultImageWorkers).
+	ImageWorkers int
 }
 
 // Service scans components and manages findings. It is safe for concurrent use.
@@ -100,6 +117,9 @@ type Service struct {
 
 	mu    sync.Mutex
 	vulns map[string]*osv.Vuln // advisory id -> details, refreshed when "modified" changes
+	// imgStatus caches the image scanner's status for imageStatusTTL.
+	imgStatus   *ImageStatus
+	imgStatusAt time.Time
 }
 
 // New returns a service.
@@ -127,6 +147,16 @@ func New(opts Options) (*Service, error) {
 	}
 	if opts.Now == nil {
 		opts.Now = time.Now
+	}
+	if (opts.Images == nil) != (opts.Registry == nil) {
+		return nil, fmt.Errorf("scanning: image scanning needs both the image scanner and the registry: %w", core.ErrInvalid)
+	}
+	switch opts.ImagePlatforms {
+	case "":
+		opts.ImagePlatforms = PlatformsAll
+	case PlatformsAll, PlatformsDefault:
+	default:
+		return nil, fmt.Errorf("scanning: image platforms %q: want all or default: %w", opts.ImagePlatforms, core.ErrInvalid)
 	}
 	return &Service{opts: opts, store: &store{pool: opts.Pool}, log: opts.Logger, vulns: map[string]*osv.Vuln{}}, nil
 }
@@ -159,10 +189,35 @@ func (s *Summary) add(o Summary) {
 	s.Released += o.Released
 }
 
-// scan scans targets of supported formats (others are skipped). A failure
-// of the advisory database fails every target of the call; their earlier
-// findings are kept and their status records the error.
+// scan scans targets of supported formats (others are skipped): packages
+// against the advisory database, images with the image scanner. The
+// returned error is set when a target failed (Summary.Failed > 0; recorded
+// on the component) or the outcome could not be recorded (Failed == 0).
 func (s *Service) scan(ctx context.Context, targets []*Target) (Summary, error) {
+	var images, packages []*Target
+	for _, t := range targets {
+		if t.Format == FormatDocker && s.imagesOn() {
+			images = append(images, t)
+		} else {
+			packages = append(packages, t) // those without an ecosystem are skipped
+		}
+	}
+	sum, err := s.scanPackages(ctx, packages)
+	if err != nil && sum.Failed == 0 {
+		return sum, err
+	}
+	isum, ierr := s.scanImages(ctx, images)
+	sum.add(isum)
+	if ierr != nil && isum.Failed == 0 {
+		return sum, ierr
+	}
+	return sum, errors.Join(err, ierr)
+}
+
+// scanPackages checks package targets against the advisory database. A
+// failure of the database fails every target of the call; their earlier
+// findings are kept and their status records the error.
+func (s *Service) scanPackages(ctx context.Context, targets []*Target) (Summary, error) {
 	var sum Summary
 	targets = slices.DeleteFunc(slices.Clone(targets), func(t *Target) bool { _, ok := t.Ecosystem(); return !ok })
 	if len(targets) == 0 {
@@ -198,13 +253,13 @@ func (s *Service) scan(ctx context.Context, targets []*Target) (Summary, error) 
 			found = append(found, s.detect(v, pkgs[i], versions[i]))
 		}
 		if missing != nil {
-			if err := s.store.saveFailure(ctx, []string{t.ComponentID}, "advisory details: "+missing.Error()); err != nil {
+			if err := s.store.saveFailure(ctx, []string{t.ComponentID}, "advisory details: "+missing.Error(), SourceOSV); err != nil {
 				return sum, err
 			}
 			sum.Failed++
 			continue
 		}
-		added, err := s.store.saveResult(ctx, t, dedupe(found))
+		added, err := s.store.saveResult(ctx, t, dedupe(found), SourceOSV)
 		if err != nil {
 			return sum, err
 		}
@@ -239,7 +294,7 @@ func (s *Service) fail(ctx context.Context, targets []*Target, err error) (Summa
 	if ctx.Err() != nil {
 		return Summary{}, err // shutting down: not a failure of the components
 	}
-	if serr := s.store.saveFailure(context.WithoutCancel(ctx), ids, err.Error()); serr != nil {
+	if serr := s.store.saveFailure(context.WithoutCancel(ctx), ids, err.Error(), SourceOSV); serr != nil {
 		return Summary{}, errors.Join(err, serr)
 	}
 	return Summary{Failed: len(targets)}, err
@@ -411,7 +466,7 @@ func (s *Service) ScanComponent(ctx context.Context, componentID string) (*ScanR
 		return nil, err
 	}
 	res := &ScanResult{ComponentID: t.ComponentID}
-	if _, ok := t.Ecosystem(); ok {
+	if s.targetScannable(t) {
 		if !s.opts.Enabled {
 			return nil, ErrDisabled
 		}
@@ -421,7 +476,7 @@ func (s *Service) ScanComponent(ctx context.Context, componentID string) (*ScanR
 			return nil, err // could not record the outcome
 		}
 	}
-	cs, err := s.store.componentScan(ctx, t.ComponentID, t.Format)
+	cs, err := s.ComponentScan(ctx, t.ComponentID, t.Format)
 	if err != nil {
 		return nil, err
 	}
@@ -431,18 +486,24 @@ func (s *Service) ScanComponent(ctx context.Context, componentID string) (*ScanR
 
 // ComponentScan returns the scan state of a component of format.
 func (s *Service) ComponentScan(ctx context.Context, componentID, format string) (*ComponentScan, error) {
+	if format == FormatDocker && !s.imagesOn() {
+		return &ComponentScan{Status: StatusUnsupported, Error: s.unsupportedReason(format)}, nil
+	}
 	return s.store.componentScan(ctx, componentID, format)
 }
 
 // QueueRepositoryScan enqueues a scan of every component of repo and
 // returns how many components it covers.
 func (s *Service) QueueRepositoryScan(ctx context.Context, repo *core.Repository) (int, error) {
-	ok, err := s.scannable(ctx, repo)
-	if err != nil {
-		return 0, err
+	ok := repo.Format == FormatDocker && s.imagesOn()
+	if !ok {
+		var err error
+		if ok, err = s.scannable(ctx, repo); err != nil {
+			return 0, err
+		}
 	}
 	if !ok {
-		return 0, fmt.Errorf("repository %q: %s: %w", repo.Name, UnsupportedReason(repo.Format), core.ErrInvalid)
+		return 0, fmt.Errorf("repository %q: %s: %w", repo.Name, s.unsupportedReason(repo.Format), core.ErrInvalid)
 	}
 	if !s.opts.Enabled {
 		return 0, ErrDisabled
@@ -470,7 +531,7 @@ func (s *Service) scanRepository(ctx context.Context, repoID string) (Summary, e
 	var total Summary
 	after := ""
 	for {
-		batch, err := s.store.repoTargets(ctx, repoID, after, batchSize)
+		batch, err := s.store.repoTargets(ctx, s.scannableSQL("r"), repoID, after, batchSize)
 		if err != nil {
 			return total, err
 		}
@@ -542,7 +603,7 @@ func (s *Service) handleComponentJob(ctx context.Context, j core.Job) error {
 	if err != nil {
 		return err
 	}
-	if _, ok := t.Ecosystem(); !ok {
+	if !s.targetScannable(t) {
 		return nil
 	}
 	if p.Reason == ReasonArrival {
@@ -799,17 +860,20 @@ type Status struct {
 	RescanInterval   string    `json:"rescan_interval"`
 	SupportedFormats []string  `json:"supported_formats"`
 	Coverage         *Coverage `json:"coverage"`
+	// Images is container image scanning.
+	Images *ImageStatus `json:"images"`
 }
 
 // Status reports the configuration and how many components of the
 // allowed repositories are scanned.
 func (s *Service) Status(ctx context.Context, repoIDs []string) (*Status, error) {
-	cov, err := s.store.coverage(ctx, repoIDs)
+	cov, err := s.store.coverage(ctx, s.scannableSQL("r"), repoIDs)
 	if err != nil {
 		return nil, err
 	}
 	return &Status{
-		Enabled: s.opts.Enabled, Source: "osv", SourceURL: s.opts.SourceURL,
-		RescanInterval: s.opts.RescanInterval.String(), SupportedFormats: SupportedFormats(), Coverage: cov,
+		Enabled: s.opts.Enabled, Source: SourceOSV, SourceURL: s.opts.SourceURL,
+		RescanInterval: s.opts.RescanInterval.String(), SupportedFormats: s.formats(), Coverage: cov,
+		Images: s.imageStatus(ctx),
 	}, nil
 }

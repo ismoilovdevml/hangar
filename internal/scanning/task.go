@@ -17,7 +17,7 @@ const TaskType = "rescan"
 // older than scanning.rescan_interval.
 var RescanTask = tasks.Builtin{
 	Name: "vulnerability-rescan", Type: TaskType, Schedule: "20 * * * *",
-	Description: "Check packages against the latest OSV advisories: new, failed and stale scans",
+	Description: "Check packages against the latest OSV advisories (and images with Trivy, when configured): new, failed and stale scans",
 }
 
 // rescanState is the checkpoint of a rescan run.
@@ -57,7 +57,7 @@ func (s *Service) rescan(ctx context.Context, x *tasks.Exec) error {
 	if _, err := x.LoadState(&st); err != nil {
 		return err
 	}
-	due, err := s.store.countDue(ctx, s.opts.RescanInterval, s.opts.RetryFailedAfter)
+	due, err := s.store.countDue(ctx, s.scannableSQL("r"), s.opts.RescanInterval, s.opts.RetryFailedAfter)
 	if err != nil {
 		return err
 	}
@@ -65,7 +65,7 @@ func (s *Service) rescan(ctx context.Context, x *tasks.Exec) error {
 	x.Logf("%d components to scan (never scanned, failed, or last scanned more than %s ago)", due, s.opts.RescanInterval)
 	var lastErr error
 	for {
-		batch, err := s.store.dueTargets(ctx, s.opts.RescanInterval, s.opts.RetryFailedAfter, st.After, batchSize)
+		batch, err := s.store.dueTargets(ctx, s.scannableSQL("r"), s.opts.RescanInterval, s.opts.RetryFailedAfter, st.After, batchSize)
 		if err != nil {
 			return err
 		}

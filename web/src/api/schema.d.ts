@@ -3131,8 +3131,18 @@ export interface components {
             assigned_by?: string | null;
             /** Format: date-time */
             assigned_at?: string | null;
-            /** @example osv */
-            source?: string;
+            /**
+             * @description `osv` for packages, `trivy` for container images
+             * @enum {string}
+             */
+            source?: "osv" | "trivy";
+            /**
+             * @description File of a library inside an image (a jar, a lock file, a binary); empty otherwise
+             * @example app/lib/log4j-core-2.14.1.jar
+             */
+            location?: string;
+            /** @description Container image findings only */
+            image?: components["schemas"]["ImageFindingDetails"] | null;
             first_seen_at?: components["schemas"]["Timestamp"];
             last_seen_at?: components["schemas"]["Timestamp"];
             /**
@@ -3153,10 +3163,47 @@ export interface components {
                 version: string;
             };
         };
+        /** @description What the image scanner reported about a vulnerable package inside an image */
+        ImageFindingDetails: {
+            /**
+             * @description `os-pkgs`: installed by the distribution; `lang-pkgs`: a library of an application
+             * @enum {string}
+             */
+            class: "os-pkgs" | "lang-pkgs";
+            /**
+             * @example alpine
+             * @example debian
+             * @example jar
+             * @example node-pkg
+             * @example gobinary
+             */
+            type: string;
+            /** @description The scanned part (the OS */
+            target: string;
+            /** @example alpine 3.10.9 */
+            os?: string;
+            /** @description Digest of the layer that installed the package */
+            layer?: string;
+            diff_id?: string;
+            /** @description Platforms of a multi-platform image the package was found in */
+            platforms: string[];
+            /**
+             * @description The distribution's verdict
+             * @example fixed
+             * @example affected
+             * @example will_not_fix
+             * @example fix_deferred
+             * @example end_of_life
+             */
+            fix_status?: string;
+            /** @example Alpine Secdb */
+            data_source?: string;
+            primary_url?: string;
+        };
         ComponentScan: {
             /** @enum {string} */
             status: "never" | "ok" | "failed" | "unsupported";
-            /** @description Why the last scan failed, or why the format is not scanned */
+            /** @description Why the last scan failed, or why the component is not scanned (no advisory source, image scanning not configured, not a container image) */
             error?: string;
             /** Format: date-time */
             scanned_at: string | null;
@@ -3219,6 +3266,30 @@ export interface components {
                 /** Format: date-time */
                 last_scan_at: string | null;
             };
+            images?: components["schemas"]["ImageScanningStatus"];
+        };
+        /** @description Container image scanning with Trivy (scanner.trivy_url) */
+        ImageScanningStatus: {
+            /** @description A Trivy server and the scan adapter are configured */
+            enabled: boolean;
+            /** @example trivy */
+            scanner: string;
+            /** @example http://trivy:4954 */
+            server_url?: string;
+            /** @enum {string} */
+            platforms?: "all" | "default";
+            /**
+             * @description Trivy server version
+             * @example 0.76.1
+             */
+            version?: string;
+            /**
+             * Format: date-time
+             * @description When the server's vulnerability database was built
+             */
+            db_updated_at?: string | null;
+            /** @description Why the Trivy server could not be asked */
+            error?: string;
         };
         FindingPage: {
             items: components["schemas"]["Finding"][];
@@ -3363,6 +3434,39 @@ export interface components {
             in_use: boolean;
             pulls: number;
             clients: number;
+            /** @description The vulnerable package (for an image */
+            package?: string;
+            /** @description The component version (the tag of an image) */
+            version?: string;
+            location?: string;
+            image?: components["schemas"]["ImageFindingDetails"] | null;
+        };
+        /**
+         * @description How to fix an image: rebuild it on a base image whose distribution
+         *     ships the fixed OS packages (or with them upgraded in the
+         *     Dockerfile), with the application's libraries upgraded.
+         */
+        ImagePlan: {
+            /** @example alpine 3.10.9 */
+            os: string;
+            packages: {
+                name: string;
+                /** @enum {string} */
+                class: "os" | "library";
+                type: string;
+                location: string;
+                installed: string[];
+                /** @description Version that fixes every finding of the package with a fix */
+                fixed_in: string | null;
+                findings: number;
+                unfixed: number;
+                max_severity: components["schemas"]["Severity"];
+            }[];
+            /**
+             * @description Dockerfile line upgrading the OS packages with a fix
+             * @example RUN apk upgrade --no-cache libcrypto3 libssl3
+             */
+            command: string | null;
         };
         PackagePlan: {
             /** @example nuget:Newtonsoft.Json */
@@ -3397,6 +3501,8 @@ export interface components {
             assignee: string | null;
             assignee_mixed: boolean;
             items: components["schemas"]["PlanFinding"][];
+            /** @description Container images (format docker): the key is `docker:<image>` and versions are its tags */
+            image?: components["schemas"]["ImagePlan"] | null;
         };
         Rescan: {
             id: string;

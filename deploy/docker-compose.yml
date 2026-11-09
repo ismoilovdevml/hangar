@@ -1,5 +1,6 @@
-# Hangar development stack: PostgreSQL, MinIO, NATS JetStream, Trivy server and
-# Hangar itself, with throwaway credentials and every port published.
+# Hangar development stack: PostgreSQL, MinIO, NATS JetStream, a Trivy server
+# with Hangar's scan adapter, and Hangar itself, with throwaway credentials
+# and every port published.
 # For production use deploy/compose/ (docs/deploy/install-compose.md).
 #
 #   docker compose -f deploy/docker-compose.yml up -d --build
@@ -88,6 +89,20 @@ services:
       retries: 60
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:4954/healthz"]
 
+  # Runs the Trivy client for the images Hangar scans (scanner.adapter_url).
+  hangar-scanner:
+    build:
+      context: ..
+      dockerfile: deploy/scanner/Dockerfile
+    image: hangar-scanner:dev
+    environment:
+      # Development only; the same value as HANGAR_SCANNER_ADAPTER_TOKEN.
+      HANGAR_SCANNER_TOKEN: ${HANGAR_SCANNER_TOKEN:-dev-only-scanner-token-change-me}
+    ports:
+      - "${HANGAR_SCANNER_PORT:-4955}:4955"
+    volumes:
+      - scanner:/var/lib/hangar-scanner
+
   hangar:
     build:
       context: ..
@@ -116,6 +131,10 @@ services:
       HANGAR_NATS_EMBEDDED: "false"
       HANGAR_NATS_URL: nats://nats:4222
       HANGAR_SCANNER_TRIVY_URL: http://trivy:4954
+      HANGAR_SCANNER_ADAPTER_URL: http://hangar-scanner:4955
+      HANGAR_SCANNER_ADAPTER_TOKEN: ${HANGAR_SCANNER_TOKEN:-dev-only-scanner-token-change-me}
+      # The adapter pulls the images to scan from here (inside this network).
+      HANGAR_SCANNER_REGISTRY_URL: http://hangar:8080
       # Corporate networks: outbound proxy for proxy repositories.
       HANGAR_HTTP_PROXY: ${HANGAR_HTTP_PROXY:-}
       HANGAR_HTTP_NO_PROXY: ${HANGAR_HTTP_NO_PROXY:-}
@@ -129,4 +148,5 @@ volumes:
   minio:
   nats:
   trivy:
+  scanner:
   hangar:

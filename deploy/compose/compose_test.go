@@ -283,3 +283,82 @@ func TestEnvironmentIsKnown(t *testing.T) {
 		t.Error("install.sh does not read secrets/initial-admin-password")
 	}
 }
+
+// The trivy profile: a pinned Trivy server and scan adapter on the same
+// Trivy version, and the scanner settings install.sh writes into
+// scanner.env make a configuration the server accepts.
+func TestImageScanningWiring(t *testing.T) {
+	c, raw := load(t)
+	for _, name := range []string{"trivy", "hangar-scanner"} {
+		s, ok := c.Services[name]
+		if !ok {
+			t.Fatalf("service %s missing", name)
+		}
+		if !slices.Equal(s.Profiles, []string{"trivy"}) {
+			t.Errorf("%s profiles = %v", name, s.Profiles)
+		}
+		if s.Environment["HTTPS_PROXY"] == "" || !strings.Contains(s.Environment["NO_PROXY"], "hangar") {
+			t.Errorf("%s: the outbound proxy is not wired (HTTPS_PROXY %q, NO_PROXY %q)", name, s.Environment["HTTPS_PROXY"],
+				s.Environment["NO_PROXY"])
+		}
+	}
+	trivyImage := regexp.MustCompile(`aquasec/trivy:(\d+\.\d+\.\d+)`)
+	m := trivyImage.FindStringSubmatch(c.Services["trivy"].Image)
+	if m == nil {
+		t.Fatalf("trivy image %q is not pinned to a version", c.Services["trivy"].Image)
+	}
+	df, err := os.ReadFile("../scanner/Dockerfile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := trivyImage.FindStringSubmatch(string(df)); d == nil || d[1] != m[1] {
+		t.Errorf("the scan adapter is built on Trivy %v, the server runs %s: keep them equal", d, m[1])
+	}
+	if !strings.Contains(raw, "env_file: [./scanner.env]") {
+		t.Error("the hangar service does not read scanner.env")
+	}
+
+	sh := installer(t)
+	env := map[string]string{}
+	for _, m := range regexp.MustCompile(`echo "(HANGAR_SCANNER_[A-Z_]+)=([^"]+)"`).FindAllStringSubmatch(sh, -1) {
+		env[m[1]] = m[2]
+	}
+	if len(env) != 3 {
+		t.Fatalf("install.sh writes %v into scanner.env", env)
+	}
+	known := config.EnvVars()
+	for k := range env {
+		if !slices.Contains(known, k) {
+			t.Errorf("scanner.env sets %s, which is not a server setting", k)
+		}
+	}
+	if !strings.Contains(sh, "write_secret scanner.adapter_token") {
+		t.Error("install.sh does not generate secrets/scanner.adapter_token")
+	}
+	for _, kv := range os.Environ() {
+		if k, _, _ := strings.Cut(kv, "="); strings.HasPrefix(k, "HANGAR_") {
+			t.Setenv(k, "")
+			_ = os.Unsetenv(k)
+		}
+	}
+	for k, v := range env {
+		t.Setenv(k, v)
+	}
+	t.Setenv("HANGAR_SCANNER_ADAPTER_TOKEN", "0123456789abcdef0123456789abcdef")
+	t.Setenv("HANGAR_SERVER_BASE_URL", "https://hangar.example.com")
+	t.Setenv("HANGAR_DATABASE_URL", "postgres://hangar:pw@postgres:5432/hangar")
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("server config with image scanning: %v", err)
+	}
+	if !cfg.Scanner.ImageScanning() || cfg.Scanner.AdapterURL != "http://hangar-scanner:4955" || cfg.Scanner.RegistryURL != "http://hangar:8080" {
+		t.Errorf("scanner = %+v", cfg.Redacted().Scanner)
+	}
+	// The adapter reaches Hangar and Trivy by their service names.
+	for _, host := range []string{"hangar-scanner:4955", "trivy:4954"} {
+		name, _, _ := strings.Cut(host, ":")
+		if _, ok := c.Services[name]; !ok {
+			t.Errorf("scanner.env points at %s, which is no service", host)
+		}
+	}
+}
