@@ -186,3 +186,17 @@ func TestRecorderRetentionAndBound(t *testing.T) {
 		t.Fatalf("retry = %v, pending %d", err, bounded.Pending())
 	}
 }
+
+// Regression: the wrapper hid the component service's full-text search, so
+// in production NuGet, cargo and npm search fell back to listing every
+// component of a repository.
+func TestWrapKeepsComponentSearch(t *testing.T) {
+	inner := coretest.NewComponents()
+	if _, ok := pulls.Wrap(inner, pulls.New(nil, pulls.Options{})).(core.ComponentSearcher); !ok {
+		t.Fatal("wrapped service lost core.ComponentSearcher")
+	}
+	type plain struct{ core.ComponentService }
+	if _, ok := pulls.Wrap(plain{inner}, pulls.New(nil, pulls.Options{})).(core.ComponentSearcher); ok {
+		t.Fatal("wrapped service claims a search it does not have")
+	}
+}
