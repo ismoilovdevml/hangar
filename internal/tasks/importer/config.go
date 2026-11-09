@@ -148,7 +148,7 @@ func decodeStrict(raw json.RawMessage, v any) error {
 }
 
 func (s Source) validate() error {
-	u, err := url.Parse(s.URL)
+	u, err := url.Parse(strings.TrimPrefix(s.URL, "sparse+")) // a Cargo index may be written sparse+https://
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return fmt.Errorf("source.url %q must be an absolute http(s) URL: %w", core.RedactURL(s.URL), core.ErrInvalid)
 	}

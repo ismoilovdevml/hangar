@@ -291,3 +291,18 @@ func sortedKeys(m map[string]string) []string {
 	}
 	return out
 }
+
+// httpGet GETs u over the network and returns the body of a 200 answer.
+func httpGet(t *testing.T, u string) string {
+	t.Helper()
+	resp, err := http.Get(u) //nolint:gosec,noctx // test URL
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET %s: %s: %s", u, resp.Status, b)
+	}
+	return string(b)
+}

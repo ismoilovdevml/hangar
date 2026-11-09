@@ -81,7 +81,7 @@ func (s *Service) newSource(src Source, rps float64) (*source, error) {
 	if err != nil {
 		return nil, err
 	}
-	u, err := url.Parse(src.URL)
+	u, err := url.Parse(strings.TrimPrefix(src.URL, "sparse+"))
 	if err != nil {
 		return nil, fmt.Errorf("source.url: %w", core.ErrInvalid)
 	}
