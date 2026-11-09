@@ -66,7 +66,7 @@ Every request may carry one of:
 | Bearer token | `Authorization: Bearer hgr_...` | scripts and automation (recommended) |
 | Basic, token as password | `Authorization: Basic base64(<any>:hgr_...)` (`curl -u any:$HANGAR_TOKEN`) | tools that only speak Basic |
 | Basic, username and password | `curl -u admin:<password>` | bootstrapping the first token; counts towards account lockout |
-| Session cookie | `hangar_session` cookie + `X-CSRF-Token` header on writes | the web UI |
+| Session cookie | `hangar_session` cookie + `X-CSRF-Token` header (the `hangar_csrf` cookie's value) on writes | the web UI; [first sign-in](#first-sign-in-from-a-script) |
 
 Every route requires sign-in except `GET /system/status`, `GET /system/version`,
 `GET /auth/providers`, `POST /auth/login` and the documents `GET /openapi.yaml`,
@@ -90,6 +90,53 @@ curl -H "Authorization: Bearer $HANGAR_TOKEN" https://hangar.example.com/api/v1/
 
 returns the caller and its effective privileges (see
 [Connect an integration](#connect-an-integration) for the token section).
+
+### Session cookies and CSRF
+
+`POST /auth/login` signs in with a username and password and answers with two
+cookies: `hangar_session` (the session, HttpOnly) and `hangar_csrf` (readable).
+The same CSRF value is also in the response's `X-CSRF-Token` header. Every
+request authenticated by the session cookie that is not GET or HEAD must echo
+it in an `X-CSRF-Token` header, or it answers `403 csrf_failed`. Requests with
+a token or Basic credentials need no CSRF header. Changing the password starts
+a new session with a new CSRF value: read the cookie again afterwards.
+
+### First sign-in from a script
+
+A new administrator (from `bootstrap.admin_password` or `hangar admin
+reset-password`) must set their own password before anything else; every other
+call answers `403 password_change_required`. To get from there to a token
+without the web UI, with a session:
+
+```bash
+jar=$(mktemp)
+csrf() { awk '$6 == "hangar_csrf" { print $7 }' "$jar"; }
+
+# 1. Sign in; the cookies land in the jar.
+curl -fsS -c "$jar" -H 'Content-Type: application/json' -X POST "$HANGAR_URL/api/v1/auth/login" \
+  -d "$(jq -n --arg p "$ONE_TIME_PASSWORD" '{username: "admin", password: $p}')"
+
+# 2. Set the new password: a session write, so it carries X-CSRF-Token.
+curl -fsS -b "$jar" -c "$jar" -H "X-CSRF-Token: $(csrf)" -H 'Content-Type: application/json' \
+  -X PUT "$HANGAR_URL/api/v1/me/password" \
+  -d "$(jq -n --arg c "$ONE_TIME_PASSWORD" --arg n "$NEW_PASSWORD" '{current_password: $c, new_password: $n}')"
+
+# 3. Create a token with the new session (and its new CSRF value).
+curl -fsS -b "$jar" -H "X-CSRF-Token: $(csrf)" -H 'Content-Type: application/json' \
+  -X POST "$HANGAR_URL/api/v1/tokens" \
+  -d '{"name": "bootstrap", "scopes": ["system:*"], "expires_at": "2027-01-01T00:00:00Z"}' | jq -r .secret
+rm -f "$jar"
+```
+
+Over plain HTTP the cookies are only sent back when `auth.session.insecure` is
+set; use HTTPS. Basic credentials skip the cookies and CSRF altogether:
+`curl -u "admin:$ONE_TIME_PASSWORD" -X PUT .../me/password` with the same body,
+then `curl -u "admin:$NEW_PASSWORD" -X POST .../tokens`.
+
+On the server itself, `hangar admin token create --user admin --name ci
+--scopes 'system:*' --expires 90d` prints a token without any sign-in, and
+`hangar admin reset-password --user NAME` prints a new one-time password (it
+also clears a lockout). Both read the same configuration as `hangar serve`.
 
 ## Common operations
 

@@ -120,3 +120,21 @@ func TestUnknownEndpoints(t *testing.T) {
 		t.Fatalf("unknown endpoint = %d %s", resp.StatusCode, body)
 	}
 }
+
+// The guide tells scripts how cookie-session writes pass the CSRF check and
+// how to get from a one-time password to a token.
+func TestAutomationGuideCoversSessions(t *testing.T) {
+	a := &API{}
+	rec := httptest.NewRecorder()
+	a.automationGuide(rec, httptest.NewRequest(http.MethodGet, "/api/v1/automation-guide.md", nil))
+	g := rec.Body.String()
+	for _, want := range []string{
+		"X-CSRF-Token", "hangar_csrf", "csrf_failed", "password_change_required",
+		"POST /auth/login", "/api/v1/me/password", "/api/v1/tokens",
+		"hangar admin token create", "hangar admin reset-password",
+	} {
+		if !strings.Contains(g, want) {
+			t.Errorf("automation guide lacks %q", want)
+		}
+	}
+}

@@ -139,6 +139,35 @@ const automationGuide = "# Hangar automation guide\n\n" +
 	"authentication (401) from other addresses.\n\n" +
 	"Package clients take the token as the password with any username, or as\n" +
 	"the npm `_authToken` / NuGet API key.\n\n" +
+	"A request with a wrong, expired or revoked token answers 401 on every route,\n" +
+	"the public ones included; leave the header out to call them anonymously.\n\n" +
+	"### Sessions and CSRF\n\n" +
+	"`POST /auth/login` (`{\"username\", \"password\"}`) answers with a\n" +
+	"`hangar_session` cookie and a readable `hangar_csrf` cookie (its value is also\n" +
+	"in the `X-CSRF-Token` response header). Every request authenticated by the\n" +
+	"session cookie that is not GET or HEAD must send that value in an\n" +
+	"`X-CSRF-Token` header, or it answers 403 `csrf_failed`. Token and Basic\n" +
+	"requests need no CSRF header. A password change starts a new session with\n" +
+	"a new CSRF value: read the cookie again.\n\n" +
+	"### First sign-in\n\n" +
+	"A new administrator must set their own password first; everything else\n" +
+	"answers 403 `password_change_required`. From a script, with a session:\n\n" +
+	"```sh\n" +
+	"jar=$(mktemp)\n" +
+	"csrf() { awk '$6 == \"hangar_csrf\" { print $7 }' \"$jar\"; }\n" +
+	"curl -fsS -c \"$jar\" -H 'Content-Type: application/json' -X POST \"$HANGAR_URL/api/v1/auth/login\" \\\n" +
+	"  -d \"$(jq -n --arg p \"$ONE_TIME_PASSWORD\" '{username: \"admin\", password: $p}')\"\n" +
+	"curl -fsS -b \"$jar\" -c \"$jar\" -H \"X-CSRF-Token: $(csrf)\" -H 'Content-Type: application/json' \\\n" +
+	"  -X PUT \"$HANGAR_URL/api/v1/me/password\" \\\n" +
+	"  -d \"$(jq -n --arg c \"$ONE_TIME_PASSWORD\" --arg n \"$NEW_PASSWORD\" '{current_password: $c, new_password: $n}')\"\n" +
+	"curl -fsS -b \"$jar\" -H \"X-CSRF-Token: $(csrf)\" -H 'Content-Type: application/json' \\\n" +
+	"  -X POST \"$HANGAR_URL/api/v1/tokens\" \\\n" +
+	"  -d '{\"name\": \"bootstrap\", \"scopes\": [\"system:*\"], \"expires_at\": \"2027-01-01T00:00:00Z\"}' | jq -r .secret\n" +
+	"```\n\n" +
+	"Basic credentials (`curl -u \"admin:$ONE_TIME_PASSWORD\"`) do the same without\n" +
+	"cookies or CSRF. On the server, `hangar admin token create --user admin --name ci\n" +
+	"--scopes 'system:*' --expires 90d` prints a token without signing in, and\n" +
+	"`hangar admin reset-password --user NAME` prints a new one-time password.\n\n" +
 	"## Errors\n\n" +
 	"Every non-2xx answer has the same body:\n\n" +
 	"```json\n{\"code\": \"not_found\", \"message\": \"repository \\\"npm-x\\\": not found\", \"retry_after\": 0}\n```\n\n" +
