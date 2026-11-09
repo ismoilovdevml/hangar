@@ -313,8 +313,8 @@ func (h *handler) searchObject(ctx context.Context, repo *core.Repository, bs co
 	return map[string]any{
 		"package": map[string]any{
 			"name": n.Full, "scope": scope, "version": c.Version, "description": desc, "keywords": keywords,
-			"date":  c.CreatedAt.UTC().Format(timeFormat),
-			"links": map[string]string{"npm": h.tarballBase(repo) + "/" + n.Escaped()},
+			"date":      c.CreatedAt.UTC().Format(timeFormat),
+			"links":     map[string]string{"npm": h.tarballBase(repo) + "/" + n.Escaped()},
 			"publisher": publisher, "maintainers": people,
 		},
 		"flags":       map[string]any{},
