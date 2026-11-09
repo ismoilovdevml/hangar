@@ -21,6 +21,7 @@ import { isDirty, repoClientTarget, repoToForm, storedInput, toRepositoryUpdate 
 import {
   isFormat,
   repositoryYaml,
+  SIGNED_FORMATS,
   secretStored,
   STATUS_META,
   TYPE_META,
@@ -31,6 +32,7 @@ import {
 } from '../../../lib/repositories';
 import { RepoSettingsFields } from '../RepoFormFields';
 import { focusFirstError } from '../repoFormHelpers';
+import { SigningKeyPanel } from './SigningKeyPanel';
 import '../../../styles/catalog.css';
 import './settings.css';
 
@@ -199,6 +201,8 @@ function SettingsForm({ repo }: { repo: Repository }) {
               disabled={!canAdmin}
             />
           </Panel>
+
+          {isFormat(repo.format) && SIGNED_FORMATS.includes(repo.format) && repo.type !== 'proxy' && <SigningKeyPanel repo={repo} />}
 
           <Panel title="Delete repository" titleId="danger-title" className="danger-zone">
             <p className="danger-zone__text">

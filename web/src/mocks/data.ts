@@ -272,6 +272,9 @@ const REPO_SEEDS: RepoSeed[] = [
   ['helm-charts', 'raw', 'hosted', 'Chart tarballs', 3.1 * GB],
   ['nuget-proxy', 'nuget', 'proxy', '', 9.8 * GB, 'online', { proxy: { remote_url: 'https://api.nuget.org', metadata_ttl: '1h0m0s', content_ttl: '0s', negative_cache_ttl: '10m0s' } }],
   ['pypi-all', 'pypi', 'group', '', 0, 'online', { group: { members: ['pypi-internal', 'pypi-ml', 'pypi-proxy'] } }],
+  ['internal-apt', 'apt', 'hosted', 'Internal Debian packages', 2.4 * GB],
+  ['internal-rpm', 'rpm', 'hosted', 'EL8 and EL9 packages', 3.6 * GB, 'online', { format: { repodata_depth: 2, signing_key: 'shared' } }],
+  ['go-proxy', 'go', 'proxy', '', 14 * GB, 'online', { proxy: { remote_url: 'https://proxy.golang.org', metadata_ttl: '30m0s', content_ttl: '0s', negative_cache_ttl: '10m0s' } }],
 ];
 
 /** Minutes since the last upload or download per repository; absent = no activity yet. */

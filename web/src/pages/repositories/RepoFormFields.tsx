@@ -19,6 +19,7 @@ import {
   type RepoFormField,
 } from '../../lib/repositories';
 import { ProxyChoice } from '../settings/ProxyChoice';
+import { FormatSettings } from './FormatFields';
 import { errorId, fieldId, invalidProps } from './repoFormHelpers';
 import './repoForm.css';
 
@@ -90,6 +91,8 @@ export function RepoSettingsFields({ form, selfName, set, setForm, errors, blur,
         {form.type === 'proxy' && <ProxySettings form={form} set={set} errors={errors} blur={blur} secretKept={secretKept} />}
 
         {form.type === 'group' && <GroupMembers form={form} selfName={selfName} setForm={setForm} set={set} errors={errors} />}
+
+        <FormatSettings form={form} set={set} errors={errors} blur={blur} />
 
         <div className="field">
           <label htmlFor="repo-cleanup" className="field__label">Cleanup policy</label>
