@@ -207,7 +207,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	}
 	a.onClose(rt.Close)
 	bus := events.NewBus(rt.Conn, log)
-	queue, err := events.NewQueue(ctx, rt.JS, events.QueueOptions{MaxAttempts: jobMaxAttempts}, log)
+	queue, err := events.NewQueue(ctx, rt.JS, events.QueueOptions{MaxAttempts: jobMaxAttempts, Replicas: cfg.NATS.Replicas}, log)
 	if err != nil {
 		return nil, err
 	}

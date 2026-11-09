@@ -124,8 +124,13 @@ type Server struct {
 	ReadHeaderTimeout time.Duration `yaml:"read_header_timeout"`
 	// IdleTimeout closes idle keep-alive connections.
 	IdleTimeout time.Duration `yaml:"idle_timeout"`
-	// ShutdownTimeout bounds graceful shutdown (draining in-flight uploads).
+	// ShutdownTimeout bounds graceful shutdown: the time in-flight requests
+	// (large uploads) get to finish once the listener stops, 1s to 24h.
 	ShutdownTimeout time.Duration `yaml:"shutdown_timeout"`
+	// DrainDelay is how long a node keeps serving after SIGTERM with /readyz
+	// failing before it stops accepting connections, so load balancers that
+	// poll /readyz take it out of rotation first; 0 (default) to 5m.
+	DrainDelay time.Duration `yaml:"drain_delay"`
 	// TrustedProxies are CIDRs whose X-Forwarded-For is honoured for client IPs.
 	TrustedProxies []string `yaml:"trusted_proxies"`
 	// NodeID names this process on the System status and System logs
@@ -159,6 +164,9 @@ type Storage struct {
 	S3   S3Storage `yaml:"s3"`
 	GC   GC        `yaml:"gc"`
 }
+
+// MaxDrainDelay is the longest accepted server.drain_delay.
+const MaxDrainDelay = 5 * time.Minute
 
 // MinGCGracePeriod is the shortest accepted storage.gc.grace_period. It must
 // exceed the Docker upload session lifetime (24h), or blobs of an upload that
@@ -208,6 +216,11 @@ type NATS struct {
 	DataDir string `yaml:"data_dir"`
 	// Listen exposes the embedded server on host:port; empty = in-process only.
 	Listen string `yaml:"listen"`
+	// Replicas of every JetStream stream Hangar creates (the job queue), 1
+	// to 5. Embedded NATS is a single server: 1. In a NATS cluster use 3 so
+	// queued jobs survive the loss of a NATS server. Changing it scales the
+	// existing stream on the next start.
+	Replicas int `yaml:"replicas"`
 }
 
 // HTTP configures outbound HTTP for proxy repositories (corporate networks).
@@ -271,6 +284,108 @@ type OSV struct {
 type Metrics struct {
 	Enabled bool   `yaml:"enabled"`
 	Path    string `yaml:"path"`
+	// Auth protects the endpoint: "none" (default), "bearer" (an
+	// Authorization: Bearer token) or "basic" (HTTP basic authentication).
+	Auth string `yaml:"auth"`
+	// BearerToken for auth=bearer, at least 16 characters; or
+	// BearerTokenFile, a file holding it (read on start).
+	BearerToken     string `yaml:"bearer_token"` // secret; masked by Redacted
+	BearerTokenFile string `yaml:"bearer_token_file"`
+	// Username and Password for auth=basic; the password (at least 16
+	// characters) may come from PasswordFile instead (read on start).
+	Username     string `yaml:"username"`
+	Password     string `yaml:"password"` // secret; masked by Redacted
+	PasswordFile string `yaml:"password_file"`
+	// AllowedCIDRs, if not empty, limits the endpoint to clients in these
+	// networks (CIDRs or IPs), in addition to Auth. The client address
+	// honours X-Forwarded-For only from server.trusted_proxies.
+	AllowedCIDRs []string `yaml:"allowed_cidrs"`
+}
+
+// Metrics authentication modes.
+const (
+	MetricsAuthNone   = "none"
+	MetricsAuthBearer = "bearer"
+	MetricsAuthBasic  = "basic"
+)
+
+// minMetricsSecret is the shortest accepted metrics token or password.
+const minMetricsSecret = 16
+
+// readFiles loads BearerToken and Password from their files.
+func (m *Metrics) readFiles() error {
+	var errs []error
+	for _, f := range []struct {
+		name, file string
+		value      *string
+	}{
+		{"metrics.bearer_token", m.BearerTokenFile, &m.BearerToken},
+		{"metrics.password", m.PasswordFile, &m.Password},
+	} {
+		if f.file == "" {
+			continue
+		}
+		if *f.value != "" {
+			errs = append(errs, fmt.Errorf("%s and %s_file are both set: use one", f.name, f.name))
+			continue
+		}
+		v, err := readSecretFile(f.file)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s_file: %w", f.name, err))
+			continue
+		}
+		*f.value = v
+	}
+	return errors.Join(errs...)
+}
+
+func (m *Metrics) validate() []error {
+	var errs []error
+	if m.Path == "" || !strings.HasPrefix(m.Path, "/") {
+		errs = append(errs, fmt.Errorf("metrics.path %q must start with /", m.Path))
+	}
+	m.Auth = strings.ToLower(strings.TrimSpace(m.Auth))
+	if m.Auth == "" {
+		m.Auth = MetricsAuthNone
+	}
+	switch m.Auth {
+	case MetricsAuthNone:
+		if m.BearerToken != "" || m.Username != "" || m.Password != "" {
+			errs = append(errs, errors.New("metrics.bearer_token, metrics.username or metrics.password is set but metrics.auth is none: set metrics.auth to bearer or basic"))
+		}
+	case MetricsAuthBearer:
+		if len(m.BearerToken) < minMetricsSecret {
+			errs = append(errs, fmt.Errorf("metrics.auth=bearer needs metrics.bearer_token (HANGAR_METRICS_BEARER_TOKEN) or metrics.bearer_token_file with at least %d characters", minMetricsSecret))
+		}
+		if m.Username != "" || m.Password != "" {
+			errs = append(errs, errors.New("metrics.username and metrics.password are for metrics.auth=basic"))
+		}
+	case MetricsAuthBasic:
+		if m.Username == "" || strings.Contains(m.Username, ":") {
+			errs = append(errs, errors.New("metrics.auth=basic needs metrics.username (without a colon)"))
+		}
+		if len(m.Password) < minMetricsSecret {
+			errs = append(errs, fmt.Errorf("metrics.auth=basic needs metrics.password (HANGAR_METRICS_PASSWORD) or metrics.password_file with at least %d characters", minMetricsSecret))
+		}
+		if m.BearerToken != "" {
+			errs = append(errs, errors.New("metrics.bearer_token is for metrics.auth=bearer"))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("metrics.auth %q: want none, bearer or basic", m.Auth))
+	}
+	for _, c := range m.AllowedCIDRs {
+		if !validCIDROrIP(c) {
+			errs = append(errs, fmt.Errorf("metrics.allowed_cidrs: %q is not a CIDR or IP", c))
+		}
+	}
+	return errs
+}
+
+func validCIDROrIP(s string) bool {
+	if _, _, err := net.ParseCIDR(s); err == nil {
+		return true
+	}
+	return net.ParseIP(s) != nil
 }
 
 // Observability configures tracing and the access log.
@@ -317,7 +432,7 @@ func Default() Config {
 		Storage: Storage{Kind: "fs", FS: FSStorage{Path: "./data/blobs"},
 			GC: GC{GracePeriod: 48 * time.Hour, BatchSize: 100, TempMaxAge: 24 * time.Hour}},
 		Auth: auth.DefaultConfig(),
-		NATS: NATS{Embedded: true, DataDir: "./data/nats"},
+		NATS: NATS{Embedded: true, DataDir: "./data/nats", Replicas: 1},
 		HTTP: HTTP{
 			UseEnvironment:      true,
 			ConnectTimeout:      10 * time.Second,
@@ -326,7 +441,7 @@ func Default() Config {
 			MaxIdleConns:        200,
 			MaxIdleConnsPerHost: 32,
 		},
-		Metrics:  Metrics{Enabled: true, Path: "/metrics"},
+		Metrics:  Metrics{Enabled: true, Path: "/metrics", Auth: MetricsAuthNone},
 		Scanning: Scanning{Enabled: true, RescanInterval: 24 * time.Hour, InUseWindow: 30 * 24 * time.Hour, OSV: OSV{URL: "https://api.osv.dev"}},
 		Security: DefaultSecurity(),
 		UI:       UI{ReadmeImages: "proxy"},
@@ -371,6 +486,9 @@ func Load(path string) (Config, error) {
 	if err := ApplyEnv(&cfg, os.LookupEnv); err != nil {
 		return cfg, err
 	}
+	if err := cfg.Metrics.readFiles(); err != nil {
+		return cfg, err
+	}
 	if err := cfg.Validate(); err != nil {
 		return cfg, err
 	}
@@ -392,6 +510,15 @@ func (c *Config) Validate() error {
 	c.Server.BaseURL = strings.TrimSuffix(c.Server.BaseURL, "/")
 	if c.Log.BufferSize < 100 || c.Log.BufferSize > 100000 {
 		errs = append(errs, fmt.Errorf("log.buffer_size %d: want 100 to 100000", c.Log.BufferSize))
+	}
+	if t := c.Server.ShutdownTimeout; t < time.Second || t > 24*time.Hour {
+		errs = append(errs, fmt.Errorf("server.shutdown_timeout %s: want 1s to 24h", t))
+	}
+	if d := c.Server.DrainDelay; d < 0 || d > MaxDrainDelay {
+		errs = append(errs, fmt.Errorf("server.drain_delay %s: want 0 to %s", d, MaxDrainDelay))
+	}
+	if n := c.Database.MaxConns; n != 0 && n < 2 {
+		errs = append(errs, fmt.Errorf("database.max_conns %d: want at least 2 (schema migrations hold one connection for their lock)", n))
 	}
 	if len(c.Server.NodeID) > 128 {
 		errs = append(errs, errors.New("server.node_id: at most 128 characters"))
@@ -428,8 +555,14 @@ func (c *Config) Validate() error {
 		if c.NATS.DataDir == "" {
 			errs = append(errs, errors.New("nats.data_dir is required for embedded NATS"))
 		}
+		if c.NATS.Replicas != 1 {
+			errs = append(errs, fmt.Errorf("nats.replicas %d: embedded NATS is a single server, use 1 (or an external NATS cluster)", c.NATS.Replicas))
+		}
 	} else if c.NATS.URL == "" {
 		errs = append(errs, errors.New("nats.url is required when nats.embedded=false"))
+	}
+	if c.NATS.Replicas < 1 || c.NATS.Replicas > 5 {
+		errs = append(errs, fmt.Errorf("nats.replicas %d: want 1 to 5", c.NATS.Replicas))
 	}
 	if c.HTTP.Proxy != "" {
 		u, err := url.Parse(c.HTTP.Proxy)
@@ -452,9 +585,7 @@ func (c *Config) Validate() error {
 	if c.Log.Format != "json" && c.Log.Format != "text" {
 		errs = append(errs, fmt.Errorf("log.format %q: want json or text", c.Log.Format))
 	}
-	if c.Metrics.Path == "" || !strings.HasPrefix(c.Metrics.Path, "/") {
-		errs = append(errs, fmt.Errorf("metrics.path %q must start with /", c.Metrics.Path))
-	}
+	errs = append(errs, c.Metrics.validate()...)
 	errs = append(errs, c.Security.validate()...)
 	switch c.UI.ReadmeImages = strings.ToLower(strings.TrimSpace(c.UI.ReadmeImages)); c.UI.ReadmeImages {
 	case "":
@@ -605,7 +736,7 @@ func setValue(v reflect.Value, raw string) error {
 // Redacted returns a copy safe to log: secrets and URL passwords masked.
 func (c Config) Redacted() Config {
 	for _, p := range []*string{&c.Storage.S3.SecretAccessKey, &c.Storage.S3.SessionToken, &c.Docker.TokenKey, &c.Bootstrap.AdminPassword,
-		&c.Auth.OIDC.ClientSecret, &c.Auth.LDAP.BindPassword} {
+		&c.Auth.OIDC.ClientSecret, &c.Auth.LDAP.BindPassword, &c.Metrics.BearerToken, &c.Metrics.Password} {
 		if *p != "" {
 			*p = "REDACTED"
 		}
