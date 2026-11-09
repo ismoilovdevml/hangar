@@ -187,6 +187,10 @@ curl -H "$H" -X POST "$API/repositories/npm-proxy/cache:invalidate"
 # -> {"repository":"npm-proxy","negative_entries":3,"rate_limited_hosts":0}
 ```
 
+A hosted repository created without `write_policy` gets `allow_once` (published
+versions cannot be replaced by different bytes; `docker` gets `allow`, so tags
+can move). An update without `write_policy` keeps the stored policy.
+
 Creating, updating, deleting and cache invalidation need `system:repos:admin` or
 `repo:<name>:admin`. The JSON shape of each format and type is shown in the client
 guides. The YAML returned by `Accept: application/yaml` can be sent back with

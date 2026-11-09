@@ -16,8 +16,11 @@
 // packages change: Packages, Packages.gz and Packages.xz per distribution,
 // component and architecture ("Architecture: all" packages are listed
 // under every architecture), and a Release file with MD5Sum, SHA1, SHA256
-// and SHA512 sections. InRelease and Release.gpg are signed on request
-// with the repository key (package signing).
+// and SHA512 sections and Acquire-By-Hash: yes; every index is also stored
+// under by-hash/SHA256/ and by-hash/SHA512/, and superseded by-hash files
+// stay for ByHashGrace. A repository without packages serves an empty
+// distribution. InRelease and Release.gpg are signed on request with the
+// repository key (package signing).
 //
 // Proxy repositories mirror a remote archive (http://deb.debian.org/debian,
 // http://archive.ubuntu.com/ubuntu). InRelease, Release and Release.gpg are

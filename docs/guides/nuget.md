@@ -33,8 +33,10 @@ curl -X POST https://hangar.example.com/api/v1/repositories \
 
 `config.format.delete_mode`: `unlist` (default; `dotnet nuget delete` hides the
 version from search but keeps it restorable) or `delete` (removes it). With
-`allow_once`, pushing a different package with an existing id and version gets
-`409`.
+`allow_once` (the default for repositories created without a policy) or `deny`,
+pushing an id and version that already exist gets `409`, also with identical
+bytes, as on nuget.org; `dotnet nuget push --skip-duplicate` skips it. With
+`allow` the package is replaced and keeps its listed or unlisted state.
 
 ### Proxy (nuget.org)
 
@@ -166,6 +168,26 @@ with the token in `X-NuGet-ApiKey`.
 
 Permissions: push needs `repo:<name>:write`, unlist needs `delete` and `write`,
 relist needs `write`.
+
+## Quarantine and NuGet Audit
+
+A version quarantined by a security policy is left out of the version list,
+the registration and search of the repository and of the groups containing it,
+so `dotnet` resolves floating versions and ranges to a version it can
+download; its `.nupkg` answers `403`.
+
+Every repository advertises a `VulnerabilityInfo/6.7.0` resource, which NuGet
+Audit reads during `dotnet restore` (warnings `NU1901` to `NU1904`):
+
+- a hosted repository serves the open findings of this server's vulnerability
+  scans on its packages (only when scanning is enabled; waived and fixed
+  findings are left out);
+- a proxy passes the remote's vulnerability pages through, cached for the
+  metadata TTL (nuget.org publishes them);
+- a group lists the pages of its members.
+
+Audit settings are the client's: `<NuGetAudit>`, `<NuGetAuditMode>all</NuGetAuditMode>`
+for transitive packages, `<NuGetAuditLevel>`.
 
 ## Routing rules
 

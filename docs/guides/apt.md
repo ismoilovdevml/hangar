@@ -227,13 +227,21 @@ version, the fix plan suggests `apt-get install --only-upgrade <packages>`.
 Until the release is known the packages show "No advisory source". Details:
 [vulnerabilities.md](vulnerabilities.md#apt-and-rpm-distribution-releases).
 
+## Index updates and empty repositories
+
+Hosted and group `Release` files declare `Acquire-By-Hash: yes`, and every
+`Packages` file is also served at `by-hash/SHA256/<digest>` and
+`by-hash/SHA512/<digest>` in its directory. apt fetches indexes by hash, so an
+`apt-get update` that reads `InRelease` just before an upload still finds the
+indexes it names: superseded by-hash files are kept for an hour. A repository
+without packages (before the first upload, or after the last delete) serves a
+signed, empty distribution with the `main` component and the configured
+architectures, for any distribution name, instead of `404`.
+
 ## Limits
 
 - Only binary packages (`.deb`) are indexed. Source packages and `Contents-*`
   files are not generated.
-- Hosted `Release` files do not set `Acquire-By-Hash`. A client whose
-  `apt-get update` runs at the same moment as an upload can see a hash mismatch;
-  the next update succeeds.
 - Packages themselves are not re-signed (Debian packages are rarely signed
   individually; the signed `Release` covers them through the hashes).
 
