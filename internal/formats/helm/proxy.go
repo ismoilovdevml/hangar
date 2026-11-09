@@ -203,7 +203,7 @@ func (h *handler) parseUpstream(ctx context.Context, repo *core.Repository, body
 	}
 	for key, list := range doc.Entries {
 		if list.Kind != yaml.SequenceNode {
-			if list.Kind != 0 && !(list.Kind == yaml.ScalarNode && list.Tag == "!!null") {
+			if list.Kind != 0 && (list.Kind != yaml.ScalarNode || list.Tag != "!!null") {
 				skip(key, list.Line, "not a list of chart versions")
 			}
 			continue

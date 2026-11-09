@@ -133,7 +133,7 @@ func (h *handler) audit(w http.ResponseWriter, r *http.Request, repo *core.Repos
 
 // readAuditBody reads the (possibly gzip-encoded, as npm sends it) body.
 func readAuditBody(r *http.Request) ([]byte, error) {
-	var rd io.Reader = io.LimitReader(r.Body, maxAuditBody)
+	rd := io.LimitReader(r.Body, maxAuditBody)
 	if strings.EqualFold(strings.TrimSpace(r.Header.Get("Content-Encoding")), "gzip") {
 		gz, err := gzip.NewReader(rd)
 		if err != nil {
@@ -454,7 +454,7 @@ func (h *handler) auditHosted(ctx context.Context, p *auditPlan, res *auditResul
 			more = fmt.Sprintf(" and %d more", len(pending)-5)
 			pending = pending[:5]
 		}
-		return fmt.Errorf("Hangar has no vulnerability scan result for %s%s; scan the repository or try again later: %w",
+		return fmt.Errorf("no vulnerability scan result in Hangar for %s%s; scan the repository or try again later: %w",
 			strings.Join(pending, ", "), more, errAuditUnavailable)
 	}
 	sort.Strings(order)
@@ -507,7 +507,7 @@ func findingAdvisory(f *scanning.Finding, installed []string) (*bulkAdvisory, er
 func advisoryNumber(id string) int64 {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(id))
-	return int64(h.Sum64() & (1<<53 - 1)) //nolint:gosec // masked to 53 bits
+	return int64(h.Sum64() & (1<<53 - 1))
 }
 
 func joinRange(r, v string) string {
@@ -523,10 +523,10 @@ func npmRange(affected string) string {
 	var sets []string
 	for _, part := range strings.Split(affected, ";") {
 		part = strings.TrimSpace(part)
-		switch {
-		case part == "":
+		switch part {
+		case "":
 			continue
-		case part == "all versions":
+		case "all versions":
 			return "*"
 		}
 		sets = append(sets, strings.Join(strings.Fields(strings.ReplaceAll(part, ",", " ")), " "))

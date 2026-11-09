@@ -316,7 +316,11 @@ func TestRealNpmAudit(t *testing.T) {
 			Vulnerabilities map[string]int `json:"vulnerabilities"`
 		} `json:"metadata"`
 	}
-	if err := json.Unmarshal([]byte(out[strings.Index(out, "{"):]), &rep); err != nil {
+	i := strings.Index(out, "{")
+	if i < 0 {
+		t.Fatalf("npm audit --json printed no JSON:\n%s", out)
+	}
+	if err := json.Unmarshal([]byte(out[i:]), &rep); err != nil {
 		t.Fatalf("npm audit --json: %v\n%s", err, out)
 	}
 	if rep.Vulnerabilities["lodash"].Severity != "high" || rep.Vulnerabilities["@acme/ui"].Severity != "critical" ||
