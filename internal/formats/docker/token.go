@@ -62,6 +62,19 @@ type tokenClaims struct {
 	Principal  tokenPrincipal   `json:"hgr"`
 	// Scanner marks a token issued to the image scanner (ScanToken).
 	Scanner bool `json:"scan,omitempty"`
+	// ChainExpiresAt is when the credentials this token was first issued
+	// for stop being renewable: renewing a token with itself never moves
+	// the expiry past it. Zero in tokens of older versions, which means
+	// ExpiresAt.
+	ChainExpiresAt int64 `json:"cexp,omitempty"`
+}
+
+// chainExpiry is the latest expiry a renewal of c may have.
+func (c *tokenClaims) chainExpiry() int64 {
+	if c.ChainExpiresAt > 0 {
+		return c.ChainExpiresAt
+	}
+	return c.ExpiresAt
 }
 
 var jwtHeader = base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))

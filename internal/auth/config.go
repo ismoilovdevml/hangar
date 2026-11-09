@@ -68,12 +68,21 @@ type Argon2Params struct {
 // for a server: 64 MiB, 3 passes, 2 lanes.
 var DefaultArgon2 = Argon2Params{Memory: 64 * 1024, Iterations: 3, Parallelism: 2, SaltLength: 16, KeyLength: 32}
 
-// Lockout locks an account after MaxAttempts failed password attempts within
-// Window, for Duration.
+// Lockout stops password guessing. A username is locked out for one client
+// address after MaxAttempts failed attempts from that address within Window,
+// for Duration; other addresses can still sign in, so nobody can lock an
+// account for everyone. Failures from all addresses together only slow the
+// username down: from SlowdownAfter failures within Window on, every attempt
+// waits first, doubling from a quarter second up to MaxDelay.
 type Lockout struct {
-	MaxAttempts int           `yaml:"max_attempts"` // 0 disables lockout
+	MaxAttempts int           `yaml:"max_attempts"` // negative disables lockout
 	Window      time.Duration `yaml:"window"`
 	Duration    time.Duration `yaml:"duration"`
+	// SlowdownAfter: failures of a username from all addresses within
+	// Window before attempts are slowed down (0: default, negative: never).
+	SlowdownAfter int `yaml:"slowdown_after"`
+	// MaxDelay caps the slow-down (0: default).
+	MaxDelay time.Duration `yaml:"max_delay"`
 }
 
 // SessionConfig configures cookie sessions.
@@ -104,7 +113,7 @@ func DefaultConfig() Config {
 		Argon2:              DefaultArgon2,
 		MaxConcurrentHashes: 4,
 		Password:            DefaultPasswordPolicy,
-		Lockout:             Lockout{MaxAttempts: 5, Window: 15 * time.Minute, Duration: 15 * time.Minute},
+		Lockout:             Lockout{MaxAttempts: 5, Window: 15 * time.Minute, Duration: 15 * time.Minute, SlowdownAfter: 10, MaxDelay: 4 * time.Second},
 		Session: SessionConfig{
 			TTL:            12 * time.Hour,
 			RememberTTL:    30 * 24 * time.Hour,
@@ -156,6 +165,12 @@ func (c Config) WithDefaults() Config {
 	}
 	if c.Lockout.Duration == 0 {
 		c.Lockout.Duration = d.Lockout.Duration
+	}
+	if c.Lockout.SlowdownAfter == 0 {
+		c.Lockout.SlowdownAfter = d.Lockout.SlowdownAfter
+	}
+	if c.Lockout.MaxDelay <= 0 {
+		c.Lockout.MaxDelay = d.Lockout.MaxDelay
 	}
 	s := &c.Session
 	if s.TTL == 0 {

@@ -67,12 +67,40 @@ their roles, tokens, sessions and effective permissions.
 - **Deleting** removes the account with its tokens, sessions and role
   bindings. The audit log keeps the history.
 - **Reset password** clears any lockout and ends all of the member's
-  sessions. Administrators change their *own* password under My account,
-  which requires the current password.
+  sessions. The member must choose a new password at the next sign-in.
+  Administrators change their *own* password under My account, which
+  requires the current password.
 - You cannot disable, delete or reset the password of your own account.
+- **Locked** means some client address is locked out after repeated wrong
+  passwords; the member can still sign in from elsewhere. **Unlock** clears
+  it for every address.
 
 Required privileges: `system:users:read` to list and view, `system:users:write`
 to change, `system:users:delete` to delete.
+
+### Delegating administration
+
+You can give a helpdesk or team lead part of the administration, but never
+more than they hold themselves:
+
+- Roles, role bindings and members created with roles may only carry
+  privileges the caller's own privileges cover. A helpdesk role with
+  `system:users:read` and `system:users:write` can create members without
+  roles or with roles made of those two privileges; to hand out **Reader**
+  it needs `repo:*:read` too.
+- Changing another account (password, disable, enable, edit, delete,
+  require a password change, sign out) needs covering everything that
+  account holds. Only holders of `system:*` manage administrators.
+- `system:tokens:write` issues tokens for a service account only when the
+  caller covers that account's roles.
+- A group can only list members the caller may read (also through nested
+  groups), a write member the caller may write to, and be opened to
+  anonymous readers by someone who may read everything in it. A team lead
+  with `repo:team-*:admin` can build `team-*` groups over team repositories,
+  not over `finance`.
+
+Refusals answer `403` and are audited with what was missing. See
+[docs/security.md](../security.md#privilege-escalation-model).
 
 ## Service accounts
 
@@ -205,9 +233,11 @@ auth:
   password:
     min_length: 12
   lockout:
-    max_attempts: 5              # failed sign-ins (and wrong current passwords)
+    max_attempts: 5              # failed sign-ins per address (and wrong current passwords)
     window: 15m
-    duration: 15m
+    duration: 15m                # the address is locked out this long
+    slowdown_after: 10           # failures from all addresses before attempts wait
+    max_delay: 4s                # longest wait
   session:
     ttl: 12h
     remember_ttl: 720h

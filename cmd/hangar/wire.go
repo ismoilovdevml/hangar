@@ -280,7 +280,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	a.onClose(func() { _ = signWatch.Unsubscribe() })
 
 	// Formats (repositories validate against them).
-	reg, err := builtin.RegistryWith(builtin.Options{Docker: docker.Options{TokenKey: []byte(cfg.Docker.TokenKey)}, Signing: signer})
+	reg, err := builtin.RegistryWith(builtin.Options{Docker: docker.Options{TokenKey: []byte(cfg.Docker.TokenKey), Reload: authSvc.ReloadPrincipal}, Signing: signer})
 	if err != nil {
 		return nil, err
 	}
@@ -528,6 +528,14 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	})
 	if err != nil {
 		return nil, err
+	}
+	if cfg.Metrics.Enabled && !metricsAuth.RequiresCredentials() && len(cfg.Metrics.AllowedCIDRs) == 0 {
+		log.Warn("metrics: "+cfg.Metrics.Path+" is open to anyone and names every repository; "+
+			"set metrics.auth (bearer or basic) or metrics.allowed_cidrs (docs/operations/monitoring.md)",
+			"path", cfg.Metrics.Path)
+	}
+	if cfg.Server.DevMode {
+		log.Warn("server.dev_mode is set: the public development keys are accepted; never use it in production")
 	}
 	a.router = server.NewRouter(server.RouterOptions{
 		Logger: log, Metrics: metrics, MetricsPath: metricsPath, MetricsAuth: metricsAuth,

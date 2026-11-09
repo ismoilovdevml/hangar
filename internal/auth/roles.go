@@ -132,6 +132,9 @@ func (s *Service) CreateRole(ctx context.Context, in RoleInput) (*Role, error) {
 	if err := in.validate(); err != nil {
 		return nil, err
 	}
+	if err := s.requireCovers(ctx, AuditRoleCreate, "role:"+in.Name, "role "+in.Name, in.Privileges); err != nil {
+		return nil, err
+	}
 	var out *Role
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
 		var id string
@@ -164,6 +167,14 @@ func (s *Service) UpdateRole(ctx context.Context, name string, in RoleInput) (*R
 		return nil, err
 	}
 	if err := in.validate(); err != nil {
+		return nil, err
+	}
+	// Changing a role changes what its holders may do: the caller must
+	// cover both what it grants now and what it will grant.
+	if err := s.requireCovers(ctx, AuditRoleUpdate, "role:"+in.Name, "role "+in.Name, in.Privileges); err != nil {
+		return nil, err
+	}
+	if err := s.requireCoversRoles(ctx, AuditRoleUpdate, "role:"+name, []string{name}); err != nil {
 		return nil, err
 	}
 	var out *Role
@@ -201,6 +212,9 @@ func (s *Service) UpdateRole(ctx context.Context, name string, in RoleInput) (*R
 // DeleteRole deletes a custom role and its bindings (system:users:delete).
 func (s *Service) DeleteRole(ctx context.Context, name string) error {
 	if err := s.require(ctx, AuditRoleDelete, core.ActionDelete, core.SystemResource(core.SystemUsers)); err != nil {
+		return err
+	}
+	if err := s.requireCoversRoles(ctx, AuditRoleDelete, "role:"+name, []string{name}); err != nil {
 		return err
 	}
 	var builtin bool
@@ -290,6 +304,10 @@ func (s *Service) changeBinding(ctx context.Context, role, userID string, bind b
 		action = AuditRoleBind
 	}
 	if err := s.require(ctx, action, core.ActionWrite, core.SystemResource(core.SystemUsers)); err != nil {
+		return err
+	}
+	// Granting or removing a role needs what the role grants.
+	if err := s.requireCoversRoles(ctx, action, "role:"+role, []string{role}); err != nil {
 		return err
 	}
 	var u *User

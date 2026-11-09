@@ -382,7 +382,7 @@ func (h *handler) writeError(w http.ResponseWriter, r *http.Request, err error) 
 		h.log.WarnContext(r.Context(), "auth api: directory unavailable", "path", r.URL.Path, "error", err)
 		writeErrorBody(w, http.StatusServiceUnavailable, "unavailable", "the directory cannot be reached; try again later", 0)
 	case errors.As(err, &locked):
-		writeErrorBody(w, http.StatusLocked, "locked", "account is locked after repeated failed sign-ins", locked.RetryAfter(h.svc.Now()))
+		writeErrorBody(w, http.StatusLocked, "locked", "too many failed sign-ins from this address; try again later", locked.RetryAfter(h.svc.Now()))
 	case errors.As(err, &limited):
 		writeErrorBody(w, http.StatusTooManyRequests, "rate_limited", limited.Error(), limited.wait)
 	case errors.Is(err, core.ErrUnauthenticated):

@@ -188,12 +188,18 @@ auth:
     min_classes: 0
     # Allow passwords that contain the user name.
     allow_username: false
-  # Lock an account after max_attempts failed passwords within window, for
-  # duration. A negative max_attempts disables lockout.
+  # Lock a username out for one client address after max_attempts failed
+  # passwords from that address within window, for duration; other addresses
+  # can still sign in. A negative max_attempts disables lockout. From
+  # slowdown_after failures of a username from all addresses within window,
+  # each further attempt waits first (a quarter second, doubling, at most
+  # max_delay); a negative slowdown_after disables the slow-down.
   lockout:
     max_attempts: 5
     window: 15m
     duration: 15m
+    slowdown_after: 10
+    max_delay: 4s
   # Browser sessions.
   session:
     ttl: 12h

@@ -73,6 +73,9 @@ func (s *Service) EnsureBootstrapAdmin(ctx context.Context, username, password s
 				WHERE id = $1`, userID, hash, requireChange); err != nil {
 				return dbErr(err, "promote administrator")
 			}
+			if err := s.clearSignInFailures(ctx, tx, username); err != nil {
+				return err
+			}
 		}
 		_, err = tx.Exec(ctx, `
 			INSERT INTO role_bindings (role_id, subject_kind, user_id)

@@ -65,7 +65,7 @@ func newFixture(t *testing.T) *fixture {
 		audit:  coretest.NewAuditLog(),
 		events: coretest.NewEventBus(),
 	}
-	f.authz.Grant("admin", "system:repos:admin")
+	f.authz.Grant("admin", "system:repos:admin", "repo:*:admin")
 	keys, err := secrets.NewKeyring(testKey, nil)
 	if err != nil {
 		t.Fatal(err)

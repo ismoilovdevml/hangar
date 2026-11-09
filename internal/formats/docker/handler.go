@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,6 +28,8 @@ type handler struct {
 	quarantine quarantineCache
 	// conns routes connector hosts and ports (connectors.go).
 	conns *connectors
+	// reload is Options.Reload.
+	reload func(ctx context.Context, p *core.Principal) (*core.Principal, error)
 }
 
 // authResult is who sent a request and, for registry tokens, what the token grants.

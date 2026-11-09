@@ -36,6 +36,12 @@ func newTestReg(t *testing.T) *testReg { return newTestRegWith(t, nil) }
 // newTestRegWith is newTestReg with a hook that may replace dependencies.
 func newTestRegWith(t *testing.T, adjust func(*core.Deps)) *testReg {
 	t.Helper()
+	return newTestRegOpts(t, adjust, nil)
+}
+
+// newTestRegOpts is newTestRegWith with a hook that may change the format options.
+func newTestRegOpts(t *testing.T, adjust func(*core.Deps), adjustOpts func(*docker.Options)) *testReg {
+	t.Helper()
 	env := coretest.NewEnv(t)
 	tr := &testReg{t: t, env: env, now: time.Now()}
 	var h http.Handler
@@ -53,10 +59,14 @@ func newTestRegWith(t *testing.T, adjust func(*core.Deps)) *testReg {
 	if adjust != nil {
 		adjust(&deps)
 	}
-	tr.format = docker.NewWithOptions(docker.Options{
+	opts := docker.Options{
 		TokenKey: []byte(testKey),
 		Now:      func() time.Time { return tr.now },
-	})
+	}
+	if adjustOpts != nil {
+		adjustOpts(&opts)
+	}
+	tr.format = docker.NewWithOptions(opts)
 	h = formats.NewHandler(deps, tr.format)
 	return tr
 }

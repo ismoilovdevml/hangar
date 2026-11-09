@@ -124,6 +124,9 @@ services:
       HANGAR_STORAGE_S3_BUCKET: hangar
       HANGAR_STORAGE_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-hangar}
       HANGAR_STORAGE_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-hangar-secret}
+      # Development only: lets the server start with the public keys below.
+      # A server without it refuses them.
+      HANGAR_SERVER_DEV_MODE: "true"
       # Development only: stable registry tokens and stored-secret encryption.
       HANGAR_DOCKER_TOKEN_KEY: ${HANGAR_DOCKER_TOKEN_KEY:-dev-only-token-key-change-me-0123456789abcdef}
       # 32 bytes, base64; development only.

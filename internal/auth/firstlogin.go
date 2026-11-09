@@ -127,6 +127,9 @@ func (s *Service) RequirePasswordChange(ctx context.Context, id string) (*User, 
 		if u, err = s.lockUser(ctx, tx, id); err != nil {
 			return err
 		}
+		if err := s.requireCoversUser(ctx, AuditUserPasswordRequire, u); err != nil {
+			return err
+		}
 		if u.Kind != KindUser || u.Source != SourceLocal || u.passwordHash == "" {
 			return fmt.Errorf("user %q has no local password (%s %s): %w", u.Username, u.Source, u.Kind, core.ErrInvalid)
 		}
@@ -177,6 +180,9 @@ func (s *Service) ResetPasswordOneTime(ctx context.Context, username string) (st
 				failed_window_start = NULL, locked_until = NULL, must_change_password = true, updated_at = now()
 			WHERE id = $1`, u.ID, hash); err != nil {
 			return dbErr(err, "reset password")
+		}
+		if err := s.clearSignInFailures(ctx, tx, u.Username); err != nil {
+			return err
 		}
 		ended, err = endSessions(ctx, tx, u.ID, "")
 		return err

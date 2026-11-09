@@ -140,6 +140,11 @@ func (s *Service) authorizeUserSessions(ctx context.Context, userID, auditAction
 	if err != nil {
 		return "", err
 	}
+	if action != core.ActionRead {
+		if err := s.requireCoversUser(ctx, auditAction, u); err != nil {
+			return "", err
+		}
+	}
 	return u.Username, nil
 }
 

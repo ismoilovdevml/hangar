@@ -9,17 +9,87 @@ an operator must configure, and how to report a vulnerability
 | Asset | Threat | Control |
 |---|---|---|
 | Private packages | Read or overwrite by a caller without rights | Every API operation and package endpoint authorizes the principal (`repo:<name>:read/write/delete/admin`, `system:*`); token scopes narrow a user's roles. Enforced twice: at the HTTP boundary and in the services that mutate. Checked end to end by `test/security` (below). |
-| Accounts | Password guessing, credential stuffing, token guessing | argon2id hashes, per-account lockout, per-IP login rate limit, per-IP limit on failed authentications on the API and package endpoints, tokens with 238 bits of entropy and a checksum, stored as SHA-256. |
+| Accounts | Password guessing, credential stuffing, token guessing, account enumeration | argon2id hashes, lockout per username and client address with a per-username slow-down (below), the same answer for names with and without an account, per-IP login rate limit, per-IP limit on failed authentications on the API and package endpoints, tokens with 238 bits of entropy and a checksum, stored as SHA-256. |
 | Browser sessions | CSRF, XSS, clickjacking, session theft through uploaded content | `HttpOnly`/`Secure`/`SameSite` session cookie, CSRF token on mutations, origin check, CORS deny-by-default, CSP for the UI, sandboxed CSP for everything served from package endpoints, `X-Frame-Options: DENY`, `frame-ancestors 'none'`, `nosniff`. |
 | Single sign-on | Login CSRF, code interception, token substitution, account takeover by name | OIDC authorization code flow with PKCE (S256); state, nonce and verifier in a short-lived AES-GCM encrypted `HttpOnly` cookie (key derived from `security.secret_key`); ID token signature, issuer, audience, expiry and nonce verified; same-origin post-login redirects only. External identities are linked by issuer and subject and never take over a local, service or other external account. LDAP: filter values escaped, exactly one entry required, empty passwords refused (no anonymous bind). |
 | Upstream credentials and S3 keys | Disclosure through a database dump, backup, read-only SQL access or the API | Envelope encryption at rest (below); never returned by the API; opened only when the outbound client or the storage driver is built; never sent to redirect targets. |
 | Internal network | Server-side request forgery through proxy repositories and README images | Outbound address policy: loopback, private, link-local (cloud metadata), CGNAT, multicast, reserved and IPv4-embedding IPv6 ranges are refused when a proxy is saved, on every redirect hop and when a connection is dialled. Only `http.allow_private_networks` opens exceptions. |
 | Availability | Slow-header, slow-body and oversized requests, API floods | `server.read_header_timeout`, body idle timeout, header and API body limits, per-IP API rate limit; uploads are streamed, never buffered. |
+| Rights | A limited administrator widening their own rights or taking over an account | Grants and account changes are limited to what the caller holds; groups expose only what their creator may read (below). Registry tokens are not credentials: renewing one reloads the account. |
 | Audit trail | Repudiation | Every mutation, denial and failed sign-in is recorded in the append-only audit log with the client IP (forwarding headers honoured only from `server.trusted_proxies`). |
 
 Out of scope: an attacker who can write to the database or read the
 server's environment (they hold the secret key, and can redirect a proxy to
 their own host); a compromised host or reverse proxy.
+
+## Privilege escalation model
+
+Administration is split into privileges (`system:users:write`,
+`system:tokens:write`, `repo:<pattern>:admin`, ...), so it can be delegated.
+Delegation never lets a caller go beyond what they hold:
+
+- **Covering.** Creating, changing or deleting a role, binding or removing a
+  role, and creating a member with roles need the caller to *cover* every
+  privilege involved: each one must be implied by one of the caller's own
+  effective privileges (roles narrowed by the token's scopes).
+  `repo:team-*:read` covers `repo:team-a:read`; `repo:*:admin` covers every
+  repository action; two narrower privileges never add up to a wider one.
+- **Acting on an account.** Setting or resetting a member's password,
+  disabling or enabling, editing, deleting, requiring a password change and
+  ending sessions of another account need `system:users:write` (or `delete`)
+  *and* covering everything that account holds. A helpdesk role with
+  `system:users:write` can therefore manage accounts without roles, but not
+  a Reader, and never an administrator: only holders of `system:*` manage
+  holders of `system:*`.
+- **Service-account tokens.** `system:tokens:write` issues a token for a
+  service account only when the caller covers that account's privileges.
+- **Passwords set by someone else** must be replaced at the next sign-in
+  (`must_change_password`): the administrator who typed it does not keep a
+  working password of the account.
+- **Groups.** A group serves its members to everyone who may read the
+  group, so adding a member needs `repo:<member>:read` for the member and
+  every repository a nested group member reaches; a write member needs
+  `repo:<member>:write`; turning on anonymous read of a group needs read on
+  everything it reaches. Holders of `system:repos:admin` may create any
+  repository but are held to the same rule. Routing rules only narrow what
+  members serve. A cross-repository blob mount needs pull on the source,
+  which for a group is the same rule. Every refusal is audited with the
+  repository or privilege the caller lacks.
+- **Registry tokens.** `/v2/token` does not treat a registry token as a
+  credential. Presented there, it is renewed only after the account is
+  reloaded from the database (it must exist, be enabled, not be waiting for
+  a password change; a token it came from must still be live and its
+  address restrictions met; roles are the current ones), and the renewed
+  token never expires later than the first token of the chain. There are no
+  refresh tokens (`offline_token` is ignored, `grant_type=refresh_token` is
+  refused). A registry token already issued keeps the roles it was issued
+  with until it expires (15 minutes).
+
+Groups created before this rule by someone who could not read a member are
+not changed; review group members after upgrading (see the changelog).
+
+## Sign-in lockout
+
+- Failed password checks are counted per **(username, client address)**.
+  After `auth.lockout.max_attempts` (5) failures within `window` (15m) that
+  address is locked out of that username for `duration` (15m) and gets `423`
+  with `Retry-After`. Other addresses can still sign in, so nobody can lock
+  an administrator out by guessing from their own machine.
+- Failures from **all** addresses for a username only slow it down: from
+  `slowdown_after` (10) failures within the window every further attempt
+  waits first, a quarter second doubling up to `max_delay` (4s). It never
+  locks.
+- Counting is the same for names that have no account, disabled accounts and
+  accounts without a local password, and the answers are the same (`401`
+  `invalid username or password`, then `423`). Every refused name spends one
+  password verification's time; a locked-out attempt spends none. Answers
+  therefore do not tell which usernames exist.
+- Wrong current passwords on **My account** count the same way. A correct
+  password ends the count for that address; **Unlock**, a password reset and
+  a password change clear it for every address. The members list shows an
+  account as `locked` while at least one address is locked out of it.
+- The per-IP login rate limit (`auth.login_rate`) and the failed
+  authentication limit (`security.rate_limit.failed_auth`) still apply.
 
 ## How secrets and tokens are stored
 
@@ -197,7 +267,10 @@ The image endpoint is not an open proxy:
   hosted repositories and a group and a proxy over them. Any answer that
   serves a caller who must be refused fails the build. An API operation or
   format route that is not classified in the test fails it too.
-- Privilege escalation through tokens, roles and the registry token service.
+- Privilege escalation through tokens, roles and the registry token service;
+  group membership escalation (a repository administrator cannot expose a
+  repository they cannot read); a helpdesk role cannot take over an
+  administrator; a disabled user cannot renew a registry token.
 - SSRF: remotes at loopback, `169.254.169.254`, private and IPv6-mapped
   addresses are refused; rows that bypass that check are blocked when
   fetched; redirects to internal addresses or other schemes are not followed.

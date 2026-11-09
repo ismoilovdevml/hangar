@@ -209,6 +209,7 @@ func TestServerConfigLoads(t *testing.T) {
 		"database.url":           "postgres://hangar:pw@postgres:5432/hangar?sslmode=disable\n",
 		"postgres-password":      "pw\n",
 		"initial-admin-password": "abcde-fghjk-mnpqr-stuvw\n",
+		"metrics.bearer_token":   "0123456789abcdef0123456789abcdef\n",
 	} {
 		if err := os.WriteFile(filepath.Join(secrets, name), []byte(body), 0o600); err != nil {
 			t.Fatal(err)
@@ -249,6 +250,10 @@ func TestServerConfigLoads(t *testing.T) {
 	}
 	if cfg.Security.SecretKey == "" || cfg.Docker.TokenKey == "" {
 		t.Error("secret key or token key not read from secrets/")
+	}
+	// New installations protect /metrics with the generated token.
+	if !cfg.Metrics.Enabled || cfg.Metrics.Auth != config.MetricsAuthBearer || cfg.Metrics.BearerToken != "0123456789abcdef0123456789abcdef" {
+		t.Errorf("metrics = %+v, want bearer with the token of secrets/", cfg.Redacted().Metrics)
 	}
 	// The first administrator comes from the server's one-time password
 	// file, never from environment bootstrap.

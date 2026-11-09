@@ -83,6 +83,9 @@ type Options struct {
 	Logger              *slog.Logger
 	// Now overrides the clock (tests).
 	Now func() time.Time
+	// Sleep overrides how the sign-in slow-down waits (tests); it returns
+	// the context's error when it ends first.
+	Sleep func(ctx context.Context, d time.Duration) error
 }
 
 // Service is the authentication and authorization core. It implements
@@ -94,6 +97,7 @@ type Service struct {
 	events core.EventBus
 	log    *slog.Logger
 	now    func() time.Time
+	sleep  func(ctx context.Context, d time.Duration) error
 
 	// ext holds the sign-in providers in effect; SetExternal replaces them
 	// while the server runs.
@@ -142,6 +146,7 @@ func New(pool *pgxpool.Pool, opts Options) (*Service, error) {
 		events: opts.Events,
 		log:    opts.Logger,
 		now:    opts.Now,
+		sleep:  opts.Sleep,
 		hasher: NewHasher(cfg.Argon2, cfg.MaxConcurrentHashes),
 
 		initialPasswordFile: opts.InitialPasswordFile,
@@ -155,6 +160,9 @@ func New(pool *pgxpool.Pool, opts Options) (*Service, error) {
 	}
 	if s.now == nil {
 		s.now = time.Now
+	}
+	if s.sleep == nil {
+		s.sleep = sleepContext
 	}
 	if cfg.LDAP.Enabled && opts.Directory == nil {
 		return nil, fmt.Errorf("auth: auth.ldap is enabled but no directory is configured: %w", core.ErrInvalid)
@@ -318,7 +326,7 @@ func (s *Service) PurgeExpired(ctx context.Context) error {
 	if _, err := s.pool.Exec(ctx, `DELETE FROM tokens WHERE kind = 'session' AND expires_at < $1`, now.Add(-time.Hour)); err != nil {
 		return fmt.Errorf("purge session tokens: %w", err)
 	}
-	return nil
+	return s.purgeSignInFailures(ctx)
 }
 
 // record appends an audit event; a failing audit log is logged, not returned,

@@ -58,6 +58,9 @@ func (s *Service) SetUserDisabled(ctx context.Context, id string, disabled bool)
 		if old, err = s.lockUser(ctx, tx, id); err != nil {
 			return err
 		}
+		if err := s.requireCoversUser(ctx, action, old); err != nil {
+			return err
+		}
 		if old.Disabled == disabled {
 			return nil
 		}
@@ -88,8 +91,11 @@ func (s *Service) SetUserDisabled(ctx context.Context, id string, disabled bool)
 }
 
 // ResetPassword sets another local user's password (system:users:write),
-// clears any lockout and ends all their sessions. Administrators change their
-// own password with ChangePassword, which needs the current one.
+// clears any lockout and ends all their sessions. The user must choose a new
+// password at the next sign-in, so the one an administrator knows does not
+// stay in use. The caller must cover the user's privileges (see
+// requireCoversUser). Administrators change their own password with
+// ChangePassword, which needs the current one.
 func (s *Service) ResetPassword(ctx context.Context, id, password string) error {
 	if err := s.require(ctx, AuditUserPassword, core.ActionWrite, core.SystemResource(core.SystemUsers)); err != nil {
 		return err
@@ -99,6 +105,9 @@ func (s *Service) ResetPassword(ctx context.Context, id, password string) error 
 	}
 	u, err := s.userByID(ctx, s.pool, id)
 	if err != nil {
+		return err
+	}
+	if err := s.requireCoversUser(ctx, AuditUserPassword, u); err != nil {
 		return err
 	}
 	if u.Kind != KindUser || u.Source != SourceLocal {
@@ -115,9 +124,12 @@ func (s *Service) ResetPassword(ctx context.Context, id, password string) error 
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `
 			UPDATE users SET password_hash = $2, password_changed_at = now(), failed_logins = 0,
-				failed_window_start = NULL, locked_until = NULL, updated_at = now()
+				failed_window_start = NULL, locked_until = NULL, must_change_password = true, updated_at = now()
 			WHERE id = $1`, id, hash); err != nil {
 			return dbErr(err, "reset password")
+		}
+		if err := s.clearSignInFailures(ctx, tx, u.Username); err != nil {
+			return err
 		}
 		ended, err = endSessions(ctx, tx, id, "")
 		return err
@@ -128,7 +140,7 @@ func (s *Service) ResetPassword(ctx context.Context, id, password string) error 
 	s.credentialsChanged()
 	s.record(ctx, core.AuditEvent{
 		Action: AuditUserPassword, Target: "user:" + u.Username,
-		Details: map[string]any{"id": id, "reset_by_admin": true, "sessions_ended": ended},
+		Details: map[string]any{"id": id, "reset_by_admin": true, "require_change": true, "sessions_ended": ended},
 	})
 	return nil
 }
@@ -155,9 +167,8 @@ func (s *Service) ChangePassword(ctx context.Context, current, next, keepSession
 	if u.Kind != KindUser || u.Source != SourceLocal || u.passwordHash == "" {
 		return fmt.Errorf("your account has no local password; it is managed by %s: %w", u.Source, core.ErrInvalid)
 	}
-	now := s.now()
-	if u.lockedAt(now) {
-		return &LockedError{Until: *u.LockedUntil}
+	if err := s.signInLocked(ctx, u.Username); err != nil {
+		return err
 	}
 	if len(current) > 4096 {
 		return errWrongPassword
@@ -167,7 +178,7 @@ func (s *Service) ChangePassword(ctx context.Context, current, next, keepSession
 		return fmt.Errorf("verify password: %w", err)
 	}
 	if !ok {
-		attempts, lockedUntil, err := s.recordFailure(ctx, u.ID, now)
+		attempts, lockedUntil, err := s.noteSignInFailure(ctx, u.Username, u.ID)
 		if err != nil {
 			return err
 		}
@@ -177,7 +188,6 @@ func (s *Service) ChangePassword(ctx context.Context, current, next, keepSession
 		}
 		s.record(ctx, core.AuditEvent{Action: AuditUserPassword, Target: "user:" + u.Username, Outcome: core.OutcomeDenied, Details: details})
 		if lockedUntil != nil {
-			s.basic.clear()
 			return &LockedError{Until: *lockedUntil}
 		}
 		return errWrongPassword
@@ -206,6 +216,9 @@ func (s *Service) ChangePassword(ctx context.Context, current, next, keepSession
 		}
 		if tag.RowsAffected() == 0 {
 			return fmt.Errorf("the password was changed concurrently; try again: %w", core.ErrAlreadyExists)
+		}
+		if err := s.clearSignInFailures(ctx, tx, u.Username); err != nil {
+			return err
 		}
 		ended, err = endSessions(ctx, tx, u.ID, keepSession)
 		return err

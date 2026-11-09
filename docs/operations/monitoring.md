@@ -75,6 +75,16 @@ The token and password (and their files) are read on start: restart the
 nodes after rotating them; scrapes answer `401` until Prometheus has the new
 value too.
 
+A new installation made with `deploy/install.sh` uses `bearer`: the
+installer writes the token to `<data>/secrets/metrics.bearer_token` (mode
+600) and `config/hangar.yaml` sets `metrics.auth: bearer`; copy the token to
+Prometheus. Installations upgraded by the installer keep their
+`config/hangar.yaml`, so an open endpoint stays open. A server that serves
+`/metrics` with `metrics.auth: none` and no `metrics.allowed_cidrs` logs a
+warning on every start. To protect an existing installation, write a token
+to `secrets/metrics.bearer_token` (owner 65532, mode 600), add
+`auth: bearer` under `metrics:` in `config/hangar.yaml` and restart.
+
 Generate a token with `openssl rand -hex 32`. Prometheus configurations for
 each mode (the job must stay named `hangar`):
 

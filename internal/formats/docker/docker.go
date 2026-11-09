@@ -44,6 +44,12 @@ type Options struct {
 	TokenTTL time.Duration
 	// UploadTTL is how long an unfinished upload session stays valid (default DefaultUploadTTL).
 	UploadTTL time.Duration
+	// Reload rebuilds the principal of a registry token presented to the
+	// token endpoint from current account data (auth.Service.ReloadPrincipal):
+	// it fails for a disabled account or a revoked token and returns the
+	// current roles. Nil refuses to renew registry tokens; clients then sign
+	// in again with their credentials.
+	Reload func(ctx context.Context, p *core.Principal) (*core.Principal, error)
 	// Now overrides the clock (tests).
 	Now func() time.Time
 }
@@ -125,7 +131,7 @@ func (f *Format) newHandler(deps core.Deps) *handler {
 	if o.Now == nil {
 		o.Now = time.Now
 	}
-	h := &handler{deps: deps, log: log, sign: signer{key: key}, tokenTTL: o.TokenTTL, uploadTTL: o.UploadTTL, now: o.Now}
+	h := &handler{deps: deps, log: log, sign: signer{key: key}, tokenTTL: o.TokenTTL, uploadTTL: o.UploadTTL, now: o.Now, reload: o.Reload}
 	h.conns = newConnectors(deps.Repos, o.Now)
 	if deps.Events != nil {
 		// A changed remote URL or credentials may serve names the old one did not.

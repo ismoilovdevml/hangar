@@ -129,6 +129,9 @@ func (s *Service) CreateUser(ctx context.Context, in UserInput) (*User, error) {
 	if err := in.validate(s.cfg.Password); err != nil {
 		return nil, err
 	}
+	if err := s.requireCoversRoles(ctx, AuditUserCreate, "user:"+in.Username, in.Roles); err != nil {
+		return nil, err
+	}
 	var hash *string
 	if in.Password != nil {
 		h, err := s.hasher.Hash(ctx, *in.Password)
@@ -220,8 +223,9 @@ func (s *Service) ListUsers(ctx context.Context, q UserQuery) (core.Page[*User],
 }
 
 // UpdateUser changes a user (system:users:write). Kind cannot change. Setting
-// a password clears any lockout; disabling or changing the password ends the
-// user's sessions.
+// a password clears any lockout and makes the user choose a new one at the
+// next sign-in; disabling or changing the password ends the user's sessions.
+// The caller must cover the user's current privileges and any roles given.
 func (s *Service) UpdateUser(ctx context.Context, id string, in UserInput) (*User, error) {
 	if err := s.require(ctx, AuditUserUpdate, core.ActionWrite, core.SystemResource(core.SystemUsers)); err != nil {
 		return nil, err
@@ -250,6 +254,14 @@ func (s *Service) UpdateUser(ctx context.Context, id string, in UserInput) (*Use
 		var err error
 		if old, err = s.lockUser(ctx, tx, id); err != nil {
 			return err
+		}
+		if err := s.requireCoversUser(ctx, AuditUserUpdate, old); err != nil {
+			return err
+		}
+		if in.Roles != nil {
+			if err := s.requireCoversRoles(ctx, AuditUserUpdate, "user:"+old.Username, in.Roles); err != nil {
+				return err
+			}
 		}
 		if old.Kind != in.Kind {
 			return fmt.Errorf("the kind of user %q cannot change: %w", old.Username, core.ErrInvalid)
@@ -291,6 +303,7 @@ func (s *Service) UpdateUser(ctx context.Context, id string, in UserInput) (*Use
 				disabled = coalesce($6, disabled),
 				password_hash = coalesce($7, password_hash),
 				password_changed_at = CASE WHEN $7::text IS NULL THEN password_changed_at ELSE now() END,
+				must_change_password = CASE WHEN $7::text IS NULL THEN must_change_password ELSE true END,
 				failed_logins = CASE WHEN $7::text IS NULL THEN failed_logins ELSE 0 END,
 				failed_window_start = CASE WHEN $7::text IS NULL THEN failed_window_start END,
 				locked_until = CASE WHEN $7::text IS NULL THEN locked_until END,
@@ -305,6 +318,11 @@ func (s *Service) UpdateUser(ctx context.Context, id string, in UserInput) (*Use
 				changed = append(changed, "roles")
 			}
 			if err := setUserRoles(ctx, tx, id, in.Roles); err != nil {
+				return err
+			}
+		}
+		if hash != nil {
+			if err := s.clearSignInFailures(ctx, tx, old.Username); err != nil {
 				return err
 			}
 		}
@@ -342,6 +360,9 @@ func (s *Service) DeleteUser(ctx context.Context, id string) error {
 		if old, err = s.lockUser(ctx, tx, id); err != nil {
 			return err
 		}
+		if err := s.requireCoversUser(ctx, AuditUserDelete, old); err != nil {
+			return err
+		}
 		if slices.Contains(old.Roles, AdminRole) && !old.Disabled {
 			if err := ensureOtherAdmin(ctx, tx, id); err != nil {
 				return err
@@ -360,8 +381,8 @@ func (s *Service) DeleteUser(ctx context.Context, id string) error {
 	return nil
 }
 
-// UnlockUser clears a lockout after failed sign-ins (system:users:write) and
-// returns the user.
+// UnlockUser clears a lockout after failed sign-ins, for every client
+// address, (system:users:write) and returns the user.
 func (s *Service) UnlockUser(ctx context.Context, id string) (*User, error) {
 	if err := s.require(ctx, AuditUserUnlock, core.ActionWrite, core.SystemResource(core.SystemUsers)); err != nil {
 		return nil, err
@@ -375,6 +396,9 @@ func (s *Service) UnlockUser(ctx context.Context, id string) (*User, error) {
 		UPDATE users SET failed_logins = 0, failed_window_start = NULL, locked_until = NULL, updated_at = now()
 		WHERE id = $1`, id); err != nil {
 		return nil, dbErr(err, "unlock user")
+	}
+	if err := s.clearSignInFailures(ctx, s.pool, u.Username); err != nil {
+		return nil, err
 	}
 	s.record(ctx, core.AuditEvent{Action: AuditUserUnlock, Target: "user:" + u.Username,
 		Details: map[string]any{"id": id, "was_locked": wasLocked}})

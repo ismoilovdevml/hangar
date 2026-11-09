@@ -236,9 +236,12 @@ test_fresh_install_unattended() {
 	check "postgres/ is 700" mode_is "$D/postgres" 700
 	check "blobs/ is 750" mode_is "$D/blobs" 750
 	check "no caddy/ without TLS" test ! -e "$D/caddy"
-	for f in security.secret_key docker.token_key database.url postgres-password; do
+	for f in security.secret_key docker.token_key database.url postgres-password metrics.bearer_token; do
 		check "secrets/$f is 600" mode_is "$D/secrets/$f" 600
 	done
+	check "metrics token is 64 hex characters" test "$(tr -d '\n' <"$D/secrets/metrics.bearer_token" | wc -c | tr -d ' ')" = 64
+	check "metrics need the bearer token" grep -q '^  auth: bearer$' "$D/config/hangar.yaml"
+	check "summary names the metrics token" contains "$OUT" "$D/secrets/metrics.bearer_token"
 	check "secrets/ owned by the hangar user" contains "$T/log/chown.log" "65532:65532 $D/secrets"
 	check "blobs/ owned by the hangar user" contains "$T/log/chown.log" "65532:65532 $D/blobs"
 	check "nats/ owned by the hangar user" contains "$T/log/chown.log" "65532:65532 $D/nats"
@@ -507,6 +510,7 @@ test_migration_from_old_layout() {
 	check "existing administrator kept" contains "$OUT" "existing administrator kept"
 	check "no password printed" absent "$OUT" "Password:"
 	for f in "$D"/secrets/*; do check "${f##*/} is 600" mode_is "$f" 600; done
+	check "no metrics token on migration" test ! -e "$D/secrets/metrics.bearer_token"
 	# Settings carried over.
 	check "port" env_is "$D" HANGAR_HTTP_PORT 8090
 	check "bind" env_is "$D" HANGAR_BIND_ADDR 0.0.0.0
@@ -695,6 +699,18 @@ test_no_password_generated() {
 	check "exit 0" ok
 	check "no password line" absent "$OUT" "Password:"
 	check "reset hint" contains "$OUT" "hangar admin reset-password --user admin"
+}
+
+test_migration_without_settings_keeps_open_metrics() {
+	make_legacy
+	rm -f "$L/hangar.yaml"
+	local D=$T/srv/hangar
+	export FAKE_RUNNING_DIR=$L
+	run_install --migrate-from "$L" --data-dir "$D" --version v9.9.9 --yes
+	check "exit 0" ok
+	check "an existing installation keeps metrics.auth none" grep -q '^  auth: none$' "$D/config/hangar.yaml"
+	check "no metrics token" test ! -e "$D/secrets/metrics.bearer_token"
+	check "no metrics line in the summary" absent "$OUT" "metrics.bearer_token"
 }
 
 # ---- Runner -------------------------------------------------------------------------

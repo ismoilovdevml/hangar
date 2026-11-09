@@ -287,6 +287,9 @@ func (s *Service) Create(ctx context.Context, in *core.Repository) (*core.Reposi
 		if err != nil {
 			return err
 		}
+		if err := s.authorizeExposure(ctx, tx, "repository.create", r, nil); err != nil {
+			return err
+		}
 		cfg, err := encodeConfig(r.Config)
 		if err != nil {
 			return err
@@ -302,7 +305,9 @@ VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id::text`,
 		return insertMembers(ctx, tx, id, members)
 	})
 	if err != nil {
-		s.record(ctx, "repository.create", r.Name, core.OutcomeError, map[string]any{"error": err.Error()})
+		if !errors.Is(err, core.ErrForbidden) { // denials are audited where they happen
+			s.record(ctx, "repository.create", r.Name, core.OutcomeError, map[string]any{"error": err.Error()})
+		}
 		return nil, err
 	}
 	s.cache.invalidate()
@@ -333,10 +338,11 @@ func (s *Service) Update(ctx context.Context, in *core.Repository) (*core.Reposi
 			return err
 		}
 		var id, format, typ, store string
+		var oldCfg []byte
 		err := tx.QueryRow(ctx, `
-SELECT r.id::text, r.format, r.type, coalesce(bs.name, '')
+SELECT r.id::text, r.format, r.type, coalesce(bs.name, ''), r.config
   FROM repositories r LEFT JOIN blob_stores bs ON bs.id = r.blob_store_id
- WHERE r.name = $1 FOR NO KEY UPDATE OF r`, r.Name).Scan(&id, &format, &typ, &store)
+ WHERE r.name = $1 FOR NO KEY UPDATE OF r`, r.Name).Scan(&id, &format, &typ, &store, &oldCfg)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("repository %q: %w", r.Name, core.ErrNotFound)
 		}
@@ -351,6 +357,13 @@ SELECT r.id::text, r.format, r.type, coalesce(bs.name, '')
 		}
 		_, members, err := s.resolveRefs(ctx, tx, r, id)
 		if err != nil {
+			return err
+		}
+		prev, err := loadExposure(ctx, tx, id, oldCfg)
+		if err != nil {
+			return fmt.Errorf("update repository %q: %w", r.Name, err)
+		}
+		if err := s.authorizeExposure(ctx, tx, "repository.update", r, prev); err != nil {
 			return err
 		}
 		cfg, err := encodeConfig(r.Config)
@@ -371,7 +384,7 @@ UPDATE repositories SET description = $2, config = $3, online = $4, updated_at =
 		return insertMembers(ctx, tx, id, members)
 	})
 	if err != nil {
-		if !errors.Is(err, core.ErrNotFound) {
+		if !errors.Is(err, core.ErrNotFound) && !errors.Is(err, core.ErrForbidden) {
 			s.record(ctx, "repository.update", r.Name, core.OutcomeError, map[string]any{"error": err.Error()})
 		}
 		return nil, err

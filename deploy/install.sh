@@ -615,7 +615,13 @@ install -m 0644 "$stage/compose.connectors.example.yaml" "$data/compose.connecto
 if [[ ! -f "$data/config/hangar.yaml" ]]; then
 	if [[ -n "$legacy" && -f "$legacy/hangar.yaml" ]]; then
 		install -m 0644 "$legacy/hangar.yaml" "$data/config/hangar.yaml"
+	elif [[ -n "$legacy" ]]; then
+		# An existing installation keeps an open /metrics, as before.
+		sed 's/^  auth: bearer$/  auth: none/' "$stage/hangar.yaml" >"$data/config/hangar.yaml"
+		chmod 644 "$data/config/hangar.yaml"
 	else
+		# New installations protect /metrics with a generated bearer token.
+		write_secret metrics.bearer_token "$(rand_hex 32)" "$HANGAR_UID"
 		install -m 0644 "$stage/hangar.yaml" "$data/config/hangar.yaml"
 	fi
 fi
@@ -819,6 +825,9 @@ cat <<EOF
   Uninstall:  $self --data-dir $data --uninstall    (keeps $data; add --purge to delete it)
   Back up:    $data (secrets/ decrypts the credentials stored in the database)
 EOF
+if [[ -f "$data/secrets/metrics.bearer_token" ]]; then
+	echo "  Metrics:    /metrics needs an Authorization: Bearer header; the token is in $data/secrets/metrics.bearer_token"
+fi
 if [[ "$trivy" == on ]]; then
 	echo
 	echo "Image scanning: Trivy downloads its database on the first start (cd $data && docker compose logs -f trivy)."

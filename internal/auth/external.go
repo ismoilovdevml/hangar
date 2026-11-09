@@ -417,16 +417,21 @@ func (s *Service) verifyLDAP(ctx context.Context, username, password, method str
 	if err != nil {
 		known = nil
 	}
-	now := s.now()
-	if known != nil {
-		if known.Disabled {
-			fail("disabled", nil)
-			return nil, errBadCredentials
+	// The lockout is per (name, address) for names the directory knows and
+	// names it does not alike (see Lockout).
+	if err := s.signInLocked(ctx, username); err != nil {
+		var locked *LockedError
+		if errors.As(err, &locked) {
+			fail("locked", map[string]any{"locked_until": locked.Until.UTC()})
 		}
-		if known.lockedAt(now) {
-			fail("locked", map[string]any{"locked_until": known.LockedUntil.UTC()})
-			return nil, &LockedError{Until: *known.LockedUntil}
-		}
+		return nil, err
+	}
+	if known != nil && known.Disabled {
+		fail("disabled", nil)
+		return nil, errBadCredentials
+	}
+	if err := s.waitSignIn(ctx, username); err != nil {
+		return nil, err
 	}
 	id, err := dir.Authenticate(ctx, username, password)
 	if err != nil {
@@ -435,11 +440,11 @@ func (s *Service) verifyLDAP(ctx context.Context, username, password, method str
 			fail("directory_error", nil)
 			return nil, fmt.Errorf("%w: %w", ErrDirectoryUnavailable, err)
 		}
-		if known == nil {
-			fail("bad_credentials", nil)
-			return nil, errBadCredentials
+		knownID, reason := "", "bad_credentials"
+		if known != nil {
+			knownID, reason = known.ID, "bad_password"
 		}
-		attempts, lockedUntil, lerr := s.recordFailure(ctx, known.ID, now)
+		attempts, lockedUntil, lerr := s.noteSignInFailure(ctx, username, knownID)
 		if lerr != nil {
 			return nil, lerr
 		}
@@ -447,9 +452,8 @@ func (s *Service) verifyLDAP(ctx context.Context, username, password, method str
 		if lockedUntil != nil {
 			details["locked_until"] = lockedUntil.UTC()
 		}
-		fail("bad_password", details)
+		fail(reason, details)
 		if lockedUntil != nil {
-			s.basic.clear()
 			return nil, &LockedError{Until: *lockedUntil}
 		}
 		return nil, errBadCredentials
@@ -459,11 +463,9 @@ func (s *Service) verifyLDAP(ctx context.Context, username, password, method str
 	if err != nil {
 		return nil, err
 	}
-	if known != nil && known.ID == p.ID && (known.failedLogins > 0 || known.LockedUntil != nil) {
-		if _, err := s.pool.Exec(ctx, `
-			UPDATE users SET failed_logins = 0, failed_window_start = NULL, locked_until = NULL
-			WHERE id = $1`, known.ID); err != nil {
-			return nil, fmt.Errorf("reset failed logins: %w", err)
+	if known != nil && known.ID == p.ID {
+		if err := s.noteSignInSuccess(ctx, known); err != nil {
+			return nil, err
 		}
 	}
 	return s.userByID(ctx, s.pool, p.ID)

@@ -136,6 +136,10 @@ type Server struct {
 	// NodeID names this process on the System status and System logs
 	// screens; unique per node. Empty: the host name.
 	NodeID string `yaml:"node_id"`
+	// DevMode marks a development server: it may start with the keys
+	// published in deploy/docker-compose.yml, which anyone can use to forge
+	// registry tokens and open stored secrets. Never set it in production.
+	DevMode bool `yaml:"dev_mode"`
 }
 
 // Log configures structured logging.
@@ -651,6 +655,7 @@ func (c *Config) Validate() error {
 	}
 	errs = append(errs, c.Metrics.validate()...)
 	errs = append(errs, c.Security.validate()...)
+	errs = append(errs, c.devKeys()...)
 	switch c.UI.ReadmeImages = strings.ToLower(strings.TrimSpace(c.UI.ReadmeImages)); c.UI.ReadmeImages {
 	case "":
 		c.UI.ReadmeImages = "proxy"
