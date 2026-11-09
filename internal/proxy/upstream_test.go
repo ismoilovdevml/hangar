@@ -422,3 +422,43 @@ func TestHealthReporter(t *testing.T) {
 		t.Errorf("unused item: %+v", it)
 	}
 }
+
+// POST queries (npm's audit endpoints) send their body on every attempt,
+// are retried on 5xx like GET, and leave the negative cache alone; a body
+// on another method is refused.
+func TestPostQuery(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := hits.Add(1)
+		b, _ := io.ReadAll(r.Body)
+		switch {
+		case r.Method != http.MethodPost:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		case r.URL.Path == "/missing":
+			http.NotFound(w, r)
+		case n == 1:
+			w.WriteHeader(http.StatusBadGateway) // retried
+		default:
+			_, _ = w.Write(append([]byte("echo:"), b...))
+		}
+	}))
+	defer srv.Close()
+	m := newManager(t, nil)
+	u := upstreamFor(t, m, proxyRepo("p", srv.URL, func(c *core.ProxyConfig) { c.NegativeCacheTTL = core.Duration(time.Minute) }))
+
+	resp, got := fetchOK(t, u, core.UpstreamRequest{Method: http.MethodPost, Path: "audit", Body: []byte(`{"a":["1"]}`), Index: true})
+	if resp.StatusCode != http.StatusOK || got != `echo:{"a":["1"]}` || hits.Load() != 2 {
+		t.Fatalf("POST = %d %q after %d requests", resp.StatusCode, got, hits.Load())
+	}
+	for range 2 {
+		if resp, _ := fetchOK(t, u, core.UpstreamRequest{Method: http.MethodPost, Path: "missing", Body: []byte("{}"), Index: true}); resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("POST missing = %d", resp.StatusCode)
+		}
+	}
+	if hits.Load() != 4 {
+		t.Fatalf("a POST 404 was negatively cached: hits = %d", hits.Load())
+	}
+	if _, err := u.Fetch(context.Background(), core.UpstreamRequest{Path: "x", Body: []byte("{}")}); !errors.Is(err, core.ErrInvalid) {
+		t.Fatalf("GET with a body = %v", err)
+	}
+}

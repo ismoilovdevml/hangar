@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -130,8 +131,12 @@ func (u *upstream) Fetch(ctx context.Context, req core.UpstreamRequest) (*core.U
 	if method == "" {
 		method = http.MethodGet
 	}
-	if method != http.MethodGet && method != http.MethodHead {
-		return nil, fmt.Errorf("upstream method %q: want GET or HEAD: %w", method, core.ErrInvalid)
+	post := method == http.MethodPost
+	if method != http.MethodGet && method != http.MethodHead && !post {
+		return nil, fmt.Errorf("upstream method %q: want GET, HEAD or POST: %w", method, core.ErrInvalid)
+	}
+	if (req.Body != nil) != post {
+		return nil, fmt.Errorf("upstream %s request: only POST carries a body, and always: %w", method, core.ErrInvalid)
 	}
 	target, primary, err := u.target(req)
 	if err != nil {
@@ -141,12 +146,16 @@ func (u *upstream) Fetch(ctx context.Context, req core.UpstreamRequest) (*core.U
 		requestsTotal.WithLabelValues(u.name, target.Host, resultOffline).Inc()
 		return nil, fmt.Errorf("upstream %s: %w, %s is not cached: %w: %w", u.name, ErrOfflineMode, target.Redacted(), core.ErrNotFound, core.ErrUpstream)
 	}
-	if u.negTTL > 0 && u.neg.hit(target.String(), u.now()) {
+	if !post && u.negTTL > 0 && u.neg.hit(target.String(), u.now()) {
 		return &core.UpstreamResponse{StatusCode: http.StatusNotFound, Header: http.Header{}, Body: http.NoBody}, nil
 	}
 	if wait, gated := u.throttle.gated(target.Host, u.now()); gated {
 		requestsTotal.WithLabelValues(u.name, target.Host, resultRateLimited).Inc()
 		return nil, rateLimited(u.name, target.Host, wait)
+	}
+	if post {
+		// A query body is the caller's own: never shared with other callers.
+		return u.fetch(ctx, method, target, req, primary)
 	}
 	return u.flights.do(ctx, flightKey(method, target, req), func(ctx context.Context) (*core.UpstreamResponse, error) {
 		return u.fetch(ctx, method, target, req, primary)
@@ -283,7 +292,7 @@ func (u *upstream) fetch(ctx context.Context, method string, target *url.URL, re
 			u.stats.setBlocked("")
 		}
 	}
-	if resp.StatusCode == http.StatusNotFound && u.negTTL > 0 {
+	if resp.StatusCode == http.StatusNotFound && u.negTTL > 0 && method != http.MethodPost {
 		u.neg.add(target.String(), now, u.negTTL)
 	}
 	u.noteState()
@@ -451,7 +460,11 @@ func sleep(ctx context.Context, d time.Duration) error {
 // token challenge once; related hosts never get the remote's credentials or
 // a token obtained with them.
 func (u *upstream) attempt(ctx context.Context, method string, target *url.URL, req core.UpstreamRequest, primary bool) (*http.Response, error) {
-	hreq, err := http.NewRequestWithContext(ctx, method, target.String(), nil)
+	var body io.Reader
+	if req.Body != nil {
+		body = bytes.NewReader(req.Body) // sets GetBody, so redirects and retries resend it
+	}
+	hreq, err := http.NewRequestWithContext(ctx, method, target.String(), body)
 	if err != nil {
 		return nil, fmt.Errorf("upstream request: %w", err)
 	}
@@ -504,6 +517,11 @@ func (u *upstream) attempt(ctx context.Context, method string, target *url.URL, 
 	discard(resp)
 	u.tokens.remember(scope, ch, tok, exp)
 	retry := hreq.Clone(ctx)
+	if hreq.GetBody != nil {
+		if retry.Body, err = hreq.GetBody(); err != nil {
+			return nil, fmt.Errorf("upstream request: %w", err)
+		}
+	}
 	retry.Header.Set("Authorization", "Bearer "+tok)
 	resp, err = u.client.Do(retry)
 	if err == nil && resp.StatusCode == http.StatusUnauthorized {

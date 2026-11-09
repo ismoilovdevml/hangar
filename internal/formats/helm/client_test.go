@@ -274,6 +274,14 @@ func TestHelmClientProxyAndGroup(t *testing.T) {
 	if !strings.Contains(idxText, "- relchart-1.0.0.tgz") || !strings.Contains(idxText, upSrv.URL+"/charts/abschart-2.0.0.tgz") {
 		t.Fatalf("upstream index.yaml lacks relative and absolute URLs:\n%s", idxText)
 	}
+	// One malformed entry must not take the rest of the remote down.
+	broken := strings.Replace(idxText, "entries:\n", "entries:\n  brokenchart:\n  - name: brokenchart\n    version: 1.0.0\n    created: not-a-date\n    urls: [brokenchart-1.0.0.tgz]\n", 1)
+	if broken == idxText {
+		t.Fatal("could not add a malformed entry")
+	}
+	if err := os.WriteFile(filepath.Join(up, "index.yaml"), []byte(broken), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	f.env.AddRepo(t, &core.Repository{Name: "helm-proxy", Format: helm.Name, Type: core.RepoProxy,
 		Config: core.RepoConfig{Proxy: &core.ProxyConfig{RemoteURL: upSrv.URL + "/charts/"}}})
@@ -290,6 +298,9 @@ func TestHelmClientProxyAndGroup(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("group search lacks %s:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "brokenchart") {
+		t.Fatalf("malformed entry listed:\n%s", out)
 	}
 	dl := c.mkdir("dl")
 	c.run("pull", "proxied/relchart", "-d", dl)

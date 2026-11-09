@@ -77,6 +77,117 @@ func npmE2EWriteJSON(t *testing.T, path string, v any) {
 	}
 }
 
+// npmE2EAuditEventually runs npm audit until Hangar has scan results for
+// every hosted version (it answers 503 until then) and returns its output.
+func npmE2EAuditEventually(t *testing.T, dir string, env []string, npm, registry string, extra ...string) (string, error) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Minute)
+	for {
+		out, err := npmE2ERun(t, dir, env, npm, append([]string{"audit", "--registry", registry}, extra...)...)
+		if !strings.Contains(out, "no vulnerability scan result") || time.Now().After(deadline) {
+			if strings.Contains(out, "audit endpoint returned an error") {
+				t.Fatalf("npm audit failed:\n%s", out)
+			}
+			return out, err
+		}
+		time.Sleep(3 * time.Second)
+	}
+}
+
+// TestNPMAudit: npm audit through Hangar reports the advisories the public
+// registry knows for a vulnerable dependency (lodash 4.17.20), directly
+// through a proxy and through a group with a hosted member, and fails
+// --audit-level=high instead of answering "found 0 vulnerabilities".
+//
+// Needs the same environment as TestNPM and a server with scanning enabled
+// (scanning.enabled) for the hosted member.
+func TestNPMAudit(t *testing.T) {
+	base := baseURL(t)
+	token := os.Getenv("HANGAR_E2E_TOKEN")
+	if token == "" {
+		t.Skip("HANGAR_E2E_TOKEN not set")
+	}
+	npm, err := exec.LookPath("npm")
+	if err != nil {
+		t.Skip("npm not installed")
+	}
+	store := os.Getenv("HANGAR_E2E_BLOB_STORE")
+	if store == "" {
+		store = "default"
+	}
+	remote := os.Getenv("HANGAR_E2E_NPM_REMOTE")
+	if remote == "" {
+		remote = "https://registry.npmjs.org"
+	}
+	var rb [3]byte
+	_, _ = rand.Read(rb[:])
+	suffix := hex.EncodeToString(rb[:])
+	hosted, proxy, group := "npm-audit-hosted-"+suffix, "npm-audit-proxy-"+suffix, "npm-audit-group-"+suffix
+	for _, r := range []map[string]any{
+		{"name": hosted, "format": "npm", "type": "hosted", "blob_store": store, "config": map[string]any{"scan_on_arrival": true}},
+		{"name": proxy, "format": "npm", "type": "proxy", "blob_store": store,
+			"config": map[string]any{"proxy": map[string]any{"remote_url": remote}}},
+		{"name": group, "format": "npm", "type": "group",
+			"config": map[string]any{"group": map[string]any{"members": []string{hosted, proxy}, "write_member": hosted}}},
+	} {
+		if code, body := npmE2EAPI(t, base, token, http.MethodPost, "/api/v1/repositories", r); code != http.StatusCreated {
+			t.Fatalf("create %s: %d %s", r["name"], code, body)
+		}
+	}
+	t.Cleanup(func() {
+		for _, n := range []string{group, proxy, hosted} {
+			npmE2EAPI(t, base, token, http.MethodDelete, "/api/v1/repositories/"+n, nil)
+		}
+	})
+	u, _ := url.Parse(base)
+	reg := func(repo string) string { return base + "/repository/" + repo + "/" }
+	home := t.TempDir()
+	var rc strings.Builder
+	rc.WriteString("fund=false\nupdate-notifier=false\n")
+	for _, r := range []string{hosted, proxy, group} {
+		rc.WriteString("//" + u.Host + u.Path + "/repository/" + r + "/:_authToken=" + token + "\n")
+	}
+	if err := os.WriteFile(filepath.Join(home, ".npmrc"), []byte(rc.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := []string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "CI=true",
+		"npm_config_userconfig=" + filepath.Join(home, ".npmrc"), "npm_config_cache=" + filepath.Join(home, "npm-cache")}
+
+	scoped := "@hangar-e2e/audited-" + suffix
+	pkg := t.TempDir()
+	npmE2EWriteJSON(t, filepath.Join(pkg, "package.json"), map[string]any{"name": scoped, "version": "1.0.0", "license": "MIT"})
+	npmE2EMust(t, pkg, env, npm, "publish", "--registry", reg(hosted))
+
+	for _, registry := range []string{reg(proxy), reg(group)} {
+		dir := t.TempDir()
+		deps := map[string]string{"lodash": "4.17.20"}
+		if registry == reg(group) {
+			deps[scoped] = "1.0.0"
+		}
+		npmE2EWriteJSON(t, filepath.Join(dir, "package.json"), map[string]any{
+			"name": "audited", "version": "1.0.0", "private": true, "dependencies": deps})
+		npmE2EMust(t, dir, env, npm, "install", "--no-audit", "--registry", registry)
+		out, err := npmE2EAuditEventually(t, dir, env, npm, registry, "--json")
+		if err == nil {
+			t.Fatalf("npm audit exited 0 for lodash 4.17.20 through %s:\n%s", registry, out)
+		}
+		var rep struct {
+			Vulnerabilities map[string]struct {
+				Severity string `json:"severity"`
+			} `json:"vulnerabilities"`
+		}
+		if i := strings.Index(out, "{"); i < 0 || json.Unmarshal([]byte(out[i:]), &rep) != nil {
+			t.Fatalf("npm audit --json through %s:\n%s", registry, out)
+		}
+		if sev := rep.Vulnerabilities["lodash"].Severity; sev != "high" && sev != "critical" {
+			t.Fatalf("lodash severity through %s = %q:\n%s", registry, sev, out)
+		}
+		if out, err := npmE2EAuditEventually(t, dir, env, npm, registry, "--audit-level=high"); err == nil || strings.Contains(out, "found 0 vulnerabilities") {
+			t.Fatalf("--audit-level=high passed through %s:\n%s", registry, out)
+		}
+	}
+}
+
 func TestNPM(t *testing.T) {
 	base := baseURL(t)
 	token := requireEnv(t, "HANGAR_E2E_TOKEN")
@@ -94,7 +205,8 @@ func TestNPM(t *testing.T) {
 	suffix := hex.EncodeToString(rb[:])
 	hosted, proxy, group := "npm-e2e-hosted-"+suffix, "npm-e2e-proxy-"+suffix, "npm-e2e-group-"+suffix
 	for _, r := range []map[string]any{
-		{"name": hosted, "format": "npm", "type": "hosted", "blob_store": store},
+		{"name": hosted, "format": "npm", "type": "hosted", "blob_store": store,
+			"config": map[string]any{"scan_on_arrival": true}},
 		{"name": proxy, "format": "npm", "type": "proxy", "blob_store": store,
 			"config": map[string]any{"proxy": map[string]any{"remote_url": remote, "metadata_ttl": "10m"}}},
 		{"name": group, "format": "npm", "type": "group",
@@ -171,7 +283,11 @@ func TestNPM(t *testing.T) {
 		if !strings.Contains(string(lock), reg(group)+"is-odd/-/is-odd-3.0.1.tgz") {
 			t.Fatal("package-lock does not resolve proxied tarballs through Hangar")
 		}
-		npmE2EMust(t, dir, env, npm, "audit", "--registry", reg(group))
+		// The hosted versions are audited from their scan results, which
+		// the arrival scans produce shortly after publishing.
+		if out, err := npmE2EAuditEventually(t, dir, env, npm, reg(group)); err != nil {
+			t.Fatalf("npm audit: %v\n%s", err, out)
+		}
 	})
 
 	t.Run("pnpm install", func(t *testing.T) {

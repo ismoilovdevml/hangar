@@ -62,6 +62,11 @@ curl -X POST https://hangar.example.com/api/v1/repositories \
 - The remote's `index.yaml` is cached for `metadata_ttl` (`0` means 1h), then
   revalidated with `ETag` / `Last-Modified`. While the remote is down the cached
   index is served.
+- Entries of the remote's `index.yaml` that do not parse (a malformed date, a
+  string where the URL list belongs, an invalid version) are left out; the rest
+  of the remote's charts stay available. Each parse logs one warning naming the
+  first bad entry and counts the skipped entries in
+  `hangar_proxy_index_entries_skipped_total`.
 - Every chart URL in the index, relative or absolute, is rewritten to point at
   Hangar; the original URL is kept for fetching. Archives are cached forever and
   checked against the index's `digest`.

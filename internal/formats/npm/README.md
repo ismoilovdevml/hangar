@@ -20,9 +20,10 @@ Registry URL for clients: `https://<hangar>/repository/<repo>/`.
 | GET | `-/package/<pkg>/dist-tags[/<tag>]` | dist-tags |
 | PUT/POST/DELETE | `-/package/<pkg>/dist-tags/<tag>` | `npm dist-tag add/rm`; `latest` cannot be removed; tags may not be versions |
 | PUT | `-/user/org.couchdb.user:<name>` | `npm login` (username/password → session token via the token issuer) |
-| DELETE | `-/user/token/<token>` | `npm logout`: answered 200; the token expires (or is revoked in the UI) |
+| DELETE | `-/user/token/<token>` | `npm logout`: revokes the token when `npm login` minted it (claim `npm_login`, via `core.TokenRevoker`); other tokens are left alone; answered 200 |
+| GET | `-/v1/search` | `npm search`: hosted from the component search, proxy from the remote (routing rules applied), group merged in member order |
 | GET | `-/whoami`, `-/ping` | |
-| POST | `-/npm/v1/security/advisories/bulk`, `-/npm/v1/security/audits[/quick]` | answered with "no advisories" until scanner findings are exposed to formats |
+| POST | `-/npm/v1/security/advisories/bulk`, `-/npm/v1/security/audits[/quick]` | `npm audit` (gzip bodies): proxy names (routing rules applied) go to the remote's bulk endpoint, hosted versions are answered from stored findings (`Format.SetAdvisories`); 503 when a hosted version has no scan result, 502 when a remote fails (see audit.go) |
 
 `<pkg>` is `name` or `@scope/name`; `@scope%2fname` (and `%40scope%2fname`)
 are accepted. `POST -/v1/login` answers 404 so npm falls back to the
@@ -75,7 +76,7 @@ assets are served on the tarball route.
 - Package-state updates are serialised per node; concurrent publishes of the
   same package on different nodes can race on dist-tags.
 - Unpublished version numbers can be published again (no tombstones).
-- `npm search` (`-/v1/search`), web login, `npm access`/`npm owner`/teams and
+- Web login, `npm access`/`npm owner`/teams and
   provenance attachments (`.sigstore`, accepted but not stored) are not implemented.
 
 ## Tests

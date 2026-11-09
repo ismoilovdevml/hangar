@@ -255,6 +255,32 @@ func TestPublishWriteOnce(t *testing.T) {
 	}
 }
 
+// Regression: "foo-bar" and "foo_bar" could both be published, although
+// crates.io treats them as one crate and cargo cannot tell them apart in
+// Cargo.toml renames and error messages. The second spelling is refused.
+func TestPublishSeparatorSpellingsAreOneCrate(t *testing.T) {
+	f := newFixture(t)
+	f.mustPublish(t, "cargo-hosted", "foo-bar", "1.0.0", nil)
+	f.mustPublish(t, "cargo-hosted", "foo-baz_qux", "1.0.0", nil) // shares the prefix, other crate
+	for _, name := range []string{"foo_bar", "Foo_Bar", "FOO-bar"} {
+		rec := f.publish(t, "cargo-hosted", meta(name, "2.0.0", nil), crateSpec{name: name, version: "2.0.0"}.build(t))
+		detail := errorDetail(t, rec)
+		if rec.Code == http.StatusOK || rec.Code >= 500 || !strings.Contains(detail, "foo-bar") {
+			t.Errorf("publish %s = %d %s", name, rec.Code, rec.Body.String())
+		}
+	}
+	rec := f.publish(t, "cargo-hosted", meta("foo_bar", "2.0.0", nil), crateSpec{name: "foo_bar", version: "2.0.0"}.build(t))
+	if rec.Code != http.StatusConflict || !strings.Contains(errorDetail(t, rec), "same crate") {
+		t.Errorf("publish foo_bar = %d %s, want 409 naming the rule", rec.Code, rec.Body.String())
+	}
+	// The first spelling keeps publishing; a name without the clash is fine.
+	f.mustPublish(t, "cargo-hosted", "foo-bar", "1.1.0", nil)
+	f.mustPublish(t, "cargo-hosted", "foo_baz", "1.0.0", nil)
+	if lines := f.indexLines(t, "cargo-hosted", "foo-bar"); len(lines) != 2 {
+		t.Errorf("index of foo-bar = %v", lines)
+	}
+}
+
 func TestPublishAuthorization(t *testing.T) {
 	f := newFixture(t)
 	f.env.AddRepo(t, &core.Repository{Name: "cargo-proxy", Format: cargo.Name, Type: core.RepoProxy,

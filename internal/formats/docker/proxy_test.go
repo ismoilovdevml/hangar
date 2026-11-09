@@ -1,6 +1,7 @@
 package docker_test
 
 import (
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -276,4 +277,56 @@ func cacheCounters(t *testing.T) (hits, misses, hitBytes float64) {
 		}
 	}
 	return hits, misses, hitBytes
+}
+
+// Regression: the proxy read only the first page of a remote's tag list,
+// so on registries that page it (Link: <...>; rel="next") every later tag
+// was missing. Relative and absolute next links are followed; a link to
+// another host is not.
+func TestProxyTagListFollowsPages(t *testing.T) {
+	tr := newTestReg(t)
+	pages := map[string]struct {
+		tags []string
+		link string
+	}{
+		"":           {[]string{"a", "b"}, `</v2/acme/app/tags/list?last=b&n=2>; rel="next"`},
+		"last=b&n=2": {[]string{"c", "d"}, `<https://quay.example.com/v2/acme/app/tags/list?last=d&n=2>; rel="next"`},
+		"last=d&n=2": {[]string{"e"}, `<https://elsewhere.example.com/v2/acme/app/tags/list?last=e>; rel="next"`},
+	}
+	var asked []string
+	tr.env.AddRepo(t, &core.Repository{Name: "quay-proxy", Format: "docker", Type: core.RepoProxy,
+		Config: core.RepoConfig{Proxy: &core.ProxyConfig{RemoteURL: "https://quay.example.com"}}})
+	tr.env.Upstreams.Set("quay-proxy", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/acme/app/tags/list" {
+			http.NotFound(w, r)
+			return
+		}
+		asked = append(asked, r.Host+"?"+r.URL.RawQuery)
+		p, ok := pages[r.URL.RawQuery]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		if p.link != "" {
+			w.Header().Set("Link", p.link)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"name": "acme/app", "tags": p.tags})
+	}))
+	tr.env.AuthZ.Grant("bob", "repo:quay-proxy:read")
+
+	resp, body := tr.do(http.MethodGet, "/v2/quay-proxy/acme/app/tags/list", nil, basic("bob", "secret"))
+	tr.expect(resp, body, http.StatusOK)
+	var tl struct {
+		Tags []string `json:"tags"`
+	}
+	if err := json.Unmarshal(body, &tl); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(tl.Tags, ",") != "a,b,c,d,e" {
+		t.Fatalf("tags = %v (remote asked %v)", tl.Tags, asked)
+	}
+	if len(asked) != 3 {
+		t.Fatalf("remote pages requested = %v, want 3 (no request to another host)", asked)
+	}
 }

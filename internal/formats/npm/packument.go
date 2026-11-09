@@ -262,10 +262,12 @@ func renderVersion(m manifest, tarballBase string) ([]byte, error) {
 // ("https://registry.npmjs.org/@s/n/-/n-1.0.0.tgz" -> "@s/n/-/n-1.0.0.tgz");
 // any other URL maps to "<pkg>/-/<file name>". Scoped tarballs always get
 // the conventional file name ("@s/n/-/n-1.0.0.tgz"), whatever the remote
-// calls them (canonicalTarball).
+// calls them (canonicalTarball), and so does a tarball whose URL does not
+// end in ".tgz" ("https://cdn.example.com/download/lodash/4.17.21" ->
+// "lodash/-/lodash-4.17.21.tgz"), which is then fetched from its own URL.
 func (p *packument) relativizeTarballs(n pkgName, remote string) {
 	remote = strings.TrimSuffix(remote, "/") + "/"
-	for _, m := range p.Versions {
+	for v, m := range p.Versions {
 		t := m.distStr("tarball")
 		if t == "" {
 			continue
@@ -292,6 +294,17 @@ func (p *packument) relativizeTarballs(n pkgName, remote string) {
 				p.origin(c, t)
 			}
 			rel = c
+		}
+		// A tarball named without ".tgz" (a download endpoint, a file name
+		// some remotes give every version alike) is advertised under the
+		// conventional name of its version; the remote's URL fetches it.
+		if !strings.HasSuffix(rel, ".tgz") && absolute {
+			if _, err := parseSemver(v); err == nil && !strings.ContainsAny(v, "/\\") {
+				c := tarballPath(n, v)
+				delete(p.origins, rel)
+				p.origin(c, t)
+				rel = c
+			}
 		}
 		m.setDist("tarball", rel)
 	}

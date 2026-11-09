@@ -64,7 +64,18 @@ func TestSameVersion(t *testing.T) {
 	for _, tt := range []struct {
 		a, b string
 		want bool
-	}{{"1.0.0", "1.0.0", true}, {"1.0_rc1", "1.0-rc1", true}, {"v2.0", "2.0", true}, {"1.0", "1.1", false}} {
+	}{
+		{"1.0.0", "1.0.0", true}, {"1.0_rc1", "1.0-rc1", true}, {"v2.0", "2.0", true}, {"1.0", "1.1", false},
+		// Regression: separators were dropped before comparing, so these matched.
+		{"1.0", "10", false}, {"1.1", "11", false}, {"1.0.1", "10.1", false}, {"2.0.post1", "2.0.1", false},
+		// PEP 440 spelling variations of one version.
+		{"1.0", "1.0.0", true}, {"01.02", "1.2", true}, {"1.0a1", "1.0.alpha.1", true}, {"1.0c1", "1.0rc1", true},
+		{"1.0-1", "1.0.post1", true}, {"1.0_post1", "1.0.post1", true}, {"1.0.dev0", "1.0-dev", true},
+		{"1.0+Local_1", "1.0+local.1", true}, {"1!2.0", "2.0", false}, {"0!2.0", "2.0", true},
+		{"1.0rc1", "1.0", false}, {"1.0.dev1", "1.0", false}, {"1.0+abc", "1.0", false},
+		// Legacy (non-PEP 440) versions compare as written.
+		{"2004d", "2004d", true}, {"2004d", "2004e", false}, {"1.0", "1.0-final-x", false},
+	} {
 		if got := sameVersion(tt.a, tt.b); got != tt.want {
 			t.Errorf("sameVersion(%q, %q) = %v", tt.a, tt.b, got)
 		}

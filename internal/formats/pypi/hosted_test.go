@@ -217,6 +217,9 @@ func TestUploadValidation(t *testing.T) {
 		{"bad name", "0.1.0", sd, map[string]string{"name": "bad name"}, nil, 400, "project name"},
 		{"foreign filename", "0.1.0", sd, map[string]string{"name": "other"}, nil, 400, "does not start with project"},
 		{"version mismatch", "0.2.0", sd, nil, nil, 400, "does not match version"},
+		// Regression: "1.0" and "10" compared equal once separators were dropped.
+		{"version 1.0 vs file 10", "1.0", fakeSdist("tiny-pkg", "10"), nil, nil, 400, "does not match version"},
+		{"PEP 440 spelling of the file version", "0.1", sd, nil, nil, 200, ""},
 		{"filetype mismatch", "0.1.0", sd, map[string]string{"filetype": "bdist_wheel"}, nil, 400, "is not a bdist_wheel"},
 		{"unsupported filetype", "0.1.0", sd, map[string]string{"filetype": "bdist_egg"}, nil, 400, "unsupported filetype"},
 		{"wheel without metadata", "0.1.0", dist{filename: whl.filename, data: []byte("not a zip"), filetype: "bdist_wheel", pyver: "py3"}, nil, nil, 400, "not a zip"},
@@ -335,5 +338,45 @@ func TestQuarantinedReleaseHidden(t *testing.T) {
 	}
 	if rec := f.get(t, "/repository/pypi-hosted/packages/tiny-pkg/"+sd.filename, "", "bob", "secret"); rec.Code != 403 {
 		t.Errorf("quarantined download = %d", rec.Code)
+	}
+}
+
+// Regression: Simple API pages had no validator, so pip and uv downloaded
+// every project page again on each resolve. Pages carry an ETag per
+// rendering and a matching If-None-Match answers 304 until the project
+// changes.
+func TestSimplePagesETag(t *testing.T) {
+	f := newFixture(t)
+	f.upload(t, "/repository/pypi-hosted/", "etag-pkg", "1.0.0", fakeSdist("etag-pkg", "1.0.0"))
+	get := func(path, accept, inm string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
+		req.Header.Set("Accept", accept)
+		if inm != "" {
+			req.Header.Set("If-None-Match", inm)
+		}
+		req.SetBasicAuth("bob", "secret")
+		return f.do(t, req)
+	}
+	for _, path := range []string{"/repository/pypi-hosted/simple/etag-pkg/", "/repository/pypi-hosted/simple/"} {
+		jsonPage := get(path, pipAccept, "")
+		htmlPage := get(path, "text/html", "")
+		etag := jsonPage.Header().Get("ETag")
+		if jsonPage.Code != http.StatusOK || etag == "" || htmlPage.Header().Get("ETag") == "" || htmlPage.Header().Get("ETag") == etag {
+			t.Fatalf("%s: json %d ETag %q, html ETag %q (want distinct validators)", path, jsonPage.Code, etag, htmlPage.Header().Get("ETag"))
+		}
+		if rec := get(path, pipAccept, etag); rec.Code != http.StatusNotModified || rec.Body.Len() != 0 {
+			t.Fatalf("%s: revalidation = %d with %d bytes, want 304", path, rec.Code, rec.Body.Len())
+		}
+		if rec := get(path, "text/html", etag); rec.Code != http.StatusOK {
+			t.Fatalf("%s: other rendering with the JSON ETag = %d, want 200", path, rec.Code)
+		}
+	}
+	// A new release changes the page and its validator.
+	page := "/repository/pypi-hosted/simple/etag-pkg/"
+	before := get(page, pipAccept, "").Header().Get("ETag")
+	f.upload(t, "/repository/pypi-hosted/", "etag-pkg", "1.1.0", fakeSdist("etag-pkg", "1.1.0"))
+	if rec := get(page, pipAccept, before); rec.Code != http.StatusOK || rec.Header().Get("ETag") == before {
+		t.Fatalf("after a new release: %d ETag %q (was %q)", rec.Code, rec.Header().Get("ETag"), before)
 	}
 }

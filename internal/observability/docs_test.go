@@ -26,7 +26,8 @@ const (
 // plus the proxy cache counters.
 func knownMetrics() []string {
 	return append(allHangarMetrics(), proxy.MetricCacheRequests, proxy.MetricCacheHitBytes, proxy.MetricNegativeCacheEvictions,
-		proxy.MetricUpstreamDNSFailures, httpclient.MetricDNSCacheRequests, httpclient.MetricDNSErrors)
+		proxy.MetricUpstreamDNSFailures, httpclient.MetricDNSCacheRequests, httpclient.MetricDNSErrors,
+		proxy.MetricIndexEntriesSkipped)
 }
 
 var reMetricRef = regexp.MustCompile(`hangar_[a-z0-9_]+`)

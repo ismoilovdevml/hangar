@@ -177,6 +177,7 @@ attributed to the group. `op` is `read` (GET, HEAD), `write` (PUT, POST, PATCH),
 | `hangar_proxy_cache_requests_total` | counter | `format`, `result` | Proxy requests answered from the cache (`hit`) or fetched from the remote (`miss`). |
 | `hangar_proxy_cache_hit_bytes_total` | counter | `format` | Bytes served from proxy caches without contacting the remote. |
 | `hangar_proxy_negative_cache_evictions_total` | counter | `repository` | Remembered remote 404s dropped before their `negative_cache_ttl` because the repository's negative cache (10,000 paths per remote, least recently used first) was full. A steady rate means clients probe more missing paths than the cache holds, and those probes reach the remote again. |
+| `hangar_proxy_index_entries_skipped_total` | counter | `format`, `repository` | Malformed entries of a remote index (a Helm `index.yaml`) that a proxy left out instead of failing the whole index, counted each time the index is parsed. A steady rise means the remote publishes broken entries; the warning log line names the first one. |
 
 ### Blob storage
 

@@ -30,6 +30,13 @@ func ValidCrateName(name string) bool { return crateNameRE.MatchString(name) }
 // reservedName reports whether name is refused for new crates.
 func reservedName(name string) bool { return reservedNames[strings.ToLower(name)] }
 
+// canonicalName is the form under which crate names are unique, as on
+// crates.io: case-insensitive, and "-" and "_" are the same character, so
+// "foo-bar", "Foo_Bar" and "foo_bar" name one crate.
+func canonicalName(name string) string {
+	return strings.ReplaceAll(strings.ToLower(name), "-", "_")
+}
+
 // ValidVersion reports whether v is a SemVer 2.0.0 version.
 func ValidVersion(v string) bool { return len(v) <= 128 && semverRE.MatchString(v) }
 

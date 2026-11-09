@@ -119,8 +119,9 @@ var errMethod = errors.New("method not allowed")
 
 // lock serialises changes to one crate of a hosted repository: across the
 // cluster through Deps.Locks, or within this process when it is not set.
+// Spellings of one crate name ("foo-bar", "foo_bar") share the lock.
 func (h *handler) lock(ctx context.Context, repo *core.Repository, name string) (func(), error) {
-	key := "cargo/" + repo.ID + "/" + name
+	key := "cargo/" + repo.ID + "/" + canonicalName(name)
 	if h.deps.Locks != nil {
 		return h.deps.Locks.Lock(ctx, key)
 	}
@@ -182,6 +183,18 @@ func (h *handler) publish(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, err)
 		return
 	}
+	if len(existing) == 0 {
+		other, err := h.otherSpelling(ctx, target.ID, lname)
+		if err != nil {
+			h.writeError(w, r, err)
+			return
+		}
+		if other != "" {
+			h.writeError(w, r, fmt.Errorf("crate name %q is already taken by crate `%s`: names that differ only in case or in '-' versus '_' are the same crate; publish as %q: %w",
+				meta.Name, other, other, core.ErrAlreadyExists))
+			return
+		}
+	}
 	for _, c := range existing {
 		if dn, _ := c.Attributes["display_name"].(string); dn != "" && dn != meta.Name {
 			h.writeError(w, r, fmt.Errorf("crate was published as %q: the name's spelling cannot change: %w", dn, core.ErrInvalid))
@@ -207,6 +220,44 @@ func (h *handler) publish(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"warnings": map[string][]string{
 		"invalid_categories": {}, "invalid_badges": {}, "other": {},
 	}})
+}
+
+// otherSpelling returns the published spelling of a crate in repo whose
+// name differs from lname (lowercase) only in "-" versus "_", or "". Such
+// names share everything up to their first separator, so only the crate
+// files under that prefix are read.
+func (h *handler) otherSpelling(ctx context.Context, repoID, lname string) (string, error) {
+	i := strings.IndexAny(lname, "-_")
+	if i < 0 {
+		return "", nil
+	}
+	want := canonicalName(lname)
+	q := core.AssetQuery{RepositoryID: repoID, PathPrefix: "crates/" + lname[:i], Limit: core.MaxPageSize}
+	for {
+		page, err := h.deps.Components.ListAssets(ctx, q)
+		if err != nil {
+			return "", err
+		}
+		for _, a := range page.Items {
+			rest, ok := strings.CutPrefix(a.Path, "crates/")
+			if !ok {
+				continue
+			}
+			name, _, _ := strings.Cut(rest, "/")
+			if name != lname && canonicalName(name) == want {
+				if c, err := h.deps.Components.GetComponentByID(ctx, a.ComponentID); err == nil {
+					if dn, _ := c.Attributes["display_name"].(string); dn != "" {
+						return dn, nil
+					}
+				}
+				return name, nil
+			}
+		}
+		if page.NextCursor == "" {
+			return "", nil
+		}
+		q.Cursor = page.NextCursor
+	}
 }
 
 const crateContentType = "application/gzip"

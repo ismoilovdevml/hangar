@@ -307,9 +307,26 @@ type components struct {
 	rec *Recorder
 }
 
-// Wrap returns cs, recording every RecordDownload in rec as well.
+// Wrap returns cs, recording every RecordDownload in rec as well. The
+// full-text search of cs (core.ComponentSearcher), which formats find by
+// type assertion, is kept.
 func Wrap(cs core.ComponentService, rec *Recorder) core.ComponentService {
-	return &components{ComponentService: cs, rec: rec}
+	c := &components{ComponentService: cs, rec: rec}
+	if s, ok := cs.(core.ComponentSearcher); ok {
+		return &searchable{components: c, s: s}
+	}
+	return c
+}
+
+// searchable is components over a service with a full-text index.
+type searchable struct {
+	*components
+	s core.ComponentSearcher
+}
+
+// SearchComponents implements core.ComponentSearcher.
+func (c *searchable) SearchComponents(ctx context.Context, q core.ComponentTextQuery) ([]*core.Component, bool, error) {
+	return c.s.SearchComponents(ctx, q)
 }
 
 // RecordDownload implements core.ComponentService.

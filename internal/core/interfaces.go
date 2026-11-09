@@ -81,7 +81,11 @@ type Conditional struct {
 
 // UpstreamRequest is a request to a proxy repository's remote.
 type UpstreamRequest struct {
-	Method string // GET (default) or HEAD
+	// Method is GET (default), HEAD, or POST for a read-only query that
+	// carries Body (npm's audit endpoints). POST requests are never
+	// collapsed with others nor negatively cached; they are retried like
+	// GET, so they must be idempotent.
+	Method string
 	// Path is relative to ProxyConfig.RemoteURL, e.g. "lodash" or "v2/library/nginx/manifests/1.27".
 	Path string
 	// URL, when set, is an absolute http(s) URL requested instead of Path:
@@ -96,6 +100,8 @@ type UpstreamRequest struct {
 	// addition to ProxyConfig.RelatedHosts: format defaults (PyPI's
 	// file_hosts) or hosts the remote itself declared (a NuGet service index).
 	RelatedHosts []string
+	// Body is the request body of a POST (required there, refused elsewhere).
+	Body []byte
 	// Header is added to the outgoing request (e.g. Accept for OCI manifests).
 	Header      http.Header
 	Conditional Conditional
@@ -293,6 +299,16 @@ type TokenRequest struct {
 // TokenIssuer mints tokens that Authenticator later accepts.
 type TokenIssuer interface {
 	Issue(ctx context.Context, p *Principal, req TokenRequest) (secret string, expiresAt time.Time, err error)
+}
+
+// TokenRevoker is implemented by TokenIssuers that can take back a token
+// they issued, for client logouts (npm logout). Formats type-assert
+// Deps.Tokens to it.
+type TokenRevoker interface {
+	// RevokeIssued revokes the token with id that Issue minted for the
+	// context principal. Tokens of other kinds (personal access tokens) and
+	// other users' tokens are refused with ErrNotFound.
+	RevokeIssued(ctx context.Context, id string) error
 }
 
 // AuthZ decides whether a principal may act on a resource.

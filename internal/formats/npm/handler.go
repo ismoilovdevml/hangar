@@ -33,6 +33,8 @@ func status(err error) int {
 		return http.StatusRequestEntityTooLarge
 	case errors.Is(err, errVersionExists), errors.Is(err, errVersionUnpublished), errors.Is(err, errUnpublishDenied):
 		return http.StatusForbidden
+	case errors.Is(err, errAuditUnavailable):
+		return http.StatusServiceUnavailable
 	}
 	return core.HTTPStatus(err)
 }
@@ -102,7 +104,7 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	r = r.WithContext(ctx)
 	if err := h.route(w, r, repo); err != nil {
-		if code := status(err); code >= 500 && code != http.StatusNotImplemented {
+		if code := status(err); code >= 500 && code != http.StatusNotImplemented && !errors.Is(err, errAuditUnavailable) {
 			h.deps.Logger.ErrorContext(r.Context(), "npm request failed", "repository", repo.Name,
 				"method", r.Method, "path", r.URL.Path, "error", err)
 		}
@@ -196,15 +198,11 @@ func (h *handler) routeSpecial(w http.ResponseWriter, r *http.Request, repo *cor
 		}
 		return errMethod
 	case strings.HasPrefix(rest, "user/token/"):
-		// npm logout. Session tokens cannot be revoked through the format
-		// contract; they expire (login_token_ttl) or are revoked in the UI.
-		if r.Method != http.MethodDelete {
-			return errMethod
-		}
-		ok(w, http.StatusOK)
-		return nil
+		return h.logout(w, r, repo, strings.TrimPrefix(rest, "user/token/"))
 	case strings.HasPrefix(rest, "package/"):
 		return h.routeDistTags(w, r, repo, strings.TrimPrefix(rest, "package/"))
+	case rest == "v1/search":
+		return h.search(w, r, repo)
 	case strings.HasPrefix(rest, "npm/v1/security/"):
 		return h.audit(w, r, repo, strings.TrimPrefix(rest, "npm/v1/security/"))
 	}

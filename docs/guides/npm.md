@@ -161,10 +161,44 @@ username/password prompt. `npm login` does not create users (`npm adduser` for a
 unknown user fails). The issued token lives `login_token_ttl`. In CI, write a
 token into `.npmrc` instead.
 
+`npm logout` revokes the token `npm login` issued. A personal access token
+written into `.npmrc` is left alone (npm only forgets its copy); revoke it under
+**Access tokens**. Tokens issued by `npm login` before this release are not
+recognised as such and expire after `login_token_ttl`.
+
 ### `npm audit`
 
-The audit endpoints answer "no advisories" for now; vulnerability findings are not
-exposed to npm yet.
+`npm audit` (and `pnpm audit`, `yarn npm audit`) get real answers:
+
+- **Proxy repositories** pass the audit to their remote's advisory endpoint
+  (registry.npmjs.org's for the public registry). Only package names the
+  proxy's routing rules allow are sent; names a rule keeps private never leave
+  Hangar.
+- **Hosted repositories** answer from Hangar's own vulnerability findings (OSV
+  scanning, see [vulnerabilities.md](vulnerabilities.md)) for the versions they
+  store. Waived findings are not reported; advisories without a severity count
+  as `high`, as npm treats them.
+- **Groups** combine both: each package is asked of the members the group's
+  routing rules let serve it, and the answers are merged (the same advisory
+  from both sources is listed once).
+
+Hangar never answers "no advisories" when it cannot vouch for that. The audit
+fails, and npm prints `audit endpoint returned an error`, when:
+
+- a hosted version in the request has no successful scan yet (not scanned,
+  or the last scan failed; the message names them). Turn on
+  `scan_on_arrival` for hosted npm repositories, or scan them from the
+  repository page;
+- vulnerability scanning is turned off (`scanning.enabled: false`) and the
+  request names a version Hangar stores (503);
+- a proxy's remote cannot answer the audit (502).
+
+### `npm search`
+
+`npm search <text>` works on every repository type: hosted repositories search
+their packages (name, scope, description), proxies ask their remote's search
+(results their routing rules exclude are dropped), and groups merge their
+members' results in member order. `size` is capped at 250.
 
 ## pnpm
 
@@ -224,8 +258,17 @@ always-auth=true
 
 ## Not supported yet
 
-`npm search`, `npm access`, `npm owner`, teams and provenance attestations
+`npm access`, `npm owner`, teams and provenance attestations
 (accepted on publish but not stored).
+
+## Proxy tarball names
+
+A remote whose tarball URLs do not end in `.tgz` (a download endpoint such as
+`https://cdn.example.com/download/lodash/4.17.21`) is served too: Hangar
+advertises such tarballs under the conventional name
+(`lodash/-/lodash-4.17.21.tgz`) and fetches them from the remote's URL. A URL
+on another host than the remote needs that host in the proxy's
+`related_hosts`.
 
 ## Routing rules
 

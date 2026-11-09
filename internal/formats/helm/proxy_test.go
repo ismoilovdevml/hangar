@@ -11,10 +11,13 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/core/coretest"
 	"github.com/ismoilovdevml/hangar/internal/formats"
 	"github.com/ismoilovdevml/hangar/internal/formats/helm"
+	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
 // upstream is a classic chart repository at /charts/ whose index.yaml
@@ -426,5 +429,85 @@ func TestNoFormatSettings(t *testing.T) {
 		Config: core.RepoConfig{Format: map[string]any{"x": 1}}})
 	if err == nil {
 		t.Fatal("unknown setting accepted")
+	}
+}
+
+// skippedEntries reads hangar_proxy_index_entries_skipped_total for repo.
+func skippedEntries(t *testing.T, repo string) float64 {
+	t.Helper()
+	reg := prometheus.NewRegistry()
+	if err := proxy.RegisterMetrics(reg); err != nil {
+		t.Fatal(err)
+	}
+	fams, err := reg.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fams {
+		if f.GetName() != proxy.MetricIndexEntriesSkipped {
+			continue
+		}
+		for _, m := range f.GetMetric() {
+			for _, l := range m.GetLabel() {
+				if l.GetName() == "repository" && l.GetValue() == repo {
+					return m.GetCounter().GetValue()
+				}
+			}
+		}
+	}
+	return 0
+}
+
+// Regression: one entry of the remote index.yaml that does not decode (a
+// date that is not a date, a string where the URL list belongs) failed the
+// whole index with 502, so no chart of the remote could be installed.
+// Malformed entries are left out, logged and counted.
+func TestProxyIndexSkipsMalformedEntries(t *testing.T) {
+	f := newFixture(t)
+	good := chartTgz(t, "good-app", "1.0.0", "")
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/charts/index.yaml":
+			_, _ = fmt.Fprintf(w, `apiVersion: v1
+entries:
+  good-app:
+  - apiVersion: v2
+    name: good-app
+    version: 1.0.0
+    created: "2024-01-01T10:00:00Z"
+    digest: %s
+    urls: [good-app-1.0.0.tgz]
+  - apiVersion: v2
+    name: good-app
+    version: 0.9.0
+    created: last tuesday
+    urls: [good-app-0.9.0.tgz]
+  odd-urls:
+  - name: odd-urls
+    version: 1.0.0
+    urls: odd-urls-1.0.0.tgz
+  not-a-list: surprise
+generated: "2024-03-01T10:00:00Z"
+`, sha(good))
+		case "/charts/good-app-1.0.0.tgz":
+			_, _ = w.Write(good)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(remote.Close)
+	f.env.AddRepo(t, &core.Repository{Name: "helm-lenient", Format: helm.Name, Type: core.RepoProxy,
+		Config: core.RepoConfig{Proxy: &core.ProxyConfig{RemoteURL: remote.URL + "/charts", MetadataTTL: core.Duration(3600e9)}}})
+
+	before := skippedEntries(t, "helm-lenient")
+	idx := f.index("helm-lenient")
+	if ga := idx.Entries["good-app"]; len(ga) != 1 || ga[0].Version != "1.0.0" || len(idx.Entries) != 1 {
+		t.Fatalf("entries = %+v", idx.Entries)
+	}
+	if rec := f.do(http.MethodGet, "/repository/helm-lenient/good-app/1.0.0/good-app-1.0.0.tgz", nil, ""); rec.Code != http.StatusOK || rec.Body.String() != string(good) {
+		t.Fatalf("good chart = %d", rec.Code)
+	}
+	if n := skippedEntries(t, "helm-lenient") - before; n != 3 {
+		t.Fatalf("skipped entries counted = %v, want 3", n)
 	}
 }

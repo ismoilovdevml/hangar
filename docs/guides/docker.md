@@ -103,6 +103,9 @@ docker pull hangar.example.com/docker-hub/library/alpine:3.20
   [README.md](README.md#things-that-apply-to-every-proxy-repository)).
 - Names the remote does not serve answer `404`, and are remembered for
   `negative_cache_ttl` (30 s when unset).
+- Tag lists follow the remote's paging (`Link: <...>; rel="next"`, as Quay,
+  Harbor and GitLab page them), up to 200 pages; a page on another host is not
+  followed.
 - Proxy repositories are read-only (`405` on push).
 
 ## Group repository
@@ -128,6 +131,15 @@ Reads try the members in order. Pushes go to `write_member`; without one the gro
 is read-only. Groups take no `blob_store`. An unreachable or rate-limiting proxy
 member counts as a miss, so pushes through the group keep working while Docker Hub
 is down.
+
+A push through a group asks the group whether layers exist, and the group
+answers from any member. When a layer (or, for a multi-platform image, a
+platform manifest) is held by another member or behind a proxy member, the
+client skips uploading it. The pushed manifest is then still accepted: Hangar
+links that content into the write member (fetching it from the proxy's remote
+if only the remote has it), so the write member holds the complete image and
+can also be pulled on its own. Content is only linked when the pusher may read
+the group, and never from a quarantined image.
 
 ## Connectors: own host or port
 
