@@ -486,6 +486,26 @@ var formatRequests = map[string][]formatRequest{
 		{Method: "POST", Path: "/repository/R/yank/pkg/1.0", Write: true},
 		{Method: "DELETE", Path: "/repository/R/yank/pkg/1.0", Write: true},
 	},
+	"helm": {
+		{Method: "GET", Path: "/repository/R/index.yaml"},
+		{Method: "HEAD", Path: "/repository/R/index.yaml"},
+		{Method: "GET", Path: "/repository/R/web/1.0.0/web-1.0.0.tgz"},
+		{Method: "HEAD", Path: "/repository/R/web/1.0.0/web-1.0.0.tgz.prov"},
+		{Method: "GET", Path: "/repository/R/web-1.0.0.tgz"},
+		{Method: "HEAD", Path: "/repository/R/web-1.0.0.tgz"},
+		{Method: "GET", Path: "/repository/R/api/charts"},
+		{Method: "HEAD", Path: "/repository/R/api/charts"},
+		{Method: "GET", Path: "/repository/R/api/charts/web"},
+		{Method: "HEAD", Path: "/repository/R/api/charts/web"},
+		{Method: "GET", Path: "/repository/R/api/charts/web/1.0.0"},
+		{Method: "HEAD", Path: "/repository/R/api/charts/web/latest"},
+		{Method: "POST", Path: "/repository/R/api/charts", Body: "x", Write: true},
+		{Method: "POST", Path: "/repository/R/api/charts?force", Body: "x", Write: true},
+		{Method: "POST", Path: "/repository/R/api/prov", Body: "x", Write: true},
+		{Method: "PUT", Path: "/repository/R/web-1.0.0.tgz", Body: "x", Write: true},
+		{Method: "PUT", Path: "/repository/R/web-1.0.0.tgz.prov", Body: "x", Write: true},
+		{Method: "DELETE", Path: "/repository/R/api/charts/web/1.0.0", Write: true},
+	},
 	"nuget": {
 		// The service index only lists this repository's endpoint URLs;
 		// clients read it before they are challenged for credentials.

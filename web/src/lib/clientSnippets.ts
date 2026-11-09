@@ -119,7 +119,16 @@ export function clientSetup(t: ClientTarget): ClientSetup {
         publish: t.publishes ? [l(`curl -u ${user}:${tok} --upload-file ./<file> ${url}<path>/<file>`)] : [],
       };
     case 'helm':
-      return { setup: [l(`helm repo add ${repo} ${url} --username ${user} --password ${tok}`)], publish: [] };
+      return {
+        setup: [l(`helm repo add ${repo} ${url} --username ${user} --password ${tok}`), l('helm repo update')],
+        publish: t.publishes
+          ? [
+              l(`helm cm-push ./<chart>-<version>.tgz ${repo}`),
+              c('# or without the plugin'),
+              l(`curl -u ${user}:${tok} --upload-file ./<chart>-<version>.tgz ${url}<chart>-<version>.tgz`),
+            ]
+          : [],
+      };
     case 'go':
       return {
         setup: [l(`go env -w GOPROXY=${url},direct`), c(`# ~/.netrc: machine ${dockerHost(url)} login ${user} password ${tok}`)],
@@ -220,6 +229,14 @@ export function installCommands(t: Pick<ClientTarget, 'format' | 'url'>, p: Pack
     }
     case 'raw':
       return [{ id: 'curl', label: 'curl', lines: [l(`curl -u <username>:${TOKEN} -fLO ${url}${full.replace(/^\/+/, '')}`)] }];
+    case 'helm': {
+      // `helm repo add` names the repository after the Hangar repository (see the set-up snippet).
+      const repo = url.replace(/\/+$/, '').split('/').pop() ?? '<repo>';
+      return [
+        { id: 'helm', label: 'Helm', lines: [l(`helm install <release> ${repo}/${p.name} --version ${v}`)] },
+        { id: 'pull', label: 'Pull', lines: [l(`helm pull ${repo}/${p.name} --version ${v}`)] },
+      ];
+    }
     default:
       return [];
   }
