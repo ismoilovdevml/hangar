@@ -166,7 +166,11 @@ func tarball(files map[string]string, dirs bool) ([]byte, error) {
 			}
 		}
 		body := files[f]
-		if err := tw.WriteHeader(&tar.Header{Name: "./" + rel, Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(body)), ModTime: mt, Format: tar.FormatGNU}); err != nil {
+		mode := int64(0o644)
+		if strings.HasPrefix(f, "/usr/bin/") || strings.HasPrefix(f, "/usr/sbin/") {
+			mode = 0o755
+		}
+		if err := tw.WriteHeader(&tar.Header{Name: "./" + rel, Typeflag: tar.TypeReg, Mode: mode, Size: int64(len(body)), ModTime: mt, Format: tar.FormatGNU}); err != nil {
 			return nil, err
 		}
 		if _, err := io.WriteString(tw, body); err != nil {

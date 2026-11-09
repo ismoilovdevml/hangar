@@ -166,6 +166,8 @@ export function clientSetup(t: ClientTarget): ClientSetup {
       // A proxy passes the remote's signed metadata through: trust the remote's archive key.
       const proxy = t.type === 'proxy';
       const keyring = proxy ? '/usr/share/keyrings/debian-archive-keyring.gpg' : `/etc/apt/keyrings/${repo}.gpg`;
+      // apt sends auth.conf credentials over plain http only when the entry names the scheme.
+      const machine = url.startsWith('http://') ? `http://${dockerHost(url)}` : dockerHost(url);
       return {
         setup: [
           ...(proxy
@@ -179,7 +181,7 @@ export function clientSetup(t: ClientTarget): ClientSetup {
           l(`Signed-By: ${keyring}`),
           l('EOF'),
           c('# Private repositories: credentials for apt (mode 0600)'),
-          l(`echo 'machine ${dockerHost(url)} login ${user} password ${tok}' | sudo tee /etc/apt/auth.conf.d/${repo}.conf > /dev/null`),
+          l(`echo 'machine ${machine} login ${user} password ${tok}' | sudo tee /etc/apt/auth.conf.d/${repo}.conf > /dev/null`),
           l(`sudo chmod 600 /etc/apt/auth.conf.d/${repo}.conf && sudo apt-get update`),
         ],
         publish: t.publishes

@@ -128,6 +128,8 @@ sudo apt-get install hello
 - Older apt (Debian 10, Ubuntu 18.04) reads one-line `.list` files:
   `deb [signed-by=/etc/apt/keyrings/apt-hosted.gpg] https://hangar.example.com/repository/apt-hosted/ stable main`.
 - Repositories with anonymous read need neither `-u` nor `auth.conf.d`.
+- apt sends `auth.conf.d` credentials over plain `http` only when the entry
+  names the scheme: `machine http://hangar.example.com:8080 login ...`.
 
 ### Proxy of Debian or Ubuntu
 
