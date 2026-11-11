@@ -275,8 +275,10 @@ func (s *Components) DeleteComponent(ctx context.Context, repo *core.Repository,
 		_ = s.Audit.Record(ctx, core.AuditEvent{Action: "component.delete", Target: target})
 	}
 	if s.Events != nil {
+		// Like the component service, the payload is the deleted component.
+		data, _ := json.Marshal(c)
 		_ = s.Events.Publish(ctx, core.Event{Type: core.EventComponentDeleted, Repository: repo.Name, Subject: target,
-			Actor: core.PrincipalFrom(ctx).Name})
+			Actor: core.PrincipalFrom(ctx).Name, Data: data})
 	}
 	return nil
 }
