@@ -24,9 +24,13 @@ const (
 	// service denying our credentials) or the address is blocked by the
 	// outbound address policy. Usually a configuration problem.
 	StateBlocked State = "blocked"
-	// StateOffline: the circuit breaker is open after repeated connection
-	// failures or 5xx answers; requests fail fast until it half-opens.
+	// StateOffline: the last request to the remote failed (connection
+	// error or 5xx answer), or the circuit breaker is open after repeated
+	// failures and requests fail fast until it half-opens.
 	StateOffline State = "offline"
+	// StateUnknown: this node has not sent the remote a request since it
+	// started or the repository's remote settings last changed.
+	StateUnknown State = "unknown"
 )
 
 // Reason says why a remote is StateBlocked (HealthItem.Reason).
@@ -55,6 +59,9 @@ type HealthItem struct {
 	// LatencyMS is the smoothed time to response headers; nil without
 	// traffic in the last LatencyWindow.
 	LatencyMS *int64 `json:"latency_ms"`
+	// LastError is why the last request failed, while State is offline.
+	// It is the client's error text: scrub it before showing it.
+	LastError string `json:"last_error,omitempty"`
 }
 
 // LatencyWindow is how long a latency sample stays meaningful.
@@ -70,6 +77,35 @@ type stats struct {
 	lastSample time.Time
 	blocked    Reason // "" = not blocked
 	reported   State
+	// lastOK and lastFail are when a request to the remote last got an
+	// answer below 500 and last failed; lastErr says why it failed.
+	lastOK, lastFail time.Time
+	lastErr          string
+}
+
+// succeeded records an answer from the remote.
+func (s *stats) succeeded(now time.Time) {
+	s.mu.Lock()
+	s.lastOK = now
+	s.mu.Unlock()
+}
+
+// failed records a request that got no answer or a 5xx.
+func (s *stats) failed(now time.Time, why string) {
+	s.mu.Lock()
+	s.lastFail, s.lastErr = now, why
+	s.mu.Unlock()
+}
+
+// outcome reports whether the remote was ever contacted and, if the last
+// request failed, why.
+func (s *stats) outcome() (contacted bool, failure string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.lastFail.IsZero() && s.lastFail.After(s.lastOK) {
+		return true, s.lastErr
+	}
+	return !s.lastOK.IsZero(), ""
 }
 
 func (s *stats) observe(d time.Duration, now time.Time) {
@@ -114,11 +150,18 @@ func (u *upstream) state(now time.Time) State {
 	if u.stats.blockReason() != "" {
 		return StateBlocked
 	}
+	contacted, failure := u.stats.outcome()
+	if failure != "" {
+		return StateOffline
+	}
 	if l, ok := u.stats.latency(now); ok && l > u.slow {
 		return StateSlow
 	}
 	if _, gated := u.throttle.gated(u.base.Host, now); gated {
 		return StateSlow // rate limited: answers come, only later
+	}
+	if !contacted {
+		return StateUnknown
 	}
 	return StateHealthy
 }
@@ -129,6 +172,12 @@ func (u *upstream) health() HealthItem {
 	it := HealthItem{Name: u.name, URL: core.RedactURL(u.remoteRaw), State: u.state(now)}
 	if it.State == StateBlocked {
 		it.Reason = u.stats.blockReason()
+	}
+	if _, failure := u.stats.outcome(); it.State == StateOffline {
+		it.LastError = failure
+		if failure == "" {
+			it.LastError = "Too many failed requests; requests are not sent until the remote answers a probe"
+		}
 	}
 	if l, ok := u.stats.latency(now); ok {
 		ms := l.Milliseconds()
@@ -145,7 +194,7 @@ func (u *upstream) changedState() (prev, cur State, changed bool) {
 	defer u.stats.mu.Unlock()
 	prev = u.stats.reported
 	if prev == "" {
-		prev = StateHealthy
+		prev = StateUnknown
 	}
 	u.stats.reported = cur
 	return prev, cur, prev != cur
@@ -153,7 +202,7 @@ func (u *upstream) changedState() (prev, cur State, changed bool) {
 
 // HealthReporter lists the health of every proxy repository, for
 // GET /api/v1/upstreams/health. Remotes that have not been used since start
-// are reported healthy without latency.
+// are reported unknown: nothing probes them in the background.
 type HealthReporter struct {
 	m     *Manager
 	repos core.RepositoryService

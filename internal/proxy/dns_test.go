@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sony/gobreaker/v2"
+
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/httpclient"
 )
@@ -118,20 +120,25 @@ func TestDNSTimeoutBurstDoesNotOpenBreaker(t *testing.T) {
 		})
 	}
 	wg.Wait()
-	if st := m.Health(repo).State; st != StateHealthy {
-		t.Fatalf("after one DNS timeout burst: state %s, want healthy", st)
+	// The requests failed, so the remote reads offline; the breaker stays
+	// closed and lets the next request try.
+	if st := u.breaker.State(); st != gobreaker.StateClosed {
+		t.Fatalf("after one DNS timeout burst: breaker %s, want closed", st)
+	}
+	if it := m.Health(repo); it.State != StateOffline || it.LastError == "" {
+		t.Fatalf("after one DNS timeout burst: %+v, want offline with the error", it)
 	}
 	// The outage goes on: one more counted failure per second.
 	clk.Advance(time.Second)
 	_ = fetch("a")
 	_ = fetch("b") // same second: not counted
-	if st := m.Health(repo).State; st != StateHealthy {
-		t.Fatalf("after two counted DNS failures: state %s", st)
+	if st := u.breaker.State(); st != gobreaker.StateClosed {
+		t.Fatalf("after two counted DNS failures: breaker %s", st)
 	}
 	clk.Advance(time.Second)
 	_ = fetch("c")
-	if st := m.Health(repo).State; st != StateOffline {
-		t.Fatalf("after a lasting DNS outage: state %s, want offline", st)
+	if st := u.breaker.State(); st != gobreaker.StateOpen {
+		t.Fatalf("after a lasting DNS outage: breaker %s, want open", st)
 	}
 
 	// NXDOMAIN is a real failure: each one counts.
