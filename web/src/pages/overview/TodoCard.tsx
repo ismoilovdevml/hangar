@@ -4,7 +4,8 @@ import { ErrorNote } from '../../components/ErrorNote';
 import { IconCheck, IconClose } from '../../components/icons';
 import type { TodoItem, TodoLink } from '../../lib/overview';
 
-function TodoAnchor({ link, className, children }: { link: TodoLink; className: string; children: ReactNode }) {
+/** The link of a to-do item (To do card and the bell). */
+export function TodoAnchor({ link, className, children }: { link: TodoLink; className: string; children: ReactNode }) {
   switch (link.kind) {
     case 'account-tokens':
       return (

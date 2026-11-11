@@ -322,7 +322,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Overall health, shown in the header status dot and the sidebar card */
+        /**
+         * Overall health, shown by every status indicator of the web UI
+         * @description The rollup of the System status checks of every node (the same checks
+         *     as `/system/nodes` and `/system/health`), so all of them agree. `state`
+         *     and `message` are public; signed-in callers also get the failing checks
+         *     in `problems`, and callers with `system:cluster:read` their detail and
+         *     the dependency errors.
+         */
         get: operations["getSystemStatus"];
         put?: never;
         post?: never;
@@ -2425,12 +2432,46 @@ export interface components {
             uptime_seconds?: number;
             /** @description Whether the web UI is embedded in this binary */
             web_ui?: boolean;
+            /** @description The answering node's checks; `error` only for system:cluster:read */
             dependencies?: components["schemas"]["DependencyStatus"][];
+            /** @description System status checks of the nodes that answer */
+            checks_total?: number;
+            /** @description Of those */
+            checks_passing?: number;
+            /** @description Checks that are not healthy and silent nodes, worst first; signed-in callers only */
+            problems?: components["schemas"]["SystemCheckState"][];
+        };
+        SystemCheckState: {
+            /** @description The node the check ran on; set when there is more than one */
+            node?: string;
+            /** @description The subsystem name (see SystemSubsystem), or `node` for a node that stopped publishing heartbeats */
+            name: string;
+            label: string;
+            status: components["schemas"]["SystemStatusLevel"];
+            /** @description One sentence explaining the status; only for system:cluster:read on /system/status */
+            detail?: string;
+            since?: components["schemas"]["Timestamp"];
+            latency_ms?: number;
+        };
+        /** @description The installation's state as /system/status reports it */
+        SystemSummary: {
+            status: components["schemas"]["SystemStatusLevel"];
+            /**
+             * @example All systems normal
+             * @example Blob storage down
+             * @example 2 checks need attention
+             */
+            headline: string;
+            nodes_up: number;
+            nodes_total: number;
+            checks_total: number;
+            checks_passing: number;
+            problems: components["schemas"]["SystemCheckState"][];
         };
         /** @enum {string} */
         SystemStatusLevel: "healthy" | "degraded" | "down";
         SystemSubsystem: {
-            /** @description database, blobstores, eventbus, scheduler, search, auth, upstreams */
+            /** @description database, blobstores, eventbus, scheduler, search, auth, upstreams, scanner */
             name: string;
             /** @description Display name, e.g. Database or Sign-in (OIDC) */
             label: string;
@@ -2490,6 +2531,7 @@ export interface components {
             /** @description Only this node is listed because the database cannot be read */
             partial: boolean;
             message?: string;
+            summary?: components["schemas"]["SystemSummary"];
         };
         SystemLogRecord: {
             /** @description Sequence number within the node's process */
@@ -2628,7 +2670,10 @@ export interface components {
             }[];
         };
         /**
-         * @description unknown = no health data for the remote
+         * @description offline = the last request failed (connection error or 5xx) or the
+         *     circuit breaker is open; unknown = the answering node has not sent the
+         *     remote a request since it started (nothing probes remotes in the
+         *     background).
          * @enum {string}
          */
         UpstreamState: "healthy" | "slow" | "blocked" | "offline" | "unknown";
@@ -2655,6 +2700,8 @@ export interface components {
             latency_ms: number | null;
             /** @description Remote requests timed over the range; null when traffic statistics are not available */
             requests: number | null;
+            /** @description Why the last request to the remote failed, while offline */
+            last_error?: string;
         };
         CacheInvalidation: {
             repository: string;
@@ -2969,13 +3016,22 @@ export interface components {
         };
         /** @enum {string} */
         RepositoryStatus: "online" | "slow_upstream" | "blocked" | "offline";
+        /**
+         * @description Why a proxy is `blocked` (see UpstreamBlockedReason), or why an
+         *     enabled repository is `offline`: its remote's last request failed
+         *     (`upstream_unreachable`) or its blob store failed the last health
+         *     probe (`blob_store_unavailable`). Absent for a disabled repository.
+         * @enum {string}
+         */
+        RepositoryStatusReason: "auth_failed" | "access_denied" | "address_blocked" | "upstream_unreachable" | "blob_store_unavailable";
         Repository: components["schemas"]["RepositoryInput"] & {
             id: string;
             /** @description Client URL built from server.base_url */
             url: string;
             status: components["schemas"]["RepositoryStatus"];
-            /** @description Proxy repositories with status blocked only */
-            status_reason?: components["schemas"]["UpstreamBlockedReason"];
+            status_reason?: components["schemas"]["RepositoryStatusReason"];
+            /** @description The error behind an offline status (the store's or the remote's) */
+            status_detail?: string;
             /**
              * @description Hosted and proxy: the total size of the repository's assets.
              *     Group: what the group serves; every blob stored by its
@@ -3034,10 +3090,18 @@ export interface components {
         BlobStore: components["schemas"]["BlobStoreInput"] & {
             id: string;
             /**
-             * @description unknown when the storage subsystem does not report live state
+             * @description From the System status blob storage check, which probes every
+             *     store each heartbeat: ok, degraded (low on free space),
+             *     unavailable (the probe failed). unknown before the first probe.
              * @enum {string}
              */
             state: "ok" | "degraded" | "unavailable" | "read_only" | "unknown";
+            /** @description What the last probe found, e.g. the error of an unavailable store */
+            state_detail?: string;
+            /** @description When the store was last probed */
+            checked_at?: components["schemas"]["Timestamp"];
+            /** @description Since when the store has this state (on the answering node) */
+            state_since?: components["schemas"]["Timestamp"];
             /** @description Human-readable location (bucket/prefix or path) */
             location: string;
             used_bytes: components["schemas"]["Bytes"];

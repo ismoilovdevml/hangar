@@ -41,7 +41,7 @@ describe('overview', () => {
     const upstream = await waitFor(() => card(/^Upstream/));
     expect(upstream).toHaveAttribute('href', '/repositories?type=proxy');
     expect(within(upstream).getByText('ghcr.io')).toBeInTheDocument();
-    expect(within(upstream).getByText('authentication failed (401) · cache hit 94% · 2 of 5 healthy')).toBeInTheDocument();
+    expect(within(upstream).getByText('authentication failed (401) · cache hit 94% · 2 of 4 healthy · 1 not used yet')).toBeInTheDocument();
   });
 
   it('lists what needs attention, most urgent first, linking to where it is fixed', async () => {
@@ -52,15 +52,18 @@ describe('overview', () => {
       'ghcr-proxy: authentication failed (401)',
       '4 pushes rejected',
       'Review 7 critical vulnerabilities',
+      // From the system health: the mock cluster has a silent node.
+      'Node hangar-3 is not responding',
       'Renew the laptop CLI token',
     ]);
     expect(items.map((a) => a.getAttribute('href'))).toEqual([
       '/repositories/ghcr-proxy/settings',
       '/audit?action=component.publish',
       '/vulnerabilities',
+      '/system/status',
       '/account#my-tokens-title',
     ]);
-    expect(todo.querySelector('.todo__count')).toHaveTextContent('4 items');
+    expect(todo.querySelector('.todo__count')).toHaveTextContent('5 items');
     // The backup task is scheduled and the blob stores have quotas: no reminders for those.
     expect(todo).not.toHaveTextContent(/backup|quota/i);
   });

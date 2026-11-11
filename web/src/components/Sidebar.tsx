@@ -1,11 +1,10 @@
 import { useId, useState } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
-import { useSession, useSystemStatus } from '../api/hooks';
+import { useSystemHealth } from '../api/health';
+import { useSession } from '../api/hooks';
 import { versionText } from '../lib/format';
 import { activeNav, visibleNav } from '../nav';
 import { IconClose, IconLogo, IconMenu } from './icons';
-
-const STATUS_TONE = { ok: 'ok', degraded: 'warn', down: 'bad' } as const;
 
 export function Sidebar() {
   const bodyId = useId();
@@ -14,9 +13,8 @@ export function Sidebar() {
   const [openOn, setOpenOn] = useState<string | null>(null);
   const open = openOn === pathname;
   const session = useSession();
-  const status = useSystemStatus();
-
-  const sys = status.data;
+  const health = useSystemHealth();
+  const sys = health.status;
   const active = activeNav(pathname);
 
   return (
@@ -73,26 +71,16 @@ export function Sidebar() {
           ))}
         </div>
 
-        <Link to="/system/status" className={`system-card system-card--${sys ? STATUS_TONE[sys.state] : 'neutral'}`}>
+        <Link to="/system/status" className={`system-card system-card--${health.tone}`}>
           <span className="system-card__body" role="status" aria-live="polite">
-            {sys ? (
-              <>
-                <span className="system-card__state">
-                  <span className={`status__dot dot-${STATUS_TONE[sys.state]} status__dot--halo`} aria-hidden="true" />
-                  {/* This card speaks for the nodes only; the Overview weighs upstreams and errors as well. */}
-                  {sys.state === 'ok' ? 'All nodes healthy' : sys.message}
-                </span>
-                <span className="system-card__meta">
-                  {sys.nodes_up} of {sys.nodes_total} nodes · {versionText(sys.version)}
-                </span>
-              </>
-            ) : status.isError ? (
-              <span className="system-card__state">
-                <span className="status__dot dot-neutral" aria-hidden="true" />
-                Status unavailable
+            <span className="system-card__state">
+              <span className={`status__dot dot-${health.tone}${health.tone === 'neutral' ? '' : ' status__dot--halo'}`} aria-hidden="true" />
+              {health.text}
+            </span>
+            {sys && !health.error && (
+              <span className="system-card__meta">
+                {sys.nodes_up} of {sys.nodes_total} {sys.nodes_total === 1 ? 'node' : 'nodes'} · {versionText(sys.version)}
               </span>
-            ) : (
-              <span className="system-card__meta">Checking system status…</span>
             )}
           </span>
         </Link>
