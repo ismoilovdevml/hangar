@@ -19,6 +19,7 @@ import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { safeRedirect } from './lib/redirect';
 import { GATES, type Gate } from './lib/gates';
 import { DocsShell } from './pages/apidocs/DocsShell';
+import { OverviewPage } from './pages/overview/OverviewPage';
 import { isBrowseTab, type BrowseTab } from './lib/packages';
 import { isSearchSort } from './lib/searchQuery';
 import type { SearchSort } from './api/types';
@@ -37,9 +38,8 @@ import { isTaskStatusFilter, isTaskType } from './lib/tasks';
 import { validateLogsSearch, type SystemLogsSearch } from './pages/system/model';
 
 // Pages load on first visit (or on hover of a link to them), so the first
-// load fetches only the shell and the page it opens.
+// load fetches only the shell, the landing page (Overview) and the page it opens.
 const ApiDocsPage = lazyRouteComponent(() => import('./pages/apidocs/ApiDocsPage'), 'ApiDocsPage');
-const OverviewPage = lazyRouteComponent(() => import('./pages/overview/OverviewPage'), 'OverviewPage');
 const RepoCreatePage = lazyRouteComponent(() => import('./pages/repositories/RepoCreatePage'), 'RepoCreatePage');
 const RepositoriesPage = lazyRouteComponent(() => import('./pages/repositories/RepositoriesPage'), 'RepositoriesPage');
 const RepoSettingsPage = lazyRouteComponent(() => import('./pages/repositories/settings/RepoSettingsPage'), 'RepoSettingsPage');
