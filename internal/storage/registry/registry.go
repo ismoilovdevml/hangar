@@ -256,3 +256,24 @@ LIMIT 1`, name, kind, config).Scan(&id)
 	}
 	return id, nil
 }
+
+// SyncStore sets the kind and config of the blob_stores row name to the
+// given ones when they differ, and reports whether it changed the row. It
+// keeps the row of the store defined by the server configuration equal to
+// the settings in effect, which may change between starts (configuration
+// file, environment).
+func SyncStore(ctx context.Context, pool *pgxpool.Pool, name, kind string, config any) (bool, error) {
+	if config == nil {
+		config = map[string]any{}
+	}
+	b, err := json.Marshal(config)
+	if err != nil {
+		return false, fmt.Errorf("sync blob store %q: %w", name, err)
+	}
+	tag, err := pool.Exec(ctx, `UPDATE blob_stores SET kind = $2, config = $3::jsonb, updated_at = now()
+WHERE name = $1 AND (kind <> $2 OR config <> $3::jsonb)`, name, kind, b)
+	if err != nil {
+		return false, fmt.Errorf("sync blob store %q: %w", name, err)
+	}
+	return tag.RowsAffected() > 0, nil
+}

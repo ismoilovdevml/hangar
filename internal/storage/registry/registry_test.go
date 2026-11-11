@@ -182,6 +182,29 @@ func TestEnsureStore(t *testing.T) {
 	}
 }
 
+func TestSyncStore(t *testing.T) {
+	pool := pgtest.Pool(t)
+	ctx := context.Background()
+	s3cfg := map[string]any{"endpoint": "http://minio:9000", "bucket": "hangar", "use_path_style": false}
+	if _, err := registry.EnsureStore(ctx, pool, "default", "s3", s3cfg); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := registry.SyncStore(ctx, pool, "default", "s3", s3cfg); err != nil || changed {
+		t.Fatalf("unchanged settings: changed=%v, %v", changed, err)
+	}
+	s3cfg["use_path_style"] = true
+	if changed, err := registry.SyncStore(ctx, pool, "default", "s3", s3cfg); err != nil || !changed {
+		t.Fatalf("path style switched on: changed=%v, %v", changed, err)
+	}
+	var pathStyle bool
+	if err := pool.QueryRow(ctx, `SELECT (config->>'use_path_style')::bool FROM blob_stores WHERE name = 'default'`).Scan(&pathStyle); err != nil || !pathStyle {
+		t.Fatalf("stored use_path_style = %v, %v", pathStyle, err)
+	}
+	if changed, err := registry.SyncStore(ctx, pool, "missing", "s3", s3cfg); err != nil || changed {
+		t.Fatalf("missing row: changed=%v, %v", changed, err)
+	}
+}
+
 func TestConformanceThroughRegistry(t *testing.T) {
 	pool := pgtest.Pool(t)
 	n := 0
