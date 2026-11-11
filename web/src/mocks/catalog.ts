@@ -533,7 +533,8 @@ function componentInfo(c: ComponentDetail): ComponentInfo {
         homepage: 'https://ui.example.com',
         readme: {
           format: 'markdown',
-          content: UI_KIT_README,
+          // The public demo leaves out the badge whose host is down, so its console stays clean.
+          content: import.meta.env.VITE_DEMO === 'true' ? UI_KIT_README.replace('![Offline](https://offline.example.com/badge.svg)\n', '') : UI_KIT_README,
           source: 'README in the version manifest',
           truncated: false,
           images: {
