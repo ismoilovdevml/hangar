@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -65,7 +66,7 @@ func TestServiceIndexIsSensitive(t *testing.T) {
 		t.Errorf("a repository without a custom index got one: %s", b)
 	}
 	resp, yb := f.do("carol", "GET", "/api/v1/repositories/nuget-vendor", nil, "Accept", "application/yaml")
-	if resp.StatusCode != 200 || strings.Contains(string(yb), feedKey) || !strings.Contains(string(yb), `service_index: '***'`) {
+	if resp.StatusCode != http.StatusOK || strings.Contains(string(yb), feedKey) || !strings.Contains(string(yb), `service_index: '***'`) {
 		t.Errorf("reader YAML = %d %s", resp.StatusCode, yb)
 	}
 
@@ -78,7 +79,7 @@ func TestServiceIndexIsSensitive(t *testing.T) {
 			t.Errorf("%s list = %s", user, b)
 		}
 		resp, yb := f.do(user, "GET", "/api/v1/repositories/nuget-vendor", nil, "Accept", "application/yaml")
-		if resp.StatusCode != 200 || !strings.Contains(string(yb), feedKey) {
+		if resp.StatusCode != http.StatusOK || !strings.Contains(string(yb), feedKey) {
 			t.Errorf("%s YAML = %d %s", user, resp.StatusCode, yb)
 		}
 	}
@@ -118,7 +119,7 @@ func TestServiceIndexIsSensitive(t *testing.T) {
 		"proxy":  map[string]any{"remote_url": "https://api.nuget.example"},
 		"format": map[string]any{"service_index": redactedSetting},
 	}}, "Content-Type", "application/json")
-	if resp.StatusCode != 400 || !strings.Contains(string(b), "placeholder") {
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(b), "placeholder") {
 		t.Errorf("placeholder with nothing stored = %d %s", resp.StatusCode, b)
 	}
 
