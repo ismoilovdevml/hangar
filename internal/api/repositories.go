@@ -213,6 +213,10 @@ func (a *API) toRepositoryJSON(r *core.Repository, stats map[string]catalog.Repo
 		SizeBytes: st.SizeBytes, ComponentCount: st.ComponentCount, CreatedAt: r.CreatedAt.UTC(), UpdatedAt: r.UpdatedAt.UTC(),
 	}
 	j.Status, j.StatusReason, j.StatusDetail = a.repoStatus(r, up)
+	if j.StatusReason == "blob_store_unavailable" && !admin {
+		// The store's error names paths and buckets: administrators only.
+		j.StatusDetail = "Blob store " + r.BlobStore + " failed its last health check"
+	}
 	if !st.LastActivityAt.IsZero() {
 		last := st.LastActivityAt
 		j.LastActivityAt = &last

@@ -128,6 +128,12 @@ func TestStoreAndUpstreamStateReachRepositories(t *testing.T) {
 	if r := repos["raw-bad"]; r.Status != "offline" || r.StatusReason != "blob_store_unavailable" || !strings.Contains(r.StatusDetail, "s3-bad") {
 		t.Errorf("repository on a broken store = %+v", r)
 	}
+	// Readers learn the store failed, not its paths.
+	f.env.AuthZ.Grant("bob", "repo:raw-bad:read")
+	_ = json.Unmarshal(f.expect("bob", "GET", "/api/v1/repositories/raw-bad", nil, 200), &list.Items[0])
+	if r := list.Items[0]; r.StatusReason != "blob_store_unavailable" || strings.Contains(r.StatusDetail, "no such host") {
+		t.Errorf("reader sees = %+v", r)
+	}
 	if r := repos["npm-dead"]; r.Status != "offline" || r.StatusReason != "upstream_unreachable" || !strings.Contains(r.StatusDetail, "no such host") {
 		t.Errorf("dead proxy = %+v", r)
 	}
