@@ -25,6 +25,10 @@ type SystemMonitor interface {
 	Nodes(ctx context.Context) ([]sysmon.Node, error)
 	// Summary is the nodes up and known, without I/O.
 	Summary() (up, total int)
+	// Rollup is the state of the installation without reading the
+	// database: this node checked now (or within seconds), the others as of
+	// the last heartbeat.
+	Rollup(ctx context.Context) sysmon.Summary
 }
 
 // SystemLogs reads the in-memory log buffers of the nodes (implemented by
@@ -38,6 +42,8 @@ type systemNodes struct {
 	Current     string        `json:"current"`
 	GeneratedAt time.Time     `json:"generated_at"`
 	Items       []sysmon.Node `json:"items"`
+	// Summary rolls the items up the way /system/status does.
+	Summary sysmon.Summary `json:"summary"`
 	// Partial is set when only this node could be shown; Message says why.
 	Partial bool   `json:"partial"`
 	Message string `json:"message,omitempty"`
@@ -72,6 +78,7 @@ func (a *API) systemNodes(w http.ResponseWriter, r *http.Request) {
 	if out.Items == nil {
 		out.Items = []sysmon.Node{}
 	}
+	out.Summary = sysmon.Summarize(out.Items)
 	WriteJSON(w, http.StatusOK, out)
 }
 

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"net/http"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/api/catalog"
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/sysmon"
 )
 
 type fsJSON struct {
@@ -35,22 +37,27 @@ type blobStoreInput struct {
 
 // blobStoreJSON is schema BlobStore.
 type blobStoreJSON struct {
-	ID               string    `json:"id"`
-	Name             string    `json:"name"`
-	Kind             string    `json:"kind"`
-	SoftQuotaBytes   *int64    `json:"soft_quota_bytes"`
-	FS               *fsJSON   `json:"fs,omitempty"`
-	S3               *s3JSON   `json:"s3,omitempty"`
-	State            string    `json:"state"`
-	Location         string    `json:"location"`
-	UsedBytes        int64     `json:"used_bytes"`
-	CapacityBytes    *int64    `json:"capacity_bytes"`
-	RepositoryCount  int64     `json:"repository_count"`
-	BlobCount        int64     `json:"blob_count"`
-	ReclaimableBytes int64     `json:"reclaimable_bytes"`
-	DedupSavedBytes  int64     `json:"dedup_saved_bytes"`
-	WriteLatencyMS   *float64  `json:"write_latency_ms"`
-	CreatedAt        time.Time `json:"created_at"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Kind           string  `json:"kind"`
+	SoftQuotaBytes *int64  `json:"soft_quota_bytes"`
+	FS             *fsJSON `json:"fs,omitempty"`
+	S3             *s3JSON `json:"s3,omitempty"`
+	State          string  `json:"state"`
+	// StateDetail is what the last probe found: the error of an
+	// unavailable store, or "Reachable (3 ms)".
+	StateDetail      string     `json:"state_detail,omitempty"`
+	CheckedAt        *time.Time `json:"checked_at,omitempty"`
+	StateSince       *time.Time `json:"state_since,omitempty"`
+	Location         string     `json:"location"`
+	UsedBytes        int64      `json:"used_bytes"`
+	CapacityBytes    *int64     `json:"capacity_bytes"`
+	RepositoryCount  int64      `json:"repository_count"`
+	BlobCount        int64      `json:"blob_count"`
+	ReclaimableBytes int64      `json:"reclaimable_bytes"`
+	DedupSavedBytes  int64      `json:"dedup_saved_bytes"`
+	WriteLatencyMS   *float64   `json:"write_latency_ms"`
+	CreatedAt        time.Time  `json:"created_at"`
 }
 
 type blobStoreTotals struct {
@@ -75,10 +82,42 @@ func (a *API) toBlobStoreJSON(r *http.Request, s *catalog.BlobStore) blobStoreJS
 		out.S3 = &s3JSON{Endpoint: s.S3.Endpoint, Region: s.S3.Region, Bucket: s.S3.Bucket, Prefix: s.S3.Prefix,
 			AccessKeyID: s.S3.AccessKeyID, UsePathStyle: s.S3.UsePathStyle}
 	}
-	if a.BlobStoreProbe != nil {
-		out.State, out.WriteLatencyMS = a.BlobStoreProbe.BlobStoreState(r.Context(), s.Name)
-	}
+	a.applyStoreState(&out)
 	return out
+}
+
+// storeStates maps the System status levels to BlobStore.state.
+var storeStates = map[string]string{
+	sysmon.StatusHealthy:  "ok",
+	sysmon.StatusDegraded: "degraded",
+	sysmon.StatusDown:     "unavailable",
+}
+
+// blobStoreState is the last health probe of the named store; ok is false
+// while it is unknown.
+func (a *API) blobStoreState(name string) (sysmon.StoreState, bool) {
+	if a.BlobStoreProbe == nil || name == "" {
+		return sysmon.StoreState{}, false
+	}
+	return a.BlobStoreProbe.BlobStoreState(name)
+}
+
+// applyStoreState fills state, its detail and the write latency from the
+// System status blob storage check. A filesystem probe writes and removes a
+// file, so its time is a write latency; an S3 probe only asks for the bucket.
+func (a *API) applyStoreState(out *blobStoreJSON) {
+	st, ok := a.blobStoreState(out.Name)
+	if !ok {
+		return
+	}
+	out.State = cmp.Or(storeStates[st.Status], "unknown")
+	out.StateDetail = st.Detail
+	checked, since := st.CheckedAt, st.Since
+	out.CheckedAt, out.StateSince = &checked, &since
+	if out.Kind == "fs" && st.LatencyMS != nil {
+		v := float64(*st.LatencyMS)
+		out.WriteLatencyMS = &v
+	}
 }
 
 func (a *API) listBlobStores(w http.ResponseWriter, r *http.Request) {

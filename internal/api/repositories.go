@@ -19,7 +19,9 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/api/catalog"
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/observability"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/sysmon"
 )
 
 // repositoryInput is schema RepositoryInput (JSON and YAML).
@@ -48,8 +50,12 @@ type repositoryJSON struct {
 	URL         string          `json:"url"`
 	Status      string          `json:"status"`
 	// StatusReason says why a proxy is "blocked": auth_failed (401),
-	// access_denied (403) or address_blocked (outbound address policy).
-	StatusReason   string    `json:"status_reason,omitempty"`
+	// access_denied (403) or address_blocked (outbound address policy); or
+	// why an enabled repository is "offline": upstream_unreachable or
+	// blob_store_unavailable.
+	StatusReason string `json:"status_reason,omitempty"`
+	// StatusDetail is the error behind an offline status.
+	StatusDetail   string    `json:"status_detail,omitempty"`
 	SizeBytes      int64     `json:"size_bytes"`
 	ComponentCount int64     `json:"component_count"`
 	CreatedAt      time.Time `json:"created_at"`
@@ -172,19 +178,29 @@ func (a *API) upstreamStates(ctx context.Context) (map[string]proxy.HealthItem, 
 	}
 }
 
-func repoStatus(r *core.Repository, up map[string]proxy.HealthItem) string {
+// repoStatus is the repository's status, why it is not online and the error
+// behind it. A repository whose blob store failed its last health probe, or
+// a proxy whose last request to the remote failed, is offline.
+func (a *API) repoStatus(r *core.Repository, up map[string]proxy.HealthItem) (status, reason, detail string) {
 	if !r.Online {
-		return "offline"
+		return "offline", "", ""
 	}
-	if r.Type == core.RepoProxy {
-		switch up[r.Name].State {
-		case proxy.StateSlow:
-			return "slow_upstream"
-		case proxy.StateBlocked:
-			return "blocked"
+	if r.Type != core.RepoGroup {
+		if st, ok := a.blobStoreState(r.BlobStore); ok && st.Status == sysmon.StatusDown {
+			return "offline", "blob_store_unavailable", "Blob store " + r.BlobStore + ": " + st.Detail
 		}
 	}
-	return "online"
+	if r.Type == core.RepoProxy {
+		switch h := up[r.Name]; h.State {
+		case proxy.StateSlow:
+			return "slow_upstream", "", ""
+		case proxy.StateBlocked:
+			return "blocked", string(h.Reason), ""
+		case proxy.StateOffline:
+			return "offline", "upstream_unreachable", observability.Scrub(h.LastError)
+		}
+	}
+	return "online", "", ""
 }
 
 // toRepositoryJSON is schema Repository; admin reports whether the caller
@@ -193,12 +209,10 @@ func (a *API) toRepositoryJSON(r *core.Repository, stats map[string]catalog.Repo
 	st := stats[r.ID]
 	j := repositoryJSON{
 		ID: r.ID, Name: r.Name, Format: r.Format, Type: r.Type, Description: r.Description, BlobStore: r.BlobStore,
-		Online: r.Online, Config: redactConfig(r.Config, admin), URL: a.repoURL(r), Status: repoStatus(r, up),
+		Online: r.Online, Config: redactConfig(r.Config, admin), URL: a.repoURL(r),
 		SizeBytes: st.SizeBytes, ComponentCount: st.ComponentCount, CreatedAt: r.CreatedAt.UTC(), UpdatedAt: r.UpdatedAt.UTC(),
 	}
-	if j.Status == "blocked" {
-		j.StatusReason = string(up[r.Name].Reason)
-	}
+	j.Status, j.StatusReason, j.StatusDetail = a.repoStatus(r, up)
 	if !st.LastActivityAt.IsZero() {
 		last := st.LastActivityAt
 		j.LastActivityAt = &last

@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,6 +19,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/events"
 	"github.com/ismoilovdevml/hangar/internal/health"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/scanning"
 	"github.com/ismoilovdevml/hangar/internal/server"
 	"github.com/ismoilovdevml/hangar/internal/sysmon"
 )
@@ -30,10 +32,13 @@ type monitorDeps struct {
 	nats      *events.Runtime
 	blobStore func(ctx context.Context, name string) (core.BlobStore, error)
 	upstreams *proxy.HealthReporter
-	oidc      *oidc.Provider
-	auth      *auth.Service
-	started   time.Time
-	log       *slog.Logger
+	// stores receives each blob store's probe; the blob store and
+	// repository screens read it.
+	stores  *sysmon.StoreStates
+	oidc    *oidc.Provider
+	auth    *auth.Service
+	started time.Time
+	log     *slog.Logger
 }
 
 // nodeIdentity returns this node's id, host name and own URL.
@@ -63,7 +68,7 @@ func newMonitor(d monitorDeps) *sysmon.Monitor {
 		sysmon.DatabaseCheck(d.pool, ready),
 		sysmon.BlobStoresCheck(func(ctx context.Context) ([]sysmon.BlobStore, error) {
 			return listBlobStores(ctx, d.pool)
-		}, d.blobStore, ready),
+		}, d.blobStore, ready, d.stores),
 		sysmon.EventBusCheck(d.nats.Conn, d.nats.JS, d.cfg.NATS.Embedded, ready),
 		sysmon.SchedulerCheck(d.pool, func() (bool, time.Time) { return m.Leader() }),
 		sysmon.SearchCheck(d.pool),
@@ -113,4 +118,38 @@ func authProviders(d monitorDeps) []sysmon.AuthProvider {
 		}
 	}
 	return out
+}
+
+// scannerStateTTL is how long the scan coverage of the scanner check is
+// reused: counting every component's scan is too heavy for every heartbeat.
+const scannerStateTTL = time.Minute
+
+// scannerState adapts the scanning service for sysmon.ScannerCheck.
+func scannerState(s *scanning.Service) func(ctx context.Context) (sysmon.ScannerState, error) {
+	var (
+		mu   sync.Mutex
+		last sysmon.ScannerState
+		at   time.Time
+	)
+	return func(ctx context.Context) (sysmon.ScannerState, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if !at.IsZero() && time.Since(at) < scannerStateTTL {
+			return last, nil
+		}
+		st, err := s.Status(ctx, nil)
+		if err != nil {
+			return sysmon.ScannerState{}, err
+		}
+		out := sysmon.ScannerState{Enabled: st.Enabled, SourceURL: st.SourceURL}
+		if c := st.Coverage; c != nil {
+			out.Scanned, out.Failed, out.LastScanAt = c.Scanned, c.Failed, c.LastScanAt
+		}
+		if im := st.Images; im != nil && im.Enabled {
+			out.Images, out.TrivyURL, out.TrivyVersion, out.TrivyDBUpdatedAt, out.TrivyError =
+				true, im.ServerURL, im.Version, im.DBUpdatedAt, im.Error
+		}
+		last, at = out, time.Now()
+		return out, nil
+	}
 }

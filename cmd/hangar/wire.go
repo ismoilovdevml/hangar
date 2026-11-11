@@ -473,8 +473,9 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 
 	// System status and System logs: this node's checks, its heartbeat and
 	// its log buffer, served to the other nodes over NATS.
+	storeStates := sysmon.NewStoreStates()
 	mon := newMonitor(monitorDeps{cfg: cfg, pool: pool, health: hc, nats: rt, blobStore: blobs.ByName,
-		upstreams: healthReporter, oidc: sso, auth: authSvc, started: started, log: log})
+		upstreams: healthReporter, stores: storeStates, oidc: sso, auth: authSvc, started: started, log: log})
 	sysLogs := sysmon.NewLogs(mon.NodeID(), logRing, rt.Conn, log)
 	if err := sysLogs.Serve(); err != nil {
 		return nil, err
@@ -515,6 +516,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Audit:          auditLog,
 		Upstreams:      healthReporter,
 		UpstreamCache:  upstreams,
+		BlobStoreProbe: storeStates,
 		AuthMiddleware: chainMiddleware(httpapi.Middleware(authSvc, authOpts), observability.TagPrincipal),
 		Traffic:        rollup.NewStore(pool),
 		Monitor:        mon,
@@ -611,6 +613,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	go func() { scanner.Run(sweepCtx); close(sweepDone) }()
 	a.onClose(func() { stopSweep(); <-sweepDone })
 	restAPI.Scanning = scanner
+	mon.AddCheck(sysmon.ScannerCheck(scannerState(scanner)))
 	if f, ok := reg.Get(nuget.Name); ok && scanner.Enabled() {
 		if nf, ok := f.(*nuget.Format); ok {
 			nf.SetAdvisories(nugetAdvisories{scanner: scanner})

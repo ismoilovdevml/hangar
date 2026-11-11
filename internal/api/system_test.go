@@ -30,7 +30,8 @@ func (f fakeMonitor) Nodes(context.Context) ([]sysmon.Node, error) {
 	}
 	return f.nodes, nil
 }
-func (f fakeMonitor) Summary() (int, int) { return 1, len(f.nodes) }
+func (f fakeMonitor) Summary() (int, int)                   { return 1, len(f.nodes) }
+func (f fakeMonitor) Rollup(context.Context) sysmon.Summary { return sysmon.Summarize(f.nodes) }
 
 func monitorFixture(t *testing.T) (*fixture, *observability.LogRing) {
 	t.Helper()
