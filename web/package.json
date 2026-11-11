@@ -16,6 +16,7 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "e2e:demo": "playwright test -c playwright.demo.config.ts",
+    "site:screenshots": "vite build --mode demo && node scripts/site-screenshots.ts",
     "gen:api": "openapi-typescript ../api/openapi.yaml -o src/api/schema.d.ts"
   },
   "dependencies": {
