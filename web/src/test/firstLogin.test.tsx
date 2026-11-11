@@ -120,7 +120,7 @@ describe('first sign-in password change', () => {
 
 describe('password policy checks', () => {
   it('mirrors the server rules', () => {
-    const policy = { min_length: 12, max_length: 20, min_classes: 3, allow_username: false };
+    const policy = { min_length: 12, max_length: 20, min_classes: 3, allow_username: false, allow_weak: true };
     const byId = (pw: string, confirm = pw) => Object.fromEntries(passwordChecks(policy, 'Admin', 'old', pw, confirm).map((c) => [c.id, c.met]));
     expect(byId('abcdefghijkl')).toMatchObject({ length: true, classes: false, username: true, differs: true, match: true });
     expect(byId('Abcdefghijk1')).toMatchObject({ classes: true });
@@ -128,6 +128,12 @@ describe('password policy checks', () => {
     expect(byId('Abcdefghijk1Abcdefghijk1')).toMatchObject({ length: false });
     expect(byId('Abcdefghijk1', 'other')).toMatchObject({ match: false });
     expect(passwordChecks({ ...policy, min_classes: 0, allow_username: true }, 'admin', '', 'x', 'x').map((c) => c.id)).toEqual(['length', 'differs', 'match']);
+  });
+  it('refuses guessable passwords like the server', () => {
+    const policy = { min_length: 12, max_length: 256, min_classes: 0, allow_username: false, allow_weak: false };
+    const guessable = (pw: string) => !passwordChecks(policy, 'alice', '', pw, pw).find((c) => c.id === 'guessable')!.met;
+    for (const pw of ['aaaaaaaaaaaa', 'abababababab', 'abcdabcdabcd', '123456789012', 'zyxwvutsrqpo', 'Password2026!', '!!Welcome1234']) expect(guessable(pw)).toBe(true);
+    for (const pw of ['password manager rocks', 'k7Qm-2vXr-9TzP', 'a long private passphrase']) expect(guessable(pw)).toBe(false);
   });
 });
 
