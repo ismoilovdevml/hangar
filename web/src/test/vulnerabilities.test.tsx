@@ -269,10 +269,12 @@ describe('vulnerabilities', () => {
     await screen.findByRole('heading', { level: 1, name: 'payments-api' });
     const head = screen.getByRole('region', { name: 'payments-api 2.14.0' });
     const tabs = within(head).getByRole('tablist', { name: 'Package details' });
-    // No empty "Vulnerabilities" tab for an image nobody scanned.
+    // The tab stays and says why there is nothing to list, instead of disappearing.
     await waitFor(() => expect(within(tabs).getAllByRole('tab').map((t) => t.textContent)).toContain('Versions 3'));
-    await new Promise((r) => setTimeout(r, 50));
-    expect(within(tabs).queryByRole('tab', { name: 'Vulnerabilities' })).not.toBeInTheDocument();
+    await userEvent.click(within(tabs).getByRole('tab', { name: 'Vulnerabilities' }));
+    const panel = screen.getByRole('tabpanel');
+    expect(await within(panel).findByText('Image scanning not configured')).toBeInTheDocument();
+    expect(within(panel).getByText(/image scanner \(Trivy\)/)).toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: 'Version' })).getByText('Image scanning not configured')).toBeInTheDocument();
   });
 
