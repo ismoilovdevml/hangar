@@ -1,4 +1,5 @@
 import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
+import { PickerLoadError } from '../../components/States';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { errorText, useCanSystem, useCreateTask, useParseLockfile } from '../../api/ops';
 import type { ImportTaskConfig, PrewarmTaskConfig } from '../../api/opsTypes';
@@ -384,14 +385,18 @@ export function NewTaskPage() {
                     id={f('repo')}
                     value={draft.repository}
                     searchable
-                    placeholder={repos.isPending ? 'Loading…' : candidates.length ? 'Choose a repository' : 'No repositories of this kind'}
+                    placeholder={repos.isPending ? 'Loading…' : repos.isError ? 'Repositories could not be loaded' : candidates.length ? 'Choose a repository' : 'No repositories of this kind'}
                     options={candidates.map((r) => ({ value: r.name, label: r.name, hint: `${r.format} · ${r.type}` }))}
                     onChange={(v) => {
                       set({ repository: v });
                       setChips([]);
                     }}
                   />
-                  {err('repository') && <span className="field__error">{err('repository')}</span>}
+                  {repos.isError ? (
+                    <PickerLoadError what="repositories" onRetry={() => void repos.refetch()} />
+                  ) : (
+                    err('repository') && <span className="field__error">{err('repository')}</span>
+                  )}
                 </div>
               )}
 

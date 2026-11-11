@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { PickerLoadError } from '../../components/States';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import { ApiRequestError } from '../../api/client';
 import { useBlobStores, useCreateRepository, useFormats, useRepositoriesByFormat } from '../../api/hooks';
@@ -155,17 +156,19 @@ export function RepoCreatePage() {
             onChange={(v) => set('blobStore', v)}
             onBlur={blur('blobStore')}
             disabled={stores.isPending}
-            placeholder={stores.isPending ? 'Loading…' : writableStores.length === 0 ? 'No writable blob store' : 'Choose a blob store'}
+            placeholder={stores.isPending ? 'Loading…' : stores.isError ? 'Blob stores could not be loaded' : writableStores.length === 0 ? 'No writable blob store' : 'Choose a blob store'}
             options={(stores.data?.items ?? []).map((b) => ({ value: b.name, label: blobStoreOption(b), disabled: !blobStoreWritable(b) }))}
             {...invalidProps('blobStore', shownErrors, 'repo-blob-hint')}
           />
-          <span id="repo-blob-hint" className="field__hint">
-            {stores.isError
-              ? isForbidden(stores.error)
-                ? 'Listing blob stores needs the system:blobstores:read privilege.'
-                : 'Could not load blob stores.'
-              : 'Where the bytes are kept'}
-          </span>
+          {stores.isError && !isForbidden(stores.error) ? (
+            <span id="repo-blob-hint">
+              <PickerLoadError what="blob stores" onRetry={() => void stores.refetch()} />
+            </span>
+          ) : (
+            <span id="repo-blob-hint" className="field__hint">
+              {stores.isError ? 'Listing blob stores needs the system:blobstores:read privilege.' : 'Where the bytes are kept'}
+            </span>
+          )}
           <FieldError field="blobStore" errors={shownErrors} />
         </div>
       )}

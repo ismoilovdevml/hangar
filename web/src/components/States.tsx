@@ -111,3 +111,15 @@ export function NotFound({ kind, name, back, backLabel, children, named = 'named
   );
   return pane ? body : <div className="screen">{body}</div>;
 }
+
+/** Under a picker whose options failed to load: says so (never "none exist") and offers Retry. */
+export function PickerLoadError({ what, onRetry }: { what: string; onRetry: () => void }) {
+  return (
+    <span className="field__error" role="alert">
+      Could not load {what}.{' '}
+      <button type="button" className="link-button" onClick={onRetry}>
+        Retry
+      </button>
+    </span>
+  );
+}

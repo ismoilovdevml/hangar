@@ -1,4 +1,5 @@
 import { useId, useState, type ReactNode } from 'react';
+import { PickerLoadError } from '../../components/States';
 import { useRepositories } from '../../api/hooks';
 import {
   errorText,
@@ -394,7 +395,7 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
                       variant="inline"
                       className="chip__select"
                       value=""
-                      placeholder={repos.isPending ? 'Loading repositories…' : candidates.length === 0 ? 'No more repositories' : 'Add repository'}
+                      placeholder={repos.isPending ? 'Loading repositories…' : repos.isError ? 'Repositories could not be loaded' : candidates.length === 0 ? 'No more repositories' : 'Add repository'}
                       disabled={repos.isPending || candidates.length === 0}
                       options={candidates.map((r) => ({ value: r.name, label: r.name, hint: r.type }))}
                       onChange={(v) => update({ repositories: [...draft.repositories, v] })}
@@ -403,7 +404,11 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
                   </li>
                 )}
               </ul>
-              {repos.isError && <p className="field__error">Could not load repositories.</p>}
+              {repos.isError && (
+                <p>
+                  <PickerLoadError what="repositories" onRetry={() => void repos.refetch()} />
+                </p>
+              )}
               {showErrors && errors.repositories && <p className="field__error">{errors.repositories}</p>}
             </div>
 
