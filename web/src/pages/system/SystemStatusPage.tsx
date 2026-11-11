@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { ApiRequestError } from '../../api/client';
+import { queryKeys, useBlobStores } from '../../api/hooks';
 import { isMissingEndpoint, useCanSystem } from '../../api/ops';
 import { ErrorNote } from '../../components/ErrorNote';
 import { IconRefresh } from '../../components/opsIcons';
@@ -93,9 +94,11 @@ function CheckAction({ s, node, canLogs, canSettings }: { s: Subsystem; node: Sy
   const arrow = <span aria-hidden="true"> →</span>;
   switch (s.name) {
     case 'blobstores':
+      return <BlobStoresAction healthy={s.status === 'healthy'} />;
+    case 'scanner':
       return (
-        <Link to="/blob-stores" className="check__action">
-          Blob stores{arrow}
+        <Link to="/vulnerabilities" className="check__action">
+          Vulnerabilities{arrow}
         </Link>
       );
     case 'scheduler':
@@ -124,6 +127,27 @@ function CheckAction({ s, node, canLogs, canSettings }: { s: Subsystem; node: Sy
         </Link>
       ) : null;
   }
+}
+
+/** To the failing blob store when exactly one fails (and the user may see it), else to the list. */
+function BlobStoresAction({ healthy }: { healthy: boolean }) {
+  const canRead = useCanSystem('blobstores', 'read');
+  const stores = useBlobStores(canRead && !healthy);
+  const failing = (stores.data?.items ?? []).filter((b) => b.state === 'unavailable' || b.state === 'degraded');
+  const arrow = <span aria-hidden="true"> →</span>;
+  if (failing.length === 1) {
+    return (
+      <Link to="/blob-stores/$name" params={{ name: failing[0]!.name }} className="check__action">
+        {failing[0]!.name}
+        {arrow}
+      </Link>
+    );
+  }
+  return (
+    <Link to="/blob-stores" className="check__action">
+      Blob stores{arrow}
+    </Link>
+  );
 }
 
 function FactValue({ value, now }: { value: string; now: Date }) {
@@ -365,7 +389,10 @@ export function SystemStatusPage() {
       fetching={nodes.isFetching}
       updatedAt={nodes.dataUpdatedAt || undefined}
       onPause={setPaused}
-      onRefresh={() => void qc.refetchQueries({ queryKey: systemKeys.nodes })}
+      onRefresh={() => {
+        void qc.refetchQueries({ queryKey: systemKeys.nodes });
+        void qc.refetchQueries({ queryKey: queryKeys.systemStatus });
+      }}
     />
   );
 
@@ -392,7 +419,11 @@ export function SystemStatusPage() {
     );
   }
 
-  const summary = summarize(data.items);
+  // The server's rollup is what every other indicator shows; older servers do not send it.
+  const local = summarize(data.items);
+  const summary = data.summary
+    ? { ...local, status: data.summary.status, headline: data.summary.headline, passing: data.summary.checks_passing, checks: data.summary.checks_total }
+    : local;
   const multi = data.items.length > 1;
   const only = data.items[0];
   const sub: string[] = [`${summary.passing} of ${summary.checks} checks passing`];

@@ -32,7 +32,7 @@ describe('system status', () => {
     const user = userEvent.setup();
     systemMockState.singleNode();
     renderApp('/system/status');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Everything is working' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'All systems normal' })).toBeInTheDocument();
     const summary = screen.getByRole('region', { name: 'Summary' });
     expect(within(summary).getByText('7 of 7 checks passing · hangar-1 · v1.0.0')).toBeInTheDocument();
 
@@ -290,11 +290,11 @@ describe('system model', () => {
       id, hostname: id, url: '', version: '1.0.0', commit: '', started_at: '', uptime_seconds: 1, last_heartbeat: '',
       role: 'follower', status: 'healthy', stale: false, current: false, subsystems: [], ...patch,
     });
-    const sub = (status: 'healthy' | 'degraded' | 'down') => ({ name: status, label: status, status, detail: '', checked_at: '' });
+    const sub = (status: 'healthy' | 'degraded' | 'down') => ({ name: status, label: 'Search index', status, detail: '', checked_at: '' });
     const ok = summarize([node('a', { role: 'leader', subsystems: [sub('healthy'), sub('healthy')] })]);
-    expect(ok).toMatchObject({ headline: 'Everything is working', passing: 2, checks: 2, notes: [] });
+    expect(ok).toMatchObject({ headline: 'All systems normal', passing: 2, checks: 2, notes: [] });
     const s = summarize([node('a', { status: 'degraded', subsystems: [sub('healthy'), sub('degraded')] })]);
-    expect(s).toMatchObject({ status: 'degraded', headline: '1 check needs attention', passing: 1, checks: 2 });
+    expect(s).toMatchObject({ status: 'degraded', headline: 'Search index degraded', passing: 1, checks: 2 });
     expect(s.notes[0]).toMatch(/No node holds the scheduler lock/);
     expect(summarize([node('a', { status: 'down', role: 'leader', subsystems: [sub('down'), sub('down'), sub('degraded')] })]).headline).toBe('2 checks are down');
     expect(summarize([]).headline).toBe('Waiting for the first report');

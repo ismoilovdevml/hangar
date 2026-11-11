@@ -1,33 +1,80 @@
 import { Link, useMatches, useRouterState } from '@tanstack/react-router';
-import { useOverview, useSession, useSystemStatus, useUpstreamHealth } from '../api/hooks';
+import { useSystemHealth } from '../api/health';
+import { useSession } from '../api/hooks';
 import { instanceName, isRange } from '../lib/format';
-import { overallStatus } from '../lib/overview';
+import { TodoAnchor } from '../pages/overview/TodoCard';
+import { useTodo } from '../pages/overview/useTodo';
 import { AccountMenu } from './AccountMenu';
 import { isMac, useCommandPalette } from './commandPaletteContext';
 import { Disclosure } from './Disclosure';
+import { ErrorNote } from './ErrorNote';
 import { IconBell, IconSearch } from './icons';
-import { TokenWarnings } from '../pages/access/AccountPage';
+
+/** The range in the URL (the Overview's), else today: the bell then lists what the To do card does. */
+function useRange() {
+  const range = useRouterState({ select: (s) => (s.location.search as { range?: unknown }).range });
+  return isRange(range) ? range : 'today';
+}
 
 /**
- * The Overview's state in a few words, linking to the status page; nothing
- * while it loads. It weighs the same signals as the Overview's cards (the
- * queries are shared), so it is never green next to a red alert.
+ * The installation's state in a few words, linking to the status page. It
+ * reads the same health as the sidebar card and System status, and is grey
+ * while that loads or cannot be read.
  */
 function StatusPill() {
-  const range = useRouterState({ select: (s) => (s.location.search as { range?: unknown }).range });
-  const r = isRange(range) ? range : 'today';
-  const status = useSystemStatus();
-  const overview = useOverview(r);
-  const upstreams = useUpstreamHealth(r);
-  const sys = status.data;
-  if (!sys && !status.isError) return null;
-  const state = sys ? overallStatus({ system: sys, upstreams: upstreams.data?.items, metrics: overview.data }) : null;
-  const tone = state?.tone ?? 'neutral';
+  const health = useSystemHealth();
   return (
-    <Link to="/system/status" className={`status-pill glass status-pill--${tone}`}>
-      <span className={`status__dot dot-${tone}`} aria-hidden="true" />
-      <span className="status-pill__text">{state ? state.text : 'Status unavailable'}</span>
+    <Link to="/system/status" className={`status-pill glass status-pill--${health.tone}`} aria-busy={health.loading || undefined}>
+      <span className={`status__dot dot-${health.tone}`} aria-hidden="true" />
+      <span className="status-pill__text">{health.text}</span>
     </Link>
+  );
+}
+
+/** The bell: the To do list, everywhere. */
+function Notifications({ compact }: { compact: boolean }) {
+  const todo = useTodo(useRange());
+  const items = todo.items ?? [];
+  const urgent = items.filter((t) => t.tone !== 'info').length;
+  return (
+    <Disclosure
+      label={urgent ? `Notifications, ${urgent} waiting` : 'Notifications'}
+      panelLabel="Notifications"
+      buttonClassName={compact ? 'icon-button icon-button--glass icon-button--compact glass notify' : 'icon-button icon-button--glass notify'}
+      buttonContent={
+        <>
+          <IconBell size={compact ? 17 : 18} />
+          {urgent > 0 && <span className={`notify__dot notify__dot--${items.some((t) => t.tone === 'bad') ? 'bad' : 'warn'}`} aria-hidden="true" />}
+        </>
+      }
+    >
+      {(close) => (
+        <>
+          <p className="popover__title">To do</p>
+          {!todo.items ? (
+            todo.error ? (
+              <ErrorNote what="what needs attention" onRetry={todo.retry} />
+            ) : (
+              <p className="popover__text">Loading…</p>
+            )
+          ) : items.length === 0 ? (
+            <p className="popover__text">Nothing needs you right now.</p>
+          ) : (
+            <ul className="todo__list notify__list">
+              {items.map((t) => (
+                <li key={t.id} onClick={close}>
+                  <TodoAnchor link={t.link} className={`todo__item todo__item--${t.tone}`}>
+                    <span className="todo__tag">{t.tag}</span>
+                    <span className="todo__item-title">{t.title}</span>
+                    <span className="todo__detail">{t.detail}</span>
+                  </TodoAnchor>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </Disclosure>
   );
 }
 
@@ -42,7 +89,6 @@ export function TopBar({ onSignOut }: { onSignOut: () => void }) {
   const shortcut = isMac() ? '⌘K' : 'Ctrl K';
   // The Overview carries its own search box, so its header is bare and shows the system state instead.
   const bare = pathname === '/';
-  const waiting = session.data?.token_warnings?.length ?? 0;
 
   return (
     <header className={bare ? 'topbar topbar--bare' : 'topbar glass'}>
@@ -74,26 +120,7 @@ export function TopBar({ onSignOut }: { onSignOut: () => void }) {
         </button>
       )}
 
-      <Disclosure
-        label={waiting ? `Notifications, ${waiting} waiting` : 'Notifications'}
-        panelLabel="Notifications"
-        buttonClassName={bare ? 'icon-button icon-button--glass icon-button--compact glass notify' : 'icon-button icon-button--glass notify'}
-        buttonContent={
-          <>
-            <IconBell size={bare ? 17 : 18} />
-            {waiting > 0 && <span className="notify__dot" aria-hidden="true" />}
-          </>
-        }
-      >
-        <p className="popover__title">Notifications</p>
-        {waiting ? (
-          <TokenWarnings />
-        ) : (
-          <p className="popover__text">
-            Quarantines, failed tasks and quota warnings will appear here. Nothing needs your attention.
-          </p>
-        )}
-      </Disclosure>
+      <Notifications compact={bare} />
 
       <AccountMenu onSignOut={onSignOut} compact={bare} />
     </header>

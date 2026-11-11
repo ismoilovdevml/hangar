@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../api/opsTypes';
 import { overview } from '../mocks/data';
-import type { OverviewMetrics, UpstreamHealth } from '../api/types';
-import { headlineUpstream, overallStatus, ratioPercent, storageNote, successRatio, todoItems, urlHost } from './overview';
+import type { SystemStatus, UpstreamHealth } from '../api/types';
+import { systemHealth } from '../api/health';
+import { headlineUpstream, ratioPercent, storageNote, successRatio, todoItems, urlHost } from './overview';
 
 const NOW = new Date('2026-11-04T12:00:00Z');
 
@@ -177,32 +178,57 @@ describe('todoItems', () => {
   });
 });
 
-describe('overallStatus', () => {
-  const system = { state: 'ok' as const, message: 'All systems normal' };
-  const up = (name: string, state: UpstreamHealth['state']): UpstreamHealth => ({ name, url: `https://${name}.example`, state, latency_ms: 10, requests: 1 });
-  const metrics = (server_errors: number | null) =>
-    ({ range: 'today', requests: { server_errors } }) as unknown as OverviewMetrics;
+describe('systemHealth', () => {
+  const status = (state: SystemStatus['state'], message: string, problems?: SystemStatus['problems']) =>
+    ({ state, message, problems, version: '1', instance_name: 'h', nodes_up: 1, nodes_total: 1 }) as SystemStatus;
 
-  it('is green only when nodes, upstreams and requests all are', () => {
-    expect(overallStatus({ system, upstreams: [up('a', 'healthy'), up('b', 'slow')], metrics: metrics(0) })).toEqual({ tone: 'ok', text: 'All systems normal' });
+  it('is grey while loading and when the status cannot be read, never green', () => {
+    expect(systemHealth({ isError: false })).toMatchObject({ tone: 'neutral', state: 'unknown', text: 'Checking status…', loading: true });
+    expect(systemHealth({ isError: true })).toMatchObject({ tone: 'neutral', state: 'unknown', text: 'Status unavailable', error: true });
+    // A refresh that fails does not keep showing the old green.
+    expect(systemHealth({ isError: true, data: status('ok', 'All systems normal') }).tone).toBe('neutral');
   });
 
-  it('puts an unreachable upstream before server errors and a degraded node', () => {
-    expect(overallStatus({ system, upstreams: [up('ghcr', 'blocked')], metrics: metrics(13) })).toEqual({ tone: 'bad', text: 'ghcr upstream is blocked' });
-    expect(overallStatus({ system, upstreams: [up('a', 'offline'), up('b', 'blocked')] })).toEqual({ tone: 'bad', text: '2 upstreams unreachable' });
-    expect(overallStatus({ system: { state: 'degraded', message: 'Search degraded' }, metrics: metrics(13) })).toEqual({ tone: 'warn', text: 'Search degraded' });
-    expect(overallStatus({ system, metrics: metrics(13) })).toEqual({ tone: 'warn', text: '13 server errors today' });
-    expect(overallStatus({ system: { state: 'down', message: 'Database down' }, upstreams: [up('a', 'blocked')] })).toEqual({ tone: 'bad', text: 'Database down' });
+  it('says what the server says', () => {
+    expect(systemHealth({ isError: false, data: status('ok', 'All systems normal') })).toMatchObject({ tone: 'ok', text: 'All systems normal' });
+    const down = systemHealth({ isError: false, data: status('down', 'Blob storage down', [{ name: 'blobstores', label: 'Blob storage', status: 'down' }]) });
+    expect(down).toMatchObject({ tone: 'bad', text: 'Blob storage down' });
+    expect(down.problems).toHaveLength(1);
+    expect(systemHealth({ isError: false, data: status('degraded', '2 checks need attention') }).tone).toBe('warn');
   });
+});
 
-  it('names a refused credential the way the to-do list does', () => {
-    expect(overallStatus({ system, upstreams: [{ ...up('ghcr', 'blocked'), reason: 'auth_failed' }] })).toEqual({
-      tone: 'bad',
-      text: 'ghcr upstream: authentication failed (401)',
+describe('todoItems from health', () => {
+  const offline: UpstreamHealth = { name: 'broken', url: 'https://does-not-exist.invalid', state: 'offline', latency_ms: null, requests: 0 };
+
+  it('lists each failing check, and leaves upstreams to the per-remote items', () => {
+    const items = todoItems({
+      metrics: calm(),
+      system: {
+        state: 'down',
+        message: '1 check is down',
+        nodes_up: 1,
+        nodes_total: 1,
+        problems: [
+          { name: 'blobstores', label: 'Blob storage', status: 'down', detail: 's3-bad is unreachable: no such host' },
+          { name: 'upstreams', label: 'Upstream proxies', status: 'degraded' },
+        ],
+      },
+      upstreams: [offline],
+      now: NOW,
     });
+    expect(items.map((t) => `${t.tag}: ${t.title}: ${t.detail}`)).toEqual([
+      'OUTAGE: Blob storage down: s3-bad is unreachable: no such host',
+      'UPSTREAM: broken is offline: does-not-exist.invalid cannot be reached; uncached packages fail',
+    ]);
   });
 
-  it('does not invent errors the server does not count', () => {
-    expect(overallStatus({ system, metrics: metrics(null) }).tone).toBe('ok');
+  it('keeps the upstream check when no remote can be named', () => {
+    const items = todoItems({
+      metrics: calm(),
+      system: { state: 'degraded', message: 'Upstream proxies degraded', nodes_up: 1, nodes_total: 1, problems: [{ name: 'upstreams', label: 'Upstream proxies', status: 'degraded' }] },
+      now: NOW,
+    });
+    expect(items.map((t) => t.title)).toEqual(['Upstream proxies degraded']);
   });
 });

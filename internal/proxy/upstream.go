@@ -268,6 +268,10 @@ func (u *upstream) fetch(ctx context.Context, method string, target *url.URL, re
 		default:
 			done(err)
 		}
+		// A caller going away says nothing about the remote.
+		if primary && !errors.Is(err, ErrBlocked) && !errors.Is(err, context.Canceled) {
+			u.stats.failed(u.now(), err.Error())
+		}
 		requestsTotal.WithLabelValues(u.name, host, resultError).Inc()
 		u.noteState()
 		u.log.Warn("upstream request failed", "repository", u.name, "url", target.Redacted(), "error", err)
@@ -283,6 +287,11 @@ func (u *upstream) fetch(ctx context.Context, method string, target *url.URL, re
 	requestsTotal.WithLabelValues(u.name, host, statusClass(resp.StatusCode)).Inc()
 	if primary {
 		u.stats.observe(now.Sub(start), now)
+		if resp.StatusCode >= http.StatusInternalServerError {
+			u.stats.failed(now, "The remote answered "+resp.Status)
+		} else {
+			u.stats.succeeded(now)
+		}
 		switch {
 		case resp.StatusCode == http.StatusUnauthorized:
 			u.stats.setBlocked(ReasonAuthFailed)

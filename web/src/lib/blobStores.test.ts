@@ -12,7 +12,7 @@ describe('blob store display', () => {
     expect(storeBadge(store({ used_bytes: 120, soft_quota_bytes: 100 })).label).toBe('Over quota');
     expect(storeBadge(store({ used_bytes: 10, soft_quota_bytes: 100 })).label).toBe('Healthy');
     expect(storeBadge(store({ state: 'read_only', used_bytes: 99, soft_quota_bytes: 100 })).label).toBe('Read-only');
-    expect(storeBadge(store({ state: 'unknown' })).label).toBe('Not monitored');
+    expect(storeBadge(store({ state: 'unknown' })).label).toBe('Not checked yet');
   });
 
   it('expresses dedup savings as a share of the raw size', () => {

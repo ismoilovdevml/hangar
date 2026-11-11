@@ -77,12 +77,12 @@ type UpstreamHealthLister interface {
 }
 
 var descUpstreamState = prometheus.NewDesc("hangar_upstream_state",
-	"1 for the current state of each proxy repository's remote as seen by this node (healthy, slow, blocked, offline = circuit breaker open). "+
+	"1 for the current state of each proxy repository's remote as seen by this node (healthy, slow, blocked, offline = the last request failed or the circuit breaker is open, unknown = not used since start). "+
 		"Labelled by repository: proxy repositories are created by administrators, so the set is small.",
 	[]string{"repository", "state"}, nil)
 
 // upstreamStates are every value of the state label.
-var upstreamStates = []proxy.State{proxy.StateHealthy, proxy.StateSlow, proxy.StateBlocked, proxy.StateOffline}
+var upstreamStates = []proxy.State{proxy.StateHealthy, proxy.StateSlow, proxy.StateBlocked, proxy.StateOffline, proxy.StateUnknown}
 
 // RegisterUpstreamHealth exposes each proxy remote's state (circuit breaker
 // open = "offline"), cached for 15 seconds. At most 512 repositories are

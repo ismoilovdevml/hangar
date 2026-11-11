@@ -298,7 +298,7 @@ func TestBlobStoresCheck(t *testing.T) {
 		return fakeStore{}, nil
 	}
 	list := func(context.Context) ([]BlobStore, error) { return stores, nil }
-	r := BlobStoresCheck(list, open, FromChecker(nil)).Run(ctx)
+	r := BlobStoresCheck(list, open, FromChecker(nil), nil).Run(ctx)
 	if r.Status != StatusDown || r.Detail != "Unreachable: s3-main" || len(r.Facts) != 2 {
 		t.Fatalf("result = %+v", r)
 	}
@@ -306,17 +306,17 @@ func TestBlobStoresCheck(t *testing.T) {
 		t.Errorf("fs store fact without free space: %+v", r.Facts[0])
 	}
 	stores = stores[:1]
-	r = BlobStoresCheck(list, open, FromChecker(nil)).Run(ctx)
+	r = BlobStoresCheck(list, open, FromChecker(nil), nil).Run(ctx)
 	if r.Status != StatusHealthy || !strings.HasPrefix(r.Detail, "default (fs) · ") || !strings.Contains(r.Detail, " free of ") ||
 		r.Target != dir || !strings.HasSuffix(r.Metric, "% free") {
 		t.Fatalf("one healthy store = %+v", r)
 	}
 	stores = []BlobStore{{Name: "s3-ok", Kind: "s3"}}
-	if r = BlobStoresCheck(list, open, FromChecker(nil)).Run(ctx); r.Detail != "s3-ok (s3) · reachable" || r.Target != "s3-ok" || !strings.HasSuffix(r.Metric, " ms") {
+	if r = BlobStoresCheck(list, open, FromChecker(nil), nil).Run(ctx); r.Detail != "s3-ok (s3) · reachable" || r.Target != "s3-ok" || !strings.HasSuffix(r.Metric, " ms") {
 		t.Fatalf("one object store = %+v", r)
 	}
 	failing := func(context.Context) ([]BlobStore, error) { return nil, errors.New("db down") }
-	if r = BlobStoresCheck(failing, open, FromChecker(nil)).Run(ctx); r.Status != StatusDown {
+	if r = BlobStoresCheck(failing, open, FromChecker(nil), nil).Run(ctx); r.Status != StatusDown {
 		t.Fatalf("store list failing = %+v", r)
 	}
 }

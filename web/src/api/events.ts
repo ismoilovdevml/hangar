@@ -63,6 +63,8 @@ export function applyLiveEvent(qc: QueryClient, event: LiveEvent, invalidate: In
       );
       invalidate(queryKeys.upstreams);
       invalidate(queryKeys.repositories);
+      // The upstream check is part of the system health every indicator shows.
+      invalidate(queryKeys.systemStatus);
       break;
     }
   }

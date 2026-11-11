@@ -13,20 +13,41 @@ describe('app shell', () => {
     for (const label of ['Overview', 'Packages', 'Search', 'Repositories', 'Blob stores', 'Cleanup policies', 'Vulnerabilities', 'Access & audit', 'Scheduled tasks', 'Cluster & replication']) {
       expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument();
     }
-    expect(await within(nav).findByText('All nodes healthy')).toBeInTheDocument();
-    expect(within(nav).getByText('3 of 3 nodes · v1.0.0')).toBeInTheDocument();
+    // The mock cluster has a degraded and a silent node: the card says what System status says.
+    const card = (await within(nav).findByText('1 check needs attention')).closest('a')!;
+    expect(card).toHaveClass('system-card--warn');
+    expect(within(nav).getByText('2 of 3 nodes · v1.0.0')).toBeInTheDocument();
     const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' });
     expect(await within(crumbs).findByText('acme-platform')).toBeInTheDocument();
     expect(within(crumbs).getByText('Overview')).toHaveAttribute('aria-current', 'page');
-    // One token expires soon: the bell says so.
-    expect(screen.getByRole('button', { name: 'Notifications, 1 waiting' })).toBeInTheDocument();
-    // The Overview's header shows the state instead of the search button, weighing the same
-    // signals as its cards: a blocked upstream is not "All systems normal".
-    const pill = await screen.findByRole('link', { name: 'ghcr-proxy upstream: authentication failed (401)' });
+    // The Overview's header shows the same state instead of the search button.
+    const pill = await screen.findByRole('link', { name: '1 check needs attention' });
     expect(pill).toHaveAttribute('href', '/system/status');
-    expect(pill).toHaveClass('status-pill--bad');
+    expect(pill).toHaveClass('status-pill--warn');
     expect(screen.queryByText('All systems normal')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Search packages, digests, CVEs/ })).not.toBeInTheDocument();
+  });
+
+  it('lists the To do items in the bell', async () => {
+    const user = userEvent.setup();
+    renderApp('/');
+    const todo = await screen.findByRole('region', { name: 'To do' });
+    const titles = (root: HTMLElement) => [...root.querySelectorAll('.todo__item-title')].map((e) => e.textContent);
+    await waitFor(() => expect(titles(todo)).toContain('Node hangar-3 is not responding'));
+    const bell = await screen.findByRole('button', { name: /^Notifications, \d+ waiting$/ });
+    await user.click(bell);
+    const panel = screen.getByRole('region', { name: 'Notifications' });
+    expect(titles(panel)).toEqual(titles(todo));
+  });
+
+  it('is grey, not green, while the status loads', async () => {
+    server.use(http.get('*/api/v1/system/status', () => new Promise<never>(() => {})));
+    renderApp('/');
+    const nav = await screen.findByRole('navigation', { name: 'Primary' });
+    const card = (await within(nav).findByText('Checking status…')).closest('a')!;
+    expect(card).toHaveClass('system-card--neutral');
+    const header = screen.getByRole('banner');
+    expect(await within(header).findByRole('link', { name: 'Checking status…' })).toHaveClass('status-pill--neutral');
   });
 
   it('keeps the search button and status card on other pages, and shows a degraded system', async () => {

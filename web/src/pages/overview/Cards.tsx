@@ -148,7 +148,7 @@ const UPSTREAM_TONE: Record<UpstreamHealth['state'], { tone: 'ok' | 'warn' | 'ba
   slow: { tone: 'warn', label: 'slow' },
   blocked: { tone: 'bad', label: 'blocked' },
   offline: { tone: 'bad', label: 'offline' },
-  unknown: { tone: 'neutral', label: 'not checked yet' },
+  unknown: { tone: 'neutral', label: 'not used yet' },
 };
 
 interface UpstreamCardProps {
@@ -189,11 +189,14 @@ export function UpstreamCard({ items, error, onRetry, m }: UpstreamCardProps) {
   }
   const auth = u.state === 'blocked' ? upstreamAuthProblem(u.reason) : null;
   const s = auth ? { ...UPSTREAM_TONE.blocked, label: auth.label } : UPSTREAM_TONE[u.state];
+  const checked = items.filter((x) => x.state !== 'unknown');
   const hit = m?.cache.hit_ratio;
   const note = [
     u.latency_ms !== null ? `${u.latency_ms} ms` : s.label,
     hit !== null && hit !== undefined ? `cache hit ${formatPercent(hit, 0)}%` : null,
-    items.length > 1 ? `${items.filter((x) => x.state === 'healthy').length} of ${items.length} healthy` : null,
+    // Remotes not used since start are not counted as healthy (or at all).
+    checked.length > 1 ? `${checked.filter((x) => x.state === 'healthy').length} of ${checked.length} healthy` : null,
+    items.length > checked.length && items.length > 1 ? `${items.length - checked.length} not used yet` : null,
   ]
     .filter(Boolean)
     .join(' · ');

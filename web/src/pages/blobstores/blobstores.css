@@ -34,3 +34,10 @@
 .store-manage__quota .form-error { flex-basis: 100%; }
 .store-manage__delete { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; border-top: 1px solid var(--hairline); }
 .store-manage .danger-zone__text { font-size: 14px; color: var(--ink-2); line-height: 1.55; }
+
+/* What the last health check found, one line under the header. */
+.store-card__problem {
+  margin: -4px 0 0; padding: 6px 10px; border-radius: var(--r-small); font-size: 12px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.store-detail__problem { color: var(--bad-ink); overflow-wrap: anywhere; }

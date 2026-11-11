@@ -392,7 +392,13 @@ paths:
     get:
       tags: [system]
       operationId: getSystemStatus
-      summary: Overall health, shown in the header status dot and the sidebar card
+      summary: Overall health, shown by every status indicator of the web UI
+      description: |
+        The rollup of the System status checks of every node (the same checks
+        as `/system/nodes` and `/system/health`), so all of them agree. `state`
+        and `message` are public; signed-in callers also get the failing checks
+        in `problems`, and callers with `system:cluster:read` their detail and
+        the dependency errors.
       security: []
       responses:
         "200":
@@ -3389,7 +3395,42 @@ components:
           description: Whether the web UI is embedded in this binary
         dependencies:
           type: array
+          description: The answering node's checks; `error` only for system:cluster:read
           items: { $ref: "#/components/schemas/DependencyStatus" }
+        checks_total: { type: integer, description: System status checks of the nodes that answer }
+        checks_passing: { type: integer, description: Of those, the healthy ones }
+        problems:
+          type: array
+          description: Checks that are not healthy and silent nodes, worst first; signed-in callers only
+          items: { $ref: "#/components/schemas/SystemCheckState" }
+
+    SystemCheckState:
+      type: object
+      required: [name, label, status]
+      properties:
+        node: { type: string, description: The node the check ran on; set when there is more than one }
+        name:
+          type: string
+          description: The subsystem name (see SystemSubsystem), or `node` for a node that stopped publishing heartbeats
+        label: { type: string }
+        status: { $ref: "#/components/schemas/SystemStatusLevel" }
+        detail: { type: string, description: "One sentence explaining the status; only for system:cluster:read on /system/status" }
+        since: { $ref: "#/components/schemas/Timestamp" }
+        latency_ms: { type: integer }
+    SystemSummary:
+      type: object
+      required: [status, headline, nodes_up, nodes_total, checks_total, checks_passing, problems]
+      description: The installation's state as /system/status reports it
+      properties:
+        status: { $ref: "#/components/schemas/SystemStatusLevel" }
+        headline: { type: string, examples: ["All systems normal", "Blob storage down", "2 checks need attention"] }
+        nodes_up: { type: integer }
+        nodes_total: { type: integer }
+        checks_total: { type: integer }
+        checks_passing: { type: integer }
+        problems:
+          type: array
+          items: { $ref: "#/components/schemas/SystemCheckState" }
 
     SystemStatusLevel:
       type: string
@@ -3400,7 +3441,7 @@ components:
       properties:
         name:
           type: string
-          description: database, blobstores, eventbus, scheduler, search, auth, upstreams
+          description: database, blobstores, eventbus, scheduler, search, auth, upstreams, scanner
         label: { type: string, description: "Display name, e.g. Database or Sign-in (OIDC)" }
         status: { $ref: "#/components/schemas/SystemStatusLevel" }
         detail: { type: string, description: One sentence explaining the status }
@@ -3473,6 +3514,7 @@ components:
           type: boolean
           description: Only this node is listed because the database cannot be read
         message: { type: string }
+        summary: { $ref: "#/components/schemas/SystemSummary" }
     SystemLogRecord:
       type: object
       required: [seq, time, level, msg]
@@ -3659,7 +3701,11 @@ components:
     UpstreamState:
       type: string
       enum: [healthy, slow, blocked, offline, unknown]
-      description: unknown = no health data for the remote
+      description: |
+        offline = the last request failed (connection error or 5xx) or the
+        circuit breaker is open; unknown = the answering node has not sent the
+        remote a request since it started (nothing probes remotes in the
+        background).
     UpstreamBlockedReason:
       type: string
       enum: [auth_failed, access_denied, address_blocked]
@@ -3689,6 +3735,9 @@ components:
         requests:
           type: [integer, "null"]
           description: Remote requests timed over the range; null when traffic statistics are not available
+        last_error:
+          type: string
+          description: Why the last request to the remote failed, while offline
     CacheInvalidation:
       type: object
       required: [repository, negative_entries, rate_limited_hosts]
@@ -4146,6 +4195,14 @@ components:
     RepositoryStatus:
       type: string
       enum: [online, slow_upstream, blocked, offline]
+    RepositoryStatusReason:
+      type: string
+      enum: [auth_failed, access_denied, address_blocked, upstream_unreachable, blob_store_unavailable]
+      description: |
+        Why a proxy is `blocked` (see UpstreamBlockedReason), or why an
+        enabled repository is `offline`: its remote's last request failed
+        (`upstream_unreachable`) or its blob store failed the last health
+        probe (`blob_store_unavailable`). Absent for a disabled repository.
     Repository:
       allOf:
         - $ref: "#/components/schemas/RepositoryInput"
@@ -4158,8 +4215,10 @@ components:
               description: Client URL built from server.base_url
             status: { $ref: "#/components/schemas/RepositoryStatus" }
             status_reason:
-              $ref: "#/components/schemas/UpstreamBlockedReason"
-              description: Proxy repositories with status blocked only
+              $ref: "#/components/schemas/RepositoryStatusReason"
+            status_detail:
+              type: string
+              description: The error behind an offline status (the remote's, or for administrators the blob store's)
             size_bytes:
               allOf: [{ $ref: "#/components/schemas/Bytes" }]
               description: |
@@ -4235,7 +4294,19 @@ components:
             state:
               type: string
               enum: [ok, degraded, unavailable, read_only, unknown]
-              description: unknown when the storage subsystem does not report live state
+              description: |
+                From the System status blob storage check, which probes every
+                store each heartbeat: ok, degraded (low on free space),
+                unavailable (the probe failed). unknown before the first probe.
+            state_detail:
+              type: string
+              description: What the last probe found, e.g. the error of an unavailable store
+            checked_at:
+              allOf: [{ $ref: "#/components/schemas/Timestamp" }]
+              description: When the store was last probed
+            state_since:
+              allOf: [{ $ref: "#/components/schemas/Timestamp" }]
+              description: Since when the store has this state (on the answering node)
             location:
               type: string
               description: Human-readable location (bucket/prefix or path)

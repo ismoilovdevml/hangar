@@ -96,6 +96,7 @@ describe('overview with metrics the server does not report', () => {
     useMetrics(calmMetrics());
     server.use(
       http.get('*/api/v1/auth/session', () => HttpResponse.json({ ...session, token_warnings: [] })),
+      http.get('*/api/v1/system/status', () => HttpResponse.json(systemStatus)),
       http.get('*/api/v1/upstreams/health', () =>
         HttpResponse.json({
           items: [{ name: 'nuget-proxy', url: 'https://api.nuget.org/v3/index.json', state: 'healthy', latency_ms: 140, requests: 52 }],

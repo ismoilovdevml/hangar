@@ -1,4 +1,5 @@
 import { Link, useRouter } from '@tanstack/react-router';
+import { useSystemHealth } from '../../api/health';
 import { useAuthProviders, useBlobStores, useSession, useSystemStatus } from '../../api/hooks';
 import { IconChevronRight } from '../../components/opsIcons';
 import { canSee, visibleHub, type AppPath, type HubEntry, type HubEntryId } from '../../nav';
@@ -8,8 +9,6 @@ import { useSystemNodes } from '../system/api';
 import { summarize, versionText } from '../system/model';
 import { useIdentityProviders, useProxies } from './settingsApi';
 import './hub.css';
-
-const STATE_TONE = { ok: 'ok', degraded: 'warn', down: 'bad' } as const;
 
 /** A row's status line: text (monospace for addresses), or still loading, or not readable. */
 type Line = { text: string; mono?: boolean; attention?: boolean } | 'pending' | 'unavailable';
@@ -41,6 +40,7 @@ export function SettingsHubPage() {
   const canCluster = can('cluster', 'read');
 
   const status = useSystemStatus();
+  const health = useSystemHealth();
   const sys = status.data;
   const providers = useAuthProviders();
   const idps = useIdentityProviders(canSettings);
@@ -93,7 +93,8 @@ export function SettingsHubPage() {
         const capacity = items.length === 1 ? (items[0]!.capacity_bytes ?? items[0]!.soft_quota_bytes ?? null) : (totals.capacity_bytes ?? null);
         const used = totals.used_bytes;
         const fill = capacity ? `${Math.max(0, Math.round((1 - used / capacity) * 100))}% free` : `${formatBytes(used)} used`;
-        const unhealthy = items.filter((s) => s.state !== 'ok').length;
+        // Not yet probed ("unknown") is not unhealthy.
+        const unhealthy = items.filter((s) => s.state === 'unavailable' || s.state === 'degraded').length;
         const head = items.length === 1 ? `${items[0]!.name} · ${items[0]!.kind === 's3' ? 'S3' : 'filesystem'}` : plural(items.length, 'blob store');
         return { text: [head, fill, unhealthy ? `${unhealthy} not healthy` : ''].filter(Boolean).join(' · '), attention: unhealthy > 0 };
       }),
@@ -106,12 +107,12 @@ export function SettingsHubPage() {
     },
     configuration: () => ({ text: 'hangar.yaml + HANGAR_* environment' }),
     status: () => {
-      if (summary && summary.checks > 0) {
-        return summary.passing === summary.checks
-          ? { text: `All ${plural(summary.checks, 'check')} passing` }
-          : { text: `${summary.headline} · ${summary.passing} of ${summary.checks} passing`, attention: true };
-      }
-      return lineFrom(status, (s) => ({ text: s.message, attention: s.state !== 'ok' }));
+      const s = health.status;
+      if (health.loading) return 'pending';
+      if (health.error || !s) return 'unavailable';
+      if (s.state === 'ok') return { text: s.checks_total ? `All ${plural(s.checks_total, 'check')} passing` : health.text };
+      const counts = s.checks_total ? ` · ${s.checks_passing ?? 0} of ${s.checks_total} passing` : '';
+      return { text: `${health.text}${counts}`, attention: true };
     },
     logs: () => ({ text: 'Live server output · filter by node and level' }),
     audit: () => ({ text: 'Who changed what, and when' }),
@@ -148,9 +149,9 @@ export function SettingsHubPage() {
           {sys.build?.commit && <> · {sys.build.commit.slice(0, 12)}</>}
           {sys.build?.date && <> · built {formatUtc(sys.build.date).split(',')[0]}</>}
           {' · '}
-          <Link to="/system/status" className={`hub-foot__status hub-foot__status--${STATE_TONE[sys.state]}`}>
-            <span className={`status__dot dot-${STATE_TONE[sys.state]}`} aria-hidden="true" />
-            {sys.message}
+          <Link to="/system/status" className={`hub-foot__status hub-foot__status--${health.tone}`}>
+            <span className={`status__dot dot-${health.tone}`} aria-hidden="true" />
+            {health.text}
           </Link>
         </p>
       )}

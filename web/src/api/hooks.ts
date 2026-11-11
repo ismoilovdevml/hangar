@@ -49,11 +49,13 @@ export function useSession() {
   return useQuery(sessionQuery);
 }
 
+/** GET /system/status; read it through useSystemHealth() for anything that shows health. */
 export function useSystemStatus() {
   return useQuery({
     queryKey: queryKeys.systemStatus,
     queryFn: ({ signal }) => apiFetch<SystemStatus>('/system/status', { signal, allowUnauthorized: true }),
-    refetchInterval: 30_000,
+    // As often as the System status screen, so the two never tell different stories for long.
+    refetchInterval: 15_000,
   });
 }
 

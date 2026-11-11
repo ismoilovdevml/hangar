@@ -8,7 +8,7 @@ import { KpiCard, KpiCardSkeleton } from '../../components/KpiCard';
 import { Meter } from '../../components/Meter';
 import { PageHeader } from '../../components/PageHeader';
 import { Pill } from '../../components/Pill';
-import { dedupShare, humanDays, quotaRatio, storeBadge } from '../../lib/blobStores';
+import { dedupShare, humanDays, quotaRatio, storeBadge, storeProblem } from '../../lib/blobStores';
 import { formatBytes, formatCompact, splitBytes } from '../../lib/format';
 import { BlobStoreCreate } from './BlobStoreCreate';
 import './blobstores.css';
@@ -118,6 +118,7 @@ function Totals({ data }: { data: BlobStoreList | undefined }) {
 
 function StoreCard({ store: s }: { store: BlobStore }) {
   const badge = storeBadge(s);
+  const problem = storeProblem(s);
   const capacity = s.capacity_bytes ?? s.soft_quota_bytes ?? null;
   const ratio = quotaRatio(s);
   return (
@@ -139,6 +140,11 @@ function StoreCard({ store: s }: { store: BlobStore }) {
         </div>
         <Pill tone={badge.tone}>{badge.label}</Pill>
       </header>
+      {problem && (
+        <p className={`store-card__problem tone-${badge.tone}`} title={problem}>
+          {problem}
+        </p>
+      )}
 
       <div className="store-card__usage">
         <div className="store-card__usage-row">

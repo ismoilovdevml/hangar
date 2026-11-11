@@ -23,6 +23,30 @@
   so a store probe waiting for its 3 s timeout does not hold up the System
   status and System logs screens. A client that cancels the request no
   longer logs "other nodes unavailable".
+- **One source of truth for health**: `GET /system/status` is now the rollup
+  of the System status checks (the same ones `/system/nodes` and
+  `/system/health` report), so a broken blob store reads `down` in both, and
+  its message names the failing check ("Blob storage down"). Signed-in
+  callers get the failing checks in `problems`; their detail and the
+  dependency errors need `system:cluster:read`. `/system/nodes` carries the
+  same rollup in `summary`. The sidebar card, the Overview pill, the bell,
+  System status, Settings › System and the Settings hub all show it, in grey
+  while it loads or cannot be read; the bell lists the To do items.
+- **Blob store state is real**: every store is probed each heartbeat (one
+  hanging store no longer times the whole check out), and `/blob-stores`
+  reports `ok`, `degraded` or `unavailable` with what the probe found
+  (`state_detail`, `checked_at`) instead of a fixed `unknown`. A repository on
+  an unavailable store is `offline` with `status_reason`
+  `blob_store_unavailable`.
+- **Proxy remotes are not "healthy" before they are used**: a remote this
+  node has not contacted since it started is `unknown`; a request that fails
+  (no answer or a 5xx) makes it `offline` at once with `last_error`, before
+  the circuit breaker trips, and the next answer clears it. The repository
+  list shows such a proxy as "Upstream unreachable" (`status_reason`
+  `upstream_unreachable`, `status_detail`) instead of a green "Online".
+  `hangar_upstream_state` gains `state="unknown"`.
+- **Vulnerability scanner check**: System status lists the scanner (advisory
+  scans that worked and failed, and whether the Trivy server answers).
 
 ## v0.1.8 (2026-11-11)
 

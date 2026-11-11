@@ -294,9 +294,9 @@ func (m *Manager) purge(name string) CacheInvalidation {
 }
 
 // Health returns the health of a proxy repository's remote. A remote that
-// has not been used yet is reported healthy without latency.
+// has not been used yet is reported unknown.
 func (m *Manager) Health(repo *core.Repository) HealthItem {
-	it := HealthItem{Name: repo.Name, State: StateHealthy}
+	it := HealthItem{Name: repo.Name, State: StateUnknown}
 	if repo.Config.Proxy == nil {
 		return it
 	}

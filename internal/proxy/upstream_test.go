@@ -203,8 +203,8 @@ func TestSingleflightAllCallersGoneCancelsUpstream(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("upstream request not cancelled after the only caller left")
 	}
-	if st := u.health().State; st != StateHealthy {
-		t.Fatalf("a caller giving up must not hurt the remote's state: %s", st)
+	if st := u.health().State; st != StateUnknown {
+		t.Fatalf("a caller giving up must not hurt the remote's state: %s, want unknown (no answer yet)", st)
 	}
 }
 
@@ -418,7 +418,7 @@ func TestHealthReporter(t *testing.T) {
 		t.Fatalf("page 2 must hold only the remaining proxy: %+v", page)
 	}
 	it := page.Items[0]
-	if it.State != StateHealthy || it.LatencyMS != nil || strings.Contains(it.URL, "secret") {
+	if it.State != StateUnknown || it.LatencyMS != nil || strings.Contains(it.URL, "secret") {
 		t.Errorf("unused item: %+v", it)
 	}
 }

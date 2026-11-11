@@ -30,6 +30,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/health"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 	"github.com/ismoilovdevml/hangar/internal/search"
+	"github.com/ismoilovdevml/hangar/internal/sysmon"
 	"github.com/ismoilovdevml/hangar/internal/version"
 	"github.com/ismoilovdevml/hangar/internal/webui"
 )
@@ -86,11 +87,11 @@ type UpstreamCache interface {
 	InvalidateCache(ctx context.Context, repo *core.Repository) (proxy.CacheInvalidation, error)
 }
 
-// BlobStoreProbe reports the live state of a blob store by name: "ok",
-// "degraded", "unavailable" or "read_only", plus the recent write latency
-// (nil if unknown). The storage subsystem implements it.
+// BlobStoreProbe reports the last health probe of a blob store by name,
+// false before the store was first probed (implemented by
+// *sysmon.StoreStates, filled by the System status blob storage check).
 type BlobStoreProbe interface {
-	BlobStoreState(ctx context.Context, name string) (state string, writeLatencyMS *float64)
+	BlobStoreState(name string) (sysmon.StoreState, bool)
 }
 
 // RouteRegistrar adds routes to the /api/v1 router. Routes registered this
@@ -317,8 +318,29 @@ type systemStatus struct {
 	UptimeSeconds int64        `json:"uptime_seconds"`
 	WebUI         bool         `json:"web_ui"`
 	Dependencies  []dependency `json:"dependencies"`
+	// ChecksTotal and ChecksPassing count the System status checks.
+	ChecksTotal   *int `json:"checks_total,omitempty"`
+	ChecksPassing *int `json:"checks_passing,omitempty"`
+	// Problems are the checks that are not healthy, worst first; signed-in
+	// callers only, with the detail for system:cluster:read.
+	Problems []sysmon.CheckState `json:"problems,omitempty"`
 }
 
+// summaryState maps a System status level to SystemStatus.state.
+func summaryState(level string) string {
+	switch level {
+	case sysmon.StatusDown:
+		return "down"
+	case sysmon.StatusDegraded:
+		return "degraded"
+	}
+	return "ok"
+}
+
+// systemStatus serves GET /system/status, the state every health indicator
+// of the web UI shows. It is built from the same checks as /system/nodes and
+// /system/health (sysmon.Summarize), so they always agree. Without a monitor
+// (tests, tools) it falls back to the readiness checks.
 func (a *API) systemStatus(w http.ResponseWriter, r *http.Request) {
 	build := version.Get()
 	up, total := a.nodeCounts()
@@ -336,12 +358,53 @@ func (a *API) systemStatus(w http.ResponseWriter, r *http.Request) {
 		WebUI:         webui.Embedded(),
 		Dependencies:  []dependency{},
 	}
-	if a.Health != nil {
+	// Errors name hosts, buckets and paths: only for those who may read the
+	// System status screen.
+	detail := a.authorize(r.Context(), core.ActionRead, core.SystemResource(core.SystemCluster)) == nil
+	switch {
+	case a.Monitor != nil:
+		sum := a.Monitor.Rollup(r.Context())
+		st.State, st.Message = summaryState(sum.Status), sum.Headline
+		if sum.Total > 0 {
+			st.NodesUp, st.NodesTotal = sum.Up, sum.Total
+		}
+		st.ChecksTotal, st.ChecksPassing = &sum.Checks, &sum.Passing
+		self := a.Monitor.NodeID()
+		for _, c := range sum.All {
+			if c.Node != "" && c.Node != self {
+				continue
+			}
+			d := dependency{Name: c.Name, Status: health.StatusOK}
+			if c.LatencyMS != nil {
+				d.LatencyMS = *c.LatencyMS
+			}
+			if c.Status != sysmon.StatusHealthy {
+				d.Status = health.StatusFail
+				if detail {
+					d.Error = c.Detail
+				}
+			}
+			st.Dependencies = append(st.Dependencies, d)
+		}
+		if !core.PrincipalFrom(r.Context()).IsAnonymous() {
+			st.Problems = make([]sysmon.CheckState, 0, len(sum.Problems))
+			for _, p := range sum.Problems {
+				if !detail {
+					p.Detail = ""
+				}
+				st.Problems = append(st.Problems, p)
+			}
+		}
+	case a.Health != nil:
 		rep := a.Health.Run(r.Context())
 		var failing []string
 		for _, name := range slices.Sorted(maps.Keys(rep.Checks)) {
 			c := rep.Checks[name]
-			st.Dependencies = append(st.Dependencies, dependency{Name: name, Status: c.Status, LatencyMS: c.LatencyMS, Error: c.Error})
+			d := dependency{Name: name, Status: c.Status, LatencyMS: c.LatencyMS}
+			if detail {
+				d.Error = c.Error
+			}
+			st.Dependencies = append(st.Dependencies, d)
 			if c.Status != health.StatusOK {
 				failing = append(failing, name)
 			}
@@ -354,6 +417,7 @@ func (a *API) systemStatus(w http.ResponseWriter, r *http.Request) {
 			st.State, st.Message = "degraded", "Degraded: "+strings.Join(failing, ", ")
 		}
 	}
+	w.Header().Set("Cache-Control", "no-store")
 	WriteJSON(w, http.StatusOK, st)
 }
 

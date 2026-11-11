@@ -138,39 +138,6 @@ export function headlineUpstream(items: UpstreamHealth[]): UpstreamHealth | null
   );
 }
 
-const RANGE_WORDS: Record<OverviewRange, string> = { '1h': 'in the last hour', today: 'today', '7d': 'in 7 days', '30d': 'in 30 days' };
-
-export interface OverallStatus {
-  tone: 'ok' | 'warn' | 'bad';
-  text: string;
-}
-
-/**
- * The Overview's one-line state, from the same signals as its cards and
- * to-do list: node health, unreachable upstreams and server errors in the
- * range. It never reads "All systems normal" while any of them is red.
- */
-export function overallStatus(input: {
-  system: { state: 'ok' | 'degraded' | 'down'; message: string };
-  upstreams?: UpstreamHealth[];
-  metrics?: OverviewMetrics;
-}): OverallStatus {
-  const { system, upstreams = [], metrics } = input;
-  if (system.state === 'down') return { tone: 'bad', text: system.message };
-  const unreachable = upstreams.filter((u) => u.state === 'offline' || u.state === 'blocked');
-  if (unreachable.length === 1) {
-    const u = unreachable[0]!;
-    // Worded like the to-do item: a refused credential is named as such.
-    const auth = u.state === 'blocked' ? upstreamAuthProblem(u.reason) : null;
-    return { tone: 'bad', text: auth ? `${u.name} upstream: ${auth.label}` : `${u.name} upstream is ${u.state}` };
-  }
-  if (unreachable.length > 1) return { tone: 'bad', text: `${unreachable.length} upstreams unreachable` };
-  if (system.state === 'degraded') return { tone: 'warn', text: system.message };
-  const errors = metrics?.requests.server_errors ?? 0;
-  if (errors > 0) return { tone: 'warn', text: `${plural(errors, 'server error')} ${RANGE_WORDS[metrics!.range]}` };
-  return { tone: 'ok', text: system.message };
-}
-
 /** Where a to-do item leads. */
 export type TodoLink =
   | { kind: 'account-tokens' }
@@ -197,10 +164,19 @@ export interface TodoItem {
   dismissible?: boolean;
 }
 
+/** A failing System status check, as /system/status lists it. */
+export interface HealthProblem {
+  node?: string;
+  name: string;
+  label: string;
+  status: 'healthy' | 'degraded' | 'down';
+  detail?: string;
+}
+
 export interface TodoInput {
   metrics: OverviewMetrics;
   upstreams?: UpstreamHealth[];
-  system?: { state: 'ok' | 'degraded' | 'down'; message: string; nodes_up: number; nodes_total: number };
+  system?: { state: 'ok' | 'degraded' | 'down'; message: string; nodes_up: number; nodes_total: number; problems?: HealthProblem[] };
   tokenWarnings?: Token[];
   /** The signed-in username: their own tokens are renewed on My account. */
   username?: string;
@@ -221,6 +197,19 @@ function expiresIn(iso: string, now: Date): string {
   return `Expires in ${Math.floor(h / 24)} days`;
 }
 
+function healthItem(p: HealthProblem): TodoItem {
+  const down = p.status === 'down';
+  const where = p.node ? ` on ${p.node}` : '';
+  return {
+    id: `health-${p.node ?? ''}-${p.name}`,
+    tone: down ? 'bad' : 'warn',
+    tag: down ? 'OUTAGE' : 'DEGRADED',
+    title: p.name === 'node' ? `${p.label} is not responding` : `${p.label} ${down ? 'down' : 'degraded'}${where}`,
+    detail: p.detail || 'See System status for the cause',
+    link: { kind: 'system-status' },
+  };
+}
+
 /** What needs someone's attention, built only from what the server reports; most urgent first. */
 export function todoItems(input: TodoInput): TodoItem[] {
   const { metrics: m, now = new Date() } = input;
@@ -228,14 +217,22 @@ export function todoItems(input: TodoInput): TodoItem[] {
 
   const sys = input.system;
   if (sys && sys.state !== 'ok') {
-    out.push({
-      id: 'system',
-      tone: sys.state === 'down' ? 'bad' : 'warn',
-      tag: sys.state === 'down' ? 'OUTAGE' : 'DEGRADED',
-      title: sys.message,
-      detail: `${sys.nodes_up} of ${sys.nodes_total} ${sys.nodes_total === 1 ? 'node' : 'nodes'} up`,
-      link: { kind: 'system-status' },
-    });
+    // One item per failing check, worded like the status headline; the
+    // upstream check is left to the items naming each remote below.
+    const named = (input.upstreams ?? []).some((u) => u.state === 'offline' || u.state === 'blocked');
+    const problems = (sys.problems ?? []).filter((p) => p.status !== 'healthy' && !(p.name === 'upstreams' && named));
+    if (problems.length > 0) {
+      for (const p of problems) out.push(healthItem(p));
+    } else if (!sys.problems?.length || !named) {
+      out.push({
+        id: 'system',
+        tone: sys.state === 'down' ? 'bad' : 'warn',
+        tag: sys.state === 'down' ? 'OUTAGE' : 'DEGRADED',
+        title: sys.message,
+        detail: `${sys.nodes_up} of ${sys.nodes_total} ${sys.nodes_total === 1 ? 'node' : 'nodes'} up`,
+        link: { kind: 'system-status' },
+      });
+    }
   }
 
   for (const u of input.upstreams ?? []) {
