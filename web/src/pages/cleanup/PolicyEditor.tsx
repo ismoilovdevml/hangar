@@ -1,5 +1,6 @@
 import { useId, useState, type ReactNode } from 'react';
-import { PickerLoadError } from '../../components/States';
+import { ErrorMessage, PickerLoadError } from '../../components/States';
+import { ApiRequestError } from '../../api/client';
 import { useRepositories } from '../../api/hooks';
 import {
   errorText,
@@ -143,6 +144,13 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
   delete previewErrors.name;
   delete previewErrors.schedule;
 
+  // A pattern the server refused lands under the field too (the client check may not know every rule).
+  const refusedGlob =
+    previewM.error instanceof ApiRequestError && /keep_matching/i.test(previewM.error.body?.message ?? '')
+      ? `${/bad glob "([^"]*)"/.exec(previewM.error.body?.message ?? '')?.[1] ?? 'A pattern'} is not a valid pattern`
+      : null;
+  const globError = (showErrors && errors.keepMatching) || refusedGlob;
+
   const runPreview = () => {
     setShowErrors(true);
     if (Object.keys(previewErrors).length) return;
@@ -214,7 +222,11 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
 
   let previewBody: ReactNode;
   if (previewM.isError) {
-    previewBody = <p className="form-error">{errorText(previewM.error, 'The preview failed.')}</p>;
+    previewBody = refusedGlob ? (
+      <p className="form-error">Fix the pattern under “tags matching” and preview again.</p>
+    ) : (
+      <ErrorMessage error={previewM.error} message={errorText(previewM.error, 'The preview failed.')} />
+    );
   } else if (!preview) {
     previewBody = (
       <p className="meta">
@@ -355,12 +367,19 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
                     placeholder="release-*, latest, v*.*.*"
                     spellCheck={false}
                     autoComplete="off"
+                    aria-invalid={globError ? true : undefined}
                     aria-describedby={`${ids.globs}-hint`}
                   />
                 </span>
-                <span className="field__hint rule__error" id={`${ids.globs}-hint`}>
-                  Comma-separated globs; matching versions are never deleted.
-                </span>
+                {globError ? (
+                  <span className="field__error rule__error" id={`${ids.globs}-hint`}>
+                    {globError}
+                  </span>
+                ) : (
+                  <span className="field__hint rule__error" id={`${ids.globs}-hint`}>
+                    Comma-separated globs; matching versions are never deleted.
+                  </span>
+                )}
               </div>
               {showErrors && errors.criteria && <p className="field__error">{errors.criteria}</p>}
             </div>

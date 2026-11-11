@@ -6,6 +6,7 @@ import {
   draftFromPolicy,
   draftToInput,
   emptyDraft,
+  globProblem,
   parseGlobs,
   previewHeadline,
   previewKey,
@@ -53,6 +54,17 @@ describe('allows', () => {
 });
 
 describe('cleanup draft', () => {
+  it('checks keep-matching globs the way the server does', () => {
+    expect(globProblem('release-*')).toBeNull();
+    expect(globProblem('v[0-9].*')).toBeNull();
+    expect(globProblem('[bad')).toBe('[bad is not a valid pattern: the [ is never closed');
+    expect(globProblem('a[]')).toMatch(/matches nothing/);
+    expect(globProblem('[a-]')).toMatch(/missing an end/);
+    expect(globProblem('x]')).toMatch(/without a \[/);
+    expect(globProblem('ends\\')).toMatch(/lone/);
+    expect(validateDraft({ ...emptyDraft(), keepMatching: 'latest, [bad' }).keepMatching).toBe('[bad is not a valid pattern: the [ is never closed');
+  });
+
   const policy: CleanupPolicy = {
     id: 'cp_1',
     name: 'docker-lean',

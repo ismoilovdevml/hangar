@@ -28,6 +28,17 @@ describe('cleanup policies', () => {
     expect(screen.getByRole('button', { name: 'Save policy' })).toBeDisabled();
   });
 
+  it('says under the field when a keep pattern is not valid', async () => {
+    const user = userEvent.setup();
+    renderApp('/cleanup?create=true');
+    await screen.findByRole('heading', { level: 2, name: 'New policy' });
+    const globs = screen.getByLabelText('tags matching');
+    await user.type(globs, '[[bad');
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+    expect(globs).toHaveAttribute('aria-invalid', 'true');
+    expect(globs).toHaveAccessibleDescription('[bad is not a valid pattern: the [ is never closed');
+  });
+
   it('previews, then creates a policy and shows it in the URL', async () => {
     const user = userEvent.setup();
     const { history } = renderApp('/cleanup?create=true');

@@ -75,7 +75,37 @@ export function parseGlobs(text: string): string[] {
   return out;
 }
 
-export type DraftErrors = Partial<Record<'name' | 'olderThan' | 'notDownloaded' | 'keepNewest' | 'criteria' | 'repositories' | 'schedule', string>>;
+export type DraftErrors = Partial<Record<'name' | 'olderThan' | 'notDownloaded' | 'keepNewest' | 'keepMatching' | 'criteria' | 'repositories' | 'schedule', string>>;
+
+/**
+ * Why a "keep tags matching" glob is not one the server accepts (Go's
+ * path.Match syntax: *, ?, [class] and \ escapes); null when it is fine.
+ */
+export function globProblem(g: string): string | null {
+  for (let i = 0; i < g.length; i++) {
+    const c = g[i];
+    if (c === '\\') {
+      if (i === g.length - 1) return `${g} is not a valid pattern: it ends in a lone \\`;
+      i++;
+    } else if (c === '[') {
+      let j = i + 1;
+      if (g[j] === '^') j++;
+      const start = j;
+      while (j < g.length && g[j] !== ']') {
+        if (g[j] === '\\') j++;
+        j++;
+      }
+      if (j >= g.length) return `${g} is not a valid pattern: the [ is never closed`;
+      if (j === start) return `${g} is not a valid pattern: [] matches nothing`;
+      const cls = g.slice(start, j);
+      if (/^-|[^\\]-$/.test(cls)) return `${g} is not a valid pattern: a range in [${cls}] is missing an end`;
+      i = j;
+    } else if (c === ']') {
+      return `${g} is not a valid pattern: ] without a [`;
+    }
+  }
+  return null;
+}
 
 function intIn(text: string, min: number, max: number): number | null {
   if (!/^\d+$/.test(text.trim())) return null;
@@ -91,6 +121,8 @@ export function validateDraft(d: PolicyDraft): DraftErrors {
   if (d.olderThan.on && intIn(d.olderThan.value, 1, MAX_DAYS) === null) e.olderThan = `Enter whole days, 1–${MAX_DAYS}`;
   if (d.notDownloaded.on && intIn(d.notDownloaded.value, 1, MAX_DAYS) === null) e.notDownloaded = `Enter whole days, 1–${MAX_DAYS}`;
   if (d.keepNewest.on && intIn(d.keepNewest.value, 0, MAX_KEEP) === null) e.keepNewest = `Enter a count, 0–${MAX_KEEP}`;
+  const badGlob = parseGlobs(d.keepMatching).map(globProblem).find(Boolean);
+  if (badGlob) e.keepMatching = badGlob;
   // Without any of these the policy would select every version of every package.
   if (!d.olderThan.on && !d.notDownloaded.on && !d.prereleaseOnly && !d.keepNewest.on) {
     e.criteria = 'Choose an age, last-download, pre-release or keep-newest condition; otherwise every version is selected';
