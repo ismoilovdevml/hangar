@@ -20,12 +20,24 @@
 .sidebar__toggle { display: none; }
 .sidebar__body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 22px; }
 /* The links scroll on short screens; the status card stays at the bottom. */
+.sidebar__scroll { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .sidebar__nav {
-  flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 22px;
-  margin: 0 -6px; padding: 2px 6px 16px;
-  /* a soft edge where the list runs under the status card */
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+  flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
+  margin: 0 -6px; padding: 2px 6px 8px; scrollbar-width: thin;
 }
+/* Fades at the ends that have more entries beyond them, and a button to scroll down. */
+.sidebar__nav[data-more-below] { mask-image: linear-gradient(to bottom, #000 calc(100% - 56px), rgba(0, 0, 0, .08)); }
+.sidebar__nav[data-more-above] { mask-image: linear-gradient(to bottom, rgba(0, 0, 0, .08), #000 32px); }
+.sidebar__nav[data-more-above][data-more-below] { mask-image: linear-gradient(to bottom, rgba(0, 0, 0, .08), #000 32px, #000 calc(100% - 56px), rgba(0, 0, 0, .08)); }
+.sidebar__more {
+  position: absolute; left: 50%; bottom: 2px; z-index: 1; width: 32px; height: 24px; margin-left: -16px; padding: 0;
+  display: grid; place-items: center; border: 1px solid var(--track); border-radius: var(--r-pill);
+  background: var(--surface-solid); color: var(--ink-2); box-shadow: var(--shadow-raised);
+  opacity: 0; pointer-events: none; transition: opacity var(--t-fast);
+}
+.sidebar__more svg { transform: rotate(90deg); }
+.sidebar__more:hover { color: var(--lake-ink); }
+.sidebar__nav[data-more-below] + .sidebar__more { opacity: 1; pointer-events: auto; }
 
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px; color: var(--ink); }
 .brand:hover { color: var(--ink); }
@@ -42,11 +54,17 @@
 
 
 .nav-section { display: flex; flex-direction: column; gap: 2px; }
-.nav-section__title {
-  padding: 0 12px 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em;
-  text-transform: uppercase; color: var(--ink-3);
+.nav-section__title { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+/* The heading folds its section; the chevron points down while it is open. */
+.nav-section__toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 24px; padding: 0 8px 0 12px;
+  border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer;
 }
+.nav-section__toggle:hover { color: var(--ink); background: rgba(255, 255, 255, .45); }
+.nav-section__chevron { flex: none; transform: rotate(90deg); transition: transform var(--t-fast); }
+.nav-section__toggle[aria-expanded='false'] .nav-section__chevron { transform: none; }
 .nav-section__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.nav-section__list[hidden] { display: none; }
 .nav-item {
   display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 12px;
   border-radius: var(--r-small); color: var(--ink-2); font-size: 14px; font-weight: 500;
@@ -518,7 +536,8 @@
   .sidebar__toggle { display: grid; }
   .sidebar__body { display: none; }
   .sidebar.is-open .sidebar__body { display: flex; padding: 14px 2px 4px; }
-  .sidebar__nav { overflow: visible; margin: 0; padding: 0; mask-image: none; }
+  .sidebar__nav, .sidebar__nav[data-more-above], .sidebar__nav[data-more-below], .sidebar__nav[data-more-above][data-more-below] { overflow: visible; margin: 0; padding: 0; mask-image: none; }
+  .sidebar__more { display: none; }
   .topbar { padding: 10px 12px; }
   .breadcrumb { flex-basis: 100%; }
   .search-trigger { flex: 1 1 0; }
