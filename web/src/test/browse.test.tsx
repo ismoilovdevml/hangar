@@ -330,8 +330,8 @@ describe('package browser: package', () => {
 
   it('says when a version does not exist', async () => {
     renderApp('/browse?repo=docker-prod&name=payments-api&version=9.9.9');
-    expect(await screen.findByText(/is not in docker-prod/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Show the newest version' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Version not found' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Show the newest version of payments-api' })).toBeInTheDocument();
   });
 
   it('resolves the overview’s links, which carry no namespace', async () => {

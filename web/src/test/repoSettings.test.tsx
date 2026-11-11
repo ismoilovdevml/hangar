@@ -149,6 +149,8 @@ describe('repository settings', () => {
 
   it('says when the repository does not exist', async () => {
     renderApp('/repositories/missing-repo/settings');
-    expect(await screen.findByText('This repository does not exist, or you cannot see it.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Repository not found' })).toBeInTheDocument();
+    expect(screen.getByText('missing-repo')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to repositories' })).toHaveAttribute('href', '/repositories');
   });
 });

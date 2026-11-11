@@ -135,7 +135,8 @@ describe('blob stores', () => {
 
   it('says when a store does not exist', async () => {
     renderApp('/blob-stores/nope');
-    expect(await screen.findByText('This blob store does not exist.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Blob store not found' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to blob stores' })).toHaveAttribute('href', '/blob-stores');
   });
 
   it('tests S3 settings before adding the store and says why they fail', async () => {

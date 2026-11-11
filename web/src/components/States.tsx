@@ -85,16 +85,20 @@ interface NotFoundProps {
   /** "repositories" → "Back to repositories". */
   backLabel: string;
   children?: ReactNode;
+  /** "with id" for things named by an id. */
+  named?: string;
+  /** Inside a page's pane (Packages) rather than a page of its own. */
+  pane?: boolean;
 }
 
 /** An entity that does not exist (or the user cannot see): the same page for every kind. */
-export function NotFound({ kind, name, back, backLabel, children }: NotFoundProps) {
-  return (
-    <div className="screen">
+export function NotFound({ kind, name, back, backLabel, children, named = 'named', pane }: NotFoundProps) {
+  const body = (
+    <>
       <PageHeader title={`${kind} not found`} />
-      <div className="panel glass state-notfound">
+      <div className="panel glass state-notfound" role="status">
         <p>
-          No {kind.toLowerCase()} named <code className="inline-code">{name}</code> exists, or you cannot see it.
+          No {kind.toLowerCase()} {named} <code className="inline-code">{name}</code> exists, or you cannot see it.
         </p>
         {children}
         <p>
@@ -103,6 +107,7 @@ export function NotFound({ kind, name, back, backLabel, children }: NotFoundProp
           </Link>
         </p>
       </div>
-    </div>
+    </>
   );
+  return pane ? body : <div className="screen">{body}</div>;
 }

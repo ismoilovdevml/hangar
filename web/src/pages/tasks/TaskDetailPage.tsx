@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { NotFound } from '../../components/States';
 import { useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link, useRouterState } from '@tanstack/react-router';
 import { subscribeLiveEvents } from '../../api/events';
@@ -313,17 +314,13 @@ export function TaskDetailPage() {
   }, [running, cursor, firstPage, qc, taskId]);
 
   if (task.isError) {
-    const notFound = task.error instanceof ApiRequestError && task.error.status === 404;
+    if (task.error instanceof ApiRequestError && task.error.status === 404) {
+      return <NotFound kind="Task" named="with id" name={taskId} back={{ to: '/tasks' }} backLabel="scheduled tasks" />;
+    }
     return (
       <div className="screen">
-        <PageHeader title={notFound ? 'Task not found' : 'Task'} description={<Link to="/tasks">All scheduled tasks</Link>} />
-        {notFound ? (
-          <Panel>
-            <p>There is no task with id {taskId}. It may have been deleted.</p>
-          </Panel>
-        ) : (
-          <ErrorNote what="this task" error={task.error} privilege="system:tasks:read" onRetry={() => void task.refetch()} />
-        )}
+        <PageHeader title="Task" description={<Link to="/tasks">All scheduled tasks</Link>} />
+        <ErrorNote what="this task" error={task.error} privilege="system:tasks:read" onRetry={() => void task.refetch()} />
       </div>
     );
   }

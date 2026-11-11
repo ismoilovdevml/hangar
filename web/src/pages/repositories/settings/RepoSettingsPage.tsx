@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
+import { NotFound } from '../../../components/States';
 import { getRouteApi, Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { ApiRequestError } from '../../../api/client';
 import { useDeleteRepository, useRepository, useUpdateRepository } from '../../../api/catalog';
@@ -55,17 +56,13 @@ export function RepoSettingsPage() {
   const repo = useRepository(name);
 
   if (repo.isError) {
-    const notFound = repo.error instanceof ApiRequestError && repo.error.status === 404;
+    if (repo.error instanceof ApiRequestError && repo.error.status === 404) {
+      return <NotFound kind="Repository" name={name} back={{ to: '/repositories' }} backLabel="repositories" />;
+    }
     return (
       <div className="screen">
-        <PageHeader title={name} description={notFound ? 'This repository does not exist, or you cannot see it.' : undefined} />
-        {notFound ? (
-          <p>
-            <Link to="/repositories">Back to repositories</Link>
-          </p>
-        ) : (
-          <ErrorNote what="the repository" error={repo.error} onRetry={() => void repo.refetch()} />
-        )}
+        <PageHeader title={name} />
+        <ErrorNote what="the repository" error={repo.error} onRetry={() => void repo.refetch()} />
       </div>
     );
   }
