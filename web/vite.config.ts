@@ -97,6 +97,17 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), mockServiceWorker(mocks), precompress()],
+    build: {
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            // Everything the first paint needs (React, the router, the shell)
+            // in one file; pages and their dependencies load on demand.
+            groups: [{ name: 'app', tags: ['$initial'] }],
+          },
+        },
+      },
+    },
     server: {
       port: 5173,
       proxy,

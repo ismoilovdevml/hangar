@@ -3,10 +3,13 @@ import {
   createRootRouteWithContext,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   Outlet,
   redirect,
+  type RouteComponent,
   type RouterHistory,
 } from '@tanstack/react-router';
+import './pageStyles';
 import { ApiRequestError } from './api/client';
 import { sessionQuery } from './api/hooks';
 import { AppShell } from './components/AppShell';
@@ -15,43 +18,50 @@ import { LoginPage } from './pages/LoginPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { safeRedirect } from './lib/redirect';
 import { GATES, type Gate } from './lib/gates';
-import { ApiDocsPage } from './pages/apidocs/ApiDocsPage';
 import { DocsShell } from './pages/apidocs/DocsShell';
-import { OverviewPage } from './pages/overview/OverviewPage';
-import { RepoCreatePage } from './pages/repositories/RepoCreatePage';
-import { RepositoriesPage } from './pages/repositories/RepositoriesPage';
-import { RepoSettingsPage } from './pages/repositories/settings/RepoSettingsPage';
-import { BrowsePage } from './pages/browse/BrowsePage';
-import { SearchPage } from './pages/search/SearchPage';
 import { isBrowseTab, type BrowseTab } from './lib/packages';
 import { isSearchSort } from './lib/searchQuery';
-import { BlobStoresPage } from './pages/blobstores/BlobStoresPage';
-import { BlobStoreDetailPage } from './pages/blobstores/BlobStoreDetailPage';
 import type { SearchSort } from './api/types';
 import { isFormat, isRepoSort, isRepoType, type RepoSort } from './lib/repositories';
 import type { Format, RepositoryType } from './api/types';
-import { AccessPage } from './pages/access/AccessPage';
 import { isAccessTab, type AccessSearch } from './pages/access/model';
-import { AccountPage } from './pages/access/AccountPage';
-import { ClusterPage } from './pages/cluster/ClusterPage';
 import { NotFoundPage } from './pages/screens';
-import { VulnerabilitiesPage } from './pages/vulnerabilities/VulnerabilitiesPage';
 import { validateVulnSearch, type VulnSearch } from './lib/vulnerabilities';
-import { AuditPage } from './pages/audit/AuditPage';
-import { CleanupPage, type CleanupSearch } from './pages/cleanup/CleanupPage';
-import { SettingsHubPage } from './pages/settings/SettingsHubPage';
-import { SystemPage } from './pages/settings/SystemPage';
-import { AuthenticationPage } from './pages/settings/AuthenticationPage';
-import { ProxiesPage } from './pages/settings/ProxiesPage';
-import { TaskDetailPage, type TaskDetailSearch } from './pages/tasks/TaskDetailPage';
-import { TasksPage, type TasksSearch } from './pages/tasks/TasksPage';
-import { NewTaskPage, type NewTaskSearch } from './pages/tasks/NewTaskPage';
+import type { CleanupSearch } from './pages/cleanup/CleanupPage';
+import type { TaskDetailSearch } from './pages/tasks/TaskDetailPage';
+import type { TasksSearch } from './pages/tasks/TasksPage';
+import type { NewTaskSearch } from './pages/tasks/NewTaskPage';
 import { isImportKind } from './lib/imports';
 import { validateAuditSearch, type AuditSearch } from './lib/audit';
 import { isTaskStatusFilter, isTaskType } from './lib/tasks';
-import { SystemStatusPage } from './pages/system/SystemStatusPage';
-import { SystemLogsPage } from './pages/system/SystemLogsPage';
 import { validateLogsSearch, type SystemLogsSearch } from './pages/system/model';
+
+// Pages load on first visit (or on hover of a link to them), so the first
+// load fetches only the shell and the page it opens.
+const ApiDocsPage = lazyRouteComponent(() => import('./pages/apidocs/ApiDocsPage'), 'ApiDocsPage');
+const OverviewPage = lazyRouteComponent(() => import('./pages/overview/OverviewPage'), 'OverviewPage');
+const RepoCreatePage = lazyRouteComponent(() => import('./pages/repositories/RepoCreatePage'), 'RepoCreatePage');
+const RepositoriesPage = lazyRouteComponent(() => import('./pages/repositories/RepositoriesPage'), 'RepositoriesPage');
+const RepoSettingsPage = lazyRouteComponent(() => import('./pages/repositories/settings/RepoSettingsPage'), 'RepoSettingsPage');
+const BrowsePage = lazyRouteComponent(() => import('./pages/browse/BrowsePage'), 'BrowsePage');
+const SearchPage = lazyRouteComponent(() => import('./pages/search/SearchPage'), 'SearchPage');
+const BlobStoresPage = lazyRouteComponent(() => import('./pages/blobstores/BlobStoresPage'), 'BlobStoresPage');
+const BlobStoreDetailPage = lazyRouteComponent(() => import('./pages/blobstores/BlobStoreDetailPage'), 'BlobStoreDetailPage');
+const AccessPage = lazyRouteComponent(() => import('./pages/access/AccessPage'), 'AccessPage');
+const AccountPage = lazyRouteComponent(() => import('./pages/access/AccountPage'), 'AccountPage');
+const ClusterPage = lazyRouteComponent(() => import('./pages/cluster/ClusterPage'), 'ClusterPage');
+const VulnerabilitiesPage = lazyRouteComponent(() => import('./pages/vulnerabilities/VulnerabilitiesPage'), 'VulnerabilitiesPage');
+const AuditPage = lazyRouteComponent(() => import('./pages/audit/AuditPage'), 'AuditPage');
+const CleanupPage = lazyRouteComponent(() => import('./pages/cleanup/CleanupPage'), 'CleanupPage');
+const SettingsHubPage = lazyRouteComponent(() => import('./pages/settings/SettingsHubPage'), 'SettingsHubPage');
+const SystemPage = lazyRouteComponent(() => import('./pages/settings/SystemPage'), 'SystemPage');
+const AuthenticationPage = lazyRouteComponent(() => import('./pages/settings/AuthenticationPage'), 'AuthenticationPage');
+const ProxiesPage = lazyRouteComponent(() => import('./pages/settings/ProxiesPage'), 'ProxiesPage');
+const TaskDetailPage = lazyRouteComponent(() => import('./pages/tasks/TaskDetailPage'), 'TaskDetailPage');
+const TasksPage = lazyRouteComponent(() => import('./pages/tasks/TasksPage'), 'TasksPage');
+const NewTaskPage = lazyRouteComponent(() => import('./pages/tasks/NewTaskPage'), 'NewTaskPage');
+const SystemStatusPage = lazyRouteComponent(() => import('./pages/system/SystemStatusPage'), 'SystemStatusPage');
+const SystemLogsPage = lazyRouteComponent(() => import('./pages/system/SystemLogsPage'), 'SystemLogsPage');
 
 declare module '@tanstack/react-router' {
   interface StaticDataRouteOption {
@@ -150,7 +160,7 @@ const appRoute = createRoute({
   component: AppShell,
 });
 
-const page = <TPath extends string>(path: TPath, title: string, component: () => JSX.Element, inSettings?: boolean, gate?: Gate) =>
+const page = <TPath extends string>(path: TPath, title: string, component: RouteComponent, inSettings?: boolean, gate?: Gate) =>
   createRoute({ getParentRoute: () => appRoute, path, staticData: { title, inSettings, gate }, component });
 
 const overviewRoute = createRoute({
