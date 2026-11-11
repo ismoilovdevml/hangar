@@ -128,13 +128,14 @@ test('a reader sees only what it can use, and who to ask for the rest', async ({
   await frame(page, 'reader-new-repo-1440');
 });
 
-test('the overview status follows its own alerts', async ({ page }) => {
+test('the overview status says what the sidebar and System status say', async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await page.goto('/');
   const todo = page.getByRole('region', { name: 'To do' });
   await expect(todo.getByText('ghcr-proxy: authentication failed (401)')).toBeVisible();
-  const pill = page.getByRole('link', { name: 'ghcr-proxy upstream: authentication failed (401)' });
-  await expect(pill).toHaveClass(/status-pill--bad/);
+  const pill = page.getByRole('banner').getByRole('link', { name: '1 check needs attention' });
+  await expect(pill).toHaveClass(/status-pill--warn/);
+  await expect(page.getByRole('navigation', { name: 'Primary' }).getByText('1 check needs attention')).toBeVisible();
   await expect(page.getByText('All systems normal')).toHaveCount(0);
   await frame(page, 'overview-status-1440');
 });

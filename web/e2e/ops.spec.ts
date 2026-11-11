@@ -138,7 +138,8 @@ test('system page at desktop and phone width', async ({ page }) => {
   for (const [w, size] of SIZES) {
     await page.setViewportSize(size);
     await page.goto('/settings/system');
-    await expect(page.getByText('Operational')).toBeVisible();
+    // The mock cluster has a degraded and a silent node; the page says what System status says.
+    await expect(page.getByText('Degraded', { exact: true }).first()).toBeVisible();
     await expect(page.getByRole('cell', { name: 'hangar-1' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Configuration' })).toContainText('hangar.yaml');
     await checkFrame(page, `system-${w}`);
@@ -156,7 +157,7 @@ test('settings hub at desktop and phone width, from the keyboard', async ({ page
     await expect(hub.getByRole('link', { name: /^Internet access/ })).toContainText('corp-proxy');
     await expect(hub.getByRole('link', { name: /^Storage/ })).toContainText('blob stores');
     await expect(hub.getByRole('link', { name: /^System status/ })).toContainText('passing');
-    await expect(page.getByRole('link', { name: 'All systems normal' }).last()).toBeVisible();
+    await expect(page.getByRole('link', { name: '1 check needs attention' }).last()).toBeVisible();
     await checkFrame(page, `settings-hub-${w}`);
   }
   // Tab through the rows; Enter opens one.
