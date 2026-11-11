@@ -149,6 +149,39 @@ describe('repository settings', () => {
     await user.click(confirm);
     await waitFor(() => expect(history.location.pathname).toBe('/repositories'));
     expect(mockState.repositories.some((r) => r.name === 'npm-sandbox')).toBe(false);
+    expect(await screen.findByText('Deleted npm-sandbox.')).toBeInTheDocument();
+  });
+
+  it('says a group delete leaves the members and their packages alone', async () => {
+    renderApp('/repositories/npm-all/settings');
+    const zone = await screen.findByRole('region', { name: 'Delete repository' });
+    expect(zone).toHaveTextContent('Removes only the group and its URL. Its members (npm-internal, npmjs-proxy) and their packages are not touched.');
+    expect(zone).not.toHaveTextContent(/package versions/);
+  });
+
+  it('asks before leaving with unsaved changes, and keeps them on Stay', async () => {
+    const user = setupUser();
+    const { history } = renderApp('/repositories/npmjs-proxy/settings');
+    const form = await screen.findByRole('form', { name: 'Settings of npmjs-proxy' });
+    await user.type(within(form).getByLabelText(/Description/), 'not saved yet');
+    await user.click(screen.getAllByRole('link', { name: 'Repositories' })[0]!);
+    const ask = await screen.findByRole('alertdialog', { name: 'Leave without saving?' });
+    await user.click(within(ask).getByRole('button', { name: 'Stay' }));
+    expect(history.location.pathname).toBe('/repositories/npmjs-proxy/settings');
+    expect(within(form).getByLabelText(/Description/)).toHaveValue('not saved yet');
+
+    await user.click(screen.getAllByRole('link', { name: 'Repositories' })[0]!);
+    await user.click(within(await screen.findByRole('alertdialog', { name: 'Leave without saving?' })).getByRole('button', { name: 'Leave' }));
+    await waitFor(() => expect(history.location.pathname).toBe('/repositories'));
+  });
+
+  it('leaves without asking when nothing changed', async () => {
+    const user = setupUser();
+    const { history } = renderApp('/repositories/npmjs-proxy/settings');
+    await screen.findByRole('form', { name: 'Settings of npmjs-proxy' });
+    await user.click(screen.getAllByRole('link', { name: 'Repositories' })[0]!);
+    await waitFor(() => expect(history.location.pathname).toBe('/repositories'));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
   it('explains why a group member cannot be deleted', async () => {
