@@ -165,8 +165,11 @@ type Monitor struct {
 
 	runMu  sync.Mutex        // one check run at a time
 	tracks map[string]*track // by check name; guarded by runMu
-	mu     sync.Mutex
-	last   *Node
+	// refreshing is set while a background check run started by Nodes is
+	// under way.
+	refreshing atomic.Bool
+	mu         sync.Mutex
+	last       *Node
 	// up and total are from the last heartbeat read (Summary).
 	up, total int
 }
@@ -404,11 +407,17 @@ func (m *Monitor) Heartbeat(ctx context.Context) error {
 	return err
 }
 
-// Nodes returns every known node, this one first with fresh checks, then
-// the others by id from their last heartbeat. When the database cannot be
-// read the error is returned with this node alone.
+// Nodes returns every known node, this one first, then the others by id
+// from their last heartbeat. When the database cannot be read the error is
+// returned with this node alone.
+//
+// This node's checks come from its last run while that is no older than a
+// heartbeat interval (plus the check timeout); a run older than five
+// seconds is refreshed in the background for the next caller. So a check
+// waiting for its timeout (an unreachable store) never holds up the node
+// list, which the status and log screens wait for.
 func (m *Monitor) Nodes(ctx context.Context) ([]Node, error) {
-	self := m.Check(ctx)
+	self := m.recent(ctx)
 	out := []Node{self}
 	if m.pool == nil {
 		return out, nil
@@ -428,6 +437,25 @@ func (m *Monitor) Nodes(ctx context.Context) ([]Node, error) {
 	m.up, m.total = up, len(out)
 	m.mu.Unlock()
 	return out, nil
+}
+
+// recent returns this node from its last check run, refreshing a run older
+// than cacheFor in the background. Without a run younger than an interval
+// and the check timeout, it runs the checks and waits for them.
+func (m *Monitor) recent(ctx context.Context) Node {
+	m.mu.Lock()
+	last := m.last
+	m.mu.Unlock()
+	if last == nil || time.Since(last.LastHeartbeat) > m.opts.Interval+m.opts.CheckTimeout {
+		return m.Check(ctx)
+	}
+	if time.Since(last.LastHeartbeat) >= cacheFor && m.refreshing.CompareAndSwap(false, true) {
+		go func() {
+			defer m.refreshing.Store(false)
+			m.Check(context.WithoutCancel(ctx))
+		}()
+	}
+	return m.withRuntime(*last)
 }
 
 // Summary returns the nodes up (publishing heartbeats) and known at the
