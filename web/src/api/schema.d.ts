@@ -4920,8 +4920,9 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             /**
              * @description Wrong username or password. With lockout on, `details.attempts_left` says how many
-             *     more failures this address may have for the username typed before it is locked out;
-             *     the answer is the same whether or not the username belongs to an account.
+             *     more failures this address may have for the username typed before it is locked out
+             *     for `details.lockout_seconds`; the answer is the same whether or not the username
+             *     belongs to an account.
              */
             401: {
                 headers: {

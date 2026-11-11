@@ -51,6 +51,8 @@ var errBadCredentials = fmt.Errorf("invalid credentials: %w", core.ErrUnauthenti
 // belongs to an account, and wraps core.ErrUnauthenticated.
 type AttemptsError struct {
 	Left int
+	// LockFor is how long the lockout lasts once Left reaches zero.
+	LockFor time.Duration
 }
 
 func (e *AttemptsError) Error() string { return errBadCredentials.Error() }
@@ -64,7 +66,7 @@ func (s *Service) badCredentials(attempts int) error {
 	if s.cfg.Lockout.MaxAttempts <= 0 {
 		return errBadCredentials
 	}
-	return &AttemptsError{Left: max(s.cfg.Lockout.MaxAttempts-attempts, 0)}
+	return &AttemptsError{Left: max(s.cfg.Lockout.MaxAttempts-attempts, 0), LockFor: s.cfg.Lockout.Duration}
 }
 
 // Authenticate implements core.Authenticator: empty credentials give the

@@ -104,7 +104,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 			// address's failures for the name typed.
 			var attempts *auth.AttemptsError
 			if errors.As(err, &attempts) {
-				body.Details = map[string]any{"attempts_left": attempts.Left}
+				body.Details = map[string]any{"attempts_left": attempts.Left, "lockout_seconds": int(attempts.LockFor / time.Second)}
 			}
 			writeJSON(w, http.StatusUnauthorized, body)
 			return

@@ -258,7 +258,7 @@ func TestLoginLockoutAndRateLimit(t *testing.T) {
 	c := s.client(t)
 	resp, body := c.login("admin", "wrong password!!", false)
 	expect(t, resp, body, http.StatusUnauthorized, "unauthenticated")
-	if d, _ := body["details"].(map[string]any); d["attempts_left"] != float64(1) {
+	if d, _ := body["details"].(map[string]any); d["attempts_left"] != float64(1) || d["lockout_seconds"] != float64(300) {
 		t.Fatalf("details after one failure = %v", body["details"])
 	}
 	// A name without an account answers the same way.
