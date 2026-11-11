@@ -9,6 +9,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
 import { Select } from '../../components/Select';
+import { TableScroll } from '../../components/TableScroll';
 import {
   ACTION_SUGGESTIONS,
   AUDIT_OUTCOMES,
@@ -67,21 +68,27 @@ function EventRow({ e, now }: { e: AuditEvent; now: Date }) {
             <IconChevronRight size={16} />
           </button>
         </td>
-        <td className="nowrap">
+        <td className="nowrap audit-time" data-label="">
           <time dateTime={e.at} title={formatUtc(e.at, { seconds: true })}>
             {formatUtc(e.at)}
           </time>
           <span className="audit-sub">{relativeTime(e.at, now)}</span>
         </td>
-        <td className="audit-actor">{e.actor}</td>
-        <td>
+        <td className="audit-actor" data-label="Actor">
+          {e.actor}
+        </td>
+        <td data-label="Action">
           <code className="audit-action">{e.action}</code>
         </td>
-        <td className="audit-target">{e.target}</td>
-        <td>
+        <td className="audit-target" data-priority={2} data-label="Target">
+          {e.target}
+        </td>
+        <td data-label="Outcome">
           <Pill tone={outcome.tone}>{outcome.label}</Pill>
         </td>
-        <td className="muted nowrap col-last">{e.ip ?? '—'}</td>
+        <td className="muted nowrap col-last" data-priority={3} data-label="IP">
+          {e.ip ?? '—'}
+        </td>
       </tr>
       <tr id={detailsId} className="audit-details" hidden={!open}>
         <td />
@@ -312,8 +319,8 @@ export function AuditPage() {
         ) : events.isError ? (
           <ErrorNote what="audit events" error={events.error} privilege="system:audit:read" onRetry={() => void events.refetch()} />
         ) : (
-          <div className="table-scroll" tabIndex={0} role="region" aria-label="Audit events table">
-            <table className="data-table audit-table" style={{ minWidth: 920 }} aria-busy={events.isFetching || undefined}>
+          <TableScroll label="Audit events table">
+            <table className="data-table data-table--stack audit-table" style={{ minWidth: 920 }} aria-busy={events.isFetching || undefined}>
               <caption className="visually-hidden">Audit events, newest first</caption>
               <thead>
                 <tr>
@@ -323,9 +330,11 @@ export function AuditPage() {
                   <th scope="col">Time</th>
                   <th scope="col">Actor</th>
                   <th scope="col">Action</th>
-                  <th scope="col">Target</th>
+                  <th scope="col" data-priority={2}>
+                    Target
+                  </th>
                   <th scope="col">Outcome</th>
-                  <th scope="col" className="col-last">
+                  <th scope="col" className="col-last" data-priority={3}>
                     IP
                   </th>
                 </tr>
@@ -357,7 +366,7 @@ export function AuditPage() {
                 )}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         )}
         <div className="repo-footer">
           <p className="meta" aria-live="polite">

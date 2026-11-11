@@ -509,6 +509,7 @@ function VersionsTable({ c, newestId, cached, canDelete, onDelete, versionSearch
     },
     {
       key: 'when',
+      priority: 3,
       header: cached ? 'Cached' : 'Published',
       className: 'meta',
       cell: (v) => (
@@ -517,8 +518,8 @@ function VersionsTable({ c, newestId, cached, canDelete, onDelete, versionSearch
         </time>
       ),
     },
-    { key: 'size', header: 'Size', align: 'right', className: 'muted nowrap', cell: (v) => (v.size_bytes !== undefined ? formatBytes(v.size_bytes) : '') },
-    { key: 'dl', header: 'Downloads', align: 'right', className: 'muted', cell: (v) => formatCompact(v.download_count ?? 0) },
+    { key: 'size', priority: 3, header: 'Size', align: 'right', className: 'muted nowrap', cell: (v) => (v.size_bytes !== undefined ? formatBytes(v.size_bytes) : '') },
+    { key: 'dl', priority: 2, header: 'Downloads', align: 'right', className: 'muted', cell: (v) => formatCompact(v.download_count ?? 0) },
     {
       key: 'sec',
       header: 'Security',
@@ -580,9 +581,10 @@ function FilesTable({ c, now }: { c: ComponentDetail; now: Date }) {
         </div>
       ),
     },
-    { key: 'kind', header: 'Kind', cell: (a) => <Pill tone={a.kind === 'content' ? 'info' : 'neutral'}>{a.kind === 'content' ? 'Content' : 'Metadata'}</Pill> },
+    { key: 'kind', priority: 3, header: 'Kind', cell: (a) => <Pill tone={a.kind === 'content' ? 'info' : 'neutral'}>{a.kind === 'content' ? 'Content' : 'Metadata'}</Pill> },
     {
       key: 'size',
+      priority: 2,
       header: 'Size',
       align: 'right',
       className: 'muted nowrap',
@@ -600,6 +602,7 @@ function FilesTable({ c, now }: { c: ComponentDetail; now: Date }) {
     },
     {
       key: 'sha',
+      priority: 2,
       header: 'SHA-256',
       cell: (a) => {
         const sha = a.checksums?.sha256 ? `sha256:${a.checksums.sha256}` : a.blob_digest;
@@ -613,6 +616,7 @@ function FilesTable({ c, now }: { c: ComponentDetail; now: Date }) {
     },
     {
       key: 'last',
+      priority: 3,
       header: 'Last downloaded',
       align: 'right',
       className: 'col-last meta',
@@ -651,6 +655,7 @@ function RepositoriesTab({ c, now }: { c: ComponentDetail; now: Date }) {
     },
     {
       key: 'type',
+      priority: 2,
       header: 'Type',
       cell: (h) => {
         const r = byName.get(h.repository);
@@ -659,11 +664,12 @@ function RepositoriesTab({ c, now }: { c: ComponentDetail; now: Date }) {
     },
     {
       key: 'when',
+      priority: 3,
       header: 'Published or cached',
       className: 'meta',
       cell: (h) => <time dateTime={h.published_at}>{relativeTime(h.published_at, now)}</time>,
     },
-    { key: 'dl', header: 'Downloads', align: 'right', className: 'col-last muted', cell: (h) => formatCompact(h.download_count ?? 0) },
+    { key: 'dl', priority: 2, header: 'Downloads', align: 'right', className: 'col-last muted', cell: (h) => formatCompact(h.download_count ?? 0) },
   ];
   return (
     <>
@@ -704,6 +710,7 @@ function FindingsTable({ items }: { items: Finding[] }) {
     { key: 'sev', header: 'Severity', cell: (f) => <Pill tone={SEVERITY_TONE[f.severity as keyof typeof SEVERITY_TONE] ?? 'neutral'}>{f.severity}</Pill> },
     {
       key: 'pkg',
+      priority: 2,
       header: 'In',
       className: 'muted',
       cell: (f) =>
@@ -717,7 +724,7 @@ function FindingsTable({ items }: { items: Finding[] }) {
         ),
     },
     { key: 'fix', header: 'Fixed in', className: 'muted', cell: (f) => f.fixed_in ?? 'No fix yet' },
-    { key: 'status', header: 'Status', className: 'col-last muted', cell: (f) => f.status },
+    { key: 'status', priority: 3, header: 'Status', className: 'col-last muted', cell: (f) => f.status },
   ];
   return <DataTable caption="Vulnerabilities" columns={columns} rows={items} rowKey={(f) => f.id} minWidth={720} empty="No known vulnerabilities." />;
 }

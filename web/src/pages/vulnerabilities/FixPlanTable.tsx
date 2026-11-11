@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from 'react';
 import type { PackagePlan, PlanFinding } from '../../api/types';
 import { MarkdownInline } from '../../components/Markdown';
 import { Pill } from '../../components/Pill';
+import { TableScroll } from '../../components/TableScroll';
 import { plural } from '../../lib/overview';
 import {
   advisoryIds,
@@ -44,19 +45,25 @@ function Chevron() {
 /** One row per package, expandable into its findings. */
 export function FixPlanTable({ items, tab, windowDays, inUseDays, expanded, onToggle, onOpenFinding, onWaive, onAssign, canWrite, busy, empty }: FixPlanTableProps) {
   return (
-    <div className="table-scroll" tabIndex={0} role="region" aria-label="Fix plan table">
-      <table className="data-table vplan" aria-busy={busy || undefined}>
+    <TableScroll label="Fix plan table">
+      <table className="data-table data-table--stack vplan" aria-busy={busy || undefined}>
         <caption className="visually-hidden">Fix plan by package</caption>
         <thead>
           <tr>
             <th scope="col" className="col-first">
               Package
             </th>
-            <th scope="col">Vulnerable versions</th>
+            <th scope="col" data-priority={2}>
+              Vulnerable versions
+            </th>
             <th scope="col">Findings</th>
             <th scope="col">{tab === 'waived' ? 'Fix' : 'Upgrade to'}</th>
-            <th scope="col">Pulled · {windowDays} d</th>
-            <th scope="col">Assignee</th>
+            <th scope="col" data-priority={3}>
+              Pulled · {windowDays} d
+            </th>
+            <th scope="col" data-priority={2}>
+              Assignee
+            </th>
             <th scope="col" className="col-last is-right">
               Action
             </th>
@@ -100,15 +107,15 @@ export function FixPlanTable({ items, tab, windowDays, inUseDays, expanded, onTo
                         </span>
                       </div>
                     </td>
-                    <td>
+                    <td data-priority={2} data-label="Vulnerable">
                       <span className="vplan__versions">{p.versions.join(', ')}</span>
                     </td>
-                    <td>
+                    <td data-label="Findings">
                       <Pill tone={sev.tone} className="vplan__sev">
                         {findingsSummary(p)}
                       </Pill>
                     </td>
-                    <td>
+                    <td data-label={tab === 'waived' ? 'Fix' : 'Upgrade to'}>
                       {target ? (
                         <span className="vplan__upgrade" title={p.image ? 'Rebuild the image with the fixed packages' : undefined}>
                           {p.image ? target : `→ ${target}`}
@@ -120,10 +127,10 @@ export function FixPlanTable({ items, tab, windowDays, inUseDays, expanded, onTo
                         <span className="vplan__partial">{p.findings - p.fixable} without a fix</span>
                       )}
                     </td>
-                    <td className="vplan__pulls">
+                    <td className="vplan__pulls" data-priority={3} data-label={`Pulled · ${windowDays} d`}>
                       <PulledCell p={p} inUseDays={inUseDays} />
                     </td>
-                    <td className="vplan__assignee" onClick={(e) => canWrite && e.stopPropagation()}>
+                    <td className="vplan__assignee" data-priority={2} data-label="Assignee" onClick={(e) => canWrite && e.stopPropagation()}>
                       {canWrite ? (
                         <button
                           type="button"
@@ -141,7 +148,7 @@ export function FixPlanTable({ items, tab, windowDays, inUseDays, expanded, onTo
                         <span className="muted">—</span>
                       )}
                     </td>
-                    <td className="col-last is-right" onClick={(e) => e.stopPropagation()}>
+                    <td className="col-last is-right" data-label="" onClick={(e) => e.stopPropagation()}>
                       <div className="vplan__actions">
                         {tab !== 'waived' && commands && (
                           <CopyTextButton
@@ -186,7 +193,7 @@ export function FixPlanTable({ items, tab, windowDays, inUseDays, expanded, onTo
           )}
         </tbody>
       </table>
-    </div>
+    </TableScroll>
   );
 }
 

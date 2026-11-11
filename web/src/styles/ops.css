@@ -186,6 +186,15 @@
 .audit-target { overflow-wrap: anywhere; color: var(--ink-2); }
 .audit-table tr.is-open > td { background: rgba(255, 255, 255, .45); }
 .audit-details > td { border-top: 0 !important; padding-top: 0 !important; background: rgba(255, 255, 255, .45); }
+/* phone cards: the toggle and the time head each event, the details follow it */
+@media (max-width: 640px) {
+  .audit-table > tbody > tr > td.audit-toggle-cell { flex: none; width: auto; }
+  .audit-table > tbody > tr > td.audit-time[data-label] { flex: 1 1 0; margin-left: 0; }
+  .audit-table > tbody > tr.audit-details { padding-top: 0; border-top: 0; }
+  .audit-table > tbody > tr.audit-details[hidden], .audit-table > tbody > tr.audit-details > td:empty { display: none; }
+  .audit-table > tbody > tr.audit-details > td { flex-basis: 100%; background: none; }
+  .audit-table > tbody > tr.is-open > td { background: none; }
+}
 
 /* ---------- system ---------- */
 .system-status__state { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 16px; }

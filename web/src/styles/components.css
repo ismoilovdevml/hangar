@@ -103,6 +103,11 @@
 }
 .segmented__item:hover { color: var(--ink); }
 .segmented__item.is-active { background: var(--surface-solid); color: var(--lake-ink); box-shadow: var(--shadow-raised); }
+/* phones: a long switch scrolls inside its panel instead of running past it */
+@media (max-width: 640px) {
+  .segmented { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .segmented__item { flex: none; }
+}
 
 /* ---------- KPI card ---------- */
 .kpi { border-radius: var(--r-panel); padding: 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
@@ -115,6 +120,19 @@
 .skeleton { display: inline-block; border-radius: 6px; background: var(--track); }
 
 /* ---------- data table ---------- */
+/* TableScroll: columns with data-priority 3, then 2, give way before the table
+   scrolls; a shadow marks a side that still hides columns. */
+.table-frame { position: relative; min-width: 0; }
+.table-frame::before, .table-frame::after {
+  content: ''; position: absolute; top: 0; bottom: 0; z-index: 1; width: 32px;
+  pointer-events: none; opacity: 0; transition: opacity var(--t-fast);
+}
+.table-frame::before { left: 0; background: linear-gradient(to right, rgba(30, 43, 58, .14), rgba(30, 43, 58, 0)); }
+.table-frame::after { right: 0; background: linear-gradient(to left, rgba(30, 43, 58, .14), rgba(30, 43, 58, 0)); }
+.table-frame[data-more-left]::before, .table-frame[data-more-right]::after { opacity: 1; }
+.table-scroll[data-hide] > table { min-width: 0 !important; }
+.table-scroll[data-hide='3'] [data-priority='3'],
+.table-scroll[data-hide='2'] :is([data-priority='2'], [data-priority='3']) { display: none; }
 .table-scroll { overflow-x: auto; }
 .table-scroll:focus-visible { box-shadow: inset var(--focus-ring); }
 .data-table { width: 100%; font-size: 14px; }
@@ -138,6 +156,30 @@
 .data-table .nowrap { white-space: nowrap; }
 .data-table .pill { padding: 4px 10px; }
 .data-table__empty { color: var(--ink-3); text-align: center; padding: 28px 22px !important; }
+
+/* Phones: each row of a stacking table is a card. The first cell is its title,
+   a cell without a label (the row actions) sits beside it, the rest follow as
+   "label value" pairs. */
+@media (max-width: 640px) {
+  .data-table--stack, .data-table--stack > tbody, .data-table--stack > tbody > tr, .data-table--stack > tbody > tr > td { display: block; }
+  .data-table--stack { min-width: 0 !important; }
+  .data-table--stack > thead {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .data-table--stack > tbody > tr {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 12px 16px; border-top: 1px solid var(--hairline);
+  }
+  .data-table--stack > tbody > tr[hidden] { display: none; }
+  .data-table--stack > tbody > tr::after { content: ''; order: 1; flex-basis: 100%; height: 0; }
+  .data-table--stack > tbody > tr > td { order: 2; min-width: 0; padding: 0 !important; border: 0; text-align: left; white-space: normal; }
+  .data-table--stack > tbody > tr > td:first-child { order: 0; flex: 1 1 0; font-size: 15px; }
+  .data-table--stack > tbody > tr > td[data-label='']:not(:first-child) { order: 0; margin-left: auto; }
+  .data-table--stack > tbody > tr > td:not(:first-child)[data-label]:not([data-label=''])::before {
+    content: attr(data-label); margin-right: 6px; font-size: 12px; font-weight: 600; color: var(--ink-3);
+  }
+  .data-table--stack [data-priority='3'], .data-table--stack > tbody > tr > td:empty:not(:first-child) { display: none !important; }
+  .data-table--stack > tbody > tr > td.data-table__empty { flex-basis: 100%; text-align: center; }
+}
 
 /* ---------- code block ---------- */
 .code-block { position: relative; }
@@ -351,3 +393,16 @@ select.input:disabled { opacity: .7; }
 .markdown th, .markdown td { padding: 6px 10px; border: 1px solid var(--hairline-strong); text-align: left; }
 .markdown th { background: var(--surface-muted); font-weight: 700; }
 .markdown a { color: var(--lake-ink); text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---------- touch screens: targets of at least 44 px ---------- */
+@media (pointer: coarse) {
+  .icon-button--sm, .copy-button, .todo__dismiss, .vplan__toggle { width: 44px; height: 44px; }
+  .todo__dismiss { top: 0; right: 0; }
+  .segmented__item, .segmented--mini .segmented__item, .vtabs__tab, .vplan__assign, .vplan__owner--btn, .th-sort { min-height: 44px; }
+  .breadcrumb__link, .nav-section__toggle { min-height: 44px; }
+  /* Links inside text keep their line height; the tappable area grows around them. */
+  .link-strong, .panel__link, .repo-name__link, .client-setup__intro a, .page-header__desc a, .meta a { position: relative; }
+  .link-strong::after, .panel__link::after, .repo-name__link::after, .client-setup__intro a::after, .page-header__desc a::after, .meta a::after {
+    content: ''; position: absolute; inset: -12px -4px;
+  }
+}

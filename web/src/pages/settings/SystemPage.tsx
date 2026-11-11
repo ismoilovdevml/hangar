@@ -74,7 +74,7 @@ export function SystemPage() {
         return <StatusDot tone={LEVEL_TONE[level]} label={LEVEL_LABEL[level]} />;
       },
     },
-    { key: 'latency', header: 'Latency', align: 'right', className: 'muted nowrap', cell: (d) => `${d.latency_ms} ms` },
+    { key: 'latency', priority: 3, header: 'Latency', align: 'right', className: 'muted nowrap', cell: (d) => `${d.latency_ms} ms` },
     { key: 'error', header: 'Error', className: 'muted col-last', cell: (d) => d.error ?? '' },
   ];
 
@@ -90,17 +90,17 @@ export function SystemPage() {
         </div>
       ),
     },
-    { key: 'role', header: 'Role', cell: (n) => <Pill tone={n.role === 'leader' ? 'info' : 'neutral'}>{n.role}</Pill> },
-    { key: 'zone', header: 'Zone', className: 'muted', cell: (n) => n.zone ?? <NotAvailable /> },
-    { key: 'version', header: 'Version', className: 'muted', cell: (n) => (n.version ? versionText(n.version) : <NotAvailable />) },
+    { key: 'role', priority: 2, header: 'Role', cell: (n) => <Pill tone={n.role === 'leader' ? 'info' : 'neutral'}>{n.role}</Pill> },
+    { key: 'zone', priority: 3, header: 'Zone', className: 'muted', cell: (n) => n.zone ?? <NotAvailable /> },
+    { key: 'version', priority: 3, header: 'Version', className: 'muted', cell: (n) => (n.version ? versionText(n.version) : <NotAvailable />) },
     {
       key: 'health',
       header: 'Health',
       className: 'nowrap',
       cell: (n) => <StatusDot tone={n.healthy ? 'ok' : 'bad'} label={n.healthy ? 'Healthy' : 'Unhealthy'} />,
     },
-    { key: 'uptime', header: 'Uptime', className: 'muted nowrap', cell: (n) => (n.uptime_seconds !== undefined ? formatUptime(n.uptime_seconds) : <NotAvailable />) },
-    { key: 'beat', header: 'Last heartbeat', className: 'muted nowrap col-last', cell: (n) => formatUtc(n.last_heartbeat, { seconds: true }) },
+    { key: 'uptime', priority: 3, header: 'Uptime', className: 'muted nowrap', cell: (n) => (n.uptime_seconds !== undefined ? formatUptime(n.uptime_seconds) : <NotAvailable />) },
+    { key: 'beat', priority: 2, header: 'Last heartbeat', className: 'muted nowrap col-last', cell: (n) => formatUtc(n.last_heartbeat, { seconds: true }) },
   ];
 
   return (

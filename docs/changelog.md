@@ -47,6 +47,27 @@
   `hangar_upstream_state` gains `state="unknown"`.
 - **Vulnerability scanner check**: System status lists the scanner (advisory
   scans that worked and failed, and whether the Trivy server answers).
+- **Every sidebar entry is reachable on laptop screens**: sections fold from
+  their heading and the browser remembers which (a section opens again on its
+  own pages); when the list runs past the status card its ends fade and a
+  button scrolls on; the current page's entry is scrolled into view.
+- **Wide tables keep their key columns**: when a table does not fit its
+  panel, secondary columns give way first (address, timestamps, descriptions)
+  so the name, status and actions stay on screen; if it still has to scroll,
+  a shadow marks the side with more columns. On phones each row becomes a
+  card. Applies to repositories, scheduled tasks, the fix plan, members,
+  tokens, roles, both audit logs, blob store, system and package tables.
+- **Package detail gets the width**: the version and setup cards move under
+  the package until it has room beside them, tabs wrap instead of clipping,
+  advisory titles wrap, and the browse tree folds away with a button (also
+  remembered).
+- **Phone layouts**: the Overview header keeps the bell and account on the
+  breadcrumb row; repository counts form one compact strip and the type tabs
+  scroll on one row; search filters fold behind a "Filters" row; Packages and
+  the API reference show their title before the tree or endpoint index;
+  repository settings show Save under the settings and keep it in reach while
+  there are unsaved changes; buttons and links on touch screens get 44 px
+  targets.
 
 ## v0.1.8 (2026-11-11)
 

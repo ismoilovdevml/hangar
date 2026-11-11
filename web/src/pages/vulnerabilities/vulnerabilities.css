@@ -72,7 +72,7 @@
 .vplan__toggle:hover { background: var(--surface-muted); color: var(--ink); }
 .vplan__toggle[aria-expanded='true'] { transform: rotate(90deg); color: var(--lake-ink); }
 .vplan__names { display: flex; flex-direction: column; gap: 2px; min-width: 200px; }
-.vplan__name { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--ink-strong); overflow-wrap: break-word; }
+.vplan__name { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--ink-strong); overflow-wrap: anywhere; }
 .vplan__ids { font-size: 12px; color: var(--ink-3); }
 .vplan__versions {
   font-family: var(--font-mono); font-size: 12px; color: var(--bad-ink); background: var(--bad-bg);
@@ -94,7 +94,8 @@
 }
 .vplan__assign { color: var(--lake-ink); font-weight: 700; }
 .vplan__owner--btn:hover, .vplan__assign:hover { background: var(--surface-muted); }
-.vplan__actions { display: inline-flex; gap: 4px; flex-wrap: nowrap; }
+/* the two buttons stack when the column is narrow, so the table fits instead of scrolling */
+.vplan__actions { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
 .vplan__actions .button--sm { min-height: 32px; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 700; }
 .vplan__copy { background: var(--lake); color: var(--ink-inverse); border: 0; }
 .vplan__copy:hover { background: #285D79; color: var(--ink-inverse); }
@@ -185,6 +186,7 @@
   .vimpact__lead { font-size: 17px; }
   .vimpact__bar { flex-basis: 100%; }
   .vplan-panel__head, .vplan-panel__filters { padding-left: 14px; padding-right: 14px; }
+  .vplan-panel__title { white-space: nowrap; }
   .vdrawer { border-radius: 0; }
   .vdrawer__head { padding: 16px 16px 8px; }
   .vdrawer__body { padding: 4px 16px 18px; }
@@ -198,3 +200,10 @@
 .advisory .markdown h4, .advisory .markdown h5, .advisory .markdown h6 { margin-top: 14px; font-size: 13.5px; }
 .advisory .markdown .md-code { max-height: 220px; overflow: auto; font-size: 12px; }
 .advisory__toggle { align-self: flex-start; }
+
+/* phone cards: the package heads the card, its actions close it */
+@media (max-width: 640px) {
+  .vplan.data-table--stack > tbody > tr > td.col-last[data-label] { order: 3; margin-left: auto; }
+  .vplan__names { min-width: 0; }
+  .vplan__ids { overflow-wrap: anywhere; }
+}

@@ -103,6 +103,7 @@ export function TokenTable({ caption, tokens, showOwner, busy, empty }: TokenTab
       ? [
           {
             key: 'owner',
+            priority: 2 as const,
             header: 'Owner',
             cell: (t: Token) => (
               <div className="cell-stack">
@@ -115,6 +116,7 @@ export function TokenTable({ caption, tokens, showOwner, busy, empty }: TokenTab
       : []),
     {
       key: 'scopes',
+      priority: 3,
       header: 'Can',
       cell: (t) => (
         <div className="cell-stack">
@@ -132,9 +134,10 @@ export function TokenTable({ caption, tokens, showOwner, busy, empty }: TokenTab
         </div>
       ),
     },
-    { key: 'created', header: 'Created', className: 'meta', cell: (t) => formatDate(t.created_at) },
+    { key: 'created', priority: 3, header: 'Created', className: 'meta', cell: (t) => formatDate(t.created_at) },
     {
       key: 'used',
+      priority: 3,
       header: 'Last used',
       cell: (t) =>
         t.last_used_at ? (
@@ -148,6 +151,7 @@ export function TokenTable({ caption, tokens, showOwner, busy, empty }: TokenTab
     },
     {
       key: 'expires',
+      priority: 2,
       header: 'Expires',
       cell: (t) => {
         const st = tokenState(t, now, warnMs);

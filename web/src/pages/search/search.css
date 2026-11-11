@@ -71,6 +71,11 @@
   .search-body { grid-template-columns: minmax(0, 1fr); }
   .facets { position: static; }
 }
+/* phones: the filters folded behind one row */
+.facets:has(> .facets__fold) { padding: 4px 18px; gap: 0; }
+.facets__toggle { display: flex; align-items: center; gap: 6px; min-height: 44px; font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer; }
+.facets__count { font-weight: 600; color: var(--lake-ink); }
+.facets__body { display: flex; flex-direction: column; gap: 18px; padding: 6px 0 14px; }
 @media (max-width: 600px) {
   .search-hero { padding: 20px 18px; }
   .search-hero__title { font-size: 26px; }

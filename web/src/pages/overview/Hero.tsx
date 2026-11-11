@@ -8,6 +8,7 @@ import { IconKey, IconPackage, IconPlus, IconSearch, IconTerminal } from '../../
 import { isMac } from '../../components/commandPaletteContext';
 import { useGate } from '../../api/permissions';
 import { GATES } from '../../lib/gates';
+import { PHONE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { Dialog } from '../access/ui';
 
 /** The client set-up snippets for the repositories the user can read, in a dialog. */
@@ -71,6 +72,7 @@ export function Hero({ topFormat }: { topFormat?: Format }) {
   const inputId = useId();
   const [q, setQ] = useState('');
   const [connecting, setConnecting] = useState(false);
+  const phone = useMediaQuery(PHONE_QUERY);
   const canCreateRepo = useGate(GATES.createRepository);
 
   const submit = (e: FormEvent) => {
@@ -95,7 +97,7 @@ export function Hero({ topFormat }: { topFormat?: Format }) {
           id={inputId}
           type="search"
           className="hero__input"
-          placeholder="Package, version, sha256 digest, CVE or license"
+          placeholder={phone ? 'Search packages, CVEs…' : 'Package, version, sha256 digest, CVE or license'}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           autoComplete="off"
