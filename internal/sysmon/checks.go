@@ -144,6 +144,9 @@ func BlobStoresCheck(list func(ctx context.Context) ([]BlobStore, error),
 			}
 		}
 		res.Metric = storesMetric(probes)
+		if took := slowestProbe(probes); took >= 0 {
+			res.LatencyMS = ms(took)
+		}
 		if len(stores) == 1 {
 			res.Target = stores[0].Name
 			if stores[0].Kind == "fs" && stores[0].Path != "" {
@@ -298,6 +301,16 @@ func storesMetric(probes []storeProbe) string {
 		return fmt.Sprintf("%d ms", took)
 	}
 	return ""
+}
+
+// slowestProbe is the longest probe time of the stores that answered; -1
+// when none did.
+func slowestProbe(probes []storeProbe) int64 {
+	took := int64(-1)
+	for _, p := range probes {
+		took = max(took, p.tookMS)
+	}
+	return took
 }
 
 func probeStore(ctx context.Context, s BlobStore, open func(ctx context.Context, name string) (core.BlobStore, error)) storeProbe {
