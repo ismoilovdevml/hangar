@@ -932,7 +932,7 @@ export interface paths {
         get: operations["getAsset"];
         put?: never;
         post?: never;
-        /** @description Deletes the file. Requires `repo:<name>:delete`; audited as `asset.delete` (refusals with outcome "denied"). The blob reference is released, so a blob no other asset uses becomes eligible for compaction. Deleting the last file of a version deletes the version. */
+        /** @description Deletes the file. Requires `repo:<name>:delete`; audited as `asset.delete` (refusals with outcome "denied"). The blob reference is released, so a blob no other asset uses becomes eligible for compaction. Deleting the last file of a version deletes the version. Docker files (layers, manifests) are refused with 400: they are deleted with their version. */
         delete: operations["deleteAsset"];
         options?: never;
         head?: never;

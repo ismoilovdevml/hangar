@@ -365,6 +365,8 @@ func TestAssetEndpointsWithPostgres(t *testing.T) {
 	tgz := e.file(npm, ui, "@acme/ui-kit/-/ui-kit-5.3.1.tgz")
 	meta := e.file(npm, ui, "@acme/ui-kit/-/meta/5.3.1.json")
 	cached := e.file(proxy, "", "lodash/-/lodash-4.17.21.tgz")
+	docker := e.repo("docker-hosted", "docker", core.RepoHosted)
+	dockerTag := e.file(docker, e.s.Component(docker, "team", "app", "1.0", e.now, 0, "ci"), "team/app/manifests/1.0")
 
 	// Detail: coordinates, checksums, blob dates, download link.
 	var d assetDetailJSON
@@ -402,6 +404,10 @@ func TestAssetEndpointsWithPostgres(t *testing.T) {
 	if refs != 0 || soft == nil {
 		t.Errorf("blob after delete: refs %d, soft-deleted %v", refs, soft)
 	}
+
+	// Docker layers and manifests are never deleted one file at a time.
+	f.expect("admin", "DELETE", "/api/v1/assets/"+dockerTag, nil, 400)
+	f.expect("admin", "GET", "/api/v1/assets/"+dockerTag, nil, 200)
 
 	// Deleting the last file of a version deletes the version too.
 	f.expect("alice", "DELETE", "/api/v1/assets/"+meta, nil, 204)

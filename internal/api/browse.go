@@ -541,6 +541,13 @@ func (a *API) deleteAsset(w http.ResponseWriter, r *http.Request) {
 		a.writeErr(w, r, err)
 		return
 	}
+	// Layers and manifests are shared by tags and images: removing one file
+	// breaks every image that uses it. Docker content goes by version (tag);
+	// layers no version uses are released for compaction.
+	if repo.Format == "docker" {
+		a.writeErr(w, r, fmt.Errorf("docker files are deleted with their version: delete the tag, layers no other version uses are then released: %w", core.ErrInvalid))
+		return
+	}
 	target := "asset:" + repo.Name + "/" + d.Path
 	if err := a.authorizeMutation(ctx, core.ActionDelete, core.RepoResource(repo.Name), "asset.delete", target); err != nil {
 		a.writeErr(w, r, err)
