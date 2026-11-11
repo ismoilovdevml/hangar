@@ -1,7 +1,10 @@
 package api
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -135,6 +138,52 @@ func TestAutomationGuideCoversSessions(t *testing.T) {
 	} {
 		if !strings.Contains(g, want) {
 			t.Errorf("automation guide lacks %q", want)
+		}
+	}
+}
+
+// The API reference page loads openapi.json whole: it is sent gzipped to
+// clients that accept it.
+func TestOpenAPIJSONCompressed(t *testing.T) {
+	f := newFixture(t)
+	plainResp, plain := f.do("", http.MethodGet, "/api/v1/openapi.json", nil, "Accept-Encoding", "identity")
+	if plainResp.Header.Get("Content-Encoding") != "" || !json.Valid(plain) {
+		t.Fatalf("identity: %v, valid JSON %v", plainResp.Header, json.Valid(plain))
+	}
+	resp, body := f.do("", http.MethodGet, "/api/v1/openapi.json", nil, "Accept-Encoding", "gzip, deflate, br")
+	if resp.Header.Get("Content-Encoding") != "gzip" || resp.Header.Get("Vary") != "Accept-Encoding" {
+		t.Fatalf("gzip: %v", resp.Header)
+	}
+	zr, err := gzip.NewReader(bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	unzipped, err := io.ReadAll(zr)
+	if err != nil || !bytes.Equal(unzipped, plain) {
+		t.Fatalf("gunzipped body differs (err %v)", err)
+	}
+	if len(body)*4 > len(plain) {
+		t.Errorf("gzip %d bytes of %d", len(body), len(plain))
+	}
+}
+
+func TestAcceptsGzip(t *testing.T) {
+	for header, want := range map[string]bool{
+		"":                        false,
+		"identity":                false,
+		"br":                      false,
+		"gzip":                    true,
+		"gzip, deflate, br, zstd": true,
+		"br;q=1, gzip;q=0.5":      true,
+		"gzip;q=0":                false,
+		"GZIP; q=0.0":             false,
+		"*":                       true,
+		"*;q=0":                   false,
+		"gzip;q=0, *":             false,
+		"*, gzip;q=0":             false,
+	} {
+		if got := acceptsGzip(header); got != want {
+			t.Errorf("acceptsGzip(%q) = %v, want %v", header, got, want)
 		}
 	}
 }
