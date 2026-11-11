@@ -3423,7 +3423,7 @@ components:
       description: The installation's state as /system/status reports it
       properties:
         status: { $ref: "#/components/schemas/SystemStatusLevel" }
-        headline: { type: string, examples: ["All systems normal", "Blob storage is down", "2 checks need attention"] }
+        headline: { type: string, examples: ["All systems normal", "Blob storage down", "2 checks need attention"] }
         nodes_up: { type: integer }
         nodes_total: { type: integer }
         checks_total: { type: integer }

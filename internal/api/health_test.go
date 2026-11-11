@@ -45,7 +45,7 @@ func TestSystemStatusAgreesWithHealth(t *testing.T) {
 
 	var nodes systemNodes
 	_ = json.Unmarshal(f.expect("viewer", "GET", "/api/v1/system/nodes", nil, 200), &nodes)
-	if nodes.Summary.Status != sysmon.StatusDown || nodes.Summary.Headline != "Blob storage is down" {
+	if nodes.Summary.Status != sysmon.StatusDown || nodes.Summary.Headline != "Blob storage down" {
 		t.Fatalf("nodes summary = %+v", nodes.Summary)
 	}
 

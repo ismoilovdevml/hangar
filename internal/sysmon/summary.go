@@ -29,7 +29,7 @@ type Summary struct {
 	// at least degraded while a node is silent, down when none answers.
 	Status string `json:"status"`
 	// Headline says it in a few words: "All systems normal", "Blob storage
-	// is down", "2 checks need attention".
+	// down", "2 checks need attention".
 	Headline string `json:"headline"`
 	Up       int    `json:"nodes_up"`
 	Total    int    `json:"nodes_total"`
@@ -105,11 +105,12 @@ func headline(s Summary, silent int) string {
 	case s.Up == 0:
 		return "No node is responding"
 	case down+degraded == 1 && silent == 0:
+		// "Blob storage down": no verb to agree with "Upstream proxies".
 		p := s.Problems[0]
 		if p.Status == StatusDown {
-			return p.Label + " is down"
+			return p.Label + " down"
 		}
-		return p.Label + " needs attention"
+		return p.Label + " degraded"
 	case down > 0:
 		return count(down, "check is", "checks are") + " down"
 	case degraded > 0:

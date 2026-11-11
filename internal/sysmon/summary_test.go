@@ -27,9 +27,9 @@ func TestSummarize(t *testing.T) {
 		{"no nodes", nil, StatusHealthy, "Waiting for the first report", 0},
 		{"all healthy", []Node{{ID: "a", Subsystems: healthy}}, StatusHealthy, "All systems normal", 0},
 		{"one check down", []Node{{ID: "a", Subsystems: []Subsystem{healthy[0], sub("blobstores", "Blob storage", StatusDown, "s3 unreachable")}}},
-			StatusDown, "Blob storage is down", 1},
+			StatusDown, "Blob storage down", 1},
 		{"one check degraded", []Node{{ID: "a", Subsystems: []Subsystem{healthy[0], sub("upstreams", "Upstream proxies", StatusDegraded, "1 offline")}}},
-			StatusDegraded, "Upstream proxies needs attention", 1},
+			StatusDegraded, "Upstream proxies degraded", 1},
 		{"down and degraded", []Node{{ID: "a", Subsystems: []Subsystem{sub("upstreams", "Upstream proxies", StatusDegraded, ""),
 			sub("blobstores", "Blob storage", StatusDown, "")}}}, StatusDown, "1 check is down", 2},
 		{"two degraded", []Node{{ID: "a", Subsystems: []Subsystem{sub("upstreams", "U", StatusDegraded, ""), sub("search", "S", StatusDegraded, "")}}},
@@ -62,7 +62,7 @@ func TestRollupAgreesWithChecks(t *testing.T) {
 	}})
 	r := m.Rollup(context.Background())
 	nodes, _ := m.Nodes(context.Background())
-	if r.Status != StatusDown || r.Headline != "Blob storage is down" || Summarize(nodes).Headline != r.Headline {
+	if r.Status != StatusDown || r.Headline != "Blob storage down" || Summarize(nodes).Headline != r.Headline {
 		t.Fatalf("rollup = %+v", r)
 	}
 	m.AddCheck(Check{Name: "scanner", Label: "Vulnerability scanner", Run: func(context.Context) Result { return Result{Status: StatusHealthy} }})
