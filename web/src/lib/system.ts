@@ -1,8 +1,12 @@
 export const DEPENDENCY_LABELS: Record<string, string> = {
   database: 'PostgreSQL',
   blobstore: 'Blob storage',
+  blobstores: 'Blob storage',
   eventbus: 'Event bus (NATS)',
+  scheduler: 'Task scheduler',
   search: 'Search index',
+  auth: 'Sign-in',
+  upstreams: 'Upstream proxies',
   scanner: 'Vulnerability scanner',
 };
 

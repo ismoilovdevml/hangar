@@ -10,7 +10,7 @@ import { catalogHandlers, resetCatalogState } from './catalog';
 import { findingsHandlers, resetFindingsState } from './findings';
 import * as data from './data';
 import { onMockLiveEvent, opsHandlers, resetOpsMockState } from './ops';
-import { resetSystemMockState, systemHandlers } from './system';
+import { mockSystemStatus, resetSystemMockState, systemHandlers } from './system';
 import { resetSettingsState, settingsHandlers } from './settings';
 import { routingHandlers } from './routing';
 import { resetSigningState, signingHandlers } from './signing';
@@ -193,7 +193,7 @@ export const handlers = [
     (name) => state.repositories.find((r) => r.name === name)?.format,
   ),
 
-  http.get(api('/system/status'), () => HttpResponse.json(data.systemStatus)),
+  http.get(api('/system/status'), () => HttpResponse.json(mockSystemStatus(data.systemStatus))),
   http.get(api('/formats'), () => HttpResponse.json({ items: data.formats.map((name) => ({ name })) })),
 
   http.get(api('/auth/session'), () =>

@@ -4,8 +4,9 @@
  * record on every follow request, like a live server.
  */
 import { http, HttpResponse } from 'msw';
-import type { ApiError } from '../api/types';
-import type { LogLevel, LogPage, LogRecord, Subsystem, SystemNode, SystemNodeList } from '../pages/system/model';
+import type { components } from '../api/schema';
+import type { ApiError, SystemStatus } from '../api/types';
+import { summarize, type LogLevel, type LogPage, type LogRecord, type Subsystem, type SystemNode, type SystemNodeList } from '../pages/system/model';
 
 const api = (path: string) => `*/api/v1${path}`;
 type Guard = (request: Request, mutating?: boolean) => Response | null;
@@ -221,6 +222,37 @@ function page(node: string, logs: NodeLogs, p: URLSearchParams): LogPage | Respo
   return { node, items, cursor: `${logs.boot}.${cursor}`, more, gap: restarted, buffer };
 }
 
+type SystemSummary = components['schemas']['SystemSummary'];
+type SystemCheckState = components['schemas']['SystemCheckState'];
+
+const LEVEL: Record<SystemCheckState['status'], number> = { healthy: 0, degraded: 1, down: 2 };
+const STATE: Record<SystemSummary['status'], SystemStatus['state']> = { healthy: 'ok', degraded: 'degraded', down: 'down' };
+
+/** The installation's state rolled up from the mock nodes, the way the server does it. */
+export function mockSummary(nodes: SystemNode[]): SystemSummary {
+  const sum = summarize(nodes);
+  const multi = nodes.length > 1;
+  const problems: SystemCheckState[] = [
+    ...nodes
+      .filter((n) => !n.stale)
+      .flatMap((n) =>
+        n.subsystems
+          .filter((x) => x.status !== 'healthy')
+          .map((x) => ({ node: multi ? n.id : undefined, name: x.name, label: x.label, status: x.status, detail: x.detail, since: x.since })),
+      ),
+    ...nodes
+      .filter((n) => n.stale)
+      .map((n) => ({ node: n.id, name: 'node', label: `Node ${n.id}`, status: 'degraded' as const, detail: `No heartbeat since ${n.last_heartbeat}` })),
+  ].sort((a, b) => LEVEL[b.status] - LEVEL[a.status]);
+  return { status: sum.status, headline: sum.headline, nodes_up: sum.up, nodes_total: sum.total, checks_total: sum.checks, checks_passing: sum.passing, problems };
+}
+
+/** GET /system/status: the static fields of `base`, the state of the mock nodes. */
+export function mockSystemStatus<T extends SystemStatus>(base: T): T {
+  const s = mockSummary(state.nodes);
+  return { ...base, state: STATE[s.status], message: s.headline, nodes_up: s.nodes_up, nodes_total: s.nodes_total, checks_total: s.checks_total, checks_passing: s.checks_passing, problems: s.problems };
+}
+
 export function systemHandlers(guard: Guard) {
   return [
     http.get(api('/system/nodes'), ({ request }) => {
@@ -229,7 +261,7 @@ export function systemHandlers(guard: Guard) {
       state.nodesRequests++;
       const now = Date.now();
       const items = state.nodes.map((n) => (n.stale ? n : { ...n, last_heartbeat: new Date(now - (n.current ? 1_000 : 6_000)).toISOString() }));
-      const body: SystemNodeList = { current: 'hangar-1', generated_at: new Date(now).toISOString(), items, partial: false };
+      const body: SystemNodeList = { current: 'hangar-1', generated_at: new Date(now).toISOString(), items, partial: false, summary: mockSummary(items) };
       return HttpResponse.json(body);
     }),
 

@@ -34,7 +34,7 @@ describe('settings hub', () => {
     expect(row('Sign-in')).toHaveAttribute('href', '/settings/authentication');
     await waitFor(() => expect(row('Internet access')).toHaveTextContent('corp-proxy · proxy.acme.example:3128 · 1 more proxy'));
     expect(row('Internet access')).toHaveAttribute('href', '/settings/proxies');
-    await waitFor(() => expect(row('Storage')).toHaveTextContent(/^Storage3 blob stores · .+ used · 2 not healthy$/));
+    await waitFor(() => expect(row('Storage')).toHaveTextContent(/^Storage3 blob stores · .+ used$/));
     expect(row('Storage')).toHaveAttribute('href', '/blob-stores');
 
     await waitFor(() => expect(row('Nodes')).toHaveTextContent('2 of 3 up · hangar-1 leader'));
@@ -53,7 +53,8 @@ describe('settings hub', () => {
     // This build has the API reference page, so the hub links to it.
     expect(main().getByRole('link', { name: /^API reference/ })).toHaveAttribute('href', '/api-docs');
 
-    const status = await screen.findByRole('link', { name: 'All systems normal' });
+    // Not yet probed is not unhealthy; the footer says what System status says.
+    const status = await screen.findByRole('link', { name: '1 check needs attention' });
     expect(status).toHaveAttribute('href', '/system/status');
     expect(status.closest('p')).toHaveTextContent(/^Hangar v1\.0\.0 · 237ab95/);
   });

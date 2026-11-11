@@ -3,6 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
+import { systemStatus } from '../mocks/data';
 import { server } from '../mocks/node';
 import { renderApp } from './render';
 
@@ -88,6 +89,8 @@ describe('audit log', () => {
 
 describe('system', () => {
   it('shows status, endpoints, dependencies, nodes and where configuration lives', async () => {
+    // A calm installation: the mock nodes include a silent one.
+    server.use(http.get('*/api/v1/system/status', () => HttpResponse.json(systemStatus)));
     renderApp('/settings/system');
     expect(await screen.findByText('Operational')).toBeInTheDocument();
     expect(screen.getByText('All systems normal', { selector: '.meta' })).toBeInTheDocument();
@@ -117,6 +120,8 @@ describe('system', () => {
     const asked: string[] = [];
     server.events.on('request:start', ({ request }) => void asked.push(new URL(request.url).pathname));
     server.use(http.get('*/api/v1/nodes', () => HttpResponse.json({ code: 'not_implemented', message: 'cluster' }, { status: 501 })));
+    // A calm installation: the mock nodes include a silent one.
+    server.use(http.get('*/api/v1/system/status', () => HttpResponse.json(systemStatus)));
     renderApp('/settings/system');
     expect(await screen.findByText(/does not list cluster nodes yet; it reports 3 of 3 up/)).toBeInTheDocument();
     expect(asked).not.toContain('/api/v1/system/config');

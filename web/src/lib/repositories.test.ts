@@ -73,6 +73,17 @@ describe('YAML preview', () => {
 });
 
 describe('repoStatusMeta', () => {
+  it('names a dead remote and a broken blob store, with the error as hint', () => {
+    expect(repoStatusMeta({ status: 'offline', status_reason: 'upstream_unreachable', status_detail: 'no such host' })).toEqual({
+      label: 'Upstream unreachable',
+      tone: 'bad',
+      hint: 'no such host',
+    });
+    expect(repoStatusMeta({ status: 'offline', status_reason: 'blob_store_unavailable' })).toMatchObject({ label: 'Storage unavailable', tone: 'bad' });
+    // A disabled repository stays a neutral "Offline".
+    expect(repoStatusMeta({ status: 'offline' })).toEqual({ label: 'Offline', tone: 'neutral' });
+  });
+
   it('names credential failures of a proxy and keeps the other states', () => {
     expect(repoStatusMeta({ status: 'blocked', status_reason: 'auth_failed' })).toEqual({
       label: 'Authentication failed (401)',

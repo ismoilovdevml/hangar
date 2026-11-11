@@ -26,7 +26,7 @@ describe('blob stores', () => {
     expect(within(primary).getByRole('meter', { name: 's3-eu-primary usage' })).toHaveAttribute('aria-valuetext', '4.62 TB of 12 TB');
     expect(within(primary).getByText('SSE-S3')).toBeInTheDocument();
     const local = within(stores).getByRole('article', { name: 'fs-local' });
-    expect(within(local).getByText('Not monitored')).toBeInTheDocument();
+    expect(within(local).getByText('Not checked yet')).toBeInTheDocument();
     expect(within(local).getByText('No soft quota set')).toBeInTheDocument();
     expect(within(stores).getByRole('article', { name: 's3-archive' })).toHaveTextContent('Read-only');
   });

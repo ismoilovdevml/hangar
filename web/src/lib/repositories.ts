@@ -87,20 +87,28 @@ export const STATUS_META: Record<RepositoryStatus, { label: string; tone: 'ok' |
 };
 
 /** A remote that refuses the proxy's credentials (401 or 403), as opposed to one that cannot be reached. */
-export function upstreamAuthProblem(reason: UpstreamBlockedReason | undefined): { label: string; hint: string } | null {
+export function upstreamAuthProblem(reason: UpstreamBlockedReason | Repository['status_reason'] | undefined): { label: string; hint: string } | null {
   if (reason === 'auth_failed') return { label: 'authentication failed (401)', hint: 'check the proxy credentials' };
   if (reason === 'access_denied') return { label: 'access denied (403)', hint: 'check the proxy credentials' };
   return null;
 }
 
-/** The status badge of a repository; a credentials problem is named as such. */
-export function repoStatusMeta(r: Pick<Repository, 'status' | 'status_reason'>): {
+/** The status badge of a repository; a credentials problem, a dead remote and a broken blob store are named as such. */
+export function repoStatusMeta(r: Pick<Repository, 'status' | 'status_reason' | 'status_detail'>): {
   label: string;
   tone: 'ok' | 'warn' | 'bad' | 'neutral';
   hint?: string;
 } {
-  const auth = r.status === 'blocked' ? upstreamAuthProblem(r.status_reason) : null;
-  if (auth) return { label: auth.label.charAt(0).toUpperCase() + auth.label.slice(1), tone: 'bad', hint: 'Check the proxy credentials.' };
+  if (r.status === 'blocked') {
+    const auth = upstreamAuthProblem(r.status_reason);
+    if (auth) return { label: auth.label.charAt(0).toUpperCase() + auth.label.slice(1), tone: 'bad', hint: 'Check the proxy credentials.' };
+  }
+  if (r.status === 'offline' && r.status_reason === 'upstream_unreachable') {
+    return { label: 'Upstream unreachable', tone: 'bad', hint: r.status_detail || 'The last request to the remote failed.' };
+  }
+  if (r.status === 'offline' && r.status_reason === 'blob_store_unavailable') {
+    return { label: 'Storage unavailable', tone: 'bad', hint: r.status_detail || 'The blob store failed its last health check.' };
+  }
   return STATUS_META[r.status];
 }
 

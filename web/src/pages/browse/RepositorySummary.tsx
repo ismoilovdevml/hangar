@@ -105,7 +105,9 @@ export function RepositorySummary({ repo }: { repo: string }) {
           {r.type === 'group'
             ? 'Expand the group on the left to browse the content of all its members.'
             : r.component_count === 0
-              ? 'Nothing has been published here yet.'
+              ? r.type === 'proxy'
+                ? 'Nothing cached yet: packages appear here after a client requests them.'
+                : 'Nothing has been published here yet.'
               : 'Expand the repository on the left to browse its packages and files.'}
         </p>
       </Panel>

@@ -1,4 +1,5 @@
 import { versionText } from '../../lib/format';
+import { LEVEL_TONE, useSystemHealth } from '../../api/health';
 import { useSystemStatus } from '../../api/hooks';
 import { isMissingEndpoint, useCanSystem, useClusterStatus } from '../../api/ops';
 import type { ClusterNode, DependencyStatus, SystemStatusDetail } from '../../api/opsTypes';
@@ -13,8 +14,8 @@ import { DOCS } from '../../lib/docs';
 import { dependencyLabel, formatUptime, hostOf } from '../../lib/system';
 import { formatUtc } from '../../lib/tasks';
 
-const STATE_TONE = { ok: 'ok', degraded: 'warn', down: 'bad' } as const;
-const STATE_LABEL = { ok: 'Operational', degraded: 'Degraded', down: 'Down' } as const;
+const STATE_LABEL = { ok: 'Operational', degraded: 'Degraded', down: 'Down', unknown: 'Unknown' } as const;
+const LEVEL_LABEL = { healthy: 'Healthy', degraded: 'Degraded', down: 'Down' } as const;
 
 function Endpoint({ label, value, hint }: { label: string; value?: string; hint?: string }) {
   return (
@@ -51,6 +52,7 @@ function ConfigPanel() {
 
 export function SystemPage() {
   const status = useSystemStatus();
+  const health = useSystemHealth();
   const cluster = useClusterStatus();
   const canReadSettings = useCanSystem('settings', 'read');
   const sys = status.data as SystemStatusDetail | undefined;
@@ -64,7 +66,11 @@ export function SystemPage() {
       key: 'status',
       header: 'Status',
       className: 'nowrap',
-      cell: (d) => <StatusDot tone={d.status === 'ok' ? 'ok' : 'bad'} label={d.status === 'ok' ? 'Healthy' : 'Failing'} />,
+      cell: (d) => {
+        // The level (degraded or down) is in the health problems; the dependency only says ok or fail.
+        const level = d.status === 'ok' ? 'healthy' : (health.problems.find((p) => p.name === d.name)?.status ?? 'down');
+        return <StatusDot tone={LEVEL_TONE[level]} label={LEVEL_LABEL[level]} />;
+      },
     },
     { key: 'latency', header: 'Latency', align: 'right', className: 'muted nowrap', cell: (d) => `${d.latency_ms} ms` },
     { key: 'error', header: 'Error', className: 'muted col-last', cell: (d) => d.error ?? '' },
@@ -106,8 +112,8 @@ export function SystemPage() {
           {sys ? (
             <>
               <div className="system-status__state">
-                <StatusDot tone={STATE_TONE[sys.state]} halo label={<strong>{STATE_LABEL[sys.state]}</strong>} />
-                <span className="meta">{sys.message}</span>
+                <StatusDot tone={health.tone} halo={health.tone !== 'neutral'} label={<strong>{STATE_LABEL[health.state]}</strong>} />
+                <span className="meta">{health.text}</span>
               </div>
               <dl className="facts">
                 <div>

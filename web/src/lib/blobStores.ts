@@ -6,8 +6,14 @@ export const STORE_STATE: Record<BlobStoreState, { label: string; tone: Extract<
   degraded: { label: 'Degraded', tone: 'warn' },
   unavailable: { label: 'Unavailable', tone: 'bad' },
   read_only: { label: 'Read-only', tone: 'neutral' },
-  unknown: { label: 'Not monitored', tone: 'neutral' },
+  unknown: { label: 'Not checked yet', tone: 'neutral' },
 };
+
+/** What the last health check found, for a store that is not healthy. */
+export function storeProblem(s: Pick<BlobStore, 'state' | 'state_detail'>): string | null {
+  if (s.state !== 'unavailable' && s.state !== 'degraded') return null;
+  return s.state_detail || (s.state === 'unavailable' ? 'The last health check failed' : 'Low on free space');
+}
 
 /** Share of the soft quota in use, or null without a quota. */
 export function quotaRatio(s: Pick<BlobStore, 'used_bytes' | 'soft_quota_bytes'>): number | null {

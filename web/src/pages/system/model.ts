@@ -37,7 +37,7 @@ export interface ClusterSummary {
   /** Checks of the nodes that answer: healthy ones and all of them. */
   passing: number;
   checks: number;
-  /** The page's headline: "Everything is working", "1 check needs attention". */
+  /** The page's headline: "All systems normal", "Blob storage down", "2 checks need attention". */
   headline: string;
   /** Things to know beyond the checks (no scheduler leader). */
   notes: string[];
@@ -59,9 +59,12 @@ export function summarize(nodes: SystemNode[]): ClusterSummary {
   const degraded = subs.filter((s) => s.status === 'degraded').length;
   const silent = nodes.length - up;
 
-  let headline = 'Everything is working';
+  // Worded like the server's rollup (sysmon.Summarize), which newer servers send along.
+  const failing = subs.filter((s) => s.status !== 'healthy');
+  let headline = 'All systems normal';
   if (nodes.length === 0) headline = 'Waiting for the first report';
   else if (up === 0) headline = 'No node is responding';
+  else if (failing.length === 1 && silent === 0) headline = `${failing[0]!.label} ${failing[0]!.status === 'down' ? 'down' : 'degraded'}`;
   else if (down > 0) headline = `${count(down, 'check is', 'checks are')} down`;
   else if (degraded > 0) headline = `${count(degraded, 'check needs', 'checks need')} attention`;
   else if (silent > 0) headline = `${count(silent, 'node is', 'nodes are')} not responding`;

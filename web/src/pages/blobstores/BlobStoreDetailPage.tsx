@@ -10,9 +10,10 @@ import { Meter } from '../../components/Meter';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
-import { dedupShare, quotaRatio, storeBadge } from '../../lib/blobStores';
+import { dedupShare, quotaRatio, storeBadge, storeProblem } from '../../lib/blobStores';
 import { formatBytes, formatCompact } from '../../lib/format';
 import { isFormat, repoStatusMeta, TYPE_META } from '../../lib/repositories';
+import { formatUtc } from '../../lib/tasks';
 import { BlobStoreManage } from './BlobStoreManage';
 import '../../styles/catalog.css';
 import './blobstores.css';
@@ -106,8 +107,21 @@ function Usage({ s }: { s: BlobStore }) {
           <dd>{formatBytes(s.reclaimable_bytes ?? 0)}</dd>
         </div>
         <div>
+          <dt>Health check</dt>
+          <dd className={storeProblem(s) ? 'store-detail__problem' : undefined}>
+            {s.checked_at ? (
+              <>
+                {s.state_detail ?? 'Checked'}
+                <span className="meta"> · {formatUtc(s.checked_at, { seconds: true })}</span>
+              </>
+            ) : (
+              'Not checked yet'
+            )}
+          </dd>
+        </div>
+        <div>
           <dt>Write latency</dt>
-          <dd>{s.write_latency_ms != null ? `${Math.round(s.write_latency_ms)} ms` : 'Not measured'}</dd>
+          <dd>{s.write_latency_ms != null ? `${Math.round(s.write_latency_ms)} ms` : s.kind === 's3' ? 'Not measured for S3' : 'Not measured'}</dd>
         </div>
         {s.encryption && (
           <div>
