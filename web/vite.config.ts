@@ -81,6 +81,36 @@ function precompress(): Plugin {
   };
 }
 
+/**
+ * Moves the built style sheet and entry script from <head> to the end of
+ * <body>, after the boot screen in index.html. In <head> the style sheet
+ * blocks the first paint, so on a slow link the boot screen would only show
+ * once the whole sheet has arrived. The script stays after the sheet, so the
+ * app still never renders unstyled.
+ */
+function bootScreenFirst(): Plugin {
+  return {
+    name: 'hangar-boot-screen-first',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html) {
+        const tags: string[] = [];
+        const head = html.replace(
+          /\n?\s*<(?:link rel="(?:stylesheet|modulepreload)"|script type="module")[^>]*>(?:<\/script>)?/g,
+          (tag) => {
+            tags.push(tag.trim());
+            return '';
+          },
+        );
+        // Style sheets first: a module script waits for the sheets before it.
+        tags.sort((a, b) => Number(a.startsWith('<script')) - Number(b.startsWith('<script')));
+        return head.replace(/\s*<\/body>/, `\n${tags.map((t) => `    ${t}\n`).join('')}  </body>`);
+      },
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env };
   const mocks = env.VITE_API_MOCKS === 'true';
@@ -96,7 +126,7 @@ export default defineConfig(({ mode }) => {
       };
 
   return {
-    plugins: [react(), mockServiceWorker(mocks), precompress()],
+    plugins: [react(), mockServiceWorker(mocks), bootScreenFirst(), precompress()],
     build: {
       rolldownOptions: {
         output: {

@@ -7,9 +7,37 @@
     <meta name="theme-color" content="#DCE3EC" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Hangar</title>
+    <style>
+      /* Boot screen while the scripts load; hidden by CSS as soon as the app renders. */
+      body { margin: 0; background: #DCE3EC; }
+      #root:not(:empty) + .boot-splash { display: none; }
+      .boot-splash {
+        position: fixed; inset: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+        font: 600 14px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif; color: #3E4C5C;
+        animation: boot-in 0.2s ease-out 0.3s both;
+      }
+      .boot-splash svg { width: 44px; height: 44px; }
+      .boot-splash__bar { position: relative; width: 120px; height: 3px; overflow: hidden; border-radius: 3px; background: rgba(47, 106, 138, 0.18); }
+      .boot-splash__bar::after {
+        content: ''; position: absolute; inset: 0; width: 40%; border-radius: 3px; background: #2F6A8A;
+        animation: boot-bar 1.2s ease-in-out infinite;
+      }
+      @keyframes boot-in { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes boot-bar { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-splash { animation: none; }
+        .boot-splash__bar::after { animation: none; width: 100%; opacity: 0.5; }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div class="boot-splash" role="status" aria-live="polite">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#2F6A8A"/><g fill="none" stroke="#fff" stroke-width="2.4"><path d="M7 25V13.5l9-5 9 5V25" stroke-linejoin="round"/><path d="M12 25v-6h8v6"/></g></svg>
+      <span>Loading Hangar…</span>
+      <span class="boot-splash__bar" aria-hidden="true"></span>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
