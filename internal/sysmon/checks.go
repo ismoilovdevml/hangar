@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -106,9 +107,10 @@ type BlobStore struct {
 // BlobStoresCheck pings every blob store and reports free space of
 // filesystem stores. list returns the stores; open returns a store by name.
 // When list fails (database down) only the default store is checked,
-// through the readiness check "blobstore".
+// through the readiness check "blobstore". Each store's outcome is also
+// kept in states (when not nil), which the blob store screens read.
 func BlobStoresCheck(list func(ctx context.Context) ([]BlobStore, error),
-	open func(ctx context.Context, name string) (core.BlobStore, error), ready Readiness,
+	open func(ctx context.Context, name string) (core.BlobStore, error), ready Readiness, states *StoreStates,
 ) Check {
 	return Check{Name: "blobstores", Label: "Blob storage", Run: func(ctx context.Context) Result {
 		stores, err := list(ctx)
@@ -124,14 +126,15 @@ func BlobStoresCheck(list func(ctx context.Context) ([]BlobStore, error),
 				Detail: "Default store reachable; other stores unknown while the database is unavailable"}
 		}
 		if len(stores) == 0 {
+			states.record(nil, nil, time.Now())
 			return Result{Status: StatusHealthy, Detail: "No blob stores configured"}
 		}
 		res := Result{Status: StatusHealthy}
 		var unreachable, low []string
-		var probes []storeProbe
-		for _, s := range stores {
-			p := probeStore(ctx, s, open)
-			probes = append(probes, p)
+		probes := probeStores(ctx, stores, open)
+		states.record(stores, probes, time.Now())
+		for i, s := range stores {
+			p := probes[i]
 			res.Facts = append(res.Facts, p.fact)
 			switch p.status {
 			case StatusDown:
@@ -148,6 +151,8 @@ func BlobStoresCheck(list func(ctx context.Context) ([]BlobStore, error),
 			}
 		}
 		switch {
+		case len(unreachable) == 1 && len(stores) == 1:
+			res.Status, res.Detail = StatusDown, unreachable[0]+" "+probes[0].problem
 		case len(unreachable) > 0:
 			res.Status, res.Detail = StatusDown, "Unreachable: "+strings.Join(unreachable, ", ")
 		case len(low) > 0:
@@ -163,6 +168,100 @@ func BlobStoresCheck(list func(ctx context.Context) ([]BlobStore, error),
 	}}
 }
 
+// StoreState is the outcome of the last probe of one blob store.
+type StoreState struct {
+	// Status is healthy, degraded (low on free space) or down.
+	Status string
+	// Detail says what the probe found: "Reachable (3 ms)", or the error.
+	Detail string
+	// Error is the probe's error while the store is down.
+	Error string
+	// LatencyMS is the probe time; nil when the store did not answer.
+	LatencyMS *int64
+	CheckedAt time.Time
+	// Since is when the store first had this status.
+	Since time.Time
+}
+
+// StoreStates keeps the last probe of every blob store, by name. It is
+// filled by BlobStoresCheck on every check run.
+type StoreStates struct {
+	mu sync.RWMutex
+	m  map[string]StoreState
+}
+
+// NewStoreStates returns an empty set: every store is unknown until the
+// first check run.
+func NewStoreStates() *StoreStates { return &StoreStates{m: map[string]StoreState{}} }
+
+// BlobStoreState returns the last probe of the named store; false before
+// the store was first probed.
+func (s *StoreStates) BlobStoreState(name string) (StoreState, bool) {
+	if s == nil {
+		return StoreState{}, false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	st, ok := s.m[name]
+	return st, ok
+}
+
+// record replaces the states with one run's probes; stores no longer
+// listed are forgotten.
+func (s *StoreStates) record(stores []BlobStore, probes []storeProbe, at time.Time) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := make(map[string]StoreState, len(stores))
+	for i, st := range stores {
+		p := probes[i]
+		v := StoreState{Status: p.status, Detail: p.fact.Value, Error: p.err, CheckedAt: at.UTC(), Since: at.UTC()}
+		if p.tookMS >= 0 {
+			v.LatencyMS = ms(p.tookMS)
+		}
+		if prev, ok := s.m[st.Name]; ok && prev.Status == v.Status {
+			v.Since = prev.Since
+		}
+		next[st.Name] = v
+	}
+	s.m = next
+}
+
+// storeProbeShare is the part of the check's time each store probe may
+// take, so one hanging store is reported by name instead of the whole check
+// running out of time.
+const storeProbeShare = 0.7
+
+// probeStores probes every store concurrently, each with its own timeout.
+func probeStores(ctx context.Context, stores []BlobStore, open func(ctx context.Context, name string) (core.BlobStore, error)) []storeProbe {
+	limit := 2 * time.Second
+	if d, ok := ctx.Deadline(); ok {
+		limit = time.Duration(float64(time.Until(d)) * storeProbeShare)
+	}
+	out := make([]storeProbe, len(stores))
+	var wg sync.WaitGroup
+	for i, s := range stores {
+		wg.Go(func() {
+			pctx, cancel := context.WithTimeout(ctx, limit)
+			defer cancel()
+			done := make(chan storeProbe, 1)
+			go func() { done <- probeStore(pctx, s, open) }()
+			select {
+			case p := <-done:
+				out[i] = p
+			case <-pctx.Done():
+				msg := fmt.Sprintf("No answer within %s", roundDuration(limit))
+				out[i] = storeProbe{status: StatusDown, tookMS: -1, err: msg, problem: "does not answer",
+					fact: Fact{s.Name + " (" + s.Kind + ")", msg}}
+			}
+		})
+	}
+	wg.Wait()
+	return out
+}
+
 type pinger interface {
 	Ping(ctx context.Context) error
 }
@@ -173,6 +272,9 @@ type unwrapper interface{ Unwrap() core.BlobStore }
 type storeProbe struct {
 	status string
 	fact   Fact
+	// err is the error of a store that is down; problem says it in a few
+	// words after the store's name ("is unreachable: …").
+	err, problem string
 	// tookMS is the ping time; -1 when the store did not answer.
 	tookMS int64
 	// free and size of a filesystem store; size is 0 when unknown.
@@ -202,7 +304,8 @@ func probeStore(ctx context.Context, s BlobStore, open func(ctx context.Context,
 	label := s.Name + " (" + s.Kind + ")"
 	st, err := open(ctx, s.Name)
 	if err != nil {
-		return storeProbe{status: StatusDown, tookMS: -1, fact: Fact{label, "Cannot open: " + observability.Scrub(err.Error())}}
+		msg := observability.Scrub(err.Error())
+		return storeProbe{status: StatusDown, tookMS: -1, err: msg, problem: "cannot be opened: " + msg, fact: Fact{label, "Cannot open: " + msg}}
 	}
 	for {
 		u, ok := st.(unwrapper)
@@ -214,7 +317,8 @@ func probeStore(ctx context.Context, s BlobStore, open func(ctx context.Context,
 	start := time.Now()
 	if p, ok := st.(pinger); ok {
 		if err := p.Ping(ctx); err != nil {
-			return storeProbe{status: StatusDown, tookMS: -1, fact: Fact{label, "Unreachable: " + observability.Scrub(err.Error())}}
+			msg := observability.Scrub(err.Error())
+			return storeProbe{status: StatusDown, tookMS: -1, err: msg, problem: "is unreachable: " + msg, fact: Fact{label, "Unreachable: " + msg}}
 		}
 	}
 	took := time.Since(start).Milliseconds()
@@ -459,6 +563,7 @@ func UpstreamsCheck(list UpstreamLister) Check {
 		bad := map[proxy.State][]string{}
 		denied := map[proxy.Reason][]string{}
 		var hosts []string
+		lastErr := ""
 		total := 0
 		slowest := int64(-1)
 		cursor := ""
@@ -482,6 +587,9 @@ func UpstreamsCheck(list UpstreamLister) Check {
 					denied[it.Reason] = append(denied[it.Reason], it.Name)
 				case it.State == proxy.StateOffline || it.State == proxy.StateBlocked:
 					bad[it.State] = append(bad[it.State], it.Name)
+					if it.State == proxy.StateOffline && it.LastError != "" && lastErr == "" {
+						lastErr = it.Name + ": " + observability.Scrub(it.LastError)
+					}
 				}
 			}
 			if page.NextCursor == "" {
@@ -509,6 +617,9 @@ func UpstreamsCheck(list UpstreamLister) Check {
 				parts = append(parts, fmt.Sprintf("%d %s", n, s))
 			}
 		}
+		if n := counts[proxy.StateUnknown]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%d not used since start", n))
+		}
 		for _, r := range authReasons {
 			if names := denied[r]; len(names) > 0 {
 				parts = append(parts, fmt.Sprintf("%d %s", len(names), authReason[r]))
@@ -516,6 +627,9 @@ func UpstreamsCheck(list UpstreamLister) Check {
 		}
 		for _, s := range order {
 			res.Facts = append(res.Facts, Fact{titleCase(string(s)), strconv.Itoa(counts[s])})
+		}
+		if n := counts[proxy.StateUnknown]; n > 0 {
+			res.Facts = append(res.Facts, Fact{"Not used since start", strconv.Itoa(n)})
 		}
 		for _, s := range []proxy.State{proxy.StateOffline, proxy.StateBlocked} {
 			if names := bad[s]; len(names) > 0 {
@@ -529,7 +643,12 @@ func UpstreamsCheck(list UpstreamLister) Check {
 				res.Facts = append(res.Facts, Fact{titleCase(authReason[r]), listNames(names, 5)})
 			}
 		}
-		res.Detail = fmt.Sprintf("%d of %d healthy", counts[proxy.StateHealthy], total)
+		// Remotes not used since start are not counted as healthy.
+		if checked := total - counts[proxy.StateUnknown]; checked > 0 {
+			res.Detail = fmt.Sprintf("%d of %d healthy", counts[proxy.StateHealthy], checked)
+		} else {
+			res.Detail = plural(total, "proxy remote")
+		}
 		if len(parts) > 0 {
 			res.Detail += " · " + strings.Join(parts, ", ")
 		}
@@ -538,6 +657,9 @@ func UpstreamsCheck(list UpstreamLister) Check {
 		}
 		if len(denied) > 0 {
 			res.Detail += " · check the proxy credentials"
+		}
+		if lastErr != "" {
+			res.Facts = append(res.Facts, Fact{"Last error", lastErr})
 		}
 		if len(bad[proxy.StateOffline])+len(bad[proxy.StateBlocked])+len(denied) > 0 {
 			res.Status = StatusDegraded
@@ -577,4 +699,71 @@ func plural(n int, noun string) string {
 		return "1 " + noun
 	}
 	return strconv.Itoa(n) + " " + noun + "s"
+}
+
+// ScannerState is what ScannerCheck reports about vulnerability scanning.
+type ScannerState struct {
+	// Enabled is advisory scanning of packages (scanning.enabled).
+	Enabled   bool
+	SourceURL string
+	// Images is container image scanning with a Trivy server; TrivyError
+	// says why the server could not be asked.
+	Images           bool
+	TrivyURL         string
+	TrivyVersion     string
+	TrivyDBUpdatedAt *time.Time
+	TrivyError       string
+	// Scanned and Failed count components by their last scan.
+	Scanned, Failed int
+	LastScanAt      *time.Time
+}
+
+// ScannerCheck reports vulnerability scanning: whether it is on, the scans
+// that worked and failed, and whether the Trivy server answers.
+func ScannerCheck(state func(ctx context.Context) (ScannerState, error)) Check {
+	return Check{Name: "scanner", Label: "Vulnerability scanner", Run: func(ctx context.Context) Result {
+		st, err := state(ctx)
+		if err != nil {
+			return Result{Status: StatusDegraded, Detail: "Scan results cannot be read: " + observability.Scrub(err.Error())}
+		}
+		if !st.Enabled && !st.Images {
+			return Result{Status: StatusHealthy, Metric: "off", Detail: "Turned off; packages are not checked for known vulnerabilities"}
+		}
+		res := Result{Status: StatusHealthy, Metric: "on"}
+		var parts []string
+		if st.Enabled {
+			res.Target = st.SourceURL
+			res.Facts = append(res.Facts, Fact{"Advisory source", st.SourceURL},
+				Fact{"Scanned", strconv.Itoa(st.Scanned)}, Fact{"Last scan failed", strconv.Itoa(st.Failed)})
+			if st.LastScanAt != nil {
+				res.Facts = append(res.Facts, Fact{"Last scan", st.LastScanAt.UTC().Format(time.RFC3339)})
+			}
+			parts = append(parts, fmt.Sprintf("OSV · %d scanned, %d failed", st.Scanned, st.Failed))
+		}
+		if st.Images {
+			res.Facts = append(res.Facts, Fact{"Trivy server", st.TrivyURL})
+			switch {
+			case st.TrivyError != "":
+				res.Facts = append(res.Facts, Fact{"Trivy", "Unreachable: " + observability.Scrub(st.TrivyError)})
+			case st.TrivyVersion != "":
+				res.Facts = append(res.Facts, Fact{"Trivy version", st.TrivyVersion})
+				parts = append(parts, "Trivy "+st.TrivyVersion)
+			}
+			if st.TrivyDBUpdatedAt != nil {
+				res.Facts = append(res.Facts, Fact{"Trivy database built", st.TrivyDBUpdatedAt.UTC().Format(time.RFC3339)})
+			}
+		}
+		res.Detail = strings.Join(parts, " · ")
+		switch {
+		case st.Images && st.TrivyError != "":
+			res.Status, res.Metric = StatusDegraded, "failing"
+			res.Detail = "The Trivy server does not answer; container images are not scanned"
+		case st.Enabled && st.Failed > 0 && st.Scanned == 0:
+			res.Status, res.Metric = StatusDegraded, "failing"
+			res.Detail = fmt.Sprintf("No component could be scanned (%d failed); is %s reachable?", st.Failed, st.SourceURL)
+		case res.Detail == "":
+			res.Detail = "Container image scanning only"
+		}
+		return res
+	}}
 }

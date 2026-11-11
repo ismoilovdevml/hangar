@@ -172,6 +172,8 @@ type Monitor struct {
 	last       *Node
 	// up and total are from the last heartbeat read (Summary).
 	up, total int
+	// others are the other nodes at the last heartbeat read (Rollup).
+	others []Node
 }
 
 // New returns a monitor publishing into pool's system_nodes table. A nil
@@ -338,15 +340,6 @@ func Worst(subs []Subsystem) string {
 }
 
 func worse(a, b string) string {
-	rank := func(s string) int {
-		switch s {
-		case StatusDown:
-			return 2
-		case StatusDegraded:
-			return 1
-		}
-		return 0
-	}
 	if rank(b) > rank(a) {
 		return b
 	}
@@ -434,7 +427,7 @@ func (m *Monitor) Nodes(ctx context.Context) ([]Node, error) {
 		}
 	}
 	m.mu.Lock()
-	m.up, m.total = up, len(out)
+	m.up, m.total, m.others = up, len(out), others
 	m.mu.Unlock()
 	return out, nil
 }
@@ -456,6 +449,29 @@ func (m *Monitor) recent(ctx context.Context) Node {
 		}()
 	}
 	return m.withRuntime(*last)
+}
+
+// Rollup is the state of the installation: this node's checks, run now or
+// reused from the last five seconds, and the other nodes as of the last
+// heartbeat read. It reads no database rows, so the public status endpoint
+// can afford it.
+func (m *Monitor) Rollup(ctx context.Context) Summary {
+	self := m.Check(ctx)
+	m.mu.Lock()
+	nodes := append([]Node{self}, m.others...)
+	m.mu.Unlock()
+	return Summarize(nodes)
+}
+
+// AddCheck adds a subsystem check after the monitor was built, for services
+// that start later (the vulnerability scanner). The next run includes it.
+func (m *Monitor) AddCheck(c Check) {
+	m.runMu.Lock()
+	m.opts.Checks = append(m.opts.Checks, c)
+	m.runMu.Unlock()
+	m.mu.Lock()
+	m.last = nil
+	m.mu.Unlock()
 }
 
 // Summary returns the nodes up (publishing heartbeats) and known at the
