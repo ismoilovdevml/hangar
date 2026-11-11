@@ -64,6 +64,10 @@ describe('routing rules', () => {
     expect(await within(p).findByText('Added @acme/*. Review and save.')).toBeInTheDocument();
     expect(within(p).getByLabelText('Names only npm-internal serves')).toHaveValue('@acme/*');
     expect(within(p).getByRole('button', { name: 'Save routing rules' })).toBeEnabled();
+    // Asking again before saving must not claim the protection is active.
+    await user.click(within(p).getByRole('button', { name: 'Block names your hosted repositories publish' }));
+    expect(await within(p).findByText('The suggested patterns are in the form but not saved yet. Review and save.')).toBeInTheDocument();
+    expect(within(p).queryByText('The suggested patterns are already in place.')).not.toBeInTheDocument();
     await user.click(within(p).getByRole('button', { name: 'Discard' }));
     expect(within(p).getByLabelText('Names only npm-internal serves')).toHaveValue('');
   });
