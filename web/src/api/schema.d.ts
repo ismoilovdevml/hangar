@@ -221,7 +221,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Endpoints the current user should configure in their clients, most-used format first */
+        /**
+         * Endpoints the current user should configure in their clients, most-used format first
+         * @description One repository per format among the online repositories the caller may read: a group when there is one, else a proxy, else a hosted repository.
+         */
         get: operations["listClientEndpoints"];
         put?: never;
         post?: never;
@@ -2424,6 +2427,11 @@ export interface components {
             /** @description Registry host for docker, base URL for everything else (built from server.base_url) */
             endpoint: string;
             repository: string;
+            type: components["schemas"]["RepositoryType"];
+            /** @description Clients can upload through it (a hosted repository, or a group with a write member) */
+            publishes: boolean;
+            /** @description Reading needs no credentials */
+            anonymous_read: boolean;
         };
         ClientEndpointPage: {
             items: components["schemas"]["ClientEndpoint"][];

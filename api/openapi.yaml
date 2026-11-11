@@ -286,6 +286,10 @@ paths:
       tags: [auth]
       operationId: listClientEndpoints
       summary: Endpoints the current user should configure in their clients, most-used format first
+      description: >-
+        One repository per format among the online repositories the caller
+        may read: a group when there is one, else a proxy, else a hosted
+        repository.
       parameters:
         - $ref: "#/components/parameters/Limit"
       responses:
@@ -3370,13 +3374,20 @@ components:
         expiry_warning: { $ref: "#/components/schemas/Duration" }
     ClientEndpoint:
       type: object
-      required: [format, endpoint, repository]
+      required: [format, endpoint, repository, type, publishes, anonymous_read]
       properties:
         format: { $ref: "#/components/schemas/Format" }
         endpoint:
           type: string
           description: Registry host for docker, base URL for everything else (built from server.base_url)
         repository: { type: string }
+        type: { $ref: "#/components/schemas/RepositoryType" }
+        publishes:
+          type: boolean
+          description: Clients can upload through it (a hosted repository, or a group with a write member)
+        anonymous_read:
+          type: boolean
+          description: Reading needs no credentials
     ClientEndpointPage:
       type: object
       required: [items]
