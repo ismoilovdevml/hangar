@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/api/catalog"
+	"github.com/ismoilovdevml/hangar/internal/api/pkginfo"
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/search"
 )
@@ -64,6 +65,17 @@ type componentDetail struct {
 	SourceURL        string            `json:"source_url,omitempty"`
 	License          string            `json:"license,omitempty"`
 	Attributes       map[string]any    `json:"attributes,omitempty"`
+	// Image is set for docker versions whose manifests are stored.
+	Image *pkginfo.ContainerImage `json:"image,omitempty"`
+}
+
+// dockerImage describes a docker version from its stored manifests; nil
+// for other formats, without package details, or when they are not stored.
+func (a *API) dockerImage(ctx context.Context, repo *core.Repository, c *core.Component) (*pkginfo.ContainerImage, error) {
+	if repo.Format != "docker" || a.PackageInfo == nil {
+		return nil, nil
+	}
+	return a.PackageInfo.ContainerImage(ctx, repo, c.Namespace, c.Name, attrString(c.Attributes, "digest"), attrString(c.Attributes, "media_type"))
 }
 
 // assetJSON is schema Asset.
@@ -207,6 +219,15 @@ func (a *API) getComponent(w http.ResponseWriter, r *http.Request) {
 		QuarantineReason: attrString(d.Attributes, "quarantine_reason"), BaseImage: attrString(d.Attributes, "base_image"),
 		SourceURL: attrString(d.Attributes, "source_url"), License: attrString(d.Attributes, "license"), Attributes: d.Attributes,
 	}
+	img, err := a.dockerImage(ctx, repo, &d.Component)
+	if err != nil {
+		a.writeErr(w, r, err)
+		return
+	}
+	// A docker version's size is the image clients pull, not its manifest.
+	if out.Image = img; img != nil && img.SizeBytes != nil {
+		out.SizeBytes = *img.SizeBytes
+	}
 	out.Signed, _ = d.Attributes["signed"].(bool)
 	if ps, ok := d.Attributes["platforms"].([]any); ok {
 		for _, p := range ps {
@@ -300,6 +321,14 @@ func (a *API) listComponentVersions(w http.ResponseWriter, r *http.Request) {
 	for _, it := range p.Items {
 		pc := toPublished(it)
 		size := sizes[it.ID]
+		img, err := a.dockerImage(ctx, repo, &it.Component)
+		if err != nil {
+			a.writeErr(w, r, err)
+			return
+		}
+		if img != nil && img.SizeBytes != nil {
+			size = *img.SizeBytes
+		}
 		pc.SizeBytes = &size
 		items = append(items, pc)
 	}

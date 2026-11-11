@@ -4448,7 +4448,10 @@ components:
         last_downloaded_at: { type: [string, "null"], format: date-time }
         size_bytes:
           $ref: "#/components/schemas/Bytes"
-          description: Content size; reported by the versions listing
+          description: >-
+            Content size; reported by the versions listing. Docker: the
+            compressed image (config plus layers, from the manifest; for a
+            multi-platform index, linux/amd64 or its first platform).
     PublishedComponentPage:
       type: object
       required: [items]
@@ -4463,7 +4466,9 @@ components:
         - type: object
           required: [size_bytes, checksums, install_command, signed, quarantined]
           properties:
-            size_bytes: { $ref: "#/components/schemas/Bytes" }
+            size_bytes:
+              $ref: "#/components/schemas/Bytes"
+              description: Content size; docker the compressed image, as in the versions listing
             digest:
               type: string
               description: Primary digest (OCI manifest digest or main file sha256)
@@ -4490,6 +4495,46 @@ components:
             attributes:
               type: object
               additionalProperties: true
+            image: { $ref: "#/components/schemas/ContainerImage" }
+    ContainerImage:
+      type: object
+      description: >-
+        Docker versions whose manifests are stored: what the manifest (and,
+        for a multi-platform index, its platform manifests) says clients pull.
+      required: [media_type, size_bytes, layers]
+      properties:
+        media_type: { type: string }
+        size_bytes:
+          type: [integer, "null"]
+          format: int64
+          description: Config plus layers, compressed; null when the platform manifest is not stored
+        platform:
+          type: string
+          description: Index only; the platform layers and size_bytes describe (linux/amd64, else the first)
+        config: { $ref: "#/components/schemas/ContainerBlob" }
+        layers:
+          type: array
+          items: { $ref: "#/components/schemas/ContainerBlob" }
+        platforms:
+          type: array
+          description: Index only; attestation manifests are left out
+          items:
+            type: object
+            required: [platform, digest, size_bytes]
+            properties:
+              platform: { type: string, examples: [linux/arm64/v8] }
+              digest: { type: string }
+              size_bytes:
+                type: [integer, "null"]
+                format: int64
+                description: null when that platform's manifest is not stored
+    ContainerBlob:
+      type: object
+      required: [digest, media_type, size_bytes]
+      properties:
+        digest: { type: string }
+        media_type: { type: string }
+        size_bytes: { $ref: "#/components/schemas/Bytes" }
     Asset:
       type: object
       required: [id, path, kind, blob_digest, content_type, size_bytes, created_at]

@@ -3201,7 +3201,7 @@ export interface components {
             download_count?: number;
             /** Format: date-time */
             last_downloaded_at?: string | null;
-            /** @description Content size; reported by the versions listing */
+            /** @description Content size; reported by the versions listing. Docker: the compressed image (config plus layers, from the manifest; for a multi-platform index, linux/amd64 or its first platform). */
             size_bytes?: components["schemas"]["Bytes"];
         };
         PublishedComponentPage: {
@@ -3209,6 +3209,7 @@ export interface components {
             next_cursor?: components["schemas"]["NextCursor"];
         };
         ComponentDetail: components["schemas"]["PublishedComponent"] & {
+            /** @description Content size; docker the compressed image, as in the versions listing */
             size_bytes: components["schemas"]["Bytes"];
             /** @description Primary digest (OCI manifest digest or main file sha256) */
             digest?: string;
@@ -3236,6 +3237,36 @@ export interface components {
             attributes?: {
                 [key: string]: unknown;
             };
+            image?: components["schemas"]["ContainerImage"];
+        };
+        /** @description Docker versions whose manifests are stored: what the manifest (and, for a multi-platform index, its platform manifests) says clients pull. */
+        ContainerImage: {
+            media_type: string;
+            /**
+             * Format: int64
+             * @description Config plus layers, compressed; null when the platform manifest is not stored
+             */
+            size_bytes: number | null;
+            /** @description Index only; the platform layers and size_bytes describe (linux/amd64, else the first) */
+            platform?: string;
+            config?: components["schemas"]["ContainerBlob"];
+            layers: components["schemas"]["ContainerBlob"][];
+            /** @description Index only; attestation manifests are left out */
+            platforms?: {
+                /** @example linux/arm64/v8 */
+                platform: string;
+                digest: string;
+                /**
+                 * Format: int64
+                 * @description null when that platform's manifest is not stored
+                 */
+                size_bytes: number | null;
+            }[];
+        };
+        ContainerBlob: {
+            digest: string;
+            media_type: string;
+            size_bytes: components["schemas"]["Bytes"];
         };
         Asset: {
             id: string;
