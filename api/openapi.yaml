@@ -114,7 +114,14 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Session" }
         "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
+        "401":
+          description: |
+            Wrong username or password. With lockout on, `details.attempts_left` says how many
+            more failures this address may have for the username typed before it is locked out;
+            the answer is the same whether or not the username belongs to an account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "423":
           description: Account locked after repeated failures; `retry_after` says when to retry.
           content:

@@ -4918,7 +4918,19 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
+            /**
+             * @description Wrong username or password. With lockout on, `details.attempts_left` says how many
+             *     more failures this address may have for the username typed before it is locked out;
+             *     the answer is the same whether or not the username belongs to an account.
+             */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /**
              * @description Realm `ldap`: the directory account may not sign in (`allowed_groups`,
              *     or `auto_create` is off and the user never signed in before).

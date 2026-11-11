@@ -99,7 +99,14 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var locked *auth.LockedError
 		if errors.Is(err, core.ErrUnauthenticated) && !errors.As(err, &locked) {
-			writeErrorBody(w, http.StatusUnauthorized, "unauthenticated", "invalid username or password", 0)
+			body := apiError{Code: "unauthenticated", Message: "invalid username or password"}
+			// The same for every name, existing or not: it counts this
+			// address's failures for the name typed.
+			var attempts *auth.AttemptsError
+			if errors.As(err, &attempts) {
+				body.Details = map[string]any{"attempts_left": attempts.Left}
+			}
+			writeJSON(w, http.StatusUnauthorized, body)
 			return
 		}
 		h.writeError(w, r, err)
