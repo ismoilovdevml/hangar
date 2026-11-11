@@ -66,7 +66,7 @@ import (
 
 // DefaultBlobStore is the name of the blob store built from the storage
 // section of the configuration. Repositories reference it by this name.
-const DefaultBlobStore = "default"
+const DefaultBlobStore = core.DefaultBlobStore
 
 // Background job types besides blobgc.JobType.
 const (

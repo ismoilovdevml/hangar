@@ -435,6 +435,10 @@ func (a *API) createRepository(w http.ResponseWriter, r *http.Request) {
 		a.writeErr(w, r, notImplemented("repository service"))
 		return
 	}
+	if in.Type != core.RepoGroup && in.BlobStore == "" {
+		// Hosted and proxy repositories need a store; the configured one is the obvious choice.
+		in.BlobStore = core.DefaultBlobStore
+	}
 	repo, err := a.Deps.Repos.Create(ctx, in.repository())
 	if err != nil {
 		a.writeErr(w, r, err)

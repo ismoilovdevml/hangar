@@ -69,6 +69,11 @@ func ValidateRepositoryName(name string) error {
 	return nil
 }
 
+// DefaultBlobStore is the name of the blob store built from the storage
+// section of the configuration. A hosted or proxy repository created without
+// a blob store uses it.
+const DefaultBlobStore = "default"
+
 // Repository is a named container of one format and one type.
 type Repository struct {
 	ID          string     `json:"id"`
@@ -443,10 +448,10 @@ func (r *Repository) Validate() error {
 		return fmt.Errorf("repository %q: %w", r.Name, err)
 	}
 	if c := r.Config.Connector; c != nil && (c.HTTPPort < 0 || c.HTTPPort > 65535) {
-		return fmt.Errorf("repository %q: connector httpPort out of range: %w", r.Name, ErrInvalid)
+		return fmt.Errorf("repository %q: connector http_port out of range: %w", r.Name, ErrInvalid)
 	}
 	if r.Type != RepoGroup && r.BlobStore == "" {
-		return fmt.Errorf("repository %q: blobStore is required: %w", r.Name, ErrInvalid)
+		return fmt.Errorf("repository %q: blob_store is required: %w", r.Name, ErrInvalid)
 	}
 	if err := r.validateRouting(); err != nil {
 		return fmt.Errorf("repository %q: %w", r.Name, err)

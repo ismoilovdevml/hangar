@@ -4237,8 +4237,9 @@ components:
         blob_store:
           type: string
           description: |
-            Required for hosted and proxy repositories. Ignored for groups,
-            which store nothing; their responses leave it out.
+            Blob store of a hosted or proxy repository; on create, `default`
+            (the configured store) when omitted. Ignored for groups, which
+            store nothing; their responses leave it out.
         online:
           type: boolean
           description: Optional; true when omitted

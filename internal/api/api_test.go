@@ -261,6 +261,19 @@ func TestRepositories(t *testing.T) {
 	}
 	f.expect("admin", "POST", "/api/v1/repositories", "{bad", 400)
 
+	// Without blob_store a hosted or proxy repository lands on the default store.
+	b = f.expect("admin", "POST", "/api/v1/repositories", map[string]any{"name": "npm-nostore", "format": "npm", "type": "hosted",
+		"config": map[string]any{}}, 201)
+	_ = json.Unmarshal(b, &created)
+	if created.BlobStore != core.DefaultBlobStore {
+		t.Errorf("blob store without one asked = %q, want %q", created.BlobStore, core.DefaultBlobStore)
+	}
+	// Validation messages name the field as the API spells it, without the Go sentinel.
+	resp, b = f.do("admin", "PUT", "/api/v1/repositories/npm-nostore", map[string]any{"config": map[string]any{}})
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(b), "blob_store is required") || strings.Contains(string(b), "invalid argument") {
+		t.Errorf("update without blob store = %d %s", resp.StatusCode, b)
+	}
+
 	// Update keeps write-only secrets sent back redacted, and refuses renames.
 	upd := map[string]any{"description": "npmjs mirror", "blob_store": "default",
 		"config": map[string]any{"proxy": map[string]any{"remote_url": "https://registry.npmjs.org", "auth": map[string]any{"kind": "bearer"}}}}
