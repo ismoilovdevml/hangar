@@ -282,6 +282,7 @@ export function NewTaskPage() {
         <form className="new-task" onSubmit={onSubmit} noValidate aria-label="New task">
           <Panel>
             <Segmented<NewTaskKind>
+              className="new-task__kind"
               label="Task type"
               value={kind}
               onChange={switchKind}

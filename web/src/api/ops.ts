@@ -263,7 +263,8 @@ export function useUpdateTask(id: string) {
   return useMutation({
     mutationFn: (input: TaskInput) => apiFetch<Task>(`/tasks/${encodeURIComponent(id)}`, { method: 'PUT', body: input }),
     onSuccess: (task) => {
-      qc.setQueryData(opsKeys.task(id), task);
+      // The page may have loaded the task by name (/tasks/docker-gc): update every copy.
+      qc.setQueriesData<Task>({ queryKey: ['tasks', 'detail'] }, (old) => (old?.id === task.id ? task : old));
       invalidateTask(qc, id);
     },
   });
@@ -275,7 +276,7 @@ export function useDeleteTask(id: string) {
   return useMutation({
     mutationFn: () => apiFetch<void>(`/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     onSuccess: () => {
-      qc.removeQueries({ queryKey: opsKeys.task(id) });
+      qc.removeQueries({ queryKey: ['tasks', 'detail'], predicate: (q) => (q.state.data as Task | undefined)?.id === id });
       void qc.invalidateQueries({ queryKey: opsKeys.taskList });
     },
   });

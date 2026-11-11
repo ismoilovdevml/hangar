@@ -235,6 +235,10 @@
 .new-task__more summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--lake-ink); padding: 4px 0; }
 .new-task__more[open] summary { margin-bottom: 12px; }
 .new-task__schedule { margin-bottom: 14px; }
+@media (max-width: 520px) {
+  .new-task__kind { flex-wrap: wrap; }
+  .new-task__kind .segmented__item { flex: 1 1 auto; padding: 0 10px; }
+}
 .new-task__actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
 .new-task__actions .checkbox { margin-right: auto; }
 .link-button { border: 0; background: none; padding: 0; font: inherit; font-size: 12px; font-weight: 600; color: var(--lake-ink); cursor: pointer; }
