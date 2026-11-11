@@ -4410,7 +4410,17 @@ components:
             used_bytes: { $ref: "#/components/schemas/Bytes" }
             capacity_bytes: { type: [integer, "null"] }
             dedup_saved_bytes: { $ref: "#/components/schemas/Bytes" }
-            growth_bytes_per_day: { type: integer }
+            growth_bytes_per_day:
+              type: integer
+              description: >-
+                Bytes written per day, averaged over `growth_window_days`; 0
+                while the stores hold less than a day of history.
+            growth_window_days:
+              type: number
+              description: >-
+                Days the growth average covers: 7, or the age of the oldest
+                blob when that is younger. Under 1 there is not enough
+                history for a rate.
             days_to_full: { type: [number, "null"] }
             reclaimable_bytes:
               allOf: [{ $ref: "#/components/schemas/Bytes" }]

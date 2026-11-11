@@ -2,6 +2,7 @@ package api
 
 import (
 	"cmp"
+	"math"
 	"net/http"
 	"time"
 
@@ -66,6 +67,7 @@ type blobStoreTotals struct {
 	CapacityBytes     *int64   `json:"capacity_bytes"`
 	DedupSavedBytes   int64    `json:"dedup_saved_bytes"`
 	GrowthBytesPerDay int64    `json:"growth_bytes_per_day"`
+	GrowthWindowDays  float64  `json:"growth_window_days"`
 	DaysToFull        *float64 `json:"days_to_full"`
 	ReclaimableBytes  int64    `json:"reclaimable_bytes"`
 }
@@ -142,7 +144,8 @@ func (a *API) listBlobStores(w http.ResponseWriter, r *http.Request) {
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"items": items, "totals": blobStoreTotals{
 		UsedBytes: t.UsedBytes, CapacityBytes: t.CapacityBytes, DedupSavedBytes: t.DedupSavedBytes,
-		GrowthBytesPerDay: t.GrowthBytesPerDay, DaysToFull: t.DaysToFull, ReclaimableBytes: t.ReclaimableBytes,
+		GrowthBytesPerDay: t.GrowthBytesPerDay, GrowthWindowDays: math.Round(t.GrowthWindowDays*100) / 100,
+		DaysToFull: t.DaysToFull, ReclaimableBytes: t.ReclaimableBytes,
 	}})
 }
 
