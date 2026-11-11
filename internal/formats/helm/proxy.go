@@ -84,14 +84,14 @@ func (h *handler) upstreamIndex(ctx context.Context, repo *core.Repository) (*co
 		return h.refreshIndex(context.WithoutCancel(ctx), repo, cached)
 	})
 	if err != nil {
-		proxy.NoteCacheMiss(ctx)
+		proxy.NoteCacheMiss(ctx, err)
 		return nil, err
 	}
 	a := res.(*core.Asset)
 	if cached != nil && a.BlobDigest == cached.BlobDigest {
 		proxy.NoteCacheHit(ctx, a.Size)
 	} else {
-		proxy.NoteCacheMiss(ctx)
+		proxy.NoteCacheMiss(ctx, nil)
 	}
 	return a, nil
 }
@@ -367,7 +367,8 @@ func (h *handler) proxyAsset(ctx context.Context, repo *core.Repository, name, v
 	if !errors.Is(err, core.ErrNotFound) {
 		return nil, err
 	}
-	v, err := h.proxyView(ctx, repo)
+	// The index only locates the archive: it is not what the client asked for.
+	v, err := h.proxyView(proxy.WithoutCacheTally(ctx), repo)
 	if err != nil {
 		return nil, err
 	}
@@ -375,10 +376,10 @@ func (h *handler) proxyAsset(ctx context.Context, repo *core.Repository, name, v
 	if e == nil {
 		return nil, fmt.Errorf("chart %s %s is not in the remote index: %w", name, version, core.ErrNotFound)
 	}
-	proxy.NoteCacheMiss(ctx)
 	res, err, _ := h.flight.Do("file:"+repo.ID+"/"+path, func() (any, error) {
 		return h.fetchFile(context.WithoutCancel(ctx), repo, e, path, prov)
 	})
+	proxy.NoteCacheMiss(ctx, err)
 	if err != nil {
 		return nil, err
 	}

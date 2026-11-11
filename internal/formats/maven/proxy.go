@@ -63,7 +63,7 @@ func (h *handler) fetchRemote(ctx context.Context, repo *core.Repository, mp *ma
 			proxy.NoteCacheHit(ctx, cached.Size)
 			return assetEntity(repo, cached), nil
 		}
-		proxy.NoteCacheMiss(ctx)
+		proxy.NoteCacheMiss(ctx, err)
 		return nil, err
 	}
 	up, err := h.deps.Upstreams.ForRepository(ctx, repo)
@@ -89,12 +89,11 @@ func (h *handler) fetchRemote(ctx context.Context, repo *core.Repository, mp *ma
 		proxy.NoteCacheHit(ctx, cached.Size)
 		return assetEntity(repo, cached), nil
 	case resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone:
-		proxy.NoteCacheMiss(ctx)
 		return nil, fmt.Errorf("%s: not found upstream: %w", mp.path, core.ErrNotFound)
 	case resp.StatusCode != http.StatusOK:
 		return stale(fmt.Errorf("%s: remote answered %d: %w", mp.path, resp.StatusCode, core.ErrUpstream))
 	}
-	proxy.NoteCacheMiss(ctx)
+	proxy.NoteCacheMiss(ctx, nil)
 
 	bs, err := h.deps.Blobs.ForRepository(ctx, repo)
 	if err != nil {
@@ -198,7 +197,7 @@ func (h *handler) proxyChecksum(ctx context.Context, repo *core.Repository, mp *
 	if mod.IsZero() {
 		mod = time.Now()
 	}
-	proxy.NoteCacheMiss(ctx)
+	proxy.NoteCacheMiss(ctx, nil)
 	return dataEntity([]byte(sum), contentType(mp.path), mod), true, nil
 }
 

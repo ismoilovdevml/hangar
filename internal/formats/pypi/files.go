@@ -111,8 +111,8 @@ func (h *handler) openFile(ctx context.Context, repo *core.Repository, name, fil
 		if !errors.Is(err, core.ErrNotFound) {
 			return nil, nil, err
 		}
-		proxy.NoteCacheMiss(ctx)
 		a, err = h.cacheFile(ctx, repo, name, filename)
+		proxy.NoteCacheMiss(ctx, err)
 		if err != nil {
 			return nil, nil, err
 		}

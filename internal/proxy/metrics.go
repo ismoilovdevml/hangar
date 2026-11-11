@@ -35,7 +35,7 @@ const (
 var (
 	cacheRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: MetricCacheRequests,
-		Help: "Proxy repository content requests by cache result (hit = served from the local cache, miss = fetched from the remote).",
+		Help: "Proxy repository content requests by cache result (hit = served from the local cache, miss = needed content a remote supplied). Remotes answering not found or failing count as neither.",
 	}, []string{"format", "result"})
 	cacheHitBytes = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: MetricCacheHitBytes,
@@ -147,21 +147,25 @@ func CacheHit(format string, size int64) {
 	}
 }
 
-// CacheMiss records a proxy request of format that had to fetch the content
-// from the remote (whether or not the remote had it).
+// CacheMiss records a proxy request of format whose answer needed content a
+// remote supplied.
 func CacheMiss(format string) {
 	cacheRequests.WithLabelValues(format, CacheResultMiss).Inc()
 }
 
 // CacheTally collects the proxy cache outcome of one client request so the
 // request is counted once in the cache metrics, however many proxy members
-// of a group it consulted: a miss when any remote had to be asked for the
-// content, otherwise a hit when a proxy cache answered. Requests answered by
-// hosted repositories alone are not counted.
+// of a group it consulted: a miss when any remote supplied content for the
+// answer (a merged version list counts as soon as one remote supplied its
+// part), otherwise a hit when a proxy cache answered. Remotes that answered
+// not found or failed do not count: in a group whose first proxies' remotes
+// do not have a package and whose last proxy serves it from its cache, the
+// request is a hit. Requests answered by hosted repositories alone, or by
+// nothing, are not counted.
 //
 //	ctx, tally := proxy.WithCacheTally(r.Context())
 //	defer tally.Record(Name, r.Method)
-//	... proxy.NoteCacheHit(ctx, size) / proxy.NoteCacheMiss(ctx) at decision points
+//	... proxy.NoteCacheHit(ctx, size) / proxy.NoteCacheMiss(ctx, err) at decision points
 type CacheTally struct {
 	mu        sync.Mutex
 	hit, miss bool
@@ -176,11 +180,27 @@ func WithCacheTally(ctx context.Context) (context.Context, *CacheTally) {
 	return context.WithValue(ctx, cacheTallyKey{}, t), t
 }
 
+// WithoutCacheTally returns ctx without the request's tally, for lookups that
+// only locate the content (a remote's service index or package index read to
+// find a download URL): whether those came from the cache or the remote says
+// nothing about how the content itself was served.
+func WithoutCacheTally(ctx context.Context) context.Context {
+	if tallyFrom(ctx) == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, cacheTallyKey{}, (*CacheTally)(nil))
+}
+
+func tallyFrom(ctx context.Context) *CacheTally {
+	t, _ := ctx.Value(cacheTallyKey{}).(*CacheTally)
+	return t
+}
+
 // NoteCacheHit notes that a proxy repository answered from its cache (fresh,
 // revalidated with a 304, or stale because the remote failed) with size
 // bytes. Without a tally in ctx it does nothing.
 func NoteCacheHit(ctx context.Context, size int64) {
-	if t, ok := ctx.Value(cacheTallyKey{}).(*CacheTally); ok {
+	if t := tallyFrom(ctx); t != nil {
 		t.mu.Lock()
 		t.hit = true
 		t.size += size
@@ -188,10 +208,16 @@ func NoteCacheHit(ctx context.Context, size int64) {
 	}
 }
 
-// NoteCacheMiss notes that a proxy repository asked its remote for the
-// content. Without a tally in ctx it does nothing.
-func NoteCacheMiss(ctx context.Context) {
-	if t, ok := ctx.Value(cacheTallyKey{}).(*CacheTally); ok {
+// NoteCacheMiss notes the outcome of a proxy repository asking its remote
+// for content: err is nil when the remote supplied it, which makes the
+// request a miss, and otherwise the error of the attempt (the remote did not
+// have it, failed, or was not asked after all), which leaves the tally as it
+// was. Without a tally in ctx it does nothing.
+func NoteCacheMiss(ctx context.Context, err error) {
+	if err != nil {
+		return
+	}
+	if t := tallyFrom(ctx); t != nil {
 		t.mu.Lock()
 		t.miss = true
 		t.mu.Unlock()

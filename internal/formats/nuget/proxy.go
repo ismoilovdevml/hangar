@@ -98,7 +98,10 @@ func parseServiceIndex(b []byte) (*upstreamResources, error) {
 	return res, nil
 }
 
+// upstreamIndex returns the remote's service index. It only locates the
+// resources clients ask for, so it is kept out of the cache tally.
 func (h *handler) upstreamIndex(ctx context.Context, repo *core.Repository) (*upstreamResources, error) {
+	ctx = proxy.WithoutCacheTally(ctx)
 	cfg, err := decodeConfig(repo)
 	if err != nil {
 		return nil, err
@@ -227,10 +230,10 @@ func (h *handler) cachedDoc(ctx context.Context, repo *core.Repository, path str
 				return stale, nil
 			}
 		}
-		proxy.NoteCacheMiss(ctx)
+		proxy.NoteCacheMiss(ctx, err)
 		return nil, err
 	}
-	proxy.NoteCacheMiss(ctx)
+	proxy.NoteCacheMiss(ctx, nil)
 	if err := h.storeMetadata(ctx, repo, path, b); err != nil {
 		h.log().WarnContext(ctx, "nuget cache store failed", "repo", repo.Name, "path", path, "err", err)
 	}

@@ -2592,12 +2592,13 @@ export interface components {
             };
             /**
              * @description Proxy cache effectiveness over the range, every format, every node.
-             *     A client request counts once: a miss when any proxy repository
-             *     (directly or as a member of the group addressed) asked its remote
-             *     for the content, otherwise a hit when a proxy answered from its
-             *     cache. Requests answered by hosted repositories alone are not
-             *     counted. Every value is null when traffic statistics are not
-             *     available.
+             *     A client request counts once: a miss when a remote of any proxy
+             *     repository (directly or as a member of the group addressed)
+             *     supplied content for the answer, otherwise a hit when a proxy
+             *     answered from its cache. Remotes that answered not found or failed
+             *     count as neither. Requests answered by hosted repositories alone
+             *     are not counted. Every value is null when traffic statistics are
+             *     not available.
              */
             cache: {
                 /** @description hits / (hits + misses); null when no proxy request was counted in the range */

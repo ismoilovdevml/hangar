@@ -108,7 +108,7 @@ func (h *handler) proxyDoc(ctx context.Context, repo *core.Repository, name pkgN
 	}
 	stale := func(cause error) (*packument, error) {
 		if cached == nil {
-			proxy.NoteCacheMiss(ctx)
+			proxy.NoteCacheMiss(ctx, cause)
 			return nil, cause
 		}
 		h.deps.Logger.WarnContext(ctx, "npm proxy serving stale packument", "repository", repo.Name,
@@ -149,7 +149,7 @@ func (h *handler) proxyDoc(ctx context.Context, repo *core.Repository, name pkgN
 		proxy.NoteCacheHit(ctx, cached.Size)
 		return h.readProxyDoc(ctx, repo, bs, cached, name)
 	case resp.StatusCode == http.StatusOK:
-		proxy.NoteCacheMiss(ctx)
+		proxy.NoteCacheMiss(ctx, nil)
 		d, n, err := bs.Put(ctx, io.LimitReader(resp.Body, maxDocumentSize))
 		if err != nil {
 			return stale(fmt.Errorf("store upstream packument: %w", err))
@@ -164,7 +164,6 @@ func (h *handler) proxyDoc(ctx context.Context, repo *core.Repository, name pkgN
 		}
 		return doc, err
 	case resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone:
-		proxy.NoteCacheMiss(ctx)
 		return nil, fmt.Errorf("package %s not found upstream: %w", name.Full, core.ErrNotFound)
 	default:
 		return stale(fmt.Errorf("upstream answered %d for %s: %w", resp.StatusCode, name.Full, core.ErrUpstream))
@@ -260,7 +259,6 @@ func (h *handler) proxyTarball(ctx context.Context, repo *core.Repository, rel s
 	if err != nil {
 		return nil, nil, err
 	}
-	proxy.NoteCacheMiss(ctx)
 	resp, err := up.Fetch(ctx, tarballRequest(repo, rel, origin, name.Full))
 	if err != nil {
 		return nil, nil, err
@@ -277,6 +275,7 @@ func (h *handler) proxyTarball(ctx context.Context, repo *core.Repository, rel s
 	defer func() { _ = resp.Body.Close() }()
 	switch resp.StatusCode {
 	case http.StatusOK:
+		proxy.NoteCacheMiss(ctx, nil)
 	case http.StatusNotFound, http.StatusGone:
 		return nil, nil, fmt.Errorf("tarball %s not found upstream: %w", rel, core.ErrNotFound)
 	default:

@@ -77,7 +77,7 @@ func (h *handler) proxyDoc(ctx context.Context, repo *core.Repository, mod strin
 	})
 	res, _ := v.(result)
 	if err != nil || !res.fromCache {
-		proxy.NoteCacheMiss(ctx)
+		proxy.NoteCacheMiss(ctx, err)
 	} else if cachedAsset != nil {
 		proxy.NoteCacheHit(ctx, cachedAsset.Size)
 	}
@@ -188,7 +188,6 @@ func (h *handler) resolveQuery(ctx context.Context, repo *core.Repository, mod, 
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", err.Error(), core.ErrNotFound)
 	}
-	proxy.NoteCacheMiss(ctx)
 	resp, err := h.fetch(ctx, repo, p, mod, core.Conditional{})
 	if err != nil {
 		return nil, err
@@ -209,6 +208,7 @@ func (h *handler) resolveQuery(ctx context.Context, repo *core.Repository, mod, 
 	if json.Unmarshal(b, &doc) != nil || !canonical(doc.Version) {
 		return nil, fmt.Errorf("remote %s is not a version info document: %w", p, core.ErrUpstream)
 	}
+	proxy.NoteCacheMiss(ctx, nil)
 	return b, nil
 }
 
@@ -225,10 +225,10 @@ func (h *handler) proxyFile(ctx context.Context, repo *core.Repository, mod, ver
 	if !errors.Is(err, core.ErrNotFound) {
 		return nil, err
 	}
-	proxy.NoteCacheMiss(ctx)
 	v, err, _ := h.flight.Do("file:"+repo.ID+"/"+path, func() (any, error) {
 		return h.fetchFile(context.WithoutCancel(ctx), repo, mod, ver, k)
 	})
+	proxy.NoteCacheMiss(ctx, err)
 	if err != nil {
 		return nil, err
 	}

@@ -172,8 +172,8 @@ func (h *handler) openCrate(ctx context.Context, repo *core.Repository, name, ve
 		if !errors.Is(err, core.ErrNotFound) {
 			return nil, nil, err
 		}
-		proxy.NoteCacheMiss(ctx)
 		a, err = h.cacheCrate(ctx, repo, name, version)
+		proxy.NoteCacheMiss(ctx, err)
 		if err != nil {
 			return nil, nil, err
 		}

@@ -149,7 +149,7 @@ func (h *handler) index(ctx context.Context, repo *core.Repository, name string)
 	})
 	res, _ := v.(refreshed)
 	if err != nil || !res.fromCache {
-		proxy.NoteCacheMiss(ctx)
+		proxy.NoteCacheMiss(ctx, err)
 	} else if cachedAsset != nil {
 		proxy.NoteCacheHit(ctx, cachedAsset.Size)
 	}
@@ -502,7 +502,8 @@ func (h *handler) fetchAndStore(ctx context.Context, repo *core.Repository, name
 	if a, err := h.deps.Components.GetAsset(ctx, repo.ID, filePath(name, filename)); err == nil {
 		return a, nil // a concurrent request cached it
 	}
-	idx, err := h.index(ctx, repo, name)
+	// The index only locates the file: it is not what the client asked for.
+	idx, err := h.index(proxy.WithoutCacheTally(ctx), repo, name)
 	if err != nil {
 		return nil, err
 	}

@@ -109,7 +109,7 @@ func (h *handler) remoteDoc(ctx context.Context, repo *core.Repository, remotePa
 	})
 	res, _ := v.(refreshed)
 	if err != nil || !res.fromCache {
-		proxy.NoteCacheMiss(ctx)
+		proxy.NoteCacheMiss(ctx, err)
 	} else if asset != nil {
 		proxy.NoteCacheHit(ctx, asset.Size)
 	}
@@ -265,7 +265,8 @@ func (h *handler) fetchCrate(ctx context.Context, repo *core.Repository, name, v
 	if a, err := h.deps.Components.GetAsset(ctx, repo.ID, cratePath(name, version)); err == nil {
 		return a, nil // a concurrent request cached it
 	}
-	f, err := h.proxyIndex(ctx, repo, name)
+	// The index only locates the crate: it is not what the client asked for.
+	f, err := h.proxyIndex(proxy.WithoutCacheTally(ctx), repo, name)
 	if err != nil {
 		return nil, err
 	}

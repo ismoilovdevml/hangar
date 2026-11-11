@@ -2,11 +2,14 @@ package proxy
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+
+	"github.com/ismoilovdevml/hangar/internal/core"
 )
 
 func TestCacheMetrics(t *testing.T) {
@@ -52,7 +55,7 @@ func TestCacheTally(t *testing.T) {
 	// Two members hit, one missed: one miss for the request.
 	ctx, tally := WithCacheTally(context.Background())
 	NoteCacheHit(ctx, 10)
-	NoteCacheMiss(ctx)
+	NoteCacheMiss(ctx, nil)
 	NoteCacheHit(ctx, 5)
 	tally.Record("tally-test", http.MethodGet)
 	if val(CacheResultMiss) != 1 || val(CacheResultHit) != 0 {
@@ -75,5 +78,22 @@ func TestCacheTally(t *testing.T) {
 	NoteCacheHit(context.Background(), 1) // no tally: ignored
 	if val(CacheResultHit) != 2 || val(CacheResultMiss) != 1 || bytes() != 3 {
 		t.Fatalf("head/empty: hit=%v miss=%v bytes=%v", val(CacheResultHit), val(CacheResultMiss), bytes())
+	}
+	// Remotes that did not have the content, or failed, are not misses: the
+	// member that answered from its cache makes the request a hit.
+	ctx, tally = WithCacheTally(context.Background())
+	NoteCacheMiss(ctx, fmt.Errorf("upstream: %w", core.ErrNotFound))
+	NoteCacheMiss(ctx, fmt.Errorf("upstream: %w", core.ErrUpstream))
+	NoteCacheHit(ctx, 7)
+	tally.Record("tally-test", http.MethodGet)
+	if val(CacheResultHit) != 3 || val(CacheResultMiss) != 1 || bytes() != 10 {
+		t.Fatalf("not found then hit: hit=%v miss=%v bytes=%v", val(CacheResultHit), val(CacheResultMiss), bytes())
+	}
+	// Only remotes that did not have it: neither.
+	ctx, tally = WithCacheTally(context.Background())
+	NoteCacheMiss(ctx, fmt.Errorf("upstream: %w", core.ErrNotFound))
+	tally.Record("tally-test", http.MethodGet)
+	if val(CacheResultHit) != 3 || val(CacheResultMiss) != 1 {
+		t.Fatalf("not found only: hit=%v miss=%v", val(CacheResultHit), val(CacheResultMiss))
 	}
 }

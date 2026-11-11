@@ -158,8 +158,8 @@ func (h *handler) locate(ctx context.Context, repo *core.Repository, lid, lver, 
 		if err == nil || !errors.Is(err, core.ErrNotFound) {
 			return repo, a, err
 		}
-		proxy.NoteCacheMiss(ctx)
 		uncached, err := h.cachePackage(ctx, repo, lid, lver)
+		proxy.NoteCacheMiss(ctx, err)
 		if err != nil {
 			return nil, nil, err
 		}
