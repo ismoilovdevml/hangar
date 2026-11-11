@@ -12,8 +12,9 @@ import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
 import { dedupShare, quotaRatio, storeBadge, storeProblem } from '../../lib/blobStores';
 import { formatBytes, formatCompact } from '../../lib/format';
+import { Time } from '../../components/Time';
 import { isFormat, repoStatusMeta, TYPE_META } from '../../lib/repositories';
-import { formatUtc } from '../../lib/tasks';
+import { formatTime } from '../../lib/format';
 import { BlobStoreManage } from './BlobStoreManage';
 import '../../styles/catalog.css';
 import './blobstores.css';
@@ -112,7 +113,7 @@ function Usage({ s }: { s: BlobStore }) {
             {s.checked_at ? (
               <>
                 {s.state_detail ?? 'Checked'}
-                <span className="meta"> · {formatUtc(s.checked_at, { seconds: true })}</span>
+                <span className="meta"> · {formatTime(s.checked_at, { seconds: true })}</span>
               </>
             ) : (
               'Not checked yet'
@@ -171,7 +172,9 @@ function Configuration({ s }: { s: BlobStore }) {
         {s.created_at && (
           <>
             <dt>Created</dt>
-            <dd>{new Date(s.created_at).toISOString().slice(0, 10)}</dd>
+            <dd>
+              <Time value={s.created_at} mode="date" />
+            </dd>
           </>
         )}
       </dl>

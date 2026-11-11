@@ -151,15 +151,16 @@ export function expiryPresets(maxDays: number): number[] {
   return out;
 }
 
-/** End of the day `days` from now, in UTC, as an RFC 3339 string. */
+/** The moment `days` from now, as an RFC 3339 string. */
 export function expiresInDays(days: number, now: Date = new Date()): string {
   return new Date(now.getTime() + days * DAY).toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
-/** Expiry for a custom date (yyyy-mm-dd), at 23:59:59 UTC; error text if outside 1 day … maxDays. */
+/** Expiry for a custom date (yyyy-mm-dd), at 23:59:59 in the browser's zone; error text if outside 1 day … maxDays. */
 export function customExpiry(date: string, maxDays: number, now: Date = new Date()): { value: string | null; error: string | null } {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { value: null, error: 'Pick a date.' };
-  const at = new Date(`${date}T23:59:59Z`);
+  // Without an offset the date-time is local: the end of the day the user picked, where they are.
+  const at = new Date(`${date}T23:59:59`);
   if (Number.isNaN(at.getTime())) return { value: null, error: 'Pick a valid date.' };
   if (at.getTime() <= now.getTime()) return { value: null, error: 'The date must be in the future.' };
   if (at.getTime() > now.getTime() + maxDays * DAY) return { value: null, error: `At most ${maxDays} days from today.` };
@@ -204,20 +205,7 @@ export function expiryText(iso: string, now: Date = new Date()): string {
   return diff > 0 ? `in ${span}` : `${span} ago`;
 }
 
-export function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(iso));
-}
-
-export function formatDateTime(iso: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'UTC',
-    timeZoneName: 'short',
-  }).format(new Date(iso));
-}
+export { formatDate } from '../../lib/format';
 
 /* ---------------------------------------------------------------- users */
 

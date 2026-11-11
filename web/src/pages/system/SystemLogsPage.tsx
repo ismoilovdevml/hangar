@@ -12,6 +12,7 @@ import { fetchWholeBuffer, isOlderServer, LOGS_REFRESH_MS, useLogStream, useSyst
 import { AutoRefresh } from './AutoRefresh';
 import { LogList } from './LogList';
 import { isLogLevel, LOG_LEVELS, toJsonLines, type SystemLogsSearch } from './model';
+import { zoneLabel } from '../../lib/format';
 import './system.css';
 
 const route = getRouteApi('/app/system/logs');
@@ -215,7 +216,7 @@ export function SystemLogsPage() {
     <div className="screen">
       <PageHeader
         title="System logs"
-        description="Recent log records each node keeps in memory, newest at the bottom. Open a line to see all of its fields."
+        description={`Recent log records each node keeps in memory, newest at the bottom, in your local time (${zoneLabel()}). Open a line to see all of its fields.`}
       />
       {!canAdmin ? (
         <Forbidden />

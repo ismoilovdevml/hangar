@@ -6,7 +6,8 @@ import { IconSearch } from '../../components/icons';
 import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
 import { Select } from '../../components/Select';
-import { relativeTime } from '../../lib/format';
+import { zoneLabel } from '../../lib/format';
+import { Time } from '../../components/Time';
 import { useNow } from '../../lib/useNow';
 import {
   useCreateMember,
@@ -32,7 +33,7 @@ import {
   ACTIONS,
   describePrivilege,
   describeUserAgent,
-  formatDate,
+  expiryText,
   generatePassword,
   groupRepoAccess,
   nameList,
@@ -128,7 +129,7 @@ export function MembersTab({ kind, filters, onFilters, onOpen }: MembersTabProps
       priority: 3,
       header: 'Last active',
       className: 'muted nowrap',
-      cell: (m) => (m.last_active_at ? relativeTime(m.last_active_at, now) : 'Never'),
+      cell: (m) => (m.last_active_at ? <Time value={m.last_active_at} mode="relative" now={now} /> : 'Never'),
     },
     {
       key: 'status',
@@ -447,7 +448,8 @@ export function SessionList({ sessions, onEnd, busy }: SessionListProps) {
               {describeUserAgent(s.user_agent)} {s.current && <Pill tone="ok">This session</Pill>}
             </span>
             <span className="meta">
-              {s.ip ?? 'unknown address'} · signed in {formatDate(s.created_at)} · active {relativeTime(s.last_seen_at, now).toLowerCase()}
+              {s.ip ?? 'unknown address'} · signed in <Time value={s.created_at} mode="date" /> · active{' '}
+              <Time value={s.last_seen_at} mode="relative" now={now} inline />
               {s.remember ? ' · remembered' : ''}
             </span>
           </span>
@@ -505,7 +507,11 @@ export function UserDrawer({ id, canWrite, canDelete, canManageTokens, onClose }
           <div className="drawer__status">
             <Avatar name={m.display_name || m.username} size={44} />
             <StatusDot tone={USER_STATUS_META[status].tone} label={USER_STATUS_META[status].label} />
-            {status === 'locked' && m.locked_until && <span className="meta">until {formatDate(m.locked_until)}</span>}
+            {status === 'locked' && m.locked_until && (
+              <span className="meta">
+                unlocks at <Time value={m.locked_until} mode="short" /> ({zoneLabel(new Date(m.locked_until))}), {expiryText(m.locked_until)}
+              </span>
+            )}
             {m.must_change_password && <MustChangeBadge />}
           </div>
           {notice && <Notice message={notice} />}
@@ -671,11 +677,13 @@ function Overview({ member: m }: { member: Member }) {
       <dt>Live tokens</dt>
       <dd>{m.token_count}</dd>
       <dt>Last active</dt>
-      <dd>{m.last_active_at ? relativeTime(m.last_active_at, now) : 'Never'}</dd>
+      <dd>{m.last_active_at ? <Time value={m.last_active_at} mode="relative" now={now} /> : 'Never'}</dd>
       {m.created_at && (
         <>
           <dt>Created</dt>
-          <dd>{formatDate(m.created_at)}</dd>
+          <dd>
+            <Time value={m.created_at} mode="date" />
+          </dd>
         </>
       )}
     </dl>

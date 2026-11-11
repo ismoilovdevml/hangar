@@ -21,13 +21,13 @@ import {
   hasFilters,
   isAuditOutcome,
   isAuditRange,
-  isoToUtcInput,
+  isoToLocalInput,
   outcomeMeta,
-  utcInputToIso,
+  localInputToIso,
   type AuditSearch,
 } from '../../lib/audit';
-import { relativeTime } from '../../lib/format';
-import { formatUtc } from '../../lib/tasks';
+import { relativeTime, zoneLabel } from '../../lib/format';
+import { Time } from '../../components/Time';
 
 const route = getRouteApi('/app/audit');
 
@@ -44,8 +44,8 @@ const toDraft = (s: AuditSearch): TextDraft => ({
   actor: s.actor ?? '',
   action: s.action ?? '',
   target: s.target ?? '',
-  from: isoToUtcInput(s.from),
-  to: isoToUtcInput(s.to),
+  from: isoToLocalInput(s.from),
+  to: isoToLocalInput(s.to),
 });
 
 function EventRow({ e, now }: { e: AuditEvent; now: Date }) {
@@ -69,9 +69,7 @@ function EventRow({ e, now }: { e: AuditEvent; now: Date }) {
           </button>
         </td>
         <td className="nowrap audit-time" data-label="">
-          <time dateTime={e.at} title={formatUtc(e.at, { seconds: true })}>
-            {formatUtc(e.at)}
-          </time>
+          <Time value={e.at} zone={false} />
           <span className="audit-sub">{relativeTime(e.at, now)}</span>
         </td>
         <td className="audit-actor" data-label="Actor">
@@ -103,7 +101,9 @@ function EventRow({ e, now }: { e: AuditEvent; now: Date }) {
               </div>
               <div>
                 <dt>Time</dt>
-                <dd>{formatUtc(e.at, { seconds: true })}</dd>
+                <dd>
+                  <Time value={e.at} seconds />
+                </dd>
               </div>
               {details.length === 0 && (
                 <div>
@@ -157,7 +157,7 @@ export function AuditPage() {
       actor: draft.actor.trim() || undefined,
       action: draft.action.trim() || undefined,
       target: draft.target.trim() || undefined,
-      ...(range === 'custom' ? { from: utcInputToIso(draft.from), to: utcInputToIso(draft.to) } : {}),
+      ...(range === 'custom' ? { from: localInputToIso(draft.from), to: localInputToIso(draft.to) } : {}),
     });
   };
 
@@ -181,7 +181,7 @@ export function AuditPage() {
     <div className="screen">
       <PageHeader
         title="Audit log"
-        description="Every sign-in, change and denied request, newest first. Times are in UTC."
+        description={`Every sign-in, change and denied request, newest first. Times are your local time (${zoneLabel()}); exports use UTC.`}
         actions={
           !forbidden && (
             <>
@@ -276,12 +276,12 @@ export function AuditPage() {
           {range === 'custom' && (
             <>
               <div className="field">
-                <label htmlFor={ids.from}>From (UTC)</label>
+                <label htmlFor={ids.from}>From</label>
                 <input id={ids.from} className="input" type="datetime-local" value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })} />
               </div>
               <div className="field">
                 <label htmlFor={ids.to}>
-                  To (UTC) <span className="field__optional">(optional)</span>
+                  To <span className="field__optional">(optional)</span>
                 </label>
                 <input id={ids.to} className="input" type="datetime-local" value={draft.to} onChange={(e) => setDraft({ ...draft, to: e.target.value })} />
               </div>
@@ -327,7 +327,7 @@ export function AuditPage() {
                   <th scope="col" className="col-first">
                     <span className="visually-hidden">Details</span>
                   </th>
-                  <th scope="col">Time</th>
+                  <th scope="col">Time ({zoneLabel()})</th>
                   <th scope="col">Actor</th>
                   <th scope="col">Action</th>
                   <th scope="col" data-priority={2}>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CleanupPolicy, TaskList, TaskRun } from '../api/opsTypes';
-import { auditExportUrl, auditQuery, flattenDetails, isoToUtcInput, utcInputToIso, validateAuditSearch } from './audit';
+import { auditExportUrl, auditQuery, flattenDetails, isoToLocalInput, localInputToIso, validateAuditSearch } from './audit';
 import { allows } from './can';
 import {
   draftFromPolicy,
@@ -18,11 +18,9 @@ import {
   applyTaskProgress,
   estimateRemaining,
   filterTasks,
-  formatDuration,
-  formatNextRun,
-  formatUtc,
   remainingText,
 } from './tasks';
+import { formatDuration, formatUtc, relativeFuture as formatNextRun } from './format';
 
 const run = (over: Partial<TaskRun> = {}): TaskRun => ({
   id: 'run_1',
@@ -125,8 +123,8 @@ describe('cleanup draft', () => {
   });
 
   it('phrases the preview headline', () => {
-    expect(previewHeadline(18240, 212e9)).toBe('18,240 versions · 212 GB would be freed');
-    expect(previewHeadline(1, 4e6)).toBe('1 version · 4 MB would be freed');
+    expect(previewHeadline(18240, 212e9)).toBe('18,240 versions · 197 GiB would be freed');
+    expect(previewHeadline(1, 4 * 1024 ** 2)).toBe('1 version · 4 MiB would be freed');
     expect(previewHeadline(0, 0)).toBe('Nothing would be deleted');
   });
 });
@@ -222,9 +220,9 @@ describe('audit helpers', () => {
   });
 
   it('converts datetime-local values as UTC', () => {
-    expect(utcInputToIso('2026-11-04T09:30')).toBe('2026-11-04T09:30:00.000Z');
-    expect(utcInputToIso('')).toBeUndefined();
-    expect(isoToUtcInput('2026-11-04T09:30:00.000Z')).toBe('2026-11-04T09:30');
+    expect(localInputToIso('2026-11-04T09:30')).toBe('2026-11-04T09:30:00.000Z');
+    expect(localInputToIso('')).toBeUndefined();
+    expect(isoToLocalInput('2026-11-04T09:30:00.000Z')).toBe('2026-11-04T09:30');
   });
 
   it('flattens nested details', () => {

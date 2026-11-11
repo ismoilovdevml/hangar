@@ -52,13 +52,16 @@ describe('overview with metrics the server does not report', () => {
 
     const storage = screen.getByRole('link', { name: /^Storage/ });
     expect(within(storage).getByText('0 B')).toBeInTheDocument();
-    expect(within(storage).getByText('Nothing stored yet · no quota')).toBeInTheDocument();
+    // The capacity is unknown because one store has no quota: the note names it.
+    expect(await within(storage).findByText('Nothing stored yet · no quota on fs-local')).toBeInTheDocument();
 
     expect(within(screen.getByRole('link', { name: /^Security/ })).getByText('Clean')).toBeInTheDocument();
 
-    // No quota yet: the admin is pointed at the blob stores.
+    // The store without a quota: the admin is pointed at it.
     const todo = screen.getByRole('region', { name: 'To do' });
-    expect(await within(todo).findByRole('link', { name: /Set a storage quota/ })).toHaveAttribute('href', '/blob-stores');
+    const quota = await within(todo).findByRole('link', { name: /Set a storage quota/ });
+    expect(quota).toHaveAttribute('href', '/blob-stores/fs-local');
+    expect(quota).toHaveTextContent('Blob store fs-local has no quota');
 
     // Nothing leaks through as a literal null/NaN/undefined.
     expect(document.body.textContent).not.toMatch(/NaN|null|undefined|Infinity/);
@@ -78,7 +81,10 @@ describe('overview with metrics the server does not report', () => {
     expect(within(outcomes).getByRole('img', { name: 'No requests in this range yet' })).toBeInTheDocument();
     expect(within(outcomes).getByText('Nothing to measure yet')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /^Requests per hour: none yet/ })).toBeInTheDocument();
-    expect(within(screen.getByRole('table', { name: 'Requests per hour' })).getAllByText('not recorded')).toHaveLength(3);
+    // The three hours before counting started are left out of the chart, not drawn as empty bars.
+    const table = screen.getByRole('table', { name: 'Requests per hour' });
+    expect(within(table).queryByText('not recorded')).not.toBeInTheDocument();
+    expect(within(table).getAllByRole('row')).toHaveLength(m.traffic.length - 3 + 1);
   });
 
   it('says when scanning is off, and asks to turn it on', async () => {

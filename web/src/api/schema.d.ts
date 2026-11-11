@@ -3039,8 +3039,9 @@ export interface components {
             type: components["schemas"]["RepositoryType"];
             description?: string;
             /**
-             * @description Required for hosted and proxy repositories. Ignored for groups,
-             *     which store nothing; their responses leave it out.
+             * @description Blob store of a hosted or proxy repository; on create, `default`
+             *     (the configured store) when omitted. Ignored for groups, which
+             *     store nothing; their responses leave it out.
              */
             blob_store?: string;
             /** @description Optional; true when omitted */
@@ -3157,7 +3158,10 @@ export interface components {
                 used_bytes: components["schemas"]["Bytes"];
                 capacity_bytes?: number | null;
                 dedup_saved_bytes: components["schemas"]["Bytes"];
+                /** @description Bytes written per day, averaged over `growth_window_days`; 0 while the stores hold less than a day of history. */
                 growth_bytes_per_day: number;
+                /** @description Days the growth average covers: 7, or the age of the oldest blob when that is younger. Under 1 there is not enough history for a rate. */
+                growth_window_days?: number;
                 days_to_full?: number | null;
                 /** @description Soft-deleted bytes a compaction would free now */
                 reclaimable_bytes: components["schemas"]["Bytes"];
@@ -5440,6 +5444,12 @@ export interface operations {
         parameters: {
             query?: {
                 range?: components["schemas"]["OverviewRange"];
+                /**
+                 * @description The viewer's offset from UTC in minutes east (UTC+5 is 300), so
+                 *     days ("today", day buckets) start at the viewer's midnight.
+                 *     Default 0 (UTC).
+                 */
+                tz_offset?: number;
             };
             header?: never;
             path?: never;
@@ -5456,6 +5466,7 @@ export interface operations {
                     "application/json": components["schemas"]["OverviewMetrics"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
         };
     };
@@ -5467,6 +5478,12 @@ export interface operations {
                 limit?: components["parameters"]["Limit"];
                 /** @description Window of `latency_ms` and `requests` (default `today`) */
                 range?: components["schemas"]["OverviewRange"];
+                /**
+                 * @description The viewer's offset from UTC in minutes east (UTC+5 is 300), so
+                 *     days ("today", day buckets) start at the viewer's midnight.
+                 *     Default 0 (UTC).
+                 */
+                tz_offset?: number;
             };
             header?: never;
             path?: never;

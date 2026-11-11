@@ -12,7 +12,7 @@ import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
 import { DOCS } from '../../lib/docs';
 import { dependencyLabel, formatUptime, hostOf } from '../../lib/system';
-import { formatUtc } from '../../lib/tasks';
+import { Time } from '../../components/Time';
 
 const STATE_LABEL = { ok: 'Operational', degraded: 'Degraded', down: 'Down', unknown: 'Unknown' } as const;
 const LEVEL_LABEL = { healthy: 'Healthy', degraded: 'Degraded', down: 'Down' } as const;
@@ -100,7 +100,7 @@ export function SystemPage() {
       cell: (n) => <StatusDot tone={n.healthy ? 'ok' : 'bad'} label={n.healthy ? 'Healthy' : 'Unhealthy'} />,
     },
     { key: 'uptime', priority: 3, header: 'Uptime', className: 'muted nowrap', cell: (n) => (n.uptime_seconds !== undefined ? formatUptime(n.uptime_seconds) : <NotAvailable />) },
-    { key: 'beat', priority: 2, header: 'Last heartbeat', className: 'muted nowrap col-last', cell: (n) => formatUtc(n.last_heartbeat, { seconds: true }) },
+    { key: 'beat', priority: 2, header: 'Last heartbeat', className: 'muted nowrap col-last', cell: (n) => <Time value={n.last_heartbeat} seconds /> },
   ];
 
   return (
@@ -132,7 +132,7 @@ export function SystemPage() {
                 <div>
                   <dt>Built</dt>
                   <dd>
-                    {sys.build?.date ? formatUtc(sys.build.date) : <NotAvailable />}
+                    {sys.build?.date ? <Time value={sys.build.date} /> : <NotAvailable />}
                     {sys.build?.go_version && <span className="meta"> · {sys.build.go_version}</span>}
                   </dd>
                 </div>

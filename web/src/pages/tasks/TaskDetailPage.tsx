@@ -9,14 +9,13 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
 import { Meter } from '../../components/Meter';
 import { NotAvailable } from '../../components/NotAvailable';
+import { Time } from '../../components/Time';
+import { formatDuration, formatTime, relativeFuture } from '../../lib/format';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
 import {
   estimateRemaining,
-  formatDuration,
-  formatNextRun,
-  formatUtc,
   isActive,
   remainingText,
   RUN_STATUS,
@@ -246,11 +245,11 @@ function RunDetail({ taskId, run }: { taskId: string; run: TaskRun }) {
       <dl className="facts">
         <div>
           <dt>Started</dt>
-          <dd>{run.started_at ? formatUtc(run.started_at, { seconds: true }) : 'Not started'}</dd>
+          <dd>{run.started_at ? <Time value={run.started_at} seconds /> : 'Not started'}</dd>
         </div>
         <div>
           <dt>Finished</dt>
-          <dd>{run.finished_at ? formatUtc(run.finished_at, { seconds: true }) : isActive(run) ? 'Still running' : <NotAvailable />}</dd>
+          <dd>{run.finished_at ? <Time value={run.finished_at} seconds /> : isActive(run) ? 'Still running' : <NotAvailable />}</dd>
         </div>
         <div>
           <dt>Duration</dt>
@@ -347,7 +346,7 @@ export function TaskDetailPage() {
       className: 'col-first nowrap',
       cell: (r) => (
         <Link to="/tasks/$taskId" params={{ taskId }} search={(s) => ({ ...s, run: r.id })} aria-current={selected?.id === r.id ? 'true' : undefined} className="run-link">
-          {formatUtc(r.started_at ?? r.created_at)}
+          <Time value={r.started_at ?? r.created_at} />
         </Link>
       ),
     },
@@ -413,7 +412,7 @@ export function TaskDetailPage() {
             </div>
             <div>
               <dt>Next run</dt>
-              <dd>{t.next_run_at && t.enabled !== false ? `${formatNextRun(t.next_run_at, now)} (${formatUtc(t.next_run_at)})` : 'Not scheduled'}</dd>
+              <dd>{t.next_run_at && t.enabled !== false ? `${relativeFuture(t.next_run_at, now)} (${formatTime(t.next_run_at)})` : 'Not scheduled'}</dd>
             </div>
             <div>
               <dt>State</dt>

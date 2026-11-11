@@ -13,11 +13,11 @@ import { FormatName } from '../../components/FormatIcon';
 import { formatOptions } from '../../components/formatOptions';
 import { Select } from '../../components/Select';
 import { StatusDot } from '../../components/Pill';
-import { formatBytes, relativeTime } from '../../lib/format';
+import { formatBytes } from '../../lib/format';
+import { Time } from '../../components/Time';
 import { GATES } from '../../lib/gates';
 import { PHONE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { plural } from '../../lib/overview';
-import { formatUtc } from '../../lib/tasks';
 import { useNow } from '../../lib/useNow';
 import { ALL_FORMATS, displayUrl, isFormat, isRepoSort, repoStatusMeta, repoSubtitle, TYPE_META } from '../../lib/repositories';
 
@@ -283,9 +283,7 @@ export function RepositoriesPage() {
       className: 'meta nowrap',
       cell: (r) =>
         r.last_activity_at ? (
-          <time dateTime={r.last_activity_at} title={formatUtc(r.last_activity_at)}>
-            {relativeTime(r.last_activity_at, now)}
-          </time>
+          <Time value={r.last_activity_at} mode="relative" now={now} />
         ) : (
           'No activity yet'
         ),

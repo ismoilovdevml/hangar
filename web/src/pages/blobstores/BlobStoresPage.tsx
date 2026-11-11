@@ -9,7 +9,7 @@ import { Meter } from '../../components/Meter';
 import { PageHeader } from '../../components/PageHeader';
 import { Pill } from '../../components/Pill';
 import { dedupShare, humanDays, quotaRatio, storeBadge, storeProblem } from '../../lib/blobStores';
-import { formatBytes, formatCompact, splitBytes } from '../../lib/format';
+import { formatBytes, formatCompact, formatShare, splitBytes } from '../../lib/format';
 import { BlobStoreCreate } from './BlobStoreCreate';
 import { RunCompaction } from './RunCompaction';
 import './blobstores.css';
@@ -78,6 +78,9 @@ function Totals({ data }: { data: BlobStoreList | undefined }) {
   const share = dedupShare(t.used_bytes, t.dedup_saved_bytes);
   const n = data.items.length;
   const capacity = t.capacity_bytes;
+  // Older servers do not say how much history the average covers (it was always 7 days).
+  const windowDays = t.growth_window_days;
+  const young = windowDays !== undefined && windowDays < 1;
   return (
     <section className="kpis" aria-labelledby="storage-totals-title">
       {/* The cards' h3 labels need an h2 above them. */}
@@ -99,14 +102,24 @@ function Totals({ data }: { data: BlobStoreList | undefined }) {
         label="Saved by deduplication"
         value={saved.value}
         unit={saved.unit}
-        note={share !== null ? `${Math.round(share * 100)}% of the raw size` : 'No duplicate content yet'}
+        note={share !== null ? `${formatShare(share)} of the raw size` : 'No duplicate content yet'}
       />
-      <KpiCard
-        label="Growth"
-        value={`+${growth.value}`}
-        unit={`${growth.unit} / day`}
-        note={t.days_to_full != null ? `Quota reached in ${humanDays(t.days_to_full)}` : capacity ? 'Not growing toward the quota' : 'Set quotas to see time to full'}
-      />
+      {young ? (
+        <KpiCard label="Growth" value="—" note="Not enough history yet: less than a day of data" />
+      ) : (
+        <KpiCard
+          label="Growth"
+          value={`+${growth.value}`}
+          unit={`${growth.unit} / day`}
+          note={[
+            windowDays !== undefined && `${Math.max(1, Math.round(windowDays))}-day average`,
+            t.days_to_full != null ? `quota reached in ${humanDays(t.days_to_full)}` : capacity ? 'not growing toward the quota' : 'set quotas to see time to full',
+          ]
+            .filter(Boolean)
+            .join(' · ')
+            .replace(/^./, (c) => c.toUpperCase())}
+        />
+      )}
       <KpiCard
         label="Reclaimable now"
         value={reclaim.value}

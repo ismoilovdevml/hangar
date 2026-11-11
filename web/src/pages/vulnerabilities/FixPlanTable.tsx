@@ -4,6 +4,7 @@ import { MarkdownInline } from '../../components/Markdown';
 import { Pill } from '../../components/Pill';
 import { TableScroll } from '../../components/TableScroll';
 import { plural } from '../../lib/overview';
+import { formatDate } from '../../lib/format';
 import {
   advisoryIds,
   findingsSummary,
@@ -197,8 +198,8 @@ export function FixPlanTable({ items, tab, windowDays, inUseDays, expanded, onTo
   );
 }
 
-const dayFmt = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-const shortDay = (iso: string) => dayFmt.format(new Date(iso));
+/** "11 Nov", in the browser's zone. */
+const shortDay = (iso: string) => formatDate(iso).replace(/ \d{4}$/, '');
 
 function PulledCell({ p, inUseDays }: { p: PackagePlan; inUseDays: number }) {
   if (p.pulls > 0) {

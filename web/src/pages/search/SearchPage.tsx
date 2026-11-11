@@ -9,7 +9,8 @@ import { FormatBadge } from '../../components/FormatBadge';
 import { FormatIcon } from '../../components/FormatIcon';
 import { Pill } from '../../components/Pill';
 import { Select } from '../../components/Select';
-import { FORMAT_META, formatCompact, relativeTime } from '../../lib/format';
+import { FORMAT_META, formatCompact } from '../../lib/format';
+import { Time } from '../../components/Time';
 import { hasVersion, hitName, securityPill } from '../../lib/packages';
 import { isFormat } from '../../lib/repositories';
 import { PHONE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
@@ -225,7 +226,12 @@ function ResultList({
                   {hasVersion(h.version) && ` · ${h.version} newest`}
                   {` · ${h.versions} ${h.versions === 1 ? 'version' : 'versions'}`}
                   {` · ${formatCompact(h.downloads)} ${h.downloads === 1 ? 'download' : 'downloads'}`}
-                  {h.published_at && ` · ${relativeTime(h.published_at, now).toLowerCase()}`}
+                  {h.published_at && (
+                    <>
+                      {' · '}
+                      <Time value={h.published_at} mode="relative" now={now} inline />
+                    </>
+                  )}
                 </span>
               </span>
               <Pill tone={pill.tone} className="result__pill">

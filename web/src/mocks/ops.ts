@@ -27,8 +27,8 @@ import * as data from './data';
 const api = (path: string) => `*/api/v1${path}`;
 type Guard = (request: Request, mutating?: boolean) => Response | null;
 
-const GB = 1e9;
-const MB = 1e6;
+const GB = 1024 ** 3;
+const MB = 1024 ** 2;
 const DAY = 86_400_000;
 
 const error = (status: number, body: ApiError) => HttpResponse.json(body, { status });

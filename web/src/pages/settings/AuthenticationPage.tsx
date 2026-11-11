@@ -4,7 +4,7 @@ import { ErrorNote } from '../../components/ErrorNote';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { Segmented } from '../../components/Segmented';
-import { formatUtc } from '../../lib/tasks';
+import { formatTime } from '../../lib/format';
 import { ldapForm, oidcForm, type LdapForm, type OidcForm } from './model';
 import {
   PRESET_CARDS,
@@ -189,7 +189,7 @@ function ProviderChips({ oidc, ldap }: { oidc?: OIDCSettings; ldap?: LDAPSetting
   return (
     <ul className="auth-chips" aria-label="Sign-in methods" aria-busy={q.isPending || undefined}>
       {on.map((p) => (
-        <li key={p.name} className="auth-chip glass" title={p.last_sync_at ? `Last request ${formatUtc(p.last_sync_at)}` : undefined}>
+        <li key={p.name} className="auth-chip glass" title={p.last_sync_at ? `Last request ${formatTime(p.last_sync_at)}` : undefined}>
           <span className={`status__dot dot-${p.state === 'ok' ? 'ok' : 'bad'}`} aria-hidden="true" />
           {providerLabel(p, oidc, ldap)}
           {p.state === 'ok' ? <span className="visually-hidden"> · {STATE_TEXT.ok}</span> : <span className="auth-chip__state"> · {STATE_TEXT[p.state]}</span>}
@@ -214,7 +214,7 @@ function ProviderProblems({ oidc, ldap }: { oidc?: OIDCSettings; ldap?: LDAPSett
       {failing.map((p) => (
         <p key={p.name}>
           <strong>{providerLabel(p, oidc, ldap)} is failing:</strong> {p.error ?? 'unknown error'}
-          {p.last_sync_at && <span className="meta"> · last request {formatUtc(p.last_sync_at)}</span>}
+          {p.last_sync_at && <span className="meta"> · last request {formatTime(p.last_sync_at)}</span>}
         </p>
       ))}
     </div>

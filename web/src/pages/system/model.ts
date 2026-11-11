@@ -3,7 +3,7 @@
  * (GET /system/nodes, /system/health and /system/logs in api/openapi.yaml).
  */
 import type { components } from '../../api/schema';
-import type { Tone } from '../../lib/format';
+import { formatClock, formatShortTime, type Tone } from '../../lib/format';
 
 type Schemas = components['schemas'];
 
@@ -76,16 +76,8 @@ export function summarize(nodes: SystemNode[]): ClusterSummary {
 
 export { versionText } from '../../lib/format';
 
-const pad = (n: number) => String(n).padStart(2, '0');
-const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** UTC time of day for times today ("17:37"), with the date otherwise ("3 Nov 17:37"). */
-export function shortTime(iso: string, now: Date): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const clockText = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
-  return d.toISOString().slice(0, 10) === now.toISOString().slice(0, 10) ? clockText : `${d.getUTCDate()} ${MONTH[d.getUTCMonth()]} ${clockText}`;
-}
+/** Local time of day for times today ("17:37"), with the day otherwise ("3 Nov 17:37"). */
+export const shortTime = (iso: string, now: Date): string => formatShortTime(iso, now);
 
 /** "08:52–10:32", or with dates when the period is not within today. */
 export function period(from: string, to: string, now: Date): string {
@@ -165,11 +157,9 @@ export function appendRecords(prev: LogRecord[], next: LogRecord[], max = MAX_CL
   return all.length > max ? all.slice(all.length - max) : all;
 }
 
-/** "13:48:39.509" in UTC. */
+/** "13:48:39.509" in the browser's zone. */
 export function clock(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toISOString().slice(11, 23);
+  return formatClock(iso, { ms: true });
 }
 
 /** Attributes shown inline after the message, in this order first. */

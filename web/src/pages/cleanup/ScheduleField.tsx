@@ -1,7 +1,7 @@
 import { useId } from 'react';
 import { Select } from '../../components/Select';
 import { DAY_NAMES, describeCron, nextRuns, parseCron, scheduleToCron, type ScheduleDraft, type ScheduleMode } from '../../lib/cron';
-import { formatUtc } from '../../lib/tasks';
+import { formatTime } from '../../lib/format';
 import { useNow } from '../../lib/useNow';
 
 const MODES: { id: ScheduleMode; label: string }[] = [
@@ -110,7 +110,7 @@ export function ScheduleField({ value, onChange, error, disabled }: ScheduleFiel
         ) : (
           <>
             {human} · <code className="inline-code">{cron}</code>
-            {next && <> · next {formatUtc(next.toISOString())}</>}
+            {next && <> · next {formatTime(next)}</>}
           </>
         )}
       </p>

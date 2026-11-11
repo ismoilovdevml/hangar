@@ -20,8 +20,8 @@ import type {
 } from '../api/types';
 import type { SystemStatusDetail } from '../api/opsTypes';
 
-const TB = 1e12;
-const GB = 1e9;
+const TB = 1024 ** 4;
+const GB = 1024 ** 3;
 
 export const session: Session = {
   user: {
@@ -384,6 +384,7 @@ export function blobStoreList(): BlobStoreList {
       capacity_bytes: null,
       dedup_saved_bytes: blobStores.reduce((n, b) => n + (b.dedup_saved_bytes ?? 0), 0),
       growth_bytes_per_day: 38 * GB,
+      growth_window_days: 7,
       days_to_full: null,
       reclaimable_bytes: 48 * GB,
     },

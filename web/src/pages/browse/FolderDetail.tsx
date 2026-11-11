@@ -7,7 +7,8 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
-import { formatBytes, relativeTime } from '../../lib/format';
+import { formatBytes } from '../../lib/format';
+import { Time } from '../../components/Time';
 import { useNow } from '../../lib/useNow';
 
 const KIND_LABEL: Record<BrowseEntry['kind'], string> = { folder: 'Folder', package: 'Package', version: 'Version', asset: 'File' };
@@ -62,7 +63,7 @@ export function FolderDetail({ repo, path, onOpen, onUp }: FolderDetailProps) {
       header: 'Updated',
       align: 'right',
       className: 'col-last meta',
-      cell: (e) => (e.asset ? relativeTime(e.asset.updated_at, now) : ''),
+      cell: (e) => (e.asset ? <Time value={e.asset.updated_at} mode="relative" now={now} /> : ''),
     },
   ];
 

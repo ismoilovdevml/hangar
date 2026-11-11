@@ -28,7 +28,7 @@ describe('repositories list', () => {
     expect(within(row).getByText('Proxy')).toBeInTheDocument();
     expect(within(row).getByText('registry.npmjs.org')).toBeInTheDocument();
     expect(within(row).getByText('Slow upstream')).toBeInTheDocument();
-    expect(within(row).getByText('435 GB')).toBeInTheDocument();
+    expect(within(row).getByText('435 GiB')).toBeInTheDocument();
     expect(within(row).getByRole('button', { name: 'Copy URL of npmjs-proxy' })).toBeInTheDocument();
     expect(within(within(table).getByText('ghcr-proxy').closest('tr')!).getByText('Authentication failed (401)')).toHaveAttribute(
       'title',

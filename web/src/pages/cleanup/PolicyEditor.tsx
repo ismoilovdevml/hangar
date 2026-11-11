@@ -31,8 +31,8 @@ import {
 } from '../../lib/cleanup';
 import { scheduleToCron, describeCron } from '../../lib/cron';
 import { formatBytes } from '../../lib/format';
+import { Time } from '../../components/Time';
 import { ALL_FORMATS, isFormat } from '../../lib/repositories';
-import { formatUtc } from '../../lib/tasks';
 import { RunHistory } from './RunHistory';
 import { ScheduleField } from './ScheduleField';
 
@@ -193,13 +193,13 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
       ),
     },
     { key: 'repo', priority: 2, header: 'Repository', className: 'muted', cell: (c) => c.repository },
-    { key: 'published', priority: 3, header: 'Published', className: 'muted nowrap', cell: (c) => formatUtc(c.published_at).replace(/, \d\d:\d\d UTC$/, '') },
+    { key: 'published', priority: 3, header: 'Published', className: 'muted nowrap', cell: (c) => <Time value={c.published_at} mode="date" /> },
     {
       key: 'download',
       priority: 3,
       header: 'Last download',
       className: 'muted nowrap',
-      cell: (c) => (c.last_downloaded_at ? formatUtc(c.last_downloaded_at).replace(/, \d\d:\d\d UTC$/, '') : 'Never'),
+      cell: (c) => (c.last_downloaded_at ? <Time value={c.last_downloaded_at} mode="date" /> : 'Never'),
     },
     {
       key: 'size',

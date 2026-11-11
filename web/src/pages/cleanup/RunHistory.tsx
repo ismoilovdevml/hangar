@@ -5,8 +5,9 @@ import { ErrorNote } from '../../components/ErrorNote';
 import { NotAvailable } from '../../components/NotAvailable';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
-import { formatBytes } from '../../lib/format';
-import { formatDuration, formatUtc, RUN_STATUS, runDuration } from '../../lib/tasks';
+import { formatBytes, formatDuration } from '../../lib/format';
+import { RUN_STATUS, runDuration } from '../../lib/tasks';
+import { Time } from '../../components/Time';
 import { useNow } from '../../lib/useNow';
 
 /** The latest runs of one policy, newest first. */
@@ -15,7 +16,7 @@ export function RunHistory({ policy }: { policy: string }) {
   const now = useNow(10_000);
 
   const columns: Column<CleanupRun>[] = [
-    { key: 'started', header: 'Started', className: 'col-first nowrap', cell: (r) => formatUtc(r.started_at ?? r.created_at) },
+    { key: 'started', header: 'Started', className: 'col-first nowrap', cell: (r) => <Time value={r.started_at ?? r.created_at} /> },
     { key: 'status', header: 'Status', cell: (r) => <Pill tone={RUN_STATUS[r.status].pill}>{RUN_STATUS[r.status].label}</Pill> },
     {
       key: 'deleted',

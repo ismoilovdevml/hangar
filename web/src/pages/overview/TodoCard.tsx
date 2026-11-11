@@ -55,6 +55,12 @@ export function TodoAnchor({ link, className, children }: { link: TodoLink; clas
           {children}
         </Link>
       );
+    case 'blob-store':
+      return (
+        <Link to="/blob-stores/$name" params={{ name: link.name }} className={className}>
+          {children}
+        </Link>
+      );
     case 'repository':
       return (
         <Link to="/repositories/$name/settings" params={{ name: link.name }} className={className}>

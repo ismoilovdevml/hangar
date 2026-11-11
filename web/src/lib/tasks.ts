@@ -1,5 +1,5 @@
 import type { Task, TaskList, TaskProgress, TaskRun, TaskRunStatus, TaskType } from '../api/opsTypes';
-import type { Tone } from './format';
+import { formatDuration, type Tone } from './format';
 
 export const TASK_TYPES: Record<TaskType, { label: string; hint: string }> = {
   cleanup: { label: 'Cleanup', hint: 'Applies a cleanup policy' },
@@ -109,18 +109,6 @@ export function applyTaskFinished(list: TaskList, run: TaskRun): TaskList {
   };
 }
 
-/* ---------------------------------------------------------------- time */
-
-/** 75_000 → "1 min 15 s", 4_000 → "4 s", 3_900_000 → "1 h 5 min". */
-export function formatDuration(ms: number): string {
-  const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 60) return `${s} s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return s % 60 && m < 10 ? `${m} min ${s % 60} s` : `${m} min`;
-  const h = Math.floor(m / 60);
-  return m % 60 ? `${h} h ${m % 60} min` : `${h} h`;
-}
-
 export function runDuration(r: Pick<TaskRun, 'started_at' | 'finished_at'>, now: Date): number | null {
   if (!r.started_at) return null;
   const end = r.finished_at ? new Date(r.finished_at) : now;
@@ -142,35 +130,6 @@ export function remainingText(ms: number | null): string | null {
   if (ms === null) return null;
   if (ms < 60_000) return 'less than a minute left';
   return `about ${formatDuration(Math.round(ms / 60_000) * 60_000)} left`;
-}
-
-const DAY = 86_400_000;
-const utcDay = (d: Date) => Math.floor(d.getTime() / DAY);
-const pad = (n: number) => String(n).padStart(2, '0');
-const utcClock = (d: Date) => `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
-const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** UTC wall time in a compact form: "14 Mar 2026, 09:52 UTC". */
-export function formatUtc(iso: string, opts: { seconds?: boolean } = {}): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const time = opts.seconds ? `${utcClock(d)}:${pad(d.getUTCSeconds())}` : utcClock(d);
-  return `${d.getUTCDate()} ${MONTH[d.getUTCMonth()]} ${d.getUTCFullYear()}, ${time} UTC`;
-}
-
-/** When a scheduled run happens, relative to now: "In 9 min", "Today 02:00", "Sun 03:00", "12 Nov 03:00" (UTC). */
-export function formatNextRun(iso: string, now: Date): string {
-  const d = new Date(iso);
-  const diff = d.getTime() - now.getTime();
-  if (Number.isNaN(diff)) return iso;
-  if (diff <= 60_000) return 'Due now';
-  if (diff < 60 * 60_000) return `In ${Math.round(diff / 60_000)} min`;
-  const days = utcDay(d) - utcDay(now);
-  if (days === 0) return `Today ${utcClock(d)}`;
-  if (days === 1) return `Tomorrow ${utcClock(d)}`;
-  if (days < 7) return `${WEEKDAY[d.getUTCDay()]} ${utcClock(d)}`;
-  return `${d.getUTCDate()} ${MONTH[d.getUTCMonth()]} ${utcClock(d)}`;
 }
 
 /** The cleanup policy a task belongs to ("cleanup/<policy>"); null for other tasks. */

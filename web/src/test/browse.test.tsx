@@ -202,7 +202,7 @@ describe('package browser: package', () => {
     await within(table).findByRole('link', { name: '2.13.1' });
     expect(within(table).getAllByRole('row')).toHaveLength(4);
     expect(within(table).getAllByText('Newest')).toHaveLength(1);
-    expect(within(table).getByText('186 MB')).toBeInTheDocument();
+    expect(within(table).getByText('177 MiB')).toBeInTheDocument();
     await user.click(within(table).getByRole('link', { name: '2.13.1' }));
     await waitFor(() => expect(search(history).get('version')).toBe('2.13.1'));
     expect(await screen.findByRole('region', { name: 'payments-api 2.13.1' })).toBeInTheDocument();

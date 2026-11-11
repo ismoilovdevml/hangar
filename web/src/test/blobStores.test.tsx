@@ -16,14 +16,14 @@ describe('blob stores', () => {
     renderApp('/blob-stores');
     await screen.findByRole('article', { name: 's3-eu-primary' });
     const totals = screen.getByRole('region', { name: 'Storage totals' });
-    expect(within(totals).getByRole('article', { name: 'Saved by deduplication' })).toHaveTextContent('3.51TB');
-    expect(within(totals).getByRole('article', { name: 'Growth' })).toHaveTextContent('+38GB / day');
+    expect(within(totals).getByRole('article', { name: 'Saved by deduplication' })).toHaveTextContent('3.51TiB');
+    expect(within(totals).getByRole('article', { name: 'Growth' })).toHaveTextContent('+38GiB / day7-day average');
     expect(within(totals).getByRole('article', { name: 'Reclaimable now' })).toHaveTextContent('Freed by the next blob compaction');
 
     const stores = screen.getByRole('region', { name: 'Blob stores' });
     const primary = within(stores).getByRole('article', { name: 's3-eu-primary' });
     expect(within(primary).getByText('Healthy')).toBeInTheDocument();
-    expect(within(primary).getByRole('meter', { name: 's3-eu-primary usage' })).toHaveAttribute('aria-valuetext', '4.62 TB of 12 TB');
+    expect(within(primary).getByRole('meter', { name: 's3-eu-primary usage' })).toHaveAttribute('aria-valuetext', '4.62 TiB of 12 TiB');
     expect(within(primary).getByText('SSE-S3')).toBeInTheDocument();
     const local = within(stores).getByRole('article', { name: 'fs-local' });
     expect(within(local).getByText('Not checked yet')).toBeInTheDocument();

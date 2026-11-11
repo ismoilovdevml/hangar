@@ -1,5 +1,6 @@
 import { keepPreviousData, queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, resetCsrfToken } from './client';
+import { tzOffsetMinutes } from '../lib/format';
 import type {
   AuthProviders,
   BlobStoreList,
@@ -119,7 +120,8 @@ export function useOverview(range: OverviewRange) {
   return useQuery({
     queryKey: queryKeys.overview(range),
     queryFn: ({ signal }) =>
-      apiFetch<OverviewMetrics>('/metrics/overview', { query: { range }, signal }),
+      // Days start at the viewer's midnight, as the times on the card are local.
+      apiFetch<OverviewMetrics>('/metrics/overview', { query: { range, tz_offset: tzOffsetMinutes() || undefined }, signal }),
     refetchInterval: 60_000,
     placeholderData: keepPreviousData,
   });
@@ -142,7 +144,7 @@ export function useRecentComponents() {
 export function useUpstreamHealth(range: OverviewRange) {
   return useQuery({
     queryKey: queryKeys.upstreamHealth(range),
-    queryFn: ({ signal }) => apiFetch<Page<UpstreamHealth>>('/upstreams/health', { query: { range }, signal }),
+    queryFn: ({ signal }) => apiFetch<Page<UpstreamHealth>>('/upstreams/health', { query: { range, tz_offset: tzOffsetMinutes() || undefined }, signal }),
     refetchInterval: 30_000,
     placeholderData: keepPreviousData,
   });

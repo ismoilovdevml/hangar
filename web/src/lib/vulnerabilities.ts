@@ -5,7 +5,7 @@
 import { ApiRequestError } from '../api/client';
 import type { FixPlanQuery } from '../api/findings';
 import type { Finding, PackagePlan, ScanningStatus, Severity, UpgradeLine } from '../api/types';
-import type { Tone } from './format';
+import { formatDate, type Tone } from './format';
 
 export const SEVERITIES = ['critical', 'high', 'medium', 'low', 'unknown'] as const satisfies readonly Severity[];
 
@@ -105,10 +105,8 @@ export function findingsSummary(p: Pick<PackagePlan, 'findings' | 'max_severity'
 /** Package and version as the advisory names them: `Newtonsoft.Json@12.0.1`. */
 export const packageAt = (f: Pick<Finding, 'package' | 'installed'>) => (f.installed ? `${f.package}@${f.installed}` : f.package);
 
-const dayFmt = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-
-/** "4 Dec 2026" (UTC). */
-export const shortDate = (iso: string) => dayFmt.format(new Date(iso));
+/** "4 Dec 2026", in the browser's zone. */
+export const shortDate = (iso: string) => formatDate(iso);
 
 /** The status of a finding in words, with the waiver expiry when it matters. */
 export function findingStatus(f: Pick<Finding, 'status' | 'waiver_until' | 'quarantined'>, now: Date = new Date()): { label: string; tone: Tone } {
@@ -144,10 +142,11 @@ export function dateInputValue(d: Date): string {
 
 export const MAX_WAIVER_DAYS = 365;
 
-/** The waiver expiry for a date input: the end of that day in UTC. */
+/** The waiver expiry for a date input: the end of that day where the user is. */
 export function waiverUntil(dateValue: string): Date | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return null;
-  const d = new Date(`${dateValue}T23:59:59Z`);
+  // Without an offset the date-time is local time.
+  const d = new Date(`${dateValue}T23:59:59`);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 

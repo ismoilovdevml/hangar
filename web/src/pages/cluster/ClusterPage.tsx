@@ -7,9 +7,9 @@ import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
 import { DOCS } from '../../lib/docs';
-import { relativeTime, versionText } from '../../lib/format';
+import { versionText } from '../../lib/format';
+import { Time } from '../../components/Time';
 import { formatUptime } from '../../lib/system';
-import { formatUtc } from '../../lib/tasks';
 import { useNow } from '../../lib/useNow';
 import './cluster.css';
 
@@ -45,9 +45,7 @@ function NodeCard({ n, now }: { n: ClusterNode; now: Date }) {
         <div>
           <dt>Last heartbeat</dt>
           <dd>
-            <time dateTime={n.last_heartbeat} title={formatUtc(n.last_heartbeat, { seconds: true })}>
-              {relativeTime(n.last_heartbeat, now)}
-            </time>
+            <Time value={n.last_heartbeat} mode="relative" now={now} />
           </dd>
         </div>
       </dl>

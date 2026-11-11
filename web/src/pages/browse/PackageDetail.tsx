@@ -38,6 +38,7 @@ import { useNow } from '../../lib/useNow';
 import { imageWhere, packageAt, scannable } from '../../lib/vulnerabilities';
 import { Fact } from './AssetDetail';
 import { dateTime, deleteMessage, shortDigest } from './detailUtil';
+import { Time } from '../../components/Time';
 import { FormatIcon } from '../../components/FormatIcon';
 import { Markdown, MarkdownInline } from '../../components/Markdown';
 import { safeHref, safeImageSrc } from '../../components/urlPolicy';
@@ -802,7 +803,7 @@ function FilesTable({ c, now }: { c: ComponentDetail; now: Date }) {
       header: 'Last downloaded',
       align: 'right',
       className: 'col-last meta',
-      cell: (a) => (a.last_downloaded_at ? relativeTime(a.last_downloaded_at, now) : 'Never'),
+      cell: (a) => (a.last_downloaded_at ? <Time value={a.last_downloaded_at} mode="relative" now={now} /> : 'Never'),
     },
   ];
   if (q.isError) return <ErrorNote what="files" error={q.error} onRetry={() => void q.refetch()} />;
@@ -849,7 +850,7 @@ function RepositoriesTab({ c, now }: { c: ComponentDetail; now: Date }) {
       priority: 3,
       header: 'Published or cached',
       className: 'meta',
-      cell: (h) => <time dateTime={h.published_at}>{relativeTime(h.published_at, now)}</time>,
+      cell: (h) => <Time value={h.published_at} mode="relative" now={now} />,
     },
     { key: 'dl', priority: 2, header: 'Downloads', align: 'right', className: 'col-last muted', cell: (h) => formatCompact(h.download_count ?? 0) },
   ];

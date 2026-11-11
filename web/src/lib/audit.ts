@@ -108,18 +108,21 @@ export function auditExportUrl(s: AuditSearch, format: ExportFormat, now: Date):
   return buildUrl('/audit/export', { format, ...q });
 }
 
-/** "2026-11-04T09:30" (datetime-local, read as UTC) → ISO; empty → undefined. */
-export function utcInputToIso(v: string): string | undefined {
+/** "2026-11-04T09:30" (datetime-local, the browser's time zone) → ISO; empty → undefined. */
+export function localInputToIso(v: string): string | undefined {
   if (!v) return undefined;
-  const d = new Date(`${v}:00Z`);
+  // A date-time without an offset is local time.
+  const d = new Date(v);
   return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
 }
 
-/** ISO → "2026-11-04T09:30" for a datetime-local input showing UTC. */
-export function isoToUtcInput(iso: string | undefined): string {
+/** ISO → "2026-11-04T09:30" for a datetime-local input in the browser's time zone. */
+export function isoToLocalInput(iso: string | undefined): string {
   if (!iso) return '';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 16);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 /** Flattens event details for display: nested keys become dotted paths, arrays are joined. */
