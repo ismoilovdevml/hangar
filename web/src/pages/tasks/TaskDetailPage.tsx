@@ -25,6 +25,7 @@ import {
 } from '../../lib/tasks';
 import { useNow } from '../../lib/useNow';
 import { TaskActions } from './TaskActions';
+import { TaskEditForm, TaskManageActions } from './TaskManage';
 
 const route = getRouteApi('/app/tasks/$taskId');
 
@@ -283,6 +284,7 @@ export function TaskDetailPage() {
   const canRun = useCanSystem('tasks', 'write');
   const now = useNow(30_000);
   const [message, setMessage] = useState('');
+  const [editing, setEditing] = useState(false);
 
   const items = runs.data?.items ?? [];
   const selected = items.find((r) => r.id === runId) ?? (runId ? undefined : items[0]);
@@ -374,13 +376,32 @@ export function TaskDetailPage() {
         }
         title={t?.name ?? 'Loading task…'}
         description={t?.description}
-        actions={canRun && t ? <TaskActions task={t} active={running} size="md" onMessage={setMessage} /> : undefined}
+        actions={
+          canRun && t ? (
+            <>
+              <TaskActions task={t} active={running} size="md" onMessage={setMessage} />
+              <TaskManageActions task={t} editing={editing} onEdit={() => setEditing(true)} />
+            </>
+          ) : undefined
+        }
       />
       <p className="visually-hidden" role="status">
         {message}
       </p>
 
-      {t && (
+      {t && editing && (
+        <Panel aria-label="Task settings">
+          <TaskEditForm
+            task={t}
+            onCancel={() => setEditing(false)}
+            onSaved={() => {
+              setEditing(false);
+              setMessage(`${t.name} saved.`);
+            }}
+          />
+        </Panel>
+      )}
+      {t && !editing && (
         <Panel aria-label="Task settings">
           <dl className="facts">
             <div>

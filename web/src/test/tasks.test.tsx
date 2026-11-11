@@ -129,6 +129,49 @@ describe('task detail', () => {
     await waitFor(() => expect(search(history).get('cursor')).toBeNull());
   });
 
+  it('edits the schedule and turns a built-in task off, sending its config back', async () => {
+    const puts: unknown[] = [];
+    server.events.on('request:start', async ({ request }) => {
+      if (request.method === 'PUT') puts.push(await request.clone().json());
+    });
+    const user = userEvent.setup();
+    renderApp('/tasks/t_docker_gc');
+    await screen.findByRole('heading', { level: 1, name: 'Docker garbage collection' });
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    const form = screen.getByRole('form', { name: 'Edit Docker garbage collection' });
+    const save = within(form).getByRole('button', { name: 'Save' });
+    expect(save).toBeDisabled();
+    await user.click(within(form).getByRole('checkbox', { name: /Enabled/ }));
+    await user.click(save);
+    await waitFor(() => expect(screen.queryByRole('form', { name: 'Edit Docker garbage collection' })).not.toBeInTheDocument());
+    expect(screen.getByRole('region', { name: 'Task settings' })).toHaveTextContent('Disabled');
+    expect(puts.at(-1)).toMatchObject({ name: 'Docker garbage collection', type: 'docker_gc', schedule: '0 4 * * *', enabled: false, config: {} });
+    server.events.removeAllListeners();
+  });
+
+  it('deletes a task an administrator added, after typing its name', async () => {
+    const now = new Date().toISOString();
+    opsMockState.addTask({ id: 't_extra_gc', name: 'extra-gc', type: 'docker_gc', description: '', schedule: null, schedule_text: 'Manual only',
+      config: { older_than_days: 14 }, enabled: true, builtin: false, next_run_at: null, last_run: null, created_at: now, updated_at: now });
+    const user = userEvent.setup();
+    const { history } = renderApp('/tasks/t_extra_gc');
+    await screen.findByRole('heading', { level: 1, name: 'extra-gc' });
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Delete extra-gc?' });
+    await user.type(within(dialog).getByRole('textbox'), 'extra-gc');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete task' }));
+    await waitFor(() => expect(history.location.pathname).toBe('/tasks'));
+    expect(opsMockState.tasks.some((t) => t.id === 't_extra_gc')).toBe(false);
+  });
+
+  it('sends the task of a cleanup policy to its policy', async () => {
+    renderApp('/tasks/t_cleanup_docker');
+    await screen.findByRole('heading', { level: 1, name: 'Cleanup · docker-lean' });
+    expect(screen.getByRole('link', { name: 'Edit policy' })).toHaveAttribute('href', expect.stringContaining('/cleanup?policy='));
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+  });
+
   it('says when the task does not exist', async () => {
     renderApp('/tasks/t_missing');
     expect(await screen.findByRole('heading', { level: 1, name: 'Task not found' })).toBeInTheDocument();

@@ -346,6 +346,9 @@ export const opsMockState = {
   get tasks(): readonly Task[] {
     return state.tasks;
   },
+  addTask(t: Task) {
+    state.tasks = [...state.tasks, t];
+  },
   set stepMs(ms: number) {
     state.stepMs = ms;
   },
@@ -673,6 +676,39 @@ export function opsHandlers(guard: Guard) {
       if (denied) return denied;
       const t = state.tasks.find((x) => x.id === params.id);
       return t ? HttpResponse.json(t) : error(404, { code: 'not_found', message: `task "${String(params.id)}" not found` });
+    }),
+
+    http.put(api('/tasks/:id'), async ({ request, params }) => {
+      const denied = guard(request, true);
+      if (denied) return denied;
+      const t = state.tasks.find((x) => x.id === params.id || x.name === params.id);
+      if (!t) return error(404, { code: 'not_found', message: `task "${String(params.id)}" not found` });
+      if (t.policy_id) return error(409, { code: 'managed', message: `task "${t.name}" belongs to a cleanup policy; edit the policy` });
+      const input = (await request.json()) as TaskInput;
+      if (input.name !== t.name || input.type !== t.type) return error(400, { code: 'invalid_argument', message: 'task name and type cannot be changed' });
+      if (input.schedule && !describeCron(input.schedule)) return error(400, { code: 'invalid_argument', message: `cron "${input.schedule}": invalid argument` });
+      const next: Task = {
+        ...t,
+        description: input.description ?? '',
+        schedule: input.schedule ?? null,
+        schedule_text: (input.schedule ? describeCron(input.schedule) : null) ?? 'Manual only',
+        config: input.config ?? {},
+        enabled: input.enabled ?? true,
+        updated_at: new Date().toISOString(),
+      };
+      state.tasks = state.tasks.map((x) => (x.id === t.id ? next : x));
+      return HttpResponse.json(next);
+    }),
+
+    http.delete(api('/tasks/:id'), ({ request, params }) => {
+      const denied = guard(request, true);
+      if (denied) return denied;
+      const t = state.tasks.find((x) => x.id === params.id || x.name === params.id);
+      if (!t) return error(404, { code: 'not_found', message: `task "${String(params.id)}" not found` });
+      if (t.builtin || t.policy_id) return error(409, { code: 'managed', message: `task "${t.name}" is managed by the server` });
+      if (state.active.has(t.id)) return error(409, { code: 'already_running', message: `task "${t.name}" is running` });
+      state.tasks = state.tasks.filter((x) => x.id !== t.id);
+      return new HttpResponse(null, { status: 204 });
     }),
 
     http.post(api('/tasks/:id/run'), ({ request, params }) => {

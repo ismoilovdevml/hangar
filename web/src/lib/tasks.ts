@@ -172,3 +172,12 @@ export function formatNextRun(iso: string, now: Date): string {
   if (days < 7) return `${WEEKDAY[d.getUTCDay()]} ${utcClock(d)}`;
   return `${d.getUTCDate()} ${MONTH[d.getUTCMonth()]} ${utcClock(d)}`;
 }
+
+/** The cleanup policy a task belongs to ("cleanup/<policy>"); null for other tasks. */
+export function taskPolicy(t: Pick<Task, 'type' | 'name' | 'policy_id'>): string | null {
+  if (!t.policy_id && t.type !== 'cleanup') return null;
+  return t.name.startsWith('cleanup/') ? t.name.slice('cleanup/'.length) : t.name;
+}
+
+/** Only tasks an administrator added can be deleted; built-in and policy tasks cannot. */
+export const taskDeletable = (t: Pick<Task, 'builtin' | 'policy_id' | 'type'>) => !t.builtin && !t.policy_id && t.type !== 'cleanup';
