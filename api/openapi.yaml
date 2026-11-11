@@ -968,6 +968,16 @@ paths:
           in: query
           description: Folder in the browse tree, e.g. "@acme/" or "com/acme/ledger-core/"; empty for the root
           schema: { type: string }
+        - name: view
+          in: query
+          description: >-
+            `files` (default): every folder and file. `packages`: what
+            clients consume; folders down to packages, without files,
+            without folders that hold no package, and without the folders a
+            package keeps its versions and files in (nested packages, such
+            as a Go module's /v2, stay). apt and rpm list one package entry
+            per name at the root. Raw repositories show their files.
+          schema: { type: string, enum: [files, packages], default: files }
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
       responses:

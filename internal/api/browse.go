@@ -163,10 +163,41 @@ func folderKind(format, tree string, c *catalog.BrowseComponent) string {
 	return nodeFolder
 }
 
+// insidePackage reports whether the browse folder tree lies below the
+// package folder of c (its version folders, @v, manifests, blobs): storage
+// of that package, not a package of its own.
+func insidePackage(format, tree string, c *catalog.BrowseComponent) bool {
+	pkg, _ := componentFolders(format, c)
+	if pkg == "" {
+		return false
+	}
+	norm := tree
+	if format == "pypi" {
+		norm = pypiSeparators.ReplaceAllString(norm, "-")
+	}
+	norm, pkg = strings.ToLower(norm), strings.ToLower(pkg)
+	return len(norm) > len(pkg) && strings.HasPrefix(norm, pkg)
+}
+
 // browseFormatsWithPackages are the formats whose folders can be packages
 // or versions; raw folders are plain directories and are not annotated.
 var browseFormatsWithPackages = map[string]bool{"npm": true, "maven": true, "nuget": true, "pypi": true, "docker": true,
 	"helm": true, "go": true, "cargo": true}
+
+// browseFormatsByName are the formats whose storage layout has no package
+// folders (pool/ and repodata/ paths): their packages view lists package
+// names at the root.
+var browseFormatsByName = map[string]bool{"apt": true, "rpm": true}
+
+// Browse views (the view query parameter).
+const (
+	// viewFiles is the storage tree: every folder and file.
+	viewFiles = "files"
+	// viewPackages is what clients consume: folders down to packages, without
+	// files, and without folders that hold no package. Raw repositories,
+	// whose files are their content, show their files.
+	viewPackages = "packages"
+)
 
 type browseCursor struct {
 	K string `json:"k"`
@@ -277,6 +308,16 @@ func (a *API) browseRepository(w http.ResponseWriter, r *http.Request) {
 		a.writeErr(w, r, err)
 		return
 	}
+	view := q.Get("view")
+	switch view {
+	case "":
+		view = viewFiles
+	case viewFiles, viewPackages:
+	default:
+		a.writeErr(w, r, fmt.Errorf("view %q: want files or packages: %w", view, core.ErrInvalid))
+		return
+	}
+	packagesOnly := view == viewPackages && browseFormatsWithPackages[repo.Format]
 	after := ""
 	if c := q.Get("cursor"); c != "" {
 		if after, err = decodeBrowseCursor(c); err != nil {
@@ -287,6 +328,10 @@ func (a *API) browseRepository(w http.ResponseWriter, r *http.Request) {
 	sources, err := a.browseSources(ctx, repo)
 	if err != nil {
 		a.writeErr(w, r, err)
+		return
+	}
+	if view == viewPackages && browseFormatsByName[repo.Format] {
+		a.browsePackageNames(w, r, repo, sources, tree, after, limit)
 		return
 	}
 
@@ -332,6 +377,11 @@ func (a *API) browseRepository(w http.ResponseWriter, r *http.Request) {
 		out.NextCursor = &next
 	}
 	for _, m := range order {
+		// The packages view leaves out files, folders without a package below,
+		// and the folders a package keeps its own versions and files in.
+		if packagesOnly && (!m.node.Folder || m.node.Component == nil || insidePackage(repo.Format, tree+m.key, m.node.Component)) {
+			continue
+		}
 		e := browseEntryJSON{Name: m.node.Name, Path: tree + m.key, Repository: m.in[0]}
 		if repo.Type == core.RepoGroup {
 			e.Repositories = m.in
@@ -349,6 +399,56 @@ func (a *API) browseRepository(w http.ResponseWriter, r *http.Request) {
 			as := m.node.Asset
 			e.Asset = &browseAssetJSON{ID: as.ID, Path: as.Path, Kind: as.Kind, ContentType: as.ContentType, SizeBytes: as.Size,
 				CreatedAt: as.CreatedAt, UpdatedAt: as.UpdatedAt, LastDownloadedAt: as.LastDownloadedAt, DownloadCount: as.DownloadCount}
+		}
+		out.Items = append(out.Items, e)
+	}
+	WriteJSON(w, http.StatusOK, out)
+}
+
+// browsePackageNames is the packages view of formats without package
+// folders: the root lists one package entry per name (sort key name + "/"),
+// merged over the group's members like folders are; deeper paths are empty.
+func (a *API) browsePackageNames(w http.ResponseWriter, r *http.Request, repo *core.Repository, sources []*core.Repository,
+	tree, after string, limit int) {
+	out := browsePageJSON{Repository: repo.Name, Format: repo.Format, Path: tree, Items: []browseEntryJSON{}}
+	if tree != "" {
+		WriteJSON(w, http.StatusOK, out)
+		return
+	}
+	type merged struct {
+		c  catalog.BrowseComponent
+		in []string
+	}
+	byName := map[string]*merged{}
+	var order []*merged
+	for _, src := range sources {
+		comps, err := a.Catalog.PackageNames(r.Context(), src.ID, strings.TrimSuffix(after, "/"), limit+1)
+		if err != nil {
+			a.writeErr(w, r, err)
+			return
+		}
+		for _, c := range comps {
+			if m, ok := byName[c.Name]; ok {
+				m.in = append(m.in, src.Name)
+				continue
+			}
+			m := &merged{c: c, in: []string{src.Name}}
+			byName[c.Name] = m
+			order = append(order, m)
+		}
+	}
+	slices.SortFunc(order, func(x, y *merged) int { return strings.Compare(x.c.Name, y.c.Name) })
+	if len(order) > limit {
+		order = order[:limit]
+		next := encodeBrowseCursor(order[limit-1].c.Name + "/")
+		out.NextCursor = &next
+	}
+	for _, m := range order {
+		c := m.c
+		e := browseEntryJSON{Name: c.Name, Path: c.Name + "/", Kind: nodePackage, Repository: m.in[0],
+			Component: &browseComponentJSON{ID: c.ID, Namespace: c.Namespace, Name: c.Name, Version: c.Version}}
+		if repo.Type == core.RepoGroup {
+			e.Repositories = m.in
 		}
 		out.Items = append(out.Items, e)
 	}

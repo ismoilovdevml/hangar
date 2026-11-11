@@ -5929,6 +5929,8 @@ export interface operations {
             query?: {
                 /** @description Folder in the browse tree, e.g. "@acme/" or "com/acme/ledger-core/"; empty for the root */
                 path?: string;
+                /** @description `files` (default): every folder and file. `packages`: what clients consume; folders down to packages, without files, without folders that hold no package, and without the folders a package keeps its versions and files in (nested packages, such as a Go module's /v2, stay). apt and rpm list one package entry per name at the root. Raw repositories show their files. */
+                view?: "files" | "packages";
                 /** @description Opaque cursor from the previous page's `next_cursor` */
                 cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];

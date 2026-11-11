@@ -213,7 +213,7 @@ func TestBrowseWithPostgres(t *testing.T) {
 
 	check := func(what string, got browseResult, want ...string) {
 		t.Helper()
-		if s := summary(got.Items); !reflect.DeepEqual(s, want) {
+		if s := summary(got.Items); (len(s) > 0 || len(want) > 0) && !reflect.DeepEqual(s, want) {
 			t.Errorf("%s = %v, want %v", what, s, want)
 		}
 	}
@@ -284,6 +284,36 @@ func TestBrowseWithPostgres(t *testing.T) {
 	if want := []string{"f1:asset", "f2:asset", "f3:asset", "sub:folder", "zz:folder"}; !reflect.DeepEqual(all, want) {
 		t.Errorf("raw pages = %v, want %v", all, want)
 	}
+	// The packages view: folders down to packages, never files or a package's own folders.
+	pv := func(repo, path string) browseResult { return e.browse("admin", repo, path, "view", "packages") }
+	check("packages npm root", pv("npm-hosted", ""), "@acme:folder", "lodash:package")
+	check("packages npm package", pv("npm-hosted", "@acme/ui-kit/"))
+	check("packages maven artifact", pv("maven-releases", "com/acme/ledger-core/"))
+	check("packages docker image", pv("docker-hosted", "team/app/"))
+	check("packages go module", pv("go-hosted", "github.com/Acme/x/"), "v2:package")
+	check("packages nuget id", pv("nuget-hosted", "newtonsoft.json/"))
+	check("packages raw root", pv("raw-hosted", ""), "dir:folder", "readme.txt:asset")
+	check("packages group root", pv("npm-all", ""), "@acme:folder", "lodash:package", "react:package")
+	f.expect("admin", "GET", "/api/v1/repositories/raw-hosted/browse?view=tree", nil, 400)
+
+	// apt and rpm keep packages in pool/ paths: their packages view lists names.
+	deb := e.repo("apt-hosted", "apt", core.RepoHosted)
+	e.file(deb, e.s.Component(deb, "", "curl", "8.0", e.now.Add(-time.Hour), 0, "ci"), "pool/main/c/curl/curl_8.0_amd64.deb")
+	e.file(deb, e.s.Component(deb, "", "curl", "8.1", e.now, 0, "ci"), "pool/main/c/curl/curl_8.1_amd64.deb")
+	e.file(deb, e.s.Component(deb, "", "zlib", "1.3", e.now, 0, "ci"), "pool/main/z/zlib/zlib_1.3_amd64.deb")
+	debRoot := pv("apt-hosted", "")
+	check("packages apt root", debRoot, "curl:package", "zlib:package")
+	if c := debRoot.Items[0]; c.Path != "curl/" || c.Component == nil || c.Component.Version != "8.1" {
+		t.Errorf("apt curl = %+v", c)
+	}
+	check("packages apt deeper", pv("apt-hosted", "curl/"))
+	check("files apt root", e.browse("admin", "apt-hosted", ""), "pool:folder")
+	page1 := e.browse("admin", "apt-hosted", "", "view", "packages", "limit", "1")
+	if check("apt page 1", page1, "curl:package"); page1.NextCursor == nil {
+		t.Fatal("apt page 1 has no cursor")
+	}
+	check("apt page 2", e.browse("admin", "apt-hosted", "", "view", "packages", "limit", "1", "cursor", *page1.NextCursor), "zlib:package")
+
 	f.expect("admin", "GET", "/api/v1/repositories/raw-hosted/browse?cursor=bogus", nil, 400)
 	f.expect("admin", "GET", "/api/v1/repositories/raw-hosted/browse?path=a//b", nil, 400)
 	f.expect("admin", "GET", "/api/v1/repositories/nope/browse", nil, 404)

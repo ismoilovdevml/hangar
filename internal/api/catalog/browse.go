@@ -315,6 +315,32 @@ func (c *Catalog) ComponentSizes(ctx context.Context, ids []string) (map[string]
 	return out, rows.Err()
 }
 
+// PackageNames returns, in byte order of the name, one component per
+// package name of repository repoID (namespace ""): its newest version.
+// Names sort after `after`; at most limit are returned. It lists the
+// packages of formats whose storage layout has no package folders (apt, rpm).
+func (c *Catalog) PackageNames(ctx context.Context, repoID, after string, limit int) ([]BrowseComponent, error) {
+	if !ValidID(repoID) || limit <= 0 {
+		return []BrowseComponent{}, nil
+	}
+	rows, err := c.pool.Query(ctx, `
+		SELECT DISTINCT ON (name COLLATE "C") id::text, namespace, name, version FROM components
+		WHERE repo_id = $1 AND namespace = '' AND name COLLATE "C" > $2
+		ORDER BY name COLLATE "C", created_at DESC, id DESC LIMIT $3`, repoID, after, limit)
+	if err != nil {
+		return nil, fmt.Errorf("package names: %w", err)
+	}
+	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (BrowseComponent, error) {
+		var bc BrowseComponent
+		err := r.Scan(&bc.ID, &bc.Namespace, &bc.Name, &bc.Version)
+		return bc, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("package names: %w", err)
+	}
+	return out, nil
+}
+
 // prefixUpperBound returns the smallest string greater than every string
 // that starts with p, in byte (and so code point) order: p with its last
 // code point incremented. ok is false when there is none (p is empty or
