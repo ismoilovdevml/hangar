@@ -20,6 +20,7 @@ window.addEventListener('vite:preloadError', (event) => {
 
 async function enableMocks() {
   if (import.meta.env.VITE_API_MOCKS !== 'true') return;
+  if (import.meta.env.VITE_DEMO === 'true') (await import('./demo/boot')).openHashLink();
   const { startMockWorker } = await import('./mocks/browser');
   await startMockWorker();
 }

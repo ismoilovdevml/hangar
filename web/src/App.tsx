@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { RouterProvider, useRouterState, type RouterHistory } from '@tanstack/react-router';
 import { setPasswordChangeHandler, setUnauthorizedHandler } from './api/client';
@@ -7,6 +7,9 @@ import type { Session } from './api/types';
 import { requestReauth } from './lib/reauth';
 import { createQueryClient } from './lib/queryClient';
 import { createAppRouter } from './router';
+
+/** Only the demo build (`npm run build:demo`) has the note; the product bundle drops it. */
+const DemoNote = import.meta.env.VITE_DEMO === 'true' ? lazy(() => import('./demo/DemoNote')) : null;
 
 function DocumentTitle() {
   const title = useRouterState({
@@ -61,6 +64,11 @@ export function App({ queryClient, history }: { queryClient?: QueryClient; histo
         <>
           <DocumentTitle />
           {children}
+          {DemoNote && (
+            <Suspense fallback={null}>
+              <DemoNote />
+            </Suspense>
+          )}
         </>
       )} />
     </QueryClientProvider>
