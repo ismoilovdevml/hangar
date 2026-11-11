@@ -34,8 +34,10 @@ import {
   type RepoFormField,
 } from '../../../lib/repositories';
 import { RepoSettingsFields } from '../RepoFormFields';
-import { focusFirstError } from '../repoFormHelpers';
+import { focusFirstError, serverFieldErrors } from '../repoFormHelpers';
 import { RepoActions } from './RepoActions';
+import { ErrorMessage } from '../../../components/States';
+import { errorSentence } from '../../../lib/apiError';
 import { RoutingPanel } from './RoutingPanel';
 import { SigningKeyPanel } from './SigningKeyPanel';
 import '../../../styles/catalog.css';
@@ -46,7 +48,8 @@ const route = getRouteApi('/app/repositories/$name/settings');
 function apiMessage(err: unknown, action: string): string {
   if (err instanceof ApiRequestError) {
     if (err.status === 403) return `You do not have permission to ${action} this repository.`;
-    return err.body?.message ?? `The server could not ${action} the repository.`;
+    if (Object.keys(serverFieldErrors(err)).length > 0) return 'The server refused a setting: see the highlighted field.';
+    return err.body?.message ? errorSentence(err) : `The server could not ${action} the repository.`;
   }
   return 'Cannot reach the server. Check your connection and try again.';
 }
@@ -116,9 +119,12 @@ function SettingsForm({ repo }: { repo: Repository }) {
   const storedRemoteUrl = repo.config.proxy?.remote_url;
   const memberTypes = useMemo(() => new Map((members.data ?? []).map((r) => [r.name, r.type] as const)), [members.data]);
   const errors = validateRepoForm(form, { memberTypes, storedAuth, storedRemoteUrl });
-  const visible: RepoFormErrors = Object.fromEntries(
-    Object.entries(errors).filter(([k]) => submitted || blurred[k as RepoFormField]),
-  );
+  // A refused save marks the field it is about, under the field, until that field changes.
+  const refused = update.isError ? serverFieldErrors(update.error) : {};
+  const visible: RepoFormErrors = {
+    ...refused,
+    ...Object.fromEntries(Object.entries(errors).filter(([k]) => submitted || blurred[k as RepoFormField])),
+  };
   const dirty = isDirty(form, repo);
   const body = toRepositoryUpdate(form, repo);
   const yaml = repositoryYaml(body);
@@ -136,6 +142,9 @@ function SettingsForm({ repo }: { repo: Repository }) {
         setSubmitted(false);
         setBlurred({});
         setSaved(true);
+      },
+      onError: (err) => {
+        focusFirstError(serverFieldErrors(err));
       },
     });
   };
@@ -323,11 +332,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
                 {Object.keys(errors).length === 1 ? 'One setting needs attention.' : `${Object.keys(errors).length} settings need attention.`}
               </p>
             )}
-            {update.isError && (
-              <p className="form-error" role="alert">
-                {apiMessage(update.error, 'save')}
-              </p>
-            )}
+            {update.isError && <ErrorMessage error={update.error} message={apiMessage(update.error, 'save')} />}
             <p className="visually-hidden" aria-live="polite">
               {saved ? 'Settings saved' : ''}
             </p>

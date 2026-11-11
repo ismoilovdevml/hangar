@@ -83,6 +83,32 @@ describe('repository settings', () => {
     expect(repo('npmjs-proxy').config.proxy?.metadata_ttl).toBe('45m');
   });
 
+  it('puts a refused remote URL under the field, in words', async () => {
+    server.use(
+      http.put('*/api/v1/repositories/npmjs-proxy', () =>
+        HttpResponse.json(
+          {
+            code: 'invalid_argument',
+            message: 'repository "npmjs-proxy": remote url http://169.254.169.254/latest: address 169.254.169.254: blocked by outbound address policy',
+          },
+          { status: 400 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp('/repositories/npmjs-proxy/settings');
+    const form = await screen.findByRole('form', { name: 'Settings of npmjs-proxy' });
+    const url = within(form).getByLabelText('Remote URL');
+    await user.clear(url);
+    await user.type(url, 'http://169.254.169.254/latest');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(url).toHaveAttribute('aria-invalid', 'true'));
+    expect(url).toHaveAccessibleDescription(/169\.254\.169\.254 is blocked by the outbound address policy/);
+    await waitFor(() => expect(url).toHaveFocus());
+    expect(screen.getByText('The server refused a setting: see the highlighted field.')).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent('invalid argument');
+  });
+
   it('shows the YAML and copyable client configuration for the repository', async () => {
     renderApp('/repositories/npm-internal/settings');
     await screen.findByRole('form', { name: 'Settings of npm-internal' });

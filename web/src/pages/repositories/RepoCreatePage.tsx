@@ -29,7 +29,8 @@ import {
   type RepoFormField,
 } from '../../lib/repositories';
 import { FieldError, RepoSettingsFields } from './RepoFormFields';
-import { errorId, focusFirstError, invalidProps } from './repoFormHelpers';
+import { errorId, focusFirstError, invalidProps, serverFieldErrors } from './repoFormHelpers';
+import { errorSentence } from '../../lib/apiError';
 
 const route = getRouteApi('/app/repositories/new');
 
@@ -100,9 +101,10 @@ export function RepoCreatePage() {
 
   const serverError = create.error instanceof ApiRequestError ? create.error : null;
   const nameTaken = serverError?.status === 409;
+  const refused = serverFieldErrors(create.error);
   const shownErrors: RepoFormErrors = nameTaken && !visible.name
     ? { ...visible, name: 'A repository with this name already exists.' }
-    : visible;
+    : { ...refused, ...visible };
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -111,6 +113,7 @@ export function RepoCreatePage() {
     create.mutate(input, {
       // The repository's page, where the next step (connecting a client) is waiting.
       onSuccess: (repo) => void navigate({ to: '/repositories/$name/settings', params: { name: repo.name }, state: { created: repo.name } }),
+      onError: (err) => void focusFirstError(serverFieldErrors(err)),
     });
   };
 
@@ -120,7 +123,11 @@ export function RepoCreatePage() {
       ? 'You do not have permission to create repositories.'
       : serverError.status === 409
         ? 'A repository with this name already exists. Choose another name.'
-        : (serverError.body?.message ?? 'The server could not create the repository.')
+        : Object.keys(refused).length > 0
+          ? 'The server refused a setting: see the highlighted field.'
+          : serverError.body?.message
+            ? errorSentence(serverError)
+            : 'The server could not create the repository.'
     : create.isError
       ? 'Cannot reach the server. Check your connection and try again.'
       : null;
