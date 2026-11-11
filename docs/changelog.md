@@ -6,6 +6,29 @@
   release workflow run only when the repository variable `RELEASE_TESTS` is
   `true`. When they run, images, binaries and the release wait for them and
   stop if one fails.
+- **Overview success rate no longer counts authentication challenges as
+  denied**: a 401 to a request that presented no credentials at all (NuGet
+  and .NET clients, docker, npm and pip ask without credentials and retry
+  with them) is counted in the new `hangar_http_auth_challenges_total` and
+  stored apart (migration 00300); `denied` and the success rate leave it
+  out, and the Overview note's tooltip says how many were not counted. A 401
+  to wrong or expired credentials and every 403 still count as denied.
+- **A client that hangs up is not a server error**: when the request is
+  cancelled mid-way (dotnet probing workload manifests), every format answers
+  499, logs at debug level instead of error, and the request is not counted
+  as a 5xx. A remote or database timeout is still an error. Docker now answers
+  500 instead of 401 when authentication fails for a reason other than the
+  credentials.
+- **NuGet `service_index` is treated as a secret**: some feeds carry their
+  key in the path, so `config.format.service_index` is returned only to
+  administrators of the repository (`***` to everyone else, the YAML export
+  included); an update that sends `***` keeps the stored value, and error
+  messages sent to clients no longer contain the path.
+- **Proxy cache hit ratio**: a remote answering not found is no longer a
+  cache miss. In a group whose first proxies' remotes do not have a package
+  and whose last proxy serves it from its cache, the request is a hit; only
+  content a remote supplied makes a miss. Index lookups that only locate a
+  download do not count either.
 
 ## v0.1.7 (2026-11-09)
 
