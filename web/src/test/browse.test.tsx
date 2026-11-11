@@ -262,9 +262,25 @@ describe('package browser: package', () => {
     await user.click(await screen.findByRole('tab', { name: 'Vulnerabilities' }));
     expect(within(screen.getByRole('table', { name: 'Vulnerabilities' })).getByText('CVE-2026-0001')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Version' })).toHaveTextContent('1 high');
-    expect(screen.queryByRole('tab', { name: 'Dependents' })).not.toBeInTheDocument();
-    expect(asked.some((p) => p.endsWith('/dependents'))).toBe(false);
+    // Dependents is planned on the server (501): shown as such, never asked for.
+    expect(screen.getByRole('tab', { name: 'Dependents (planned)' })).toBeDisabled();
+    expect(asked.some((p) => p.endsWith('/dependents') || p.endsWith('/sbom'))).toBe(false);
     server.events.removeAllListeners();
+  });
+
+  it('scans a version now and reports the result', async () => {
+    const user = userEvent.setup();
+    renderApp('/browse?repo=npm-internal&ns=@acme&name=ui-kit');
+    const head = await screen.findByRole('region', { name: '@acme/ui-kit 5.3.1' });
+    await user.click(await within(head).findByRole('button', { name: 'Scan now' }));
+    expect(await screen.findByText(/^Scan finished: /)).toBeInTheDocument();
+  });
+
+  it('offers no scan for formats without an advisory source', async () => {
+    renderApp('/browse?repo=docker-prod&name=payments-api');
+    const head = await screen.findByRole('region', { name: /^payments-api/ });
+    await within(head).findByRole('button', { name: 'Delete version' });
+    expect(within(head).queryByRole('button', { name: 'Scan now' })).not.toBeInTheDocument();
   });
 
   it('says when the server does not read READMEs', async () => {
