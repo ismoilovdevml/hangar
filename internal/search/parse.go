@@ -27,10 +27,14 @@ type Parsed struct {
 	// Pieces are the alphanumeric prefixes matched against the tsvector.
 	Pieces []string
 
-	Formats     []string // format:
-	Repos       []string // repo:
-	SHA256      []string // sha256: hex prefix (4-64 chars)
-	CVEs        []string // cve:
+	Formats []string // format:
+	Repos   []string // repo:
+	SHA256  []string // sha256: hex prefix (4-64 chars)
+	// Digests are bare words that look like a digest prefix (8 to 64 hex
+	// digits with a letter and a digit). They match a digest prefix or the
+	// package name, so a pasted digest needs no qualifier.
+	Digests     []string
+	CVEs        []string // cve:, or a bare advisory id (CVE-2021-44228, GHSA-…)
 	Licenses    []string // license:
 	Security    []string // security: pending|clean|findings|quarantined|failed|unsupported
 	UnusedFor   time.Duration
@@ -39,7 +43,10 @@ type Parsed struct {
 }
 
 var (
-	hexRE      = regexp.MustCompile(`^[0-9a-f]{4,64}$`)
+	hexRE    = regexp.MustCompile(`^[0-9a-f]{4,64}$`)
+	digestRE = regexp.MustCompile(`^[0-9a-f]{8,64}$`)
+	// advisoryRE: advisory ids pasted without "cve:" (CVE, GHSA, PYSEC, RUSTSEC).
+	advisoryRE = regexp.MustCompile(`^(?i:cve-\d{4}-\d{4,}|ghsa(-[23456789cfghjmpqrvwx]{4}){3}|pysec-\d{4}-\d+|rustsec-\d{4}-\d{4})$`)
 	durationRE = regexp.MustCompile(`^(\d+)([hdw])$`)
 	scanStates = map[string]bool{"pending": true, "clean": true, "findings": true, "quarantined": true, "failed": true, "unsupported": true}
 )
@@ -57,7 +64,14 @@ func Parse(q string) (Parsed, error) {
 		key, val, ok := strings.Cut(tok, ":")
 		key = strings.ToLower(key)
 		if !ok || !isQualifier(key) {
-			words = append(words, strings.ToLower(tok))
+			switch w := strings.ToLower(tok); {
+			case advisoryRE.MatchString(w):
+				p.CVEs = append(p.CVEs, strings.ToUpper(w))
+			case isDigest(w):
+				p.Digests = append(p.Digests, w)
+			default:
+				words = append(words, w)
+			}
 			continue
 		}
 		if val == "" {
@@ -101,6 +115,12 @@ func Parse(q string) (Parsed, error) {
 		p.Pieces = append(p.Pieces, pieces(w)...)
 	}
 	return p, nil
+}
+
+// isDigest: 8 to 64 hex digits with at least one letter and one digit, so
+// words ("facade") and numbers ("20260101") stay free text.
+func isDigest(w string) bool {
+	return digestRE.MatchString(w) && strings.ContainsAny(w, "abcdef") && strings.ContainsAny(w, "0123456789")
 }
 
 func isQualifier(k string) bool {

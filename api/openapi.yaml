@@ -1379,7 +1379,10 @@ paths:
             Free text plus qualifiers: `format:npm`, `repo:npm-hosted`, `sha256:ab12`,
             `cve:CVE-2026-1234`, `unused:>90d`, `license:GPL-3.0`, `published:<2026-01-01`,
             `security:findings` (pending, clean, findings, quarantined, failed, unsupported); `cve:` also matches aliases. Each free-text word is
-            a prefix match on the package coordinates.
+            a prefix match on the package coordinates. A bare advisory id
+            (`CVE-2021-44228`, `GHSA-…`, `PYSEC-…`, `RUSTSEC-…`) counts as `cve:`, and a
+            bare word of 8 to 64 hex digits with a letter and a digit matches a
+            digest prefix or the package name.
           schema: { type: string }
         - name: sort
           in: query
