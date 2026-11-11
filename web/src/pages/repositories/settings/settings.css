@@ -2,6 +2,12 @@
 .repo-settings__url { display: flex; align-items: center; gap: 8px; }
 .repo-settings__url span { flex: 1; min-width: 0; }
 .repo-settings__save { display: flex; flex-direction: column; gap: 10px; }
+/* phones, with unsaved changes: the bar stays at the bottom of the screen while the settings are in view */
+.repo-settings__save.is-pinned {
+  position: sticky; bottom: 12px; z-index: var(--z-raised); flex-direction: row; padding: 10px;
+  border-radius: var(--r-panel); background: var(--surface-solid); box-shadow: var(--shadow-modal);
+}
+.repo-settings__save.is-pinned .button { flex: 1 1 0; }
 .note { padding: 10px 12px; border-radius: var(--r-small); background: var(--lake-soft); color: var(--lake-ink); font-size: 13px; font-weight: 600; }
 .danger-zone { gap: 12px; }
 .danger-zone__text { font-size: 14px; color: var(--ink-2); line-height: 1.55; }

@@ -12,6 +12,7 @@ import { Select } from '../../components/Select';
 import { FORMAT_META, formatCompact, relativeTime } from '../../lib/format';
 import { hasVersion, hitName, securityPill } from '../../lib/packages';
 import { isFormat } from '../../lib/repositories';
+import { PHONE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import {
   highlight,
   highlightTerms,
@@ -263,9 +264,12 @@ function Facets({ q, result, onChange }: { q: string; result: SearchResult; onCh
   const security = withSelected(result.facets.security, selectedSecurity);
   const repos = withSelected(result.facets.repository, selectedRepos);
   const security1 = selectedSecurity.length === 1 ? selectedSecurity[0] : selectedSecurity.length ? 'mixed' : '';
+  // On a phone the filters fold behind one row, so the first results show on the first screen.
+  const phone = useMediaQuery(PHONE_QUERY);
+  const active = selectedFormats.length + (security1 ? 1 : 0) + selectedRepos.length;
 
-  return (
-    <aside className="facets glass" aria-label="Filters">
+  const body = (
+    <>
       <fieldset className="facet">
         <legend className="facet__title">Format</legend>
         {formats.length === 0 && <p className="meta">None</p>}
@@ -309,6 +313,19 @@ function Facets({ q, result, onChange }: { q: string; result: SearchResult; onCh
           onChange={(v) => onChange(setQualifier(q, 'repo', v ? [v] : []))}
         />
       </div>
+    </>
+  );
+
+  return (
+    <aside className="facets glass" aria-label="Filters">
+      {phone ? (
+        <details className="facets__fold">
+          <summary className="facets__toggle">Filters{active > 0 && <span className="facets__count"> ({active})</span>}</summary>
+          <div className="facets__body">{body}</div>
+        </details>
+      ) : (
+        body
+      )}
     </aside>
   );
 }

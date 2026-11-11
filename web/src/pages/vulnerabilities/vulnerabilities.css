@@ -186,6 +186,7 @@
   .vimpact__lead { font-size: 17px; }
   .vimpact__bar { flex-basis: 100%; }
   .vplan-panel__head, .vplan-panel__filters { padding-left: 14px; padding-right: 14px; }
+  .vplan-panel__title { white-space: nowrap; }
   .vdrawer { border-radius: 0; }
   .vdrawer__head { padding: 16px 16px 8px; }
   .vdrawer__body { padding: 4px 16px 18px; }

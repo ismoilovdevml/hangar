@@ -96,7 +96,9 @@
 @media (max-width: 860px) {
   .api-docs__layout { grid-template-columns: minmax(0, 1fr); }
   .api-docs__side { position: static; max-height: none; }
-  .api-docs__toc { flex-direction: row; flex-wrap: wrap; gap: 4px; }
+  /* one scrolling row, so the page title follows right after the endpoint index */
+  .api-docs__toc { flex-direction: row; flex-wrap: nowrap; gap: 4px; overflow-x: auto; }
+  .api-docs__toc a { white-space: nowrap; }
 }
 
 @media (prefers-reduced-motion: reduce) {

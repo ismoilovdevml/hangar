@@ -103,6 +103,11 @@
 }
 .segmented__item:hover { color: var(--ink); }
 .segmented__item.is-active { background: var(--surface-solid); color: var(--lake-ink); box-shadow: var(--shadow-raised); }
+/* phones: a long switch scrolls inside its panel instead of running past it */
+@media (max-width: 640px) {
+  .segmented { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .segmented__item { flex: none; }
+}
 
 /* ---------- KPI card ---------- */
 .kpi { border-radius: var(--r-panel); padding: 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
@@ -388,3 +393,16 @@ select.input:disabled { opacity: .7; }
 .markdown th, .markdown td { padding: 6px 10px; border: 1px solid var(--hairline-strong); text-align: left; }
 .markdown th { background: var(--surface-muted); font-weight: 700; }
 .markdown a { color: var(--lake-ink); text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---------- touch screens: targets of at least 44 px ---------- */
+@media (pointer: coarse) {
+  .icon-button--sm, .copy-button, .todo__dismiss, .vplan__toggle { width: 44px; height: 44px; }
+  .todo__dismiss { top: 0; right: 0; }
+  .segmented__item, .segmented--mini .segmented__item, .vtabs__tab, .vplan__assign, .vplan__owner--btn, .th-sort { min-height: 44px; }
+  .breadcrumb__link, .nav-section__toggle { min-height: 44px; }
+  /* Links inside text keep their line height; the tappable area grows around them. */
+  .link-strong, .panel__link, .repo-name__link, .client-setup__intro a, .page-header__desc a, .meta a { position: relative; }
+  .link-strong::after, .panel__link::after, .repo-name__link::after, .client-setup__intro a::after, .page-header__desc a::after, .meta a::after {
+    content: ''; position: absolute; inset: -12px -4px;
+  }
+}

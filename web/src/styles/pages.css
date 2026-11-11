@@ -551,6 +551,17 @@
   .repo-create__summary { position: static; }
 }
 @media (max-width: 640px) {
+  /* Overview header: the trail, the bell and the account on one row, the system state under them. */
+  .topbar--bare .breadcrumb { flex: 1 1 0; }
+  .topbar--bare .status-pill { order: 3; flex-basis: 100%; margin-right: 0; padding-left: 2px; }
+  /* Repositories: the counts as one compact strip and the type tabs on one scrolling row, so the list starts on the first screen. */
+  .count-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .count-card { min-height: 0; padding: 10px 12px; }
+  .count-card__icon { display: none; }
+  .count-card__number { font-size: 20px; }
+  .count-card__label { font-size: 12px; line-height: 1.3; }
+  .tabs { flex-wrap: nowrap; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .tabs__item { flex: none; padding: 0 10px; }
   /* Tap targets of at least 24 px on touch screens. */
   .checkbox input, .choice input[type='radio'] { width: 24px; height: 24px; }
   .task-name__link, .breadcrumb__link, .hub-foot__status, .link-button, .store-card__name a, .run-link, .check__action { display: inline-flex; align-items: center; min-height: 24px; }

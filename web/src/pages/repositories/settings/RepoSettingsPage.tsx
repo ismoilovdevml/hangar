@@ -17,6 +17,7 @@ import { PageHeader } from '../../../components/PageHeader';
 import { Panel } from '../../../components/Panel';
 import { Pill, StatusDot } from '../../../components/Pill';
 import { Toast } from '../../../components/Toast';
+import { PHONE_QUERY, useMediaQuery } from '../../../lib/useMediaQuery';
 import { FORMAT_META, formatBytes } from '../../../lib/format';
 import { isDirty, repoClientTarget, repoToForm, storedInput, toRepositoryUpdate } from '../../../lib/repoSettings';
 import {
@@ -88,6 +89,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
   const [submitted, setSubmitted] = useState(false);
   const [saved, setSaved] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const phone = useMediaQuery(PHONE_QUERY);
   const created = useRouterState({ select: (s) => s.location.state.created });
   const dismissCreated = useCallback(
     () => void navigate({ to: '/repositories/$name/settings', params: { name: repo.name }, replace: true, state: (s) => ({ ...s, created: undefined }) }),
@@ -153,6 +155,29 @@ function SettingsForm({ repo }: { repo: Repository }) {
       {readonly('Name', repo.name, 'Cannot be changed')}
       {repo.type !== 'group' && readonly('Blob store', repo.blob_store ?? '—', 'Cannot be changed after creation')}
     </>
+  );
+
+  // On a phone the summary sits under everything else, so Save follows the settings and stays in reach while they change.
+  const saveBar = canAdmin && (
+    <div className={phone && dirty ? 'repo-settings__save is-pinned' : 'repo-settings__save'}>
+      <button type="submit" className="button button--primary button--block" disabled={update.isPending || !dirty}>
+        {update.isPending ? 'Saving…' : saved && !dirty ? 'Saved' : 'Save changes'}
+      </button>
+      {dirty && (
+        <button
+          type="button"
+          className="button button--secondary button--block"
+          onClick={() => {
+            update.reset();
+            setForm(repoToForm(repo));
+            setSubmitted(false);
+            setBlurred({});
+          }}
+        >
+          Discard changes
+        </button>
+      )}
+    </div>
   );
 
   return (
@@ -229,6 +254,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
               disabled={!canAdmin}
             />
           </Panel>
+          {phone && saveBar}
 
           {isFormat(repo.format) && SIGNED_FORMATS.includes(repo.format) && repo.type !== 'proxy' && <SigningKeyPanel repo={repo} />}
 
@@ -306,27 +332,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
             <p className="visually-hidden" aria-live="polite">
               {saved ? 'Settings saved' : ''}
             </p>
-            {canAdmin && (
-              <div className="repo-settings__save">
-                <button type="submit" className="button button--primary button--block" disabled={update.isPending || !dirty}>
-                  {update.isPending ? 'Saving…' : saved && !dirty ? 'Saved' : 'Save changes'}
-                </button>
-                {dirty && (
-                  <button
-                    type="button"
-                    className="button button--secondary button--block"
-                    onClick={() => {
-                      update.reset();
-                      setForm(repoToForm(repo));
-                      setSubmitted(false);
-                      setBlurred({});
-                    }}
-                  >
-                    Discard changes
-                  </button>
-                )}
-              </div>
-            )}
+            {!phone && saveBar}
           </Panel>
         </aside>
       </form>
