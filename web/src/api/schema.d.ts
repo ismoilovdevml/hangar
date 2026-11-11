@@ -3201,7 +3201,7 @@ export interface components {
             download_count?: number;
             /** Format: date-time */
             last_downloaded_at?: string | null;
-            /** @description Content size; reported by the versions listing. Docker: the compressed image (config plus layers, from the manifest; for a multi-platform index, linux/amd64 or its first platform). */
+            /** @description Content size; reported by the versions listing. Docker: the compressed image (config plus layers, from the manifest; for a multi-platform index, linux/amd64 or its first platform), absent when no platform manifest of the index is stored. */
             size_bytes?: components["schemas"]["Bytes"];
         };
         PublishedComponentPage: {
