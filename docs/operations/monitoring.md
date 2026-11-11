@@ -278,7 +278,11 @@ record logged while serving a request carries:
 The access log line (`"msg":"http request"`) adds `method`, `path` (without the
 query string), `route`, `status`, `bytes_in`, `bytes_out`, `duration_ms`,
 `remote_ip` and `user_agent`. It is written at `info`, `error` for 5xx (except
-501), and `debug` for `/healthz`, `/readyz` and the metrics path.
+501), and `debug` for `/healthz`, `/readyz`, the metrics path and the web UI's
+own successful reads: its files and the `GET` API calls of a browser session
+(each open tab polls status, events and notifications every few seconds).
+Writes, failures and requests with a token or from package clients stay at
+`info`. Set `log.level: debug` to see the UI's reads too.
 
 **Secrets are never logged.** Before a record is written, values of attributes
 whose name denotes a secret (`password`, `token`, `secret`, `authorization`,
@@ -298,7 +302,9 @@ Each node also keeps its newest `log.buffer_size` records in memory, after the
 same scrubbing, so administrators can read them under **Operations → System
 logs** without access to the host. The buffer is a fixed ring: appending is
 constant time and never waits for readers, and the oldest records are
-overwritten. It is lost on restart; full logs stay on stderr, so keep shipping
+overwritten. Warnings and errors are kept longer: the newest of them (a fifth
+of `log.buffer_size`, at least 100) stay readable after a burst of info
+records has overwritten their place. It is lost on restart; full logs stay on stderr, so keep shipping
 them (`docker compose logs hangar`, `journalctl -u hangar`, `kubectl logs`).
 
 The screen filters by node, minimum level and text, follows new records

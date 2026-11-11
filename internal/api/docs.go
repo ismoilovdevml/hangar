@@ -1,9 +1,12 @@
 package api
 
 import (
+	"bytes"
+	"compress/gzip"
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -26,15 +29,67 @@ func (a *API) openAPIYAML(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write(apispec.OpenAPIYAML)
 }
 
+// openAPIJSONGzip is the JSON document gzipped once: the API reference page
+// loads all of it (about 200 KB, a tenth of that compressed).
+var openAPIJSONGzip = sync.OnceValues(func() ([]byte, error) {
+	b, err := apispec.OpenAPIJSON()
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	zw, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	if _, err := zw.Write(b); err != nil {
+		return nil, err
+	}
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+})
+
 func (a *API) openAPIJSON(w http.ResponseWriter, r *http.Request) {
 	b, err := apispec.OpenAPIJSON()
 	if err != nil {
 		a.writeErr(w, r, err)
 		return
 	}
-	w.Header().Set("Cache-Control", docsCacheControl)
-	w.Header().Set("Content-Type", "application/json")
+	h := w.Header()
+	h.Set("Cache-Control", docsCacheControl)
+	h.Set("Content-Type", "application/json")
+	h.Add("Vary", "Accept-Encoding")
+	if acceptsGzip(r.Header.Get("Accept-Encoding")) {
+		if gz, err := openAPIJSONGzip(); err == nil {
+			h.Set("Content-Encoding", "gzip")
+			h.Set("Content-Length", strconv.Itoa(len(gz)))
+			_, _ = w.Write(gz)
+			return
+		}
+	}
+	h.Set("Content-Length", strconv.Itoa(len(b)))
 	_, _ = w.Write(b)
+}
+
+// acceptsGzip reports whether an Accept-Encoding header accepts gzip: named
+// or matched by "*", with a quality above zero.
+func acceptsGzip(header string) bool {
+	accepted := false
+	for part := range strings.SplitSeq(header, ",") {
+		token, params, _ := strings.Cut(strings.TrimSpace(part), ";")
+		token = strings.ToLower(strings.TrimSpace(token))
+		if token != "gzip" && token != "x-gzip" && token != "*" {
+			continue
+		}
+		ok := true
+		if k, v, found := strings.Cut(strings.TrimSpace(params), "="); found && strings.EqualFold(strings.TrimSpace(k), "q") {
+			q, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+			ok = err == nil && q > 0
+		}
+		if token != "*" {
+			return ok
+		}
+		accepted = ok
+	}
+	return accepted
 }
 
 func (a *API) automationGuide(w http.ResponseWriter, r *http.Request) {

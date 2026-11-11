@@ -62,6 +62,7 @@ func NewRouter(o RouterOptions) http.Handler {
 	r.Use(RequestInfo(o.TrustedProxies))
 	r.Use(observability.HTTPMiddleware(observability.HTTPOptions{
 		Logger: o.Logger, Metrics: o.Metrics, AccessLogSampleRatio: o.AccessLogSampleRatio, QuietPaths: quietPaths(o.MetricsPath),
+		Quiet: uiReads,
 	}))
 	r.Use(Recover(o.Logger))
 	r.Use(sec.headers)
@@ -119,6 +120,23 @@ func quietPaths(metricsPath string) map[string]bool {
 		q[metricsPath] = true
 	}
 	return q
+}
+
+// uiReads reports the web UI's own successful reads, which are logged at
+// debug level: its files (the requests no route matches go to the UI
+// handler) and the REST API reads of a browser session. Every open tab
+// repeats some of them every few seconds (status, events, notifications), so
+// at info level they would fill the System logs buffer within minutes and
+// push out the records operators look for there. Writes, failures and
+// requests with an API token or a package client keep their level.
+func uiReads(r *http.Request, route string, status int) bool {
+	if (r.Method != http.MethodGet && r.Method != http.MethodHead) || status >= http.StatusBadRequest {
+		return false
+	}
+	if route == observability.RouteUnmatched {
+		return true
+	}
+	return isAPI(r.URL.Path) && r.Header.Get("Cookie") != "" && r.Header.Get("Authorization") == ""
 }
 
 // Config for Run.

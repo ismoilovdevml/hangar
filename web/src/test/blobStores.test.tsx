@@ -67,7 +67,7 @@ describe('blob stores', () => {
       },
     ]);
     // The detail page never shows the secret.
-    expect(screen.getByText('Stored encrypted, write-only')).toBeInTheDocument();
+    expect(await screen.findByText('Stored encrypted, write-only')).toBeInTheDocument();
     expect(screen.queryByText('top-secret')).not.toBeInTheDocument();
     expect(catalogState.blobStores.find((b) => b.name === 'minio-onprem')?.s3).not.toHaveProperty('secret_access_key', 'top-secret');
   });

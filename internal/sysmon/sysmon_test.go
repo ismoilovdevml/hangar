@@ -433,3 +433,58 @@ func TestUpstreamsCheckCredentialFailures(t *testing.T) {
 		t.Errorf("only auth = %q", r.Detail)
 	}
 }
+
+// A check waiting for its timeout (an unreachable store) must not hold up
+// the node list: it is served from the last run and refreshed behind it.
+func TestNodesDoNotWaitForSlowChecks(t *testing.T) {
+	const timeout = 300 * time.Millisecond
+	var runs atomic.Int32
+	m := New(nil, Options{NodeID: "solo", Interval: time.Minute, CheckTimeout: timeout, Checks: []Check{
+		{Name: "store", Run: func(ctx context.Context) Result { runs.Add(1); <-ctx.Done(); return Result{} }},
+	}})
+	timed := func() (Node, time.Duration) {
+		t.Helper()
+		start := time.Now()
+		nodes, err := m.Nodes(context.Background())
+		if err != nil || len(nodes) != 1 {
+			t.Fatalf("nodes = %+v, %v", nodes, err)
+		}
+		return nodes[0], time.Since(start)
+	}
+	age := func(d time.Duration) {
+		m.mu.Lock()
+		last := *m.last
+		last.LastHeartbeat = last.LastHeartbeat.Add(-d)
+		m.last = &last
+		m.mu.Unlock()
+	}
+
+	// Nothing to show yet: the first list waits for the checks.
+	if n, took := timed(); took < timeout || n.Status != StatusDown {
+		t.Fatalf("first list took %s, status %s", took, n.Status)
+	}
+	// An aged run is answered at once and refreshed in the background.
+	age(10 * time.Second)
+	n, took := timed()
+	if took > timeout/2 || n.Status != StatusDown || n.UptimeSeconds < 0 {
+		t.Fatalf("aged list took %s, status %s", took, n.Status)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for runs.Load() < 2 || m.refreshing.Load() {
+		if time.Now().After(deadline) {
+			t.Fatalf("no background refresh: %d runs", runs.Load())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	m.mu.Lock()
+	fresh := time.Since(m.last.LastHeartbeat) < 5*time.Second
+	m.mu.Unlock()
+	if !fresh {
+		t.Fatal("the background run did not replace the aged one")
+	}
+	// Older than an interval: the list is out of date, so it waits again.
+	age(2 * time.Minute)
+	if _, took := timed(); took < timeout {
+		t.Fatalf("stale list took %s", took)
+	}
+}

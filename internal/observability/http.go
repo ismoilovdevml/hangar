@@ -35,6 +35,10 @@ type HTTPOptions struct {
 	AccessLogSampleRatio float64
 	// QuietPaths are logged at debug level (probes and scrapes).
 	QuietPaths map[string]bool
+	// Quiet, if set, reports further requests to log at debug level, given
+	// the matched route pattern (RouteUnmatched when none) and the status.
+	// Server errors are logged at error level regardless.
+	Quiet func(r *http.Request, route string, status int) bool
 }
 
 // HTTPMiddleware observes every request: it starts a server span (joining
@@ -132,6 +136,8 @@ func HTTPMiddleware(o HTTPOptions) func(http.Handler) http.Handler {
 			case status >= http.StatusInternalServerError && status != http.StatusNotImplemented:
 				level = slog.LevelError
 			case o.QuietPaths[r.URL.Path]:
+				level = slog.LevelDebug
+			case o.Quiet != nil && o.Quiet(r, route, status):
 				level = slog.LevelDebug
 			}
 			if level < slog.LevelError && !sampled(o.AccessLogSampleRatio) {
