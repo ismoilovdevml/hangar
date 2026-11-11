@@ -1,6 +1,7 @@
 import { cloneElement, useEffect, useId, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { IconClose } from '../../components/icons';
+import { useEscapeLayer } from '../../lib/layers';
 import { initials } from '../../lib/format';
 import { errorText } from './model';
 import { ErrorMessage } from '../../components/States';
@@ -20,16 +21,14 @@ interface DialogProps {
 
 /**
  * Modal dialog: focus moves in on open and back to the opener on close, Tab
- * stays inside, Escape and the scrim close it.
+ * stays inside, Escape and the scrim close it. Escape closes only the topmost
+ * layer, so a dialog opened from a drawer closes alone.
  */
 export function Dialog({ title, description, onClose, children, drawer, wide, footer }: DialogProps) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descId = useId();
-  const close = useRef(onClose);
-  useEffect(() => {
-    close.current = onClose;
-  }, [onClose]);
+  useEscapeLayer(onClose);
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
@@ -37,11 +36,6 @@ export function Dialog({ title, description, onClose, children, drawer, wide, fo
     const first = el?.querySelector<HTMLElement>('[data-autofocus]') ?? el?.querySelector<HTMLElement>(FOCUSABLE);
     (first ?? el)?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        close.current();
-        return;
-      }
       if (e.key !== 'Tab' || !el) return;
       const items = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((n) => n.offsetParent !== null || n === document.activeElement);
       if (items.length === 0) return;
