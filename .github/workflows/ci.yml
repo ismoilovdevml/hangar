@@ -181,6 +181,11 @@ jobs:
         env:
           CI: "1"
         run: npx playwright test
+      - name: Demo build smoke
+        working-directory: web
+        env:
+          CI: "1"
+        run: npx playwright test -c playwright.demo.config.ts
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
