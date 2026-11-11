@@ -269,6 +269,41 @@ export function describeUserAgent(ua: string): string {
   return browser ?? os ?? ua.slice(0, 40);
 }
 
+/** Sessions from the same browser and address, shown as one device. */
+export interface SessionGroup<S extends SessionWithDevice = SessionWithDevice> {
+  key: string;
+  device: string;
+  ip: string | null;
+  /** This session first, then newest activity first. */
+  sessions: S[];
+  current: boolean;
+}
+
+interface SessionWithDevice {
+  id: string;
+  ip: string | null;
+  user_agent: string;
+  last_seen_at: string;
+  current: boolean;
+}
+
+/** Groups sessions by device and address: this session's device first, then the most recently active. */
+export function groupSessions<S extends SessionWithDevice>(sessions: S[]): SessionGroup<S>[] {
+  const groups = new Map<string, SessionGroup<S>>();
+  for (const s of sessions) {
+    const device = describeUserAgent(s.user_agent);
+    const key = `${device}\u0000${s.ip ?? ''}`;
+    const g = groups.get(key) ?? { key, device, ip: s.ip, sessions: [], current: false };
+    g.sessions.push(s);
+    g.current ||= s.current;
+    groups.set(key, g);
+  }
+  const latest = (g: SessionGroup<S>) => Date.parse(g.sessions[0]!.last_seen_at);
+  const out = [...groups.values()];
+  for (const g of out) g.sessions.sort((a, b) => Number(b.current) - Number(a.current) || Date.parse(b.last_seen_at) - Date.parse(a.last_seen_at));
+  return out.sort((a, b) => Number(b.current) - Number(a.current) || latest(b) - latest(a));
+}
+
 /* ---------------------------------------------------------------- audit */
 
 export interface AuditCategory {

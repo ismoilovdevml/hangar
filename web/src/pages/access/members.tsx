@@ -37,6 +37,7 @@ import {
   describeUserAgent,
   expiryText,
   generatePassword,
+  groupSessions,
   groupRepoAccess,
   nameList,
   roleTone,
@@ -472,29 +473,96 @@ interface SessionListProps {
   busy?: boolean;
 }
 
+/** Devices shown before "Show all", and sessions of one device before "Show more". */
+const DEVICES_SHOWN = 5;
+const DEVICE_SESSIONS_SHOWN = 10;
+
+function SessionRow({ s, onEnd, now, nested }: { s: SessionInfo; onEnd: (s: SessionInfo) => void; now: Date; nested?: boolean }) {
+  return (
+    <li className={nested ? 'session-list__row session-list__row--nested' : 'session-list__row'}>
+      <span className="cell-stack">
+        {!nested && (
+          <span className="cell-strong">
+            {describeUserAgent(s.user_agent)} {s.current && <Pill tone="ok">This session</Pill>}
+          </span>
+        )}
+        <span className="meta">
+          {nested ? '' : `${s.ip ?? 'unknown address'} · `}signed in <Time value={s.created_at} mode="date" /> · active{' '}
+          <Time value={s.last_seen_at} mode="relative" now={now} inline /> · expires{' '}
+          {expiryText(s.expires_at, now)}
+          {s.remember ? ' · remembered' : ''}
+          {nested && s.current && ' · this session'}
+        </span>
+      </span>
+      <button type="button" className="button button--secondary button--sm" onClick={() => onEnd(s)} aria-label={s.current ? 'Sign out of this session' : `End session from ${s.ip ?? 'unknown address'}`}>
+        {s.current ? 'Sign out' : 'End'}
+      </button>
+    </li>
+  );
+}
+
+/** Signed-in sessions, one row per device and address; a device with several sessions opens to list them. */
 export function SessionList({ sessions, onEnd, busy }: SessionListProps) {
   const now = useNow();
+  const [allDevices, setAllDevices] = useState(false);
+  const [open, setOpen] = useState<Record<string, number>>({});
+  const groups = groupSessions(sessions);
   if (sessions.length === 0) return <p className="meta">No active sessions.</p>;
+  const shown = allDevices ? groups : groups.slice(0, DEVICES_SHOWN);
   return (
-    <ul className="session-list" aria-busy={busy || undefined}>
-      {sessions.map((s) => (
-        <li key={s.id} className="session-list__row">
-          <span className="cell-stack">
-            <span className="cell-strong">
-              {describeUserAgent(s.user_agent)} {s.current && <Pill tone="ok">This session</Pill>}
-            </span>
-            <span className="meta">
-              {s.ip ?? 'unknown address'} · signed in <Time value={s.created_at} mode="date" /> · active{' '}
-              <Time value={s.last_seen_at} mode="relative" now={now} inline />
-              {s.remember ? ' · remembered' : ''}
-            </span>
-          </span>
-          <button type="button" className="button button--secondary button--sm" onClick={() => onEnd(s)} aria-label={s.current ? 'Sign out of this session' : `End session from ${s.ip ?? 'unknown address'}`}>
-            {s.current ? 'Sign out' : 'End'}
+    <>
+      <ul className="session-list" aria-busy={busy || undefined}>
+        {shown.map((g) => {
+          if (g.sessions.length === 1) return <SessionRow key={g.key} s={g.sessions[0]!} onEnd={onEnd} now={now} />;
+          const limit = open[g.key];
+          const newest = g.sessions[0]!;
+          return (
+            <li key={g.key} className="session-list__group">
+              <div className="session-list__row">
+                <span className="cell-stack">
+                  <span className="cell-strong">
+                    {g.device} {g.current && <Pill tone="ok">This session</Pill>} <Pill tone="neutral">{g.sessions.length} sessions</Pill>
+                  </span>
+                  <span className="meta">
+                    {g.ip ?? 'unknown address'} · active <Time value={newest.last_seen_at} mode="relative" now={now} inline />
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="button button--secondary button--sm"
+                  aria-expanded={limit !== undefined}
+                  onClick={() => setOpen((o) => (o[g.key] === undefined ? { ...o, [g.key]: DEVICE_SESSIONS_SHOWN } : Object.fromEntries(Object.entries(o).filter(([k]) => k !== g.key))))}
+                >
+                  {limit === undefined ? `Show ${g.sessions.length}` : 'Hide'}
+                </button>
+              </div>
+              {limit !== undefined && (
+                <ul className="session-list session-list--nested" aria-label={`Sessions of ${g.device} at ${g.ip ?? 'an unknown address'}`}>
+                  {g.sessions.slice(0, limit).map((s) => (
+                    <SessionRow key={s.id} s={s} onEnd={onEnd} now={now} nested />
+                  ))}
+                  {g.sessions.length > limit && (
+                    <li className="session-list__more">
+                      <button type="button" className="link-button" onClick={() => setOpen((o) => ({ ...o, [g.key]: limit + DEVICE_SESSIONS_SHOWN }))}>
+                        Show {Math.min(DEVICE_SESSIONS_SHOWN, g.sessions.length - limit)} more of {g.sessions.length - limit}
+                      </button>
+                    </li>
+                  )}
+                </ul>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {groups.length > DEVICES_SHOWN && (
+        <p className="meta session-list__footer">
+          {sessions.length} sessions on {groups.length} devices.{' '}
+          <button type="button" className="link-button" onClick={() => setAllDevices((v) => !v)}>
+            {allDevices ? `Show the ${DEVICES_SHOWN} most recent` : `Show all ${groups.length} devices`}
           </button>
-        </li>
-      ))}
-    </ul>
+        </p>
+      )}
+    </>
   );
 }
 
