@@ -95,4 +95,11 @@ describe('error, empty and not-found states', () => {
     expect(within(alert).getByRole('button', { name: 'Retry' })).toBeInTheDocument();
     expect(within(alert).getByText('HTTP 503 unavailable: database is unavailable')).toBeInTheDocument();
   });
+
+  it('stops calling the status live when the last update failed', async () => {
+    server.use(http.get('*/api/v1/system/nodes', () => HttpResponse.json({ code: 'internal', message: 'internal error' }, { status: 500 })));
+    renderApp('/system/status');
+    expect(await screen.findByRole('button', { name: /Last update failed · retrying/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Live · every/)).not.toBeInTheDocument();
+  });
 });

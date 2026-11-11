@@ -56,23 +56,25 @@ interface LiveProps {
   paused: boolean;
   fetching: boolean;
   updatedAt?: number;
+  /** The last refresh failed: the pill must not claim live data. */
+  failed?: boolean;
   onPause: (paused: boolean) => void;
   onRefresh: () => void;
 }
 
 /** "Live · every 15 s" toggles auto-refresh; the round button refreshes now. */
-function LiveControls({ paused, fetching, updatedAt, onPause, onRefresh }: LiveProps) {
+function LiveControls({ paused, fetching, updatedAt, failed, onPause, onRefresh }: LiveProps) {
   const updated = updatedAt ? `Updated ${formatTime(updatedAt, { seconds: true })}` : undefined;
   return (
     <div className="live" role="group" aria-label="Refresh status">
       <button
         type="button"
-        className={`live__toggle glass${paused ? ' live__toggle--paused' : ''}`}
+        className={`live__toggle glass${paused ? ' live__toggle--paused' : failed ? ' live__toggle--failed' : ''}`}
         onClick={() => onPause(!paused)}
-        title={paused ? 'Resume auto-refresh' : 'Pause auto-refresh'}
+        title={paused ? 'Resume auto-refresh' : failed ? 'The last update failed; it retries on its own' : 'Pause auto-refresh'}
       >
         <span className="live__dot" aria-hidden="true" />
-        {paused ? 'Paused' : `Live · every ${STATUS_REFRESH_MS / 1000} s`}{' '}
+        {paused ? 'Paused' : failed ? 'Last update failed · retrying' : `Live · every ${STATUS_REFRESH_MS / 1000} s`}{' '}
         <span className="visually-hidden">{paused ? '– resume' : '– pause'}</span>
       </button>
       <button
@@ -387,6 +389,7 @@ export function SystemStatusPage() {
       paused={paused}
       fetching={nodes.isFetching}
       updatedAt={nodes.dataUpdatedAt || undefined}
+      failed={nodes.isError}
       onPause={setPaused}
       onRefresh={() => {
         void qc.refetchQueries({ queryKey: systemKeys.nodes });

@@ -108,6 +108,7 @@ function LogsView({ filters, nodeOptions, onNode, onFilter }: LogsViewProps) {
           intervalMs={LOGS_REFRESH_MS}
           paused={paused}
           fetching={stream.fetching}
+          failed={stream.error !== undefined}
           onPause={setPaused}
           onRefresh={stream.refresh}
         />

@@ -11,6 +11,8 @@ interface AutoRefreshProps {
   onRefresh: () => void;
   /** What is refreshed, for the button names ("status", "logs"). */
   what: string;
+  /** The last refresh failed: say so instead of counting down as if all were well. */
+  failed?: boolean;
 }
 
 function IconPause({ size = 16 }: { size?: number }) {
@@ -22,14 +24,24 @@ function IconPause({ size = 16 }: { size?: number }) {
 }
 
 /** "Refreshing in 9 s" with Pause/Resume and Refresh now. */
-export function AutoRefresh({ updatedAt, intervalMs, paused, fetching, onPause, onRefresh, what }: AutoRefreshProps) {
+export function AutoRefresh({ updatedAt, intervalMs, paused, fetching, onPause, onRefresh, what, failed }: AutoRefreshProps) {
   const now = useNow(1_000);
   const left = updatedAt ? Math.max(0, Math.ceil((updatedAt + intervalMs - now.getTime()) / 1000)) : null;
-  const text = fetching ? 'Refreshing…' : paused ? 'Auto-refresh paused' : left === null ? ' ' : left === 0 ? 'Refreshing…' : `Refreshing in ${left} s`;
+  const text = fetching
+    ? 'Refreshing…'
+    : paused
+      ? 'Auto-refresh paused'
+      : failed
+        ? 'Last refresh failed · retrying'
+        : left === null
+          ? ' '
+          : left === 0
+            ? 'Refreshing…'
+            : `Refreshing in ${left} s`;
   return (
     <div className="auto-refresh" role="group" aria-label={`Refresh ${what}`}>
       <span className="auto-refresh__text" aria-live="off">
-        {!paused && <span className="status__dot dot-ok auto-refresh__pulse" aria-hidden="true" />}
+        {!paused && <span className={`status__dot ${failed ? 'dot-warn' : 'dot-ok auto-refresh__pulse'}`} aria-hidden="true" />}
         {text}
       </span>
       <button type="button" className="button button--secondary button--sm" onClick={() => onPause(!paused)}>
