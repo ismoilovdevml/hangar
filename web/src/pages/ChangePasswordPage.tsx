@@ -4,9 +4,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, useRouter } from '@tanstack/react-router';
 import { ApiRequestError, apiFetch } from '../api/client';
 import { leaveAfterLogout, queryKeys, useLogout, useSession, useSystemStatus } from '../api/hooks';
-import { IconCheck, IconLogo } from '../components/icons';
+import { IconLogo } from '../components/icons';
+import { PasswordChecklist } from '../components/PasswordChecklist';
 import { DEFAULT_PASSWORD_POLICY, passwordChecks } from '../lib/passwordPolicy';
 import { safeRedirect } from '../lib/redirect';
+import { forgetSignInPassword, peekSignInPassword } from '../lib/signInPassword';
+import { toast } from '../lib/toast';
 import './changePassword.css';
 
 const route = getRouteApi('/change-password');
@@ -38,7 +41,9 @@ export function ChangePasswordPage() {
   const status = useSystemStatus();
   const logout = useLogout();
 
-  const [current, setCurrent] = useState('');
+  // The password typed on the sign-in form moments ago, when this tab signed in.
+  const [held, setHeld] = useState(() => peekSignInPassword());
+  const [current, setCurrent] = useState(held ?? '');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [show, setShow] = useState(false);
@@ -52,7 +57,17 @@ export function ChangePasswordPage() {
 
   const change = useMutation({
     mutationFn: (body: { current_password: string; new_password: string }) => apiFetch<void>('/me/password', { method: 'PUT', body }),
+    onError: (err) => {
+      // The remembered password was not accepted after all: ask for it.
+      if (held && err instanceof ApiRequestError && err.status === 400) {
+        forgetSignInPassword();
+        setHeld(null);
+        setCurrent('');
+      }
+    },
     onSuccess: async () => {
+      forgetSignInPassword();
+      toast('Password changed. Use the new one from now on.');
       // Nothing cached while the session was limited may be reused.
       qc.removeQueries({ predicate: (q) => !['auth', 'system', 'session'].includes(String(q.queryKey[0])) });
       await qc.invalidateQueries({ queryKey: queryKeys.session });
@@ -67,8 +82,10 @@ export function ChangePasswordPage() {
     change.mutate({ current_password: current, new_password: next });
   };
 
-  const signOut = () =>
+  const signOut = () => {
+    forgetSignInPassword();
     logout.mutate(undefined, { onSettled: (res) => leaveAfterLogout(res, () => void router.navigate({ to: '/login', replace: true })) });
+  };
 
   const currentMissing = submitted && !current;
   const nextInvalid = submitted && unmet.some((c) => c.id !== 'match');
@@ -99,23 +116,26 @@ export function ChangePasswordPage() {
           </div>
           <p id={ids.intro} className="change-password__lead">
             The password you signed in with was issued to you and must be replaced before you can continue. Choose one only you
-            know; the old one stops working.
+            know; the old one stops working.{held !== null && ' You do not need to type the old one again.'}
           </p>
 
-          <label className="field">
-            <span className="field__label">Current password</span>
-            <input
-              id={ids.current}
-              className="input"
-              type={type}
-              name="current-password"
-              autoComplete="current-password"
-              required
-              value={current}
-              onChange={(e) => setCurrent(e.target.value)}
-              aria-invalid={currentMissing || undefined}
-            />
-          </label>
+          {held === null && (
+            <label className="field">
+              <span className="field__label">Current password</span>
+              <input
+                id={ids.current}
+                className="input"
+                type={type}
+                name="current-password"
+                autoComplete="current-password"
+                required
+                autoFocus
+                value={current}
+                onChange={(e) => setCurrent(e.target.value)}
+                aria-invalid={currentMissing || undefined}
+              />
+            </label>
+          )}
           <label className="field">
             <span className="field__label">New password</span>
             <input
@@ -124,6 +144,7 @@ export function ChangePasswordPage() {
               name="new-password"
               autoComplete="new-password"
               required
+              autoFocus={held !== null}
               value={next}
               onChange={(e) => setNext(e.target.value)}
               aria-invalid={nextInvalid || undefined}
@@ -149,17 +170,7 @@ export function ChangePasswordPage() {
             Show passwords
           </label>
 
-          <ul id={ids.checks} className="policy-checks" aria-label="Password requirements">
-            {checks.map((c) => (
-              <li key={c.id} className={c.met ? 'policy-checks__item is-met' : 'policy-checks__item'}>
-                <span className="policy-checks__mark" aria-hidden="true">
-                  {c.met ? <IconCheck size={12} /> : null}
-                </span>
-                {c.label}
-                <span className="visually-hidden">{c.met ? ' (met)' : ' (not met yet)'}</span>
-              </li>
-            ))}
-          </ul>
+          <PasswordChecklist id={ids.checks} checks={checks} />
 
           {errorText && (
             <p id={ids.error} className="form-error" role="alert">

@@ -468,8 +468,12 @@ describe('my account', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'My account' })).toBeInTheDocument();
     expect(screen.getAllByText(/laptop CLI/).length).toBeGreaterThan(0);
     const pw = screen.getByRole('region', { name: 'Password' });
+    // The rules are listed up front and ticked off while typing.
+    const rules = within(pw).getByRole('list', { name: 'Password requirements' });
+    expect(within(rules).getByText('At least 12 characters').closest('li')).not.toHaveClass('is-met');
     await user.type(within(pw).getByLabelText('Current password'), 'password1234');
     await user.type(within(pw).getByLabelText('New password'), 'a much longer passphrase');
+    expect(within(rules).getByText('At least 12 characters').closest('li')).toHaveClass('is-met');
     await user.type(within(pw).getByLabelText('Repeat new password'), 'a different passphrase');
     await user.click(within(pw).getByRole('button', { name: 'Change password' }));
     expect(within(pw).getByText('The passwords do not match.')).toBeInTheDocument();
