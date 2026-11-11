@@ -169,10 +169,33 @@ func TestAPIWithPostgres(t *testing.T) {
 	// Overview: database aggregates plus the recorded traffic. The proxy
 	// cache fill is neither a publication nor an upload.
 	var ov overviewMetrics
-	_ = json.Unmarshal(f.expect("alice", "GET", "/api/v1/metrics/overview?range=1h", nil, 200), &ov)
-	if ov.Range != "1h" || ov.Storage.UsedBytes != 3500 || ov.Summary.PublishedSinceYesterday != 3 || ov.Issues.Critical != 1 ||
+	_ = json.Unmarshal(f.expect("admin", "GET", "/api/v1/metrics/overview?range=1h", nil, 200), &ov)
+	if ov.Range != "1h" || ov.Scope != "instance" || ov.Storage.UsedBytes != 3500 || ov.Summary.PublishedSinceYesterday != 3 || ov.Issues.Critical != 1 ||
 		len(ov.Traffic) != 12 || ov.Requests.Total == nil || *ov.Requests.Total != 7 {
 		t.Errorf("overview = %+v", ov)
+	}
+	// A reader of the npm repositories sees their numbers only: not the
+	// critical finding in maven-releases, nor instance-wide traffic.
+	var scoped overviewMetrics
+	_ = json.Unmarshal(f.expect("alice", "GET", "/api/v1/metrics/overview?range=1h", nil, 200), &scoped)
+	if scoped.Scope != "repositories" || scoped.Storage.UsedBytes != 3500 || scoped.Storage.CapacityBytes != nil ||
+		scoped.Summary.PublishedSinceYesterday != 2 || scoped.Issues.Critical != 0 || scoped.Issues.PackagesAffected != 0 ||
+		scoped.Issues.OpenFindings != 0 || scoped.Requests.Total != nil || scoped.Requests.ServerErrors != nil || scoped.Cache.Hits != nil {
+		t.Errorf("alice overview = %+v", scoped)
+	}
+	if len(scoped.StorageByFormat) != 1 || scoped.StorageByFormat[0].Format != "npm" {
+		t.Errorf("alice storage by format = %+v", scoped.StorageByFormat)
+	}
+	for _, b := range scoped.Traffic {
+		if b.Downloads != nil || b.Requests != nil {
+			t.Errorf("alice traffic bucket = %+v", b)
+		}
+	}
+	var none overviewMetrics
+	_ = json.Unmarshal(f.expect("bob", "GET", "/api/v1/metrics/overview?range=1h", nil, 200), &none)
+	if none.Scope != "repositories" || none.Storage.UsedBytes != 0 || none.Summary.PublishedSinceYesterday != 0 ||
+		len(none.StorageByFormat) != 0 || none.Issues.Critical != 0 {
+		t.Errorf("bob overview = %+v", none)
 	}
 	if c := ov.Cache; c.HitRatio == nil || *c.HitRatio != 0.75 || c.Hits == nil || *c.Hits != 3 || c.Misses == nil || *c.Misses != 1 {
 		t.Errorf("cache = %+v", c)
@@ -198,7 +221,7 @@ func TestAPIWithPostgres(t *testing.T) {
 	if err := restarted.Flush(ctx); err != nil {
 		t.Fatal(err)
 	}
-	_ = json.Unmarshal(f.expect("alice", "GET", "/api/v1/metrics/overview?range=today", nil, 200), &ov)
+	_ = json.Unmarshal(f.expect("admin", "GET", "/api/v1/metrics/overview?range=today", nil, 200), &ov)
 	if now.Add(-30*time.Minute).Day() == now.Day() && (ov.Requests.Total == nil || *ov.Requests.Total != 7) {
 		t.Errorf("after restart = %+v", ov.Requests)
 	}

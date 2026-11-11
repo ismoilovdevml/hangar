@@ -456,7 +456,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every number on the Overview screen for one range */
+        /**
+         * Every number on the Overview screen for one range
+         * @description Callers with system:cluster:read get the whole instance (scope
+         *     "instance"). Everyone else gets scope "repositories": every count
+         *     covers only the repositories they may read, and the instance-wide
+         *     request, cache and capacity numbers are null.
+         */
         get: operations["getOverviewMetrics"];
         put?: never;
         post?: never;
@@ -2610,6 +2616,11 @@ export interface components {
         OverviewMetrics: {
             range: components["schemas"]["OverviewRange"];
             generated_at: components["schemas"]["Timestamp"];
+            /**
+             * @description What the numbers cover; "repositories" means only the repositories the caller may read
+             * @enum {string}
+             */
+            scope: "instance" | "repositories";
             summary: {
                 /** @description Components published to hosted repositories in the last 24 hours */
                 published_since_yesterday: number;

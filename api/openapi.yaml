@@ -544,6 +544,11 @@ paths:
       tags: [overview]
       operationId: getOverviewMetrics
       summary: Every number on the Overview screen for one range
+      description: |
+        Callers with system:cluster:read get the whole instance (scope
+        "instance"). Everyone else gets scope "repositories": every count
+        covers only the repositories they may read, and the instance-wide
+        request, cache and capacity numbers are null.
       parameters:
         - name: range
           in: query
@@ -3639,10 +3644,14 @@ components:
           description: Requests served by every node in the bucket (as in `requests.total`); null like `downloads`
     OverviewMetrics:
       type: object
-      required: [range, generated_at, summary, activity, storage, requests, cache, issues, traffic, storage_by_format]
+      required: [range, generated_at, scope, summary, activity, storage, requests, cache, issues, traffic, storage_by_format]
       properties:
         range: { $ref: "#/components/schemas/OverviewRange" }
         generated_at: { $ref: "#/components/schemas/Timestamp" }
+        scope:
+          type: string
+          enum: [instance, repositories]
+          description: What the numbers cover; "repositories" means only the repositories the caller may read
         summary:
           type: object
           required: [published_since_yesterday, failed_pushes]
