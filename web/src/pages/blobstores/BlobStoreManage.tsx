@@ -9,6 +9,7 @@ import { Panel } from '../../components/Panel';
 import { Select } from '../../components/Select';
 import { QUOTA_UNITS, quotaBytes, quotaToForm, type QuotaUnit } from '../../lib/blobStores';
 import { formatBytes, formatCompact } from '../../lib/format';
+import { toast } from '../../lib/toast';
 import { BlobStoreConnection } from './BlobStoreConnection';
 
 function message(err: unknown, action: string): string {
@@ -30,13 +31,15 @@ export function BlobStoreManage({ s }: { s: BlobStore }) {
   const [quota, setQuota] = useState(initial.quota);
   const [unit, setUnit] = useState<QuotaUnit>(initial.quotaUnit);
   const [saved, setSaved] = useState(false);
+  // Only what the user typed or picked is saved; the pre-filled value may be rounded.
+  const [touched, setTouched] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const update = useUpdateBlobStore(s.name);
   const remove = useDeleteBlobStore(s.name);
 
   const bytes = quotaBytes(quota, unit);
   const invalid = bytes !== null && Number.isNaN(bytes);
-  const changed = (bytes ?? null) !== (s.soft_quota_bytes ?? null);
+  const changed = touched && (bytes ?? null) !== (s.soft_quota_bytes ?? null);
   const inUse = s.repository_count > 0 || s.blob_count > 0;
 
   const onSubmit = (e: FormEvent) => {
@@ -44,7 +47,11 @@ export function BlobStoreManage({ s }: { s: BlobStore }) {
     if (invalid || !changed) return;
     // Only the quota is sent: left-out config sections keep their stored values.
     update.mutate(bytes === null ? { name: s.name, kind: s.kind } : { name: s.name, kind: s.kind, soft_quota_bytes: bytes }, {
-      onSuccess: () => setSaved(true),
+      onSuccess: () => {
+        setSaved(true);
+        setTouched(false);
+        toast(bytes === null ? `Removed the soft quota of ${s.name}.` : `Soft quota of ${s.name} set to ${quota.trim()} ${unit}.`);
+      },
     });
   };
 
@@ -68,6 +75,7 @@ export function BlobStoreManage({ s }: { s: BlobStore }) {
               aria-describedby="manage-quota-hint"
               onChange={(e) => {
                 setSaved(false);
+                setTouched(true);
                 update.reset();
                 setQuota(e.target.value);
               }}
@@ -75,7 +83,17 @@ export function BlobStoreManage({ s }: { s: BlobStore }) {
             <label htmlFor="manage-quota-unit" className="visually-hidden">
               Quota unit
             </label>
-            <Select<QuotaUnit> id="manage-quota-unit" value={unit} disabled={!canAdmin} options={QUOTA_UNITS} onChange={setUnit} />
+            <Select<QuotaUnit>
+              id="manage-quota-unit"
+              value={unit}
+              disabled={!canAdmin}
+              options={QUOTA_UNITS}
+              onChange={(u) => {
+                setSaved(false);
+                setTouched(true);
+                setUnit(u);
+              }}
+            />
           </div>
           <span id="manage-quota-hint" className={invalid ? 'field__error' : 'field__hint'}>
             {invalid ? 'Enter a positive number, or leave empty for no quota.' : 'A warning threshold, not a hard limit. Empty removes it.'}

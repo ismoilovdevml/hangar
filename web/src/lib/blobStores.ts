@@ -50,11 +50,14 @@ export function humanDays(days: number): string {
 /* ---------------------------------------------------------------- create form */
 
 export type StoreKind = BlobStoreInput['kind'];
-export type QuotaUnit = 'GB' | 'TB';
+/** Decimal (GB, TB) and binary (GiB, TiB) units, so a quota set either way shows exactly. */
+export type QuotaUnit = 'GB' | 'GiB' | 'TB' | 'TiB';
 
 export const QUOTA_UNITS: { value: QuotaUnit; label: string }[] = [
   { value: 'GB', label: 'GB' },
+  { value: 'GiB', label: 'GiB' },
   { value: 'TB', label: 'TB' },
+  { value: 'TiB', label: 'TiB' },
 ];
 
 export interface BlobStoreForm {
@@ -91,7 +94,7 @@ export type BlobStoreField = 'name' | 'quota' | 'path' | 'endpoint' | 'bucket' |
 export type BlobStoreErrors = Partial<Record<BlobStoreField, string>>;
 
 export const STORE_NAME = /^[a-z0-9][a-z0-9-]{1,62}$/;
-const UNIT: Record<QuotaUnit, number> = { GB: 1e9, TB: 1e12 };
+const UNIT: Record<QuotaUnit, number> = { GB: 1e9, GiB: 2 ** 30, TB: 1e12, TiB: 2 ** 40 };
 
 /** Mirrors the server's checks (catalog.NewBlobStore.Validate); the server stays the authority. */
 export function validateBlobStoreForm(f: BlobStoreForm): BlobStoreErrors {
@@ -131,11 +134,19 @@ export function quotaBytes(value: string, unit: QuotaUnit): number | null {
   return Number.isFinite(n) && n > 0 ? Math.round(n * UNIT[unit]) : NaN;
 }
 
-/** The largest unit that shows a quota without a long fraction (for pre-filling the editor). */
+/**
+ * The quota for the editor: the largest unit that gives back exactly the
+ * stored bytes with at most three decimals (2147483648 is 2 GiB), else GB
+ * rounded. The editor only saves what the user changed, so a rounded value
+ * is never written back unasked.
+ */
 export function quotaToForm(bytes: number | null | undefined): { quota: string; quotaUnit: QuotaUnit } {
   if (!bytes) return { quota: '', quotaUnit: 'TB' };
-  const unit: QuotaUnit = bytes >= 1e12 ? 'TB' : 'GB';
-  return { quota: String(Number((bytes / UNIT[unit]).toFixed(3))), quotaUnit: unit };
+  for (const unit of ['TiB', 'TB', 'GiB', 'GB'] as const) {
+    const v = Number((bytes / UNIT[unit]).toFixed(3));
+    if (v >= 1 && Math.round(v * UNIT[unit]) === bytes) return { quota: String(v), quotaUnit: unit };
+  }
+  return { quota: String(Number((bytes / UNIT.GB).toFixed(3))), quotaUnit: 'GB' };
 }
 
 /** The request body for POST /blob-stores. Includes the secret; never log it. */
