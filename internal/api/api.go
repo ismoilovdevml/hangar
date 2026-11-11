@@ -47,6 +47,7 @@ type Catalog interface {
 	BlobStore(ctx context.Context, name string) (*catalog.BlobStore, error)
 	CreateBlobStore(ctx context.Context, n catalog.NewBlobStore) (*catalog.BlobStore, error)
 	UpdateBlobStore(ctx context.Context, name string, n catalog.NewBlobStore) (*catalog.BlobStore, error)
+	BlobStoreTestConfig(ctx context.Context, n catalog.NewBlobStore) (map[string]any, error)
 	DeleteBlobStore(ctx context.Context, name string) error
 	Overview(ctx context.Context, q catalog.OverviewQuery) (*catalog.Overview, error)
 	FormatDownloads(ctx context.Context) (map[string]int64, error)
@@ -94,6 +95,20 @@ type BlobStoreProbe interface {
 	BlobStoreState(name string) (sysmon.StoreState, bool)
 }
 
+// BlobStoreCheck is one step of a blob store connection test.
+type BlobStoreCheck struct {
+	Name    string
+	Latency time.Duration
+	Err     error // nil when the step passed
+}
+
+// BlobStoreTester tests a blob store configuration (the blob_stores.config
+// form; it opens sealed secrets itself) without saving it: the bucket is
+// reachable and a test object can be written, read and deleted.
+type BlobStoreTester interface {
+	TestBlobStore(ctx context.Context, kind string, config map[string]any) ([]BlobStoreCheck, error)
+}
+
 // RouteRegistrar adds routes to the /api/v1 router. Routes registered this
 // way run after authentication (the principal is in the context) and must be
 // documented in api/openapi.yaml like every other route.
@@ -125,6 +140,8 @@ type API struct {
 	Upstreams      UpstreamHealth
 	UpstreamCache  UpstreamCache
 	BlobStoreProbe BlobStoreProbe
+	// BlobStoreTester serves POST /blob-stores:test; nil answers 501.
+	BlobStoreTester BlobStoreTester
 	// Cleanup manages cleanup policies; Tasks manages scheduled tasks and runs.
 	Cleanup CleanupPolicies
 	Tasks   TaskManager
@@ -199,6 +216,7 @@ func (a *API) Mount(r chi.Router) {
 
 		r.Get("/blob-stores", a.listBlobStores)
 		r.Post("/blob-stores", a.createBlobStore)
+		r.Post("/blob-stores:test", a.testBlobStore)
 		r.Get("/blob-stores/{name}", a.getBlobStore)
 		r.Put("/blob-stores/{name}", a.updateBlobStore)
 		r.Delete("/blob-stores/{name}", a.deleteBlobStore)

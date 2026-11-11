@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -170,6 +171,33 @@ func TestCleanupAndTasksAPI(t *testing.T) {
 	if bs.SoftQuotaBytes != nil {
 		t.Fatalf("quota not cleared: %+v", bs)
 	}
+	if !bs.FromConfig {
+		t.Errorf("default store is not marked as configured: %+v", bs)
+	}
+	var spareJSON blobStoreJSON
+	if _ = json.Unmarshal(f.expect("admin", "GET", "/api/v1/blob-stores/spare", nil, 200), &spareJSON); spareJSON.FromConfig {
+		t.Errorf("spare store marked as configured")
+	}
+
+	// Connection test: the tester's steps come back; nothing is saved.
+	s3In := map[string]any{"name": "s3-try", "kind": "s3", "s3": map[string]any{"bucket": "no-such-bucket", "endpoint": "http://minio.example.com:9000"}}
+	f.expect("admin", "POST", "/api/v1/blob-stores:test", s3In, 501) // no tester wired
+	tester := &fakeStoreTester{fail: "bucket"}
+	f.api.BlobStoreTester = tester
+	f.expect("bob", "POST", "/api/v1/blob-stores:test", s3In, 403)
+	var tr blobStoreTestResult
+	_ = json.Unmarshal(f.expect("admin", "POST", "/api/v1/blob-stores:test", s3In, 200), &tr)
+	if tr.OK || len(tr.Steps) != 1 || tr.Steps[0].Status != "failed" || tr.Message != "bucket failed" || tester.cfg["bucket"] != "no-such-bucket" {
+		t.Errorf("failed test = %+v (config %v)", tr, tester.cfg)
+	}
+	tester.fail = ""
+	_ = json.Unmarshal(f.expect("admin", "POST", "/api/v1/blob-stores:test", s3In, 200), &tr)
+	if !tr.OK || len(tr.Steps) != 4 {
+		t.Errorf("passed test = %+v", tr)
+	}
+	f.expect("admin", "POST", "/api/v1/blob-stores:test", map[string]any{"name": "x", "kind": "fs", "fs": map[string]any{"path": "/srv/x"}}, 400)
+	f.expect("admin", "GET", "/api/v1/blob-stores/s3-try", nil, 404)
+
 	f.expect("admin", "PUT", "/api/v1/blob-stores/default", map[string]any{"fs": map[string]string{"path": "/elsewhere"}}, 400)
 	f.expect("admin", "PUT", "/api/v1/blob-stores/default", map[string]any{"kind": "s3"}, 400)
 	f.expect("admin", "PUT", "/api/v1/blob-stores/spare", map[string]any{"fs": map[string]string{"path": "/srv/spare"}}, 200)
@@ -194,4 +222,22 @@ func TestCleanupAndTasksAPI(t *testing.T) {
 	if got := outcomes("blobstore.delete"); got != "bob/denied,admin/success" {
 		t.Errorf("blobstore.delete audit = %s", got)
 	}
+}
+
+// fakeStoreTester passes every step, or fails the step named fail.
+type fakeStoreTester struct {
+	fail string
+	cfg  map[string]any
+}
+
+func (t *fakeStoreTester) TestBlobStore(_ context.Context, _ string, cfg map[string]any) ([]BlobStoreCheck, error) {
+	t.cfg = cfg
+	var out []BlobStoreCheck
+	for _, name := range []string{"bucket", "write", "read", "delete"} {
+		if name == t.fail {
+			return append(out, BlobStoreCheck{Name: name, Err: errors.New(name + " failed")}), nil
+		}
+		out = append(out, BlobStoreCheck{Name: name})
+	}
+	return out, nil
 }

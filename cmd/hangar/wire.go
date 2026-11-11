@@ -264,6 +264,13 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	if err != nil {
 		return nil, err
 	}
+	// The row shows what is in effect: settings changed in the configuration
+	// or the environment since the first start replace the stored ones.
+	if changed, err := registry.SyncStore(ctx, pool, DefaultBlobStore, cfg.Storage.Kind, storage.RegistryConfig(cfg.Storage)); err != nil {
+		return nil, err
+	} else if changed {
+		log.Info("blob store settings updated from the server configuration", "name", DefaultBlobStore, "kind", cfg.Storage.Kind)
+	}
 	blobs := registry.New(pool, registry.Options{
 		Static: map[string]core.BlobStore{DefaultBlobStore: store}, Fallback: store, Logger: log,
 	})
@@ -524,6 +531,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		AuthRoutes:     api.RouteFunc(func(r chi.Router) { httpapi.Register(r, authSvc, authOpts) }),
 		ExtraRoutes:    []api.RouteRegistrar{settingsSvc, signer},
 	}
+	restAPI.BlobStoreTester = blobStoreTester{keyring: keyring}
 	a.onClose(restAPI.Close)
 
 	trusted, err := server.ParseTrustedProxies(cfg.Server.TrustedProxies)

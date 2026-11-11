@@ -124,6 +124,57 @@ FROM blob_stores s WHERE s.name = $1 FOR UPDATE OF s`, name).Scan(&id, &kind, &r
 	return c.BlobStore(ctx, name)
 }
 
+// BlobStoreTestConfig returns the driver configuration (blob_stores.config
+// form) that a connection test of n uses, without saving anything. Only S3
+// stores are tested. When n names an existing S3 store and leaves the secret
+// out with the stored access key, the stored (sealed) secret is used, so a
+// store can be re-tested while it is edited.
+func (c *Catalog) BlobStoreTestConfig(ctx context.Context, n NewBlobStore) (map[string]any, error) {
+	if n.Kind != KindS3 {
+		return nil, fmt.Errorf("only s3 blob stores can be tested: %w", core.ErrInvalid)
+	}
+	if n.S3 == nil || n.S3.Bucket == "" {
+		return nil, fmt.Errorf("s3 blob store needs s3.bucket: %w", core.ErrInvalid)
+	}
+	in := *n.S3
+	sealed := ""
+	if in.AccessKeyID != "" && in.SecretAccessKey == "" {
+		var raw []byte
+		err := c.pool.QueryRow(ctx, `SELECT config FROM blob_stores WHERE name = $1 AND kind = $2`, n.Name, KindS3).Scan(&raw)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("test blob store %q: %w", n.Name, err)
+		}
+		var cur S3Config
+		_ = json.Unmarshal(raw, &cur)
+		if cur.AccessKeyID != in.AccessKeyID || cur.SecretSealed == "" {
+			return nil, fmt.Errorf("s3 access_key_id needs its secret_access_key: %w", core.ErrInvalid)
+		}
+		sealed = cur.SecretSealed
+	}
+	check := NewBlobStore{Name: "connection-test", Kind: KindS3, S3: &in}
+	if sealed != "" {
+		cp := in
+		cp.SecretAccessKey = "stored"
+		check.S3 = &cp
+	}
+	if err := check.Validate(); err != nil {
+		return nil, err
+	}
+	cfg := map[string]any{"bucket": in.Bucket, "use_path_style": in.UsePathStyle}
+	for k, v := range map[string]string{"endpoint": in.Endpoint, "region": in.Region, "prefix": in.Prefix, "access_key_id": in.AccessKeyID} {
+		if v != "" {
+			cfg[k] = v
+		}
+	}
+	switch {
+	case in.SecretAccessKey != "":
+		cfg["secret_access_key"] = in.SecretAccessKey
+	case sealed != "":
+		cfg["secret_access_key_sealed"] = sealed
+	}
+	return cfg, nil
+}
+
 func (c *Catalog) locationLocked(name string) error {
 	if c.configured(name) {
 		return fmt.Errorf("blob store %q is defined by the server configuration; change it there "+

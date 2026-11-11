@@ -58,6 +58,7 @@ type blobStoreJSON struct {
 	DedupSavedBytes  int64      `json:"dedup_saved_bytes"`
 	WriteLatencyMS   *float64   `json:"write_latency_ms"`
 	CreatedAt        time.Time  `json:"created_at"`
+	FromConfig       bool       `json:"from_config"`
 }
 
 type blobStoreTotals struct {
@@ -73,7 +74,7 @@ func (a *API) toBlobStoreJSON(r *http.Request, s *catalog.BlobStore) blobStoreJS
 	out := blobStoreJSON{
 		ID: s.ID, Name: s.Name, Kind: s.Kind, SoftQuotaBytes: s.SoftQuotaBytes, State: "unknown", Location: s.Location(),
 		UsedBytes: s.UsedBytes, CapacityBytes: s.SoftQuotaBytes, RepositoryCount: s.RepositoryCount, BlobCount: s.BlobCount,
-		ReclaimableBytes: s.ReclaimableBytes, DedupSavedBytes: s.DedupSavedBytes, CreatedAt: s.CreatedAt,
+		ReclaimableBytes: s.ReclaimableBytes, DedupSavedBytes: s.DedupSavedBytes, CreatedAt: s.CreatedAt, FromConfig: s.FromConfig,
 	}
 	if s.FS != nil {
 		out.FS = &fsJSON{Path: s.FS.Path}
