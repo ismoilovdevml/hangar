@@ -104,7 +104,8 @@ func (h *handler) upstreamIndex(ctx context.Context, repo *core.Repository) (*up
 		return nil, err
 	}
 	b, err := h.cachedDoc(ctx, repo, upstreamPrefix+"index.json", func(ctx context.Context) ([]byte, error) {
-		return h.fetchDoc(ctx, repo, h.remoteBase(repo)+"/"+cfg.ServiceIndex, "", maxServiceIndex)
+		b, err := h.fetchDoc(ctx, repo, h.remoteBase(repo)+"/"+cfg.ServiceIndex, "", maxServiceIndex)
+		return b, maskServiceIndex(err, cfg.ServiceIndex)
 	})
 	if err != nil {
 		// A remote without a service index is broken (502); an offline-mode
@@ -116,6 +117,24 @@ func (h *handler) upstreamIndex(ctx context.Context, repo *core.Repository) (*up
 	}
 	return parseServiceIndex(b)
 }
+
+// maskServiceIndex hides the service index path in err's message: some
+// feeds carry their key in it, and error messages reach clients. The error
+// chain (errors.Is, errors.As) is unchanged.
+func maskServiceIndex(err error, index string) error {
+	if err == nil || index == DefaultServiceIndex || !strings.Contains(err.Error(), index) {
+		return err
+	}
+	return maskedError{msg: strings.ReplaceAll(err.Error(), index, "<service_index>"), err: err}
+}
+
+type maskedError struct {
+	msg string
+	err error
+}
+
+func (e maskedError) Error() string { return e.msg }
+func (e maskedError) Unwrap() error { return e.err }
 
 func (h *handler) remoteBase(repo *core.Repository) string {
 	return strings.TrimSuffix(repo.Config.Proxy.RemoteURL, "/")

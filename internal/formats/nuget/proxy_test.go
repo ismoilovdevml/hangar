@@ -304,3 +304,25 @@ func TestGroupReadFillsProxyWithGroupPrivilegeOnly(t *testing.T) {
 		t.Errorf("direct read of the member = %d, want 403", rec.Code)
 	}
 }
+
+// A feed key in the service index path never reaches a client in an error
+// message (the remote failing, or not having the index).
+func TestServiceIndexPathStaysOutOfErrors(t *testing.T) {
+	f, feed := newProxyFixture(t)
+	const key = "k7Qx2mN9vB4cR8tY6wZ1aS3dF5gH0jL"
+	f.env.AddRepo(t, &core.Repository{Name: "nuget-vendor", Format: nuget.Name, Type: core.RepoProxy,
+		Config: core.RepoConfig{Proxy: &core.ProxyConfig{RemoteURL: remote},
+			Format: map[string]any{"service_index": "/" + key + "/api/v3/index.json"}}})
+	f.env.Upstreams.Set("nuget-vendor", feed)
+	f.h = formats.NewHandler(f.env.Deps(), nuget.New())
+	for _, down := range []bool{false, true} {
+		feed.down.Store(down)
+		rec := f.get("/repository/nuget-vendor/v3-flatcontainer/remote.pkg/index.json")
+		if rec.Code < 500 {
+			t.Errorf("down=%v: status %d, want a 5xx", down, rec.Code)
+		}
+		if strings.Contains(rec.Body.String(), key) {
+			t.Errorf("down=%v: the feed key leaked: %s", down, rec.Body)
+		}
+	}
+}

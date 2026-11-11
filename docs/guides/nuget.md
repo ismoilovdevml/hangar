@@ -61,6 +61,32 @@ fetched as related hosts, without the remote's credentials. When search there
 fails, is rate limited or the proxy is `offline`, search answers from the cached
 packages.
 
+#### Feeds that need a key
+
+Some private feeds take their key in the URL path (`https://feed.example.com/<feed-key>/api/v3/index.json`):
+configured as `remote_url: https://feed.example.com` and
+`service_index: /<feed-key>/api/v3/index.json`. Hangar treats `service_index`
+as sensitive: it is returned only to administrators of the repository
+(`repo:<name>:admin` or `system:repos:admin`); everyone else, the YAML export
+included, sees `***`, which shows that a custom index is set. An update that
+sends `***` back keeps the stored value. Error messages sent to clients name
+it `<service_index>`.
+
+The path is still stored in the repository configuration as plain text,
+unlike `config.proxy.auth`, whose secrets are encrypted at rest and never
+returned by the API. Where the feed accepts the key as a credential (HTTP
+Basic or a header; check the feed's own documentation), put it in
+`config.proxy.auth` and keep `service_index` free of secrets:
+
+```json
+"config": {
+  "proxy": {
+    "remote_url": "https://feed.example.com",
+    "auth": { "kind": "basic", "username": "<user>", "password": "<feed-key>" }
+  }
+}
+```
+
 ### Group
 
 ```bash

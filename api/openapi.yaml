@@ -3987,7 +3987,11 @@ components:
           description: What `DELETE api/v2/package/{id}/{version}` (`dotnet nuget delete`) does. Default `unlist`.
         service_index:
           type: string
-          description: Proxy only. The remote's service index path, relative to `remote_url`. Default `v3/index.json`.
+          description: |
+            Proxy only. The remote's service index path, relative to `remote_url`. Default `v3/index.json`.
+            Sensitive, as some feeds carry their key in this path: returned only to administrators of
+            the repository (`repo:<name>:admin`, `system:repos:admin`), as `***` to everyone else. An
+            update that sends `***` keeps the stored value.
           examples: [v3/index.json, index.json]
     PypiFormatConfig:
       type: object

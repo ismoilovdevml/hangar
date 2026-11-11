@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"slices"
@@ -69,8 +70,24 @@ type repositoryList struct {
 	Counts repoCounts `json:"counts"`
 }
 
-// redactConfig removes write-only secrets before a config leaves the server.
-func redactConfig(c core.RepoConfig) core.RepoConfig {
+// sensitiveFormatKeys are config.format settings that may carry a secret:
+// some NuGet feeds put the API key in the service index path
+// (/<feed-key>/api/v3/index.json). Only administrators of the repository
+// read them; everyone else gets redactedSetting, which still shows that a
+// value is set.
+var sensitiveFormatKeys = []string{"service_index"}
+
+// redactedSetting replaces a sensitive setting for readers who may not see
+// it. Sent back in an update, it keeps the stored value (keepSecrets).
+const redactedSetting = "***"
+
+// redactConfig removes write-only secrets before a config leaves the server,
+// and the sensitive format settings unless admin (the caller administers the
+// repository).
+func redactConfig(c core.RepoConfig, admin bool) core.RepoConfig {
+	if !admin {
+		c.Format = redactFormat(c.Format)
+	}
 	if c.Proxy != nil {
 		p := *c.Proxy
 		if p.Auth != nil {
@@ -83,6 +100,25 @@ func redactConfig(c core.RepoConfig) core.RepoConfig {
 		c.Proxy = &p
 	}
 	return c
+}
+
+// redactFormat returns f with every sensitive setting that holds a value
+// replaced by redactedSetting; f itself is not modified.
+func redactFormat(f map[string]any) map[string]any {
+	var out map[string]any
+	for _, k := range sensitiveFormatKeys {
+		if v, ok := f[k]; !ok || v == nil || v == "" {
+			continue
+		}
+		if out == nil {
+			out = maps.Clone(f)
+		}
+		out[k] = redactedSetting
+	}
+	if out == nil {
+		return f
+	}
+	return out
 }
 
 // baseURL is Deps.BaseURL without a trailing slash.
@@ -151,11 +187,13 @@ func repoStatus(r *core.Repository, up map[string]proxy.HealthItem) string {
 	return "online"
 }
 
-func (a *API) toRepositoryJSON(r *core.Repository, stats map[string]catalog.RepoStats, up map[string]proxy.HealthItem) repositoryJSON {
+// toRepositoryJSON is schema Repository; admin reports whether the caller
+// administers r (see redactConfig).
+func (a *API) toRepositoryJSON(r *core.Repository, stats map[string]catalog.RepoStats, up map[string]proxy.HealthItem, admin bool) repositoryJSON {
 	st := stats[r.ID]
 	j := repositoryJSON{
 		ID: r.ID, Name: r.Name, Format: r.Format, Type: r.Type, Description: r.Description, BlobStore: r.BlobStore,
-		Online: r.Online, Config: redactConfig(r.Config), URL: a.repoURL(r), Status: repoStatus(r, up),
+		Online: r.Online, Config: redactConfig(r.Config, admin), URL: a.repoURL(r), Status: repoStatus(r, up),
 		SizeBytes: st.SizeBytes, ComponentCount: st.ComponentCount, CreatedAt: r.CreatedAt.UTC(), UpdatedAt: r.UpdatedAt.UTC(),
 	}
 	if j.Status == "blocked" {
@@ -273,7 +311,7 @@ func (a *API) listRepositories(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]repositoryJSON, 0, len(items))
 	for _, repo := range items {
-		out = append(out, a.toRepositoryJSON(repo, stats, up))
+		out = append(out, a.toRepositoryJSON(repo, stats, up, a.isRepoAdmin(ctx, repo.Name)))
 	}
 	WriteJSON(w, http.StatusOK, repositoryList{page: newPage(out, next), Counts: counts})
 }
@@ -311,7 +349,7 @@ func (a *API) getRepository(w http.ResponseWriter, r *http.Request) {
 	if wantsYAML(r) {
 		online := repo.Online
 		b, err := yaml.Marshal(repositoryInput{Name: repo.Name, Format: repo.Format, Type: repo.Type,
-			Description: repo.Description, BlobStore: repo.BlobStore, Online: &online, Config: redactConfig(repo.Config)})
+			Description: repo.Description, BlobStore: repo.BlobStore, Online: &online, Config: redactConfig(repo.Config, a.isRepoAdmin(ctx, repo.Name))})
 		if err != nil {
 			a.writeErr(w, r, err)
 			return
@@ -326,7 +364,7 @@ func (a *API) getRepository(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	up, _ := a.upstreamStates(ctx)
-	WriteJSON(w, http.StatusOK, a.toRepositoryJSON(repo, stats, up))
+	WriteJSON(w, http.StatusOK, a.toRepositoryJSON(repo, stats, up, a.isRepoAdmin(ctx, repo.Name)))
 }
 
 // decodeRepositoryInput reads a JSON or YAML RepositoryInput and notes
@@ -384,7 +422,7 @@ func (a *API) createRepository(w http.ResponseWriter, r *http.Request) {
 		a.writeErr(w, r, err)
 		return
 	}
-	WriteJSON(w, http.StatusCreated, a.toRepositoryJSON(repo, nil, nil))
+	WriteJSON(w, http.StatusCreated, a.toRepositoryJSON(repo, nil, nil, true))
 }
 
 func (a *API) updateRepository(w http.ResponseWriter, r *http.Request) {
@@ -430,7 +468,7 @@ func (a *API) updateRepository(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stats, _ := a.repoStats(ctx)
-	WriteJSON(w, http.StatusOK, a.toRepositoryJSON(repo, stats, nil))
+	WriteJSON(w, http.StatusOK, a.toRepositoryJSON(repo, stats, nil, true))
 }
 
 func (a *API) deleteRepository(w http.ResponseWriter, r *http.Request) {

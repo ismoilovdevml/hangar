@@ -2844,6 +2844,9 @@ export interface components {
             delete_mode?: "unlist" | "delete";
             /**
              * @description Proxy only. The remote's service index path, relative to `remote_url`. Default `v3/index.json`.
+             *     Sensitive, as some feeds carry their key in this path: returned only to administrators of
+             *     the repository (`repo:<name>:admin`, `system:repos:admin`), as `***` to everyone else. An
+             *     update that sends `***` keeps the stored value.
              * @example v3/index.json
              * @example index.json
              */
