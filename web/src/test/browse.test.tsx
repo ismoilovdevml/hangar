@@ -38,8 +38,16 @@ describe('package browser: tree', () => {
     await waitFor(() => expect(search(history).get('name')).toBe('ui-kit'));
     expect(search(history).get('path')).toBe('@acme/ui-kit/');
     expect(await screen.findByRole('heading', { level: 1, name: '@acme/ui-kit' })).toBeInTheDocument();
-    expect(await item(/^ui-kit-5\.3\.1\.tgz/)).toHaveAttribute('aria-level', '4');
-    expect(await item(/^meta/)).toBeInTheDocument();
+    // A package opens to its versions, never to the files it is stored in.
+    const v = await item(/^5\.3\.1/);
+    expect(v).toHaveAttribute('aria-level', '4');
+    expect(v).toHaveTextContent('newest');
+    expect(within(tree()).queryByRole('treeitem', { name: /\.tgz/ })).toBeNull();
+    expect(within(tree()).queryByRole('treeitem', { name: /^meta/ })).toBeNull();
+    await user.click(await item(/^5\.3\.0/));
+    await waitFor(() => expect(search(history).get('version')).toBe('5.3.0'));
+    expect(search(history).get('path')).toBe('@acme/ui-kit/');
+    expect(await item(/^5\.3\.0/)).toHaveAttribute('aria-selected', 'true');
     expect(document.querySelector('select')).toBeNull();
   });
 
@@ -79,12 +87,13 @@ describe('package browser: tree', () => {
   });
 
   it('opens the folders of a deep link and selects the node', async () => {
-    renderApp('/browse?repo=maven-releases&path=com/acme/ledger-core/7.0.0/&ns=com.acme&name=ledger-core&version=7.0.0');
-    const version = await item(/^7\.0\.0\s*version/);
+    // Search results and shared links name the package, not its folder.
+    renderApp('/browse?repo=maven-releases&ns=com.acme&name=ledger-core&version=7.0.0');
+    const version = await item(/^7\.0\.0/);
     expect(version).toHaveAttribute('aria-selected', 'true');
     expect(version).toHaveAttribute('aria-level', '5');
-    expect(await item(/^ledger-core-7\.0\.0\.jar/)).toBeInTheDocument();
-    expect(await item(/^maven-metadata\.xml/)).toBeInTheDocument();
+    expect(await item(/^ledger-core\s*package/)).toHaveAttribute('aria-expanded', 'true');
+    expect(within(tree()).queryByRole('treeitem', { name: /maven-metadata\.xml/ })).toBeNull();
     expect(await screen.findByRole('heading', { level: 1, name: 'com.acme:ledger-core' })).toBeInTheDocument();
   });
 
@@ -97,18 +106,21 @@ describe('package browser: tree', () => {
     await user.clear(screen.getByLabelText('Filter the tree'));
     await user.type(screen.getByLabelText('Filter the tree'), 'nothing-like-this');
     expect(await screen.findByText(/Nothing loaded matches/)).toBeInTheDocument();
+    // What is not loaded yet is a search away.
+    expect(screen.getByRole('link', { name: 'Search all packages for “nothing-like-this”' })).toHaveAttribute('href', '/search?q=nothing-like-this');
   });
 
   it('merges a group’s members and names the member that holds each entry', async () => {
     const user = userEvent.setup();
     const { history } = renderApp('/browse?repo=docker-all&path=payments-api/');
     expect(await item(/^payments-api/)).toBeInTheDocument();
-    await user.click(await item(/^manifests/));
-    await user.click(await item(/^2\.14\.0/));
-    await waitFor(() => expect(search(history).get('asset')).toMatch(/^c_8812_m_/));
-    const head = await screen.findByRole('region', { name: 'File 2.14.0' });
-    expect(within(head).getByText(/served through docker-all/)).toBeInTheDocument();
-    expect(within(head).getByRole('link', { name: 'docker-prod' })).toBeInTheDocument();
+    expect(within(tree()).queryByRole('treeitem', { name: /^manifests/ })).toBeNull();
+    expect(within(tree()).queryByRole('treeitem', { name: /^blobs/ })).toBeNull();
+    await user.click(await item(/^2\.13\.2/));
+    await waitFor(() => expect(search(history).get('version')).toBe('2.13.2'));
+    expect(search(history).get('repo')).toBe('docker-all');
+    expect(search(history).get('member')).toBe('docker-prod');
+    expect(await screen.findByRole('region', { name: 'payments-api 2.13.2' })).toBeInTheDocument();
   });
 
   it('shows the repository summary: members of a group, upstream of a proxy', async () => {
@@ -211,6 +223,32 @@ describe('package browser: package', () => {
     expect(within(table).getByRole('button', { name: /Copy SHA-256 of/ })).toBeInTheDocument();
   });
 
+  it('sizes a docker image by its layers, not its manifest', async () => {
+    renderApp('/browse?repo=docker-prod&name=payments-api&version=2.14.0&tab=files');
+    expect(await screen.findByRole('tab', { name: 'Layers' })).toHaveAttribute('aria-selected', 'true');
+    const table = await screen.findByRole('table', { name: 'Layers' });
+    expect(within(table).getByText('Image config')).toBeInTheDocument();
+    expect(within(table).getAllByText(/^sha256:/)).toHaveLength(3);
+    expect(screen.getByText('3 layers, 186 MB compressed.')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Version' })).toHaveTextContent('Compressed size186 MB');
+  });
+
+  it('deletes a whole package after typing its name', async () => {
+    const user = userEvent.setup();
+    const { history } = renderApp('/browse?repo=docker-prod&name=payments-api&tab=versions');
+    const table = await screen.findByRole('table', { name: 'Versions' });
+    await within(table).findByRole('link', { name: '2.13.1' });
+    await user.click(screen.getByRole('button', { name: 'Delete package…' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Delete payments-api?' });
+    const confirm = within(dialog).getByRole('button', { name: 'Delete 3 versions' });
+    expect(confirm).toBeDisabled();
+    await user.type(within(dialog).getByRole('textbox'), 'payments-api');
+    await user.click(confirm);
+    await waitFor(() => expect(catalogState.components.some((c) => c.repository === 'docker-prod' && c.name === 'payments-api')).toBe(false));
+    await waitFor(() => expect(search(history).get('name')).toBeNull());
+    expect(search(history).get('repo')).toBe('docker-prod');
+  });
+
   it('lists the repositories that hold the version and the groups that serve it', async () => {
     renderApp('/browse?repo=npm-internal&ns=@acme&name=ui-kit&tab=repositories');
     const table = await screen.findByRole('table', { name: 'Repositories with this version' });
@@ -303,10 +341,24 @@ describe('package browser: package', () => {
 });
 
 describe('package browser: files', () => {
+  it('opens the stored files from the repository summary', async () => {
+    const user = userEvent.setup();
+    const { history } = renderApp('/browse?repo=nuget-internal');
+    await user.click(await screen.findByRole('link', { name: 'Files' }));
+    await waitFor(() => expect(search(history).get('files')).toBe('/'));
+    const table = await screen.findByRole('table', { name: 'Files in nuget-internal' });
+    await user.click(await within(table).findByRole('button', { name: /acme\.core/ }));
+    await waitFor(() => expect(search(history).get('files')).toBe('acme.core/'));
+    expect(await screen.findByRole('button', { name: 'Up one folder' })).toBeInTheDocument();
+    // The tree marks the repository, whose stored files these are.
+    expect(await item(/^nuget-internal/)).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('shows a file and deletes it after confirmation', async () => {
     const user = userEvent.setup();
-    const { history } = renderApp('/browse?repo=nuget-internal&path=acme.core/1.2.0/');
-    await user.click(await item(/^acme\.core\.1\.2\.0\.nupkg/));
+    const { history } = renderApp('/browse?repo=nuget-internal&files=acme.core/1.2.0/');
+    const table = await screen.findByRole('table', { name: 'Contents of acme.core/1.2.0/' });
+    await user.click(await within(table).findByRole('button', { name: 'acme.core.1.2.0.nupkg' }));
     await waitFor(() => expect(search(history).get('asset')).toBe('c_nuget_a0'));
     const head = await screen.findByRole('region', { name: 'File acme.core.1.2.0.nupkg' });
     expect(within(head).getByText('v3-flatcontainer/acme.core/1.2.0/acme.core.1.2.0.nupkg', { selector: '.pkg-head__meta' })).toBeInTheDocument();
@@ -320,8 +372,26 @@ describe('package browser: files', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Delete file' }));
     await waitFor(() => expect(catalogState.deletedAssets.has('c_nuget_a0')).toBe(true));
     await waitFor(() => expect(search(history).get('asset')).toBeNull());
-    expect(search(history).get('path')).toBe('acme.core/1.2.0/');
-    await waitFor(() => expect(within(tree()).queryByRole('treeitem', { name: /^acme\.core\.1\.2\.0\.nupkg/ })).toBeNull());
+    expect(search(history).get('files')).toBe('acme.core/1.2.0/');
+    const after = await screen.findByRole('table', { name: 'Contents of acme.core/1.2.0/' });
+    await waitFor(() => expect(within(after).queryByRole('button', { name: 'acme.core.1.2.0.nupkg' })).toBeNull());
+  });
+
+  it('never offers to delete one file of a docker image', async () => {
+    const user = userEvent.setup();
+    renderApp('/browse?repo=docker-prod&files=payments-api/manifests/');
+    const table = await screen.findByRole('table', { name: 'Contents of payments-api/manifests/' });
+    await user.click(await within(table).findByRole('button', { name: '2.14.0' }));
+    expect(await screen.findByText(/Layers and manifests are shared/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete file' })).toBeNull();
+  });
+
+  it('opens a raw file found by search as the file it is', async () => {
+    const raw = catalogState.components.find((c) => c.format === 'raw')!;
+    renderApp(`/browse?repo=${raw.repository}&ns=${encodeURIComponent(raw.namespace ?? '')}&name=${encodeURIComponent(raw.name)}`);
+    expect(await screen.findByRole('button', { name: 'Delete file' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete version' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Readme' })).toBeNull();
   });
 
   it('marks a cached file of a proxy and disables deletion without rights', async () => {
