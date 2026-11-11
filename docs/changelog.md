@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- **Faster first load of the web UI**: the build writes brotli and gzip
+  copies of its scripts, styles and page, and the server sends the one the
+  browser accepts (`Vary: Accept-Encoding`; hashed assets stay cached for a
+  year, the page is revalidated). Pages other than Overview load on first
+  visit, so the first load fetches 178 KB instead of 1.09 MB. A boot screen
+  shows while the scripts arrive; on a 500 kbit/s link with 400 ms latency
+  it appears after about 0.8 s and the page after about 5 s, where the
+  screen used to stay blank for 18.8 s. A tab opened before an upgrade
+  reloads once when it asks for a script the new release no longer has (the
+  server now answers 404 for it instead of the page). `openapi.json` is sent
+  gzipped.
+- **System logs keep the errors that matter**: the web UI's own successful
+  reads (its files and a browser session's `GET` API calls, which every open
+  tab repeats every few seconds) are logged at debug level, so they no
+  longer fill the in-memory buffer. The newest warnings and errors (a fifth
+  of `log.buffer_size`, at least 100) also outlive their place in it.
+- **The node list no longer waits for slow checks**: `/system/nodes` and
+  `/nodes` answer from the last check run and refresh it in the background,
+  so a store probe waiting for its 3 s timeout does not hold up the System
+  status and System logs screens. A client that cancels the request no
+  longer logs "other nodes unavailable".
+
 ## v0.1.8 (2026-11-11)
 
 - **Release checks are opt-in**: the test, lint and deploy-check jobs of the
