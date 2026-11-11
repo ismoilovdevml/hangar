@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   allows,
+  groupSessions,
   customExpiry,
   describeAudit,
   describePrivilege,
@@ -133,3 +134,21 @@ describe('groupRepoAccess', () => {
   });
 });
 
+
+describe('groupSessions', () => {
+  const ua = (b: string) => (b === 'chrome' ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0' : 'Mozilla/5.0 (X11; Linux x86_64) Firefox/121.0');
+  const s = (id: string, browser: string, ip: string, seen: string, current = false) => ({ id, user_agent: ua(browser), ip, last_seen_at: seen, current });
+  it('puts this device first and folds identical device and address rows', () => {
+    const groups = groupSessions([
+      s('a', 'chrome', '10.0.0.1', '2026-11-11T09:00:00Z'),
+      s('b', 'firefox', '10.0.0.2', '2026-11-11T12:00:00Z'),
+      s('c', 'chrome', '10.0.0.1', '2026-11-11T10:00:00Z', true),
+      s('d', 'chrome', '10.0.0.1', '2026-11-11T11:00:00Z'),
+    ]);
+    expect(groups.map((g) => [g.device, g.ip, g.sessions.map((x) => x.id)])).toEqual([
+      ['Chrome on macOS', '10.0.0.1', ['c', 'd', 'a']],
+      ['Firefox on Linux', '10.0.0.2', ['b']],
+    ]);
+    expect(groups[0]!.current).toBe(true);
+  });
+});
