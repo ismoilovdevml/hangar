@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -162,5 +164,30 @@ func TestLogRequestSince(t *testing.T) {
 	r = httptest.NewRequest(http.MethodGet, "/?since=2026-05-01T10:00:00Z", nil)
 	if req, err = logRequest(r, now); err != nil || req.Since.Hour() != 10 {
 		t.Fatalf("since=rfc3339: %+v %v", req, err)
+	}
+}
+
+// A client that goes away while the other nodes are read is not a fault
+// worth a warning; the screens cancel such requests all the time.
+func TestSystemNodesQuietWhenClientLeaves(t *testing.T) {
+	f, _ := monitorFixture(t)
+	ring := observability.NewLogRing(100)
+	f.api.Deps.Logger = observability.NewLoggerWithRing(io.Discard, "info", "json", ring)
+	f.api.Monitor = fakeMonitor{nodes: []sysmon.Node{{ID: "hangar-1"}}, err: fmt.Errorf("read nodes: %w", context.Canceled)}
+	for _, path := range []string{"/api/v1/system/nodes", "/api/v1/nodes"} {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		req := httptest.NewRequestWithContext(ctx, http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer "+f.tokens["admin"])
+		f.srv.Config.Handler.ServeHTTP(httptest.NewRecorder(), req)
+		if p := ring.Query(observability.LogQuery{MinLevel: slog.LevelWarn}); len(p.Items) != 0 {
+			t.Fatalf("%s: canceled request logged %+v", path, p.Items)
+		}
+	}
+	// The database failing for a client still waiting is worth one.
+	f.api.Monitor = fakeMonitor{nodes: []sysmon.Node{{ID: "hangar-1"}}, err: errors.New("connection refused")}
+	f.expect("admin", "GET", "/api/v1/system/nodes", nil, http.StatusOK)
+	if p := ring.Query(observability.LogQuery{MinLevel: slog.LevelWarn}); len(p.Items) != 1 {
+		t.Fatalf("database failure logged %+v", p.Items)
 	}
 }

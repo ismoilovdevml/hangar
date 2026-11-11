@@ -64,7 +64,9 @@ func (a *API) systemNodes(w http.ResponseWriter, r *http.Request) {
 	nodes, err := a.Monitor.Nodes(r.Context())
 	out := systemNodes{Current: a.Monitor.NodeID(), GeneratedAt: time.Now().UTC(), Items: nodes}
 	if err != nil {
-		a.logger().WarnContext(r.Context(), "system nodes: other nodes unavailable", "error", err)
+		if r.Context().Err() == nil { // not just the client going away
+			a.logger().WarnContext(r.Context(), "system nodes: other nodes unavailable", "error", err)
+		}
 		out.Partial, out.Message = true, "Other nodes are not shown: their heartbeats cannot be read from the database."
 	}
 	if out.Items == nil {
@@ -171,7 +173,7 @@ func (a *API) listNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nodes, err := a.Monitor.Nodes(r.Context())
-	if err != nil {
+	if err != nil && r.Context().Err() == nil { // not just the client going away
 		a.logger().WarnContext(r.Context(), "nodes: other nodes unavailable", "error", err)
 	}
 	out := clusterStatus{Nodes: make([]clusterNode, 0, len(nodes)), Dependencies: []dependency{}}
