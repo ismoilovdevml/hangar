@@ -1,8 +1,10 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useAssignees, useAssignFinding, useAssignPackage, useWaivePackage } from '../../api/findings';
+import { useQueryClient } from '@tanstack/react-query';
+import { revokeWaivers, useAssignees, useAssignFinding, useAssignPackage, useWaivePackage } from '../../api/findings';
 import { useSession } from '../../api/hooks';
-import { dateInputValue, errorText, MAX_WAIVER_DAYS, validateWaiver, waiverUntil } from '../../lib/vulnerabilities';
+import { toast } from '../../lib/toast';
+import { dateInputValue, errorText, MAX_WAIVER_DAYS, shortDate, validateWaiver, waiverUntil } from '../../lib/vulnerabilities';
 
 interface FormDialogProps {
   title: string;
@@ -100,6 +102,7 @@ interface WaiveDialogProps {
 /** Waive every finding of a package, or one of them, with a reason and an end date. */
 export function WaiveDialog({ packageKey, packageName, findings, initial, onClose }: WaiveDialogProps) {
   const waive = useWaivePackage();
+  const qc = useQueryClient();
   const reasonId = useId();
   const untilId = useId();
   const scopeName = useId();
@@ -116,7 +119,20 @@ export function WaiveDialog({ packageKey, packageName, findings, initial, onClos
     if (errors.reason || errors.until || !end) return;
     waive.mutate(
       { package: packageKey, finding_ids: scope === 'all' ? [] : [scope], reason: reason.trim(), until: end.toISOString() },
-      { onSuccess: onClose },
+      {
+        onSuccess: (res) => {
+          onClose();
+          const n = res.findings.length;
+          toast(`Waived ${n === 1 ? '1 finding' : `${n} findings`} of ${packageName} until ${shortDate(end.toISOString())}. They are listed under Waived.`, {
+            label: 'Undo',
+            run: () =>
+              void revokeWaivers(qc, res.findings).then(
+                () => toast(`Waiver of ${packageName} undone.`),
+                () => toast(`Could not undo the waiver of ${packageName}. End it from the Waived tab.`),
+              ),
+          });
+        },
+      },
     );
   };
 
@@ -198,8 +214,12 @@ export function AssignDialog({ target, current, onClose }: { target: AssignTarge
   const listName = useId();
 
   const save = (assignee: string | null) => {
-    if (target.kind === 'finding') one.mutate({ id: target.id, assignee }, { onSuccess: onClose });
-    else pkg.mutate({ key: target.key, assignee }, { onSuccess: onClose });
+    const done = () => {
+      onClose();
+      toast(assignee ? `Assigned ${target.label} to ${assignee}.` : `${target.label} is no longer assigned.`);
+    };
+    if (target.kind === 'finding') one.mutate({ id: target.id, assignee }, { onSuccess: done });
+    else pkg.mutate({ key: target.key, assignee }, { onSuccess: done });
   };
   const [missing, setMissing] = useState(false);
   const submit = () => {

@@ -151,6 +151,12 @@ describe('vulnerabilities', () => {
     expect(Date.parse(findingsState.findings.find((f) => f.id === 'f_8')!.waiver_until!) - Date.now()).toBeGreaterThan(29 * 86_400_000);
     await waitFor(() => expect(within(row('System.Security.Cryptography.Xml')).getByText('1 high · CVSS 8.1')).toBeInTheDocument());
     expect(screen.getByRole('tab', { name: 'Waived · 2' })).toBeInTheDocument();
+
+    // The toast says what happened and undoes it.
+    expect(await screen.findByText(/^Waived 1 finding of System.Security.Cryptography.Xml until /)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(await screen.findByText('Waiver of System.Security.Cryptography.Xml undone.')).toBeInTheDocument();
+    expect(findingsState.findings.find((f) => f.id === 'f_8')!.status).not.toBe('waived');
   });
 
   it('assigns a package and a finding, and filters to my assignments', async () => {

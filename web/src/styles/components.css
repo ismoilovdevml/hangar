@@ -353,7 +353,7 @@ select.input:disabled { opacity: .7; }
 
 /* ---------- toast ---------- */
 .toast {
-  position: fixed; z-index: 60; right: 24px; bottom: 24px; max-width: min(420px, calc(100vw - 32px));
+  position: fixed; z-index: var(--z-toast); right: 24px; bottom: 24px; max-width: min(420px, calc(100vw - 32px));
   display: flex; align-items: flex-start; gap: 12px; padding: 14px 14px 14px 16px;
   border-radius: var(--r-panel); box-shadow: var(--shadow-raised); color: var(--ink); font-size: 14px;
 }

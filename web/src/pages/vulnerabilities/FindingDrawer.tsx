@@ -23,6 +23,7 @@ import {
   shortDate,
   sortedAliases,
 } from '../../lib/vulnerabilities';
+import { toast } from '../../lib/toast';
 import { AdvisoryText } from './AdvisoryText';
 import { CopyTextButton } from './CopyTextButton';
 import { Drawer } from './Drawer';
@@ -367,7 +368,7 @@ function WaiverSection({ f, canWrite }: { f: Finding; canWrite: boolean }) {
           <p className="meta">The finding re-opens on its own when the waiver ends.</p>
           {canWrite && (
             <div className="vfinding__actions">
-              <button type="button" className="button button--secondary button--sm" disabled={revoke.isPending} onClick={() => revoke.mutate(f.id)}>
+              <button type="button" className="button button--secondary button--sm" disabled={revoke.isPending} onClick={() => revoke.mutate(f.id, { onSuccess: () => toast(`Waiver of ${f.advisory_id} ended; the finding is open again.`) })}>
                 {revoke.isPending ? 'Revoking…' : 'Revoke waiver'}
               </button>
             </div>
