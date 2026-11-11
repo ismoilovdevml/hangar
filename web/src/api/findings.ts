@@ -20,6 +20,7 @@ import type {
   Rescan,
   ScanningStatus,
   ScanResult,
+  SearchResult,
   Severity,
   WaiverInput,
 } from './types';
@@ -132,6 +133,14 @@ export function useScanComponent(id: string) {
   return useMutation({
     mutationFn: () => apiFetch<ScanResult>(`/components/${encodeURIComponent(id)}:scan`, { method: 'POST' }),
     onSuccess: () => invalidateAll(qc),
+  });
+}
+
+/** Packages with a quarantined version in the readable repositories (search `security:quarantined`). */
+export function useQuarantinedPackages() {
+  return useQuery({
+    queryKey: [...findingKeys.all, 'quarantined-packages'] as const,
+    queryFn: async ({ signal }) => (await apiFetch<SearchResult>('/search', { query: { q: 'security:quarantined', limit: 1 }, signal })).total,
   });
 }
 
