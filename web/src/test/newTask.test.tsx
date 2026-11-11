@@ -130,4 +130,11 @@ describe('new import and pre-warm tasks', () => {
     expect(sent).toMatchObject({ type: 'repository_import', schedule: '0 3 * * *' });
     server.events.removeAllListeners();
   });
+
+  it('does not start maintenance on its own when opened by link', async () => {
+    renderApp('/tasks/new?kind=maintenance');
+    const form = await screen.findByRole('form', { name: 'New task' });
+    expect(within(form).getByRole('checkbox', { name: 'Run now' })).not.toBeChecked();
+    expect(within(form).getByRole('button', { name: 'Create task' })).toBeInTheDocument();
+  });
 });

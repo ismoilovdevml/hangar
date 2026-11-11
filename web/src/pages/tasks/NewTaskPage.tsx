@@ -192,7 +192,7 @@ export function NewTaskPage() {
   const kind: NewTaskKind = search.kind ?? 'import';
   const repos = useRepositories({ limit: 1000 });
   const stores = useBlobStores(kind === 'maintenance');
-  const [draft, setDraft] = useState<Draft>(() => ({ ...EMPTY, repository: search.repository ?? '' }));
+  const [draft, setDraft] = useState<Draft>(() => ({ ...EMPTY, repository: search.repository ?? '', runNow: kind !== 'maintenance' }));
   const [shown, setShown] = useState(false);
   const [chips, setChips] = useState<LockfileChip[]>([]);
   const [lockError, setLockError] = useState<string | null>(null);
