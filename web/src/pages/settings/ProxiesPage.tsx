@@ -422,7 +422,8 @@ function ProxyEditor({
     : r
       ? r.ok
         ? { tone: 'ok', text: `${testHost} answered ${r.status_code ?? 'OK'} in ${r.latency_ms} ms` }
-        : { tone: 'bad', text: r.message }
+        : // The result below explains the failure; the status line only says it failed.
+          { tone: 'bad', text: `${testHost} could not be reached through this proxy` }
       : test.isError && Object.keys(fieldErrorsOf(test.error)).length === 0
         ? { tone: 'bad', text: errorMessage(test.error) }
         : { tone: '', text: `Tests against ${testHost}` };

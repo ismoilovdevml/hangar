@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
 import { ApiRequestError } from '../api/client';
-import { cleanServerMessage, describeError } from '../lib/apiError';
+import { cleanServerMessage, describeError, explainConnectionFailure } from '../lib/apiError';
 import { server } from '../mocks/node';
 import { notFoundSuggestion } from '../lib/notFound';
 import { renderApp } from './render';
@@ -24,6 +24,20 @@ describe('error text', () => {
     expect(describeError(new ApiRequestError(502, null)).message).toMatch(/could not reach a service/);
     expect(describeError(new ApiRequestError(502, { code: 'unavailable', message: 'node "n3" does not answer' })).message).toBe('Node "n3" does not answer.');
     expect(describeError(new TypeError('Failed to fetch')).message).toMatch(/Cannot reach the server/);
+  });
+
+  it('explains common connection test failures in one sentence', () => {
+    expect(
+      explainConnectionFailure(
+        'GET https://api.nuget.org/v3/index.json through http://does-not-exist.invalid:3128 failed: Get "https://api.nuget.org/v3/index.json": proxyconnect tcp: dial tcp: lookup does-not-exist.invalid on 127.0.0.11:53: no such host',
+      ),
+    ).toBe('Can’t resolve the proxy host does-not-exist.invalid: check the address or the server’s DNS.');
+    expect(explainConnectionFailure('LDAP Result Code 200 "Network Error": dial tcp: lookup does-not-exist.invalid on 127.0.0.11:53: no such host')).toBe(
+      'Can’t resolve the host does-not-exist.invalid: check the address or the server’s DNS.',
+    );
+    expect(explainConnectionFailure('dial tcp 10.0.0.5:636: connect: connection refused')).toMatch(/^10\.0\.0\.5:636 refused the connection/);
+    expect(explainConnectionFailure('LDAP Result Code 49 "Invalid Credentials"')).toMatch(/refused the bind account/);
+    expect(explainConnectionFailure('something unusual')).toBeNull();
   });
 
   it('suggests the page behind a guessed address', () => {

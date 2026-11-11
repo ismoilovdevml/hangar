@@ -106,3 +106,26 @@ export function describeError(err: unknown): ErrorDescription {
 
 /** Just the sentence, for places that have room for one line. */
 export const errorSentence = (err: unknown) => describeError(err).message;
+
+/**
+ * A connection test's failure (proxy, directory, identity provider) as one
+ * sentence about the likely cause; null when the text matches no common
+ * cause, and the server's own message is shown instead.
+ */
+export function explainConnectionFailure(raw: string): string | null {
+  const m = raw.toLowerCase();
+  const via = /proxyconnect/.test(m) ? 'proxy host' : 'host';
+  const lookup = /lookup ([^\s:]+)(?: on \S+)?: no such host/i.exec(raw);
+  if (lookup) return `Can’t resolve the ${via} ${lookup[1]}: check the address or the server’s DNS.`;
+  if (/no such host|server misbehaving/.test(m)) return `Can’t resolve the ${via}: check the address or the server’s DNS.`;
+  const refused = /dial tcp ([^\s]+): connect: connection refused/i.exec(raw);
+  if (refused || /connection refused/.test(m)) return `${refused ? refused[1] : 'The host'} refused the connection: check the host and port, and that the service runs.`;
+  if (/i\/o timeout|deadline exceeded|client\.timeout|timed out/.test(m)) return 'No answer in time: check the address and that a firewall lets the server through.';
+  if (/x509|certificate|tls: |handshake failure/.test(m)) return 'The TLS certificate was not accepted: check the address, or add the CA that signed it.';
+  if (/ldap result code 49|invalid credentials/.test(m)) return 'The directory refused the bind account’s credentials.';
+  if (/ldap result code 200|network error/.test(m)) return 'The directory cannot be reached: check the URL and port.';
+  if (/\b407\b|proxy authentication required/.test(m)) return 'The proxy asks for credentials: check the proxy username and password.';
+  if (/\b401\b|unauthorized/.test(m)) return 'The credentials were refused.';
+  if (/\b404\b/.test(m) && /well-known|openid-configuration|discovery|issuer/.test(m)) return 'The issuer has no discovery document at this address (404): check the issuer URL.';
+  return null;
+}
