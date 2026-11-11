@@ -692,7 +692,7 @@ function LayersTable({ image }: { image: ContainerImage }) {
       className: 'col-first',
       cell: (r) => (
         <div className="asset-path">
-          <span className="facts__mono facts__copy">
+          <span className={r.config ? 'facts__copy' : 'facts__mono facts__copy'}>
             <span title={r.digest}>{r.config ? 'Image config' : shortDigest(r.digest)}</span>
             <CopyButton text={r.digest} label={`Copy digest ${r.digest}`} />
           </span>
@@ -715,24 +715,26 @@ function LayersTable({ image }: { image: ContainerImage }) {
       ),
     },
   ];
+  const layers = rows.length - (image.config ? 1 : 0);
   return (
-    <div className="pkg-table">
-      {image.platform && (
+    <>
+      <div className="pkg-table">
+        <DataTable
+          caption="Layers"
+          columns={columns}
+          rows={rows}
+          rowKey={(r) => r.digest}
+          minWidth={420}
+          empty={image.size_bytes === null ? 'No platform of this image has been pulled through this repository yet.' : 'No layers.'}
+        />
+      </div>
+      {image.size_bytes !== null && (
         <p className="meta">
-          Layers of {image.platform}
-          {(image.platforms?.length ?? 0) > 1 && ` (one of ${image.platforms!.map((p) => p.platform).join(', ')})`}.
+          {layers} {layers === 1 ? 'layer' : 'layers'}, {formatBytes(image.size_bytes)} compressed
+          {image.platform && ` (${image.platform}${(image.platforms?.length ?? 0) > 1 ? `; ${image.platforms!.length} platforms` : ''})`}.
         </p>
       )}
-      <DataTable
-        caption="Layers"
-        columns={columns}
-        rows={rows}
-        rowKey={(r) => r.digest}
-        minWidth={420}
-        empty={image.size_bytes === null ? 'This platform has not been pulled through this repository yet.' : 'No layers.'}
-      />
-      {image.size_bytes !== null && <p className="meta">{rows.length - (image.config ? 1 : 0)} layers, {formatBytes(image.size_bytes)} compressed.</p>}
-    </div>
+    </>
   );
 }
 
