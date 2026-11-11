@@ -94,12 +94,23 @@ export function advisoryIds(p: Pick<PackagePlan, 'advisories'>): string {
   return more > 0 ? `${ids} + ${more} more` : ids;
 }
 
-/** "2 high · 8.1": the findings count at the highest severity, and the highest score. */
+/**
+ * "8 findings · 2 critical · CVSS 10.0": the total, how many are at the
+ * highest severity, and the highest score; "2 high · CVSS 8.1" when all are
+ * at that severity.
+ */
 export function findingsSummary(p: Pick<PackagePlan, 'findings' | 'max_severity' | 'max_cvss' | 'severities'>): string {
   const n = p.severities[p.max_severity as keyof typeof p.severities] ?? p.findings;
-  const others = p.findings - n;
-  const head = `${n} ${SEVERITY_META[p.max_severity].label.toLowerCase()}${others > 0 ? ` + ${others}` : ''}`;
-  return p.max_cvss != null ? `${head} · ${p.max_cvss.toFixed(1)}` : head;
+  const worst = `${n} ${SEVERITY_META[p.max_severity].label.toLowerCase()}`;
+  const head = p.findings > n ? `${p.findings} findings · ${worst}` : worst;
+  return p.max_cvss != null ? `${head} · CVSS ${p.max_cvss.toFixed(1)}` : head;
+}
+
+/** "2 critical, 5 high, 1 medium": every severity with findings, for the hover text. */
+export function severityBreakdown(p: Pick<PackagePlan, 'severities'>): string {
+  return SEVERITIES.filter((s) => (p.severities[s as keyof typeof p.severities] ?? 0) > 0)
+    .map((s) => `${p.severities[s as keyof typeof p.severities]} ${SEVERITY_META[s].label.toLowerCase()}`)
+    .join(', ');
 }
 
 /** Package and version as the advisory names them: `Newtonsoft.Json@12.0.1`. */

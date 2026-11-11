@@ -8,6 +8,7 @@ import { formatDate } from '../../lib/format';
 import {
   advisoryIds,
   findingsSummary,
+  severityBreakdown,
   findingStatus,
   imageUpgradeText,
   imageWhere,
@@ -60,7 +61,7 @@ export function FixPlanTable({ items, tab, windowDays, inUseDays, expanded, onTo
             <th scope="col">Findings</th>
             <th scope="col">{tab === 'waived' ? 'Fix' : 'Upgrade to'}</th>
             <th scope="col" data-priority={3}>
-              Pulled · {windowDays} d
+              Pulls · {windowDays} d
             </th>
             <th scope="col" data-priority={2}>
               Assignee
@@ -112,9 +113,11 @@ export function FixPlanTable({ items, tab, windowDays, inUseDays, expanded, onTo
                       <span className="vplan__versions">{p.versions.join(', ')}</span>
                     </td>
                     <td data-label="Findings">
-                      <Pill tone={sev.tone} className="vplan__sev">
-                        {findingsSummary(p)}
-                      </Pill>
+                      <span title={severityBreakdown(p)}>
+                        <Pill tone={sev.tone} className="vplan__sev">
+                          {findingsSummary(p)}
+                        </Pill>
+                      </span>
                     </td>
                     <td data-label={tab === 'waived' ? 'Fix' : 'Upgrade to'}>
                       {target ? (
@@ -209,16 +212,23 @@ function PulledCell({ p, inUseDays }: { p: PackagePlan; inUseDays: number }) {
       </>
     );
   }
+  // No pulls in this window; whether the package counts as in use is decided over the longer in-use window.
   if (p.in_use) {
     return (
       <>
-        <b>0</b> <span className="muted">· last {p.last_pulled_at ? shortDay(p.last_pulled_at) : `in ${inUseDays} d`}</span>
+        <b>0</b>{' '}
+        <span className="muted" title={`Downloaded in the last ${inUseDays} days, so it counts as in use`}>
+          · in use, last {p.last_pulled_at ? shortDay(p.last_pulled_at) : `${inUseDays} d`}
+        </span>
       </>
     );
   }
   return (
     <>
-      <b>0</b> <span className="muted" title={`Not downloaded in the last ${inUseDays} days`}>not used</span>
+      <b>0</b>{' '}
+      <span className="muted" title={`Not downloaded in the last ${inUseDays} days`}>
+        · unused for {inUseDays} d
+      </span>
     </>
   );
 }

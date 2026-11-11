@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { getRouteApi, Link } from '@tanstack/react-router';
+import { getRouteApi } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiRequestError } from '../../api/client';
 import {
@@ -26,6 +26,7 @@ import { FindingDrawer } from './FindingDrawer';
 import { FixPlanTable } from './FixPlanTable';
 import { VulnSummary } from './VulnSummary';
 import { AssignDialog, WaiveDialog } from './PlanDialogs';
+import { ErrorMessage, Loading, NoMatches } from '../../components/States';
 import './vulnerabilities.css';
 
 const route = getRouteApi('/app/vulnerabilities');
@@ -44,17 +45,21 @@ function ScanState({ status, canRescan, canFollow }: { status?: ScanningStatus; 
     wasRunning.current = running;
   }, [running, qc]);
 
-  if (!status) return <span className="vhead__meta">Loading scanner…</span>;
+  if (!status) return <Loading label="Loading the scanner status…" className="vhead__meta" />;
   const c = status.coverage;
   const pct = run && run.total ? Math.floor((run.done / run.total) * 100) : 0;
+  // "60 of 65 scanned (5 unsupported)": the packages a rescan walks are all of them, so say why some are not counted.
+  const total = c.scanned + c.failed + c.never + c.unsupported;
+  const rest = [c.unsupported && `${c.unsupported} unsupported`, c.failed && `${c.failed} failed`, c.never && `${c.never} not yet`].filter(Boolean).join(', ');
+  const coverage = total > c.scanned ? `${c.scanned.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} scanned (${rest})` : `${c.scanned.toLocaleString('en-US')} scanned`;
   return (
     <div className="vhead__scan">
       <span className="vhead__meta" role="status">
         {!status.enabled
           ? 'Scanning is turned off on this server'
           : running
-            ? `Rescanning · ${run.done.toLocaleString('en-US')} of ${plural(run.total, 'package')}`
-            : `${c.scanned.toLocaleString('en-US')} scanned · ${status.images?.enabled ? 'OSV + Trivy' : 'OSV'} · ${c.last_scan_at ? `checked ${relativeTime(c.last_scan_at).toLowerCase()}` : 'not checked yet'}`}
+            ? `Rescanning · ${run.done.toLocaleString('en-US')} of ${plural(run.total, 'package')} (${pct}%)`
+            : `${coverage} · ${status.images?.enabled ? 'OSV + Trivy' : 'OSV'} · ${c.last_scan_at ? `checked ${relativeTime(c.last_scan_at).toLowerCase()}` : 'not checked yet'}`}
         {status.enabled && status.images?.enabled && status.images.error && (
           <span className="vhead__warn" title={status.images.error}>
             {' '}
@@ -70,7 +75,7 @@ function ScanState({ status, canRescan, canFollow }: { status?: ScanningStatus; 
           disabled={running || start.isPending}
           onClick={() => start.mutate()}
         >
-          {start.isPending ? 'Queuing…' : running ? `Rescanning ${pct}%` : 'Rescan'}
+          {start.isPending ? 'Queuing…' : running ? 'Rescanning…' : 'Rescan'}
         </button>
       )}
       {running && (
@@ -78,11 +83,7 @@ function ScanState({ status, canRescan, canFollow }: { status?: ScanningStatus; 
           <span style={{ width: `${pct}%` }} />
         </span>
       )}
-      {start.isError && (
-        <p className="form-error vhead__error" role="alert">
-          {errorText(start.error)}
-        </p>
-      )}
+      {start.isError && <ErrorMessage error={start.error} message={errorText(start.error)} className="form-error vhead__error" />}
     </div>
   );
 }
@@ -207,6 +208,8 @@ export function VulnerabilitiesPage() {
   const navigate = route.useNavigate();
   const tab = search.tab ?? 'in_use';
   const plan = useFixPlan(planQuery(search));
+  // The banner and the "All N packages" tab describe the whole plan; a search must never turn them into an all-clear.
+  const whole = useFixPlan(planQuery({ tab: search.tab }));
   // Header counts and the waived badge ignore the filters.
   const totals = useFindings({ limit: 1 });
   const status = useScanningStatus();
@@ -240,22 +243,18 @@ export function VulnerabilitiesPage() {
   const data = plan.data;
   const items = data?.items ?? [];
   const filtered = hasFilters(search);
-  const waivedCount = data?.summary.waived_packages;
+  const overall = filtered ? whole.data : data;
+  const waivedCount = overall?.summary.waived_packages;
   const tabLabel = (id: (typeof PLAN_TABS)[number]['id'], label: string) =>
-    id === 'all' && data ? `All ${data.summary.packages} packages` : id === 'waived' && waivedCount ? `Waived · ${waivedCount}` : label;
+    id === 'all' && overall ? `All ${overall.summary.packages} packages` : id === 'waived' && waivedCount ? `Waived · ${waivedCount}` : label;
 
   const empty = plan.isPending ? (
-    'Loading…'
+    <Loading label="Working out the fix plan…" />
   ) : filtered ? (
     search.mine && !search.q && !search.repo ? (
       'Nothing is assigned to you.'
     ) : (
-      <>
-        No package matches these filters.{' '}
-        <Link to="/vulnerabilities" search={{ tab: search.tab }}>
-          Clear filters
-        </Link>
-      </>
+      <NoMatches what="packages" onClear={() => void navigate({ search: { tab: search.tab } })} />
     )
   ) : tab === 'waived' ? (
     'No waived findings.'
@@ -301,8 +300,8 @@ export function VulnerabilitiesPage() {
 
       {totals.isError ? <span className="meta">Counts unavailable</span> : <VulnSummary list={totals.data} />}
 
-      {plan.isError ? null : data ? (
-        <ImpactBanner plan={data} status={status.data} />
+      {plan.isError ? null : overall ? (
+        <ImpactBanner plan={overall} status={status.data} />
       ) : (
         <section className="vimpact glass" aria-label="Impact" aria-busy="true">
           <div className="vimpact__text">
