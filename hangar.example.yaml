@@ -196,6 +196,9 @@ auth:
     min_classes: 0
     # Allow passwords that contain the user name.
     allow_username: false
+    # Allow guessable passwords: fewer than 5 different characters, a run
+    # such as 123456789012, or a common password with digits added.
+    allow_weak: false
   # Lock a username out for one client address after max_attempts failed
   # passwords from that address within window, for duration; other addresses
   # can still sign in. A negative max_attempts disables lockout. From

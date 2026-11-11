@@ -201,6 +201,7 @@ type passwordPolicy struct {
 	MaxLength     int  `json:"max_length"`
 	MinClasses    int  `json:"min_classes"`
 	AllowUsername bool `json:"allow_username"`
+	AllowWeak     bool `json:"allow_weak"`
 }
 
 // sessionBody is schema Session.
@@ -291,7 +292,7 @@ func (h *handler) writeSession(w http.ResponseWriter, r *http.Request, p *core.P
 		PasswordChangeRequired: p.PasswordChangeRequired,
 		PasswordPolicy: passwordPolicy{
 			MinLength: h.cfg.Password.MinLength, MaxLength: h.cfg.Password.MaxLength,
-			MinClasses: h.cfg.Password.MinClasses, AllowUsername: h.cfg.Password.AllowUsername,
+			MinClasses: h.cfg.Password.MinClasses, AllowUsername: h.cfg.Password.AllowUsername, AllowWeak: h.cfg.Password.AllowWeak,
 		},
 		Token: token,
 	})

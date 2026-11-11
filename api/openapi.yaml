@@ -3364,7 +3364,7 @@ components:
     PasswordPolicy:
       type: object
       description: Rules new local passwords must meet (`auth.password`)
-      required: [min_length, max_length, min_classes, allow_username]
+      required: [min_length, max_length, min_classes, allow_username, allow_weak]
       properties:
         min_length: { type: integer, description: Minimum length in characters }
         max_length: { type: integer, description: Maximum length in characters }
@@ -3374,6 +3374,12 @@ components:
         allow_username:
           type: boolean
           description: Whether the password may contain the username
+        allow_weak:
+          type: boolean
+          description: |
+            Whether guessable passwords are accepted. When false (the default) a password is refused
+            if it has fewer than 5 different characters, is a run of consecutive characters
+            (123456789012) or is a common password padded with digits and symbols (Password2026!).
     CurrentToken:
       type: object
       required: [id, kind, name, prefix, scopes, expires_at, read_only, allowed_cidrs]

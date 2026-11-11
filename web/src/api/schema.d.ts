@@ -2405,6 +2405,12 @@ export interface components {
             min_classes: number;
             /** @description Whether the password may contain the username */
             allow_username: boolean;
+            /**
+             * @description Whether guessable passwords are accepted. When false (the default) a password is refused
+             *     if it has fewer than 5 different characters, is a run of consecutive characters
+             *     (123456789012) or is a common password padded with digits and symbols (Password2026!).
+             */
+            allow_weak: boolean;
         };
         CurrentToken: {
             id: string;
