@@ -190,3 +190,103 @@ export const isSearchSort = (v: unknown): v is SearchSort => SEARCH_SORTS.some((
 
 /** Normalises whitespace so equal queries share one URL and cache entry. */
 export const normalizeQuery = (q: string) => q.trim().split(/\s+/).filter(Boolean).join(' ');
+
+/* ---------------------------------------------------------------- query problems */
+
+export interface QueryProblem {
+  /** The token as typed. */
+  token: string;
+  /** error: the server refuses the query; warning: it runs, but probably not as meant. */
+  level: 'error' | 'warning';
+  message: string;
+}
+
+const example = (key: QualifierKey) => QUALIFIERS.find((q) => q.key === key)!.example;
+
+/** The known qualifier closest to a mistyped key ("fromat" → format), if any is close. */
+function closestKey(key: string): QualifierKey | null {
+  const k = key.toLowerCase();
+  let best: QualifierKey | null = null;
+  let bestScore = Infinity;
+  for (const q of QUALIFIERS) {
+    const d = editDistance(k, q.key);
+    if (d < bestScore) {
+      bestScore = d;
+      best = q.key;
+    }
+  }
+  return bestScore <= 2 ? best : null;
+}
+
+function editDistance(a: string, b: string): number {
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0]!;
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cur = row[j]!;
+      row[j] = Math.min(row[j]! + 1, row[j - 1]! + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+  }
+  return row[b.length]!;
+}
+
+/**
+ * Every problem in a query, in plain words, the way the server's parser sees
+ * it (errors), plus what it would silently take as free text (warnings): an
+ * unknown `word:` key, a format this server does not have.
+ */
+export function queryProblems(q: string, ctx: { formats?: string[] } = {}): QueryProblem[] {
+  const out: QueryProblem[] = [];
+  for (const t of tokenize(q)) {
+    if (!t.key) {
+      const m = /^([a-z][a-z0-9_-]*):(.*)$/i.exec(t.text);
+      // "word:" with an unknown key is searched as text; "https://…" and "a:b:c" coordinates are left alone.
+      if (m && !m[2]!.startsWith('//') && !m[2]!.includes(':')) {
+        const near = closestKey(m[1]!);
+        out.push({
+          token: t.text,
+          level: 'warning',
+          message: `${m[1]}: is not a search qualifier, so “${t.text}” is searched as text${near ? `. Did you mean ${near}:?` : '.'}`,
+        });
+      }
+      continue;
+    }
+    const v = t.value ?? '';
+    if (v === '') {
+      out.push({ token: t.text, level: 'error', message: `${t.key}: needs a value, e.g. ${example(t.key)}.` });
+      continue;
+    }
+    switch (t.key) {
+      case 'format':
+        if (ctx.formats?.length && !ctx.formats.includes(v.toLowerCase())) {
+          out.push({ token: t.text, level: 'warning', message: `${v} is not a format of this server (${ctx.formats.join(', ')}).` });
+        }
+        break;
+      case 'sha256':
+        if (!/^[0-9a-f]{4,64}$/i.test(v)) out.push({ token: t.text, level: 'error', message: `sha256: takes 4 to 64 hex digits (0-9, a-f), e.g. ${example('sha256')}.` });
+        break;
+      case 'security':
+        if (!(SECURITY_STATES as readonly string[]).includes(v.toLowerCase())) {
+          out.push({ token: t.text, level: 'error', message: `security: is one of ${SECURITY_STATES.join(', ')}.` });
+        }
+        break;
+      case 'unused': {
+        const m = /^>?(\d+)([hdw])$/i.exec(v);
+        if (!m || Number(m[1]) <= 0 || Number(m[1]) > 36500) {
+          out.push({ token: t.text, level: 'error', message: `unused: takes a number of hours, days or weeks, e.g. ${example('unused')}.` });
+        }
+        break;
+      }
+      case 'published': {
+        const d = v.replace(/^[<>]/, '');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Number.isNaN(new Date(`${d}T00:00:00Z`).getTime())) {
+          out.push({ token: t.text, level: 'error', message: `published: takes a date, optionally with < or >, e.g. ${example('published')}.` });
+        }
+        break;
+      }
+    }
+  }
+  return out;
+}

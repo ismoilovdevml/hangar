@@ -101,9 +101,24 @@ describe('search', () => {
     await waitFor(() => expect(q(history)).toBe('zzz'));
   });
 
-  it('shows the server’s message for an invalid qualifier', async () => {
-    renderApp('/search?q=sha256%3Azz');
-    expect(await screen.findByRole('alert')).toHaveTextContent('sha256:zz: want 4 to 64 hex digits');
-    expect(screen.getByRole('heading', { level: 2, name: 'Check the query' })).toBeInTheDocument();
+  it('lists every problem of an invalid query in words, under the box', async () => {
+    renderApp('/search?q=format%3A%20sha256%3Azz%20published%3A%3Cnotadate%20unused%3A%3Exyz');
+    const problems = await screen.findByRole('alert');
+    expect(within(problems).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'format: format: needs a value, e.g. format:npm.',
+      'sha256:zz sha256: takes 4 to 64 hex digits (0-9, a-f), e.g. sha256:9f2c.',
+      'published:<notadate published: takes a date, optionally with < or >, e.g. published:<2026-01-01.',
+      'unused:>xyz unused: takes a number of hours, days or weeks, e.g. unused:>90d.',
+    ]);
+    expect(problems).not.toHaveTextContent('invalid argument');
+    // No results column and no Sort for a query that cannot run.
+    expect(screen.queryByRole('combobox', { name: 'Sort' })).not.toBeInTheDocument();
+  });
+
+  it('warns about an unknown qualifier and an unknown format', async () => {
+    renderApp('/search?q=fromat%3Anpm%20format%3Afoo%20lodash');
+    const problems = await screen.findByRole('list', { name: 'Problems in the query' });
+    expect(problems).toHaveTextContent('fromat: is not a search qualifier, so “fromat:npm” is searched as text. Did you mean format:?');
+    expect(await within(problems).findByText(/foo is not a format of this server/)).toBeInTheDocument();
   });
 });

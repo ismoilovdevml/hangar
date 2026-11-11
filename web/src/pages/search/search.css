@@ -85,3 +85,8 @@
   .result__link { flex-wrap: wrap; padding: 14px; }
   .result__text { flex-basis: calc(100% - 56px); }
 }
+
+/* Problems in the query: full width under the box, every one of them. */
+.search-problems { display: grid; gap: 4px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; }
+.search-problems__error { color: var(--bad-ink); font-weight: 600; }
+.search-problems__warn { color: var(--warn-ink); font-weight: 600; }
