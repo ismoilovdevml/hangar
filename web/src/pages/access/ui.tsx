@@ -17,6 +17,8 @@ interface DialogProps {
   drawer?: boolean;
   wide?: boolean;
   footer?: ReactNode;
+  /** False for a question that must be answered: no close button, and Escape and the scrim do nothing. */
+  dismissible?: boolean;
 }
 
 /**
@@ -24,11 +26,12 @@ interface DialogProps {
  * stays inside, Escape and the scrim close it. Escape closes only the topmost
  * layer, so a dialog opened from a drawer closes alone.
  */
-export function Dialog({ title, description, onClose, children, drawer, wide, footer }: DialogProps) {
+export function Dialog({ title, description, onClose, children, drawer, wide, footer, dismissible = true }: DialogProps) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descId = useId();
-  useEscapeLayer(onClose);
+  // A dialog that cannot be dismissed still takes Escape, so nothing underneath closes instead.
+  useEscapeLayer(dismissible ? onClose : () => {});
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
@@ -63,7 +66,7 @@ export function Dialog({ title, description, onClose, children, drawer, wide, fo
     <div
       className={drawer ? 'dialog-scrim dialog-scrim--drawer' : 'dialog-scrim'}
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (dismissible && e.target === e.currentTarget) onClose();
       }}
     >
       <div
@@ -86,9 +89,11 @@ export function Dialog({ title, description, onClose, children, drawer, wide, fo
               </p>
             )}
           </div>
-          <button type="button" className="icon-button icon-button--sm" aria-label="Close" onClick={onClose}>
-            <IconClose size={18} />
-          </button>
+          {dismissible && (
+            <button type="button" className="icon-button icon-button--sm" aria-label="Close" onClick={onClose}>
+              <IconClose size={18} />
+            </button>
+          )}
         </div>
         <div className="dialog__body">{children}</div>
         {footer && <div className="dialog__foot">{footer}</div>}

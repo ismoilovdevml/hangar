@@ -56,6 +56,7 @@ button.tabs__item { background: transparent; cursor: pointer; }
 .dialog-form { display: flex; flex-direction: column; gap: 16px; }
 .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
 .dialog-section { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--hairline); padding-top: 14px; }
+.reauth__more { display: flex; flex-direction: column; gap: 6px; }
 .dialog-section__title { font-size: 14px; font-weight: 700; color: var(--ink); }
 .button--danger { min-height: 48px; background: var(--bad); color: var(--ink-inverse); }
 .button--danger:hover { background: #962F2F; }

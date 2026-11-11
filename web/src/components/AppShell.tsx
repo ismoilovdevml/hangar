@@ -7,6 +7,7 @@ import { passes } from '../lib/gates';
 import { NoAccessPage } from './NoAccess';
 import { CommandPaletteProvider } from './CommandPalette';
 import { Sidebar } from './Sidebar';
+import { ReauthDialog } from './ReauthDialog';
 import { Toaster } from './Toaster';
 import { TopBar } from './TopBar';
 
@@ -39,6 +40,7 @@ export function AppShell() {
           </div>
         </div>
         <Toaster />
+        <ReauthDialog />
       </CommandPaletteProvider>
     </LiveStatusContext.Provider>
   );

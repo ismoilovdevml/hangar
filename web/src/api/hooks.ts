@@ -68,14 +68,18 @@ export function useAuthProviders() {
   });
 }
 
-export function useLogin() {
+/**
+ * POST /auth/login. keepCache is for signing the same user in again after the
+ * session expired: the page's data stays and is refetched instead of dropped.
+ */
+export function useLogin({ keepCache = false }: { keepCache?: boolean } = {}) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: LoginRequest) =>
       apiFetch<Session>('/auth/login', { method: 'POST', body, allowUnauthorized: true }),
     onSuccess: (session) => {
       // A new principal: nothing cached for the previous one may leak through.
-      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'auth' && q.queryKey[0] !== 'system' });
+      if (!keepCache) qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'auth' && q.queryKey[0] !== 'system' });
       qc.setQueryData(queryKeys.session, session);
     },
   });
