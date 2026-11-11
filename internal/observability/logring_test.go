@@ -74,18 +74,81 @@ func TestLogRingTailAndFollow(t *testing.T) {
 	if len(p.Items) != 0 || p.Cursor != 250 || p.More {
 		t.Fatalf("caught up = %+v", p)
 	}
-	// Records 11..150 were overwritten before this reader saw them.
+	// Records 11..150 were overwritten before this reader saw them; of
+	// those, the errors (20, 30, ..., 150) are still kept.
 	p = r.Query(LogQuery{After: 10, HasAfter: true, Limit: 1})
-	if !p.Gap || p.Items[0].Seq != 151 {
+	if !p.Gap || p.Items[0].Seq != 20 {
 		t.Fatalf("gap = %+v", p)
 	}
+	if p = r.Query(LogQuery{After: 150, HasAfter: true, Limit: 1}); p.Gap || p.Items[0].Seq != 151 {
+		t.Fatalf("after the kept errors = %+v", p)
+	}
 	// After 0 means "from the oldest record", not a gap.
-	if p = r.Query(LogQuery{HasAfter: true, Limit: 1}); p.Gap || p.Items[0].Seq != 151 {
+	if p = r.Query(LogQuery{HasAfter: true, Limit: 1}); p.Gap || p.Items[0].Seq != 10 {
 		t.Fatalf("from start = %+v", p)
 	}
 	// A cursor from a longer-lived process continues at the head.
 	if p = r.Query(LogQuery{After: 9999, HasAfter: true}); len(p.Items) != 0 || p.Cursor != 250 {
 		t.Fatalf("future cursor = %+v", p)
+	}
+}
+
+// A burst of info records must not push out the error that explains an
+// outage: the newest warnings and errors outlive their place in the ring.
+func TestLogRingKeepsWarningsPastEviction(t *testing.T) {
+	r := NewLogRing(MinLogBufferSize)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	add := func(lv slog.Level, msg string) {
+		r.Append(LogRecord{Time: at, Level: levelName(lv), level: lv, Message: msg})
+	}
+	add(slog.LevelError, "raw: request failed")
+	add(slog.LevelInfo, "info 1")
+	add(slog.LevelWarn, "proxy slow")
+	for range 10 * MinLogBufferSize {
+		add(slog.LevelInfo, "http request")
+	}
+	head := r.Head()
+
+	p := r.Query(LogQuery{MinLevel: slog.LevelWarn})
+	if got := seqs(p.Items); len(got) != 2 || got[0] != 1 || got[1] != 3 {
+		t.Fatalf("warnings = %v", got)
+	}
+	if p.Size != MinLogBufferSize || p.Oldest != head-MinLogBufferSize+1 {
+		t.Fatalf("buffer = size %d oldest %d", p.Size, p.Oldest)
+	}
+	// Unfiltered, in order: the two kept records, then the ring.
+	p = r.Query(LogQuery{Limit: 1000})
+	if got := seqs(p.Items); len(got) != MinLogBufferSize+2 || got[0] != 1 || got[1] != 3 || got[2] != p.Oldest {
+		t.Fatalf("all = %d records from %v", len(got), got[:3])
+	}
+	if p = r.Query(LogQuery{Text: "request failed"}); len(p.Items) != 1 {
+		t.Fatalf("text = %+v", p.Items)
+	}
+	// Follow mode: from the start, pages continue in sequence order.
+	p = r.Query(LogQuery{HasAfter: true, Limit: 1})
+	if p.Gap || !p.More || p.Cursor != 1 || p.Items[0].Seq != 1 {
+		t.Fatalf("follow 1 = %+v", p)
+	}
+	p = r.Query(LogQuery{After: p.Cursor, HasAfter: true, Limit: 1})
+	if !p.Gap || p.Cursor != 3 || p.Items[0].Seq != 3 { // info 1 is gone
+		t.Fatalf("follow 2 = %+v", p)
+	}
+	p = r.Query(LogQuery{After: p.Cursor, HasAfter: true, Limit: 1})
+	if p.Items[0].Seq != r.Query(LogQuery{}).Oldest {
+		t.Fatalf("follow 3 = %+v", p)
+	}
+
+	// The kept ring is bounded too: the newest warnings win.
+	kept := keptCapacity(MinLogBufferSize)
+	for i := range kept + 50 {
+		add(slog.LevelWarn, fmt.Sprintf("warning %d", i))
+		for range 20 {
+			add(slog.LevelInfo, "http request")
+		}
+	}
+	p = r.Query(LogQuery{MinLevel: slog.LevelWarn, Limit: 1000})
+	if len(p.Items) != kept || p.Items[len(p.Items)-1].Message != fmt.Sprintf("warning %d", kept+49) {
+		t.Fatalf("kept %d warnings, newest %q", len(p.Items), p.Items[len(p.Items)-1].Message)
 	}
 }
 

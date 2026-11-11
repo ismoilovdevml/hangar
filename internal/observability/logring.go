@@ -73,15 +73,26 @@ type LogPage struct {
 // LogRing keeps the newest records of this process in a fixed-size ring.
 // Appending is O(1) under a short mutex and never waits for readers, so it
 // cannot slow logging down noticeably; old records are overwritten.
+//
+// Warnings and errors are also copied into a second, smaller ring, so the
+// newest of them outlive their place in the main one: a burst of info
+// records does not push out the error that explains an outage. Queries
+// return them in sequence order with the rest.
 type LogRing struct {
 	boot string
 
 	mu      sync.Mutex
 	buf     []LogRecord
 	next    uint64 // sequence number of the next record
+	kept    []LogRecord
+	keptN   uint64 // warnings and errors appended so far
 	waiters int
 	changed chan struct{}
 }
+
+// keptCapacity is the number of warnings and errors kept past the main
+// ring: a fifth of it, at least MinLogBufferSize.
+func keptCapacity(capacity int) int { return max(MinLogBufferSize, capacity/5) }
 
 // NewLogRing returns a ring holding capacity records, clamped to
 // [MinLogBufferSize, MaxLogBufferSize]; 0 means DefaultLogBufferSize.
@@ -96,7 +107,8 @@ func NewLogRing(capacity int) *LogRing {
 	}
 	var b [6]byte
 	_, _ = rand.Read(b[:])
-	return &LogRing{boot: hex.EncodeToString(b[:]), buf: make([]LogRecord, capacity), next: 1, changed: make(chan struct{})}
+	return &LogRing{boot: hex.EncodeToString(b[:]), buf: make([]LogRecord, capacity),
+		kept: make([]LogRecord, keptCapacity(capacity)), next: 1, changed: make(chan struct{})}
 }
 
 // Boot identifies this process's sequence numbers: a cursor from another
@@ -111,6 +123,10 @@ func (r *LogRing) Append(rec LogRecord) {
 	r.mu.Lock()
 	rec.Seq = r.next
 	r.buf[(r.next-1)%uint64(len(r.buf))] = rec
+	if rec.level >= slog.LevelWarn {
+		r.kept[r.keptN%uint64(len(r.kept))] = rec
+		r.keptN++
+	}
 	r.next++
 	if r.waiters > 0 {
 		close(r.changed)
@@ -174,8 +190,9 @@ func (r *LogRing) Query(q LogQuery) LogPage {
 			page.Size = int(head) //nolint:gosec // head < capacity, an int
 		}
 	}
-	from := oldest
+	from, start := oldest, uint64(1) // start: the first sequence number asked for
 	if q.HasAfter {
+		start = q.After + 1
 		if q.After >= head {
 			r.mu.Unlock()
 			if q.After > head {
@@ -192,6 +209,7 @@ func (r *LogRing) Query(q LogQuery) LogPage {
 		}
 	}
 	snap := make([]LogRecord, 0, head-from+1)
+	snap = r.appendKept(snap, start, from)
 	if head > 0 {
 		for s := from; s <= head; s++ {
 			snap = append(snap, r.buf[(s-1)%capacity])
@@ -229,6 +247,18 @@ func (r *LogRing) Query(q LogQuery) LogPage {
 		page.Items[i], page.Items[j] = page.Items[j], page.Items[i]
 	}
 	return page
+}
+
+// appendKept appends the kept warnings and errors numbered from start up to,
+// not including, before, oldest first. Called with r.mu held.
+func (r *LogRing) appendKept(dst []LogRecord, start, before uint64) []LogRecord {
+	n := min(r.keptN, uint64(len(r.kept)))
+	for i := r.keptN - n; i < r.keptN; i++ {
+		if rec := r.kept[i%uint64(len(r.kept))]; rec.Seq >= start && rec.Seq < before {
+			dst = append(dst, rec)
+		}
+	}
+	return dst
 }
 
 // contains reports whether the lower-cased text occurs in the message or

@@ -302,7 +302,9 @@ Each node also keeps its newest `log.buffer_size` records in memory, after the
 same scrubbing, so administrators can read them under **Operations → System
 logs** without access to the host. The buffer is a fixed ring: appending is
 constant time and never waits for readers, and the oldest records are
-overwritten. It is lost on restart; full logs stay on stderr, so keep shipping
+overwritten. Warnings and errors are kept longer: the newest of them (a fifth
+of `log.buffer_size`, at least 100) stay readable after a burst of info
+records has overwritten their place. It is lost on restart; full logs stay on stderr, so keep shipping
 them (`docker compose logs hangar`, `journalctl -u hangar`, `kubectl logs`).
 
 The screen filters by node, minimum level and text, follows new records
