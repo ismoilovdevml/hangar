@@ -144,11 +144,21 @@ function Configuration({ s }: { s: BlobStore }) {
           ['Endpoint', s.s3?.endpoint || 'AWS S3'],
           ['Region', s.s3?.region || '—'],
           ['Addressing', s.s3?.use_path_style ? 'Path-style' : 'Virtual-hosted'],
-          ['Access key id', s.s3?.access_key_id || 'From the environment'],
+          ['Access key id', s.s3?.access_key_id || (s.from_config ? 'From the server configuration' : 'From the environment')],
           ['Secret access key', s.s3?.access_key_id ? 'Stored encrypted, write-only' : '—'],
         ];
   return (
-    <Panel title="Configuration" titleId="config-title">
+    <Panel
+      title="Configuration"
+      titleId="config-title"
+      action={
+        s.from_config ? (
+          <Pill tone="neutral">
+            From server configuration
+          </Pill>
+        ) : undefined
+      }
+    >
       <dl className="summary__list">
         <dt>Kind</dt>
         <dd>{s.kind === 's3' ? 'S3 / MinIO' : 'Filesystem'}</dd>

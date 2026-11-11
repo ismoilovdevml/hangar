@@ -11,6 +11,7 @@ import { Pill } from '../../components/Pill';
 import { dedupShare, humanDays, quotaRatio, storeBadge, storeProblem } from '../../lib/blobStores';
 import { formatBytes, formatCompact, splitBytes } from '../../lib/format';
 import { BlobStoreCreate } from './BlobStoreCreate';
+import { RunCompaction } from './RunCompaction';
 import './blobstores.css';
 
 const route = getRouteApi('/app/blob-stores');
@@ -110,7 +111,15 @@ function Totals({ data }: { data: BlobStoreList | undefined }) {
         label="Reclaimable now"
         value={reclaim.value}
         unit={reclaim.unit}
-        note={t.reclaimable_bytes > 0 ? 'Freed by the next blob compaction' : 'Nothing waiting for compaction'}
+        note={
+          t.reclaimable_bytes > 0 ? (
+            <>
+              Freed by the next blob compaction · <RunCompaction />
+            </>
+          ) : (
+            'Nothing waiting for compaction'
+          )
+        }
       />
     </section>
   );
@@ -199,6 +208,10 @@ function StoreCard({ store: s }: { store: BlobStore }) {
         <Link to="/blob-stores/$name" params={{ name: s.name }} className="button button--secondary button--sm">
           Details and repositories
         </Link>
+        {/* Online migration between stores is planned on the server (POST /blob-stores/{name}/move-repositories answers 501). */}
+        <button type="button" className="button button--secondary button--sm" disabled title="Planned: not available yet">
+          Move repositories (planned)
+        </button>
       </div>
     </article>
   );

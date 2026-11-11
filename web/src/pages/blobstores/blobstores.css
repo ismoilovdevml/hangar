@@ -41,3 +41,7 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .store-detail__problem { color: var(--bad-ink); overflow-wrap: anywhere; }
+.store-test.is-ok { margin: 0; font-size: 13px; color: var(--ok-ink); }
+.store-connection { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; border-top: 1px solid var(--hairline); }
+.store-connection__form { display: flex; flex-direction: column; gap: 14px; }
+.store-connection__actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }

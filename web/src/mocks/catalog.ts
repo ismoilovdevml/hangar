@@ -737,7 +737,26 @@ export function catalogHandlers(guard: Guard, readableRepos: () => string[], rep
           return error(400, { code: 'invalid_argument', message: 'soft_quota_bytes must be positive' });
         }
         // Left-out sections keep their values; a missing quota removes it (as the server does).
-        const next: BlobStore = { ...old, soft_quota_bytes: body.soft_quota_bytes ?? null, capacity_bytes: body.soft_quota_bytes ?? null };
+        let s3 = old.s3;
+        if (body.s3) {
+          const cur = old.s3 ?? { bucket: '' };
+          const moved = body.s3.bucket !== cur.bucket || (body.s3.prefix ?? '') !== (cur.prefix ?? '') || (body.s3.endpoint ?? '') !== (cur.endpoint ?? '');
+          const changed = moved || (body.s3.access_key_id ?? '') !== (cur.access_key_id ?? '') || !!body.s3.secret_access_key ||
+            (body.s3.region ?? '') !== (cur.region ?? '') || !!body.s3.use_path_style !== !!cur.use_path_style;
+          if (old.from_config && changed) {
+            return error(400, { code: 'invalid_argument', message: `blob store "${old.name}" is defined by the server configuration; change it there` });
+          }
+          if (moved && (old.repository_count > 0 || old.blob_count > 0)) {
+            return error(409, { code: 'in_use', message: `blob store "${old.name}" holds repositories or blobs, so its location cannot change` });
+          }
+          s3 = { ...body.s3, secret_access_key: undefined };
+        }
+        const next: BlobStore = {
+          ...old,
+          ...(s3 ? { s3, location: `s3://${s3.bucket}${s3.prefix ? `/${s3.prefix.replace(/^\/+|\/+$/g, '')}` : ''}` } : {}),
+          soft_quota_bytes: body.soft_quota_bytes ?? null,
+          capacity_bytes: body.soft_quota_bytes ?? null,
+        };
         state.blobStores = state.blobStores.map((b) => (b.name === old.name ? next : b));
         return HttpResponse.json(next);
       }, true),
@@ -785,6 +804,26 @@ export function catalogHandlers(guard: Guard, readableRepos: () => string[], rep
         };
         state.blobStores = [...state.blobStores, store];
         return HttpResponse.json(store, { status: 201 });
+      }, true),
+    ),
+
+    // ":test" is part of the last path segment. Buckets named no-such-* are
+    // missing and access keys starting with WRONG are refused.
+    http.post(
+      new RegExp('/api/v1/blob-stores:test$'),
+      withGuard(async ({ request }) => {
+        const body = (await request.json()) as BlobStoreInput;
+        if (body.kind !== 's3') return error(400, { code: 'invalid_argument', message: 'only s3 blob stores can be tested: invalid argument' });
+        if (!body.s3?.bucket) return error(400, { code: 'invalid_argument', message: 's3 blob store needs s3.bucket: invalid argument' });
+        const at = body.s3.endpoint || 'https://s3.amazonaws.com';
+        const step = (name: string, message = 'ok') => ({ name, status: message === 'ok' ? 'ok' : 'failed', message, latency_ms: 4 });
+        let steps;
+        if (body.s3.bucket.startsWith('no-such')) steps = [step('bucket', `bucket "${body.s3.bucket}" not found at ${at} (NoSuchBucket)`)];
+        else if (body.s3.access_key_id?.startsWith('WRONG')) {
+          steps = [step('bucket', `bucket "${body.s3.bucket}" at ${at}: The Access Key Id you provided does not exist in our records. (InvalidAccessKeyId)`)];
+        } else steps = ['bucket', 'write', 'read', 'delete'].map((n) => step(n));
+        const failed = steps.find((x) => x.status === 'failed');
+        return HttpResponse.json({ ok: !failed, message: failed ? failed.message : 'Connected: the bucket accepts writes, reads and deletes.', steps, latency_ms: 16 });
       }, true),
     ),
 

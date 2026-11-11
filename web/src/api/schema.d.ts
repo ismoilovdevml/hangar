@@ -711,6 +711,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/blob-stores:test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test an S3 blob store's settings without saving them
+         * @description Checks that the bucket is reachable with the credentials and that a
+         *     small object under `tmp/` can be written, read back and deleted (steps
+         *     `bucket`, `write`, `read`, `delete`; a failing step names the S3 error
+         *     code). Nothing is saved. When `name` is an existing S3 store and the
+         *     secret is left out with its stored access key, the stored secret is
+         *     used. Only S3 stores are tested. Requires `system:blobstores:admin`.
+         */
+        post: operations["testBlobStore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/blob-stores/{name}": {
         parameters: {
             query?: never;
@@ -3113,6 +3138,8 @@ export interface components {
             dedup_saved_bytes?: components["schemas"]["Bytes"];
             created_at?: components["schemas"]["Timestamp"];
             write_latency_ms?: number | null;
+            /** @description Defined by the server configuration (`storage.*`). Its connection settings are the ones in effect and change only there; the API can set its soft quota. */
+            from_config?: boolean;
             /** @description e.g. "SSE-S3", "SSE-KMS", "none" */
             encryption?: string;
         };
@@ -5965,6 +5992,32 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    testBlobStore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlobStoreInput"];
+            };
+        };
+        responses: {
+            /** @description Outcome (also when the test failed) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsTestResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
     getBlobStore: {
         parameters: {
             query?: never;
@@ -6461,7 +6514,10 @@ export interface operations {
                  * @description Free text plus qualifiers: `format:npm`, `repo:npm-hosted`, `sha256:ab12`,
                  *     `cve:CVE-2026-1234`, `unused:>90d`, `license:GPL-3.0`, `published:<2026-01-01`,
                  *     `security:findings` (pending, clean, findings, quarantined, failed, unsupported); `cve:` also matches aliases. Each free-text word is
-                 *     a prefix match on the package coordinates.
+                 *     a prefix match on the package coordinates. A bare advisory id
+                 *     (`CVE-2021-44228`, `GHSA-…`, `PYSEC-…`, `RUSTSEC-…`) counts as `cve:`, and a
+                 *     bare word of 8 to 64 hex digits with a letter and a digit matches a
+                 *     digest prefix or the package name.
                  */
                 q?: string;
                 sort?: "relevance" | "-downloads" | "-published_at";

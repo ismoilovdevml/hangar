@@ -16,6 +16,8 @@ import {
   type QuotaUnit,
   type StoreKind,
 } from '../../lib/blobStores';
+import { TestOutcome } from './TestOutcome';
+import { useConnectionTest } from './useConnectionTest';
 
 const FIELD_ORDER: BlobStoreField[] = ['name', 'quota', 'path', 'endpoint', 'bucket', 'accessKeyId', 'secretAccessKey'];
 const id = (f: BlobStoreField) => `store-${f}`;
@@ -36,6 +38,7 @@ export function BlobStoreCreate({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState<BlobStoreForm>(initialBlobStoreForm);
   const [submitted, setSubmitted] = useState(false);
   const create = useCreateBlobStore();
+  const check = useConnectionTest();
   const errors = validateBlobStoreForm(form);
   const shown: BlobStoreErrors = submitted ? errors : {};
 
@@ -52,9 +55,22 @@ export function BlobStoreCreate({ onClose }: { onClose: () => void }) {
       document.getElementById(id(first))?.focus();
       return;
     }
-    create.mutate(toBlobStoreInput(form), {
-      onSuccess: (s) => void navigate({ to: '/blob-stores/$name', params: { name: s.name } }),
-    });
+    const input = toBlobStoreInput(form);
+    const save = () => create.mutate(input, { onSuccess: (s) => void navigate({ to: '/blob-stores/$name', params: { name: s.name } }) });
+    // S3 settings are tested before the store is added.
+    if (form.kind === 's3') check.submit(input, save);
+    else save();
+  };
+  const s3Input = form.kind === 's3' ? toBlobStoreInput(form) : null;
+  const tested = s3Input ? check.resultFor(s3Input) : null;
+  const onTest = () => {
+    setSubmitted(true);
+    const first = FIELD_ORDER.find((f) => errors[f]);
+    if (first) {
+      document.getElementById(id(first))?.focus();
+      return;
+    }
+    if (s3Input) check.run(s3Input);
   };
 
   const field = (f: BlobStoreField, label: string, input: JSX.Element, hint?: string, wide = false) => (
@@ -179,12 +195,18 @@ export function BlobStoreCreate({ onClose }: { onClose: () => void }) {
             {submitMessage(create.error)}
           </p>
         )}
+        {form.kind === 's3' && <TestOutcome result={tested} pending={check.pending} error={check.error} />}
         <div className="store-create__actions">
           <button type="button" className="button button--secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button button--primary" disabled={create.isPending}>
-            {create.isPending ? 'Adding…' : 'Add blob store'}
+          {form.kind === 's3' && (
+            <button type="button" className="button button--secondary" onClick={onTest} disabled={check.pending || create.isPending}>
+              Test connection
+            </button>
+          )}
+          <button type="submit" className="button button--primary" disabled={create.isPending || check.pending}>
+            {create.isPending ? 'Adding…' : tested && !tested.ok ? 'Add anyway' : 'Add blob store'}
           </button>
         </div>
       </form>

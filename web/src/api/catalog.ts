@@ -17,6 +17,7 @@ import type {
   BlobStore,
   BlobStoreInput,
   CacheInvalidation,
+  ConnectionTestResult,
   ComponentDetail,
   ComponentFindings,
   FindingPage,
@@ -373,6 +374,13 @@ export function useDeleteBlobStore(name: string) {
       qc.removeQueries({ queryKey: catalogKeys.blobStore(name) });
       void qc.invalidateQueries({ queryKey: queryKeys.blobStores });
     },
+  });
+}
+
+/** POST /blob-stores:test: S3 settings tested without saving (an existing store's name lends its stored secret). */
+export function useTestBlobStore() {
+  return useMutation({
+    mutationFn: (body: BlobStoreInput) => apiFetch<ConnectionTestResult>('/blob-stores:test', { method: 'POST', body }),
   });
 }
 
