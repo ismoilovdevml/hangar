@@ -34,6 +34,28 @@ describe('repository settings', () => {
     expect(screen.getByRole('link', { name: 'Browse packages' })).toHaveAttribute('href', '/browse?repo=npmjs-proxy');
   });
 
+  it('invalidates the cache of a proxy and scans a repository', async () => {
+    const user = setupUser();
+    renderApp('/repositories/npmjs-proxy/settings');
+    await screen.findByRole('form', { name: 'Settings of npmjs-proxy' });
+    await user.click(await screen.findByRole('button', { name: 'Invalidate cache' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Invalidate the cache of npmjs-proxy?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Invalidate cache' }));
+    expect(await screen.findByText(/3 remembered “not found” answers and 0 rate-limit holds dropped/)).toBeInTheDocument();
+
+    await user.click(await screen.findByRole('button', { name: 'Scan now' }));
+    expect(await screen.findByText('Scan queued for 12 package versions.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open vulnerabilities' })).toHaveAttribute('href', '/vulnerabilities?repo=npmjs-proxy&tab=all');
+  });
+
+  it('offers no cache invalidation on hosted repositories and no scan where nothing is scanned', async () => {
+    renderApp('/repositories/docker-prod/settings');
+    await screen.findByRole('form', { name: 'Settings of docker-prod' });
+    await screen.findByRole('button', { name: 'Take offline' });
+    expect(screen.queryByRole('button', { name: 'Invalidate cache' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Scan now' })).not.toBeInTheDocument();
+  });
+
   it('edits with the New repository form, pre-filled, and saves only what changed', async () => {
     const puts = capturePuts();
     const user = setupUser();

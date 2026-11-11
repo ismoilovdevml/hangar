@@ -16,6 +16,7 @@ import type {
   AssetPage,
   BlobStore,
   BlobStoreInput,
+  CacheInvalidation,
   ComponentDetail,
   ComponentFindings,
   FindingPage,
@@ -327,6 +328,13 @@ export function useTestRouting(name: string) {
 export function useSuggestRouting(name: string) {
   return useMutation({
     mutationFn: () => apiFetch<RoutingSuggestions>(`${routingPath(name)}:suggest`),
+  });
+}
+
+/** Proxy only: forgets remembered remote 404s and rate-limit holds (cached files stay). */
+export function useInvalidateCache(name: string) {
+  return useMutation({
+    mutationFn: () => apiFetch<CacheInvalidation>(`/repositories/${encodeURIComponent(name)}/cache:invalidate`, { method: 'POST' }),
   });
 }
 

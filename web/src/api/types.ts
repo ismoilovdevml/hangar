@@ -87,6 +87,7 @@ export type FindingList = Schemas['FindingList'];
 export type ComponentScan = Schemas['ComponentScan'];
 export type ComponentFindings = Schemas['ComponentFindings'];
 export type ScanResult = Schemas['ScanResult'];
+export type CacheInvalidation = Schemas['CacheInvalidation'];
 export type RepositoryScanQueued = Schemas['RepositoryScanQueued'];
 export type FindingTrend = Schemas['FindingTrend'];
 export type FindingTrendPoint = Schemas['FindingTrendPoint'];

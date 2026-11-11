@@ -787,5 +787,19 @@ export function catalogHandlers(guard: Guard, readableRepos: () => string[], rep
         return HttpResponse.json(store, { status: 201 });
       }, true),
     ),
+
+    // ":invalidate" is part of the last path segment.
+    http.post(
+      new RegExp('/api/v1/repositories/([^/]+)/cache:invalidate$'),
+      withGuard(({ request }) => {
+        const name = decodeURIComponent(/repositories\/([^/]+)\/cache:invalidate$/.exec(new URL(request.url).pathname)![1]!);
+        const repo = repositories().find((r) => r.name === name && readableRepos().includes(r.name));
+        if (!repo) return error(404, { code: 'not_found', message: `repository "${name}" not found` });
+        if (repo.type !== 'proxy') {
+          return error(400, { code: 'invalid_argument', message: `repository "${name}" is a ${repo.type} repository, not a proxy: invalid argument` });
+        }
+        return HttpResponse.json({ repository: name, negative_entries: 3, rate_limited_hosts: 0 });
+      }, true),
+    ),
   ];
 }
