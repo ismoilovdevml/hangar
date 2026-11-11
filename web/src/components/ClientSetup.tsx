@@ -25,9 +25,11 @@ export function ClientSetup({ targets, install }: ClientSetupProps) {
   const index = chosen < targets.length ? chosen : 0;
   const target = targets[index];
   if (!target) return null;
-  const { setup, publish } = clientSetup({ ...target, username });
+  const { shell, setup, publish } = clientSetup({ ...target, username });
+  // The go command sends credentials over HTTPS only: say how to read over plain http.
+  const goNeedsAccess = target.format === 'go' && !!target.url?.startsWith('http://') && !target.anonymousRead;
   const name = FORMAT_META[target.format]?.label ?? target.format;
-  const commands = install ? installCommands(target, install) : [];
+  const commands = install ? installCommands({ ...target, username }, install) : [];
   const command = commands.find((x) => x.id === client) ?? commands[0];
 
   return (
@@ -65,11 +67,26 @@ export function ClientSetup({ targets, install }: ClientSetupProps) {
           <CodeBlock label={`${command.label} install command`} lines={command.lines} />
         </div>
       )}
+      {shell && shell.length > 0 && (
+        <div className="client-setup__block">
+          <p className="client-setup__label">In your shell</p>
+          <CodeBlock label={`${name} shell commands`} lines={shell} />
+        </div>
+      )}
       <div className="client-setup__block">
         <p className="client-setup__label">
           Use <span className="client-setup__repo">{target.repository}</span>
         </p>
         <CodeBlock label={`${name} set-up commands`} lines={setup} />
+        {goNeedsAccess && (
+          <p className="meta">
+            Go sends credentials over HTTPS only. Serve Hangar over HTTPS, or allow anonymous read in the{' '}
+            <Link to="/repositories/$name/settings" params={{ name: target.repository }} className="link-strong">
+              settings of {target.repository}
+            </Link>
+            .
+          </p>
+        )}
       </div>
       {publish.length > 0 && (
         <div className="client-setup__block">
