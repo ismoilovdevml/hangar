@@ -1,5 +1,15 @@
 .browse { display: grid; grid-template-columns: minmax(260px, 330px) minmax(0, 1fr); gap: var(--gap); align-items: start; }
-.browse__main { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+.browse--tree-hidden { grid-template-columns: 36px minmax(0, 1fr); }
+/* The package panes below lay out by this column's width, not the window's. */
+.browse__main { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; container: browse-main / inline-size; }
+/* The tree folds away to give the package the width; the button sits in its filter row. */
+.browse__side { position: sticky; top: var(--page-pad); min-width: 0; }
+.browse__side .browse-tree { position: static; }
+.browse__side .browse-tree__filter { padding-right: 44px; }
+.browse__side > .browse__tree-toggle { position: absolute; top: 16px; right: 12px; z-index: 1; }
+.browse__tree-toggle svg { transform: rotate(180deg); transition: transform var(--t-fast); }
+.browse__side > .browse__tree-toggle[aria-expanded='false'] { position: static; }
+.browse__tree-toggle[aria-expanded='false'] svg { transform: none; }
 .browse-empty { gap: 8px; color: var(--ink-2); font-size: 14px; }
 .inline-icon { display: inline-block; vertical-align: -2px; }
 
@@ -60,7 +70,8 @@
 .install__clients { align-self: flex-start; max-width: 100%; overflow-x: auto; }
 .install .code-block pre { font-size: 13px; padding-right: 48px; }
 
-.pkg-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--hairline-strong); overflow-x: auto; }
+/* Tabs wrap instead of clipping a label in a narrow column. */
+.pkg-tabs { display: flex; flex-wrap: wrap; gap: 0 4px; border-bottom: 1px solid var(--hairline-strong); }
 .pkg-tabs__tab {
   min-height: 44px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
   background: transparent; color: var(--ink-2); font-size: 14px; font-weight: 600; white-space: nowrap;
@@ -82,6 +93,8 @@
 .checksums__value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .asset-path { display: flex; flex-direction: column; gap: 2px; min-width: 220px; }
+/* advisory titles wrap rather than widen the findings table */
+.pkg-panel .asset-path > .meta { white-space: normal; }
 .asset-path__link { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
 .asset-size { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 90px; }
 .asset-size__bar { display: block; width: 90px; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
@@ -105,12 +118,22 @@
    not) form one row; bounded so a large picture cannot take over the page. */
 .markdown .md-img { display: inline; max-width: 100%; max-height: 640px; height: auto; vertical-align: middle; object-fit: contain; }
 
-@media (max-width: 1280px) {
+/* Version and setup cards move under the package until it has 700 px beside them. */
+@container browse-main (max-width: 1039px) {
   .pkg-layout { grid-template-columns: minmax(0, 1fr); }
+  .pkg-layout__side { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); align-items: start; }
 }
+@media (min-width: 1001px) and (max-width: 1200px) {
+  .browse:not(.browse--tree-hidden) { grid-template-columns: minmax(220px, 250px) minmax(0, 1fr); }
+}
+/* One column: the page's header and content come first, the tree under them. */
 @media (max-width: 1000px) {
-  .browse { grid-template-columns: minmax(0, 1fr); }
-  .browse-tree { position: static; height: 420px; }
+  .browse, .browse--tree-hidden { grid-template-columns: minmax(0, 1fr); }
+  .browse__main { order: -1; }
+  .browse__side { position: relative; top: auto; }
+  .browse-tree { height: 420px; }
+  .browse__tree-toggle svg { transform: rotate(-90deg); }
+  .browse__tree-toggle[aria-expanded='false'] svg { transform: rotate(90deg); }
 }
 @media (max-width: 480px) {
   .pkg-table { margin: 0 -18px -18px; }

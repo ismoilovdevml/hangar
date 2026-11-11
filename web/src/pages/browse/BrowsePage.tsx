@@ -1,7 +1,9 @@
+import { useId, useRef, useState } from 'react';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import { useComponentLookup } from '../../api/catalog';
 import { ErrorNote } from '../../components/ErrorNote';
 import { IconSearch } from '../../components/icons';
+import { IconChevronRight } from '../../components/opsIcons';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { AssetDetail } from './AssetDetail';
@@ -15,13 +17,41 @@ import './browse.css';
 
 const route = getRouteApi('/app/browse');
 
+const TREE_KEY = 'hangar.browse.treeHidden';
+
+/** Whether this browser hid the tree. Storage may be missing or blocked: hiding then lasts until a reload. */
+function readTreeHidden(): boolean {
+  try {
+    return window.localStorage.getItem(TREE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** One column: the tree sits under the page, so a selection scrolls the page back up to it. */
+const SINGLE_COLUMN = '(max-width: 1000px)';
+
 export function BrowsePage() {
   const search = route.useSearch();
   const navigate = useNavigate();
   const { repo, name, path } = search;
+  const treeId = useId();
+  const mainRef = useRef<HTMLDivElement>(null);
+  const [treeHidden, setTreeHidden] = useState(readTreeHidden);
+  const toggleTree = () => {
+    const next = !treeHidden;
+    setTreeHidden(next);
+    try {
+      window.localStorage.setItem(TREE_KEY, next ? '1' : '0');
+    } catch {
+      // not persisted
+    }
+  };
 
-  const onSelect = (s: TreeSelection) =>
+  const onSelect = (s: TreeSelection) => {
     void navigate({ to: '/browse', search: s.kind === 'repo' ? { repo: s.repo.name } : entrySearch(s.repo, s.entry) });
+    if (window.matchMedia?.(SINGLE_COLUMN).matches) mainRef.current?.scrollIntoView({ block: 'start' });
+  };
   const toFolder = (p: string) => void navigate({ to: '/browse', search: { repo, path: p || undefined }, replace: true });
 
   let pane;
@@ -30,7 +60,7 @@ export function BrowsePage() {
       <>
         <PageHeader title="Packages" description="Browse every repository, package, version and file." />
         <Panel className="browse-empty">
-          <p>Expand a repository on the left to browse its content the way clients see it, or select it to see how to use it.</p>
+          <p>Expand a repository in the list to browse its content the way clients see it, or select it to see how to use it.</p>
           <p>
             Looking for something specific?{' '}
             <Link to="/search" className="link-strong">
@@ -51,9 +81,26 @@ export function BrowsePage() {
   }
 
   return (
-    <div className="browse">
-      <BrowseTree repo={repo} path={path} onSelect={onSelect} />
-      <div className="browse__main">{pane}</div>
+    <div className={treeHidden ? 'browse browse--tree-hidden' : 'browse'}>
+      <div className="browse__side">
+        <button
+          type="button"
+          className="icon-button icon-button--sm icon-button--glass browse__tree-toggle"
+          aria-expanded={!treeHidden}
+          aria-controls={treeId}
+          aria-label={treeHidden ? 'Show the repository tree' : 'Hide the repository tree'}
+          title={treeHidden ? 'Show the repository tree' : 'Hide the repository tree'}
+          onClick={toggleTree}
+        >
+          <IconChevronRight size={16} />
+        </button>
+        <div className="browse__tree" id={treeId} hidden={treeHidden}>
+          <BrowseTree repo={repo} path={path} onSelect={onSelect} />
+        </div>
+      </div>
+      <div className="browse__main" ref={mainRef}>
+        {pane}
+      </div>
     </div>
   );
 }
