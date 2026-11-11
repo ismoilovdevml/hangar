@@ -65,7 +65,7 @@ describe('repository settings', () => {
     expect(within(form).queryByRole('textbox', { name: 'Name' })).not.toBeInTheDocument();
     expect(within(form).getByText('Cannot be changed after creation')).toBeInTheDocument();
     expect(within(form).getByLabelText('Remote URL')).toHaveValue('https://registry.npmjs.org');
-    expect(within(form).getByLabelText('Metadata cached for')).toHaveValue('30m0s');
+    expect(within(form).getByLabelText('Metadata cached for')).toHaveValue('30m');
     const save = screen.getByRole('button', { name: 'Save changes' });
     expect(save).toBeDisabled();
 
@@ -79,7 +79,7 @@ describe('repository settings', () => {
     // The request listener reads the body asynchronously.
     await waitFor(() => expect(puts).toHaveLength(1));
     expect(puts[0]).toMatchObject({ name: 'npmjs-proxy', format: 'npm', type: 'proxy', blob_store: 'fs-local', description: 'Cached npmjs.org', online: true });
-    expect(puts[0]!.config.proxy).toMatchObject({ remote_url: 'https://registry.npmjs.org', metadata_ttl: '45m', negative_cache_ttl: '10m0s' });
+    expect(puts[0]!.config.proxy).toMatchObject({ remote_url: 'https://registry.npmjs.org', metadata_ttl: '45m', negative_cache_ttl: '10m' });
     expect(repo('npmjs-proxy').config.proxy?.metadata_ttl).toBe('45m');
   });
 
