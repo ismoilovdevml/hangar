@@ -230,9 +230,15 @@ export function upstreamHealth(range: OverviewRange): UpstreamHealth[] {
 }
 
 export const clientEndpoints: ClientEndpoint[] = [
-  { format: 'docker', endpoint: 'cr.acme.io', repository: 'docker-group' },
-  { format: 'npm', endpoint: 'https://pkg.acme.io/repository/npm-group/', repository: 'npm-group' },
-  { format: 'pypi', endpoint: 'https://pkg.acme.io/repository/pypi-group/', repository: 'pypi-group' },
+  { format: 'docker', endpoint: 'cr.acme.io', repository: 'docker-group', type: 'group', publishes: true, anonymous_read: false },
+  { format: 'npm', endpoint: 'https://pkg.acme.io/repository/npm-group/', repository: 'npm-group', type: 'group', publishes: true, anonymous_read: false },
+  { format: 'pypi', endpoint: 'https://pkg.acme.io/repository/pypi-group/', repository: 'pypi-group', type: 'group', publishes: false, anonymous_read: false },
+  { format: 'maven', endpoint: 'https://pkg.acme.io/repository/maven-all/', repository: 'maven-all', type: 'group', publishes: false, anonymous_read: false },
+  { format: 'nuget', endpoint: 'https://pkg.acme.io/repository/nuget-proxy/', repository: 'nuget-proxy', type: 'proxy', publishes: false, anonymous_read: false },
+  { format: 'go', endpoint: 'https://pkg.acme.io/repository/go-proxy/', repository: 'go-proxy', type: 'proxy', publishes: false, anonymous_read: false },
+  { format: 'raw', endpoint: 'https://pkg.acme.io/repository/raw-artifacts/', repository: 'raw-artifacts', type: 'hosted', publishes: true, anonymous_read: false },
+  { format: 'apt', endpoint: 'https://pkg.acme.io/repository/internal-apt/', repository: 'internal-apt', type: 'hosted', publishes: true, anonymous_read: false },
+  { format: 'rpm', endpoint: 'https://pkg.acme.io/repository/internal-rpm/', repository: 'internal-rpm', type: 'hosted', publishes: true, anonymous_read: false },
 ];
 
 /* ---------- repositories, blob stores, cleanup policies ---------- */

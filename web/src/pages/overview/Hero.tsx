@@ -34,11 +34,10 @@ function ConnectClientDialog({ onClose }: { onClose: () => void }) {
         </p>
       ) : (
         <ClientSetup
-          targets={q.data.items.map((e) =>
-            e.format === 'docker'
-              ? { format: e.format, repository: e.repository, host: e.endpoint }
-              : { format: e.format, repository: e.repository, url: e.endpoint },
-          )}
+          targets={q.data.items.map((e) => {
+            const t = { format: e.format, repository: e.repository, type: e.type, publishes: e.publishes, anonymousRead: e.anonymous_read };
+            return e.format === 'docker' ? { ...t, host: e.endpoint } : { ...t, url: e.endpoint };
+          })}
         />
       )}
     </Dialog>

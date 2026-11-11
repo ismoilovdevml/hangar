@@ -148,11 +148,21 @@ export function useUpstreamHealth(range: OverviewRange) {
   });
 }
 
+/** One endpoint per readable format (every page of them), most-used format first. */
 export function useClientEndpoints() {
   return useQuery({
     queryKey: queryKeys.clientEndpoints,
-    queryFn: ({ signal }) =>
-      apiFetch<Page<ClientEndpoint>>('/me/client-endpoints', { query: { limit: 3 }, signal }),
+    queryFn: async ({ signal }) => {
+      const items: ClientEndpoint[] = [];
+      let cursor: string | undefined;
+      for (let i = 0; i < 10; i++) {
+        const page = await apiFetch<Page<ClientEndpoint>>('/me/client-endpoints', { query: { limit: 100, cursor }, signal });
+        items.push(...page.items);
+        if (!page.next_cursor) break;
+        cursor = page.next_cursor;
+      }
+      return { items };
+    },
     staleTime: 10 * 60_000,
   });
 }
