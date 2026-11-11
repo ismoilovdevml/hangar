@@ -87,6 +87,17 @@ describe('overview', () => {
     const again = await screen.findByRole('region', { name: 'To do' });
     await within(again).findByText('ghcr-proxy: authentication failed (401)');
     expect(within(again).queryByText('Back up the database')).not.toBeInTheDocument();
+
+    // And can be brought back.
+    await user.click(within(again).getByRole('button', { name: 'Show 1 hidden reminder' }));
+    expect(await within(again).findByText('Back up the database')).toBeInTheDocument();
+    expect(within(again).queryByRole('button', { name: /hidden reminder/ })).not.toBeInTheDocument();
+    // Dismissing offers an Undo.
+    await user.click(within(again).getByRole('button', { name: 'Dismiss: Back up the database' }));
+    expect(await screen.findByText('Reminder hidden in this browser.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(await within(again).findByText('Back up the database')).toBeInTheDocument();
+    window.localStorage.removeItem('hangar.dismissed');
   });
 
   it('shows the most downloaded packages and fits the overview on one screen', async () => {

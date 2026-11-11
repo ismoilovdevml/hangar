@@ -82,10 +82,13 @@ interface TodoCardProps {
   onRetry: () => void;
   /** Hides a dismissible item for good (in this browser). */
   onDismiss: (id: string) => void;
+  /** Dismissed reminders that would show otherwise. */
+  hidden?: number;
+  onShowHidden?: () => void;
 }
 
 /** What needs someone's attention, most urgent first. */
-export function TodoCard({ items, error, onRetry, onDismiss }: TodoCardProps) {
+export function TodoCard({ items, error, onRetry, onDismiss, hidden = 0, onShowHidden }: TodoCardProps) {
   const urgent = items?.some((t) => t.tone === 'bad');
   return (
     <section className="ov-card todo glass" aria-labelledby="todo-title">
@@ -135,6 +138,11 @@ export function TodoCard({ items, error, onRetry, onDismiss }: TodoCardProps) {
             </li>
           ))}
         </ul>
+      )}
+      {items && hidden > 0 && onShowHidden && (
+        <button type="button" className="link-button todo__hidden" onClick={onShowHidden}>
+          Show {hidden === 1 ? '1 hidden reminder' : `${hidden} hidden reminders`}
+        </button>
       )}
     </section>
   );
