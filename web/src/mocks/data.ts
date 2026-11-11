@@ -156,6 +156,7 @@ export function overview(range: OverviewRange, now = Date.now()): OverviewMetric
       coverage_start: null,
       server_errors: Math.round(r.total * 0.0021),
       denied: Math.round(r.total * 0.0094),
+      auth_challenges: Math.round(r.total * 0.3),
     },
     cache: cacheNumbers(range),
     issues: {

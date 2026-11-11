@@ -2577,8 +2577,18 @@ export interface components {
                 coverage_start: string | null;
                 /** @description Requests of `total` answered with a 5xx status; counted from the version that introduced it on */
                 server_errors: number | null;
-                /** @description Requests of `total` refused with 401 or 403; counted from the version that introduced it on */
+                /** @description Requests of `total` refused with 401 or 403, authentication challenges excluded; counted from the version that introduced it on */
                 denied: number | null;
+                /**
+                 * @description Requests of `total` answered 401 that presented no credentials
+                 *     at all (no Authorization or API key header, no cookie). Clients
+                 *     such as NuGet, docker, npm and pip ask without credentials first
+                 *     and retry with them, so these are not refusals and are not in
+                 *     `denied`; a success rate leaves them out of both sides. Counted
+                 *     from the version that introduced it on (earlier ones are in
+                 *     `denied`).
+                 */
+                auth_challenges: number | null;
             };
             /**
              * @description Proxy cache effectiveness over the range, every format, every node.
