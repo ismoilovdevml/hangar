@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BrowseEntry, BrowsePage, Repository } from '../../api/types';
-import { ancestorKeys, entrySearch, flattenTree, move, nodeKey, parentPath, type FolderState } from './treeModel';
+import type { PublishedComponent } from '../../api/types';
+import { ancestorKeys, entrySearch, flattenTree, move, nodeKey, packageTreePath, parentPath, versionKey, versionSearch, type FolderState } from './treeModel';
 
 const repo = (name: string): Repository =>
   ({ id: name, name, format: 'npm', type: 'hosted', config: {}, url: '', status: 'online', size_bytes: 0, component_count: 0, created_at: '', updated_at: '' }) as Repository;
@@ -55,6 +56,65 @@ describe('flattenTree', () => {
     expect(names(rows)[move(rows, 3, 'last')]).toBe('s');
     expect(names(rows)[move(rows, 3, 'first')]).toBe('r');
     expect(move(rows, 0, 'prev')).toBe(-1);
+  });
+});
+
+describe('packages', () => {
+  const v = (version: string, repository = 'r'): PublishedComponent => ({ id: version, version, name: 'ui', namespace: '@acme', repository }) as PublishedComponent;
+  const pkg = { ...entry('@acme/ui/', 'package'), component: { id: 'c', namespace: '@acme', name: 'ui', version: '2.0.0' } };
+  const folders = new Map<string, FolderState>([
+    [nodeKey('r'), folder([pkg])],
+    [nodeKey('r', '@acme/ui/'), folder([{ ...entry('@acme/ui/v2/', 'package'), component: { id: 'd', namespace: '@acme', name: 'ui/v2', version: '1' } }])],
+  ]);
+  const names = (rows: ReturnType<typeof flattenTree>) =>
+    rows.map((r) => (r.type === 'repo' ? r.repo.name : r.type === 'entry' ? r.entry.path : r.type === 'version' ? `v${r.version.version}` : r.type));
+
+  it('expands a package to its versions, newest first, then the packages nested in it', () => {
+    const rows = flattenTree({
+      repos: [repo('r')],
+      expanded: new Set([nodeKey('r'), nodeKey('r', '@acme/ui/')]),
+      folder: (r, p) => folders.get(nodeKey(r, p)),
+      versions: (k) => (k === nodeKey('r', '@acme/ui/') ? { items: [v('2.0.0'), v('1.0.0')], loading: false, error: false } : undefined),
+      filter: '',
+    });
+    expect(names(rows)).toEqual(['r', '@acme/ui/', 'v2.0.0', 'v1.0.0', '@acme/ui/v2/']);
+    const newest = rows[2]!;
+    expect(newest.type === 'version' && [newest.key, newest.level, newest.newest, newest.posInSet, newest.setSize]).toEqual([
+      versionKey(nodeKey('r', '@acme/ui/'), '2.0.0'),
+      3,
+      true,
+      1,
+      3,
+    ]);
+  });
+
+  it('says when a package has no versions and while they load', () => {
+    const base = { repos: [repo('r')], expanded: new Set([nodeKey('r'), nodeKey('r', '@acme/ui/')]), filter: '' };
+    const only = new Map([[nodeKey('r'), folder([pkg])], [nodeKey('r', '@acme/ui/'), folder([])]]);
+    const folderOf = (r: string, p: string) => only.get(nodeKey(r, p));
+    expect(names(flattenTree({ ...base, folder: folderOf, versions: () => ({ items: [], loading: true, error: false }) }))).toEqual(['r', '@acme/ui/', 'loading']);
+    const done = flattenTree({ ...base, folder: folderOf, versions: () => ({ items: [], loading: false, error: false }) });
+    expect(done.at(-1)).toMatchObject({ type: 'empty', pkg: true });
+  });
+
+  it('finds the folder of a package named by a link', () => {
+    expect(packageTreePath('npm', '@acme', 'ui')).toBe('@acme/ui/');
+    expect(packageTreePath('maven', 'com.acme', 'ledger-core')).toBe('com/acme/ledger-core/');
+    expect(packageTreePath('pypi', '', 'Acme_ML.utils')).toBe('acme-ml-utils/');
+    expect(packageTreePath('nuget', '', 'Acme.Core')).toBe('acme.core/');
+    expect(packageTreePath('docker', 'team', 'app')).toBe('team/app/');
+    expect(packageTreePath('raw', 'releases/1.4.0', 'app.tgz')).toBe('releases/1.4.0/app.tgz');
+  });
+
+  it('links a version row, naming the group member that holds it', () => {
+    expect(versionSearch('npm-all', pkg, v('1.0.0', 'npm-internal'))).toEqual({
+      repo: 'npm-all',
+      path: '@acme/ui/',
+      member: 'npm-internal',
+      ns: '@acme',
+      name: 'ui',
+      version: '1.0.0',
+    });
   });
 });
 

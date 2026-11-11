@@ -3,11 +3,14 @@
  * ARIA tree renders), plus the keyboard moves over it. Pure functions:
  * the component supplies the loaded folders and the expanded set.
  */
-import type { BrowseEntry, BrowsePage, Repository } from '../../api/types';
+import type { BrowseEntry, BrowsePage, PublishedComponent, Repository } from '../../api/types';
 import type { BrowseSearch } from '../../router';
 
 /** Key of a container node: a repository root or a folder in it. */
 export const nodeKey = (repo: string, path = '') => (path ? `${repo}\u0000${path}` : repo);
+
+/** Key of a version row under the package node `pkgKey`. */
+export const versionKey = (pkgKey: string, version: string) => `${pkgKey}\u0002${version}`;
 
 export function splitKey(key: string): { repo: string; path: string } {
   const i = key.indexOf('\u0000');
@@ -27,20 +30,31 @@ interface RowBase {
   level: number;
 }
 
+/** What the tree knows about the versions of an expanded package. */
+export interface VersionState {
+  /** Newest first. */
+  items: PublishedComponent[];
+  loading: boolean;
+  error: boolean;
+}
+
 export type Row =
   | (RowBase & { type: 'repo'; repo: Repository; expanded: boolean; setSize: number; posInSet: number })
   | (RowBase & { type: 'entry'; repo: string; entry: BrowseEntry; expanded: boolean; container: boolean; setSize: number; posInSet: number })
-  | (RowBase & { type: 'more' | 'retry' | 'loading' | 'empty'; repo: string; path: string });
+  | (RowBase & { type: 'version'; repo: string; entry: BrowseEntry; version: PublishedComponent; newest: boolean; setSize: number; posInSet: number })
+  | (RowBase & { type: 'more' | 'retry' | 'loading' | 'empty'; repo: string; path: string; pkg?: boolean });
 
 export const isContainerEntry = (e: BrowseEntry) => e.kind !== 'asset';
 
 /** Rows that keyboard focus can land on. */
-export const isFocusable = (r: Row) => r.type === 'repo' || r.type === 'entry' || r.type === 'more' || r.type === 'retry';
+export const isFocusable = (r: Row) => r.type === 'repo' || r.type === 'entry' || r.type === 'version' || r.type === 'more' || r.type === 'retry';
 
 export interface FlattenInput {
   repos: Repository[];
   expanded: ReadonlySet<string>;
   folder: (repo: string, path: string) => FolderState | undefined;
+  /** Versions of the package node with this key (packages expand to their versions). */
+  versions?: (key: string) => VersionState | undefined;
   /** Lower-case filter text; empty shows everything. */
   filter: string;
 }
@@ -49,28 +63,57 @@ export interface FlattenInput {
  * The visible rows. With a filter, a node is shown when its name matches
  * (with its expanded subtree unfiltered) or when a loaded descendant matches.
  */
-export function flattenTree({ repos, expanded, folder, filter }: FlattenInput): Row[] {
+export function flattenTree({ repos, expanded, folder, versions, filter }: FlattenInput): Row[] {
   const matches = (name: string) => name.toLowerCase().includes(filter);
 
-  const children = (repo: string, path: string, level: number, filtering: boolean): Row[] => {
-    const st = folder(repo, path);
-    const status = (type: 'more' | 'retry' | 'loading' | 'empty'): Row => ({ type, key: `${nodeKey(repo, path)}\u0001${type}`, level, repo, path });
-    if (!st || (st.loading && st.pages.length === 0)) return filtering ? [] : [status(st?.error ? 'retry' : 'loading')];
+  /** A package's versions, newest first, then the packages nested in it (a Go module's /v2). */
+  const packageChildren = (repo: string, entry: BrowseEntry, level: number, filtering: boolean): Row[] => {
+    const key = nodeKey(repo, entry.path);
+    const v = versions?.(key);
+    const nested = folder(repo, entry.path);
+    const status = (type: 'more' | 'retry' | 'loading' | 'empty'): Row => ({ type, key: `${key}\u0001${type}`, level, repo, path: entry.path, pkg: true });
+    const groups: Row[][] = [];
+    (v?.items ?? []).forEach((c, i) => {
+      if (filtering && !matches(c.version)) return;
+      groups.push([{ type: 'version', key: versionKey(key, c.version), level, repo, entry, version: c, newest: i === 0, setSize: 0, posInSet: 0 }]);
+    });
+    if (nested) groups.push(...nestedGroups(repo, nested, level, filtering));
+    number(groups);
+    const out = groups.flat();
+    if (filtering) return out;
+    if (v?.error || nested?.error) out.push(status('retry'));
+    else if (!v || v.loading || !nested || nested.loading) out.push(status('loading'));
+    else if (nested.hasMore) out.push(status('more'));
+    else if (out.length === 0) out.push(status('empty'));
+    return out;
+  };
+
+  /** One sibling group per entry of a loaded folder, each with its open subtree. */
+  const nestedGroups = (repo: string, st: FolderState, level: number, filtering: boolean): Row[][] => {
     const groups: Row[][] = [];
     for (const entry of st.pages.flatMap((p) => p.items)) {
       const container = isContainerEntry(entry);
       const key = nodeKey(repo, entry.path);
       const open = container && expanded.has(key);
       const row: Row = { type: 'entry', key, level, repo, entry, expanded: open, container, setSize: 0, posInSet: 0 };
+      const below = (f: boolean) => (entry.kind === 'package' && versions ? packageChildren(repo, entry, level + 1, f) : children(repo, entry.path, level + 1, f));
       if (!filtering || matches(entry.name)) {
-        groups.push([row, ...(open ? children(repo, entry.path, level + 1, false) : [])]);
+        groups.push([row, ...(open ? below(false) : [])]);
         continue;
       }
       if (open) {
-        const sub = children(repo, entry.path, level + 1, true);
+        const sub = below(true);
         if (sub.length) groups.push([row, ...sub]);
       }
     }
+    return groups;
+  };
+
+  const children = (repo: string, path: string, level: number, filtering: boolean): Row[] => {
+    const st = folder(repo, path);
+    const status = (type: 'more' | 'retry' | 'loading' | 'empty'): Row => ({ type, key: `${nodeKey(repo, path)}\u0001${type}`, level, repo, path });
+    if (!st || (st.loading && st.pages.length === 0)) return filtering ? [] : [status(st?.error ? 'retry' : 'loading')];
+    const groups = nestedGroups(repo, st, level, filtering);
     number(groups);
     const out = groups.flat();
     if (filtering) return out;
@@ -103,7 +146,7 @@ export function flattenTree({ repos, expanded, folder, filter }: FlattenInput): 
 function number(groups: Row[][]) {
   groups.forEach((g, i) => {
     const head = g[0];
-    if (head && (head.type === 'repo' || head.type === 'entry')) {
+    if (head && (head.type === 'repo' || head.type === 'entry' || head.type === 'version')) {
       head.setSize = groups.length;
       head.posInSet = i + 1;
     }
@@ -118,6 +161,35 @@ export function ancestorKeys(repo: string, path: string | undefined): string[] {
   // "a/b/" -> a/, a/b/ ; "a/b/c.txt" -> a/, a/b/
   for (let i = 1; i < parts.length; i++) keys.push(nodeKey(repo, `${parts.slice(0, i).join('/')}/`));
   return keys;
+}
+
+/**
+ * The tree path of a package's folder (or of a raw file), following the
+ * server's layout, for links that name a package but no tree path.
+ */
+export function packageTreePath(format: string, ns: string | undefined, name: string): string | undefined {
+  const full = ns ? `${ns}/${name}` : name;
+  switch (format) {
+    case 'npm':
+    case 'docker':
+    case 'go':
+      return `${full}/`;
+    case 'maven':
+      return `${(ns ?? '').replace(/\./g, '/')}/${name}/`;
+    case 'nuget':
+    case 'cargo':
+      return `${name.toLowerCase()}/`;
+    case 'pypi':
+      return `${name.toLowerCase().replace(/[-_.]+/g, '-')}/`;
+    case 'helm':
+    case 'apt':
+    case 'rpm':
+      return `${name}/`;
+    case 'raw':
+      return full.replace(/^\/+/, '');
+    default:
+      return undefined;
+  }
 }
 
 /** The parent folder of a tree path ("" for a top-level node). */
@@ -157,6 +229,18 @@ export function rowId(prefix: string, key: string): string {
   let h = 2166136261;
   for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619) >>> 0;
   return `${prefix}-${h.toString(36)}-${key.length.toString(36)}`;
+}
+
+/** The URL that shows one version of a package row of repository `repo`. */
+export function versionSearch(repo: string, e: BrowseEntry, v: PublishedComponent): BrowseSearch {
+  return {
+    repo,
+    path: e.path,
+    member: v.repository !== repo ? v.repository : undefined,
+    ns: v.namespace || undefined,
+    name: v.name,
+    version: v.version,
+  };
 }
 
 /** The URL that shows a tree entry of repository `repo`. */
