@@ -4218,7 +4218,7 @@ components:
               $ref: "#/components/schemas/RepositoryStatusReason"
             status_detail:
               type: string
-              description: The error behind an offline status (the store's or the remote's)
+              description: The error behind an offline status (the remote's, or for administrators the blob store's)
             size_bytes:
               allOf: [{ $ref: "#/components/schemas/Bytes" }]
               description: |

@@ -3030,7 +3030,7 @@ export interface components {
             url: string;
             status: components["schemas"]["RepositoryStatus"];
             status_reason?: components["schemas"]["RepositoryStatusReason"];
-            /** @description The error behind an offline status (the store's or the remote's) */
+            /** @description The error behind an offline status (the remote's, or for administrators the blob store's) */
             status_detail?: string;
             /**
              * @description Hosted and proxy: the total size of the repository's assets.
