@@ -103,10 +103,15 @@ export function componentName(c: { format: string; namespace?: string; name: str
 
 /* ---------------------------------------------------------------- overview cards */
 
-/** Share of requests answered without a server error or an auth refusal; null without requests or outcome counts. */
+/**
+ * Share of requests answered without a server error or an auth refusal; null without requests or outcome counts.
+ * Authentication challenges (401s to requests without credentials, which clients retry with them) count on neither side.
+ */
 export function successRatio(r: OverviewMetrics['requests']): number | null {
-  if (r.total === null || r.total <= 0 || r.server_errors === null || r.denied === null) return null;
-  return Math.max(0, r.total - r.server_errors - r.denied) / r.total;
+  if (r.total === null || r.server_errors === null || r.denied === null) return null;
+  const counted = r.total - (r.auth_challenges ?? 0);
+  if (counted <= 0) return null;
+  return Math.max(0, counted - r.server_errors - r.denied) / counted;
 }
 
 /** "98.6" for a ratio, without a misleading "100.0" while any request failed. */

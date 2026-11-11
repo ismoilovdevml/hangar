@@ -98,14 +98,14 @@ func (b *Base) ProxyGet(ctx context.Context, repo *core.Repository, f Fetch) (*c
 		return b.fetch(fctx, repo, f, cached)
 	})
 	if err != nil {
-		proxy.NoteCacheMiss(ctx)
+		proxy.NoteCacheMiss(ctx, err)
 		return nil, err
 	}
 	res := v.(fillResult)
 	if res.fromCache {
 		proxy.NoteCacheHit(ctx, res.asset.Size)
 	} else {
-		proxy.NoteCacheMiss(ctx)
+		proxy.NoteCacheMiss(ctx, nil)
 	}
 	return res.asset, nil
 }

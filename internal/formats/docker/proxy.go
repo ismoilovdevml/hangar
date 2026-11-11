@@ -96,7 +96,6 @@ func (h *handler) proxyManifest(ctx context.Context, hdr http.Header, repo *core
 	}
 	remoteName := upstreamName(repo, image)
 	if local == nil && h.unknown.unknown(repo, remoteName, h.now()) {
-		proxy.NoteCacheMiss(ctx)
 		return nil, fmt.Errorf("manifest %s:%s: %w", image, ref, errNameUnknownCached)
 	}
 	path := "v2/" + remoteName + "/manifests/" + ref
@@ -109,7 +108,6 @@ func (h *handler) proxyManifest(ctx context.Context, hdr http.Header, repo *core
 		copyRateLimit(hdr, resp.Header)
 		switch {
 		case resp.StatusCode == http.StatusNotFound:
-			proxy.NoteCacheMiss(ctx)
 			return nil, fmt.Errorf("manifest %s:%s gone upstream: %w", image, ref, core.ErrNotFound)
 		case resp.StatusCode != http.StatusOK:
 			return fromCache()
@@ -123,7 +121,7 @@ func (h *handler) proxyManifest(ctx context.Context, hdr http.Header, repo *core
 		if local != nil {
 			return fromCache()
 		}
-		proxy.NoteCacheMiss(ctx)
+		proxy.NoteCacheMiss(ctx, err)
 		return nil, err
 	}
 	defer closeBody(resp)
@@ -132,10 +130,9 @@ func (h *handler) proxyManifest(ctx context.Context, hdr http.Header, repo *core
 		if local != nil && resp.StatusCode != http.StatusNotFound {
 			return fromCache()
 		}
-		proxy.NoteCacheMiss(ctx)
 		return nil, h.remoteMiss(repo, remoteName, "manifest "+image+":"+ref, resp)
 	}
-	proxy.NoteCacheMiss(ctx)
+	proxy.NoteCacheMiss(ctx, nil)
 	body, err := readManifestBody(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("manifest %s:%s from remote: %w: %w", image, ref, err, core.ErrUpstream)
@@ -205,14 +202,12 @@ func (h *handler) proxyBlob(w http.ResponseWriter, r *http.Request, repo *core.R
 	}
 	remoteName := upstreamName(repo, image)
 	if h.unknown.unknown(repo, remoteName, h.now()) {
-		proxy.NoteCacheMiss(ctx)
 		return false, fmt.Errorf("blob %s: %w", d, errNameUnknownCached)
 	}
 	path := "v2/" + remoteName + "/blobs/" + string(d)
 	if d.Algorithm() == core.AlgorithmSHA256 {
 		if info, err := bs.Stat(ctx, d); err == nil {
 			if err := h.remoteHasBlob(ctx, w.Header(), repo, remoteName, path, d); err != nil {
-				proxy.NoteCacheMiss(ctx)
 				return false, err
 			}
 			proxy.NoteCacheHit(ctx, info.Size)
@@ -221,7 +216,6 @@ func (h *handler) proxyBlob(w http.ResponseWriter, r *http.Request, repo *core.R
 			return true, nil
 		}
 	}
-	proxy.NoteCacheMiss(ctx)
 	if r.Method == http.MethodHead {
 		resp, err := h.fetch(ctx, repo, http.MethodHead, path, "", remoteName)
 		if err != nil {
@@ -232,6 +226,7 @@ func (h *handler) proxyBlob(w http.ResponseWriter, r *http.Request, repo *core.R
 		if resp.StatusCode != http.StatusOK {
 			return false, h.remoteMiss(repo, remoteName, "blob "+string(d), resp)
 		}
+		proxy.NoteCacheMiss(ctx, nil)
 		hd := w.Header()
 		hd.Set("Content-Type", "application/octet-stream")
 		hd.Set("Docker-Content-Digest", string(d))
@@ -254,6 +249,7 @@ func (h *handler) proxyBlob(w http.ResponseWriter, r *http.Request, repo *core.R
 	if resp.StatusCode != http.StatusOK {
 		return false, h.remoteMiss(repo, remoteName, "blob "+string(d), resp)
 	}
+	proxy.NoteCacheMiss(ctx, nil)
 	hs := d.NewDigester()
 	if hs == nil {
 		return false, fmt.Errorf("digest %s: %w", d, core.ErrInvalid)

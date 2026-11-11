@@ -2577,17 +2577,28 @@ export interface components {
                 coverage_start: string | null;
                 /** @description Requests of `total` answered with a 5xx status; counted from the version that introduced it on */
                 server_errors: number | null;
-                /** @description Requests of `total` refused with 401 or 403; counted from the version that introduced it on */
+                /** @description Requests of `total` refused with 401 or 403, authentication challenges excluded; counted from the version that introduced it on */
                 denied: number | null;
+                /**
+                 * @description Requests of `total` answered 401 that presented no credentials
+                 *     at all (no Authorization or API key header, no cookie). Clients
+                 *     such as NuGet, docker, npm and pip ask without credentials first
+                 *     and retry with them, so these are not refusals and are not in
+                 *     `denied`; a success rate leaves them out of both sides. Counted
+                 *     from the version that introduced it on (earlier ones are in
+                 *     `denied`).
+                 */
+                auth_challenges: number | null;
             };
             /**
              * @description Proxy cache effectiveness over the range, every format, every node.
-             *     A client request counts once: a miss when any proxy repository
-             *     (directly or as a member of the group addressed) asked its remote
-             *     for the content, otherwise a hit when a proxy answered from its
-             *     cache. Requests answered by hosted repositories alone are not
-             *     counted. Every value is null when traffic statistics are not
-             *     available.
+             *     A client request counts once: a miss when a remote of any proxy
+             *     repository (directly or as a member of the group addressed)
+             *     supplied content for the answer, otherwise a hit when a proxy
+             *     answered from its cache. Remotes that answered not found or failed
+             *     count as neither. Requests answered by hosted repositories alone
+             *     are not counted. Every value is null when traffic statistics are
+             *     not available.
              */
             cache: {
                 /** @description hits / (hits + misses); null when no proxy request was counted in the range */
@@ -2834,6 +2845,9 @@ export interface components {
             delete_mode?: "unlist" | "delete";
             /**
              * @description Proxy only. The remote's service index path, relative to `remote_url`. Default `v3/index.json`.
+             *     Sensitive, as some feeds carry their key in this path: returned only to administrators of
+             *     the repository (`repo:<name>:admin`, `system:repos:admin`), as `***` to everyone else. An
+             *     update that sends `***` keeps the stored value.
              * @example v3/index.json
              * @example index.json
              */

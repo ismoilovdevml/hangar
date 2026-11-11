@@ -47,9 +47,12 @@ type Overview struct {
 	// in the last 30 days (at 5-minute resolution), at least Requests.
 	PeakRequests int64
 	// ServerErrors and Denied count the requests of the window answered with
-	// a 5xx status, and refused with 401 or 403.
+	// a 5xx status, and refused with 401 or 403. Challenges counts the 401
+	// answers to requests without any credentials, which clients answer by
+	// retrying with credentials; they are in Requests, not in Denied.
 	ServerErrors  int64
 	Denied        int64
+	Challenges    int64
 	Latency       Histogram // request latency at RequestBounds
 	CacheHits     int64
 	CacheMisses   int64
@@ -90,7 +93,8 @@ func (s *Store) Overview(ctx context.Context, q OverviewQuery) (*Overview, error
 			COALESCE(sum(cache_misses) FILTER (WHERE minute >= $2), 0)::bigint,
 			COALESCE(sum(cache_hit_bytes) FILTER (WHERE minute >= $2), 0)::bigint,
 			COALESCE(sum(server_errors) FILTER (WHERE minute >= $2), 0)::bigint,
-			COALESCE(sum(denied) FILTER (WHERE minute >= $2), 0)::bigint
+			COALESCE(sum(denied) FILTER (WHERE minute >= $2), 0)::bigint,
+			COALESCE(sum(auth_challenges) FILTER (WHERE minute >= $2), 0)::bigint
 		FROM traffic_minutes WHERE minute >= $1 AND minute < $3`, prevStart, start, end)
 	b.Queue(`SELECT u.i, sum(u.v)::bigint
 		FROM traffic_minutes t, unnest(t.latency) WITH ORDINALITY AS u(v, i)
@@ -113,7 +117,7 @@ func (s *Store) Overview(ctx context.Context, q OverviewQuery) (*Overview, error
 	}
 	var prev int64
 	if err := br.QueryRow().Scan(&o.Requests, &prev, &o.CacheHits, &o.CacheMisses, &o.CacheHitBytes,
-		&o.ServerErrors, &o.Denied); err != nil {
+		&o.ServerErrors, &o.Denied, &o.Challenges); err != nil {
 		return nil, fmt.Errorf("traffic totals: %w", err)
 	}
 	if o.Covered(prevStart) {

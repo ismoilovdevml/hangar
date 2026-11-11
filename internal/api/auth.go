@@ -123,6 +123,14 @@ func (a *API) authorizeRepoAdmin(ctx context.Context, name, auditAction string) 
 	return a.authorizeMutation(ctx, core.ActionAdmin, core.RepoResource(name), auditAction, core.RepoResource(name).String())
 }
 
+// isRepoAdmin reports whether the principal administers repository name
+// (system:repos:admin or repo:<name>:admin). It only asks: refusals are not
+// audited, as reads call it for every repository they return.
+func (a *API) isRepoAdmin(ctx context.Context, name string) bool {
+	return a.authorize(ctx, core.ActionAdmin, core.SystemResource(core.SystemRepos)) == nil ||
+		a.authorize(ctx, core.ActionAdmin, core.RepoResource(name)) == nil
+}
+
 // canRead reports whether the principal may read repository name. Errors
 // other than a refusal are returned.
 func (a *API) canRead(ctx context.Context, name string) (bool, error) {

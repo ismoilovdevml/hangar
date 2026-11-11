@@ -155,7 +155,8 @@ Measured on a test node serving three formats, five repositories and a few hundr
 
 | Metric | Type | Labels | Meaning |
 |---|---|---|---|
-| `hangar_http_requests_total` | counter | `method`, `route`, `code` | Requests served. |
+| `hangar_http_requests_total` | counter | `method`, `route`, `code` | Requests served. A server error (5xx) answered after the client had already gone away (closed the connection, cancelled the request) is recorded as `499`, like the `499` handlers answer themselves: nobody read it and the cancellation caused it. |
+| `hangar_http_auth_challenges_total` | counter | `method`, `route` | The `401` answers of `hangar_http_requests_total` to requests that presented no credentials at all: no `Authorization` or `X-NuGet-ApiKey` header, no cookie, and nothing a handler read as credentials from the body. NuGet and .NET clients, docker, npm and pip ask without credentials first and retry with them after this challenge, so it is not a refusal. A `401` to wrong or expired credentials and every `403` are not counted here. `sum(rate(hangar_http_requests_total{code="401"}[5m])) - sum(rate(hangar_http_auth_challenges_total[5m]))` is the rate of rejected credentials. |
 | `hangar_http_request_duration_seconds` | histogram | `method`, `route` | Time until the handler returned (for downloads, until the last byte was written). |
 | `hangar_http_requests_in_flight` | gauge | | Requests being served now, including long uploads and the event stream. |
 | `hangar_http_request_bytes_total` | counter | `route` | Request body bytes read by handlers. |
@@ -174,7 +175,7 @@ attributed to the group. `op` is `read` (GET, HEAD), `write` (PUT, POST, PATCH),
 | `hangar_format_request_duration_seconds` | histogram | `format`, `repo_type`, `op` | Package request latency. |
 | `hangar_format_upload_bytes_total` | counter | `format`, `repo_type` | Bytes received in write requests. |
 | `hangar_format_download_bytes_total` | counter | `format`, `repo_type` | Bytes sent in successful (2xx) reads. |
-| `hangar_proxy_cache_requests_total` | counter | `format`, `result` | Proxy requests answered from the cache (`hit`) or fetched from the remote (`miss`). |
+| `hangar_proxy_cache_requests_total` | counter | `format`, `result` | Proxy requests answered from the cache (`hit`) or with content a remote supplied (`miss`), once per client request however many group members were asked. A remote answering not found (or failing) is neither: in a group whose first proxies' remotes do not have a package and whose last proxy serves it from its cache, the request is a `hit`. Index lookups that only locate a download (a NuGet service index, a cargo, pypi or Helm index) do not count. |
 | `hangar_proxy_cache_hit_bytes_total` | counter | `format` | Bytes served from proxy caches without contacting the remote. |
 | `hangar_proxy_negative_cache_evictions_total` | counter | `repository` | Remembered remote 404s dropped before their `negative_cache_ttl` because the repository's negative cache (10,000 paths per remote, least recently used first) was full. A steady rate means clients probe more missing paths than the cache holds, and those probes reach the remote again. |
 | `hangar_proxy_index_entries_skipped_total` | counter | `format`, `repository` | Malformed entries of a remote index (a Helm `index.yaml`) that a proxy left out instead of failing the whole index, counted each time the index is parsed. A steady rise means the remote publishes broken entries; the warning log line names the first one. |

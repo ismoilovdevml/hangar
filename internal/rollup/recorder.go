@@ -147,13 +147,14 @@ func (r *Recorder) trim() {
 
 const upsertTraffic = `
 INSERT INTO traffic_minutes AS t (minute, instance, requests, downloads, cache_hits, cache_misses, cache_hit_bytes, latency,
-	server_errors, denied)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	server_errors, denied, auth_challenges)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (minute, instance) DO UPDATE SET
 	requests        = t.requests + excluded.requests,
 	downloads       = t.downloads + excluded.downloads,
 	server_errors   = t.server_errors + excluded.server_errors,
 	denied          = t.denied + excluded.denied,
+	auth_challenges = t.auth_challenges + excluded.auth_challenges,
 	cache_hits      = t.cache_hits + excluded.cache_hits,
 	cache_misses    = t.cache_misses + excluded.cache_misses,
 	cache_hit_bytes = t.cache_hit_bytes + excluded.cache_hit_bytes,
@@ -179,7 +180,7 @@ func (r *Recorder) write(ctx context.Context, now time.Time) error {
 	for m, c := range r.pending {
 		if !c.trafficZero() {
 			b.Queue(upsertTraffic, m, r.instance, c.Requests, c.Downloads, c.CacheHits, c.CacheMisses,
-				c.CacheHitBytes, []int64(c.Latency), c.ServerErrors, c.Denied)
+				c.CacheHitBytes, []int64(c.Latency), c.ServerErrors, c.Denied, c.Challenges)
 		}
 		for repo, h := range c.Upstreams {
 			if h.Total() > 0 {

@@ -124,6 +124,9 @@ type errorBody struct {
 }
 
 func (s *Service) writeError(w http.ResponseWriter, r *http.Request, err error) {
+	if core.AnswerClientGone(w, r, s.log, err) {
+		return
+	}
 	code := core.HTTPStatus(err)
 	msg := err.Error()
 	if code == http.StatusInternalServerError {

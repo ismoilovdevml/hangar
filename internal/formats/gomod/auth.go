@@ -36,6 +36,9 @@ func (h *handler) authorize(w http.ResponseWriter, r *http.Request, repo *core.R
 // Missing modules and versions answer 404, so that the go command moves on
 // to the next entry of GOPROXY ("a,b" falls back only on 404 and 410).
 func (h *handler) writeError(w http.ResponseWriter, r *http.Request, err error) {
+	if core.AnswerClientGone(w, r, h.log, err) {
+		return
+	}
 	err = routing.Annotate(r.Context(), err)
 	code := core.HTTPStatus(err)
 	msg := err.Error()

@@ -21,8 +21,11 @@ describe('overview', () => {
     expect(within(today).getByRole('radio', { name: 'Today' })).toHaveAttribute('aria-checked', 'true');
 
     const outcomes = screen.getByRole('region', { name: 'Request outcomes' });
-    expect(within(outcomes).getByRole('img', { name: '98.8 percent of requests succeeded' })).toBeInTheDocument();
-    expect(within(outcomes).getByText(/^p95/)).toHaveTextContent('p95 41 ms · 173K denied · 38.6K server errors');
+    // Authentication challenges count on neither side of the rate, and the note says so.
+    expect(within(outcomes).getByRole('img', { name: '98.3 percent of requests succeeded' })).toBeInTheDocument();
+    const note = within(outcomes).getByText(/^p95/);
+    expect(note).toHaveTextContent('p95 41 ms · 173K denied · 38.6K server errors');
+    expect(note).toHaveAttribute('title', '5.5M auth challenges not counted: clients ask without credentials first and retry with them');
 
     const storage = card(/^Storage/);
     expect(storage).toHaveAttribute('href', '/blob-stores');

@@ -15,7 +15,7 @@ function bareMetrics(): OverviewMetrics {
     summary: { published_since_yesterday: 0, failed_pushes: 0 },
     activity: { published: 0, cached: 0, pushes_rejected: 0 },
     storage: { used_bytes: 0, capacity_bytes: null, added_bytes_24h: 0 },
-    requests: { total: null, trend_pct: null, peak_total: null, p95_ms: null, coverage_start: null, server_errors: null, denied: null },
+    requests: { total: null, trend_pct: null, peak_total: null, p95_ms: null, coverage_start: null, server_errors: null, denied: null, auth_challenges: null },
     cache: { hit_ratio: null, bytes_saved: null, hits: null, misses: null },
     issues: { critical: 0, packages_affected: 0, quarantined: 0, open_findings: 0 },
     traffic: m.traffic.map((b) => ({ ...b, downloads: null, requests: null, uploads: 0 })),
@@ -69,7 +69,7 @@ describe('overview with metrics the server does not report', () => {
     const restart = new Date(new Date(m.generated_at).getTime() - 10_000);
     useMetrics({
       ...m,
-      requests: { ...m.requests, total: 0, p95_ms: null, server_errors: 0, denied: 0, coverage_start: restart.toISOString() },
+      requests: { ...m.requests, total: 0, p95_ms: null, server_errors: 0, denied: 0, auth_challenges: 0, coverage_start: restart.toISOString() },
       traffic: m.traffic.map((b, i) => (i < 3 ? { ...b, requests: null, downloads: null } : { ...b, requests: 0 })),
     });
     renderApp('/');

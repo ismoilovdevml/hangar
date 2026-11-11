@@ -24,6 +24,9 @@ import (
 const (
 	MetricHTTPRequests = "hangar_http_requests_total"
 	MetricHTTPDuration = "hangar_http_request_duration_seconds"
+	// MetricHTTPChallenges counts the 401 answers of MetricHTTPRequests to
+	// requests that presented no credentials at all.
+	MetricHTTPChallenges = "hangar_http_auth_challenges_total"
 )
 
 // Fixed histogram bounds (seconds) of the stored latency arrays. They match
@@ -95,10 +98,14 @@ func (h Histogram) add(o Histogram) Histogram {
 
 // Counts are counter values, or the increments over an interval.
 type Counts struct {
-	Requests      int64
-	Downloads     int64
-	ServerErrors  int64 // requests answered with a 5xx status
-	Denied        int64 // requests refused with 401 or 403
+	Requests     int64
+	Downloads    int64
+	ServerErrors int64 // requests answered with a 5xx status
+	Denied       int64 // requests refused with 401 or 403, challenges excluded
+	// Challenges are 401 answers to requests without any credentials: the
+	// authentication challenge clients answer by retrying with credentials.
+	// They are part of Requests and not of Denied.
+	Challenges    int64
 	CacheHits     int64
 	CacheMisses   int64
 	CacheHitBytes int64
@@ -108,7 +115,8 @@ type Counts struct {
 
 // trafficZero reports whether the traffic_minutes part is all zero.
 func (c Counts) trafficZero() bool {
-	return c.Requests == 0 && c.Downloads == 0 && c.ServerErrors == 0 && c.Denied == 0 && c.CacheHits == 0 && c.CacheMisses == 0 &&
+	return c.Requests == 0 && c.Downloads == 0 && c.ServerErrors == 0 && c.Denied == 0 && c.Challenges == 0 &&
+		c.CacheHits == 0 && c.CacheMisses == 0 &&
 		c.CacheHitBytes == 0 && c.Latency.Total() == 0
 }
 
@@ -130,7 +138,8 @@ func (c Counts) Sub(prev Counts) Counts {
 	d := func(a, b int64) int64 { return max(a-b, 0) }
 	out := Counts{
 		Requests: d(c.Requests, prev.Requests), Downloads: d(c.Downloads, prev.Downloads),
-		ServerErrors: d(c.ServerErrors, prev.ServerErrors), Denied: d(c.Denied, prev.Denied),
+		ServerErrors: d(c.ServerErrors, prev.ServerErrors),
+		Denied:       d(c.Denied, prev.Denied), Challenges: d(c.Challenges, prev.Challenges),
 		CacheHits: d(c.CacheHits, prev.CacheHits), CacheMisses: d(c.CacheMisses, prev.CacheMisses),
 		CacheHitBytes: d(c.CacheHitBytes, prev.CacheHitBytes), Latency: c.Latency.sub(prev.Latency),
 	}
@@ -149,7 +158,8 @@ func (c Counts) Sub(prev Counts) Counts {
 func (c Counts) Add(o Counts) Counts {
 	out := Counts{
 		Requests: c.Requests + o.Requests, Downloads: c.Downloads + o.Downloads,
-		ServerErrors: c.ServerErrors + o.ServerErrors, Denied: c.Denied + o.Denied,
+		ServerErrors: c.ServerErrors + o.ServerErrors,
+		Denied:       c.Denied + o.Denied, Challenges: c.Challenges + o.Challenges,
 		CacheHits: c.CacheHits + o.CacheHits, CacheMisses: c.CacheMisses + o.CacheMisses,
 		CacheHitBytes: c.CacheHitBytes + o.CacheHitBytes,
 		Latency:       append(Histogram(nil), c.Latency...).add(o.Latency),
@@ -251,6 +261,12 @@ func Read(g prometheus.Gatherer) Counts {
 					c.Downloads += n
 				}
 			}
+		case MetricHTTPChallenges:
+			for _, m := range f.GetMetric() {
+				if countedRoute(label(m, "route")) {
+					c.Challenges += round(m.GetCounter().GetValue())
+				}
+			}
 		case MetricHTTPDuration:
 			for _, m := range f.GetMetric() {
 				if countedRoute(label(m, "route")) {
@@ -280,6 +296,8 @@ func Read(g prometheus.Gatherer) Counts {
 			}
 		}
 	}
+	// Challenges are 401 answers too; they are not refusals.
+	c.Denied = max(c.Denied-c.Challenges, 0)
 	c.Latency = reqHist.at(RequestBounds)
 	for repo, a := range upstream {
 		if c.Upstreams == nil {

@@ -18,6 +18,9 @@ type RequestTags struct {
 	repo      string
 	format    string
 	repoType  core.RepoType
+	// credentials: the request presented credentials somewhere the HTTP
+	// middleware cannot see (a form or JSON body, a format header).
+	credentials bool
 }
 
 type tagsKey struct{}
@@ -58,6 +61,27 @@ func (t *RequestTags) SetPrincipal(p *core.Principal) {
 	t.mu.Unlock()
 }
 
+// MarkCredentials records that the request presented credentials, so a 401
+// answer to it counts as a refusal rather than an authentication challenge.
+func (t *RequestTags) MarkCredentials() {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	t.credentials = true
+	t.mu.Unlock()
+}
+
+// presentedCredentials reports whether MarkCredentials was called.
+func (t *RequestTags) presentedCredentials() bool {
+	if t == nil {
+		return false
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.credentials
+}
+
 // snapshot returns the current values.
 func (t *RequestTags) snapshot() (principal, repo, format string, repoType core.RepoType) {
 	if t == nil {
@@ -86,7 +110,9 @@ func (t taggingRepos) Get(ctx context.Context, name string) (*core.Repository, e
 }
 
 // TagAuthenticator wraps the authenticator handed to format handlers so the
-// authenticated principal is recorded in the request's tags.
+// authenticated principal is recorded in the request's tags, and so are
+// credentials a format read from somewhere other than the headers the HTTP
+// middleware checks (a login body, a token endpoint form).
 func TagAuthenticator(next core.Authenticator) core.Authenticator {
 	return taggingAuth{next}
 }
@@ -94,6 +120,9 @@ func TagAuthenticator(next core.Authenticator) core.Authenticator {
 type taggingAuth struct{ core.Authenticator }
 
 func (t taggingAuth) Authenticate(ctx context.Context, c core.Credentials) (*core.Principal, error) {
+	if !c.Empty() {
+		TagsFrom(ctx).MarkCredentials()
+	}
 	p, err := t.Authenticator.Authenticate(ctx, c)
 	if err == nil {
 		TagsFrom(ctx).SetPrincipal(p)

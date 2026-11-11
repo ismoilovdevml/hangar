@@ -3574,7 +3574,7 @@ components:
             the database, so the numbers survive restarts; whole minutes are
             counted. Every value is null when traffic statistics are not
             available.
-          required: [total, trend_pct, peak_total, p95_ms, coverage_start, server_errors, denied]
+          required: [total, trend_pct, peak_total, p95_ms, coverage_start, server_errors, denied, auth_challenges]
           properties:
             total: { type: [integer, "null"] }
             trend_pct:
@@ -3595,17 +3595,28 @@ components:
               description: Requests of `total` answered with a 5xx status; counted from the version that introduced it on
             denied:
               type: [integer, "null"]
-              description: Requests of `total` refused with 401 or 403; counted from the version that introduced it on
+              description: Requests of `total` refused with 401 or 403, authentication challenges excluded; counted from the version that introduced it on
+            auth_challenges:
+              type: [integer, "null"]
+              description: |
+                Requests of `total` answered 401 that presented no credentials
+                at all (no Authorization or API key header, no cookie). Clients
+                such as NuGet, docker, npm and pip ask without credentials first
+                and retry with them, so these are not refusals and are not in
+                `denied`; a success rate leaves them out of both sides. Counted
+                from the version that introduced it on (earlier ones are in
+                `denied`).
         cache:
           type: object
           description: |
             Proxy cache effectiveness over the range, every format, every node.
-            A client request counts once: a miss when any proxy repository
-            (directly or as a member of the group addressed) asked its remote
-            for the content, otherwise a hit when a proxy answered from its
-            cache. Requests answered by hosted repositories alone are not
-            counted. Every value is null when traffic statistics are not
-            available.
+            A client request counts once: a miss when a remote of any proxy
+            repository (directly or as a member of the group addressed)
+            supplied content for the answer, otherwise a hit when a proxy
+            answered from its cache. Remotes that answered not found or failed
+            count as neither. Requests answered by hosted repositories alone
+            are not counted. Every value is null when traffic statistics are
+            not available.
           required: [hit_ratio, bytes_saved, hits, misses]
           properties:
             hit_ratio:
@@ -3977,7 +3988,11 @@ components:
           description: What `DELETE api/v2/package/{id}/{version}` (`dotnet nuget delete`) does. Default `unlist`.
         service_index:
           type: string
-          description: Proxy only. The remote's service index path, relative to `remote_url`. Default `v3/index.json`.
+          description: |
+            Proxy only. The remote's service index path, relative to `remote_url`. Default `v3/index.json`.
+            Sensitive, as some feeds carry their key in this path: returned only to administrators of
+            the repository (`repo:<name>:admin`, `system:repos:admin`), as `***` to everyone else. An
+            update that sends `***` keeps the stored value.
           examples: [v3/index.json, index.json]
     PypiFormatConfig:
       type: object

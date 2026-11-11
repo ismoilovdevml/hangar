@@ -277,6 +277,9 @@ func (h *handler) authorize(w http.ResponseWriter, r *http.Request, action core.
 // fail answers with the status for err; 401 carries a Basic challenge, which
 // NuGet clients answer with the credentials configured for the source.
 func (h *handler) fail(w http.ResponseWriter, r *http.Request, err error) {
+	if core.AnswerClientGone(w, r, h.log(), err) {
+		return
+	}
 	err = routing.Annotate(r.Context(), err)
 	code := core.HTTPStatus(err)
 	msg := err.Error()

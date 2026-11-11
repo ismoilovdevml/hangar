@@ -35,6 +35,11 @@ export function OutcomeCard({ m, error }: { m?: OverviewMetrics; error: boolean 
   if (r.server_errors) outcomes.push(`${formatCompact(r.server_errors)} server ${r.server_errors === 1 ? 'error' : 'errors'}`);
   if (ratio !== null && outcomes.length === 0) outcomes.push('no errors');
   const p95 = r.p95_ms === null ? null : Math.round(r.p95_ms);
+  const challenges = r.auth_challenges ?? 0;
+  const challengeNote =
+    challenges > 0
+      ? `${formatCompact(challenges)} auth ${challenges === 1 ? 'challenge' : 'challenges'} not counted: clients ask without credentials first and retry with them`
+      : undefined;
 
   let center: { value: string; caption: string; label: string };
   if (r.total === null) center = { value: '—', caption: 'not reported', label: 'Request outcomes are not reported by this server' };
@@ -53,7 +58,7 @@ export function OutcomeCard({ m, error }: { m?: OverviewMetrics; error: boolean 
           <span className="outcome__caption">{center.caption}</span>
         </div>
       </div>
-      <p className="outcome__note">
+      <p className="outcome__note" title={challengeNote}>
         {p95 !== null && (
           <>
             p95 <b>{p95} ms</b>

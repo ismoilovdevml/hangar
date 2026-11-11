@@ -52,7 +52,7 @@ func (h *handler) proxyAsset(ctx context.Context, repo *core.Repository, clean s
 		return h.fetch(fctx, repo, clean, cached)
 	})
 	if err != nil {
-		proxy.NoteCacheMiss(ctx)
+		proxy.NoteCacheMiss(ctx, err)
 		if errors.Is(err, core.ErrNotFound) {
 			h.neg.add(key, cfg.NegativeCacheTTL.D())
 		}
@@ -62,7 +62,7 @@ func (h *handler) proxyAsset(ctx context.Context, repo *core.Repository, clean s
 	if res.fromCache {
 		proxy.NoteCacheHit(ctx, res.asset.Size)
 	} else {
-		proxy.NoteCacheMiss(ctx)
+		proxy.NoteCacheMiss(ctx, nil)
 	}
 	return res.asset, nil
 }

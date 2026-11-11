@@ -84,6 +84,9 @@ func yamlAuthPresence(b []byte) authPresence {
 // the body does not resend the secret, the update is refused rather than
 // sending the old host's credentials to the new one.
 func keepSecrets(next, old *core.RepoConfig, auth authPresence) error {
+	if err := keepFormatSecrets(next, old); err != nil {
+		return err
+	}
 	if next.Proxy == nil || old.Proxy == nil {
 		return nil
 	}
@@ -124,6 +127,24 @@ func keepSecrets(next, old *core.RepoConfig, auth authPresence) error {
 		if na.Token == "" {
 			na.Token = oa.Token
 		}
+	}
+	return nil
+}
+
+// keepFormatSecrets puts the stored value back for every sensitive format
+// setting that next sends as redactedSetting (a body built from a redacted
+// read). A redacted value with nothing stored is refused rather than saved.
+func keepFormatSecrets(next, old *core.RepoConfig) error {
+	for _, k := range sensitiveFormatKeys {
+		if v, ok := next.Format[k]; !ok || v != redactedSetting {
+			continue
+		}
+		stored, ok := old.Format[k]
+		if !ok || stored == nil || stored == "" {
+			return fmt.Errorf("config.format.%s is %q, the placeholder of a hidden value, but none is stored: send the real value: %w",
+				k, redactedSetting, core.ErrInvalid)
+		}
+		next.Format[k] = stored
 	}
 	return nil
 }

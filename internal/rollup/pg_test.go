@@ -102,6 +102,8 @@ func TestRecorderAndStore(t *testing.T) {
 	node2.serve(2, "/repository/{repo}/*", "PUT", "401", 0.02)
 	node2.serve(1, "/api/v1/repositories", "GET", "403", 0.02)
 	node2.serve(1, "/repository/{repo}/*", "GET", "502", 0.02)
+	// One of the two 401s answered a request without credentials.
+	node2.m.HTTPChallenges.WithLabelValues("PUT", "/repository/{repo}/*").Inc()
 	if err := rec3.Flush(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -133,8 +135,8 @@ func TestRecorderAndStore(t *testing.T) {
 	if len(o.BucketRequests) != 2 || o.BucketRequests[0] != 18 || o.BucketRequests[1] != 27 {
 		t.Errorf("bucket requests = %v", o.BucketRequests)
 	}
-	if o.ServerErrors != 1 || o.Denied != 3 {
-		t.Errorf("server errors %d denied %d, want 1 3", o.ServerErrors, o.Denied)
+	if o.ServerErrors != 1 || o.Denied != 2 || o.Challenges != 1 {
+		t.Errorf("server errors %d denied %d challenges %d, want 1 2 1", o.ServerErrors, o.Denied, o.Challenges)
 	}
 	if o.CacheHits != 5 || o.CacheMisses != 1 || o.CacheHitBytes != 1500 {
 		t.Errorf("cache = %d/%d/%d", o.CacheHits, o.CacheMisses, o.CacheHitBytes)

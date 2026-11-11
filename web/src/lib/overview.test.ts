@@ -33,13 +33,24 @@ function calm() {
 
 describe('successRatio', () => {
   it('counts server errors and refusals as failures', () => {
-    expect(successRatio({ total: 1000, server_errors: 4, denied: 10, trend_pct: null, peak_total: null, p95_ms: null, coverage_start: null })).toBeCloseTo(0.986);
+    expect(
+      successRatio({ total: 1000, server_errors: 4, denied: 10, auth_challenges: 0, trend_pct: null, peak_total: null, p95_ms: null, coverage_start: null }),
+    ).toBeCloseTo(0.986);
+  });
+  it('leaves authentication challenges out of both sides', () => {
+    // A NuGet-heavy day: every anonymous 401 is retried with credentials and succeeds.
+    const base = { trend_pct: null, peak_total: null, p95_ms: null, coverage_start: null };
+    expect(successRatio({ ...base, total: 27200, server_errors: 0, denied: 0, auth_challenges: 13600 })).toBe(1);
+    expect(successRatio({ ...base, total: 1100, server_errors: 4, denied: 6, auth_challenges: 100 })).toBeCloseTo(0.99);
+    expect(successRatio({ ...base, total: 40, server_errors: 0, denied: 0, auth_challenges: 40 })).toBeNull();
+    // Servers that predate the field.
+    expect(successRatio({ ...base, total: 1000, server_errors: 4, denied: 10, auth_challenges: null })).toBeCloseTo(0.986);
   });
   it('is null without requests or outcome counts', () => {
     const base = { trend_pct: null, peak_total: null, p95_ms: null, coverage_start: null };
-    expect(successRatio({ ...base, total: 0, server_errors: 0, denied: 0 })).toBeNull();
-    expect(successRatio({ ...base, total: null, server_errors: null, denied: null })).toBeNull();
-    expect(successRatio({ ...base, total: 5, server_errors: null, denied: null })).toBeNull();
+    expect(successRatio({ ...base, total: 0, server_errors: 0, denied: 0, auth_challenges: 0 })).toBeNull();
+    expect(successRatio({ ...base, total: null, server_errors: null, denied: null, auth_challenges: null })).toBeNull();
+    expect(successRatio({ ...base, total: 5, server_errors: null, denied: null, auth_challenges: null })).toBeNull();
   });
   it('never rounds a failure up to 100%', () => {
     expect(ratioPercent(0.99996)).toBe('99.9');
