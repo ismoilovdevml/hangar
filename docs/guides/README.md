@@ -91,9 +91,16 @@ Formats compiled into the server today: `apt`, `cargo`, `docker`, `go`, `helm`, 
 ## Browsing
 
 **Packages** in the web UI is a tree of every repository you can read. Expand a
-repository to see its content the way clients see it:
+repository to see what clients consume: folders (npm scopes, Maven groupId
+segments, image paths, module paths) lead down to packages, and a package opens
+to its versions, newest first. apt and rpm list their packages by name. A raw
+repository's files are its content, so its tree shows directories and files.
 
-| Format | Tree |
+The files a repository stores (tarballs, manifests, Docker `manifests` and
+`blobs`, index documents) are on the repository's **Files** view, folder by
+folder in client paths:
+
+| Format | Files |
 |---|---|
 | npm | scope, package, then the package's files (tarballs, manifests) |
 | Maven | groupId segments, artifactId, version, files |
@@ -114,12 +121,17 @@ Selecting a package or version shows its README (rendered from the package's own
 files; links and images are restricted), licences, downloads, vulnerability
 status, its versions and files, the repositories that hold it, and the client
 commands to install it. Selecting a file shows its path, size, checksums, dates,
-and, in a proxy, that it is a cached copy. **Delete version** and **Delete file**
-need `repo:<name>:delete`; both are audited and release the file's blob for
-compaction.
+and, in a proxy, that it is a cached copy. A Docker version's size and its
+**Layers** tab come from the image manifest (a multi-platform index is sized by
+its linux/amd64 image). **Delete version**, **Delete package** (every version,
+on the Versions tab) and **Delete file** need `repo:<name>:delete`; all are
+audited and release the files' blobs for compaction. Docker layers and
+manifests are shared by tags, so they are deleted with their version, never one
+file at a time.
 
 The same data is in the REST API: `GET /api/v1/repositories/<name>/browse?path=<folder>`
-(direct children, cursor-paged), `GET|DELETE /api/v1/assets/<id>` and
+(direct children, cursor-paged; `view=packages` gives the tree, the default
+`view=files` the stored files), `GET|DELETE /api/v1/assets/<id>` and
 `GET /api/v1/components/<id>/info` (README, licences, keywords).
 
 ## Plain HTTP
