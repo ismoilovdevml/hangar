@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { ApiRequestError } from '../../api/client';
 import { useSession } from '../../api/hooks';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
@@ -293,8 +294,18 @@ export function MemberDialog({ kind, member, onClose, onCreated }: MemberDialogP
   const ids = { user: useId(), name: useId(), email: useId(), desc: useId(), pw: useId() };
   const external = member && member.source !== 'local';
 
+  // A name the server already has comes back as 409: it belongs under the name field, not in a banner.
+  const taken = save.error instanceof ApiRequestError && save.error.status === 409 && !member;
   const errors = {
-    username: !USERNAME_RE.test(username) ? 'Start with a letter or digit; letters, digits and . _ @ + - only.' : null,
+    username: !username.trim()
+      ? sa
+        ? 'Enter a name.'
+        : 'Enter a username.'
+      : !USERNAME_RE.test(username)
+        ? 'Start with a letter or digit; letters, digits and . _ @ + - only.'
+        : taken
+          ? `${sa ? 'A service account' : 'A member'} named ${username} already exists.`
+          : null,
     email: email && !/^[^\s@]+@[^\s@]+$/.test(email) ? 'Enter a valid email address.' : null,
     password: !member && !sa && password.length < 12 ? 'At least 12 characters (the server may require more).' : null,
   };
@@ -312,6 +323,9 @@ export function MemberDialog({ kind, member, onClose, onCreated }: MemberDialogP
         onSuccess: (m) => {
           onCreated?.(m);
           onClose();
+        },
+        onError: (err) => {
+          if (err instanceof ApiRequestError && err.status === 409) document.getElementById(ids.user)?.focus();
         },
       });
     }
@@ -331,8 +345,19 @@ export function MemberDialog({ kind, member, onClose, onCreated }: MemberDialogP
     >
       <form className="dialog-form" onSubmit={submit} noValidate>
         <div className="form-grid">
-          <Field id={ids.user} label={sa ? 'Name' : 'Username'} error={submitted && errors.username}>
-            <input className="input" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" spellCheck={false} readOnly={!!external} data-autofocus />
+          <Field id={ids.user} label={sa ? 'Name' : 'Username'} error={(submitted || taken) && errors.username}>
+            <input
+              className="input"
+              value={username}
+              onChange={(e) => {
+                if (taken) save.reset();
+                setUsername(e.target.value);
+              }}
+              autoComplete="off"
+              spellCheck={false}
+              readOnly={!!external}
+              data-autofocus
+            />
           </Field>
           <Field id={ids.name} label={<>Display name <span className="field__optional">(optional)</span></>}>
             <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={200} readOnly={!!external} />
@@ -364,7 +389,7 @@ export function MemberDialog({ kind, member, onClose, onCreated }: MemberDialogP
           )}
         </div>
         <RolePicker value={roles} onChange={setRoles} />
-        <FormError error={save.error} />
+        {!taken && <FormError error={save.error} />}
         <div className="dialog-actions">
           <button type="button" className="button button--secondary" onClick={onClose}>
             Cancel

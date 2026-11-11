@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent } from 'react';
+import { ApiRequestError } from '../../api/client';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
 import { IconClose, IconPlus } from '../../components/icons';
@@ -173,7 +174,14 @@ function RoleDialog({ role, canWrite, onClose }: { role: Role | null; canWrite: 
   const ids = { name: useId(), desc: useId() };
   const save = role ? update : create;
 
-  const nameError = !ROLE_NAME_RE.test(name) ? 'Letters, digits, spaces, dots, dashes and underscores; up to 64 characters.' : null;
+  const taken = !role && save.error instanceof ApiRequestError && save.error.status === 409;
+  const nameError = !name.trim()
+    ? 'Enter a role name.'
+    : !ROLE_NAME_RE.test(name)
+      ? 'Letters, digits, spaces, dots, dashes and underscores; up to 64 characters.'
+      : taken
+        ? `A role named ${name} already exists.`
+        : null;
   const privError = privileges.some((s) => {
     const p = parsePrivilege(s);
     return !p || (p.domain === 'repo' && repoPatternError(p.pattern));
@@ -186,7 +194,13 @@ function RoleDialog({ role, canWrite, onClose }: { role: Role | null; canWrite: 
     if (nameError || privError || groupError) return;
     const body: RoleInput = { name, description, privileges, group_mappings: groups.map((g) => ({ provider: g.provider.trim(), group: g.group.trim() })) };
     if (role) update.mutate({ name: role.name, body }, { onSuccess: onClose });
-    else create.mutate(body, { onSuccess: onClose });
+    else
+      create.mutate(body, {
+        onSuccess: onClose,
+        onError: (err) => {
+          if (err instanceof ApiRequestError && err.status === 409) document.getElementById(ids.name)?.focus();
+        },
+      });
   };
 
   return (
@@ -199,8 +213,16 @@ function RoleDialog({ role, canWrite, onClose }: { role: Role | null; canWrite: 
       <form className="dialog-form" onSubmit={submit} noValidate>
         {editable && (
           <>
-            <Field id={ids.name} label="Name" error={submitted && nameError}>
-              <input className="input" value={name} onChange={(e) => setName(e.target.value)} data-autofocus />
+            <Field id={ids.name} label="Name" error={(submitted || taken) && nameError}>
+              <input
+                className="input"
+                value={name}
+                onChange={(e) => {
+                  if (taken) save.reset();
+                  setName(e.target.value);
+                }}
+                data-autofocus
+              />
             </Field>
             <Field id={ids.desc} label={<>Description <span className="field__optional">(optional)</span></>}>
               <input className="input" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} />
@@ -248,7 +270,7 @@ function RoleDialog({ role, canWrite, onClose }: { role: Role | null; canWrite: 
           )}
         </section>
         {role && <RoleMembers role={role.name} canWrite={canWrite} />}
-        <FormError error={save.error} />
+        {!taken && <FormError error={save.error} />}
         {editable && (
           <div className="dialog-actions">
             {role && (
