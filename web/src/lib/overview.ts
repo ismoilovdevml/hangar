@@ -372,6 +372,8 @@ export function todoItems(input: TodoInput): TodoItem[] {
  * rather than guess.
  */
 export function quotaNote(m: OverviewMetrics, stores?: StoreQuota[]): string | null {
+  // Quotas belong to blob stores, so a viewer scoped to some repositories has none to compare with.
+  if (m.scope === 'repositories') return null;
   const cap = m.storage.capacity_bytes;
   if (cap !== null && cap > 0) return `${Math.round((m.storage.used_bytes / cap) * 100)}% of quota`;
   if (!stores || stores.length === 0) return null;

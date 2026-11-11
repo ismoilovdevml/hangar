@@ -125,10 +125,16 @@ export function TodayCard({ m, range, now, error, onRetry, onRange }: TodayCardP
       {m ? (
         <>
           <Activity m={m} />
-          {m.requests.total === null && <p className="meta">This server does not report request statistics.</p>}
-          <div className="today__chart">
-            <Bars buckets={m.traffic} range={range} />
-          </div>
+          {m.scope === 'repositories' ? (
+            <p className="meta">Counts cover the repositories you can read. Request statistics are for the whole server and shown to administrators.</p>
+          ) : (
+            <>
+              {m.requests.total === null && <p className="meta">This server does not report request statistics.</p>}
+              <div className="today__chart">
+                <Bars buckets={m.traffic} range={range} />
+              </div>
+            </>
+          )}
         </>
       ) : error ? (
         <ErrorNote what="today's activity" onRetry={onRetry} />

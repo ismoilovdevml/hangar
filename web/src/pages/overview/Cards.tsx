@@ -42,7 +42,8 @@ export function OutcomeCard({ m, error }: { m?: OverviewMetrics; error: boolean 
       : undefined;
 
   let center: { value: string; caption: string; label: string };
-  if (r.total === null) center = { value: '—', caption: 'not reported', label: 'Request outcomes are not reported by this server' };
+  if (m.scope === 'repositories') center = { value: '—', caption: 'admins only', label: 'Request outcomes are shown to administrators' };
+  else if (r.total === null) center = { value: '—', caption: 'not reported', label: 'Request outcomes are not reported by this server' };
   else if (ratio === null) center = { value: '—', caption: 'no requests', label: 'No requests in this range yet' };
   else {
     const pct = ratioPercent(ratio);
@@ -66,7 +67,9 @@ export function OutcomeCard({ m, error }: { m?: OverviewMetrics; error: boolean 
           </>
         )}
         {outcomes.join(' · ')}
-        {p95 === null && outcomes.length === 0 && (r.total === null ? 'No request statistics' : 'Nothing to measure yet')}
+        {p95 === null &&
+          outcomes.length === 0 &&
+          (m.scope === 'repositories' ? 'Server-wide, for administrators' : r.total === null ? 'No request statistics' : 'Nothing to measure yet')}
       </p>
     </section>
   );
@@ -89,9 +92,9 @@ export function StorageCard({ m, error, stores }: { m?: OverviewMetrics; error: 
   // With a quota the bar fills up to it; without one it shows how formats share what is stored.
   const scale = cap !== null && cap > 0 ? Math.min(1, m.storage.used_bytes / cap) : total > 0 ? 1 : 0;
   const label = (f: keyof typeof FORMAT_META) => FORMAT_META[f]?.label ?? f;
-  return (
-    <Link to="/blob-stores" className="ov-card ov-stat ov-link glass">
-      <span className="ov-card__label">Storage</span>
+  const body = (
+    <>
+      <span className="ov-card__label">{m.scope === 'repositories' ? 'Storage in your repositories' : 'Storage'}</span>
       <span className="ov-stat__value">{formatBytes(m.storage.used_bytes)}</span>
       <span className="ov-meter" aria-hidden="true">
         {rows.map((f) => (
@@ -103,6 +106,14 @@ export function StorageCard({ m, error, stores }: { m?: OverviewMetrics; error: 
         ))}
       </span>
       <span className="ov-stat__note">{storageNote(m, label, stores)}</span>
+    </>
+  );
+  // Blob stores are an administrator's page; scoped viewers get the numbers only.
+  return m.scope === 'repositories' ? (
+    <div className="ov-card ov-stat glass">{body}</div>
+  ) : (
+    <Link to="/blob-stores" className="ov-card ov-stat ov-link glass">
+      {body}
     </Link>
   );
 }

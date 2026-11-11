@@ -145,6 +145,7 @@ export function overview(range: OverviewRange, now = Date.now()): OverviewMetric
   return {
     range,
     generated_at: new Date(now).toISOString(),
+    scope: 'instance',
     summary: { published_since_yesterday: 214, failed_pushes: 4 },
     activity: ACTIVITY[range],
     storage: { used_bytes: 4.82 * TB, capacity_bytes: 12 * TB, added_bytes_24h: 38 * GB },

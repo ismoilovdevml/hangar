@@ -95,6 +95,11 @@ describe('storageNote', () => {
   it('gives the biggest format share and the quota use', () => {
     expect(storageNote(overview('today'), (f) => f.toUpperCase())).toBe('DOCKER 61% · 7 formats · 40% of quota');
   });
+  it('leaves the quota out for a viewer scoped to their repositories', () => {
+    const m = { ...overview('today'), scope: 'repositories' as const };
+    expect(storageNote({ ...m, storage_by_format: [] }, (f) => f)).toBe('Nothing stored yet');
+    expect(storageNote({ ...m, storage_by_format: [{ format: 'npm', bytes: 10 }] }, () => 'npm')).toBe('All npm');
+  });
 });
 
 describe('todoItems', () => {
