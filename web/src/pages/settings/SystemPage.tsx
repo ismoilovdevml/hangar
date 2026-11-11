@@ -16,6 +16,8 @@ import { formatUtc } from '../../lib/tasks';
 
 const STATE_LABEL = { ok: 'Operational', degraded: 'Degraded', down: 'Down', unknown: 'Unknown' } as const;
 const LEVEL_LABEL = { healthy: 'Healthy', degraded: 'Degraded', down: 'Down' } as const;
+/** Always listed; the other checks only while they fail (System status lists them all). */
+const CORE_DEPENDENCIES = new Set(['database', 'blobstore', 'blobstores', 'eventbus']);
 
 function Endpoint({ label, value, hint }: { label: string; value?: string; hint?: string }) {
   return (
@@ -170,7 +172,7 @@ export function SystemPage() {
           <DataTable
             caption="Dependency health"
             columns={depColumns}
-            rows={sys?.dependencies ?? []}
+            rows={(sys?.dependencies ?? []).filter((d) => CORE_DEPENDENCIES.has(d.name) || d.status !== 'ok')}
             rowKey={(d) => d.name}
             minWidth={460}
             empty={status.isPending ? 'Loading…' : 'This server reports no dependency checks.'}
