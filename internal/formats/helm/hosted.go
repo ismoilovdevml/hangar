@@ -404,7 +404,7 @@ func (h *handler) deleteVersion(w http.ResponseWriter, r *http.Request) {
 	comp, err := h.deps.Components.GetComponent(ctx, target.ID, "", name, version)
 	if err != nil {
 		if errors.Is(err, core.ErrNotFound) {
-			err = fmt.Errorf("chart %s %s not found: %w", name, version, core.ErrNotFound)
+			err = fmt.Errorf("chart %s %s: %w", name, version, core.ErrNotFound)
 		}
 		h.fail(w, r, err)
 		return

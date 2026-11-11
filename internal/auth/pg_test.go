@@ -533,6 +533,8 @@ func TestUserManagement(t *testing.T) {
 	}
 	if _, err := e.Svc.CreateUser(admin, auth.UserInput{Username: "jack", Kind: auth.KindUser}); !errors.Is(err, core.ErrAlreadyExists) {
 		t.Fatalf("duplicate: %v", err)
+	} else if got := err.Error(); strings.Count(got, "already exists") != 1 {
+		t.Fatalf("duplicate message %q: want \"already exists\" once", got)
 	}
 	for name, in := range map[string]auth.UserInput{
 		"bad name":     {Username: "bad name", Kind: auth.KindUser},
