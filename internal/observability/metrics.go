@@ -37,6 +37,7 @@ type Metrics struct {
 
 	// HTTP server, labelled by chi route pattern (never the raw path).
 	HTTPRequests     *prometheus.CounterVec   // method, route, code
+	HTTPChallenges   *prometheus.CounterVec   // method, route
 	HTTPDuration     *prometheus.HistogramVec // method, route
 	HTTPInFlight     prometheus.Gauge
 	HTTPRequestLen   *prometheus.CounterVec // route
@@ -95,6 +96,10 @@ func NewMetrics() *Metrics {
 			Name: "hangar_http_requests_total",
 			Help: "HTTP requests by method, route pattern and status code.",
 		}, []string{"method", "route", "code"}),
+		HTTPChallenges: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "hangar_http_auth_challenges_total",
+			Help: "401 answers to requests that presented no credentials at all (the challenge clients answer by retrying with credentials), by method and route pattern. They are also counted in hangar_http_requests_total with code 401.",
+		}, []string{"method", "route"}),
 		HTTPDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "hangar_http_request_duration_seconds",
 			Help:    "HTTP request latency (until the handler returns) by method and route pattern.",
@@ -187,7 +192,7 @@ func NewMetrics() *Metrics {
 		knownJobs: map[string]bool{},
 	}
 	m.static = []prometheus.Collector{build,
-		m.HTTPRequests, m.HTTPDuration, m.HTTPInFlight, m.HTTPRequestLen, m.HTTPResponseLen,
+		m.HTTPRequests, m.HTTPChallenges, m.HTTPDuration, m.HTTPInFlight, m.HTTPRequestLen, m.HTTPResponseLen,
 		m.FormatRequests, m.FormatDuration, m.FormatUploadLen, m.FormatDownloadLn,
 		m.BlobOps, m.BlobDuration, m.BlobPutBytes,
 		m.UpstreamFetches, m.UpstreamDuration,

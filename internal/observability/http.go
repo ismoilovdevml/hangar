@@ -81,6 +81,11 @@ func HTTPMiddleware(o HTTPOptions) func(http.Handler) http.Handler {
 			if status == 0 {
 				status = http.StatusOK
 			}
+			if status >= http.StatusInternalServerError && errors.Is(req.Context().Err(), context.Canceled) {
+				// The client went away first; nobody read the answer, and a
+				// failure the cancellation caused is not a server error.
+				status = core.StatusClientClosedRequest
+			}
 			route := RouteUnmatched
 			if rc := chi.RouteContext(req.Context()); rc != nil {
 				if p := rc.RoutePattern(); p != "" {
@@ -106,6 +111,11 @@ func HTTPMiddleware(o HTTPOptions) func(http.Handler) http.Handler {
 			}
 
 			if m != nil {
+				// Counted before the request itself so a concurrent read of
+				// both never sees more challenges than 401 answers.
+				if status == http.StatusUnauthorized && !presentsCredentials(r) && !tags.presentedCredentials() {
+					m.HTTPChallenges.WithLabelValues(method, route).Inc()
+				}
 				m.HTTPRequests.WithLabelValues(method, route, codeLabel(status)).Inc()
 				m.HTTPDuration.WithLabelValues(method, route).Observe(dur.Seconds())
 				m.HTTPRequestLen.WithLabelValues(route).Add(float64(bytesIn))
@@ -117,8 +127,7 @@ func HTTPMiddleware(o HTTPOptions) func(http.Handler) http.Handler {
 
 			level := slog.LevelInfo
 			switch {
-			case status >= http.StatusInternalServerError && errors.Is(req.Context().Err(), context.Canceled):
-				// The client went away; a failure it caused is not a server error.
+			case status == core.StatusClientClosedRequest:
 				level = slog.LevelDebug
 			case status >= http.StatusInternalServerError && status != http.StatusNotImplemented:
 				level = slog.LevelError
@@ -142,6 +151,25 @@ func HTTPMiddleware(o HTTPOptions) func(http.Handler) http.Handler {
 			)
 		})
 	}
+}
+
+// credentialHeaders carry credentials: HTTP authentication (Basic, Bearer,
+// a raw cargo token) and NuGet's API key.
+var credentialHeaders = []string{"Authorization", "X-NuGet-ApiKey"}
+
+// presentsCredentials reports whether r carries credentials in its headers:
+// an Authorization or API key header, whatever its value, or any cookie (the
+// web UI's session). A 401 answer to a request without any, nor credentials
+// a handler read from the body (RequestTags.MarkCredentials), is an
+// authentication challenge: NuGet and .NET clients, docker, npm and pip
+// first ask without credentials and retry with them after the 401.
+func presentsCredentials(r *http.Request) bool {
+	for _, h := range credentialHeaders {
+		if r.Header.Get(h) != "" {
+			return true
+		}
+	}
+	return r.Header.Get("Cookie") != ""
 }
 
 // observeFormat records one package protocol request.

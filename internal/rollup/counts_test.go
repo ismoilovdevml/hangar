@@ -38,6 +38,14 @@ func (s *source) serve(n int, route, method, code string, secs float64) {
 	}
 }
 
+// challenge serves n 401 answers to requests without credentials.
+func (s *source) challenge(n int, route, method string) {
+	for range n {
+		s.m.HTTPChallenges.WithLabelValues(method, route).Inc()
+	}
+	s.serve(n, route, method, "401", 0.001)
+}
+
 func (s *source) hit(format string, n int, size int64) {
 	s.cache.WithLabelValues(format, proxy.CacheResultHit).Add(float64(n))
 	s.hitBytes.WithLabelValues(format).Add(float64(size))
@@ -107,6 +115,20 @@ func TestRead(t *testing.T) {
 	}
 	if c.Latency.Total() != 29 {
 		t.Errorf("latency observations = %d", c.Latency.Total())
+	}
+
+	// Authentication challenges (anonymous 401s that clients retry with
+	// credentials) are requests, but not refusals.
+	s.challenge(6, "/repository/{repo}/*", "GET")
+	s.challenge(1, "/api/v1/components", "GET")
+	s.challenge(4, "/metrics", "GET") // an uncounted route
+	c = Read(s.m.Registry)
+	if c.Requests != 36 || c.Challenges != 7 || c.Denied != 3 || c.ServerErrors != 2 {
+		t.Errorf("requests %d challenges %d denied %d server errors %d, want 36 7 3 2",
+			c.Requests, c.Challenges, c.Denied, c.ServerErrors)
+	}
+	if d := c.Sub(Counts{Requests: 29, Denied: 3, ServerErrors: 2}); d.Challenges != 7 || d.Denied != 0 || d.trafficZero() {
+		t.Errorf("increment = %+v", d)
 	}
 }
 

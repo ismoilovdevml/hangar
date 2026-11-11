@@ -155,7 +155,8 @@ Measured on a test node serving three formats, five repositories and a few hundr
 
 | Metric | Type | Labels | Meaning |
 |---|---|---|---|
-| `hangar_http_requests_total` | counter | `method`, `route`, `code` | Requests served. |
+| `hangar_http_requests_total` | counter | `method`, `route`, `code` | Requests served. A server error (5xx) answered after the client had already gone away (closed the connection, cancelled the request) is recorded as `499`, like the `499` handlers answer themselves: nobody read it and the cancellation caused it. |
+| `hangar_http_auth_challenges_total` | counter | `method`, `route` | The `401` answers of `hangar_http_requests_total` to requests that presented no credentials at all: no `Authorization` or `X-NuGet-ApiKey` header, no cookie, and nothing a handler read as credentials from the body. NuGet and .NET clients, docker, npm and pip ask without credentials first and retry with them after this challenge, so it is not a refusal. A `401` to wrong or expired credentials and every `403` are not counted here. `sum(rate(hangar_http_requests_total{code="401"}[5m])) - sum(rate(hangar_http_auth_challenges_total[5m]))` is the rate of rejected credentials. |
 | `hangar_http_request_duration_seconds` | histogram | `method`, `route` | Time until the handler returned (for downloads, until the last byte was written). |
 | `hangar_http_requests_in_flight` | gauge | | Requests being served now, including long uploads and the event stream. |
 | `hangar_http_request_bytes_total` | counter | `route` | Request body bytes read by handlers. |

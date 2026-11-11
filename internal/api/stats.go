@@ -26,6 +26,9 @@ type requestNumbers struct {
 	CoverageStart *time.Time `json:"coverage_start"`
 	ServerErrors  *int64     `json:"server_errors"`
 	Denied        *int64     `json:"denied"`
+	// AuthChallenges are 401 answers to requests without credentials,
+	// which clients retry with credentials; part of Total, not of Denied.
+	AuthChallenges *int64 `json:"auth_challenges"`
 }
 
 // cacheNumbers is the cache block of OverviewMetrics.
@@ -38,7 +41,7 @@ type cacheNumbers struct {
 
 func requestsFrom(o *rollup.Overview, start time.Time) requestNumbers {
 	out := requestNumbers{Total: ptr(o.Requests), PeakTotal: ptr(o.PeakRequests),
-		ServerErrors: ptr(o.ServerErrors), Denied: ptr(o.Denied)}
+		ServerErrors: ptr(o.ServerErrors), Denied: ptr(o.Denied), AuthChallenges: ptr(o.Challenges)}
 	if !o.CoverageStart.IsZero() {
 		out.CoverageStart = ptr(maxTime(start, o.CoverageStart).UTC())
 	}

@@ -3574,7 +3574,7 @@ components:
             the database, so the numbers survive restarts; whole minutes are
             counted. Every value is null when traffic statistics are not
             available.
-          required: [total, trend_pct, peak_total, p95_ms, coverage_start, server_errors, denied]
+          required: [total, trend_pct, peak_total, p95_ms, coverage_start, server_errors, denied, auth_challenges]
           properties:
             total: { type: [integer, "null"] }
             trend_pct:
@@ -3595,7 +3595,17 @@ components:
               description: Requests of `total` answered with a 5xx status; counted from the version that introduced it on
             denied:
               type: [integer, "null"]
-              description: Requests of `total` refused with 401 or 403; counted from the version that introduced it on
+              description: Requests of `total` refused with 401 or 403, authentication challenges excluded; counted from the version that introduced it on
+            auth_challenges:
+              type: [integer, "null"]
+              description: |
+                Requests of `total` answered 401 that presented no credentials
+                at all (no Authorization or API key header, no cookie). Clients
+                such as NuGet, docker, npm and pip ask without credentials first
+                and retry with them, so these are not refusals and are not in
+                `denied`; a success rate leaves them out of both sides. Counted
+                from the version that introduced it on (earlier ones are in
+                `denied`).
         cache:
           type: object
           description: |
