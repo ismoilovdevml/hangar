@@ -326,10 +326,13 @@ func (a *API) listComponentVersions(w http.ResponseWriter, r *http.Request) {
 			a.writeErr(w, r, err)
 			return
 		}
-		if img != nil && img.SizeBytes != nil {
-			size = *img.SizeBytes
+		switch {
+		case img == nil:
+			pc.SizeBytes = &size
+		case img.SizeBytes != nil:
+			pc.SizeBytes = img.SizeBytes
 		}
-		pc.SizeBytes = &size
+		// A docker index whose platforms were never pulled has no known size.
 		items = append(items, pc)
 	}
 	WriteJSON(w, http.StatusOK, newPage(items, p.NextCursor))

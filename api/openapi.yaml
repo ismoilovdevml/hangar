@@ -4453,7 +4453,8 @@ components:
           description: >-
             Content size; reported by the versions listing. Docker: the
             compressed image (config plus layers, from the manifest; for a
-            multi-platform index, linux/amd64 or its first platform).
+            multi-platform index, linux/amd64 or its first platform), absent
+            when no platform manifest of the index is stored.
     PublishedComponentPage:
       type: object
       required: [items]

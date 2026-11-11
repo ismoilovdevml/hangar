@@ -10,6 +10,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/api/apitest"
 	"github.com/ismoilovdevml/hangar/internal/api/catalog"
+	"github.com/ismoilovdevml/hangar/internal/api/pkginfo"
 	"github.com/ismoilovdevml/hangar/internal/audit"
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/service/component"
@@ -443,4 +444,44 @@ func TestVersionsReportSizes(t *testing.T) {
 		p.Items[1].SizeBytes == nil || *p.Items[1].SizeBytes != int64(len("left-pad/-/left-pad-1.0.0.tgz")) {
 		t.Errorf("versions = %+v", p.Items)
 	}
+
+	// Docker versions are sized by their image, from the manifest; an index
+	// none of whose platforms is stored has no size.
+	docker := e.repo("docker-hosted", "docker", core.RepoHosted)
+	sized := e.s.Component(docker, "team", "app", "1.0", e.now, 0, "ci")
+	unsized := e.s.Component(docker, "team", "app", "1.1", e.now.Add(-time.Hour), 0, "ci")
+	e.file(docker, sized, "team/app/manifests/1.0")
+	for id, d := range map[string]string{sized: "sha256:sized", unsized: "sha256:unsized"} {
+		if _, err := pool.Exec(context.Background(), `UPDATE components SET attributes = jsonb_build_object('digest', $2::text) WHERE id = $1`, id, d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	size := int64(3_000_000)
+	f.api.PackageInfo = fakeContainerImages{"sha256:sized": {MediaType: "application/vnd.oci.image.manifest.v1+json", SizeBytes: &size,
+		Layers: []pkginfo.ContainerBlob{{Digest: "sha256:l1", SizeBytes: size}}}, "sha256:unsized": {MediaType: "application/vnd.oci.image.index.v1+json"}}
+	var dp page[publishedComponent]
+	_ = json.Unmarshal(f.expect("admin", "GET", "/api/v1/components/"+sized+"/versions", nil, 200), &dp)
+	if len(dp.Items) != 2 || dp.Items[0].SizeBytes == nil || *dp.Items[0].SizeBytes != size || dp.Items[1].SizeBytes != nil {
+		t.Errorf("docker versions = %+v", dp.Items)
+	}
+	var d componentDetail
+	_ = json.Unmarshal(f.expect("admin", "GET", "/api/v1/components/"+sized, nil, 200), &d)
+	if d.SizeBytes != size || d.Image == nil || len(d.Image.Layers) != 1 {
+		t.Errorf("docker detail = %+v", d)
+	}
+}
+
+// fakeContainerImages answers ContainerImage by manifest digest.
+type fakeContainerImages map[string]*pkginfo.ContainerImage
+
+func (fakeContainerImages) Info(context.Context, *core.Repository, *core.Component) (*pkginfo.Info, error) {
+	return &pkginfo.Info{}, nil
+}
+
+func (fakeContainerImages) Member(context.Context, *core.Repository, *core.Component, string, int64) ([]byte, error) {
+	return nil, core.ErrNotFound
+}
+
+func (f fakeContainerImages) ContainerImage(_ context.Context, _ *core.Repository, _, _, digest, _ string) (*pkginfo.ContainerImage, error) {
+	return f[digest], nil
 }
