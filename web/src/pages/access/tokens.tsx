@@ -71,11 +71,12 @@ interface TokenTableProps {
   tokens: Token[];
   showOwner?: boolean;
   busy?: boolean;
+  loading?: boolean;
   empty?: string;
 }
 
 /** Tokens with what they can do, restrictions, last use (time and address), expiry, Rotate and Revoke. */
-export function TokenTable({ caption, tokens, showOwner, busy, empty }: TokenTableProps) {
+export function TokenTable({ caption, tokens, showOwner, busy, loading, empty }: TokenTableProps) {
   const now = useNow();
   const session = useSession();
   const warnMs = parseGoDuration(session.data?.token_policy?.expiry_warning) ?? undefined;
@@ -187,7 +188,7 @@ export function TokenTable({ caption, tokens, showOwner, busy, empty }: TokenTab
 
   return (
     <>
-      <DataTable caption={caption} columns={columns} rows={tokens} rowKey={(t) => t.id} busy={busy} minWidth={showOwner ? 1020 : 880} empty={empty ?? 'No tokens.'} />
+      <DataTable caption={caption} columns={columns} rows={tokens} rowKey={(t) => t.id} busy={busy} loading={loading} minWidth={showOwner ? 1020 : 880} empty={empty ?? 'No tokens.'} />
       {revoking && (
         <ConfirmDialog
           title={`Revoke “${revoking.name}”?`}

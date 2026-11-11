@@ -663,7 +663,7 @@ function VersionsTable({ c, newestId, cached, canDelete, onDelete, onDeleteAll, 
   if (q.isError) return <ErrorNote what="versions" error={q.error} onRetry={() => void q.refetch()} />;
   return (
     <div className="pkg-table">
-      <DataTable caption="Versions" columns={columns} rows={rows} rowKey={(v) => v.id} busy={q.isFetching} minWidth={640} empty={q.isPending ? 'Loading…' : 'No versions.'} />
+      <DataTable caption="Versions" columns={columns} rows={rows} rowKey={(v) => v.id} busy={q.isFetching} minWidth={640} loading={q.isPending} empty={'No versions.'} />
       <LoadMore q={q} />
       {onDeleteAll && (
         <div className="pkg-more">
@@ -809,7 +809,7 @@ function FilesTable({ c, now }: { c: ComponentDetail; now: Date }) {
   if (q.isError) return <ErrorNote what="files" error={q.error} onRetry={() => void q.refetch()} />;
   return (
     <div className="pkg-table">
-      <DataTable caption={layers ? 'Layers' : 'Files'} columns={columns} rows={rows} rowKey={(a) => a.id} busy={q.isFetching} minWidth={760} empty={q.isPending ? 'Loading…' : 'No files.'} />
+      <DataTable caption={layers ? 'Layers' : 'Files'} columns={columns} rows={rows} rowKey={(a) => a.id} busy={q.isFetching} minWidth={760} loading={q.isPending} empty={'No files.'} />
       <LoadMore q={q} />
     </div>
   );

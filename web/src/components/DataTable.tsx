@@ -30,6 +30,8 @@ interface DataTableProps<T> {
   minWidth?: number;
   empty?: ReactNode;
   busy?: boolean;
+  /** The first page is still loading: placeholder rows instead of the empty message. */
+  loading?: boolean;
   sort?: TableSort;
   /** Called with the key of a sortable column whose header was activated. */
   onSort?: (key: string) => void;
@@ -39,15 +41,17 @@ interface DataTableProps<T> {
 
 const cardLabel = <T,>(c: Column<T>) => c.label ?? (typeof c.header === 'string' ? c.header : '');
 
+const SKELETON_ROWS = 4;
+
 /**
  * A table that lives inside a Panel. When it does not fit, columns with a
  * priority give way first, then it scrolls sideways; on phones its rows
  * become cards.
  */
-export function DataTable<T>({ caption, columns, rows, rowKey, minWidth = 640, empty, busy, sort, onSort, stack = true }: DataTableProps<T>) {
+export function DataTable<T>({ caption, columns, rows, rowKey, minWidth = 640, empty, busy, loading, sort, onSort, stack = true }: DataTableProps<T>) {
   return (
     <TableScroll label={`${caption} table`}>
-      <table className={stack ? 'data-table data-table--stack' : 'data-table'} style={{ minWidth }} aria-busy={busy || undefined}>
+      <table className={stack ? 'data-table data-table--stack' : 'data-table'} style={{ minWidth }} aria-busy={busy || loading || undefined}>
         <caption className="visually-hidden">{caption}</caption>
         <thead>
           <tr>
@@ -77,7 +81,17 @@ export function DataTable<T>({ caption, columns, rows, rowKey, minWidth = 640, e
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? (
+          {rows.length === 0 && loading ? (
+            Array.from({ length: SKELETON_ROWS }, (_, i) => (
+              <tr key={i} className="skeleton-row" aria-hidden="true">
+                {columns.map((c) => (
+                  <td key={c.key}>
+                    <span className="skeleton" />
+                  </td>
+                ))}
+              </tr>
+            ))
+          ) : rows.length === 0 ? (
             <tr>
               <td colSpan={columns.length} className="data-table__empty">
                 {empty ?? 'Nothing here yet.'}

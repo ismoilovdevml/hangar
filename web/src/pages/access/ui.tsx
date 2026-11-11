@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { IconClose } from '../../components/icons';
 import { initials } from '../../lib/format';
 import { errorText } from './model';
+import { ErrorMessage } from '../../components/States';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -155,11 +156,7 @@ export function Field({ id, label, error, hint, wide, addon, children }: FieldPr
 
 export function FormError({ error }: { error: unknown }) {
   if (!error) return null;
-  return (
-    <p className="form-error" role="alert">
-      {errorText(error)}
-    </p>
-  );
+  return <ErrorMessage error={error} message={errorText(error)} />;
 }
 
 const AVATAR_TONES = ['info', 'peach', 'sage', 'violet', 'warn'] as const;

@@ -160,7 +160,7 @@ describe('overview with metrics the server does not report', () => {
     expect(within(screen.getByRole('region', { name: 'To do' })).getByText('Could not load what needs attention.')).toBeInTheDocument();
     expect(screen.getByText('Request outcomes are unavailable.')).toBeInTheDocument();
     expect(await screen.findByText('Could not load upstream health.')).toBeInTheDocument();
-    expect(await screen.findByText('Could not load the most downloaded packages.')).toBeInTheDocument();
+    expect(await screen.findByText(/^Could not load the most downloaded packages\. /)).toBeInTheDocument();
 
     server.resetHandlers();
     await user.click(within(today).getByRole('button', { name: 'Retry' }));

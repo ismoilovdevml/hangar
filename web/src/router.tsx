@@ -26,7 +26,7 @@ import type { SearchSort } from './api/types';
 import { isFormat, isRepoSort, isRepoType, type RepoSort } from './lib/repositories';
 import type { Format, RepositoryType } from './api/types';
 import { isAccessTab, type AccessSearch } from './pages/access/model';
-import { NotFoundPage } from './pages/screens';
+import { NotFoundPage, RouteError, StandaloneNotFound } from './pages/screens';
 import { validateVulnSearch, type VulnSearch } from './lib/vulnerabilities';
 import type { CleanupSearch } from './pages/cleanup/CleanupPage';
 import type { TaskDetailSearch } from './pages/tasks/TaskDetailPage';
@@ -88,7 +88,8 @@ const str = (v: unknown) => (typeof v === 'string' && v.length > 0 ? v : undefin
 
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: Outlet,
-  notFoundComponent: NotFoundPage,
+  // Only for addresses outside the signed-in area; those inside reach the catch-all below, in the shell.
+  notFoundComponent: StandaloneNotFound,
 });
 
 const loginRoute = createRoute({
@@ -346,6 +347,32 @@ const repoSettingsRoute = createRoute({
   component: RepoSettingsPage,
 });
 
+/** "/repositories/npm-hosted" is the natural guess for a repository's page. */
+const repoAliasRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/repositories/$name',
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: '/repositories/$name/settings', params, replace: true });
+  },
+});
+
+/** The sidebar calls /browse "Packages". */
+const packagesAliasRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/packages',
+  beforeLoad: () => {
+    throw redirect({ to: '/browse', replace: true });
+  },
+});
+
+/** Any other address: a 404 inside the shell, so navigation and search stay. */
+const notFoundRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '$',
+  staticData: { title: 'Page not found' },
+  component: NotFoundPage,
+});
+
 const blobStoresRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/blob-stores',
@@ -387,6 +414,8 @@ const routeTree = rootRoute.addChildren([
     repositoriesRoute,
     repoCreateRoute,
     repoSettingsRoute,
+    repoAliasRoute,
+    packagesAliasRoute,
     blobStoresRoute,
     blobStoreRoute,
     cleanupRoute,
@@ -405,6 +434,7 @@ const routeTree = rootRoute.addChildren([
     page('/settings/system', 'System', SystemPage, true),
     page('/settings/authentication', 'Authentication', AuthenticationPage, true, GATES.settings),
     page('/settings/proxies', 'Proxies', ProxiesPage, true, GATES.settings),
+    notFoundRoute,
   ]),
 ]);
 
@@ -414,6 +444,8 @@ export function createAppRouter(queryClient: QueryClient, history?: RouterHistor
     context: { queryClient },
     history,
     defaultPreload: 'intent',
+    // A page that throws shows an error inside the shell, not the router's developer screen.
+    defaultErrorComponent: RouteError,
     scrollRestoration: true,
   });
 }

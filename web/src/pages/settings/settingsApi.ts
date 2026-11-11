@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiRequestError, apiFetch } from '../../api/client';
 import { queryKeys } from '../../api/hooks';
 import type { components } from '../../api/schema';
+import { errorSentence } from '../../lib/apiError';
 
 type Schemas = components['schemas'];
 
@@ -154,7 +155,6 @@ export function errorMessage(err: unknown): string {
   if (err instanceof ApiRequestError) {
     if (err.status === 403) return 'You do not have permission to change these settings.';
     if (err.status === 400 && Object.keys(fieldErrorsOf(err)).length > 0) return 'Fix the highlighted fields and save again.';
-    return err.body?.message ?? err.message;
   }
-  return err instanceof Error ? err.message : 'Something went wrong.';
+  return errorSentence(err);
 }

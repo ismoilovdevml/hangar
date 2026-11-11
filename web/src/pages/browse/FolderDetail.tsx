@@ -97,7 +97,7 @@ export function FolderDetail({ repo, path, onOpen, onUp }: FolderDetailProps) {
           rowKey={(e) => e.path}
           busy={pages.some((p) => p.isFetching)}
           minWidth={560}
-          empty={q.isPending ? 'Loading…' : 'This folder is empty.'}
+          loading={q.isPending} empty={'This folder is empty.'}
         />
         {last.data?.next_cursor && (
           <div className="pkg-more">

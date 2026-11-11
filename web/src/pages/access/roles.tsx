@@ -152,7 +152,7 @@ export function RolesTab({ canWrite }: { canWrite: boolean }) {
       {roles.isError ? (
         <ErrorNote what="roles" error={roles.error} privilege="system:users:read" onRetry={() => void roles.refetch()} />
       ) : (
-        <DataTable caption="Roles" columns={columns} rows={roles.data?.items ?? []} rowKey={(r) => r.id} busy={roles.isFetching} minWidth={760} empty={roles.isPending ? 'Loading…' : 'No roles.'} />
+        <DataTable caption="Roles" columns={columns} rows={roles.data?.items ?? []} rowKey={(r) => r.id} busy={roles.isFetching} minWidth={760} loading={roles.isPending} empty={'No roles.'} />
       )}
       {open && <RoleDialog role={open === 'new' ? null : open} canWrite={canWrite} onClose={() => setOpen(null)} />}
     </Panel>

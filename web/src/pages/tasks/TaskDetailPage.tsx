@@ -439,7 +439,7 @@ export function TaskDetailPage() {
               rowKey={(r) => r.id}
               minWidth={620}
               busy={runs.isFetching}
-              empty={runs.isPending ? 'Loading…' : 'This task has not run yet.'}
+              loading={runs.isPending} empty={'This task has not run yet.'}
             />
           )}
           <div className="repo-footer">

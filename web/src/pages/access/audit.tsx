@@ -88,7 +88,7 @@ export function AuditTab({ category, onCategory }: { category: string; onCategor
           rowKey={(e) => String(e.id)}
           busy={pages.isFetching}
           minWidth={820}
-          empty={pages.isPending ? 'Loading…' : 'No events of this type yet.'}
+          loading={pages.isPending} empty={'No events of this type yet.'}
         />
       )}
       <div className="repo-footer">

@@ -5,6 +5,7 @@
 import { ApiRequestError } from '../../api/client';
 import type { Tone } from '../../lib/format';
 import type { Member, Token } from './api';
+import { errorSentence } from '../../lib/apiError';
 
 /* ---------------------------------------------------------------- privileges */
 
@@ -373,9 +374,8 @@ export function errorText(err: unknown): string {
     if (err.code === 'read_only_token') return 'You signed in with a read-only token, which cannot change anything.';
     if (err.status === 403) return 'You do not have permission to do this.';
     if (err.status === 423 && err.retryAfter) return `Locked after repeated wrong passwords. Try again in ${Math.ceil(err.retryAfter / 60)} min.`;
-    return err.body?.message ?? err.message;
   }
-  return err instanceof Error ? err.message : 'Something went wrong.';
+  return errorSentence(err);
 }
 
 /** Generates a random passphrase-like password (for "Generate" in the password fields). */

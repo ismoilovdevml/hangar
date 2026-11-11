@@ -6,6 +6,7 @@ import type { Repository, RepositoryCounts, RepositoryType } from '../../api/typ
 import { CopyButton } from '../../components/CopyButton';
 import { DataTable, type Column, type TableSort } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
+import { NotAvailable } from '../../components/NotAvailable';
 import { IconDatabase, IconGlobe, IconGroup, IconPackage, IconPlus, IconSearch } from '../../components/icons';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
@@ -31,7 +32,8 @@ const CARD_ICON: Record<RepositoryType, ComponentType<SVGProps<SVGSVGElement> & 
   group: IconGroup,
 };
 
-function CountCards({ counts }: { counts: RepositoryCounts | undefined }) {
+/** Counts per type; a dash, not a skeleton, when the counts failed to load. */
+function CountCards({ counts, failed }: { counts: RepositoryCounts | undefined; failed?: boolean }) {
   return (
     <section className="count-cards" aria-label="Repository counts">
       {(['hosted', 'proxy', 'group'] as const).map((t) => {
@@ -43,7 +45,7 @@ function CountCards({ counts }: { counts: RepositoryCounts | undefined }) {
               <Icon size={20} />
             </span>
             <span className="count-card__text">
-              <span className="count-card__number">{counts ? counts[t] : <span className="skeleton" style={{ width: 36, height: 28 }} />}</span>{' '}
+              <span className="count-card__number">{counts ? (counts[t] ?? 0) : failed ? <NotAvailable reason="could not be loaded" /> : <span className="skeleton" style={{ width: 36, height: 28 }} />}</span>{' '}
               <span className="count-card__label">
                 {meta.label} · {meta.card}
               </span>
@@ -344,7 +346,7 @@ export function RepositoriesPage() {
         }
       />
 
-      <CountCards counts={filtered ? totals.data?.counts : data?.counts} />
+      <CountCards counts={filtered ? totals.data?.counts : data?.counts} failed={filtered ? totals.isError : list.isError} />
 
       <Panel flush className="repo-panel" aria-label="Repository list">
         <div className="repo-toolbar">
@@ -394,6 +396,7 @@ export function RepositoriesPage() {
             rows={data?.items ?? []}
             rowKey={(r) => r.id}
             busy={list.isFetching}
+            loading={list.isPending}
             minWidth={980}
             empty={empty}
             sort={order}

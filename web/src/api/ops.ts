@@ -26,6 +26,7 @@ import type {
 import { allows, type PrivilegeAction } from '../lib/can';
 import { applyTaskFinished, applyTaskProgress } from '../lib/tasks';
 import type { Page } from './types';
+import { errorSentence } from '../lib/apiError';
 
 export const opsKeys = {
   cleanupAll: [...queryKeys.cleanupPolicies, 'all'] as const,
@@ -170,7 +171,11 @@ export async function fetchPreviewCsv(body: CleanupPolicyInput): Promise<Blob> {
 export function useTasks() {
   return useQuery({
     queryKey: opsKeys.taskList,
-    queryFn: ({ signal }) => apiFetch<TaskList>('/tasks', { signal }),
+    // A list without `running` (an older server, a proxy rewriting the answer) reads as nothing running.
+    queryFn: async ({ signal }) => {
+      const l = await apiFetch<TaskList>('/tasks', { signal });
+      return { ...l, items: l.items ?? [], running: l.running ?? [] };
+    },
     // Live events keep progress current; polling is the fallback without them.
     refetchInterval: (q) => (q.state.data?.running.length ? 10_000 : 60_000),
   });
@@ -340,7 +345,10 @@ export function useAuditEvents(query: ListAuditQuery) {
 export function useClusterStatus() {
   return useQuery({
     queryKey: opsKeys.cluster,
-    queryFn: ({ signal }) => apiFetch<ClusterStatus>('/nodes', { signal }),
+    queryFn: async ({ signal }) => {
+      const c = await apiFetch<ClusterStatus>('/nodes', { signal });
+      return { ...c, nodes: c.nodes ?? [] };
+    },
     retry: false,
     refetchInterval: 30_000,
   });
@@ -350,8 +358,7 @@ export function useClusterStatus() {
 export function errorText(err: unknown, fallback = 'Something went wrong. Try again.'): string {
   if (err instanceof ApiRequestError) {
     if (err.status === 403) return 'You do not have permission to do this.';
-    const msg = err.body?.message;
-    return msg ? msg.charAt(0).toUpperCase() + msg.slice(1) : fallback;
+    return err.body?.message ? errorSentence(err) : fallback;
   }
   return fallback;
 }

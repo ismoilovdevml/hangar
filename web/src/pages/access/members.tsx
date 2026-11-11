@@ -189,7 +189,7 @@ export function MembersTab({ kind, filters, onFilters, onOpen }: MembersTabProps
           rowKey={(m) => m.id}
           busy={list.isFetching}
           minWidth={820}
-          empty={list.isPending ? 'Loading…' : filters.q || filters.role || filters.status ? 'Nobody matches these filters.' : sa ? 'No service accounts yet.' : 'No members yet.'}
+          loading={list.isPending} empty={filters.q || filters.role || filters.status ? 'Nobody matches these filters.' : sa ? 'No service accounts yet.' : 'No members yet.'}
         />
       )}
       <div className="repo-footer">
@@ -501,7 +501,7 @@ export function UserDrawer({ id, canWrite, canDelete, canManageTokens, onClose }
 
   return (
     <Dialog title={m ? m.display_name || m.username : 'Loading…'} description={m ? (sa ? 'Service account' : m.username) : undefined} onClose={onClose} drawer>
-      {member.isError && <FormError error={member.error} />}
+      {member.isError && <ErrorNote what="this member" error={member.error} onRetry={() => void member.refetch()} />}
       {m && (
         <div className="drawer">
           <div className="drawer__status">
@@ -700,9 +700,9 @@ function OwnerTokens({ owner, canCreate, onCreate }: { owner: string; canCreate:
         </button>
       )}
       {tokens.isError ? (
-        <FormError error={tokens.error} />
+        <ErrorNote what={`the tokens of ${owner}`} error={tokens.error} onRetry={() => void tokens.refetch()} />
       ) : (
-        <TokenTable caption={`Tokens of ${owner}`} tokens={tokens.data?.items ?? []} busy={tokens.isFetching} empty={tokens.isPending ? 'Loading…' : 'No tokens.'} />
+        <TokenTable caption={`Tokens of ${owner}`} tokens={tokens.data?.items ?? []} busy={tokens.isFetching} loading={tokens.isPending} empty={'No tokens.'} />
       )}
     </div>
   );
@@ -711,7 +711,7 @@ function OwnerTokens({ owner, canCreate, onCreate }: { owner: string; canCreate:
 function UserSessions({ id, canWrite }: { id: string; canWrite: boolean }) {
   const sessions = useUserSessions(id);
   const end = useEndUserSession();
-  if (sessions.isError) return <FormError error={sessions.error} />;
+  if (sessions.isError) return <ErrorNote what="the sessions" error={sessions.error} onRetry={() => void sessions.refetch()} />;
   if (!sessions.data) return <p className="meta">Loading…</p>;
   return (
     <div className="drawer__section">
@@ -733,7 +733,7 @@ export function PermissionsReport({ id }: { id: string }) {
   const [showAll, setShowAll] = useState(false);
   const filterId = useId();
   const listId = useId();
-  if (report.isError) return <FormError error={report.error} />;
+  if (report.isError) return <ErrorNote what="the permissions" error={report.error} onRetry={() => void report.refetch()} />;
   const r = report.data;
   if (!r) return <p className="meta">Loading…</p>;
   const repos = r.repositories.filter((x) => !filter || x.name.includes(filter.trim().toLowerCase()));

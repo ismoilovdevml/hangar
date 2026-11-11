@@ -174,7 +174,11 @@ export function useClientEndpoints() {
 export function useRepositories(query: ListRepositoriesQuery, enabled = true) {
   return useQuery({
     queryKey: queryKeys.repositoryList(query),
-    queryFn: ({ signal }) => apiFetch<RepositoryList>('/repositories', { query, signal }),
+    queryFn: async ({ signal }) => {
+      const l = await apiFetch<RepositoryList>('/repositories', { query, signal });
+      // Missing parts of the answer read as empty rather than breaking the page.
+      return { ...l, items: l.items ?? [], counts: { all: 0, hosted: 0, proxy: 0, group: 0, ...(l.counts as RepositoryList['counts'] | undefined) } };
+    },
     placeholderData: keepPreviousData,
     enabled,
   });
@@ -206,7 +210,11 @@ export function useRepositoriesByFormat(format: Format | undefined) {
 export function useBlobStores(enabled = true) {
   return useQuery({
     queryKey: queryKeys.blobStores,
-    queryFn: ({ signal }) => apiFetch<BlobStoreList>('/blob-stores', { signal }),
+    queryFn: async ({ signal }) => {
+      const l = await apiFetch<BlobStoreList>('/blob-stores', { signal });
+      const zero = { used_bytes: 0, capacity_bytes: null, dedup_saved_bytes: 0, growth_bytes_per_day: 0, days_to_full: null, reclaimable_bytes: 0 };
+      return { ...l, items: l.items ?? [], totals: { ...zero, ...l.totals } };
+    },
     enabled,
   });
 }

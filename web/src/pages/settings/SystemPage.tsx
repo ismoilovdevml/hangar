@@ -175,7 +175,7 @@ export function SystemPage() {
             rows={(sys?.dependencies ?? []).filter((d) => CORE_DEPENDENCIES.has(d.name) || d.status !== 'ok')}
             rowKey={(d) => d.name}
             minWidth={460}
-            empty={status.isPending ? 'Loading…' : 'This server reports no dependency checks.'}
+            loading={status.isPending} empty={'This server reports no dependency checks.'}
           />
         </Panel>
       </div>
@@ -196,7 +196,7 @@ export function SystemPage() {
             rows={cluster.data?.nodes ?? []}
             rowKey={(n) => n.id}
             minWidth={860}
-            empty={cluster.isPending ? 'Loading…' : 'No nodes reported.'}
+            loading={cluster.isPending} empty={'No nodes reported.'}
           />
         )}
       </Panel>

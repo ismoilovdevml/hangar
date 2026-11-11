@@ -224,7 +224,7 @@ function UsedBy({ s }: { s: BlobStore }) {
           rowKey={(r) => r.id}
           busy={repos.isFetching}
           minWidth={620}
-          empty={repos.isPending ? 'Loading…' : 'No repository keeps its files here yet.'}
+          loading={repos.isPending} empty={'No repository keeps its files here yet.'}
         />
       )}
       {repos.data && rows.length < s.repository_count && (

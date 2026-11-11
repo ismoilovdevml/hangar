@@ -241,7 +241,7 @@ describe('vulnerabilities', () => {
     renderApp('/vulnerabilities');
     expect(await screen.findByText('Scanning is turned off on this server')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Rescan' })).not.toBeInTheDocument();
-    expect(await screen.findByText('Could not load the fix plan.')).toBeInTheDocument();
+    expect(await screen.findByText(/^Could not load the fix plan\. /)).toBeInTheDocument();
     findingsState.planFails = false;
     await user.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await plan()).toBeInTheDocument();

@@ -415,7 +415,7 @@ describe('my account', () => {
     await user.clear(within(pw).getByLabelText('Repeat new password'));
     await user.type(within(pw).getByLabelText('Repeat new password'), 'a much longer passphrase');
     await user.click(within(pw).getByRole('button', { name: 'Change password' }));
-    expect(await within(pw).findByText('the current password is incorrect')).toBeInTheDocument();
+    expect(await within(pw).findByText('The current password is incorrect.')).toBeInTheDocument();
     await user.clear(within(pw).getByLabelText('Current password'));
     await user.type(within(pw).getByLabelText('Current password'), 'password1234');
     await user.click(within(pw).getByRole('button', { name: 'Change password' }));

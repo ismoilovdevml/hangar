@@ -65,7 +65,7 @@ export function RunHistory({ policy }: { policy: string }) {
           rowKey={(r) => r.id}
           minWidth={760}
           busy={runs.isFetching}
-          empty={runs.isPending ? 'Loading…' : 'This policy has not run yet.'}
+          loading={runs.isPending} empty={'This policy has not run yet.'}
         />
       )}
       {runs.data && runs.data.items.length >= CLEANUP_RUNS_LIMIT && (
