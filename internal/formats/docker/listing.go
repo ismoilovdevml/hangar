@@ -154,6 +154,10 @@ func (h *handler) serveCatalog(w http.ResponseWriter, r *http.Request) {
 	}
 	a, err := h.authenticate(r)
 	if err != nil {
+		if !errors.Is(err, core.ErrUnauthenticated) {
+			h.internal(w, r, "authenticate", err)
+			return
+		}
 		h.unauthorized(w, r, "registry:catalog:*", "invalid_token", "authentication failed")
 		return
 	}

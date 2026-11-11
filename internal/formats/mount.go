@@ -113,6 +113,9 @@ func (d *dispatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "repository "+name+" not found")
 			return
 		}
+		if core.AnswerClientGone(w, r, d.deps.Logger, err) {
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "repository lookup failed")
 		return
 	}

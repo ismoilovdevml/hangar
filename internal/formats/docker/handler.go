@@ -88,6 +88,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	auth, err := h.authenticate(r)
 	if err != nil {
+		if !errors.Is(err, core.ErrUnauthenticated) {
+			h.internal(w, r, "authenticate", err)
+			return
+		}
 		h.unauthorized(w, r, scopeFor(rt.name, action), "invalid_token", "authentication failed")
 		return
 	}
@@ -325,6 +329,9 @@ func (h *handler) deny(w http.ResponseWriter, r *http.Request, a authResult, err
 
 // internal logs err and answers 500 without leaking details.
 func (h *handler) internal(w http.ResponseWriter, r *http.Request, what string, err error) {
+	if core.AnswerClientGone(w, r, h.log, err) {
+		return
+	}
 	h.log.ErrorContext(r.Context(), "docker: "+what, "err", err, "path", r.URL.Path)
 	writeError(w, http.StatusInternalServerError, codeUnknown, "internal error")
 }
@@ -332,6 +339,9 @@ func (h *handler) internal(w http.ResponseWriter, r *http.Request, what string, 
 // fail answers err: auth sentinels with a challenge, everything else via the
 // core sentinel mapping.
 func (h *handler) fail(w http.ResponseWriter, r *http.Request, rq *request, err error, notFound string) {
+	if core.AnswerClientGone(w, r, h.log, err) {
+		return
+	}
 	err = routing.Annotate(r.Context(), err)
 	switch {
 	case errors.Is(err, core.ErrUnauthenticated), errors.Is(err, core.ErrForbidden):
@@ -357,6 +367,10 @@ func (h *handler) servePing(w http.ResponseWriter, r *http.Request) {
 	}
 	a, err := h.authenticate(r)
 	if err != nil {
+		if !errors.Is(err, core.ErrUnauthenticated) {
+			h.internal(w, r, "authenticate", err)
+			return
+		}
 		h.unauthorized(w, r, "", "invalid_token", "authentication failed")
 		return
 	}

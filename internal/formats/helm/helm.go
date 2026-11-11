@@ -282,6 +282,9 @@ func (h *handler) prepareWrite(w http.ResponseWriter, r *http.Request, action co
 // ({"error": "..."}), which `helm cm-push` prints. 401 carries a Basic
 // challenge.
 func (h *handler) fail(w http.ResponseWriter, r *http.Request, err error) {
+	if core.AnswerClientGone(w, r, h.log, err) {
+		return
+	}
 	err = routing.Annotate(r.Context(), err)
 	code := core.HTTPStatus(err)
 	msg := err.Error()

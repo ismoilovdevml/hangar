@@ -93,6 +93,13 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	r, _, err := h.authenticate(r)
 	if err != nil {
+		if core.AnswerClientGone(w, r, h.deps.Logger, err) {
+			return
+		}
+		if status(err) >= http.StatusInternalServerError {
+			h.deps.Logger.ErrorContext(r.Context(), "npm request failed", "repository", repo.Name,
+				"method", r.Method, "path", r.URL.Path, "error", err)
+		}
 		writeError(w, err)
 		return
 	}
@@ -104,6 +111,9 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	r = r.WithContext(ctx)
 	if err := h.route(w, r, repo); err != nil {
+		if core.AnswerClientGone(w, r, h.deps.Logger, err) {
+			return
+		}
 		if code := status(err); code >= 500 && code != http.StatusNotImplemented && !errors.Is(err, errAuditUnavailable) {
 			h.deps.Logger.ErrorContext(r.Context(), "npm request failed", "repository", repo.Name,
 				"method", r.Method, "path", r.URL.Path, "error", err)

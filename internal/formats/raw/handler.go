@@ -114,6 +114,9 @@ var errInternal = errors.New("internal error")
 // fail answers with the status for err. 401 carries a Basic challenge; server
 // errors are logged and answered without details.
 func (h *handler) fail(w http.ResponseWriter, r *http.Request, err error) {
+	if core.AnswerClientGone(w, r, h.log(r), err) {
+		return
+	}
 	err = routing.Annotate(r.Context(), err)
 	code := core.HTTPStatus(err)
 	msg := err.Error()

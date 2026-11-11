@@ -34,6 +34,9 @@ func (h *handler) authorize(w http.ResponseWriter, r *http.Request, repo *core.R
 
 // writeError answers with a plain-text message, which pip and twine print.
 func (h *handler) writeError(w http.ResponseWriter, r *http.Request, err error) {
+	if core.AnswerClientGone(w, r, h.log, err) {
+		return
+	}
 	err = routing.Annotate(r.Context(), err)
 	code := core.HTTPStatus(err)
 	msg := err.Error()

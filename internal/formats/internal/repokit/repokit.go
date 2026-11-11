@@ -84,6 +84,9 @@ func (b *Base) Authorize(w http.ResponseWriter, r *http.Request, repo *core.Repo
 
 // Fail answers with a plain-text message (apt and dnf print it).
 func (b *Base) Fail(w http.ResponseWriter, r *http.Request, err error) {
+	if core.AnswerClientGone(w, r, b.Log, err) {
+		return
+	}
 	err = routing.Annotate(r.Context(), err)
 	code := core.HTTPStatus(err)
 	msg := err.Error()

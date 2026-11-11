@@ -142,6 +142,9 @@ func (h *handler) begin(w http.ResponseWriter, r *http.Request, action core.Acti
 // and a plain-text body; 401 carries a Basic challenge, which is what makes
 // both clients send their configured credentials.
 func (h *handler) fail(w http.ResponseWriter, r *http.Request, err error) {
+	if core.AnswerClientGone(w, r, h.log, err) {
+		return
+	}
 	err = routing.Annotate(r.Context(), err)
 	code := core.HTTPStatus(err)
 	msg := err.Error()
