@@ -278,7 +278,11 @@ record logged while serving a request carries:
 The access log line (`"msg":"http request"`) adds `method`, `path` (without the
 query string), `route`, `status`, `bytes_in`, `bytes_out`, `duration_ms`,
 `remote_ip` and `user_agent`. It is written at `info`, `error` for 5xx (except
-501), and `debug` for `/healthz`, `/readyz` and the metrics path.
+501), and `debug` for `/healthz`, `/readyz`, the metrics path and the web UI's
+own successful reads: its files and the `GET` API calls of a browser session
+(each open tab polls status, events and notifications every few seconds).
+Writes, failures and requests with a token or from package clients stay at
+`info`. Set `log.level: debug` to see the UI's reads too.
 
 **Secrets are never logged.** Before a record is written, values of attributes
 whose name denotes a secret (`password`, `token`, `secret`, `authorization`,
