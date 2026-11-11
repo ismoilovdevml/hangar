@@ -100,6 +100,7 @@ export function MembersTab({ kind, filters, onFilters, onOpen }: MembersTabProps
     },
     {
       key: 'roles',
+      priority: 2,
       header: 'Role',
       cell: (m) =>
         m.roles.length ? (
@@ -114,15 +115,17 @@ export function MembersTab({ kind, filters, onFilters, onOpen }: MembersTabProps
           <span className="meta">No role</span>
         ),
     },
-    { key: 'source', header: 'Source', className: 'muted', cell: (m) => (sa ? 'Token' : (SOURCE_LABEL[m.source] ?? m.source)) },
+    { key: 'source', priority: 3, header: 'Source', className: 'muted', cell: (m) => (sa ? 'Token' : (SOURCE_LABEL[m.source] ?? m.source)) },
     {
       key: 'tokens',
+      priority: 3,
       header: 'Tokens',
       className: 'muted nowrap',
       cell: (m) => (m.token_count ? `${m.token_count} active` : '—'),
     },
     {
       key: 'active',
+      priority: 3,
       header: 'Last active',
       className: 'muted nowrap',
       cell: (m) => (m.last_active_at ? relativeTime(m.last_active_at, now) : 'Never'),

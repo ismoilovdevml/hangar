@@ -192,16 +192,18 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
         </code>
       ),
     },
-    { key: 'repo', header: 'Repository', className: 'muted', cell: (c) => c.repository },
-    { key: 'published', header: 'Published', className: 'muted nowrap', cell: (c) => formatUtc(c.published_at).replace(/, \d\d:\d\d UTC$/, '') },
+    { key: 'repo', priority: 2, header: 'Repository', className: 'muted', cell: (c) => c.repository },
+    { key: 'published', priority: 3, header: 'Published', className: 'muted nowrap', cell: (c) => formatUtc(c.published_at).replace(/, \d\d:\d\d UTC$/, '') },
     {
       key: 'download',
+      priority: 3,
       header: 'Last download',
       className: 'muted nowrap',
       cell: (c) => (c.last_downloaded_at ? formatUtc(c.last_downloaded_at).replace(/, \d\d:\d\d UTC$/, '') : 'Never'),
     },
     {
       key: 'size',
+      priority: 2,
       header: 'Size',
       align: 'right',
       className: 'muted nowrap col-last',

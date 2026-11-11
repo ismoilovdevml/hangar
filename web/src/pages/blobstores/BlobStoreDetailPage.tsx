@@ -186,9 +186,9 @@ function UsedBy({ s }: { s: BlobStore }) {
         </span>
       ),
     },
-    { key: 'type', header: 'Type', cell: (r) => <Pill tone={TYPE_META[r.type].tone}>{TYPE_META[r.type].label}</Pill> },
+    { key: 'type', priority: 2, header: 'Type', cell: (r) => <Pill tone={TYPE_META[r.type].tone}>{TYPE_META[r.type].label}</Pill> },
     { key: 'size', header: 'Size', align: 'right', className: 'muted nowrap', cell: (r) => formatBytes(r.size_bytes) },
-    { key: 'count', header: 'Versions', align: 'right', className: 'muted', cell: (r) => r.component_count },
+    { key: 'count', priority: 3, header: 'Versions', align: 'right', className: 'muted', cell: (r) => r.component_count },
     {
       key: 'status',
       header: 'Status',

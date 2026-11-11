@@ -352,6 +352,7 @@ export function TaskDetailPage() {
     { key: 'status', header: 'Status', cell: (r) => <Pill tone={RUN_STATUS[r.status].pill}>{RUN_STATUS[r.status].label}</Pill> },
     {
       key: 'duration',
+      priority: 3,
       header: 'Duration',
       className: 'muted nowrap',
       cell: (r) => {
@@ -359,8 +360,8 @@ export function TaskDetailPage() {
         return d === null ? <NotAvailable reason="not started" /> : formatDuration(d);
       },
     },
-    { key: 'by', header: 'Triggered by', className: 'muted', cell: (r) => r.triggered_by ?? <NotAvailable /> },
-    { key: 'message', header: 'Result', className: 'muted col-last', cell: (r) => r.message ?? '' },
+    { key: 'by', priority: 3, header: 'Triggered by', className: 'muted', cell: (r) => r.triggered_by ?? <NotAvailable /> },
+    { key: 'message', priority: 2, header: 'Result', className: 'muted col-last', cell: (r) => r.message ?? '' },
   ];
 
   return (

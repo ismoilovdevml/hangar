@@ -44,11 +44,12 @@ export function FolderDetail({ repo, path, onOpen }: FolderDetailProps) {
         </button>
       ),
     },
-    { key: 'kind', header: 'Kind', cell: (e) => <Pill tone={e.kind === 'asset' ? 'neutral' : 'info'}>{KIND_LABEL[e.kind]}</Pill> },
-    { key: 'size', header: 'Size', align: 'right', className: 'muted nowrap', cell: (e) => (e.asset ? formatBytes(e.asset.size_bytes) : '') },
-    ...(group ? [{ key: 'repo', header: 'Repository', className: 'muted', cell: (e: BrowseEntry) => e.repository }] : []),
+    { key: 'kind', priority: 3, header: 'Kind', cell: (e) => <Pill tone={e.kind === 'asset' ? 'neutral' : 'info'}>{KIND_LABEL[e.kind]}</Pill> },
+    { key: 'size', priority: 2, header: 'Size', align: 'right', className: 'muted nowrap', cell: (e) => (e.asset ? formatBytes(e.asset.size_bytes) : '') },
+    ...(group ? [{ key: 'repo', priority: 3 as const, header: 'Repository', className: 'muted', cell: (e: BrowseEntry) => e.repository }] : []),
     {
       key: 'updated',
+      priority: 2,
       header: 'Updated',
       align: 'right',
       className: 'col-last meta',

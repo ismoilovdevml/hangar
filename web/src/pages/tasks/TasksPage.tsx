@@ -139,9 +139,10 @@ export function TasksPage() {
         </div>
       ),
     },
-    { key: 'type', header: 'Type', cell: (t) => <Pill tone="neutral">{taskTypeLabel(t.type)}</Pill> },
+    { key: 'type', priority: 3, header: 'Type', cell: (t) => <Pill tone="neutral">{taskTypeLabel(t.type)}</Pill> },
     {
       key: 'schedule',
+      priority: 2,
       header: 'Schedule',
       cell: (t) => (
         <div className="task-schedule">
@@ -172,6 +173,7 @@ export function TasksPage() {
     },
     {
       key: 'next',
+      priority: 2,
       header: 'Next run',
       className: 'muted nowrap',
       cell: (t) =>

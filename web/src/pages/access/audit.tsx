@@ -54,7 +54,7 @@ export function AuditTab({ category, onCategory }: { category: string; onCategor
       className: 'nowrap',
       cell: (e) => <Pill tone={OUTCOME_TONE[e.outcome] ?? 'neutral'}>{e.outcome === 'success' ? 'Success' : e.outcome === 'denied' ? 'Denied' : 'Error'}</Pill>,
     },
-    { key: 'ip', header: 'Address', className: 'col-last meta mono', cell: (e) => e.ip ?? '—' },
+    { key: 'ip', priority: 3, header: 'Address', className: 'col-last meta mono', cell: (e) => e.ip ?? '—' },
   ];
 
   return (

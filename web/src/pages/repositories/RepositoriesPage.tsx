@@ -256,9 +256,10 @@ export function RepositoriesPage() {
         );
       },
     },
-    { key: 'format', header: 'Format', sortable: true, className: 'muted', cell: (r) => <FormatName format={r.format} /> },
+    { key: 'format', priority: 2, header: 'Format', sortable: true, className: 'muted', cell: (r) => <FormatName format={r.format} /> },
     {
       key: 'url',
+      priority: 3,
       header: 'URL',
       cell: (r) => (
         <code className="repo-url" title={r.url}>
@@ -268,6 +269,7 @@ export function RepositoriesPage() {
     },
     {
       key: 'size',
+      priority: 2,
       header: 'Size',
       align: 'right',
       className: 'muted nowrap',
@@ -275,6 +277,7 @@ export function RepositoriesPage() {
     },
     {
       key: 'last_activity',
+      priority: 3,
       header: 'Last activity',
       sortable: true,
       className: 'meta nowrap',

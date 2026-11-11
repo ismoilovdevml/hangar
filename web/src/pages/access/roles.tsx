@@ -127,17 +127,18 @@ export function RolesTab({ canWrite }: { canWrite: boolean }) {
         </button>
       ),
     },
-    { key: 'desc', header: 'Description', className: 'muted', cell: (r) => r.description || <span className="meta">—</span> },
-    { key: 'privs', header: 'Privileges', cell: (r) => (r.privileges.length === 0 ? <span className="meta">None</span> : <ScopeList scopes={r.privileges} max={2} />) },
+    { key: 'desc', priority: 3, header: 'Description', className: 'muted', cell: (r) => r.description || <span className="meta">—</span> },
+    { key: 'privs', priority: 2, header: 'Privileges', cell: (r) => (r.privileges.length === 0 ? <span className="meta">None</span> : <ScopeList scopes={r.privileges} max={2} />) },
     { key: 'members', header: 'Members', align: 'right', className: 'nowrap', cell: (r) => r.member_count },
     {
       key: 'groups',
+      priority: 3,
       header: 'Groups',
       align: 'right',
       className: 'nowrap',
       cell: (r) => (r.group_mappings?.length ? r.group_mappings.length : <span className="meta">—</span>),
     },
-    { key: 'kind', header: 'Type', className: 'col-last', cell: (r) => (r.builtin ? <span className="meta">Built-in</span> : 'Custom') },
+    { key: 'kind', priority: 3, header: 'Type', className: 'col-last', cell: (r) => (r.builtin ? <span className="meta">Built-in</span> : 'Custom') },
   ];
 
   return (
