@@ -76,6 +76,7 @@ export type CleanupPolicyPage = Schemas['CleanupPolicyPage'];
 /* ---------- components, assets, search ---------- */
 
 export type ComponentDetail = Schemas['ComponentDetail'];
+export type ContainerImage = Schemas['ContainerImage'];
 export type PublishedComponentPage = Schemas['PublishedComponentPage'];
 export type Asset = Schemas['Asset'];
 export type AssetPage = Schemas['AssetPage'];

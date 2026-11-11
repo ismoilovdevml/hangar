@@ -10,11 +10,13 @@ import {
   useComponentFindings,
   useComponentVersions,
   useDeleteComponent,
+  useDeletePackage,
   useRepository,
+  PartialDeleteError,
 } from '../../api/catalog';
 import { useScanComponent, useScanningStatus } from '../../api/findings';
 import { usePermissions } from '../../api/permissions';
-import type { Asset, ComponentDetail, ComponentInfo, Finding, PublishedComponent } from '../../api/types';
+import type { Asset, ComponentDetail, ComponentInfo, ContainerImage, Finding, PublishedComponent } from '../../api/types';
 import { ClientSetup } from '../../components/ClientSetup';
 import { CodeBlock } from '../../components/CodeBlock';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -63,11 +65,13 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
   const assets = useComponentAssets(c?.id);
   const perms = usePermissions();
   const remove = useDeleteComponent();
+  const removeAll = useDeletePackage();
   const invalidateBrowse = useInvalidateBrowse();
   const [toDelete, setToDelete] = useState<PublishedComponent | null>(null);
   const scanning = useScanningStatus();
   const scan = useScanComponent(id);
   const [scanned, setScanned] = useState<string | null>(null);
+  const [deletingAll, setDeletingAll] = useState(false);
   const now = useNow();
 
   if (detail.isError) {
@@ -145,6 +149,29 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
     });
   };
 
+  const askDeleteAll = () => {
+    removeAll.reset();
+    setDeletingAll(true);
+  };
+  const confirmDeleteAll = () =>
+    removeAll.mutate(
+      versions.map((v) => v.id),
+      {
+        onSuccess: () => {
+          setDeletingAll(false);
+          invalidateBrowse();
+          void navigate({ to: '/browse', search: { repo: base.repo }, replace: true });
+        },
+        onError: () => invalidateBrowse(),
+      },
+    );
+  const deleteAllError = (() => {
+    if (!removeAll.isError) return null;
+    const e = removeAll.error;
+    const why = deleteMessage(e instanceof PartialDeleteError ? e.cause : e, 'versions');
+    return e instanceof PartialDeleteError && e.deleted > 0 ? `Deleted ${e.deleted} of ${versions.length} versions, then: ${why}` : why;
+  })();
+
   const description = info.data?.description || (typeof c.attributes?.description === 'string' ? c.attributes.description : '');
   const download = mainAsset(flatItems(assets.data));
   const totalDownloads = versions.reduce((n, v) => n + (v.download_count ?? 0), 0);
@@ -215,8 +242,19 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
 
         <div role="tabpanel" id={`pkg-panel-${tab}`} aria-labelledby={`pkg-tab-${tab}`} className="pkg-panel">
           {tab === 'readme' && <ReadmeTab c={c} q={info} />}
-          {tab === 'versions' && <VersionsTable c={c} newestId={versions[0]?.id} cached={cached} canDelete={canDelete} onDelete={askDelete} versionSearch={versionSearch} now={now} />}
-          {tab === 'files' && <FilesTable c={c} now={now} />}
+          {tab === 'versions' && (
+            <VersionsTable
+              c={c}
+              newestId={versions[0]?.id}
+              cached={cached}
+              canDelete={canDelete}
+              onDelete={askDelete}
+              onDeleteAll={versions.length > 1 ? askDeleteAll : undefined}
+              versionSearch={versionSearch}
+              now={now}
+            />
+          )}
+          {tab === 'files' && (c.format === 'docker' && c.image ? <LayersTable image={c.image} /> : <FilesTable c={c} now={now} />)}
           {tab === 'repositories' && <RepositoriesTab c={c} now={now} />}
           {tab === 'security' && findings.data && <FindingsTable items={findings.data.items} />}
         </div>
@@ -236,6 +274,23 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
       </div>
 
       {scanned && <Toast onClose={() => setScanned(null)}>{scanned}</Toast>}
+      {deletingAll && (
+        <ConfirmDialog
+          title={`Delete ${label}?`}
+          confirmLabel={`Delete ${versions.length} versions`}
+          tone="danger"
+          busy={removeAll.isPending}
+          error={deleteAllError}
+          typeToConfirm={c.name}
+          onCancel={() => setDeletingAll(false)}
+          onConfirm={confirmDeleteAll}
+        >
+          <p>
+            All {versions.length} versions of <strong>{label}</strong> in <strong>{c.repository}</strong> are deleted, and clients can no longer download any
+            of them. Their files are released for compaction. This cannot be undone.
+          </p>
+        </ConfirmDialog>
+      )}
 
       {toDelete && (
         <ConfirmDialog
@@ -408,7 +463,15 @@ function VersionCard({ c, newest, cached, totalDownloads, info, infoPending, fin
             'Never'
           )}
         </Fact>
-        <Fact label="Size">{formatBytes(c.size_bytes)}</Fact>
+        {c.image ? (
+          <Fact label="Compressed size">
+            {c.image.size_bytes !== null ? formatBytes(c.image.size_bytes) : <NotAvailable reason="platform not cached" />}
+            {c.image.platform && <span className="meta"> · {c.image.platform}</span>}
+            {(c.image.platforms?.length ?? 0) > 1 && <span className="meta"> · {c.image.platforms!.length} platforms</span>}
+          </Fact>
+        ) : (
+          <Fact label="Size">{formatBytes(c.size_bytes)}</Fact>
+        )}
         <Fact label="Vulnerabilities">{vulnerabilities(c, findings)}</Fact>
         <Fact label="Licence">
           {infoPending
@@ -533,11 +596,13 @@ interface VersionsTableProps {
   cached: boolean;
   canDelete: boolean;
   onDelete: (v: PublishedComponent) => void;
+  /** Deletes the whole package; absent when it has one version. */
+  onDeleteAll?: () => void;
   versionSearch: (v: string) => Record<string, string | undefined>;
   now: Date;
 }
 
-function VersionsTable({ c, newestId, cached, canDelete, onDelete, versionSearch, now }: VersionsTableProps) {
+function VersionsTable({ c, newestId, cached, canDelete, onDelete, onDeleteAll, versionSearch, now }: VersionsTableProps) {
   const q = useComponentVersions(c.id);
   const rows = flatItems(q.data);
   const columns: Column<PublishedComponent>[] = [
@@ -599,6 +664,74 @@ function VersionsTable({ c, newestId, cached, canDelete, onDelete, versionSearch
     <div className="pkg-table">
       <DataTable caption="Versions" columns={columns} rows={rows} rowKey={(v) => v.id} busy={q.isFetching} minWidth={640} empty={q.isPending ? 'Loading…' : 'No versions.'} />
       <LoadMore q={q} />
+      {onDeleteAll && (
+        <div className="pkg-more">
+          <button
+            type="button"
+            className="button button--danger-outline button--sm"
+            disabled={!canDelete}
+            title={canDelete ? undefined : 'Needs delete rights on this repository'}
+            onClick={onDeleteAll}
+          >
+            Delete package…
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A docker image's config and layers, from its manifest, with their share of the image. */
+function LayersTable({ image }: { image: ContainerImage }) {
+  const rows = [...(image.config ? [{ ...image.config, config: true }] : []), ...image.layers.map((l) => ({ ...l, config: false }))];
+  const biggest = Math.max(1, ...rows.map((r) => r.size_bytes));
+  const columns: Column<(typeof rows)[number]>[] = [
+    {
+      key: 'digest',
+      header: 'Layer',
+      className: 'col-first',
+      cell: (r) => (
+        <div className="asset-path">
+          <span className="facts__mono facts__copy">
+            <span title={r.digest}>{r.config ? 'Image config' : shortDigest(r.digest)}</span>
+            <CopyButton text={r.digest} label={`Copy digest ${r.digest}`} />
+          </span>
+          <span className="meta">{r.media_type}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'size',
+      header: 'Compressed',
+      align: 'right',
+      className: 'col-last muted nowrap',
+      cell: (r) => (
+        <span className="asset-size">
+          {formatBytes(r.size_bytes)}
+          <span className="asset-size__bar" aria-hidden="true">
+            <span style={{ width: `${(r.size_bytes / biggest) * 100}%` }} />
+          </span>
+        </span>
+      ),
+    },
+  ];
+  return (
+    <div className="pkg-table">
+      {image.platform && (
+        <p className="meta">
+          Layers of {image.platform}
+          {(image.platforms?.length ?? 0) > 1 && ` (one of ${image.platforms!.map((p) => p.platform).join(', ')})`}.
+        </p>
+      )}
+      <DataTable
+        caption="Layers"
+        columns={columns}
+        rows={rows}
+        rowKey={(r) => r.digest}
+        minWidth={420}
+        empty={image.size_bytes === null ? 'This platform has not been pulled through this repository yet.' : 'No layers.'}
+      />
+      {image.size_bytes !== null && <p className="meta">{rows.length - (image.config ? 1 : 0)} layers, {formatBytes(image.size_bytes)} compressed.</p>}
     </div>
   );
 }
