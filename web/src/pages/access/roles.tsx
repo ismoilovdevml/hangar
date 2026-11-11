@@ -6,6 +6,7 @@ import { IconClose, IconPlus } from '../../components/icons';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
 import { Select } from '../../components/Select';
+import { toast } from '../../lib/toast';
 import {
   useAddRoleMember,
   useCreateRole,
@@ -193,10 +194,14 @@ function RoleDialog({ role, canWrite, onClose }: { role: Role | null; canWrite: 
     setSubmitted(true);
     if (nameError || privError || groupError) return;
     const body: RoleInput = { name, description, privileges, group_mappings: groups.map((g) => ({ provider: g.provider.trim(), group: g.group.trim() })) };
-    if (role) update.mutate({ name: role.name, body }, { onSuccess: onClose });
+    const done = (message: string) => () => {
+      onClose();
+      toast(message);
+    };
+    if (role) update.mutate({ name: role.name, body }, { onSuccess: done(`Role ${name} saved.`) });
     else
       create.mutate(body, {
-        onSuccess: onClose,
+        onSuccess: done(`Role ${name} created.`),
         onError: (err) => {
           if (err instanceof ApiRequestError && err.status === 409) document.getElementById(ids.name)?.focus();
         },
@@ -296,6 +301,7 @@ function RoleDialog({ role, canWrite, onClose }: { role: Role | null; canWrite: 
           onConfirm={async () => {
             await del.mutateAsync(role.name);
             onClose();
+            toast(`Role ${role.name} deleted.`);
           }}
           onClose={() => setConfirmDelete(false)}
         >

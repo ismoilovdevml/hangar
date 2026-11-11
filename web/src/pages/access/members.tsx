@@ -10,6 +10,7 @@ import { Select } from '../../components/Select';
 import { zoneLabel } from '../../lib/format';
 import { Time } from '../../components/Time';
 import { useNow } from '../../lib/useNow';
+import { toast } from '../../lib/toast';
 import {
   useCreateMember,
   useDeleteMember,
@@ -316,13 +317,23 @@ export function MemberDialog({ kind, member, onClose, onCreated }: MemberDialogP
     if (errors.username || errors.email || errors.password) return;
     const body: MemberInput = { username, kind, roles, display_name: displayName, email };
     if (sa) body.description = description;
-    if (member) update.mutate({ id: member.id, body }, { onSuccess: onClose });
+    if (member)
+      update.mutate(
+        { id: member.id, body },
+        {
+          onSuccess: () => {
+            onClose();
+            toast(`Saved ${username}.`);
+          },
+        },
+      );
     else {
       if (!sa) body.password = password;
       create.mutate(body, {
         onSuccess: (m) => {
           onCreated?.(m);
           onClose();
+          toast(sa ? `Service account ${m.username} created.` : `Member ${m.username} added.`);
         },
         onError: (err) => {
           if (err instanceof ApiRequestError && err.status === 409) document.getElementById(ids.user)?.focus();
@@ -654,6 +665,7 @@ export function UserDrawer({ id, canWrite, canDelete, canManageTokens, onClose }
           onConfirm={async () => {
             await del.mutateAsync(m.id);
             onClose();
+            toast(`Deleted ${m.username}.`);
           }}
           onClose={() => setDialog(null)}
         >

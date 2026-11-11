@@ -421,6 +421,7 @@ describe('access & audit: roles and audit', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Create role' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(await within(table).findByText('npm team')).toBeInTheDocument();
+    expect(screen.getByText('Role npm team created.')).toBeInTheDocument();
   });
 
   it('shows built-in roles read-only with their members', async () => {
