@@ -4,6 +4,7 @@ import { useAllRepositories, useRepository } from '../../api/catalog';
 import { ClientSetup } from '../../components/ClientSetup';
 import { CopyButton } from '../../components/CopyButton';
 import { ErrorNote } from '../../components/ErrorNote';
+import { IconDatabase } from '../../components/icons';
 import { IconSettings } from '../../components/opsIcons';
 import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
@@ -44,6 +45,12 @@ export function RepositorySummary({ repo }: { repo: string }) {
             </p>
           </div>
           <div className="pkg-head__actions">
+            {/* Raw repositories show their files in the tree already. */}
+            {r.format !== 'raw' && (
+              <Link to="/browse" search={{ repo: r.name, files: '/' }} className="button button--secondary">
+                <IconDatabase size={16} /> Files
+              </Link>
+            )}
             <Link to="/repositories/$name/settings" params={{ name: r.name }} className="button button--secondary">
               <IconSettings size={16} /> Settings
             </Link>
@@ -108,7 +115,9 @@ export function RepositorySummary({ repo }: { repo: string }) {
               ? r.type === 'proxy'
                 ? 'Nothing cached yet: packages appear here after a client requests them.'
                 : 'Nothing has been published here yet.'
-              : 'Expand the repository on the left to browse its packages and files.'}
+              : r.format === 'raw'
+                ? 'Expand the repository on the left to browse its files.'
+                : 'Expand the repository on the left to browse its packages and versions.'}
         </p>
       </Panel>
     </>
