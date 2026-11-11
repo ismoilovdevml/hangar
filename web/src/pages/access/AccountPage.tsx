@@ -157,7 +157,7 @@ function PasswordPanel() {
         <Field id={ids.cur} label="Current password" error={submitted && !current && 'Enter your current password.'}>
           <input type="password" className="input" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" />
         </Field>
-        <Field id={ids.next} label="New password" error={submitted && errors.next} hint="A long passphrase is best.">
+        <Field id={ids.next} label="New password" error={submitted && errors.next}>
           <input type="password" className="input" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
         </Field>
         <PasswordChecklist id={ids.checks} checks={checks.filter((c) => c.id !== 'match')} />
