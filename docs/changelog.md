@@ -103,6 +103,45 @@
   are in the form but not saved.
 - **Development compose stack**: Hangar addresses the bundled MinIO
   path-style, so the default S3 store works.
+- **"Connect a client" offers every format**: the dialog pages through
+  `/me/client-endpoints` instead of showing the first three, and the
+  endpoint per format prefers a group, then a proxy, then a hosted
+  repository. Endpoints now carry `type`, `publishes` and `anonymous_read`.
+- **Client snippets follow the repository type and work as copied**: Maven
+  mirrors everything only to a proxy or group; a hosted repository is added
+  by URL in an active profile, and every Maven snippet carries the URL; the
+  token export is its own shell block, out of `settings.xml`. Cargo never
+  names a registry `crates-io` (cargo's own source). Over plain http, NuGet
+  sources get `--allow-insecure-connections`, pip trusts the host, Gradle
+  sets `isAllowInsecureProtocol`, and Go says plainly that it sends
+  credentials over HTTPS only (serve Hangar over HTTPS, or allow anonymous
+  read) instead of a `.netrc` that is never sent. Install commands carry the
+  signed-in user and, for pip and uv, the token. Checked with npm, pip,
+  twine, uv, mvn, gradle, go, cargo, helm, dotnet, docker and curl.
+- **Code is shown as typed**: no font ligatures in code (`<!--` stays
+  `<!--`), and config blocks scroll sideways instead of wrapping mid-tag.
+- **The package tree is repository, package, version**: folders lead down to
+  packages, and a package opens to its versions (newest first, from every
+  member of a group). Stored files moved to a repository's **Files** view
+  (`/repositories/{name}/browse?view=packages` is the tree; `view=files`,
+  the default, is unchanged). apt and rpm list their packages by name. Links
+  that name a package (search results, shared URLs) open and select it in
+  the tree. Long names are cut in the middle, and filtering the tree links
+  to a search of every package.
+- **Docker images are sized by their layers**: a version's size, its
+  Versions row and the Layers tab come from the manifest (config plus
+  layers; a multi-platform index by its linux/amd64 image, with every
+  platform listed). The component detail has a new `image` field.
+- **No single-file delete in Docker repositories**: layers and manifests are
+  shared by tags; the UI no longer offers "Delete file" for them, and
+  `DELETE /assets/{id}` answers 400 for docker files.
+- **Delete a whole package**: the Versions tab deletes every version of a
+  package after typing its name.
+- **Raw files found by search open as files**, not as a package with a
+  version and an empty README.
+- **npm: the package state goes with the last version** deleted outside npm
+  (the REST API, cleanup), so no package without versions is left behind
+  unless it holds unpublish tombstones.
 
 ## v0.1.8 (2026-11-11)
 
