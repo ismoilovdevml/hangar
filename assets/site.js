@@ -33,55 +33,23 @@
   if (cb) cb.addEventListener('click', function () { copyText($$('.code pre').filter(function (p) { return !p.hidden; })[0].textContent.trim(), cb); });
 
 
-  /* clickable product tour: hotspots in % of the 1600x1000 screenshots */
-  var view = $('#app-view'), spots = $('#hotspots'), pathEl = $('#app-path'), hint = $('#app-hint');
-  if (view && spots) {
-    var box = function (x, y, w, h, go, label) { return { x: x, y: y, w: w, h: h, go: go, label: label }; };
-    var SIDEBAR = [
-      box(34, 224, 234, 44, 'overview', 'Overview'),
-      box(34, 270, 234, 46, 'packages', 'Packages'),
-      box(34, 318, 234, 44, 'packages', 'Search'),
-      box(34, 600, 234, 44, 'vulnerabilities', 'Vulnerabilities'),
-      box(34, 646, 234, 44, 'authentication', 'Access and audit'),
-      box(34, 788, 234, 44, 'status', 'Cluster and replication'),
-      box(34, 886, 234, 72, 'status', 'System status')
-    ];
-    var EXTRA = {
-      overview: [
-        box(1290, 24, 176, 38, 'status', 'All systems normal'),
-        box(520, 160, 844, 60, 'packages', 'Search packages'),
-        box(627, 652, 307, 168, 'vulnerabilities', 'Security'),
-        box(950, 652, 308, 168, 'proxies', 'Upstream'),
-        box(304, 388, 630, 248, 'packages', 'Today'),
-        box(459, 860, 263, 34, 'packages', 'microsoft.entityframeworkcore')
-      ],
-      packages: [box(322, 98, 640, 46, 'packages', 'Filter packages')],
-      vulnerabilities: [],
-      status: [],
-      authentication: [],
-      proxies: []
-    };
-    var PATHS = { overview: '', packages: 'browse', vulnerabilities: 'vulnerabilities', status: 'system/status', authentication: 'settings/authentication', proxies: 'settings/proxies' };
-    var current = 'overview';
-    function show(name) {
-      current = name;
-      $$('img', view).forEach(function (im) { im.classList.toggle('on', im.dataset.view === name); });
-      pathEl.textContent = PATHS[name] || '';
-      spots.innerHTML = SIDEBAR.concat(EXTRA[name] || []).filter(function (b) { return !(b.go === name && b.label !== 'Overview' && SIDEBAR.indexOf(b) === -1); }).map(function (b) {
-        return '<button type="button" data-go="' + b.go + '" aria-label="' + b.label + '" style="left:' + (b.x / 16) + '%;top:' + (b.y / 10) + '%;width:' + (b.w / 16) + '%;height:' + (b.h / 10) + '%"></button>';
-      }).join('');
-    }
-    spots.addEventListener('click', function (e) {
-      var b = e.target.closest('button'); if (!b) return;
-      if (hint) hint.classList.add('gone');
-      spots.classList.remove('teach');
-      show(b.dataset.go);
-    });
-    show('overview');
-    if ('IntersectionObserver' in window && !reduce) {
-      var to = new IntersectionObserver(function (es) { if (es[0].isIntersecting) { spots.classList.add('teach'); to.disconnect(); } }, { threshold: 0.6 });
-      to.observe(view);
-    }
+  /* live demo: load the frame when it comes near, fit its 1440x900 page to the frame, mirror its address */
+  var demoFrame = $('#app-frame'), view = $('#app-view'), pathEl = $('#app-path');
+  if (demoFrame && view) {
+    var wide = window.matchMedia('(min-width: 761px)');
+    var fit = function () { view.style.setProperty('--k', (view.clientWidth / 1440).toFixed(4)); };
+    var load = function () { if (!demoFrame.getAttribute('src') && wide.matches) demoFrame.src = demoFrame.dataset.src; };
+    fit();
+    addEventListener('resize', fit);
+    if ('IntersectionObserver' in window) {
+      var fo = new IntersectionObserver(function (es) { if (es[0].isIntersecting && wide.matches) { load(); fo.disconnect(); } }, { rootMargin: '600px 0px' });
+      fo.observe(view);
+    } else load();
+    if (wide.addEventListener) wide.addEventListener('change', function () { fit(); load(); });
+    setInterval(function () {
+      if (!demoFrame.getAttribute('src')) return;
+      try { pathEl.textContent = demoFrame.contentWindow.location.pathname.replace(/^.*?\/demo\/?/, ''); } catch (e) { /* not loaded yet */ }
+    }, 500);
   }
 
   /* reveal below the fold */

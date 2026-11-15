@@ -22,7 +22,7 @@
       Hangar
     </a>
     <nav class="links" aria-label="Main">
-      <a class="hide-sm" href="#demo">Tour</a>
+      <a class="hide-sm" href="#demo">Demo</a>
       <a class="hide-sm" href="#how">How it works</a>
       <a href="docs.html">Docs</a>
       <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
@@ -49,18 +49,17 @@
       <div class="app-bar">
         <span class="dots"><i></i><i></i><i></i></span>
         <span class="url">hangar.your-company.com/<b id="app-path"></b></span>
-        <span class="hint" id="app-hint">Click around</span>
+        <a class="hint" href="demo/" target="_blank" rel="noopener">Open full demo</a>
       </div>
       <div class="app-view" id="app-view">
-        <img data-view="overview" class="on" src="assets/img/overview.jpg" alt="Hangar Overview page" width="1600" height="1000">
-        <img data-view="packages" src="assets/img/packages.jpg" alt="Hangar Packages page" width="1600" height="1000">
-        <img data-view="vulnerabilities" src="assets/img/vulnerabilities.jpg" alt="Hangar Vulnerabilities page" width="1600" height="1000">
-        <img data-view="status" src="assets/img/status.jpg" alt="Hangar Status page" width="1600" height="1000">
-        <img data-view="authentication" src="assets/img/sign-in.jpg" alt="Hangar Authentication page" width="1600" height="1000">
-        <img data-view="proxies" src="assets/img/proxies.jpg" alt="Hangar Outbound proxy page" width="1600" height="1000">
-        <div class="hotspots" id="hotspots"></div>
+        <iframe id="app-frame" data-src="demo/" title="Hangar live demo: the web UI with sample data" tabindex="0"></iframe>
+        <a class="app-card" href="demo/">
+          <img src="assets/img/ui/overview-phone.jpg" alt="The Hangar Overview page on a phone" width="390" height="844" loading="lazy">
+          <span class="app-card-cta">Open the live demo</span>
+        </a>
       </div>
     </div>
+    <p class="demo-cap">The real web UI with sample data. Click anything, create a repository or a token. Changes reset on reload. <a href="demo/" target="_blank" rel="noopener">Open full demo</a></p>
   </section>
 
   <section class="sec wrap" id="what">

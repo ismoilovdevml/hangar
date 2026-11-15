@@ -1,0 +1,1 @@
+function e(e=`/hangar/demo/`,t=window.location,n=window.history){t.hash.startsWith(`#/`)&&n.replaceState(null,``,`${e.replace(/\/$/,``)}${t.hash.slice(1)}`)}export{e as openHashLink};

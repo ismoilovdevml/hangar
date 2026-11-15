@@ -1,0 +1,1 @@
+import{Qa as e,oa as t}from"./index-CG7QNL02.js";import{t as n}from"./FormatIcon-BDQ2TsF6.js";var r=e();function i(e,i){let a=e.map(e=>({value:e,label:t[e].label,icon:(0,r.jsx)(n,{format:e,size:16,label:null})}));return i===void 0?a:[{value:``,label:i},...a]}export{i as t};

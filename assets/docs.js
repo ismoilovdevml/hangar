@@ -62,6 +62,9 @@ var SITE = {
   var NAV = [
     ['Getting started', [
       ['introduction', 'Introduction'], ['installation', 'Installation'], ['quick-start', 'Quick start'], ['concepts', 'Core concepts']]],
+    ['Using the UI', [
+      ['ui-overview', 'The web UI'], ['ui-repositories', 'Repositories'], ['ui-packages', 'Packages & search'], ['ui-connect', 'Connect a client'], ['ui-vulnerabilities', 'Vulnerabilities'],
+      ['ui-access', 'Access & tokens'], ['ui-tasks', 'Scheduled tasks'], ['ui-blob-stores', 'Blob stores'], ['ui-system', 'Status, logs & audit'], ['ui-settings', 'Settings']]],
     ['Package formats', [
       ['docker', 'Docker & OCI'], ['npm', 'npm'], ['nuget', 'NuGet'], ['maven', 'Maven & Gradle'], ['pypi', 'PyPI'], ['go', 'Go modules'], ['helm', 'Helm charts'],
       ['cargo', 'Cargo'], ['apt', 'APT'], ['rpm', 'RPM'], ['raw', 'Raw files']]],
@@ -78,7 +81,7 @@ var SITE = {
   var P = {};
 
   P.introduction = { src: 'README.md', title: 'Introduction', lead: 'Hangar is a self-hosted package registry. It keeps every package your builds need in one place: what you publish, and cached copies of what you download.', body:
-    fig('overview', 'The Overview page: today in one sentence, and only the things that need you.') +
+    shot('overview', 'The Overview page: today in one sentence, and only the things that need you.') +
     '<h2>Why teams use it</h2><ul>' +
     '<li><strong>Builds stop depending on the internet.</strong> Once a package is cached, a public registry that is down no longer breaks CI: proxy repositories keep serving what they have.</li>' +
     '<li><strong>One registry for eleven formats.</strong> Docker/OCI, npm, Maven, PyPI, NuGet, Go modules, Helm, Cargo, APT, RPM and raw files share one sign-in, one set of roles and one audit log.</li>' +
@@ -131,7 +134,7 @@ var SITE = {
       ['Add a proxy for npm', '<p>Open <strong>Repositories → New repository</strong>, pick <strong>npm</strong> and <strong>Proxy</strong>. Name it <code>npm-proxy</code>; the remote URL starts as <code>https://registry.npmjs.org</code>.</p>'],
       ['Create a token', '<p>Open <strong>Settings → My account → Personal access tokens → New token</strong>. Pick <strong>Read only</strong> and an expiry. Copy the secret now; it is shown once.</p>'],
       ['Point npm at Hangar', code('shell', '$ npm config set registry ' + R + 'npm-proxy/\n$ npm config set //' + H + SITE.repoPath + 'npm-proxy/:_authToken YOUR_TOKEN') + '<p>Use the address the installer printed in place of <code>' + URL + '</code>.</p>'],
-      ['Install something', code('shell', '$ npm install react') + '<p>The first install fetches from registry.npmjs.org and keeps a copy. Open <strong>Packages</strong> in Hangar: <code>react</code> is there. It is scanned on arrival when the repository has <strong>Scan new packages for vulnerabilities</strong> on, otherwise by the hourly rescan.</p>' + fig('packages', 'Packages: what is cached and what is hosted, with downloads and security state.')]]) +
+      ['Install something', code('shell', '$ npm install react') + '<p>The first install fetches from registry.npmjs.org and keeps a copy. Open <strong>Packages</strong> in Hangar: <code>react</code> is there. It is scanned on arrival when the repository has <strong>Scan new packages for vulnerabilities</strong> on, otherwise by the hourly rescan.</p>' + shot('browse-package', 'Packages: what is cached and what is hosted, with downloads and security state.')]]) +
     call('ok', 'That is the whole loop.', 'Every other format works the same way: add a proxy (usually with a hosted repository and a group), point the client at it, build as usual.') +
     '<h2>Next</h2>' + cards([['docker', 'Docker images', 'Cache Docker Hub and push your own images.'], ['ci', 'CI/CD', 'Use Hangar from GitHub Actions, GitLab CI and Jenkins.'], ['vulnerabilities', 'Scanning', 'See what to upgrade first; quarantine critical findings.']]) };
 
@@ -261,13 +264,13 @@ var SITE = {
       ['<code>offline</code>', '', '<code>true</code>: never contact the remote; serve only what is cached.'],
       ['<code>related_hosts</code>', '', 'Other hosts the remote links to (file CDNs) that may be fetched on its behalf, without its credentials.']]) +
     '<p>To make a proxy forget remembered 404s and rate limits: <code>POST /api/v1/repositories/&lt;name&gt;/cache:invalidate</code>. Cached content stays.</p>' +
-    '<h2>Outbound proxy</h2><p>If your network blocks direct internet access, add an outbound HTTP proxy under <strong>Settings → Proxies</strong>, or set <code>http.proxy</code> in <code>hangar.yaml</code>. When remotes are reachable directly, there is nothing to fill in.</p>' + fig('proxies', 'Outbound proxy: nothing to fill in when Hangar can connect directly.') +
+    '<h2>Outbound proxy</h2><p>If your network blocks direct internet access, add an outbound HTTP proxy under <strong>Settings → Proxies</strong>, or set <code>http.proxy</code> in <code>hangar.yaml</code>. When remotes are reachable directly, there is nothing to fill in.</p>' + shot('proxies', 'Outbound proxy: nothing to fill in when Hangar can connect directly.') +
     '<p>Proxy repositories cannot reach loopback, private or cloud metadata addresses by default. To proxy an internal server, list it in <code>http.allow_private_networks</code>. A private CA goes in <code>http.ca_file</code>.</p>' +
     '<h2>Remote health</h2><p>Each remote is <strong>healthy</strong>, <strong>slow</strong>, <strong>blocked</strong> (401/403 or the address policy) or <strong>offline</strong> (the circuit breaker is open). The Overview <strong>Upstream</strong> card, the <strong>Upstream proxies</strong> row of System status and the repository list show it.</p>' +
     '<h2>Warming the cache</h2><p>A <strong>Pre-warm a proxy</strong> task (<strong>Scheduled tasks → New task</strong>) fetches a list of coordinates through a proxy or group, exactly as a client would. Paste coordinates or add them from lockfiles such as <code>package-lock.json</code>, <code>yarn.lock</code>, <code>packages.lock.json</code>, <code>poetry.lock</code>, <code>go.sum</code> or <code>Cargo.lock</code>. See <a href="#migrate">Move to Hangar</a>.</p>' };
 
   P.vulnerabilities = { src: 'docs/guides/vulnerabilities.md', title: 'Vulnerability scanning', lead: 'Hangar checks the package versions it stores against public advisories and shows what to upgrade first.', body:
-    fig('vulnerabilities', 'The fix plan puts packages your builds actually use first.') +
+    shot('vulnerabilities', 'The fix plan puts packages your builds actually use first.') +
     '<h2>What gets scanned</h2>' + table(['Format', 'Source', 'Matched by'], [
       ['npm, Maven, PyPI, NuGet, Go, Cargo', '<a href="https://osv.dev">OSV</a> (or a mirror of its API)', 'Package name and version'],
       ['APT, RPM', 'OSV', 'Source package and version, once the repository\'s distribution release is set or detected (for example <code>Debian:12</code>, <code>Rocky Linux:9</code>)'],
@@ -299,7 +302,7 @@ var SITE = {
     '<p>Imports exist for npm, NuGet, Maven, PyPI, Go, Cargo, Helm, Docker, raw, APT and RPM. A version already present with identical content is skipped; different content is reported as a conflict and left as it is. Runs resume after a restart, and running a task again copies only what is missing.</p>' };
 
   P.status = { src: 'docs/operations/monitoring.md', title: 'Health & status', lead: 'The System status screen answers one question first: is Hangar healthy? Details open when you click a row.', body:
-    fig('status', 'System status: one row per check. Click a row for details.') +
+    shot('system-status', 'System status: one row per check. Click a row for details.') +
     '<p><strong>Operations → System status</strong> shows every node with one row per subsystem: database, blob storage, event bus, task scheduler, search index, sign-in and upstream proxies. It refreshes every 15 seconds.</p>' +
     '<h2>Health endpoints</h2>' + table(['Path', 'Use', 'Returns'], [
       ['<code>/healthz</code>', 'Liveness probe', '200 <code>{"status":"ok"}</code> while the process runs'],
@@ -343,7 +346,7 @@ var SITE = {
     call('', 'The full reference.', guide('hangar.example.yaml') + ' documents every key with its default and variable. Settings are read at start, so change them on the host and restart. Sign-in providers and outbound proxies can also be edited under <strong>Settings</strong> in the UI.') };
 
   P.authentication = { src: 'docs/guides/access.md', title: 'Sign-in & tokens', lead: 'People sign in with local accounts, an OIDC provider or LDAP / Active Directory. Machines use access tokens.', body:
-    fig('sign-in', 'Settings → Authentication: pick your provider and fill in three fields.') +
+    shot('authentication', 'Settings → Authentication: pick your provider and fill in three fields.') +
     '<h2>Single sign-on</h2><p>Open <strong>Settings → Authentication</strong>. Presets cover Active Directory, OpenLDAP and FreeIPA (LDAP), and Keycloak, Microsoft Entra ID, Google Workspace and Okta (OIDC); <strong>Other</strong> takes any OIDC provider or LDAP directory. <strong>Test</strong> checks the values before you save, and saved settings apply on every node.</p>' +
     steps([
       ['Register Hangar at your provider', '<p>Redirect URI: <code>' + URL + '/api/v1/auth/oidc/callback</code>.</p>'],
@@ -401,7 +404,256 @@ var SITE = {
       ['Check', '<p><code>/readyz</code> returns 200 and <strong>System status</strong> (or <code>/api/v1/system/status</code>) shows the new version.</p>']]) +
     '<p>With several nodes, roll out node by node only when the release\'s changelog says its migrations work with the previous version; otherwise stop all nodes, migrate, and start the new version.</p>' };
 
-  function fig(img, caption) { return '<figure class="fig"><button type="button" class="zoom" aria-label="Enlarge screenshot"><img src="assets/img/' + img + '.jpg" alt="' + caption + '" loading="lazy" width="1600" height="1000"></button><figcaption>' + caption + '</figcaption></figure>'; }
+  /* ---------- Using the UI: one page per area, screenshots from the live demo ---------- */
+  var ROLES = '<strong>Admin</strong> (everything), <strong>Publisher</strong> (read and publish to every repository), <strong>Reader</strong> (read every repository) and <strong>CI deployer</strong> (read every repository, publish and delete in hosted ones)';
+
+  P['ui-overview'] = { src: 'docs/guides/README.md', title: 'The web UI', lead: 'Every page of the web UI, step by step. Each screenshot comes from the live demo: the real UI with sample data, where you can click everything and nothing is kept after a reload.', body:
+    call('', 'Open the demo next to this guide.', '<a href="demo/" target="_blank" rel="noopener">Live demo</a>. It starts signed in as an administrator. Every page below has a <em>Try it in the demo</em> link that opens the same screen.') +
+    '<h2>Sign in</h2><p>Open the address the installer printed. Sign in with a username and password, or with the single sign-on buttons (<strong>Continue with …</strong>, <strong>LDAP</strong>, <strong>SAML</strong>) once an administrator has set them up under <a href="#ui-settings">Settings → Authentication</a>. The first administrator is <code>admin</code> with the one-time password from the installer; Hangar asks for a new password on the first sign-in. If your session ends while you work, Hangar asks for your password in place, so unsaved edits survive.</p>' +
+    shot('sign-in', 'The sign-in page. The single sign-on buttons appear once a provider is configured.') + demo('/login', 'Try it in the demo (any username, e.g. demo / demo)') +
+    '<h2>Find your way around</h2><p>The sidebar groups the pages:</p>' +
+    table(['Group', 'Pages'], [
+      ['Registry', '<strong>Overview</strong>, <strong>Packages</strong>, <strong>Search</strong>, <strong>Repositories</strong>'],
+      ['Storage', '<strong>Blob stores</strong>, <strong>Cleanup policies</strong>'],
+      ['Security', '<strong>Vulnerabilities</strong>, <strong>Access &amp; audit</strong>, <strong>Audit log</strong>'],
+      ['Operations', '<strong>Scheduled tasks</strong>, <strong>Cluster &amp; replication</strong>, <strong>System status</strong>, <strong>System logs</strong>'],
+      ['Settings', '<strong>Settings</strong>, <strong>Authentication</strong>, <strong>Proxies</strong>']]) +
+    '<p>You see only the pages your roles allow; the sections fold, so every entry stays reachable on a laptop screen. The top bar shows where you are, a status pill when something needs attention, your notifications and the account menu with <strong>My account</strong> and <strong>Sign out</strong>. Times are shown in your local time with the zone, for example <code>14:05 (UTC+5)</code>, and sizes in binary units (GiB, TiB).</p>' +
+    '<h2>Read the Overview</h2>' + shot('overview', 'The Overview: today in one sentence, and only the things that need you.') + demo('/') +
+    steps([
+      ['Ask a question', '<p>Type in <strong>What do you need today?</strong>: a package name, a version, a sha256 digest, a CVE or a license. The chips below it (<code>format:docker</code>, <code>security:findings</code>, <code>unused:&gt;90d</code>) show the <a href="#ui-packages">search syntax</a>.</p>'],
+      ['Start a common task', '<p>The four cards open <strong>Connect a client</strong>, <strong>Create a token</strong>, <strong>New repository</strong> and <strong>Browse packages</strong>.</p>'],
+      ['Pick a time range', '<p><strong>1h</strong>, <strong>Today</strong>, <strong>7d</strong> or <strong>30d</strong> changes the activity sentence (requests, packages cached, published, pushes rejected), the chart and the success rate.</p>'],
+      ['Work through To do', '<p><strong>To do</strong> lists only what needs a person: a failing upstream, rejected pushes, critical vulnerabilities, a token that expires soon. Click an item to go where it is fixed. The cards below show storage, security and upstream health and open their pages too.</p>']]) +
+    '<h2>Jump anywhere with ⌘K</h2><p>Press <kbd>⌘</kbd> <kbd>K</kbd> (<kbd>Ctrl</kbd> <kbd>K</kbd> on Linux and Windows) on any page, or click the search box in the top bar. Type the name of a page, a repository, a package or a user, or an advisory id such as <code>CVE-2021-44228</code>. A matching page ranks first and <kbd>Enter</kbd> opens it; the last option searches every package.</p>' +
+    shot('command-palette', 'The command palette jumps to pages, repositories, packages, advisories and users.') +
+    '<h2>Next</h2>' + cards([['ui-repositories', 'Repositories', 'Create hosted, proxy and group repositories.'], ['ui-connect', 'Connect a client', 'Point docker, npm or pip at Hangar.'], ['ui-access', 'Access &amp; tokens', 'Add people, roles and CI tokens.']]) };
+
+  P['ui-repositories'] = { src: 'docs/guides/README.md', title: 'Repositories', lead: 'Create hosted, proxy and group repositories, change their settings, keep internal names safe with routing rules and clean up old versions.', body:
+    '<h2>The list</h2><p>Open <strong>Repositories</strong>. The cards count hosted, proxy and group repositories. Narrow the table with the <strong>All</strong>, <strong>Hosted</strong>, <strong>Proxy</strong> and <strong>Group</strong> tabs, the <strong>Format</strong> menu and <strong>Filter by name</strong>. Click a name to open its settings; the package icon at the end of a row browses its packages.</p>' +
+    shot('repositories', 'Repositories: what each one stores, where it points and whether it is online.') + demo('/repositories') +
+    '<h2>Create a hosted repository</h2><p>A hosted repository stores what your team publishes.</p>' +
+    steps([
+      ['Open the form', '<p>Click <strong>New repository</strong> (also on the Overview).</p>'],
+      ['Step 1: What will it store?', '<p>Pick the format: Docker, npm, Maven, PyPI, Go, Helm, NuGet, Cargo, APT, RPM or Raw.</p>'],
+      ['Step 2: How should it behave?', '<p>Pick <strong>Hosted</strong>.</p>'],
+      ['Step 3: Settings', '<p>Enter a <strong>Name</strong> (lowercase letters, numbers and dashes; it cannot be changed later) and choose the <strong>Blob store</strong> that keeps the files. <strong>Description</strong> and <strong>Cleanup policy</strong> are optional. Under <strong>Security and access</strong>, <strong>Scan new packages for vulnerabilities</strong> and <strong>Quarantine packages with critical issues</strong> are on; <strong>Allow anonymous read</strong> is off.</p>' +
+        shot('repo-new-hosted', 'Creating a hosted Docker repository. The Summary shows its URL and the same settings as YAML.')],
+      ['Create it', '<p>Check the <strong>Summary</strong> on the right: format, type, URL and the configuration as YAML (<code>POST /api/v1/repositories</code> accepts the same YAML). Click <strong>Create repository</strong>. Its settings page opens with a note that it is ready.</p>']]) +
+    demo('/repositories/new?format=docker&amp;type=hosted') +
+    '<h2>Create a proxy repository</h2><p>A proxy caches a public registry: the first request fetches a file, later ones are served from Hangar.</p>' +
+    steps([
+      ['Pick the format and Proxy', '<p>In <strong>New repository</strong>, pick for example <strong>npm</strong>, then <strong>Proxy</strong>. The name and <strong>Remote URL</strong> are filled in for that format (<code>npm-proxy</code>, <code>https://registry.npmjs.org</code>); change them if you like.</p>'],
+      ['Set the cache times', '<p><strong>Metadata cached for</strong> is how long indexes and tag lists are reused (<code>24h</code>). <strong>Content cached for</strong> applies to files; <code>0s</code> keeps them forever. <strong>Not-found cached for</strong> remembers 404s (<code>10m</code>).</p>' +
+        shot('repo-new-proxy', 'Step 3 for an npm proxy: remote URL and cache times.')],
+      ['Private remote?', '<p>Open <strong>Upstream credentials and connection</strong>. <strong>Authentication</strong> sends a username and password or a token, only to the remote\'s own host. <strong>Outbound proxy</strong> picks one of the proxies from <a href="#ui-settings">Settings → Proxies</a>. <strong>Extra trusted certificates</strong> takes a PEM for a private CA.</p>'],
+      ['Create it', '<p>Click <strong>Create repository</strong>. Point a client at it (<a href="#ui-connect">Connect a client</a>) and the cache fills as builds run, or fill it ahead with a <a href="#ui-tasks">pre-warm task</a>.</p>']]) +
+    demo('/repositories/new?format=npm&amp;type=proxy') +
+    '<h2>Create a group</h2><p>A group gives clients one URL for several repositories of the same format, usually your hosted repository plus a proxy.</p>' +
+    steps([
+      ['Pick the format and Group', '<p>In <strong>New repository</strong>, pick the format, then <strong>Group</strong>, and enter a name.</p>'],
+      ['Add members', '<p>Under <strong>Members, in the order reads are resolved</strong>, choose a repository in <strong>Choose a repository…</strong> and click <strong>Add member</strong>. Repeat, then use the arrows to put your hosted repository first.</p>'],
+      ['Decide where uploads go', '<p><strong>Publishing through the group</strong> is <strong>Read-only group</strong> or <strong>Send uploads to</strong> one hosted member. Only hosted members can receive uploads.</p>' +
+        shot('repo-new-group', 'A new npm group: members are read in order; uploads can go to one hosted member.')],
+      ['Create it', '<p>Click <strong>Create repository</strong>. Give clients the group\'s URL.</p>']]) +
+    demo('/repositories/new?format=npm&amp;type=group') +
+    '<h2>Change a repository</h2>' +
+    steps([
+      ['Open its settings', '<p>Click the repository\'s name in the list.</p>'],
+      ['Edit and save', '<p>The name and format are fixed. Change the description, members, remote, cache times, cleanup policy or security options, then click <strong>Save changes</strong>. Leaving with unsaved edits asks first.</p>' +
+        shot('repo-settings', 'Settings of a group. The Summary has the URL, set-up and publish commands for this repository.')],
+      ['Other actions', '<p>At the top: <strong>Browse packages</strong>, <strong>Pre-warm</strong> (proxies and groups), <strong>Take offline</strong> (it stops serving until you click <strong>Bring online</strong>), <strong>Invalidate cache</strong> on a proxy (asks first, then says what was dropped) and <strong>Scan now</strong> for formats that are scanned. <strong>Delete repository</strong> sits at the bottom; a group that lists the repository must drop it first. Deleting a group removes only the group and its URL, never its members or their packages.</p>']]) +
+    demo('/repositories/npm-all/settings') +
+    '<h2>Routing rules</h2><p>A public registry can publish one of your internal package names with a higher version (dependency confusion). Routing rules on a group keep each name on the member that owns it.</p>' +
+    steps([
+      ['Open the group', '<p>Open the group\'s settings and scroll to <strong>Routing rules</strong>.</p>'],
+      ['Reserve your names', '<p>For each member, fill <strong>Names only &lt;member&gt; serves</strong> or <strong>Names &lt;member&gt; never serves</strong> with comma-separated patterns; <code>*</code> matches anything, for example <code>@acme/*</code>. <strong>Block names your hosted repositories publish</strong> fills the rules from what you already publish.</p>' +
+        shot('routing-rules', 'Routing rules: @acme/* is served only by the hosted member, never by the public proxy.')],
+      ['Save and test', '<p>Click <strong>Save routing rules</strong>. Type a package name in <strong>Test a name</strong> and click <strong>Test</strong> to see which member would answer; tests use the saved rules.</p>']]) +
+    '<p>More in <a href="#routing">Routing rules</a>.</p>' + demo('/repositories/npm-all/settings') +
+    '<h2>Cleanup policies</h2><p>A cleanup policy deletes versions nobody needs, on a schedule. Open <strong>Cleanup policies</strong> in the sidebar.</p>' +
+    shot('cleanup', 'Cleanup policies: each one says what it deletes, where and when.') +
+    steps([
+      ['Start a policy', '<p>Click <strong>New policy</strong>. Enter a <strong>Name</strong>, pick a <strong>Format</strong> (or <strong>Any format</strong>) and add a description.</p>'],
+      ['Set the conditions', '<p>All checked conditions must hold and keep rules always win: <strong>delete versions published more than … days ago</strong>, <strong>and not downloaded in the last … days</strong>, <strong>only pre-release and snapshot versions</strong>, <strong>keep the newest … versions of each package</strong> and <strong>keep tags matching</strong> (comma-separated globs such as <code>release-*, latest</code>).</p>'],
+      ['Choose repositories and a schedule', '<p>Under <strong>Applies to</strong>, use <strong>Add repository</strong>. Under <strong>Schedule</strong>, pick <strong>How often</strong> and the time in UTC.</p>'],
+      ['Preview, then save', '<p>Click <strong>Preview</strong>. <strong>What would be deleted</strong> lists exactly what the conditions select right now (<strong>Export CSV</strong> to share it). Saving needs a preview of the current conditions; click <strong>Create policy</strong>.</p>' +
+        shot('cleanup-new', 'A new policy after Preview: nothing is deleted until it runs on its schedule.')]]) +
+    '<p>A repository can also pick its policy in its own settings (<strong>Cleanup policy</strong>). Freed space returns after the next blob compaction (<a href="#ui-tasks">Scheduled tasks</a>).</p>' + demo('/cleanup?create=true') };
+
+  P['ui-packages'] = { src: 'docs/guides/README.md', title: 'Packages & search', lead: 'Browse every repository, package, version and file, or search across all of them.', body:
+    '<h2>Browse</h2>' +
+    steps([
+      ['Open Packages', '<p>The tree on the left lists every repository you can read, as repository, package, version. <strong>Filter the tree</strong> narrows it by name and links to a search of every package; <strong>Hide the repository tree</strong> gives the page the full width.</p>'],
+      ['Pick a repository', '<p>Its page shows type, format, status, size, version count, blob store and URL, and <strong>Use this repository</strong> has the set-up and publish commands for its client. <strong>Files</strong> lists every file the repository stores, as clients address it.</p>' +
+        shot('browse-files', 'A repository\'s Files view: what it stores, by the paths clients use.')],
+      ['Open a package version', '<p>Expand the repository (and a scope or group id, where the format has one), then a package: its versions are listed newest first, from every member of a group. Click a version. The tabs show <strong>Readme</strong>, <strong>Versions</strong>, <strong>Files</strong> (<strong>Layers</strong> for a Docker image), <strong>Repositories</strong> (where else it is stored) and <strong>Vulnerabilities</strong>. The <strong>Version</strong> card has publish date, downloads, size, licence and digest, and <strong>Set me up</strong> has the install command for each client.</p>' +
+        shot('browse-package', 'A package version: readme, files, where it is stored and its security state.')],
+      ['Download, scan or delete', '<p><strong>Download</strong> fetches the main file and <strong>Scan now</strong> checks the version against the advisories again. <strong>Delete version</strong> removes this version, if your role allows. On the <strong>Versions</strong> tab, each row has a delete button, and <strong>Delete package…</strong> removes every version after you type the package name. Freed files are released at the next compaction.</p>' +
+        shot('browse-versions', 'The Versions tab: delete one version, or the whole package.')]]) +
+    demo('/browse?repo=npm-internal&amp;ns=%40acme&amp;name=ui-kit&amp;version=5.3.1') +
+    '<h2>Search</h2><p>Open <strong>Search</strong>, or press <kbd>/</kbd> to jump to the search box. Words match the start of any part of a package name. Add qualifiers to narrow the results; repeated qualifiers of the same kind mean “any of”.</p>' +
+    table(['Qualifier', 'Finds'], [
+      ['<code>format:npm</code>', 'Packages of one format'],
+      ['<code>repo:npm-hosted</code>', 'Packages in one repository'],
+      ['<code>sha256:9f2c</code>', 'Files whose digest starts with these 4 to 64 hex digits'],
+      ['<code>cve:CVE-2021-44228</code>', 'Versions affected by an advisory'],
+      ['<code>license:MIT</code>', 'Licence (<code>*</code> works as a wildcard)'],
+      ['<code>security:findings</code>', '<code>pending</code>, <code>clean</code>, <code>findings</code> or <code>quarantined</code>'],
+      ['<code>unused:&gt;90d</code>', 'Not downloaded for that long (h, d, w)'],
+      ['<code>published:&lt;2026-01-01</code>', 'Published before, after or on a date']]) +
+    '<p>A pasted advisory id (<code>CVE-…</code>, <code>GHSA-…</code>, <code>PYSEC-…</code>, <code>RUSTSEC-…</code>) searches as <code>cve:</code>, and a bare hex word of 8 to 64 digits matches a digest prefix or a package name. The filters on the left (<strong>Format</strong>, <strong>Security</strong>, <strong>Repository</strong>) and <strong>Sort</strong> refine the list. Click a result to open it in Packages.</p>' +
+    shot('search', 'Search with a qualifier and the filters next to the results.') + demo('/search?q=format%3Anpm') };
+
+  P['ui-connect'] = { src: 'docs/guides/README.md', title: 'Connect a client', lead: 'Hangar writes the set-up commands for your package manager. You only add a token.', body:
+    steps([
+      ['Create a token', '<p>Clients authenticate with a personal access token, or a service account\'s token in CI. See <a href="#ui-access">Access &amp; tokens</a>. <strong>Read only</strong> is enough to install packages.</p>'],
+      ['Open Connect a client', '<p>On the Overview, click <strong>Connect a client</strong>. The dialog has one tab per format on this server (Docker, npm, PyPI, Maven, NuGet, Go, Raw, APT, RPM and so on). Each uses the format\'s group, or a proxy when there is no group, or else a hosted repository.</p>' +
+        shot('connect-client', 'Connect a client: the commands for each package manager, with your username filled in.')],
+      ['Copy and run', '<p>Click the copy button, paste into a terminal and replace <code>&lt;token&gt;</code> with your token.</p>'],
+      ['For one repository', '<p>Every repository has its own commands: open its settings and look at the <strong>Summary</strong> (<strong>Connect a client</strong> and <strong>Publish</strong>), or select it under <strong>Packages</strong> (<strong>Use this repository</strong>).</p>']]) +
+    demo('/') +
+    '<p>The format guides explain each client in detail: ' + ['docker', 'npm', 'nuget', 'maven', 'pypi', 'go', 'helm', 'cargo', 'apt', 'rpm', 'raw'].map(function (f) { return '<a href="#' + f + '">' + P[f].title + '</a>'; }).join(', ') + '.</p>' };
+
+  P['ui-vulnerabilities'] = { src: 'docs/guides/vulnerabilities.md', title: 'Vulnerabilities', lead: 'See what to upgrade first, hand it to someone, or waive a finding that does not affect you.', body:
+    '<h2>Read the page</h2><p>The header says how many packages were scanned and when the advisories were last checked; <strong>Rescan</strong> checks every package again now. The cards count open findings by severity (with how many have a fix), chart the critical and high findings of the last 30 days, and show the quarantine policy of your repositories with the number of quarantined packages. The bar below answers the first question: how many packages to upgrade to fix the findings that builds actually use.</p>' +
+    shot('vulnerabilities', 'The fix plan: one row per package, the ones your builds pull first.') + demo('/vulnerabilities') +
+    '<h2>Fix a package</h2>' +
+    steps([
+      ['Start at the top', '<p><strong>In use first</strong> sorts packages that were downloaded recently to the top. <strong>All … packages</strong> shows the rest. Search by package or advisory, filter by <strong>Repository</strong>, or show <strong>Assigned to me</strong>.</p>'],
+      ['Look at the findings', '<p>Click the arrow at the start of a row. Each advisory shows its versions, severity and the version that fixes it.</p>' +
+        shot('vulnerability-details', 'A package with two advisories; each is fixed in a different version line.')],
+      ['Hand it to someone', '<p>Click <strong>Assign</strong> and pick a user, or <strong>Assign to me</strong>. Every open finding of the package, and new ones found later, go to that person.</p>'],
+      ['Upgrade', '<p><strong>Copy upgrade</strong> copies the upgrade command for the package\'s client. <strong>Export CSV</strong> shares the whole plan.</p>']]) +
+    '<h2>Waive a finding</h2><p>Waive a finding that does not affect you, for example when the vulnerable code path is never used.</p>' +
+    steps([
+      ['Click Waive', '<p>In the package\'s row, click <strong>Waive</strong>.</p>'],
+      ['Give a reason', '<p>Write why it does not affect you, or what mitigates it. The reason is recorded in the audit log with your name.</p>'],
+      ['Pick an end date', '<p><strong>Waived until</strong> ends at the end of that day (UTC), at most a year ahead. The finding re-opens on its own when the waiver ends.</p>' +
+        shot('vulnerability-waive', 'Waiving a finding: a reason and an end date.')],
+      ['Confirm', '<p>Click <strong>Waive</strong>. A message confirms it, with <strong>Undo</strong>. The <strong>Waived</strong> tab lists waivers; <strong>Revoke waiver</strong> ends one early.</p>']]) +
+    demo('/vulnerabilities') +
+    '<p>Repositories with <strong>Quarantine packages with critical issues</strong> on refuse downloads of versions with a critical finding. How scanning works: <a href="#vulnerabilities">Vulnerability scanning</a>.</p>' };
+
+  P['ui-access'] = { src: 'docs/guides/access.md', title: 'Access & tokens', lead: 'Add people, give them roles, set up service accounts for CI and create access tokens.', body:
+    '<p>Open <strong>Access &amp; audit</strong>. The tabs are <strong>Members</strong>, <strong>Service accounts</strong>, <strong>Access tokens</strong>, <strong>Roles</strong> and <strong>Audit log</strong>.</p>' +
+    shot('access-members', 'Members, the sign-in providers in use and recent access changes.') + demo('/access') +
+    '<h2>Add a member</h2>' +
+    steps([
+      ['Open the form', '<p>On <strong>Members</strong>, click <strong>Add member</strong>.</p>'],
+      ['Fill in the account', '<p>Enter a <strong>Username</strong>, and optionally a display name and email. Type an <strong>Initial password</strong> or click <strong>Generate</strong>; guessable passwords are refused. Share it privately; they can change it under <strong>My account</strong>.</p>'],
+      ['Pick roles', '<p>The built-in roles are ' + ROLES + '. <strong>Reader</strong> is selected by default.</p>' +
+        shot('access-add-member', 'Adding a local account with the Reader role.')],
+      ['Save', '<p>Click <strong>Add member</strong>.</p>']]) +
+    '<p>People who sign in with single sign-on or LDAP need no account here: they appear on their first sign-in, with the roles their directory groups map to (<a href="#ui-settings">Settings → Authentication</a>).</p>' + demo('/access') +
+    '<h2>Manage a member</h2><p>Click a member to open their panel: <strong>Edit</strong>, <strong>Sign out everywhere</strong>, <strong>Disable</strong> and <strong>Delete</strong>, with tabs for <strong>Overview</strong>, <strong>Tokens</strong>, <strong>Sessions</strong> and <strong>Permissions</strong>.</p>' +
+    shot('access-member', 'A member\'s panel: roles, how they sign in, their tokens and sessions.') +
+    '<h2>Create a role</h2>' +
+    steps([
+      ['Open Roles', '<p>On the <strong>Roles</strong> tab, click <strong>New role</strong>.</p>'],
+      ['Name it and add privileges', '<p>Enter a <strong>Name</strong>. Each privilege has <strong>Applies to</strong>, a repository name or pattern (<code>npm-*</code>) and an <strong>Action</strong>. Add more with <strong>Repository privilege</strong> or <strong>Administration privilege</strong>.</p>'],
+      ['Map directory groups', '<p>Under <strong>Directory groups</strong>, <strong>Map a group</strong> gives the role to members of an OIDC, LDAP or SAML group when they sign in.</p>' +
+        shot('access-new-role', 'A new role: privileges, and the directory groups that receive it.')],
+      ['Save', '<p>Click <strong>Create role</strong>. Grant it in a member\'s or service account\'s panel.</p>']]) +
+    demo('/access?tab=roles') +
+    '<h2>Set up a service account for CI</h2>' +
+    steps([
+      ['Create it', '<p>On <strong>Service accounts</strong>, click <strong>New service account</strong>. Enter a <strong>Name</strong> and, optionally, <strong>What uses it</strong> (for example GitLab runners). <strong>CI deployer</strong> is selected; click <strong>Create service account</strong>.</p>'],
+      ['Give it a token', '<p>Click the account and create a token in its panel, one per pipeline, with only the repositories and actions it needs. Service accounts have no password.</p>']]) +
+    demo('/access?tab=service-accounts') +
+    '<h2>Create an access token</h2><p>Tokens are for package clients, CI jobs and scripts. A token never grants more than its owner\'s roles.</p>' +
+    steps([
+      ['Open the form', '<p>Click <strong>New token</strong> on the <strong>Access tokens</strong> tab, or in <strong>My account → Personal access tokens</strong>, or <strong>Create a token</strong> on the Overview.</p>'],
+      ['Name and expiry', '<p>Enter a <strong>Name</strong> such as <code>gitlab-ci</code>. Under <strong>Expires</strong>, pick 7 days, 30 days, 90 days, 1 year or a custom date. Tokens always expire.</p>'],
+      ['Permissions', '<p>Pick a preset: <strong>Read only</strong>, <strong>Publish to selected repositories</strong>, <strong>Repository admin</strong>, <strong>Security reviewer</strong>, <strong>Full admin</strong> or <strong>Custom</strong>. Under <strong>Restrictions (optional)</strong>, make it read-only or limit it to IP addresses and CIDR networks.</p>' +
+        shot('access-new-token', 'A new read-only token that expires in 30 days.')],
+      ['Copy it now', '<p>Click <strong>Create token</strong>. <strong>Copy your token now</strong> shows the secret once, at the top, with its copy button ready; Hangar stores only a hash. The tabs show how to use it with the <strong>REST API</strong>, <strong>Package clients</strong> or <strong>Automation</strong>. Tick <strong>I have stored the token somewhere safe</strong> and click <strong>Done</strong>; closing before that asks first.</p>' +
+        shot('access-token-created', 'The new token, with ready-made commands. It is not shown again.')]]) +
+    '<p>The <strong>Access tokens</strong> tab lists every token with its owner, last use and expiry. <strong>Rotate</strong> issues a new secret; <strong>Revoke</strong> ends it now.</p>' + demo('/access?tab=tokens') };
+
+  P['ui-tasks'] = { src: 'docs/guides/migrate.md', title: 'Scheduled tasks', lead: 'Maintenance that runs on its own, mostly at night, plus imports from another registry and pre-warming proxies.', body:
+    '<h2>The task list</h2><p>Open <strong>Scheduled tasks</strong>. A task that is running shows its progress at the top with <strong>Stop</strong>. The table lists maintenance such as cleanup, blob compaction, rescans, Docker garbage collection and search index rebuilds, with their schedule, last run and next run. Filter by <strong>Type</strong>, <strong>Status</strong> or name; <strong>Run now</strong> starts one at once. Schedules are in UTC; run times are shown in your local time.</p>' +
+    shot('tasks', 'Scheduled tasks: what runs when, and how the last run went.') + demo('/tasks') +
+    '<p>Click a task to see its schedule and every run; click a run for its log. <strong>Edit</strong> changes the schedule (<strong>How often</strong>, the day and the time in UTC) and <strong>Enabled</strong>: a disabled task keeps its schedule but runs only with <strong>Run now</strong>. A cleanup task is changed through its policy (<strong>Edit policy</strong>). Tasks an administrator added can be deleted.</p>' + shot('task-detail', 'A task\'s runs and the log of the selected run.') +
+    '<h2>Import packages from another registry</h2>' +
+    steps([
+      ['Open the form', '<p>Click <strong>New task</strong> and keep <strong>Import packages</strong>.</p>'],
+      ['Where from, where to', '<p>Enter a <strong>Task name</strong> and pick the <strong>Hosted repository</strong> to import into. <strong>Source URL</strong> is the URL the format\'s clients use for the old registry. Add a username and password (or <strong>Use a token</strong>) if it needs one; it is stored encrypted.</p>'],
+      ['What to import', '<p>Leave <strong>Packages</strong> empty for everything, or list names and prefixes. <strong>Versions</strong> takes a range, <strong>Newest per package</strong> keeps only the latest few, and <strong>Pre-releases</strong> includes them. <strong>More options</strong> has a <strong>Schedule</strong> (<strong>Manual only</strong> by default), <strong>Exclude</strong>, and the request rate (<strong>Requests per second</strong>, <strong>At once</strong>).</p>' +
+        shot('task-import', 'An import of npm packages from an old registry into npm-internal.')],
+      ['Run it', '<p>Keep <strong>Run now</strong> checked and click <strong>Create and run</strong>. The task page shows its progress.</p>']]) +
+    demo('/tasks/new') +
+    '<h2>Pre-warm a proxy</h2><p>Fill a proxy\'s cache before clients ask, for example before switching CI to Hangar.</p>' +
+    steps([
+      ['Open the form', '<p>Click <strong>New task</strong>, then <strong>Pre-warm a proxy</strong>, or <strong>Pre-warm</strong> in a proxy\'s settings.</p>'],
+      ['Pick the proxy', '<p>Enter a <strong>Task name</strong> and pick the <strong>Proxy or group repository</strong>.</p>'],
+      ['List what to fetch', '<p>Type <strong>Coordinates</strong>, one per line (<code>react@18.3.1</code>), or click <strong>Add from lockfile</strong> to read a <code>package-lock.json</code>, <code>pnpm-lock.yaml</code> or <code>yarn.lock</code>. <strong>Also fetch everything a source registry holds</strong> copies a whole registry instead.</p>' +
+        shot('task-prewarm', 'Pre-warming an npm proxy with three packages.')],
+      ['Run it', '<p>Click <strong>Create and run</strong>.</p>']]) +
+    demo('/tasks/new?kind=prewarm') +
+    '<h2>Schedule maintenance</h2>' +
+    steps([
+      ['Pick Maintenance', '<p>Click <strong>New task</strong>, then <strong>Maintenance</strong>, and enter a <strong>Task name</strong>.</p>'],
+      ['Choose the job', '<p>Under <strong>Maintenance</strong>, pick <strong>Blob compaction</strong> (frees space held by deleted files) or Docker garbage collection, and the <strong>Blob store</strong> it applies to.</p>'],
+      ['Schedule it', '<p>Pick <strong>How often</strong>; <strong>Manual only</strong> runs only when someone presses <strong>Run now</strong>. Click <strong>Create task</strong>.</p>']]) +
+    '<p>The full migration path is in <a href="#migrate">Move to Hangar</a>.</p>' };
+
+  P['ui-blob-stores'] = { src: 'docs/deploy/requirements.md', title: 'Blob stores', lead: 'The disks and buckets behind your repositories. Identical files are stored once.', body:
+    '<h2>Read the page</h2><p>Open <strong>Blob stores</strong>. The totals show <strong>Total used</strong>, <strong>Saved by deduplication</strong>, <strong>Growth</strong> and <strong>Reclaimable now</strong> (freed by the next blob compaction). <strong>Run compaction</strong> frees that space now. Each store\'s card shows its state, usage against its soft quota, repositories, blobs and write latency.</p>' +
+    shot('blob-stores', 'Three blob stores: an S3 bucket, a local disk and a read-only archive.') + demo('/blob-stores') +
+    '<h2>Add a blob store</h2>' +
+    steps([
+      ['Open the form', '<p>Click <strong>Add blob store</strong>.</p>'],
+      ['Pick the kind', '<p><strong>Filesystem</strong> needs a <strong>Directory on the server</strong>. <strong>S3 / MinIO</strong> needs a <strong>Bucket</strong>, and optionally a <strong>Prefix</strong>, an <strong>Endpoint</strong> (empty for AWS S3) and a <strong>Region</strong>.</p>'],
+      ['Name and quota', '<p>Enter a <strong>Name</strong>; it cannot be changed later. <strong>Soft quota</strong> is a warning threshold, not a hard limit.</p>'],
+      ['Credentials', '<p>For S3, enter an <strong>Access key id</strong> and <strong>Secret access key</strong>, or leave both empty to use the environment or instance credentials. Check <strong>Path-style addressing</strong> for MinIO and most S3-compatible servers.</p>' +
+        shot('blob-store-add', 'Adding an S3 or MinIO bucket. Test connection checks it without saving.')],
+      ['Test and save', '<p><strong>Test connection</strong> checks the bucket (write, read, delete) without saving and names the S3 error if one step fails. <strong>Add blob store</strong> runs the same test first; <strong>Add anyway</strong> saves a store that failed it. Pick the store as the <strong>Blob store</strong> when you create a repository; a repository cannot move to another store later.</p>']]) +
+    demo('/blob-stores?add=true') +
+    '<h2>One store in detail</h2><p>Click a store, or <strong>Details and repositories</strong>, for its usage, configuration, the repositories that use it and the <strong>Manage</strong> section (soft quota and more). An S3 store added in the UI has <strong>Edit connection</strong> for its credentials, region and path style; the store from the server configuration says so and shows the settings in effect.</p>' +
+    shot('blob-store-detail', 'A blob store\'s usage, configuration and the repositories that use it.') + demo('/blob-stores/s3-eu-primary') +
+    '<p>Sizing, S3 settings and backups: <a href="#storage">Storage &amp; cleanup</a>.</p>' };
+
+  P['ui-system'] = { src: 'docs/operations/monitoring.md', title: 'Status, logs & audit', lead: 'Is Hangar healthy, what did it just log, and who changed what.', body:
+    '<h2>System status</h2>' +
+    steps([
+      ['Open System status', '<p>The heading answers first: all checks pass, or how many need attention.</p>'],
+      ['Read the rows', '<p>Each node has one row per check: <strong>Database</strong>, <strong>Blob storage</strong>, <strong>Event bus</strong>, <strong>Task scheduler</strong>, <strong>Search index</strong>, <strong>Sign-in</strong> and <strong>Upstream proxies</strong>. Click a row for details and a link to where it is fixed.</p>' +
+        shot('system-status', 'System status: the verdict first, then one row per check on every node.')],
+      ['Keep it open', '<p>The page refreshes every 15 seconds; pause it, or click <strong>Refresh now</strong>.</p>']]) +
+    demo('/system/status') +
+    '<h2>System logs</h2><p>Recent log records that each node keeps in memory, newest at the bottom. Times are in your local time. Pick a <strong>Node</strong> and a <strong>Level</strong>, filter by text (<code>nuget-proxy</code>), and open a line to see all of its fields. <strong>Pause</strong> stops the refresh; <strong>Download JSON lines</strong> saves what is shown.</p>' +
+    shot('system-logs', 'System logs: warnings and errors stand out; open a line for every field.') + demo('/system/logs') +
+    '<h2>Cluster &amp; replication</h2><p>The nodes serving this registry: which one leads scheduled tasks, their addresses, versions, zones, uptime and last heartbeat.</p>' +
+    shot('cluster', 'Three healthy nodes; hangar-1 leads.') + demo('/cluster') +
+    '<h2>Audit log</h2><p>Every sign-in, change and denied request, newest first. Filter by <strong>Actor</strong>, <strong>Action</strong>, <strong>Target</strong> (exact, or a prefix ending in <code>*</code>), <strong>Outcome</strong> and <strong>Time range</strong>, then click <strong>Apply filters</strong>. Open a row for its details. Times are in your local time; <strong>Export CSV</strong> and <strong>Export NDJSON</strong> download what matches, with times in UTC.</p>' +
+    shot('audit', 'The audit log: who did what, to what, from where.') + demo('/audit') +
+    '<p>Metrics, alerts and probes: <a href="#status">Health &amp; status</a>.</p>' };
+
+  P['ui-settings'] = { src: 'docs/guides/access.md', title: 'Settings', lead: 'Sign-in providers, outbound proxies, this installation and your own account.', body:
+    '<p>Open <strong>Settings</strong>. Each row says what is set now and opens its page: addresses and instance name, sign-in, internet access, storage, nodes, configuration, status, logs, audit, your account, access tokens and the API reference.</p>' +
+    shot('settings', 'Settings: one row per area, with its current state.') + demo('/settings') +
+    '<h2>Add a sign-in provider</h2>' +
+    steps([
+      ['Pick your provider', '<p>Open <strong>Settings → Authentication</strong>. Under <strong>Add a sign-in method · what do you use?</strong>, pick Active Directory, OpenLDAP, FreeIPA, Keycloak, Microsoft Entra ID, Google Workspace, Okta or <strong>Other</strong> (any OIDC or LDAP).</p>'],
+      ['Fill in the connection', '<p>For OIDC: <strong>Issuer URL</strong>, <strong>Client ID</strong> and <strong>Client secret</strong>. Copy the <strong>redirect URI</strong> shown below them and register it at the provider; <strong>How to set up …</strong> walks through the provider\'s side. For LDAP: <strong>Server</strong>, <strong>Service account</strong> and <strong>Password</strong>.</p>' +
+        shot('authentication', 'Keycloak as the sign-in provider: three fields and the redirect URI to register.')],
+      ['Map groups to roles', '<p>Open <strong>Groups and roles</strong> and map directory groups to Hangar roles, so people get their access when they sign in.</p>'],
+      ['Test and save', '<p>Click <strong>Test</strong> (LDAP asks for a username to look up), then <strong>Save</strong>. The switch <strong>Allow sign-in with …</strong> turns the provider on or off without losing its settings.</p>']]) +
+    '<p>More in <a href="#authentication">Sign-in &amp; tokens</a>.</p>' + demo('/settings/authentication') +
+    '<h2>Add an outbound proxy</h2><p>When your network blocks direct internet access, Hangar reaches registries through an HTTP proxy.</p>' +
+    steps([
+      ['Open Proxies', '<p>Open <strong>Settings → Proxies</strong> and click <strong>Add another proxy</strong>.</p>'],
+      ['Enter the proxy', '<p>Type the <strong>Proxy address</strong>, for example <code>http://proxy.example.com:3128</code>. Check <strong>Use for every proxy repository</strong> to make it the platform default. <strong>Needs a username and password</strong> and <strong>Exceptions and certificates</strong> open the rest.</p>' +
+        shot('proxies-add', 'Adding an outbound proxy. Test it before saving.')],
+      ['Test and save', '<p>Click <strong>Test</strong>, then <strong>Save</strong>. A proxy repository can pick a different proxy under <strong>Upstream credentials and connection</strong>.</p>']]) +
+    demo('/settings/proxies') +
+    '<h2>Your account</h2><p><strong>My account</strong> (from the account menu or Settings) has your <strong>Profile</strong>, <strong>Password</strong> (the rules are listed as you type; changing it signs you out on every other device, and tokens keep working), <strong>Personal access tokens</strong> and your signed-in devices, grouped by device and address.</p>' +
+    shot('account', 'My account: profile, password and personal access tokens.') + demo('/account') };
+
+  function shot(img, caption) { return '<figure class="fig"><button type="button" class="zoom" aria-label="Enlarge screenshot"><img src="assets/img/ui/' + img + '.jpg" alt="' + caption.replace(/<[^>]+>/g, '').replace(/"/g, '&quot;') + '" loading="lazy" width="1440" height="900"></button><figcaption>' + caption + '</figcaption></figure>'; }
+  function demo(path, label) { return '<p class="try-row"><a class="try" href="demo/#' + path + '" target="_blank" rel="noopener">' + (label || 'Try it in the demo') + '</a></p>'; }
+
   function api(o) {
     var h = '<div class="endpoint"><span class="verb ' + o.v.toLowerCase().slice(0, 4).replace('dele', 'del') + '">' + o.v + '</span>' + o.p + '</div><p>' + o.d + '</p>';
     if (o.params) h += table(['Parameter', 'In', 'Description'], o.params.map(function (r) { return ['<code>' + r[0] + '</code>', r[1], r[2]]; }));
