@@ -16,6 +16,7 @@ import { isFormat } from '../../lib/repositories';
 import { useNow } from '../../lib/useNow';
 import { dateTime, deleteMessage } from './detailUtil';
 import { FormatIcon } from '../../components/FormatIcon';
+import { toast } from '../../lib/toast';
 
 interface AssetDetailProps {
   id: string;
@@ -208,6 +209,7 @@ export function AssetDetail({ id, treeRepo, onDeleted }: AssetDetailProps) {
             remove.mutate(a.id, {
               onSuccess: () => {
                 setConfirm(false);
+                toast(`Deleted ${a.path} from ${a.repository}.`);
                 onDeleted();
               },
             })

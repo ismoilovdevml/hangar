@@ -5,6 +5,8 @@ interface ConfirmDialogProps {
   title: string;
   children: ReactNode;
   confirmLabel: string;
+  /** The label of the button that backs out; "Cancel" by default. */
+  cancelLabel?: string;
   /** Destructive actions get a red confirm button; Cancel is focused first either way. */
   tone?: 'danger' | 'primary';
   busy?: boolean;
@@ -23,6 +25,7 @@ export function ConfirmDialog({
   title,
   children,
   confirmLabel,
+  cancelLabel = 'Cancel',
   tone = 'primary',
   busy,
   error,
@@ -117,7 +120,7 @@ export function ConfirmDialog({
         )}
         <div className="dialog__actions">
           <button ref={cancelRef} type="button" className="button button--secondary" onClick={onCancel} disabled={busy}>
-            Cancel
+            {cancelLabel}
           </button>
           <button
             type="button"

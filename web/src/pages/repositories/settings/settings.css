@@ -46,3 +46,4 @@
   .data-table.routing__table th { padding: 4px 0; }
   .routing__table td::before { content: attr(data-label); display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--ink-3); }
 }
+.repo-settings__ready-actions { display: inline-flex; align-items: center; gap: 6px; }

@@ -312,6 +312,7 @@
 .todo__title { font-size: 15px; font-weight: 700; color: var(--ink); }
 .todo__count { padding: 2px 8px; border-radius: var(--r-pill); font-size: 12px; font-weight: 700; }
 .todo__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.todo__hidden { align-self: flex-start; margin-top: auto; }
 .todo__item {
   display: flex; flex-direction: column; gap: 3px; padding: 11px 12px; border-radius: 14px; color: var(--ink);
   transition: box-shadow var(--t-fast);
@@ -396,6 +397,10 @@
 .divider { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--ink-3); white-space: nowrap; }
 .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: rgba(30, 43, 58, .1); }
 .login__footer { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); }
+.login__head { display: flex; justify-content: flex-end; }
+.login__status { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: rgba(255, 255, 255, .6); font-size: 13px; color: var(--ink-2); }
+.login-card__note { font-size: 13.5px; color: var(--ink-2); text-align: center; }
+.login-card__hints { display: flex; flex-direction: column; gap: 4px; margin-top: -6px; font-size: 12.5px; line-height: 1.45; color: var(--ink-3); text-align: center; }
 
 /* ---------- repositories ---------- */
 .count-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: var(--gap); }

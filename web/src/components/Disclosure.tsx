@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEscapeLayer } from '../lib/layers';
 
 interface DisclosureProps {
   /** Accessible name of the trigger button. */
@@ -22,16 +23,10 @@ export function Disclosure({ label, buttonClassName, buttonContent, panelLabel, 
     const onDown = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
     document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
+    return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
+  useEscapeLayer(() => setOpen(false), open);
 
   const close = () => setOpen(false);
 

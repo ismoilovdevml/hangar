@@ -9,8 +9,10 @@ import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { FormatIcon, FormatName } from '../../components/FormatIcon';
 import { Select } from '../../components/Select';
+import { UnsavedChangesDialog } from '../../components/UnsavedChangesDialog';
 import { FORMAT_META } from '../../lib/format';
 import { isForbidden } from '../../lib/gates';
+import { useUnsavedChangesGuard } from '../../lib/unsavedChanges';
 import {
   ALL_FORMATS,
   blobStoreOption,
@@ -51,7 +53,8 @@ function Step({ n, title, children, id }: { n: number; title: string; children: 
 export function RepoCreatePage() {
   const search = route.useSearch();
   const navigate = useNavigate();
-  const [form, setForm] = useState<RepoForm>(() => initialRepoForm(search.format, search.type));
+  const [initial] = useState<RepoForm>(() => initialRepoForm(search.format, search.type));
+  const [form, setForm] = useState<RepoForm>(initial);
   const [nameTouched, setNameTouched] = useState(false);
   const [blurred, setBlurred] = useState<Partial<Record<RepoFormField, boolean>>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -60,6 +63,7 @@ export function RepoCreatePage() {
   const stores = useBlobStores();
   const repos = useRepositoriesByFormat(form.type === 'group' ? form.format : undefined);
   const create = useCreateRepository();
+  const guard = useUnsavedChangesGuard(nameTouched || JSON.stringify(form) !== JSON.stringify(initial));
 
   const set = <K extends keyof RepoForm>(key: K, value: RepoForm[K]) => {
     if (create.isError) create.reset(); // the server's answer was about the previous values
@@ -112,7 +116,10 @@ export function RepoCreatePage() {
     if (focusFirstError(errors)) return;
     create.mutate(input, {
       // The repository's page, where the next step (connecting a client) is waiting.
-      onSuccess: (repo) => void navigate({ to: '/repositories/$name/settings', params: { name: repo.name }, state: { created: repo.name } }),
+      onSuccess: (repo) => {
+        guard.allowNextNavigation();
+        void navigate({ to: '/repositories/$name/settings', params: { name: repo.name }, state: { created: repo.name } });
+      },
       onError: (err) => void focusFirstError(serverFieldErrors(err)),
     });
   };
@@ -284,6 +291,7 @@ export function RepoCreatePage() {
           </Panel>
         </aside>
       </form>
+      <UnsavedChangesDialog blocker={guard.blocker} what="the repository you started" />
     </div>
   );
 }

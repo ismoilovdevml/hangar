@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BlobStore } from '../api/types';
-import { dedupShare, humanDays, initialBlobStoreForm, storeBadge, toBlobStoreInput, validateBlobStoreForm } from './blobStores';
+import { dedupShare, humanDays, initialBlobStoreForm, quotaBytes, quotaToForm, storeBadge, toBlobStoreInput, validateBlobStoreForm } from './blobStores';
 
 const store = (over: Partial<BlobStore>): BlobStore => ({
   id: 'b', name: 'b', kind: 'fs', state: 'ok', location: '/x', used_bytes: 0, repository_count: 0, blob_count: 0, ...over,
@@ -59,5 +59,21 @@ describe('new blob store form', () => {
       kind: 's3',
       s3: { bucket: 'bkt', region: 'eu-1', use_path_style: true, access_key_id: 'AK', secret_access_key: 's3cr3t' },
     });
+  });
+});
+
+describe('quota editor units', () => {
+  it('pre-fills the unit that gives back the stored bytes exactly', () => {
+    expect(quotaToForm(2147483648)).toEqual({ quota: '2', quotaUnit: 'GiB' });
+    expect(quotaToForm(2e12)).toEqual({ quota: '2', quotaUnit: 'TB' });
+    expect(quotaToForm(2 ** 40)).toEqual({ quota: '1', quotaUnit: 'TiB' });
+    expect(quotaToForm(1.5e9)).toEqual({ quota: '1.5', quotaUnit: 'GB' });
+    expect(quotaToForm(null)).toEqual({ quota: '', quotaUnit: 'TB' });
+  });
+  it('round-trips through the editor', () => {
+    for (const b of [2147483648, 2e12, 2 ** 40, 1.5e9, 500e9, 3 * 2 ** 30]) {
+      const f = quotaToForm(b);
+      expect(quotaBytes(f.quota, f.quotaUnit)).toBe(b);
+    }
   });
 });

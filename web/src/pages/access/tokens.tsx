@@ -42,6 +42,7 @@ import {
   type PermissionDraft,
   type SystemLevel,
 } from './tokenScopes';
+import { useSecretCloseGuard } from './secretGuard';
 import { SecretPanel } from './TokenReveal';
 import { ConfirmDialog, Dialog, Field, FormError } from './ui';
 
@@ -226,6 +227,7 @@ export function RotateDialog({ token, onClose }: { token: Token; onClose: () => 
   const [created, setCreated] = useState<{ token: TokenCreated; note: string } | null>(null);
   const rotate = useRotateToken();
   const graceId = useId();
+  const guard = useSecretCloseGuard(!!created, onClose);
   const days = rotatedLifetimeDays(token, maxDays);
 
   const submit = (e: FormEvent) => {
@@ -253,11 +255,11 @@ export function RotateDialog({ token, onClose }: { token: Token; onClose: () => 
           ? 'This is the only time the secret is shown. Replace the old token wherever it is used.'
           : `A new secret with the same name, permissions and restrictions, valid for ${days} day${days === 1 ? '' : 's'}.`
       }
-      onClose={onClose}
+      onClose={guard.requestClose}
       wide={!!created}
     >
       {created ? (
-        <SecretPanel token={created.token} note={created.note} onDone={onClose} />
+        <SecretPanel token={created.token} note={created.note} stored={guard.stored} onStoredChange={guard.setStored} onDone={onClose} />
       ) : (
         <form className="dialog-form" onSubmit={submit}>
           <fieldset className="fieldset">
@@ -302,6 +304,7 @@ export function RotateDialog({ token, onClose }: { token: Token; onClose: () => 
           </div>
         </form>
       )}
+      {guard.confirm}
     </Dialog>
   );
 }
@@ -318,6 +321,7 @@ interface CreateTokenProps {
 
 export function CreateTokenDialog({ owner, ownerId, onClose }: CreateTokenProps) {
   const [created, setCreated] = useState<TokenCreated | null>(null);
+  const guard = useSecretCloseGuard(!!created, onClose);
   return (
     <Dialog
       title={created ? 'Copy your token now' : owner ? `New token for ${owner}` : 'New personal access token'}
@@ -326,10 +330,15 @@ export function CreateTokenDialog({ owner, ownerId, onClose }: CreateTokenProps)
           ? 'This is the only time the secret is shown. Hangar stores only a hash of it.'
           : 'For scripts, CI jobs, package clients and other automation. A token never grants more than its owner’s roles.'
       }
-      onClose={onClose}
+      onClose={guard.requestClose}
       wide
     >
-      {created ? <SecretPanel token={created} onDone={onClose} /> : <TokenForm owner={owner} ownerId={ownerId} onCreated={setCreated} onCancel={onClose} />}
+      {created ? (
+        <SecretPanel token={created} stored={guard.stored} onStoredChange={guard.setStored} onDone={onClose} />
+      ) : (
+        <TokenForm owner={owner} ownerId={ownerId} onCreated={setCreated} onCancel={onClose} />
+      )}
+      {guard.confirm}
     </Dialog>
   );
 }

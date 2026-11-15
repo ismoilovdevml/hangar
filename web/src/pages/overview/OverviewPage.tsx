@@ -37,7 +37,7 @@ export function OverviewPage() {
           onRange={(r) => void navigate({ search: (s) => ({ ...s, range: r === 'today' ? undefined : r }), replace: true })}
         />
         <OutcomeCard m={m} error={overview.isError} />
-        <TodoCard items={todo.items} error={todo.error} onRetry={todo.retry} onDismiss={todo.dismiss} />
+        <TodoCard items={todo.items} error={todo.error} onRetry={todo.retry} onDismiss={todo.dismiss} hidden={todo.hidden.length} onShowHidden={todo.showHidden} />
         <StorageCard m={m} error={overview.isError} stores={stores} />
         <SecurityCard m={m} error={overview.isError} />
         <UpstreamCard items={upstreams.data?.items} error={upstreams.isError} onRetry={() => void upstreams.refetch()} m={m} />

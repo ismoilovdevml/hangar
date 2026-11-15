@@ -241,6 +241,19 @@ export function useWaiveFinding() {
   });
 }
 
+/**
+ * Ends the waivers of these findings (the Undo of a waive). It takes the
+ * query client rather than being a mutation hook, so it still works after
+ * the dialog that waived them has closed.
+ */
+export async function revokeWaivers(qc: ReturnType<typeof useQueryClient>, ids: string[]): Promise<void> {
+  try {
+    await Promise.all(ids.map((id) => apiFetch<Finding>(`/findings/${encodeURIComponent(id)}/waiver`, { method: 'DELETE' })));
+  } finally {
+    invalidateAll(qc);
+  }
+}
+
 export function useRevokeWaiver() {
   const qc = useQueryClient();
   return useMutation({

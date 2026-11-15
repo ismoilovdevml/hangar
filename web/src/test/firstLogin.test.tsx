@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { passwordChecks } from '../lib/passwordPolicy';
+import { forgetSignInPassword } from '../lib/signInPassword';
 import { accessState } from '../mocks/access';
 import { mockState } from '../mocks/handlers';
 import { renderApp } from './render';
@@ -16,6 +17,16 @@ async function signInAsInitialAdmin(user: User, path = '/login') {
   await user.type(await screen.findByLabelText('Username'), 'admin');
   await user.type(screen.getByLabelText('Password'), INITIAL);
   await user.click(screen.getByRole('button', { name: 'Sign in' }));
+  await screen.findByRole('heading', { name: 'Set a new password' });
+  return utils;
+}
+
+/** Signs in, then opens the change page again (a reload): the sign-in password is no longer in memory. */
+async function openChangePage(user: User) {
+  const first = await signInAsInitialAdmin(user);
+  first.unmount();
+  forgetSignInPassword();
+  const utils = renderApp('/change-password');
   await screen.findByRole('heading', { name: 'Set a new password' });
   return utils;
 }
@@ -38,7 +49,8 @@ describe('first sign-in password change', () => {
 
   it('checks the policy live and validates before sending', async () => {
     const user = userEvent.setup();
-    await signInAsInitialAdmin(user);
+    await openChangePage(user);
+    expect(screen.getByLabelText('Current password')).toHaveFocus();
     await user.click(screen.getByRole('button', { name: 'Set password and continue' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Enter your current password.');
 
@@ -68,9 +80,20 @@ describe('first sign-in password change', () => {
     expect(screen.getByLabelText('Confirm new password')).toHaveAttribute('type', 'text');
   });
 
-  it('explains a wrong current password', async () => {
+  it('does not ask again for the password typed at sign-in', async () => {
     const user = userEvent.setup();
     await signInAsInitialAdmin(user);
+    expect(screen.queryByLabelText('Current password')).not.toBeInTheDocument();
+    expect(screen.getByText(/You do not need to type the old one again/)).toBeInTheDocument();
+    expect(screen.getByLabelText('New password')).toHaveFocus();
+    // Reusing it is refused like any unchanged password.
+    await user.type(screen.getByLabelText('New password'), INITIAL);
+    expect(checkItem(/Different from the current password/)).not.toHaveClass('is-met');
+  });
+
+  it('explains a wrong current password', async () => {
+    const user = userEvent.setup();
+    await openChangePage(user);
     await user.type(screen.getByLabelText('Current password'), 'not the one I was given');
     await user.type(screen.getByLabelText('New password'), 'a long private passphrase');
     await user.type(screen.getByLabelText('Confirm new password'), 'a long private passphrase');
@@ -90,13 +113,14 @@ describe('first sign-in password change', () => {
     await screen.findByRole('heading', { name: 'Set a new password' });
     expect(new URLSearchParams(history.location.search).get('redirect')).toBe('/repositories');
 
-    await user.type(screen.getByLabelText('Current password'), INITIAL);
+    expect(screen.queryByLabelText('Current password')).not.toBeInTheDocument();
     await user.type(screen.getByLabelText('New password'), 'a long private passphrase');
     await user.type(screen.getByLabelText('Confirm new password'), 'a long private passphrase');
     await user.click(screen.getByRole('button', { name: 'Set password and continue' }));
     await waitFor(() => expect(history.location.pathname).toBe('/repositories'));
     expect(mockState.passwordChangeRequired).toBe(false);
     expect(await screen.findByRole('heading', { name: 'Repositories', level: 1 })).toBeInTheDocument();
+    expect(screen.getByText('Password changed. Use the new one from now on.')).toBeInTheDocument();
   });
 
   it('lets the user sign out instead', async () => {
@@ -120,7 +144,7 @@ describe('first sign-in password change', () => {
 
 describe('password policy checks', () => {
   it('mirrors the server rules', () => {
-    const policy = { min_length: 12, max_length: 20, min_classes: 3, allow_username: false };
+    const policy = { min_length: 12, max_length: 20, min_classes: 3, allow_username: false, allow_weak: true };
     const byId = (pw: string, confirm = pw) => Object.fromEntries(passwordChecks(policy, 'Admin', 'old', pw, confirm).map((c) => [c.id, c.met]));
     expect(byId('abcdefghijkl')).toMatchObject({ length: true, classes: false, username: true, differs: true, match: true });
     expect(byId('Abcdefghijk1')).toMatchObject({ classes: true });
@@ -128,6 +152,12 @@ describe('password policy checks', () => {
     expect(byId('Abcdefghijk1Abcdefghijk1')).toMatchObject({ length: false });
     expect(byId('Abcdefghijk1', 'other')).toMatchObject({ match: false });
     expect(passwordChecks({ ...policy, min_classes: 0, allow_username: true }, 'admin', '', 'x', 'x').map((c) => c.id)).toEqual(['length', 'differs', 'match']);
+  });
+  it('refuses guessable passwords like the server', () => {
+    const policy = { min_length: 12, max_length: 256, min_classes: 0, allow_username: false, allow_weak: false };
+    const guessable = (pw: string) => !passwordChecks(policy, 'alice', '', pw, pw).find((c) => c.id === 'guessable')!.met;
+    for (const pw of ['aaaaaaaaaaaa', 'abababababab', 'abcdabcdabcd', '123456789012', 'zyxwvutsrqpo', 'Password2026!', '!!Welcome1234']) expect(guessable(pw)).toBe(true);
+    for (const pw of ['password manager rocks', 'k7Qm-2vXr-9TzP', 'a long private passphrase']) expect(guessable(pw)).toBe(false);
   });
 });
 

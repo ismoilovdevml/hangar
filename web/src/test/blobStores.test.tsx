@@ -1,4 +1,4 @@
-import { choose } from './choose';
+import { choose, valueOf } from './choose';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -113,6 +113,24 @@ describe('blob stores', () => {
     expect(catalogState.blobStores.find((b) => b.name === 'fs-local')?.soft_quota_bytes).toBe(500e9);
     expect(within(manage).getByRole('button', { name: 'Delete fs-local' })).toBeDisabled();
     expect(within(manage).getByText(/Deleting needs an empty store/)).toBeInTheDocument();
+  });
+
+  it('shows a binary quota exactly and does not save it untouched', async () => {
+    const user = userEvent.setup();
+    catalogState.blobStores.find((b) => b.name === 'fs-local')!.soft_quota_bytes = 2 ** 31;
+    renderApp('/blob-stores/fs-local');
+    const manage = await screen.findByRole('region', { name: 'Manage' });
+    expect(within(manage).getByLabelText('Soft quota')).toHaveValue('2');
+    expect(valueOf(within(manage).getByLabelText('Quota unit'))).toBe('GiB');
+    expect(within(manage).getByRole('button', { name: 'Save quota' })).toBeDisabled();
+    // Typing the same value back is still no change.
+    await user.clear(within(manage).getByLabelText('Soft quota'));
+    await user.type(within(manage).getByLabelText('Soft quota'), '2');
+    expect(within(manage).getByRole('button', { name: 'Save quota' })).toBeDisabled();
+    await user.type(within(manage).getByLabelText('Soft quota'), '.5');
+    await user.click(within(manage).getByRole('button', { name: 'Save quota' }));
+    expect(await within(manage).findByRole('button', { name: 'Saved' })).toBeDisabled();
+    expect(catalogState.blobStores.find((b) => b.name === 'fs-local')?.soft_quota_bytes).toBe(2.5 * 2 ** 30);
   });
 
   it('deletes an empty store after its name is typed', async () => {

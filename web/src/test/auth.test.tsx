@@ -102,34 +102,65 @@ describe('sign-in against the API', () => {
     expect(await screen.findByText('dockerhub-proxy')).toBeInTheDocument();
   });
 
-  it('explains a lockout without blaming the account, and keeps the form disabled while it lasts', async () => {
+  it('explains a lockout without blaming the address, and keeps only that name waiting', async () => {
     server.use(
-      http.post('*/api/v1/auth/login', () =>
-        HttpResponse.json({ code: 'locked', message: 'too many failed sign-ins from this address; try again later', retry_after: 900 }, { status: 423 }),
-      ),
+      http.post('*/api/v1/auth/login', async ({ request }) => {
+        const body = (await request.json()) as { username: string };
+        if (body.username !== 'locked-user') return HttpResponse.json(mockSession);
+        return HttpResponse.json({ code: 'locked', message: 'too many failed sign-ins from this address; try again later', retry_after: 900 }, { status: 423 });
+      }),
     );
     const user = userEvent.setup();
-    renderApp('/login');
-    await signIn(user);
+    const { history } = renderApp('/login');
+    await signIn(user, 'locked-user');
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('Too many failed sign-ins from this address. Try again in 15 min.');
-    expect(alert).not.toHaveTextContent(/account is locked/i);
+    expect(alert).toHaveTextContent('This sign-in is locked for 15 min after too many failed attempts. An administrator can unlock it sooner.');
+    expect(alert).not.toHaveTextContent(/from this address|account is locked/i);
     expect(screen.getByRole('button', { name: 'Try again in 15 min' })).toBeDisabled();
+
+    // Another name is not locked: editing the name clears the message and the wait.
+    await user.clear(screen.getByLabelText('Username'));
+    await user.type(screen.getByLabelText('Username'), 'someone-else');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
+    // Back to the locked name: the wait is still there.
+    await user.clear(screen.getByLabelText('Username'));
+    await user.type(screen.getByLabelText('Username'), 'locked-user');
+    expect(screen.getByRole('button', { name: 'Try again in 15 min' })).toBeDisabled();
+    await user.clear(screen.getByLabelText('Username'));
+    await user.type(screen.getByLabelText('Username'), 'someone-else');
+    await user.type(screen.getByLabelText('Password'), 'correct-horse');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    await waitFor(() => expect(history.location.pathname).toBe('/'));
   });
 
-  it('uses the server’s lockout message, or a generic one', async () => {
-    let body: Record<string, unknown> = { code: 'locked', message: 'sign-in paused for this client; try again later' };
-    server.use(http.post('*/api/v1/auth/login', () => HttpResponse.json(body, { status: 423 })));
+  it('warns before the lock, clears a wrong password and focuses it', async () => {
+    mockState.signedIn = false;
     const user = userEvent.setup();
-    const first = renderApp('/login');
-    await signIn(user);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Sign-in paused for this client. Try again later.');
-    first.unmount();
-
-    body = { code: 'locked' };
     renderApp('/login');
-    await signIn(user);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Too many failed sign-ins from this address. Try again later.');
+    await signIn(user, 'd.ismoilov', 'wrong');
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^Wrong username or password\.$/);
+    for (let i = 2; i <= 3; i++) {
+      await user.type(screen.getByLabelText('Password'), 'wrong');
+      await user.click(screen.getByRole('button', { name: 'Sign in' }));
+      await waitFor(() => expect(screen.getByLabelText('Password')).toHaveValue(''));
+    }
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Wrong username or password. 2 attempts left before a 15-minute lock.');
+    expect(screen.getByLabelText('Password')).toHaveValue('');
+    expect(screen.getByLabelText('Password')).toHaveFocus();
+  });
+
+  it('names the empty field and focuses it', async () => {
+    const user = userEvent.setup();
+    renderApp('/login');
+    expect(await screen.findByLabelText('Username')).toHaveFocus();
+    await user.type(screen.getByLabelText('Username'), 'd.ismoilov');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter your password.');
+    expect(screen.getByLabelText('Username')).not.toHaveAttribute('aria-invalid');
+    expect(screen.getByLabelText('Password')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Password')).toHaveFocus();
   });
 
   it('reads the rate-limit wait from Retry-After', async () => {
@@ -145,12 +176,38 @@ describe('sign-in against the API', () => {
     expect(screen.getByRole('button', { name: /^Try again in \d+ s$/ })).toBeDisabled();
   });
 
-  it('sends the user to sign-in when any API call answers 401', async () => {
-    server.use(http.get('*/api/v1/repositories', () => HttpResponse.json({ code: 'unauthenticated', message: 'session expired' }, { status: 401 })));
+  it('asks for the password over the page when the session ends, and keeps the page', async () => {
+    const user = userEvent.setup();
+    const { history } = renderApp('/repositories/npmjs-proxy/settings');
+    const form = await screen.findByRole('form', { name: 'Settings of npmjs-proxy' });
+    await user.type(within(form).getByLabelText(/Description/), 'typed before the session ended');
+    server.use(http.put('*/api/v1/repositories/npmjs-proxy', () => HttpResponse.json({ code: 'unauthenticated', message: 'sign in required' }, { status: 401 })));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Your session ended' });
+    expect(history.location.pathname).toBe('/repositories/npmjs-proxy/settings');
+    expect(within(dialog).getByLabelText('Username')).toHaveValue(mockSession.user.username);
+    expect(within(dialog).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+    // Escape does not throw the question away.
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog', { name: 'Your session ended' })).toBeInTheDocument();
+
+    server.resetHandlers();
+    await user.type(within(dialog).getByLabelText('Password'), 'correct-horse');
+    await user.click(within(dialog).getByRole('button', { name: 'Sign in' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Your session ended' })).not.toBeInTheDocument());
+    expect(within(form).getByLabelText(/Description/)).toHaveValue('typed before the session ended');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByRole('button', { name: 'Saved' })).toBeInTheDocument();
+  });
+
+  it('sends a tab without a session to sign-in and says why', async () => {
+    mockState.signedIn = false;
     const { history } = renderApp('/repositories?format=npm');
     expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
     expect(history.location.pathname).toBe('/login');
     expect(new URLSearchParams(history.location.search).get('redirect')).toBe('/repositories?format=npm');
+    history.push('/login?reason=expired');
+    expect(await screen.findByText('Your session ended. Sign in again to continue.')).toBeInTheDocument();
   });
 });
 

@@ -29,7 +29,8 @@ function initialState() {
     /** Signed in as "admin" with a password that must be replaced first. */
     passwordChangeRequired: false,
     username: data.session.user.username,
-    failedLogins: 0,
+    /** Failed sign-ins per lower-cased username; like the server, a lock is per name. */
+    failedLogins: {} as Record<string, number>,
     csrf: 'mock-csrf-0',
     sessions: 0,
     repositories: data.repositories(),
@@ -209,7 +210,8 @@ export const handlers = [
     if (body.username === 'rate-limited') {
       return error(429, { code: 'rate_limited', message: 'too many login attempts', retry_after: 30 }, { 'Retry-After': '30' });
     }
-    if (state.failedLogins >= MAX_FAILED_LOGINS) {
+    const name = (body.username ?? '').trim().toLowerCase();
+    if ((state.failedLogins[name] ?? 0) >= MAX_FAILED_LOGINS) {
       return error(
         423,
         { code: 'locked', message: 'too many failed sign-ins from this address; try again later', retry_after: LOCK_SECONDS },
@@ -220,10 +222,21 @@ export const handlers = [
       return error(400, { code: 'invalid_argument', message: 'username and password are required' });
     }
     if (body.password === 'wrong' || body.password.length < 4) {
-      state.failedLogins++;
-      return error(401, { code: 'unauthenticated', message: 'invalid username or password' });
+      const failed = (state.failedLogins[name] = (state.failedLogins[name] ?? 0) + 1);
+      if (failed >= MAX_FAILED_LOGINS) {
+        return error(
+          423,
+          { code: 'locked', message: 'too many failed sign-ins from this address; try again later', retry_after: LOCK_SECONDS },
+          { 'Retry-After': String(LOCK_SECONDS) },
+        );
+      }
+      return error(401, {
+        code: 'unauthenticated',
+        message: 'invalid username or password',
+        details: { attempts_left: MAX_FAILED_LOGINS - failed, lockout_seconds: LOCK_SECONDS },
+      });
     }
-    state.failedLogins = 0;
+    delete state.failedLogins[name];
     state.signedIn = true;
     state.sessions++;
     state.csrf = `mock-csrf-${state.sessions}`;

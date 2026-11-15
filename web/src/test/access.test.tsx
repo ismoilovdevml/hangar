@@ -342,12 +342,59 @@ describe('access & audit: tokens', () => {
     await user.click(within(dialog).getByRole('radio', { name: /Publish to selected repositories/ }));
     await user.click(await within(dialog).findByRole('checkbox', { name: 'docker-prod' }));
     await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
-    await screen.findByRole('dialog', { name: 'Copy your token now' });
+    const reveal = await screen.findByRole('dialog', { name: 'Copy your token now' });
     expect(accessState.tokens.find((t) => t.name === 'release')).toMatchObject({
       owner: 'gitea-runner',
       owner_kind: 'service_account',
       scopes: ['repo:docker-prod:read', 'repo:docker-prod:write'],
     });
+    // The secret's Copy button has focus, not something further down.
+    expect(within(reveal).getByRole('button', { name: 'Copy token' })).toHaveFocus();
+
+    // Escape and the close button ask before the only copy is thrown away;
+    // Escape on that question closes only the question.
+    await user.keyboard('{Escape}');
+    let ask = await screen.findByRole('dialog', { name: 'Close without the token?' });
+    expect(within(ask).getByRole('button', { name: 'Keep it open' })).toHaveFocus();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Close without the token?' })).not.toBeInTheDocument());
+    expect(screen.getByRole('dialog', { name: 'Copy your token now' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'gitea-runner' })).toBeInTheDocument();
+    await user.click(within(reveal).getByRole('button', { name: 'Close' }));
+    ask = await screen.findByRole('dialog', { name: 'Close without the token?' });
+    await user.click(within(ask).getByRole('button', { name: 'Close anyway' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Copy your token now' })).not.toBeInTheDocument());
+    // The drawer underneath stays open.
+    expect(screen.getByRole('dialog', { name: 'gitea-runner' })).toBeInTheDocument();
+  });
+
+  it('closes a stored token reveal without asking, and only the topmost layer on Escape', async () => {
+    const user = userEvent.setup();
+    renderApp('/access?tab=service-accounts');
+    const table = await screen.findByRole('table', { name: 'Service accounts' });
+    await user.click(await within(table).findByRole('button', { name: 'Open gitea-runner' }));
+    const drawer = await screen.findByRole('dialog', { name: 'gitea-runner' });
+    await user.click(within(drawer).getByRole('tab', { name: 'Tokens' }));
+    await user.click(await within(drawer).findByRole('button', { name: 'New token' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New token for gitea-runner' });
+    // Escape in the form (nothing secret yet) closes the form alone.
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'New token for gitea-runner' })).not.toBeInTheDocument());
+    expect(dialog).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'gitea-runner' })).toBeInTheDocument();
+
+    await user.click(within(drawer).getByRole('button', { name: 'New token' }));
+    const again = await screen.findByRole('dialog', { name: 'New token for gitea-runner' });
+    await user.type(within(again).getByLabelText('Name'), 'stored');
+    await user.click(within(again).getByRole('radio', { name: /Publish to selected repositories/ }));
+    await user.click(await within(again).findByRole('checkbox', { name: 'docker-prod' }));
+    await user.click(within(again).getByRole('button', { name: 'Create token' }));
+    const reveal = await screen.findByRole('dialog', { name: 'Copy your token now' });
+    await user.click(within(reveal).getByRole('checkbox', { name: /stored the token/ }));
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Copy your token now' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: 'Close without the token?' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'gitea-runner' })).toBeInTheDocument();
   });
 });
 
@@ -374,6 +421,7 @@ describe('access & audit: roles and audit', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Create role' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(await within(table).findByText('npm team')).toBeInTheDocument();
+    expect(screen.getByText('Role npm team created.')).toBeInTheDocument();
   });
 
   it('shows built-in roles read-only with their members', async () => {
@@ -420,8 +468,12 @@ describe('my account', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'My account' })).toBeInTheDocument();
     expect(screen.getAllByText(/laptop CLI/).length).toBeGreaterThan(0);
     const pw = screen.getByRole('region', { name: 'Password' });
+    // The rules are listed up front and ticked off while typing.
+    const rules = within(pw).getByRole('list', { name: 'Password requirements' });
+    expect(within(rules).getByText('At least 12 characters').closest('li')).not.toHaveClass('is-met');
     await user.type(within(pw).getByLabelText('Current password'), 'password1234');
     await user.type(within(pw).getByLabelText('New password'), 'a much longer passphrase');
+    expect(within(rules).getByText('At least 12 characters').closest('li')).toHaveClass('is-met');
     await user.type(within(pw).getByLabelText('Repeat new password'), 'a different passphrase');
     await user.click(within(pw).getByRole('button', { name: 'Change password' }));
     expect(within(pw).getByText('The passwords do not match.')).toBeInTheDocument();

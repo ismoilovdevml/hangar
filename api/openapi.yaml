@@ -114,7 +114,15 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Session" }
         "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
+        "401":
+          description: |
+            Wrong username or password. With lockout on, `details.attempts_left` says how many
+            more failures this address may have for the username typed before it is locked out
+            for `details.lockout_seconds`; the answer is the same whether or not the username
+            belongs to an account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "423":
           description: Account locked after repeated failures; `retry_after` says when to retry.
           content:
@@ -544,6 +552,11 @@ paths:
       tags: [overview]
       operationId: getOverviewMetrics
       summary: Every number on the Overview screen for one range
+      description: |
+        Callers with system:cluster:read get the whole instance (scope
+        "instance"). Everyone else gets scope "repositories": every count
+        covers only the repositories they may read, and the instance-wide
+        request, cache and capacity numbers are null.
       parameters:
         - name: range
           in: query
@@ -3359,7 +3372,7 @@ components:
     PasswordPolicy:
       type: object
       description: Rules new local passwords must meet (`auth.password`)
-      required: [min_length, max_length, min_classes, allow_username]
+      required: [min_length, max_length, min_classes, allow_username, allow_weak]
       properties:
         min_length: { type: integer, description: Minimum length in characters }
         max_length: { type: integer, description: Maximum length in characters }
@@ -3369,6 +3382,12 @@ components:
         allow_username:
           type: boolean
           description: Whether the password may contain the username
+        allow_weak:
+          type: boolean
+          description: |
+            Whether guessable passwords are accepted. When false (the default) a password is refused
+            if it has fewer than 5 different characters, is a run of consecutive characters
+            (123456789012) or is a common password padded with digits and symbols (Password2026!).
     CurrentToken:
       type: object
       required: [id, kind, name, prefix, scopes, expires_at, read_only, allowed_cidrs]
@@ -3639,10 +3658,14 @@ components:
           description: Requests served by every node in the bucket (as in `requests.total`); null like `downloads`
     OverviewMetrics:
       type: object
-      required: [range, generated_at, summary, activity, storage, requests, cache, issues, traffic, storage_by_format]
+      required: [range, generated_at, scope, summary, activity, storage, requests, cache, issues, traffic, storage_by_format]
       properties:
         range: { $ref: "#/components/schemas/OverviewRange" }
         generated_at: { $ref: "#/components/schemas/Timestamp" }
+        scope:
+          type: string
+          enum: [instance, repositories]
+          description: What the numbers cover; "repositories" means only the repositories the caller may read
         summary:
           type: object
           required: [published_since_yesterday, failed_pushes]

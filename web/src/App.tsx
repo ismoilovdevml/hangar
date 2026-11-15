@@ -3,6 +3,8 @@ import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { RouterProvider, useRouterState, type RouterHistory } from '@tanstack/react-router';
 import { setPasswordChangeHandler, setUnauthorizedHandler } from './api/client';
 import { queryKeys } from './api/hooks';
+import type { Session } from './api/types';
+import { requestReauth } from './lib/reauth';
 import { createQueryClient } from './lib/queryClient';
 import { createAppRouter } from './router';
 
@@ -21,14 +23,21 @@ export function App({ queryClient, history }: { queryClient?: QueryClient; histo
   const [router] = useState(() => createAppRouter(qc, history));
 
   // Any API call answering 401 means the session ended (expired, revoked, signed
-  // out in another tab): forget cached data and ask for sign-in, then come back.
+  // out in another tab). Inside the app the user signs in again over the page,
+  // which keeps what they were editing; elsewhere cached data is dropped and
+  // the sign-in page says why, then comes back.
   useEffect(
     () =>
       setUnauthorizedHandler(() => {
         const loc = router.state.location;
         if (loc.pathname === '/login') return;
+        const session = qc.getQueryData<Session>(queryKeys.session);
+        if (session && loc.pathname !== '/change-password' && !session.password_change_required && session.auth_method !== 'token') {
+          requestReauth(session.user.username);
+          return;
+        }
         qc.clear();
-        void router.navigate({ to: '/login', search: { redirect: loc.href }, replace: true });
+        void router.navigate({ to: '/login', search: { redirect: loc.href, reason: 'expired' }, replace: true });
       }),
     [qc, router],
   );

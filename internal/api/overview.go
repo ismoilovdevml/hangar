@@ -74,7 +74,12 @@ type formatBytes struct {
 type overviewMetrics struct {
 	Range       string    `json:"range"`
 	GeneratedAt time.Time `json:"generated_at"`
-	Summary     struct {
+	// Scope is "instance" for callers who may read the system state
+	// (system:cluster:read) and "repositories" for everyone else: their
+	// numbers cover only the repositories they may read, and the
+	// instance-wide request, cache and capacity numbers are null.
+	Scope   string `json:"scope"`
+	Summary struct {
 		PublishedSinceYesterday int64 `json:"published_since_yesterday"`
 		FailedPushes            int64 `json:"failed_pushes"`
 	} `json:"summary"`
@@ -130,12 +135,28 @@ func (a *API) overview(w http.ResponseWriter, r *http.Request) {
 	if rng == "" {
 		rng = "today"
 	}
-	o, err := a.Catalog.Overview(ctx, catalog.OverviewQuery{Now: now, Start: bucketStart, Bucket: bucket, WindowStart: start})
+	q := catalog.OverviewQuery{Now: now, Start: bucketStart, Bucket: bucket, WindowStart: start}
+	whole := a.authorize(ctx, core.ActionRead, core.SystemResource(core.SystemCluster)) == nil
+	if !whole {
+		repos, err := a.readableRepos(ctx)
+		if err != nil {
+			a.writeErr(w, r, err)
+			return
+		}
+		q.Repos = make([]catalog.RepoRef, 0, len(repos))
+		for _, repo := range repos {
+			q.Repos = append(q.Repos, catalog.RepoRef{ID: repo.ID, Name: repo.Name})
+		}
+	}
+	o, err := a.Catalog.Overview(ctx, q)
 	if err != nil {
 		a.writeErr(w, r, err)
 		return
 	}
-	out := overviewMetrics{Range: rng, GeneratedAt: now, Traffic: []trafficBucket{}, StorageByFormat: []formatBytes{}}
+	out := overviewMetrics{Range: rng, GeneratedAt: now, Scope: "instance", Traffic: []trafficBucket{}, StorageByFormat: []formatBytes{}}
+	if !whole {
+		out.Scope = "repositories"
+	}
 	out.Summary.PublishedSinceYesterday, out.Summary.FailedPushes = o.PublishedLast24h, o.FailedPushes24h
 	out.Storage.UsedBytes, out.Storage.CapacityBytes, out.Storage.AddedBytes24h = o.UsedBytes, o.CapacityBytes, o.AddedBytes24h
 	out.Activity = overviewActivity{Published: o.Activity.Published, Cached: o.Activity.Cached, PushesRejected: o.Activity.PushesRejected}
@@ -152,8 +173,10 @@ func (a *API) overview(w http.ResponseWriter, r *http.Request) {
 	for _, f := range o.StorageByFormat {
 		out.StorageByFormat = append(out.StorageByFormat, formatBytes{Format: f.Format, Bytes: f.Bytes})
 	}
+	// Request and cache counters are kept for the whole instance, not per
+	// repository, so only callers who see the instance get them.
 	var traffic *rollup.Overview
-	if a.Traffic != nil {
+	if a.Traffic != nil && whole {
 		traffic, err = a.Traffic.Overview(ctx, rollup.OverviewQuery{Start: start, End: now, BucketStart: bucketStart, Bucket: bucket})
 		if err != nil {
 			a.writeErr(w, r, err)

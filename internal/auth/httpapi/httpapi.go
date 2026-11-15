@@ -333,9 +333,10 @@ func (h *handler) clearCookies(w http.ResponseWriter, _ *http.Request) {
 
 // apiError is schema Error.
 type apiError struct {
-	Code       string `json:"code"`
-	Message    string `json:"message"`
-	RetryAfter int    `json:"retry_after,omitempty"`
+	Code       string         `json:"code"`
+	Message    string         `json:"message"`
+	RetryAfter int            `json:"retry_after,omitempty"`
+	Details    map[string]any `json:"details,omitempty"`
 }
 
 var errRateLimited = errors.New("too many requests")

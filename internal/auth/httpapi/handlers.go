@@ -99,7 +99,14 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var locked *auth.LockedError
 		if errors.Is(err, core.ErrUnauthenticated) && !errors.As(err, &locked) {
-			writeErrorBody(w, http.StatusUnauthorized, "unauthenticated", "invalid username or password", 0)
+			body := apiError{Code: "unauthenticated", Message: "invalid username or password"}
+			// The same for every name, existing or not: it counts this
+			// address's failures for the name typed.
+			var attempts *auth.AttemptsError
+			if errors.As(err, &attempts) {
+				body.Details = map[string]any{"attempts_left": attempts.Left, "lockout_seconds": int(attempts.LockFor / time.Second)}
+			}
+			writeJSON(w, http.StatusUnauthorized, body)
 			return
 		}
 		h.writeError(w, r, err)
@@ -201,6 +208,7 @@ type passwordPolicy struct {
 	MaxLength     int  `json:"max_length"`
 	MinClasses    int  `json:"min_classes"`
 	AllowUsername bool `json:"allow_username"`
+	AllowWeak     bool `json:"allow_weak"`
 }
 
 // sessionBody is schema Session.
@@ -291,7 +299,7 @@ func (h *handler) writeSession(w http.ResponseWriter, r *http.Request, p *core.P
 		PasswordChangeRequired: p.PasswordChangeRequired,
 		PasswordPolicy: passwordPolicy{
 			MinLength: h.cfg.Password.MinLength, MaxLength: h.cfg.Password.MaxLength,
-			MinClasses: h.cfg.Password.MinClasses, AllowUsername: h.cfg.Password.AllowUsername,
+			MinClasses: h.cfg.Password.MinClasses, AllowUsername: h.cfg.Password.AllowUsername, AllowWeak: h.cfg.Password.AllowWeak,
 		},
 		Token: token,
 	})

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { IconClose } from '../../components/icons';
+import { useEscapeLayer } from '../../lib/layers';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -22,21 +23,13 @@ interface DrawerProps {
 export function Drawer({ title, eyebrow, subtitle, footer, onClose, children }: DrawerProps) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
-  const close = useRef(onClose);
-  useEffect(() => {
-    close.current = onClose;
-  }, [onClose]);
+  useEscapeLayer(onClose);
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     const el = ref.current;
     el?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        close.current();
-        return;
-      }
       if (e.key !== 'Tab' || !el) return;
       const items = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)];
       if (items.length === 0) return;

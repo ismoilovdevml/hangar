@@ -86,6 +86,16 @@ func TestPasswordPolicy(t *testing.T) {
 		{"classes ok", strict, "bob", "abcDEF12", true},
 		{"classes missing", strict, "bob", "abcdefgh1", false},
 		{"invalid utf8", p, "alice", "abcdefghijkl\xff", false},
+		{"one character repeated", p, "alice", "aaaaaaaaaaaa", false},
+		{"short pattern repeated", p, "alice", "abababababab", false},
+		{"four characters mixed", p, "alice", "abcdabcdabcd", false},
+		{"digit run", p, "alice", "123456789012", false},
+		{"descending run", p, "alice", "zyxwvutsrqpo", false},
+		{"common password padded", p, "alice", "Password2026!", false},
+		{"common word padded", p, "alice", "!!Welcome1234", false},
+		{"weak allowed", PasswordPolicy{MinLength: 12, MaxLength: 256, AllowWeak: true}, "alice", "aaaaaaaaaaaa", true},
+		{"passphrase with a common word", p, "alice", "password manager rocks", true},
+		{"random", p, "alice", "k7Qm-2vXr-9TzP", true},
 	} {
 		err := tc.policy.Check(tc.user, tc.pw)
 		if (err == nil) != tc.ok {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSystemStatus } from '../../api/hooks';
 import { CodeBlock } from '../../components/CodeBlock';
 import { CopyButton } from '../../components/CopyButton';
@@ -23,20 +23,36 @@ function useServerBaseUrl(): string {
   return serverBaseUrl(status.data?.base_url, typeof window !== 'undefined' ? window.location.origin : 'https://hangar.example.com');
 }
 
+interface SecretPanelProps {
+  token: TokenCreated;
+  note?: string;
+  /** "I have stored the token" (see useSecretCloseGuard in secretGuard.tsx). */
+  stored: boolean;
+  onStoredChange: (stored: boolean) => void;
+  onDone: () => void;
+}
+
 /**
  * The one-time view of a new secret: copy it, then paste-ready snippets with
  * the real server URL for curl, package clients and automated clients.
  */
-export function SecretPanel({ token, note, onDone }: { token: TokenCreated; note?: string; onDone: () => void }) {
-  const [stored, setStored] = useState(false);
+export function SecretPanel({ token, note, stored, onStoredChange, onDone }: SecretPanelProps) {
   const [tab, setTab] = useState<RevealTab>('api');
+  const ref = useRef<HTMLDivElement>(null);
+  // The form this replaces may have been scrolled down: start at the secret, with Copy focused.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    for (let n: HTMLElement | null = el.parentElement; n && n !== document.body; n = n.parentElement) n.scrollTop = 0;
+    el.querySelector<HTMLElement>('.secret-box button')?.focus({ preventScroll: true });
+  }, []);
   const base = useServerBaseUrl();
   const repos = useRepositoryTargets(tab === 'clients');
   const { can, cannot } = summarizeScopes(token.scopes, token.read_only);
   const snippets = repos.data ? clientSnippets(repos.data, token.scopes, token.read_only, token.owner, token.secret) : [];
 
   return (
-    <div className="dialog-form">
+    <div className="dialog-form" ref={ref}>
       {note && <p className="notice">{note}</p>}
       <div className="secret-box">
         <code className="secret-box__value" data-testid="token-secret">
@@ -119,7 +135,7 @@ export function SecretPanel({ token, note, onDone }: { token: TokenCreated; note
       )}
 
       <label className="checkbox">
-        <input type="checkbox" checked={stored} onChange={(e) => setStored(e.target.checked)} />I have stored the token somewhere safe
+        <input type="checkbox" checked={stored} onChange={(e) => onStoredChange(e.target.checked)} />I have stored the token somewhere safe
       </label>
       <div className="dialog-actions">
         <button type="button" className="button button--primary" disabled={!stored} onClick={onDone}>

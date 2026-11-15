@@ -45,6 +45,30 @@ const (
 
 var errBadCredentials = fmt.Errorf("invalid credentials: %w", core.ErrUnauthenticated)
 
+// AttemptsError is a wrong username or password, with how many more
+// failures the caller's address may have for that username before it is
+// locked out (see Lockout). It is the same whether or not the username
+// belongs to an account, and wraps core.ErrUnauthenticated.
+type AttemptsError struct {
+	Left int
+	// LockFor is how long the lockout lasts once Left reaches zero.
+	LockFor time.Duration
+}
+
+func (e *AttemptsError) Error() string { return errBadCredentials.Error() }
+
+// Unwrap makes errors.Is(err, core.ErrUnauthenticated) true.
+func (e *AttemptsError) Unwrap() error { return errBadCredentials }
+
+// badCredentials is errBadCredentials with the attempts left after
+// attempts failures, when lockout is on.
+func (s *Service) badCredentials(attempts int) error {
+	if s.cfg.Lockout.MaxAttempts <= 0 {
+		return errBadCredentials
+	}
+	return &AttemptsError{Left: max(s.cfg.Lockout.MaxAttempts-attempts, 0), LockFor: s.cfg.Lockout.Duration}
+}
+
 // Authenticate implements core.Authenticator: empty credentials give the
 // anonymous principal; a token (Bearer, or as the Basic password) or a local
 // username/password give the owner's principal with roles filled in. Wrong,
@@ -170,7 +194,7 @@ func (s *Service) verifyPassword(ctx context.Context, username, password, method
 		if lockedUntil != nil {
 			return nil, &LockedError{Until: *lockedUntil}
 		}
-		return nil, errBadCredentials
+		return nil, s.badCredentials(attempts)
 	}
 	u, err := s.userByName(ctx, s.pool, username)
 	if errors.Is(err, core.ErrNotFound) {
@@ -205,7 +229,7 @@ func (s *Service) verifyPassword(ctx context.Context, username, password, method
 		if lockedUntil != nil {
 			return nil, &LockedError{Until: *lockedUntil}
 		}
-		return nil, errBadCredentials
+		return nil, s.badCredentials(attempts)
 	}
 	if err := s.noteSignInSuccess(ctx, u); err != nil {
 		return nil, err

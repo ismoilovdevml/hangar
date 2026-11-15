@@ -102,6 +102,21 @@ describe('cleanup policies', () => {
     expect(opsMockState.policies.find((p) => p.name === 'docker-lean')!.criteria.keep_newest).toBe(1);
   });
 
+  it('asks before switching away from unsaved edits', async () => {
+    const user = userEvent.setup();
+    const { history } = renderApp('/cleanup?policy=docker-lean');
+    await screen.findByRole('heading', { level: 2, name: 'docker-lean' });
+    const keep = screen.getByLabelText('Newest versions to keep');
+    await user.clear(keep);
+    await user.type(keep, '7');
+    const other = screen.getAllByRole('link').find((a) => a.getAttribute('href')?.includes('policy=') && !a.getAttribute('href')!.includes('docker-lean'))!;
+    await user.click(other);
+    const ask = await screen.findByRole('alertdialog', { name: 'Leave without saving?' });
+    await user.click(within(ask).getByRole('button', { name: 'Stay' }));
+    expect(search(history).get('policy')).toBe('docker-lean');
+    expect(screen.getByLabelText('Newest versions to keep')).toHaveValue(7);
+  });
+
   it('validates before previewing', async () => {
     const user = userEvent.setup();
     renderApp('/cleanup?create=true');

@@ -130,9 +130,14 @@ type PasswordPolicy struct {
 	MinClasses int `yaml:"min_classes"`
 	// AllowUsername permits passwords that contain the username.
 	AllowUsername bool `yaml:"allow_username"`
+	// AllowWeak turns off the check for guessable passwords: one character
+	// or a short pattern repeated, a keyboard or alphabet run, or a common
+	// password with digits and symbols around it (see weakness).
+	AllowWeak bool `yaml:"allow_weak"`
 }
 
-// DefaultPasswordPolicy: 12 to 256 characters, not containing the username.
+// DefaultPasswordPolicy: 12 to 256 characters, not containing the username,
+// not guessable.
 var DefaultPasswordPolicy = PasswordPolicy{MinLength: 12, MaxLength: 256}
 
 // Check returns an ErrInvalid error describing why password is unacceptable for username.
@@ -149,6 +154,11 @@ func (p PasswordPolicy) Check(username, password string) error {
 		return fmt.Errorf("password must not be blank: %w", core.ErrInvalid)
 	case !p.AllowUsername && username != "" && strings.Contains(strings.ToLower(password), strings.ToLower(username)):
 		return fmt.Errorf("password must not contain the username: %w", core.ErrInvalid)
+	}
+	if !p.AllowWeak {
+		if why := weakness(password); why != "" {
+			return fmt.Errorf("password is too easy to guess: %s: %w", why, core.ErrInvalid)
+		}
 	}
 	if p.MinClasses > 0 {
 		var lower, upper, digit, other bool
@@ -175,4 +185,63 @@ func (p PasswordPolicy) Check(username, password string) error {
 		}
 	}
 	return nil
+}
+
+// minDistinct is how many different characters a password needs at least.
+const minDistinct = 5
+
+// commonPasswords are words that guessing tools try first. A password whose
+// letters are only one of them ("Password2026!") is refused.
+var commonPasswords = map[string]bool{
+	"password": true, "passw": true, "passwort": true, "qwerty": true, "qwertyuiop": true, "asdfgh": true, "zxcvbn": true,
+	"letmein": true, "welcome": true, "admin": true, "administrator": true, "root": true, "changeme": true, "default": true,
+	"secret": true, "iloveyou": true, "monkey": true, "dragon": true, "master": true, "login": true, "hangar": true,
+	"registry": true, "trustno": true, "sunshine": true, "football": true, "abc": true,
+}
+
+// weakness says why password is easy to guess, or "" when it is not: fewer
+// than minDistinct different characters ("aaaaaaaaaaaa", "abababababab"),
+// a run of consecutive characters ("123456789012", "abcdefghijkl"), or a
+// common password padded with digits and symbols.
+func weakness(password string) string {
+	distinct := map[rune]bool{}
+	var letters strings.Builder
+	for _, r := range password {
+		distinct[unicode.ToLower(r)] = true
+		if unicode.IsLetter(r) {
+			letters.WriteRune(unicode.ToLower(r))
+		}
+	}
+	if len(distinct) < minDistinct {
+		return fmt.Sprintf("it uses fewer than %d different characters", minDistinct)
+	}
+	if isRun([]rune(strings.ToLower(password))) {
+		return "it is a run of consecutive characters"
+	}
+	if commonPasswords[letters.String()] {
+		return "it is a common password"
+	}
+	return ""
+}
+
+// isRun reports whether every character follows the previous one up or down
+// by one, all in the same direction (digits may wrap: 7890123).
+func isRun(rs []rune) bool {
+	if len(rs) < 3 {
+		return false
+	}
+	step := 0
+	for i := 1; i < len(rs); i++ {
+		d := int(rs[i]) - int(rs[i-1])
+		if rs[i-1] == '9' && rs[i] == '0' {
+			d = 1
+		} else if rs[i-1] == '0' && rs[i] == '9' {
+			d = -1
+		}
+		if (d != 1 && d != -1) || (step != 0 && d != step) {
+			return false
+		}
+		step = d
+	}
+	return true
 }

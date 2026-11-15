@@ -272,6 +272,7 @@ describe('package browser: package', () => {
     await waitFor(() => expect(catalogState.components.some((c) => c.id === 'c_8812')).toBe(false));
     await waitFor(() => expect(search(history).get('version')).toBeNull());
     expect(await screen.findByRole('region', { name: 'payments-api 2.13.2' })).toBeInTheDocument();
+    expect(await screen.findByText(/^Deleted payments-api \S+ from \S+\.$/)).toBeInTheDocument();
   });
 
   it('disables deletion without delete rights on the repository', async () => {
@@ -373,6 +374,7 @@ describe('package browser: files', () => {
     await waitFor(() => expect(catalogState.deletedAssets.has('c_nuget_a0')).toBe(true));
     await waitFor(() => expect(search(history).get('asset')).toBeNull());
     expect(search(history).get('files')).toBe('acme.core/1.2.0/');
+    expect(await screen.findByText(/^Deleted \S*acme\.core\.1\.2\.0\.nupkg from \S+\.$/)).toBeInTheDocument();
     const after = await screen.findByRole('table', { name: 'Contents of acme.core/1.2.0/' });
     await waitFor(() => expect(within(after).queryByRole('button', { name: 'acme.core.1.2.0.nupkg' })).toBeNull());
   });

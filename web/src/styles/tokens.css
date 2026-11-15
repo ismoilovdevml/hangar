@@ -99,6 +99,7 @@
   --z-palette: 50;        /* command palette */
   --z-modal: 60;          /* dialogs and drawers */
   --z-modal-popover: 70;  /* listboxes opened from inside a dialog */
+  --z-toast: 80;          /* confirmations of a finished write, also over a drawer */
   --z-skip-link: 100;
 }
 

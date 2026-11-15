@@ -35,6 +35,17 @@ describe('new repository form', () => {
     expect(within(step(/What will it store/)).getByRole('radio', { name: /Docker/ })).toHaveFocus();
   });
 
+  it('asks before Cancel throws away what was entered', async () => {
+    const user = userEvent.setup();
+    const { history } = renderApp('/repositories/new');
+    await user.click(within(await screen.findByRole('region', { name: /What will it store/ })).getByRole('radio', { name: /npm/ }));
+    await user.click(screen.getByRole('link', { name: 'Cancel' }));
+    const ask = await screen.findByRole('alertdialog', { name: 'Leave without saving?' });
+    await user.click(within(ask).getByRole('button', { name: 'Stay' }));
+    expect(history.location.pathname).toBe('/repositories/new');
+    expect(within(step(/What will it store/)).getByRole('radio', { name: /npm/ })).toBeChecked();
+  });
+
   it('marks formats this server does not speak', async () => {
     // A build without the Linux package formats.
     server.use(http.get('*/api/v1/formats', () => HttpResponse.json({ items: [{ name: 'npm' }, { name: 'cargo' }] })));

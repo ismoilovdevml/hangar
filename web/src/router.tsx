@@ -96,9 +96,10 @@ const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
   staticData: { title: 'Sign in' },
-  validateSearch: (s: Record<string, unknown>): { redirect?: string; error?: string } => ({
+  validateSearch: (s: Record<string, unknown>): { redirect?: string; error?: string; reason?: 'expired' } => ({
     redirect: str(s.redirect),
     error: str(s.error),
+    reason: s.reason === 'expired' ? 'expired' : undefined,
   }),
   component: LoginPage,
 });

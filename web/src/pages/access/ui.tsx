@@ -1,6 +1,7 @@
 import { cloneElement, useEffect, useId, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { IconClose } from '../../components/icons';
+import { useEscapeLayer } from '../../lib/layers';
 import { initials } from '../../lib/format';
 import { errorText } from './model';
 import { ErrorMessage } from '../../components/States';
@@ -16,20 +17,21 @@ interface DialogProps {
   drawer?: boolean;
   wide?: boolean;
   footer?: ReactNode;
+  /** False for a question that must be answered: no close button, and Escape and the scrim do nothing. */
+  dismissible?: boolean;
 }
 
 /**
  * Modal dialog: focus moves in on open and back to the opener on close, Tab
- * stays inside, Escape and the scrim close it.
+ * stays inside, Escape and the scrim close it. Escape closes only the topmost
+ * layer, so a dialog opened from a drawer closes alone.
  */
-export function Dialog({ title, description, onClose, children, drawer, wide, footer }: DialogProps) {
+export function Dialog({ title, description, onClose, children, drawer, wide, footer, dismissible = true }: DialogProps) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descId = useId();
-  const close = useRef(onClose);
-  useEffect(() => {
-    close.current = onClose;
-  }, [onClose]);
+  // A dialog that cannot be dismissed still takes Escape, so nothing underneath closes instead.
+  useEscapeLayer(dismissible ? onClose : () => {});
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
@@ -37,11 +39,6 @@ export function Dialog({ title, description, onClose, children, drawer, wide, fo
     const first = el?.querySelector<HTMLElement>('[data-autofocus]') ?? el?.querySelector<HTMLElement>(FOCUSABLE);
     (first ?? el)?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        close.current();
-        return;
-      }
       if (e.key !== 'Tab' || !el) return;
       const items = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((n) => n.offsetParent !== null || n === document.activeElement);
       if (items.length === 0) return;
@@ -69,7 +66,7 @@ export function Dialog({ title, description, onClose, children, drawer, wide, fo
     <div
       className={drawer ? 'dialog-scrim dialog-scrim--drawer' : 'dialog-scrim'}
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (dismissible && e.target === e.currentTarget) onClose();
       }}
     >
       <div
@@ -92,9 +89,11 @@ export function Dialog({ title, description, onClose, children, drawer, wide, fo
               </p>
             )}
           </div>
-          <button type="button" className="icon-button icon-button--sm" aria-label="Close" onClick={onClose}>
-            <IconClose size={18} />
-          </button>
+          {dismissible && (
+            <button type="button" className="icon-button icon-button--sm" aria-label="Close" onClick={onClose}>
+              <IconClose size={18} />
+            </button>
+          )}
         </div>
         <div className="dialog__body">{children}</div>
         {footer && <div className="dialog__foot">{footer}</div>}

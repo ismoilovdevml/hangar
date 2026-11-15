@@ -1,11 +1,13 @@
-import { useId, useState, type FormEvent } from 'react';
+import { useId, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useSession } from '../../api/hooks';
 import { IconPlus } from '../../components/icons';
 import { ErrorNote } from '../../components/ErrorNote';
 import { PageHeader } from '../../components/PageHeader';
+import { PasswordChecklist } from '../../components/PasswordChecklist';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
+import { DEFAULT_PASSWORD_POLICY, passwordChecks } from '../../lib/passwordPolicy';
 import { useChangePassword, useEndMyOtherSessions, useEndMySession, useMySessions, useTokens, useUpdateProfile, type SessionInfo } from './api';
 import { PermissionsReport, SessionList } from './members';
 import { expiryText, roleTone, SOURCE_LABEL } from './model';
@@ -113,16 +115,22 @@ function ProfilePanel({ editable }: { editable: boolean }) {
 }
 
 function PasswordPanel() {
+  const session = useSession();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [done, setDone] = useState(false);
   const change = useChangePassword();
-  const ids = { cur: useId(), next: useId(), confirm: useId() };
+  const ids = { cur: useId(), next: useId(), confirm: useId(), checks: useId() };
+  const policy = session.data?.password_policy ?? DEFAULT_PASSWORD_POLICY;
+  const username = session.data?.user.username ?? '';
+  // The same live rules as the forced change, checked as the user types.
+  const checks = useMemo(() => passwordChecks(policy, username, current, next, confirm), [policy, username, current, next, confirm]);
+  const unmet = checks.filter((c) => !c.met);
   const errors = {
-    next: next.length < 12 ? 'At least 12 characters.' : next === current ? 'Choose a password different from the current one.' : null,
-    confirm: confirm !== next ? 'The passwords do not match.' : null,
+    next: unmet.some((c) => c.id !== 'match') ? 'The new password does not meet every rule below yet.' : null,
+    confirm: unmet.some((c) => c.id === 'match') ? 'The passwords do not match.' : null,
   };
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -149,9 +157,10 @@ function PasswordPanel() {
         <Field id={ids.cur} label="Current password" error={submitted && !current && 'Enter your current password.'}>
           <input type="password" className="input" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" />
         </Field>
-        <Field id={ids.next} label="New password" error={submitted && errors.next} hint="A long passphrase is best.">
+        <Field id={ids.next} label="New password" error={submitted && errors.next}>
           <input type="password" className="input" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
         </Field>
+        <PasswordChecklist id={ids.checks} checks={checks.filter((c) => c.id !== 'match')} />
         <Field id={ids.confirm} label="Repeat new password" error={submitted && errors.confirm}>
           <input type="password" className="input" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
         </Field>

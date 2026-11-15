@@ -252,12 +252,21 @@ func TestRememberMe(t *testing.T) {
 func TestLoginLockoutAndRateLimit(t *testing.T) {
 	s := newServer(t, auth.Config{
 		Lockout:   auth.Lockout{MaxAttempts: 2, Window: time.Minute, Duration: 5 * time.Minute},
-		LoginRate: auth.RateLimit{PerMinute: 1, Burst: 4},
+		LoginRate: auth.RateLimit{PerMinute: 1, Burst: 5},
 	})
 	s.env.Admin(t)
 	c := s.client(t)
 	resp, body := c.login("admin", "wrong password!!", false)
 	expect(t, resp, body, http.StatusUnauthorized, "unauthenticated")
+	if d, _ := body["details"].(map[string]any); d["attempts_left"] != float64(1) || d["lockout_seconds"] != float64(300) {
+		t.Fatalf("details after one failure = %v", body["details"])
+	}
+	// A name without an account answers the same way.
+	resp, body = c.login("nobody-here", "wrong password!!", false)
+	expect(t, resp, body, http.StatusUnauthorized, "unauthenticated")
+	if d, _ := body["details"].(map[string]any); d["attempts_left"] != float64(1) {
+		t.Fatalf("details for an unknown name = %v", body["details"])
+	}
 	resp, body = c.login("admin", "wrong password!!", false)
 	expect(t, resp, body, http.StatusLocked, "locked")
 	if ra, _ := body["retry_after"].(float64); ra < 290 || ra > 300 || resp.Header.Get("Retry-After") == "" {
@@ -267,7 +276,7 @@ func TestLoginLockoutAndRateLimit(t *testing.T) {
 	expect(t, resp, body, http.StatusLocked, "locked")
 	resp, body = c.login("admin", authtest.AdminPassword, false)
 	expect(t, resp, body, http.StatusLocked, "locked")
-	// Fifth attempt from this IP within the burst window is rate limited.
+	// Sixth attempt from this IP within the burst window is rate limited.
 	resp, body = c.login("admin", authtest.AdminPassword, false)
 	expect(t, resp, body, http.StatusTooManyRequests, "rate_limited")
 	if resp.Header.Get("Retry-After") == "" || body["retry_after"] == nil {

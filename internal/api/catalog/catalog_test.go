@@ -262,6 +262,31 @@ func TestCatalogIntegration(t *testing.T) {
 		t.Errorf("activity over 90 minutes = %+v", o.Activity)
 	}
 
+	// Scoped to npm-hosted: its blobs, components and rejected pushes only;
+	// no capacity, since quotas belong to blob stores.
+	apitest.Exec(t, pool, `INSERT INTO audit_events (actor, action, target, outcome) VALUES
+		('alice', 'component.publish', 'component:npm-hosted/@acme/ui@2.0.0', 'denied'),
+		('alice', 'component.publish', 'repo:maven-releases', 'error')`)
+	o, err = c.Overview(ctx, OverviewQuery{Now: now, Start: now.Add(-3 * time.Hour).Truncate(time.Hour), Bucket: time.Hour,
+		Repos: []RepoRef{{ID: npm, Name: "npm-hosted"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.UsedBytes != 5000 || o.AddedBytes24h != 4000 || o.CapacityBytes != nil || o.PublishedLast24h != 1 || o.FailedPushes24h != 1 ||
+		o.OpenFindings != 0 || o.CriticalFindings != 0 || o.PackagesAffected != 0 || o.Quarantined != 1 {
+		t.Errorf("npm-hosted overview = %+v", o)
+	}
+	if len(o.StorageByFormat) != 1 || o.StorageByFormat[0] != (FormatBytes{"npm", 5000}) || o.Activity.PushesRejected != 1 {
+		t.Errorf("npm-hosted by format = %+v, activity = %+v", o.StorageByFormat, o.Activity)
+	}
+	o, err = c.Overview(ctx, OverviewQuery{Now: now, Start: now.Add(-3 * time.Hour).Truncate(time.Hour), Bucket: time.Hour, Repos: []RepoRef{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.UsedBytes != 0 || o.PublishedLast24h != 0 || o.FailedPushes24h != 0 || o.OpenFindings != 0 || o.Quarantined != 0 || len(o.StorageByFormat) != 0 {
+		t.Errorf("empty scope overview = %+v", o)
+	}
+
 	fd, err := c.FormatDownloads(ctx)
 	if err != nil || fd["npm"] != 55 || fd["maven"] != 7 {
 		t.Errorf("format downloads = %v %v", fd, err)

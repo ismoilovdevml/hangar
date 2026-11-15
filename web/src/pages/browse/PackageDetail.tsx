@@ -37,6 +37,7 @@ import { downloadHref, hasVersion, securityPill, type BrowseTab } from '../../li
 import { repoClientTarget } from '../../lib/repoSettings';
 import { TYPE_META } from '../../lib/repositories';
 import { useNow } from '../../lib/useNow';
+import { toast } from '../../lib/toast';
 import { imageWhere, packageAt, scannable } from '../../lib/vulnerabilities';
 import { Fact } from './AssetDetail';
 import { dateTime, deleteMessage, shortDigest } from './detailUtil';
@@ -134,8 +135,14 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
       onSuccess: () => {
         setToDelete(null);
         invalidateBrowse();
-        if (deleted.id !== c.id) return;
         const remaining = versions.filter((v) => v.id !== deleted.id);
+        const label = `${componentName(deleted)} ${deleted.version}`.trim();
+        toast(
+          deleted.id !== c.id || remaining.length
+            ? `Deleted ${label} from ${deleted.repository}.`
+            : `Deleted ${label}, the last version, from ${deleted.repository}.`,
+        );
+        if (deleted.id !== c.id) return;
         void navigate({
           to: '/browse',
           // Stay on the package (its newest remaining version) unless the deleted one was the last.

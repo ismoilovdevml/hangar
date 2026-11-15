@@ -11,15 +11,17 @@ import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { CopyButton } from '../../../components/CopyButton';
 import { ErrorNote } from '../../../components/ErrorNote';
 import { FormatBadge } from '../../../components/FormatBadge';
-import { IconPackage } from '../../../components/icons';
+import { IconClose, IconPackage } from '../../../components/icons';
 import { ClientSetup } from '../../../components/ClientSetup';
 import { FormatName } from '../../../components/FormatIcon';
 import { PageHeader } from '../../../components/PageHeader';
 import { Panel } from '../../../components/Panel';
 import { Pill, StatusDot } from '../../../components/Pill';
-import { Toast } from '../../../components/Toast';
+import { UnsavedChangesDialog } from '../../../components/UnsavedChangesDialog';
 import { PHONE_QUERY, useMediaQuery } from '../../../lib/useMediaQuery';
 import { FORMAT_META, formatBytes } from '../../../lib/format';
+import { toast } from '../../../lib/toast';
+import { useUnsavedChangesGuard } from '../../../lib/unsavedChanges';
 import { isDirty, repoClientTarget, repoToForm, storedInput, toRepositoryUpdate } from '../../../lib/repoSettings';
 import {
   isFormat,
@@ -126,6 +128,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
     ...Object.fromEntries(Object.entries(errors).filter(([k]) => submitted || blurred[k as RepoFormField])),
   };
   const dirty = isDirty(form, repo);
+  const guard = useUnsavedChangesGuard(dirty && canAdmin);
   const body = toRepositoryUpdate(form, repo);
   const yaml = repositoryYaml(body);
   const online = repo.online ?? true;
@@ -142,6 +145,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
         setSubmitted(false);
         setBlurred({});
         setSaved(true);
+        toast(`Saved the settings of ${repo.name}.`);
       },
       onError: (err) => {
         focusFirstError(serverFieldErrors(err));
@@ -224,7 +228,11 @@ function SettingsForm({ repo }: { repo: Repository }) {
                 className="button button--secondary"
                 aria-pressed={!online}
                 disabled={toggle.isPending}
-                onClick={() => toggle.mutate(storedInput(repo, !online))}
+                onClick={() =>
+                  toggle.mutate(storedInput(repo, !online), {
+                    onSuccess: () => toast(online ? `${repo.name} is offline: clients get 503 until you bring it back.` : `${repo.name} is online.`),
+                  })
+                }
               >
                 {toggle.isPending ? 'Saving…' : online ? 'Take offline' : 'Bring online'}
               </button>
@@ -270,10 +278,17 @@ function SettingsForm({ repo }: { repo: Repository }) {
 
           {canAdmin && (
             <Panel title="Delete repository" titleId="danger-title" className="danger-zone">
-              <p className="danger-zone__text">
-                Removes the repository and its {repo.component_count === 1 ? 'one package version' : `${repo.component_count} package versions`}.
-                Their files are released for compaction. Groups that list it must drop it first.
-              </p>
+              {repo.type === 'group' ? (
+                <p className="danger-zone__text">
+                  Removes only the group and its URL. Its members
+                  {repo.config.group?.members.length ? ` (${repo.config.group.members.join(', ')})` : ''} and their packages are not touched.
+                </p>
+              ) : (
+                <p className="danger-zone__text">
+                  Removes the repository and its {repo.component_count === 1 ? 'one package version' : `${repo.component_count} package versions`}.
+                  Their files are released for compaction. Groups that list it must drop it first.
+                </p>
+              )}
               <div>
                 <button
                   type="button"
@@ -292,6 +307,21 @@ function SettingsForm({ repo }: { repo: Repository }) {
 
         <aside className="repo-create__summary" aria-labelledby="summary-title">
           <Panel title="Summary" titleId="summary-title" as="div" className="summary">
+            {created === repo.name && (
+              <div className="notice" role="status">
+                <span>
+                  <strong>{repo.name}</strong> is ready.
+                </span>
+                <span className="repo-settings__ready-actions">
+                  <button type="button" className="button button--secondary button--sm" onClick={connectClient}>
+                    Connect a client
+                  </button>
+                  <button type="button" className="icon-button icon-button--sm" aria-label="Dismiss" onClick={dismissCreated}>
+                    <IconClose size={16} />
+                  </button>
+                </span>
+              </div>
+            )}
             <dl className="summary__list">
               <dt>Format</dt>
               <dd>
@@ -341,18 +371,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
         </aside>
       </form>
 
-      {created === repo.name && (
-        <Toast onClose={dismissCreated}>
-          <p>
-            <strong>{repo.name}</strong> is ready.
-          </p>
-          <p>
-            <button type="button" className="button button--secondary button--sm" onClick={connectClient}>
-              Connect a client
-            </button>
-          </p>
-        </Toast>
-      )}
+      <UnsavedChangesDialog blocker={guard.blocker} what={`your unsaved changes to ${repo.name}`} />
 
       {confirmDelete && (
         <ConfirmDialog
@@ -365,12 +384,17 @@ function SettingsForm({ repo }: { repo: Repository }) {
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() =>
             remove.mutate(undefined, {
-              onSuccess: () => void navigate({ to: '/repositories' }),
+              onSuccess: () => {
+                toast(repo.type === 'group' ? `Deleted group ${repo.name}. Its members are unchanged.` : `Deleted ${repo.name}.`);
+                guard.allowNextNavigation();
+                void navigate({ to: '/repositories' });
+              },
             })
           }
         >
           <p>
             Clients using <code className="inline-code">{repo.url}</code> will stop working. This cannot be undone.
+            {repo.type === 'group' && ' The member repositories and their packages stay as they are.'}
           </p>
         </ConfirmDialog>
       )}

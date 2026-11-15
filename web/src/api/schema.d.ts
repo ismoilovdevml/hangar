@@ -456,7 +456,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every number on the Overview screen for one range */
+        /**
+         * Every number on the Overview screen for one range
+         * @description Callers with system:cluster:read get the whole instance (scope
+         *     "instance"). Everyone else gets scope "repositories": every count
+         *     covers only the repositories they may read, and the instance-wide
+         *     request, cache and capacity numbers are null.
+         */
         get: operations["getOverviewMetrics"];
         put?: never;
         post?: never;
@@ -2399,6 +2405,12 @@ export interface components {
             min_classes: number;
             /** @description Whether the password may contain the username */
             allow_username: boolean;
+            /**
+             * @description Whether guessable passwords are accepted. When false (the default) a password is refused
+             *     if it has fewer than 5 different characters, is a run of consecutive characters
+             *     (123456789012) or is a common password padded with digits and symbols (Password2026!).
+             */
+            allow_weak: boolean;
         };
         CurrentToken: {
             id: string;
@@ -2610,6 +2622,11 @@ export interface components {
         OverviewMetrics: {
             range: components["schemas"]["OverviewRange"];
             generated_at: components["schemas"]["Timestamp"];
+            /**
+             * @description What the numbers cover; "repositories" means only the repositories the caller may read
+             * @enum {string}
+             */
+            scope: "instance" | "repositories";
             summary: {
                 /** @description Components published to hosted repositories in the last 24 hours */
                 published_since_yesterday: number;
@@ -4901,7 +4918,20 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
+            /**
+             * @description Wrong username or password. With lockout on, `details.attempts_left` says how many
+             *     more failures this address may have for the username typed before it is locked out
+             *     for `details.lockout_seconds`; the answer is the same whether or not the username
+             *     belongs to an account.
+             */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /**
              * @description Realm `ldap`: the directory account may not sign in (`allowed_groups`,
              *     or `auto_create` is off and the user never signed in before).

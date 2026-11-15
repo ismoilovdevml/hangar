@@ -202,6 +202,46 @@
 - **npm: the package state goes with the last version** deleted outside npm
   (the REST API, cleanup), so no package without versions is left behind
   unless it holds unpublish tombstones.
+- **Overview numbers follow what the viewer may read**: without
+  `system:cluster:read`, `GET /metrics/overview` counts only the
+  repositories the caller may read (findings, storage, publications,
+  rejected pushes) and leaves the instance-wide request, cache and capacity
+  numbers null; the new `scope` field says which. The Overview labels the
+  scoped numbers and says request statistics are for administrators.
+- **Guessable passwords are refused**: new local passwords with fewer than 5
+  different characters, a run such as `123456789012`, or a common password
+  padded with digits and symbols (`Password2026!`) are rejected unless
+  `auth.password.allow_weak` is true. The rule is listed live on the forced
+  password change and on My account.
+- **Sign-in says how many attempts are left**: a wrong password answers
+  `details.attempts_left` and `details.lockout_seconds`; the sign-in page
+  warns two attempts before the lock. A lockout only holds the username it
+  was for, so another name can sign in at once; the page names the empty
+  field, clears a wrong password, shows the system status and how to get a
+  password reset.
+- **A session that ends keeps the page**: on a 401 the app asks for the
+  password in place instead of leaving the page, so unsaved edits survive;
+  single sign-on runs in a new tab. A tab without a session goes to sign-in
+  with "Your session ended".
+- **The forced password change does not ask again** for the password typed
+  at sign-in a moment ago (kept in memory only) and confirms the change.
+- **Unsaved changes are guarded**: repository settings, the new repository
+  form and cleanup policies ask before leaving with unsaved edits, and the
+  browser asks before a reload.
+- **Writes confirm themselves**: deleting a repository, version or file,
+  waiving (with Undo), assigning, creating or saving roles and members, and
+  saving a quota show a toast. Hidden Overview reminders can be undone and
+  shown again.
+- **Token reveal**: the one-time secret opens at the top with Copy focused,
+  and closing before "I have stored the token" is ticked asks first.
+- **Escape closes only the topmost dialog**, not the drawer under it.
+- **Soft quota editor** offers GiB and TiB, shows a stored quota exactly
+  (2 GiB stays 2147483648 bytes) and saves only what was changed.
+- **Deleting a group** says that its members and their packages are not
+  touched. The "is ready" note after creating a repository sits at the top
+  of the summary instead of covering it.
+- **Signed-in devices** are grouped by device and address, five at a time,
+  with each session's expiry.
 
 ## v0.1.8 (2026-11-11)
 

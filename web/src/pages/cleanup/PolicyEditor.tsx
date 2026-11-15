@@ -19,6 +19,8 @@ import { NotAvailable } from '../../components/NotAvailable';
 import { Panel } from '../../components/Panel';
 import { formatOptions } from '../../components/formatOptions';
 import { Select } from '../../components/Select';
+import { UnsavedChangesDialog } from '../../components/UnsavedChangesDialog';
+import { pathOrSearchChanges, useUnsavedChangesGuard } from '../../lib/unsavedChanges';
 import {
   draftFromPolicy,
   draftToInput,
@@ -134,6 +136,9 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
   const stale = !!preview && !fresh;
   const dirty = !policy || JSON.stringify(draftFromPolicy(policy)) !== JSON.stringify(draft);
   const readOnly = !canWrite;
+  // A new policy counts as edited once anything differs from the empty form.
+  const edited = canWrite && JSON.stringify(policy ? draftFromPolicy(policy) : emptyDraft()) !== JSON.stringify(draft);
+  const guard = useUnsavedChangesGuard(edited, { leaves: pathOrSearchChanges });
 
   const update = (patch: Partial<PolicyDraft>) => {
     setDraft((d) => ({ ...d, ...patch }));
@@ -165,7 +170,10 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
     saveM.mutate(
       { original: policy?.name, body: draftToInput(draft, preview.data.preview_token) },
       {
-        onSuccess: (saved) => onSaved(saved.name, isNew ? `Policy ${saved.name} created.` : `Policy ${saved.name} saved.`),
+        onSuccess: (saved) => {
+          guard.allowNextNavigation();
+          onSaved(saved.name, isNew ? `Policy ${saved.name} created.` : `Policy ${saved.name} saved.`);
+        },
       },
     );
   };
@@ -558,6 +566,7 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
             deleteM.mutate(policy.name, {
               onSuccess: () => {
                 setConfirm(null);
+                guard.allowNextNavigation();
                 onDeleted(`Policy ${policy.name} deleted.`);
               },
             })
@@ -568,6 +577,7 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
           </p>
         </ConfirmDialog>
       )}
+      <UnsavedChangesDialog blocker={guard.blocker} what={policy ? `your unsaved changes to ${policy.name}` : 'the policy you started'} />
     </div>
   );
 }
