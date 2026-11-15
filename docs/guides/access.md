@@ -158,8 +158,9 @@ creation date, last use (time and client address) and expiry. **Rotate**
 creates a replacement with the same name, permissions, restrictions and
 lifetime and shows its secret; the old token keeps working for a grace period
 you choose (1 hour to 7 days), is revoked at once, or is kept until it
-expires. **Revoke** takes effect immediately, including registry logins
-obtained with the token. Administrators with `system:tokens:read` see
+expires. **Revoke** takes effect immediately for the token itself. Registry
+logins already issued with it (`docker login`) stay valid until they expire,
+15 minutes at most by default (`auth.session_token_ttl`), and cannot be renewed. Administrators with `system:tokens:read` see
 everyone's tokens (`GET /tokens?all=true`, filters `owner`, `owner_kind`,
 `status`, `q`) and can revoke them with `system:tokens:delete`.
 
@@ -203,8 +204,8 @@ Open it from the avatar menu or from **Settings → My account** (`/account`).
 - **Profile** — display name and email of local accounts (`PUT /me/profile`).
 - **Password** — `PUT /me/password` with the current and the new password.
   Wrong current passwords count towards the account lockout. Every *other*
-  session ends and short-lived registry logins are revoked; personal access
-  tokens keep working. Token-authenticated requests cannot change passwords.
+  session ends; registry logins already issued stay valid until they expire
+  (15 minutes at most by default); personal access tokens keep working. Token-authenticated requests cannot change passwords.
 - **Signed-in devices** — `GET /me/sessions`; end one
   (`DELETE /me/sessions/{sid}`) or all others (`DELETE /me/sessions`).
 

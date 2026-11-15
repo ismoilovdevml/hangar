@@ -90,6 +90,13 @@ not changed; review group members after upgrading (see the changelog).
   account as `locked` while at least one address is locked out of it.
 - The per-IP login rate limit (`auth.login_rate`) and the failed
   authentication limit (`security.rate_limit.failed_auth`) still apply.
+- Once an address has used up its failed-authentication budget, every request
+  from it that carries credentials answers 429 until the budget refills,
+  including requests with a **valid** token: they are refused before they are
+  checked. Anonymous requests are not affected. CI runners behind one NAT
+  address share the budget, so one job with a wrong or empty token can make
+  the other jobs on that runner fail with 429; fix the job's token, or raise
+  `security.rate_limit.failed_auth` for such networks.
 
 ## How secrets and tokens are stored
 
