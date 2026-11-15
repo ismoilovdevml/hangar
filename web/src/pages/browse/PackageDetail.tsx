@@ -12,6 +12,7 @@ import {
   useDeleteComponent,
   useRepository,
 } from '../../api/catalog';
+import { useScanComponent, useScanningStatus } from '../../api/findings';
 import { usePermissions } from '../../api/permissions';
 import type { Asset, ComponentDetail, ComponentInfo, Finding, PublishedComponent } from '../../api/types';
 import { ClientSetup } from '../../components/ClientSetup';
@@ -25,13 +26,14 @@ import { IconDownload } from '../../components/opsIcons';
 import { NotAvailable } from '../../components/NotAvailable';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
+import { Toast } from '../../components/Toast';
 import { formatBytes, formatCompact, relativeTime } from '../../lib/format';
 import { componentName, unsupportedText } from '../../lib/overview';
 import { downloadHref, hasVersion, securityPill, type BrowseTab } from '../../lib/packages';
 import { repoClientTarget } from '../../lib/repoSettings';
 import { TYPE_META } from '../../lib/repositories';
 import { useNow } from '../../lib/useNow';
-import { imageWhere, packageAt } from '../../lib/vulnerabilities';
+import { imageWhere, packageAt, scannable } from '../../lib/vulnerabilities';
 import { Fact } from './AssetDetail';
 import { dateTime, deleteMessage, shortDigest } from './detailUtil';
 import { FormatIcon } from '../../components/FormatIcon';
@@ -63,6 +65,9 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
   const remove = useDeleteComponent();
   const invalidateBrowse = useInvalidateBrowse();
   const [toDelete, setToDelete] = useState<PublishedComponent | null>(null);
+  const scanning = useScanningStatus();
+  const scan = useScanComponent(id);
+  const [scanned, setScanned] = useState<string | null>(null);
   const now = useNow();
 
   if (detail.isError) {
@@ -82,6 +87,19 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
 
   const label = componentName(c);
   const canDelete = perms.can('delete', 'repo', c.repository);
+  const canScan = (perms.can('write', 'repo', c.repository) || perms.can('write', 'system', 'security')) && scannable(c.format, scanning.data);
+  const runScan = () =>
+    scan.mutate(undefined, {
+      onSuccess: (r) => {
+        if (r.scan.status !== 'ok') return;
+        const n = r.summary.findings;
+        setScanned(
+          n === 0
+            ? 'Scan finished: no known vulnerabilities.'
+            : `Scan finished: ${n} ${n === 1 ? 'vulnerability' : 'vulnerabilities'}${r.summary.new_findings ? `, ${r.summary.new_findings} new` : ''}.`,
+        );
+      },
+    });
   const pill = securityPill(c.scan);
   const newest = versions[0]?.id === c.id;
   const cached = repo.data?.type === 'proxy';
@@ -154,12 +172,27 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
               </time>
             </p>
             {c.quarantined && c.quarantine_reason && <p className="form-error">Quarantined: {c.quarantine_reason}</p>}
+            {scan.isError && (
+              <p className="form-error" role="alert">
+                {scanError(scan.error)}
+              </p>
+            )}
+            {scan.data && scan.data.scan.status !== 'ok' && (
+              <p className="form-error" role="alert">
+                The scan did not finish{scan.data.scan.error ? `: ${scan.data.scan.error}` : '.'}
+              </p>
+            )}
           </div>
           <div className="pkg-head__actions">
             {download?.download_url && (
               <a href={downloadHref(download.download_url)} className="button button--primary" download title={download.path}>
                 <IconDownload size={16} /> Download
               </a>
+            )}
+            {canScan && (
+              <button type="button" className="button button--secondary" disabled={scan.isPending} onClick={runScan}>
+                {scan.isPending ? 'Scanning…' : 'Scan now'}
+              </button>
             )}
             {versions.length > 1 && (
               <button type="button" className="button button--secondary" onClick={() => setTab('versions')}>
@@ -202,6 +235,8 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
         </Panel>
       </div>
 
+      {scanned && <Toast onClose={() => setScanned(null)}>{scanned}</Toast>}
+
       {toDelete && (
         <ConfirmDialog
           title={`Delete ${label}${hasVersion(toDelete.version) ? ` ${toDelete.version}` : ''}?`}
@@ -220,6 +255,14 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
       )}
     </div>
   );
+}
+
+function scanError(err: unknown): string {
+  if (err instanceof ApiRequestError) {
+    if (err.status === 403) return 'You do not have permission to scan this package.';
+    return err.body?.message ?? 'The server could not scan the package.';
+  }
+  return 'Cannot reach the server. Check your connection and try again.';
 }
 
 const TAB_LABEL: Record<BrowseTab, string> = {
@@ -277,6 +320,10 @@ function Tabs({
           {counts[t] !== undefined && <span className="pkg-tabs__count"> {counts[t]}</span>}
         </button>
       ))}
+      {/* The server does not list dependents yet (GET /components/{id}/dependents answers 501). */}
+      <button type="button" role="tab" aria-selected={false} aria-disabled="true" disabled tabIndex={-1} className="pkg-tabs__tab is-planned" title="Planned: not available yet">
+        Dependents <span className="pkg-tabs__count">(planned)</span>
+      </button>
     </div>
   );
 }

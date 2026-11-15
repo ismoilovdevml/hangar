@@ -32,7 +32,7 @@ import type { CleanupSearch } from './pages/cleanup/CleanupPage';
 import type { TaskDetailSearch } from './pages/tasks/TaskDetailPage';
 import type { TasksSearch } from './pages/tasks/TasksPage';
 import type { NewTaskSearch } from './pages/tasks/NewTaskPage';
-import { isImportKind } from './lib/imports';
+import { isNewTaskKind } from './lib/imports';
 import { validateAuditSearch, type AuditSearch } from './lib/audit';
 import { isTaskStatusFilter, isTaskType } from './lib/tasks';
 import { validateLogsSearch, type SystemLogsSearch } from './pages/system/model';
@@ -277,7 +277,7 @@ const newTaskRoute = createRoute({
   path: '/tasks/new',
   staticData: { title: 'New task', gate: GATES.newTask },
   validateSearch: (s: Record<string, unknown>): NewTaskSearch => ({
-    kind: isImportKind(s.kind) ? s.kind : undefined,
+    kind: isNewTaskKind(s.kind) ? s.kind : undefined,
     repository: str(s.repository),
   }),
   component: NewTaskPage,

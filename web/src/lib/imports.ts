@@ -6,6 +6,16 @@ export function isImportKind(v: unknown): v is ImportKind {
   return v === 'import' || v === 'prewarm';
 }
 
+/** What the New task form creates: an import, a pre-warm, or a maintenance task. */
+export type NewTaskKind = ImportKind | 'maintenance';
+
+export function isNewTaskKind(v: unknown): v is NewTaskKind {
+  return isImportKind(v) || v === 'maintenance';
+}
+
+/** Maintenance task types an administrator can add (POST /tasks). */
+export type MaintenanceType = 'blob_compaction' | 'docker_gc';
+
 /** Task names, as the server checks them. */
 export const TASK_NAME_RE = /^[a-z0-9][a-z0-9-]{1,62}$/;
 

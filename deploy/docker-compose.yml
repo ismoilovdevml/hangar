@@ -124,6 +124,9 @@ services:
       HANGAR_STORAGE_S3_BUCKET: hangar
       HANGAR_STORAGE_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-hangar}
       HANGAR_STORAGE_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-hangar-secret}
+      # MinIO serves buckets by path (http://minio:9000/hangar/...), not as
+      # a virtual host (http://hangar.minio:9000/...), which does not resolve here.
+      HANGAR_STORAGE_S3_USE_PATH_STYLE: "true"
       # Development only: lets the server start with the public keys below.
       # A server without it refuses them.
       HANGAR_SERVER_DEV_MODE: "true"

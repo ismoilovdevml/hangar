@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -67,6 +68,70 @@ func (a *API) updateBlobStore(w http.ResponseWriter, r *http.Request) {
 	}
 	a.record(ctx, "blobstore.update", target, map[string]any{"location": s.Location(), "soft_quota_bytes": s.SoftQuotaBytes})
 	WriteJSON(w, http.StatusOK, a.toBlobStoreJSON(r, s))
+}
+
+// blobStoreTestTimeout bounds one connection test (every step together).
+const blobStoreTestTimeout = 20 * time.Second
+
+type blobStoreTestStep struct {
+	Name      string `json:"name"`
+	Status    string `json:"status"`
+	Message   string `json:"message"`
+	LatencyMS int64  `json:"latency_ms"`
+}
+
+// blobStoreTestResult is schema SettingsTestResult.
+type blobStoreTestResult struct {
+	OK        bool                `json:"ok"`
+	Message   string              `json:"message"`
+	Steps     []blobStoreTestStep `json:"steps"`
+	LatencyMS int64               `json:"latency_ms"`
+}
+
+// testBlobStore tests an S3 store's settings without saving them. The
+// outcome is 200 also when the test fails; 400 is for unusable input.
+func (a *API) testBlobStore(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if err := a.authorize(ctx, core.ActionAdmin, core.SystemResource(core.SystemBlobStores)); err != nil {
+		a.writeErr(w, r, err)
+		return
+	}
+	if a.Catalog == nil || a.BlobStoreTester == nil {
+		a.writeErr(w, r, notImplemented("blob store connection test"))
+		return
+	}
+	var in blobStoreInput
+	if err := decodeJSON(w, r, &in); err != nil {
+		a.writeErr(w, r, err)
+		return
+	}
+	n := in.toNew()
+	cfg, err := a.Catalog.BlobStoreTestConfig(ctx, n)
+	if err != nil {
+		a.writeErr(w, r, err)
+		return
+	}
+	tctx, cancel := context.WithTimeout(ctx, blobStoreTestTimeout)
+	defer cancel()
+	started := time.Now()
+	checks, err := a.BlobStoreTester.TestBlobStore(tctx, n.Kind, cfg)
+	if err != nil {
+		a.writeErr(w, r, err)
+		return
+	}
+	out := blobStoreTestResult{OK: true, Message: "Connected: the bucket accepts writes, reads and deletes.", Steps: []blobStoreTestStep{}}
+	for _, c := range checks {
+		st := blobStoreTestStep{Name: c.Name, Status: "ok", Message: "ok", LatencyMS: c.Latency.Milliseconds()}
+		if c.Err != nil {
+			st.Status, st.Message = "failed", c.Err.Error()
+			if out.OK {
+				out.OK, out.Message = false, st.Message
+			}
+		}
+		out.Steps = append(out.Steps, st)
+	}
+	out.LatencyMS = time.Since(started).Milliseconds()
+	WriteJSON(w, http.StatusOK, out)
 }
 
 func (a *API) deleteBlobStore(w http.ResponseWriter, r *http.Request) {

@@ -334,7 +334,8 @@ select.input:disabled { opacity: .7; }
 }
 .palette__option.is-active { background: var(--surface-solid); color: var(--lake-ink); font-weight: 600; box-shadow: var(--shadow-raised); }
 .palette__icon { display: grid; place-items: center; width: 20px; }
-.palette__label { flex: 1; }
+.palette__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette__hint { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 400; color: var(--ink-3); }
 .palette__empty { padding: 18px 12px; color: var(--ink-3); }
 .palette__foot { display: flex; gap: 16px; padding: 10px 16px; border-top: 1px solid var(--hairline); font-size: 12px; color: var(--ink-3); }
 .palette__foot .kbd { margin-right: 4px; padding: 0 6px; }

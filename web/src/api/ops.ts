@@ -257,6 +257,31 @@ export function useParseLockfile() {
   });
 }
 
+/** Changes a task's schedule, `enabled`, description or config (PUT sends them all). */
+export function useUpdateTask(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TaskInput) => apiFetch<Task>(`/tasks/${encodeURIComponent(id)}`, { method: 'PUT', body: input }),
+    onSuccess: (task) => {
+      // The page may have loaded the task by name (/tasks/docker-gc): update every copy.
+      qc.setQueriesData<Task>({ queryKey: ['tasks', 'detail'] }, (old) => (old?.id === task.id ? task : old));
+      invalidateTask(qc, id);
+    },
+  });
+}
+
+/** Deletes a task added by an administrator (built-in and policy tasks answer 409). */
+export function useDeleteTask(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<void>(`/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      qc.removeQueries({ queryKey: ['tasks', 'detail'], predicate: (q) => (q.state.data as Task | undefined)?.id === id });
+      void qc.invalidateQueries({ queryKey: opsKeys.taskList });
+    },
+  });
+}
+
 export function useStopTask() {
   const qc = useQueryClient();
   return useMutation({

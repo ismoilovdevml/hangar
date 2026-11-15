@@ -13,10 +13,14 @@ import type {
   PackageChange,
   PackageWaiverInput,
   Pullers,
+  FindingTrend,
   RepositoryList,
+  RepositoryScanQueued,
   RescanStarted,
   Rescan,
   ScanningStatus,
+  ScanResult,
+  SearchResult,
   Severity,
   WaiverInput,
 } from './types';
@@ -30,6 +34,7 @@ export const findingKeys = {
   pullers: (id: string, window: string) => ['findings', 'pullers', id, window] as const,
   assignees: (q: string) => ['findings', 'assignees', q] as const,
   rescan: ['findings', 'rescan'] as const,
+  trend: (days: number) => ['findings', 'trend', days] as const,
 };
 
 /** Query parameters of GET /vulnerabilities/fix-plan. */
@@ -112,6 +117,38 @@ export function useStartRescan() {
       qc.setQueryData(findingKeys.rescan, { run: r.run });
       void qc.invalidateQueries({ queryKey: findingKeys.status });
     },
+  });
+}
+
+/** Queues a scan of every component of one repository (202). */
+export function useScanRepository(name: string) {
+  return useMutation({
+    mutationFn: () => apiFetch<RepositoryScanQueued>(`/repositories/${encodeURIComponent(name)}:scan`, { method: 'POST' }),
+  });
+}
+
+/** Scans one component now; answers when the scan is done. */
+export function useScanComponent(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<ScanResult>(`/components/${encodeURIComponent(id)}:scan`, { method: 'POST' }),
+    onSuccess: () => invalidateAll(qc),
+  });
+}
+
+/** Packages with a quarantined version in the readable repositories (search `security:quarantined`). */
+export function useQuarantinedPackages() {
+  return useQuery({
+    queryKey: [...findingKeys.all, 'quarantined-packages'] as const,
+    queryFn: async ({ signal }) => (await apiFetch<SearchResult>('/search', { query: { q: 'security:quarantined', limit: 1 }, signal })).total,
+  });
+}
+
+/** Open findings per day (UTC), oldest first. */
+export function useFindingTrend(days = 30) {
+  return useQuery({
+    queryKey: findingKeys.trend(days),
+    queryFn: ({ signal }) => apiFetch<FindingTrend>('/findings/trend', { query: { days }, signal }),
   });
 }
 

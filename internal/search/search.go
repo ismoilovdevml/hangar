@@ -152,6 +152,10 @@ func (s *Service) matchCTE(b *builder, p Parsed, q Query, skip string) string {
 		}
 		where = append(where, "EXISTS (SELECT 1 FROM assets a WHERE a.component_id = c.id AND a.blob_digest LIKE ANY("+b.arg(pats)+"::text[]))")
 	}
+	for _, h := range p.Digests {
+		where = append(where, "(EXISTS (SELECT 1 FROM assets a WHERE a.component_id = c.id AND a.blob_digest LIKE "+b.arg("sha256:"+h+"%")+
+			") OR lower(c.namespace || '/' || c.name) LIKE "+b.arg("%"+h+"%")+")")
+	}
 	if len(p.CVEs) > 0 {
 		cves := b.arg(p.CVEs)
 		where = append(where, "EXISTS (SELECT 1 FROM findings f WHERE f.component_id = c.id AND f.status <> 'fixed' AND (upper(f.advisory_id) = ANY("+

@@ -51,7 +51,15 @@ func TestParse(t *testing.T) {
 			t.Errorf("Parse(%q) = %+v", tt.in, p)
 		}
 	}
-	p, err := Parse("sha256:ABCDEF12 cve:cve-2026-1 unused:>90d published:<2026-01-01 license:MIT security:findings")
+	p, err := Parse("CVE-2021-44228 ghsa-jfh8-c2jp-5v3q 05325B3A deadbeef 20260101")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(p.CVEs, []string{"CVE-2021-44228", "GHSA-JFH8-C2JP-5V3Q"}) || !reflect.DeepEqual(p.Digests, []string{"05325b3a"}) ||
+		p.Text != "deadbeef 20260101" {
+		t.Errorf("bare ids = %+v", p)
+	}
+	p, err = Parse("sha256:ABCDEF12 cve:cve-2026-1 unused:>90d published:<2026-01-01 license:MIT security:findings")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,6 +171,17 @@ func TestSearchIntegration(t *testing.T) {
 	}
 	if r = run(Query{Q: "cve:cve-2026-1234"}); r.Total != 1 || r.Items[0].ComponentID != ledger {
 		t.Errorf("cve: %+v", r.Items)
+	}
+	// Pasted without qualifiers: an advisory id and a bare digest prefix.
+	if r = run(Query{Q: "CVE-2026-1234"}); r.Total != 1 || r.Items[0].ComponentID != ledger {
+		t.Errorf("bare cve: %+v", r.Items)
+	}
+	bare := strings.TrimPrefix(d, "sha256:")[:16]
+	if !isDigest(bare) {
+		t.Fatalf("test digest prefix %q is not digest-like", bare)
+	}
+	if r = run(Query{Q: bare}); r.Total != 1 || r.Items[0].ComponentID != ledger {
+		t.Errorf("bare digest: %+v", r.Items)
 	}
 	if r = run(Query{Q: "repo:npm-hosted"}); r.Total != 2 {
 		t.Errorf("repo: %+v", r.Items)

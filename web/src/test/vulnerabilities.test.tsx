@@ -16,9 +16,14 @@ describe('vulnerabilities', () => {
   it('shows the counts, the impact of upgrading and one row per package, used ones first', async () => {
     renderApp('/vulnerabilities');
     expect(await screen.findByRole('heading', { level: 1, name: 'Vulnerabilities' })).toBeInTheDocument();
-    const pills = screen.getByRole('list', { name: 'Open findings by severity' });
-    await waitFor(() => expect(within(pills).getByText('5 high')).toBeInTheDocument());
-    expect(within(pills).getByText('1 critical')).toBeInTheDocument();
+    const cards = screen.getByRole('list', { name: 'Open findings by severity' });
+    await waitFor(() => expect(within(cards).getByRole('listitem', { name: 'High: 5' })).toBeInTheDocument());
+    expect(within(cards).getByRole('listitem', { name: 'Critical: 1' })).toHaveTextContent(/1 has a fix|No fix yet/);
+    // The quarantine policy of the repositories and the 30-day trend.
+    const policy = screen.getByRole('region', { name: 'Policy · quarantine critical' });
+    await waitFor(() => expect(policy).toHaveTextContent(/On in \d+ of \d+ repositories|Off in every repository/));
+    const trend = screen.getByRole('region', { name: 'Last 30 days · critical + high' });
+    expect(await within(trend).findByRole('img', { name: /^Open critical and high findings: / })).toBeInTheDocument();
     expect(await screen.findByText(/9 scanned · OSV · checked 40 min ago/)).toBeInTheDocument();
 
     const impact = await screen.findByRole('region', { name: 'Impact' });

@@ -13,42 +13,22 @@ import {
   useStartRescan,
 } from '../../api/findings';
 import { isMissingEndpoint, useCanSystem } from '../../api/ops';
-import type { FixPlan, FindingList, PackagePlan, Rescan, ScanningStatus } from '../../api/types';
+import type { FixPlan, PackagePlan, Rescan, ScanningStatus } from '../../api/types';
 import { ErrorNote } from '../../components/ErrorNote';
 import { FormatIcon } from '../../components/FormatIcon';
 import { IconSearch } from '../../components/icons';
 import { Panel } from '../../components/Panel';
-import { Pill } from '../../components/Pill';
 import { Select, type SelectOption } from '../../components/Select';
 import { relativeTime } from '../../lib/format';
 import { plural } from '../../lib/overview';
-import { errorText, hasFilters, PLAN_TABS, planQuery, SEVERITY_META, type VulnSearch } from '../../lib/vulnerabilities';
+import { errorText, hasFilters, PLAN_TABS, planQuery, type VulnSearch } from '../../lib/vulnerabilities';
 import { FindingDrawer } from './FindingDrawer';
 import { FixPlanTable } from './FixPlanTable';
+import { VulnSummary } from './VulnSummary';
 import { AssignDialog, WaiveDialog } from './PlanDialogs';
 import './vulnerabilities.css';
 
 const route = getRouteApi('/app/vulnerabilities');
-
-const HEADER_SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
-
-/** "0 critical · 27 high · 6 medium · 0 low": open findings of the readable repositories. */
-function SeverityPills({ list }: { list?: FindingList }) {
-  return (
-    <ul className="vhead__pills" aria-label="Open findings by severity" aria-busy={!list || undefined}>
-      {HEADER_SEVERITIES.map((s) => {
-        const n = list ? list.totals[s] + (s === 'low' ? (list.totals.unknown ?? 0) : 0) : null;
-        return (
-          <li key={s}>
-            <Pill tone={n ? SEVERITY_META[s].tone : 'neutral'} className={n ? 'vhead__pill' : 'vhead__pill is-zero'}>
-              {n ?? '–'} {s}
-            </Pill>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
 
 /** "451 scanned · OSV · checked 47 min ago" and the Rescan button with its progress. */
 function ScanState({ status, canRescan, canFollow }: { status?: ScanningStatus; canRescan: boolean; canFollow: boolean }) {
@@ -311,7 +291,6 @@ export function VulnerabilitiesPage() {
     <div className="screen vscreen">
       <header className="vhead">
         <h1 className="vhead__title">Vulnerabilities</h1>
-        {totals.isError ? <span className="meta">Counts unavailable</span> : <SeverityPills list={totals.data} />}
         <span className="vhead__spacer" />
         {status.isError ? (
           <span className="vhead__meta">Scanner status unavailable</span>
@@ -319,6 +298,8 @@ export function VulnerabilitiesPage() {
           <ScanState status={status.data} canRescan={canWrite} canFollow={canRead} />
         )}
       </header>
+
+      {totals.isError ? <span className="meta">Counts unavailable</span> : <VulnSummary list={totals.data} />}
 
       {plan.isError ? null : data ? (
         <ImpactBanner plan={data} status={status.data} />

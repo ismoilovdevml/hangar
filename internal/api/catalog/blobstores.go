@@ -51,6 +51,9 @@ type BlobStore struct {
 	FS             *FSConfig
 	S3             *S3Config // SecretSealed is cleared on reads
 	CreatedAt      time.Time
+	// FromConfig: the store is defined by the server configuration
+	// (storage.*); only its soft quota can change through the API.
+	FromConfig bool
 
 	UsedBytes        int64 // live blobs (deduplicated)
 	BlobCount        int64
@@ -139,6 +142,7 @@ func (c *Catalog) BlobStores(ctx context.Context) ([]*BlobStore, Totals, error) 
 		if err != nil {
 			return nil, Totals{}, fmt.Errorf("list blob stores: %w", err)
 		}
+		s.FromConfig = c.configured(s.Name)
 		out = append(out, s)
 		t.UsedBytes += s.UsedBytes
 		t.DedupSavedBytes += s.DedupSavedBytes
@@ -172,6 +176,7 @@ func (c *Catalog) BlobStore(ctx context.Context, name string) (*BlobStore, error
 	if err != nil {
 		return nil, fmt.Errorf("get blob store: %w", err)
 	}
+	s.FromConfig = c.configured(s.Name)
 	return s, nil
 }
 

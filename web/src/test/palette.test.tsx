@@ -19,8 +19,11 @@ describe('command palette', () => {
 
     await user.type(input, 'cluster');
     const options = within(dialog).getAllByRole('option');
-    expect(options[0]).toHaveTextContent('Search packages for “cluster”');
-    await user.keyboard('{ArrowDown}');
+    // A matching page ranks first; the package search is the fallback at the end.
+    expect(options[0]).toHaveTextContent('Cluster & replication');
+    expect(options.at(-1)).toHaveTextContent('Search packages for “cluster”');
+    // ArrowUp at the top stays there instead of wrapping to the last option.
+    await user.keyboard('{ArrowUp}');
     expect(within(dialog).getByRole('option', { name: 'Cluster & replication' })).toHaveAttribute('aria-selected', 'true');
     await user.keyboard('{Enter}');
 
@@ -81,5 +84,59 @@ describe('command palette', () => {
     for (const hidden of ['Authentication', 'Proxies', 'System status', 'System logs', 'Audit log']) {
       expect(labels).not.toContain(hidden);
     }
+  });
+
+  it('opens a page on Enter when its name matches', async () => {
+    const user = userEvent.setup();
+    const { history } = renderApp('/repositories');
+    await screen.findByRole('navigation', { name: 'Primary' });
+    await user.keyboard('{Control>}k{/Control}');
+    const dialog = await screen.findByRole('dialog', { name: 'Command palette' });
+    await user.type(within(dialog).getByRole('combobox'), 'blob');
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(history.location.pathname).toBe('/blob-stores'));
+  });
+
+  it('never wraps from the empty state to Sign out', async () => {
+    const user = userEvent.setup();
+    renderApp('/repositories');
+    await screen.findByRole('navigation', { name: 'Primary' });
+    await user.keyboard('{Control>}k{/Control}');
+    const dialog = await screen.findByRole('dialog', { name: 'Command palette' });
+    await user.keyboard('{ArrowUp}');
+    expect(within(dialog).getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'true');
+    expect(within(dialog).getByRole('option', { name: 'Sign out' })).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('jumps to a repository, a package, an advisory and a user', async () => {
+    const user = userEvent.setup();
+    const { history } = renderApp('/repositories');
+    await screen.findByRole('navigation', { name: 'Primary' });
+    const open = async (q: string) => {
+      await user.keyboard('{Control>}k{/Control}');
+      const dialog = await screen.findByRole('dialog', { name: 'Command palette' });
+      await user.type(within(dialog).getByRole('combobox'), q);
+      return dialog;
+    };
+
+    let dialog = await open('npm-internal');
+    await user.click(await within(dialog).findByRole('option', { name: /^npm-internal\s*npm · hosted$/ }));
+    await waitFor(() => expect(history.location.pathname).toBe('/repositories/npm-internal/settings'));
+
+    dialog = await open('ui-kit');
+    await user.click(await within(dialog).findByRole('option', { name: /^@acme\/ui-kit@/ }));
+    await waitFor(() => expect(history.location.pathname).toBe('/browse'));
+    expect(history.location.search).toContain('name=ui-kit');
+
+    dialog = await open('CVE-2020-8203');
+    expect(within(dialog).queryByRole('option', { name: /^npm-/ })).not.toBeInTheDocument();
+    await user.click(await within(dialog).findByRole('option', { name: /^GHSA-p6mc-m468-83gw · @acme\/ui-kit/ }));
+    await waitFor(() => expect(history.location.pathname).toBe('/vulnerabilities'));
+    expect(history.location.search).toContain('finding=');
+
+    dialog = await open('j.karimov');
+    await user.click(await within(dialog).findByRole('option', { name: /^j\.karimov\s*Jasur Karimov$/ }));
+    await waitFor(() => expect(history.location.pathname).toBe('/access'));
+    expect(history.location.search).toContain('user=');
   });
 });

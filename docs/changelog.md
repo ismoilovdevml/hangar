@@ -68,6 +68,41 @@
   repository settings show Save under the settings and keep it in reach while
   there are unsaved changes; buttons and links on touch screens get 44 px
   targets.
+- **Repository actions in the UI**: proxy settings offer "Invalidate cache"
+  (with a confirmation and what was dropped), and repositories of a scanned
+  format offer "Scan now". A package version can be scanned from its page.
+  The Dependents tab is shown as planned; there is no SBOM download until the
+  server serves SBOMs.
+- **Scheduled tasks can be edited**: schedule and on/off on every task except
+  cleanup policy tasks (which link to their policy), and tasks an
+  administrator added can be deleted. New task adds blob compaction and Docker
+  garbage collection, and an optional schedule for imports and pre-warms.
+- **Blob store connection test**: `POST /blob-stores:test` checks an S3
+  store's settings without saving them (bucket, write, read, delete; a failure
+  names the S3 error code). Adding an S3 store tests it first; "Add anyway"
+  saves a store that failed the test. S3 stores added in the UI get an
+  "Edit connection" form (credentials, region, path style; the location only
+  while the store is empty).
+- **The default blob store shows the settings in effect**: its stored
+  settings follow the server configuration and environment on every start
+  (e.g. `HANGAR_STORAGE_S3_USE_PATH_STYLE`), and `from_config` marks it as
+  defined by the configuration.
+- **Blob stores page**: "Run compaction" on the reclaimable total, and
+  "Move repositories" shown as planned.
+- **Vulnerabilities summary**: severity cards (with how many have a fix), the
+  quarantine policy of the repositories with the number of quarantined
+  packages, and the open critical and high findings of the last 30 days.
+- **Search finds pasted ids**: a bare advisory id (`CVE-2021-44228`,
+  `GHSA-…`, `PYSEC-…`, `RUSTSEC-…`) searches as `cve:`, and a bare hex word of
+  8 to 64 digits matches a digest prefix or the package name.
+- **Command palette**: jumps to repositories, packages, advisories (by CVE or
+  GHSA id) and users; a matching page ranks first and Enter opens it, the
+  package search is the last option, and ArrowUp no longer wraps to
+  "Sign out". "Create a token" is an action.
+- **Routing suggestions** no longer say "already in place" for patterns that
+  are in the form but not saved.
+- **Development compose stack**: Hangar addresses the bundled MinIO
+  path-style, so the default S3 store works.
 
 ## v0.1.8 (2026-11-11)
 

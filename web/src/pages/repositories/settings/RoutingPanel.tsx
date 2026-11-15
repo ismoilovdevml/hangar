@@ -71,9 +71,11 @@ export function RoutingPanel({ repo, memberTypes }: { repo: Repository; memberTy
           setSuggested('Your hosted repositories publish nothing yet, so there is nothing to suggest.');
           return;
         }
-        const added = new Set<string>();
-        edit((d) => {
+        // Built from the current draft here, not inside a state updater: the
+        // message below depends on what was added.
+        const withSuggestions = (d: Draft) => {
           const next: Draft = { ...d, members: { ...d.members } };
+          const added = new Set<string>();
           for (const s of res.suggestions) {
             if (isGroup && s.member) {
               const cur = next.members[s.member] ?? { exclusive: '', block: '' };
@@ -90,12 +92,17 @@ export function RoutingPanel({ repo, memberTypes }: { repo: Repository; memberTy
               }
             }
           }
-          return next;
-        });
+          return { next, added };
+        };
+        const { next, added } = withSuggestions(draft);
+        if (added.size) edit(() => next);
+        const savedAlready = withSuggestions(toDraft(repo)).added.size === 0;
         setSuggested(
           added.size
             ? `Added ${[...added].join(', ')}. Review and save.`
-            : 'The suggested patterns are already in place.',
+            : savedAlready
+              ? 'The suggested patterns are already in place.'
+              : 'The suggested patterns are in the form but not saved yet. Review and save.',
         );
       },
     });

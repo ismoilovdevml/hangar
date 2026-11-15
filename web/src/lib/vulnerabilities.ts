@@ -4,7 +4,7 @@
  */
 import { ApiRequestError } from '../api/client';
 import type { FixPlanQuery } from '../api/findings';
-import type { Finding, PackagePlan, Severity, UpgradeLine } from '../api/types';
+import type { Finding, PackagePlan, ScanningStatus, Severity, UpgradeLine } from '../api/types';
 import type { Tone } from './format';
 
 export const SEVERITIES = ['critical', 'high', 'medium', 'low', 'unknown'] as const satisfies readonly Severity[];
@@ -289,4 +289,10 @@ export function advisoryExcerpt(source: string, lines = ADVISORY_EXCERPT_LINES):
   // Drop trailing blank lines.
   while (out.length && !out[out.length - 1]!.trim()) out.pop();
   return out.length < all.length ? out.join('\n') : null;
+}
+
+/** Whether the scanner has an advisory source for the format (Docker: image scanning). */
+export function scannable(format: string, status: Pick<ScanningStatus, 'enabled' | 'supported_formats' | 'images'> | undefined): boolean {
+  if (!status?.enabled) return false;
+  return status.supported_formats.includes(format) || (format === 'docker' && !!status.images?.enabled);
 }

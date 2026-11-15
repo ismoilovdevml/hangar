@@ -34,6 +34,7 @@ import {
 } from '../../../lib/repositories';
 import { RepoSettingsFields } from '../RepoFormFields';
 import { focusFirstError } from '../repoFormHelpers';
+import { RepoActions } from './RepoActions';
 import { RoutingPanel } from './RoutingPanel';
 import { SigningKeyPanel } from './SigningKeyPanel';
 import '../../../styles/catalog.css';
@@ -222,6 +223,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
                 {toggle.isPending ? 'Saving…' : online ? 'Take offline' : 'Bring online'}
               </button>
             )}
+            <RepoActions repo={repo} />
           </>
         }
       />

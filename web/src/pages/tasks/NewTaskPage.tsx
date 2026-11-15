@@ -2,18 +2,20 @@ import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { errorText, useCanSystem, useCreateTask, useParseLockfile } from '../../api/ops';
 import type { ImportTaskConfig, PrewarmTaskConfig } from '../../api/opsTypes';
-import { useRepositories } from '../../api/hooks';
+import { useBlobStores, useRepositories } from '../../api/hooks';
 import type { Repository } from '../../api/types';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { Segmented } from '../../components/Segmented';
 import { Select } from '../../components/Select';
-import { importHints, splitList, TASK_NAME_RE, type ImportKind } from '../../lib/imports';
+import { cronToSchedule, scheduleToCron, type ScheduleDraft } from '../../lib/cron';
+import { importHints, splitList, TASK_NAME_RE, type ImportKind, type MaintenanceType, type NewTaskKind } from '../../lib/imports';
+import { ScheduleField } from '../cleanup/ScheduleField';
 
 const route = getRouteApi('/app/tasks/new');
 
 export interface NewTaskSearch {
-  kind?: ImportKind;
+  kind?: NewTaskKind;
   repository?: string;
 }
 
@@ -44,6 +46,14 @@ interface Draft {
   rps: string;
   concurrency: string;
   runNow: boolean;
+  schedule: ScheduleDraft;
+  maintenance: MaintenanceType;
+  /** blob_compaction: one store; empty = all. */
+  blobStore: string;
+  /** docker_gc: one repository; empty = all Docker repositories. */
+  gcRepository: string;
+  olderThanDays: string;
+  dryRun: boolean;
 }
 
 const EMPTY: Draft = {
@@ -67,7 +77,33 @@ const EMPTY: Draft = {
   rps: '',
   concurrency: '',
   runNow: true,
+  schedule: cronToSchedule(null),
+  maintenance: 'blob_compaction',
+  blobStore: '',
+  gcRepository: '',
+  olderThanDays: '',
+  dryRun: false,
 };
+
+const MAINTENANCE: { value: MaintenanceType; label: string; hint: string }[] = [
+  { value: 'blob_compaction', label: 'Blob compaction', hint: 'Frees the space of soft-deleted blobs' },
+  { value: 'docker_gc', label: 'Docker garbage collection', hint: 'Removes unreferenced image layers' },
+];
+
+function maintenanceConfig(d: Draft): Record<string, unknown> {
+  if (d.maintenance === 'blob_compaction') return d.blobStore ? { blob_store: d.blobStore } : {};
+  const days = num(d.olderThanDays);
+  return {
+    ...(days !== undefined ? { older_than_days: days } : {}),
+    ...(d.gcRepository ? { repositories: [d.gcRepository] } : {}),
+    ...(d.dryRun ? { dry_run: true } : {}),
+  };
+}
+
+function maintenanceDescription(d: Draft): string {
+  if (d.maintenance === 'blob_compaction') return `Blob compaction · ${d.blobStore || 'all blob stores'}`;
+  return `Docker garbage collection · ${d.gcRepository || 'all Docker repositories'}`;
+}
 
 const num = (s: string) => (s.trim() === '' ? undefined : Number(s));
 
@@ -126,9 +162,15 @@ function buildConfig(kind: ImportKind, d: Draft, format: string): ImportTaskConf
   };
 }
 
-function validate(kind: ImportKind, d: Draft): Record<string, string> {
+function validate(kind: NewTaskKind, d: Draft): Record<string, string> {
   const e: Record<string, string> = {};
   if (!TASK_NAME_RE.test(d.name)) e.name = 'Lower-case letters, digits and dashes, 2 to 63 characters';
+  if (scheduleToCron(d.schedule) === undefined) e.schedule = 'Complete the schedule';
+  if (kind === 'maintenance') {
+    const days = d.olderThanDays.trim();
+    if (d.maintenance === 'docker_gc' && days !== '' && !(Number.isInteger(Number(days)) && Number(days) >= 0)) e.olderThanDays = 'Whole days, 0 or more';
+    return e;
+  }
   if (!d.repository) e.repository = kind === 'import' ? 'Choose the hosted repository to import into' : 'Choose the proxy or group to fill';
   const needSource = kind === 'import' || d.inventory;
   if (needSource && !/^https?:\/\/[^\s/]+/i.test(d.url.trim().replace(/^sparse\+/, ''))) e.url = 'An http(s) URL of the source registry';
@@ -147,9 +189,10 @@ export function NewTaskPage() {
   const search = route.useSearch();
   const navigate = route.useNavigate();
   const canWrite = useCanSystem('tasks', 'write');
-  const kind: ImportKind = search.kind ?? 'import';
+  const kind: NewTaskKind = search.kind ?? 'import';
   const repos = useRepositories({ limit: 1000 });
-  const [draft, setDraft] = useState<Draft>(() => ({ ...EMPTY, repository: search.repository ?? '' }));
+  const stores = useBlobStores(kind === 'maintenance');
+  const [draft, setDraft] = useState<Draft>(() => ({ ...EMPTY, repository: search.repository ?? '', runNow: kind !== 'maintenance' }));
   const [shown, setShown] = useState(false);
   const [chips, setChips] = useState<LockfileChip[]>([]);
   const [lockError, setLockError] = useState<string | null>(null);
@@ -161,7 +204,9 @@ export function NewTaskPage() {
 
   const candidates = useMemo(
     () =>
-      (repos.data?.items ?? []).filter((r: Repository) => (kind === 'import' ? r.type === 'hosted' : r.type === 'proxy' || r.type === 'group')),
+      (repos.data?.items ?? []).filter((r: Repository) =>
+        kind === 'maintenance' ? r.format === 'docker' && r.type !== 'group' : kind === 'import' ? r.type === 'hosted' : r.type === 'proxy' || r.type === 'group',
+      ),
     [repos.data, kind],
   );
   const repo = candidates.find((r) => r.name === draft.repository);
@@ -171,9 +216,10 @@ export function NewTaskPage() {
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const err = (k: string) => (shown ? errors[k] : undefined);
 
-  const switchKind = (k: ImportKind) => {
+  const switchKind = (k: NewTaskKind) => {
     void navigate({ search: { kind: k, repository: undefined }, replace: true });
-    setDraft((d) => ({ ...d, repository: '' }));
+    // Maintenance deletes data: it does not start on its own unless asked.
+    setDraft((d) => ({ ...d, repository: '', runNow: k !== 'maintenance' }));
     setChips([]);
   };
 
@@ -196,15 +242,19 @@ export function NewTaskPage() {
     e.preventDefault();
     setShown(true);
     if (Object.keys(errors).length) return;
+    const schedule = scheduleToCron(draft.schedule) ?? null;
     create.mutate(
       {
-        input: {
-          name: draft.name,
-          type: kind === 'import' ? 'repository_import' : 'proxy_prewarm',
-          description: kind === 'import' ? `Import into ${draft.repository}` : `Pre-warm ${draft.repository}`,
-          schedule: null,
-          config: buildConfig(kind, draft, format) as Record<string, unknown>,
-        },
+        input:
+          kind === 'maintenance'
+            ? { name: draft.name, type: draft.maintenance, description: maintenanceDescription(draft), schedule, config: maintenanceConfig(draft) }
+            : {
+                name: draft.name,
+                type: kind === 'import' ? 'repository_import' : 'proxy_prewarm',
+                description: kind === 'import' ? `Import into ${draft.repository}` : `Pre-warm ${draft.repository}`,
+                schedule,
+                config: buildConfig(kind, draft, format) as Record<string, unknown>,
+              },
         runNow: draft.runNow,
       },
       {
@@ -214,14 +264,15 @@ export function NewTaskPage() {
   };
 
   const coordCount = splitList(draft.coordinates).length;
-  const needSource = kind === 'import' || draft.inventory;
+  const needSource = kind === 'import' || (kind === 'prewarm' && draft.inventory);
+  const scheduleField = <ScheduleField value={draft.schedule} onChange={(schedule) => set({ schedule })} error={err('schedule')} />;
 
   return (
     <div className="screen">
       <PageHeader
         eyebrow={<Link to="/tasks">Scheduled tasks</Link>}
         title="New task"
-        description="Import packages from another registry, or fill a proxy cache before clients ask for them."
+        description="Import packages from another registry, fill a proxy cache before clients ask for them, or schedule maintenance."
       />
       {!canWrite ? (
         <Panel>
@@ -230,13 +281,15 @@ export function NewTaskPage() {
       ) : (
         <form className="new-task" onSubmit={onSubmit} noValidate aria-label="New task">
           <Panel>
-            <Segmented<ImportKind>
+            <Segmented<NewTaskKind>
+              className="new-task__kind"
               label="Task type"
               value={kind}
               onChange={switchKind}
               options={[
                 { value: 'import', label: 'Import packages' },
                 { value: 'prewarm', label: 'Pre-warm a proxy' },
+                { value: 'maintenance', label: 'Maintenance' },
               ]}
             />
             <div className="form-grid new-task__grid">
@@ -248,7 +301,7 @@ export function NewTaskPage() {
                   id={f('name')}
                   className="input input--mono"
                   value={draft.name}
-                  placeholder={kind === 'import' ? 'import-npm' : 'prewarm-npm'}
+                  placeholder={kind === 'import' ? 'import-npm' : kind === 'prewarm' ? 'prewarm-npm' : draft.maintenance === 'docker_gc' ? 'docker-gc-weekly' : 'compaction-weekly'}
                   aria-invalid={!!err('name') || undefined}
                   aria-describedby={err('name') ? f('name-err') : undefined}
                   onChange={(e) => set({ name: e.target.value.trim() })}
@@ -261,23 +314,86 @@ export function NewTaskPage() {
                   </span>
                 )}
               </div>
-              <div className="field">
-                <label className="field__label" htmlFor={f('repo')}>
-                  {kind === 'import' ? 'Hosted repository' : 'Proxy or group repository'}
-                </label>
-                <Select
-                  id={f('repo')}
-                  value={draft.repository}
-                  searchable
-                  placeholder={repos.isPending ? 'Loading…' : candidates.length ? 'Choose a repository' : 'No repositories of this kind'}
-                  options={candidates.map((r) => ({ value: r.name, label: r.name, hint: `${r.format} · ${r.type}` }))}
-                  onChange={(v) => {
-                    set({ repository: v });
-                    setChips([]);
-                  }}
-                />
-                {err('repository') && <span className="field__error">{err('repository')}</span>}
-              </div>
+              {kind === 'maintenance' && (
+                <>
+                  <div className="field">
+                    <label className="field__label" htmlFor={f('mtype')}>
+                      Maintenance
+                    </label>
+                    <Select<MaintenanceType> id={f('mtype')} value={draft.maintenance} options={MAINTENANCE} onChange={(v) => set({ maintenance: v })} />
+                  </div>
+                  {draft.maintenance === 'blob_compaction' ? (
+                    <div className="field">
+                      <label className="field__label" htmlFor={f('store')}>
+                        Blob store
+                      </label>
+                      <Select
+                        id={f('store')}
+                        value={draft.blobStore}
+                        options={[{ value: '', label: 'All blob stores' }, ...(stores.data?.items ?? []).map((b) => ({ value: b.name, label: b.name, hint: b.location }))]}
+                        onChange={(v) => set({ blobStore: v })}
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="field">
+                        <label className="field__label" htmlFor={f('gcrepo')}>
+                          Docker repository
+                        </label>
+                        <Select
+                          id={f('gcrepo')}
+                          value={draft.gcRepository}
+                          searchable
+                          options={[{ value: '', label: 'All Docker repositories' }, ...candidates.map((r) => ({ value: r.name, label: r.name, hint: r.type }))]}
+                          onChange={(v) => set({ gcRepository: v })}
+                        />
+                      </div>
+                      <div className="field">
+                        <label className="field__label" htmlFor={f('days')}>
+                          Unreferenced for <span className="field__optional">days</span>
+                        </label>
+                        <input
+                          id={f('days')}
+                          className="input"
+                          type="number"
+                          min={0}
+                          inputMode="numeric"
+                          placeholder="7"
+                          value={draft.olderThanDays}
+                          aria-invalid={!!err('olderThanDays') || undefined}
+                          onChange={(e) => set({ olderThanDays: e.target.value })}
+                        />
+                        {err('olderThanDays') && <span className="field__error">{err('olderThanDays')}</span>}
+                      </div>
+                      <label className="checkbox">
+                        <input type="checkbox" checked={draft.dryRun} onChange={(e) => set({ dryRun: e.target.checked })} /> Dry run: only report what
+                        would be removed
+                      </label>
+                    </>
+                  )}
+                  <div className="field field--wide">{scheduleField}</div>
+                </>
+              )}
+
+              {kind !== 'maintenance' && (
+                <div className="field">
+                  <label className="field__label" htmlFor={f('repo')}>
+                    {kind === 'import' ? 'Hosted repository' : 'Proxy or group repository'}
+                  </label>
+                  <Select
+                    id={f('repo')}
+                    value={draft.repository}
+                    searchable
+                    placeholder={repos.isPending ? 'Loading…' : candidates.length ? 'Choose a repository' : 'No repositories of this kind'}
+                    options={candidates.map((r) => ({ value: r.name, label: r.name, hint: `${r.format} · ${r.type}` }))}
+                    onChange={(v) => {
+                      set({ repository: v });
+                      setChips([]);
+                    }}
+                  />
+                  {err('repository') && <span className="field__error">{err('repository')}</span>}
+                </div>
+              )}
 
               {kind === 'prewarm' && (
                 <div className="field field--wide">
@@ -426,79 +542,82 @@ export function NewTaskPage() {
               )}
             </div>
 
-            <details className="new-task__more">
-              <summary>More options</summary>
-              <div className="form-grid form-grid--3">
-                {needSource && (
-                  <label className="field" htmlFor={f('exclude')}>
-                    Exclude
+            {kind !== 'maintenance' && (
+              <details className="new-task__more">
+                <summary>More options</summary>
+                <div className="new-task__schedule">{scheduleField}</div>
+                <div className="form-grid form-grid--3">
+                  {needSource && (
+                    <label className="field" htmlFor={f('exclude')}>
+                      Exclude
+                      <input
+                        id={f('exclude')}
+                        className="input input--mono"
+                        value={draft.exclude}
+                        placeholder="internal-*"
+                        onChange={(e) => set({ exclude: e.target.value })}
+                        spellCheck={false}
+                      />
+                    </label>
+                  )}
+                  {needSource && format === 'apt' && (
+                    <>
+                      <label className="field" htmlFor={f('dist')}>
+                        Suite
+                        <input id={f('dist')} className="input input--mono" value={draft.distribution} placeholder="stable" onChange={(e) => set({ distribution: e.target.value })} />
+                      </label>
+                      <label className="field" htmlFor={f('comps')}>
+                        Components
+                        <input id={f('comps')} className="input input--mono" value={draft.components} placeholder="main" onChange={(e) => set({ components: e.target.value })} />
+                      </label>
+                      <label className="field" htmlFor={f('archs')}>
+                        Architectures
+                        <input id={f('archs')} className="input input--mono" value={draft.architectures} placeholder="amd64" onChange={(e) => set({ architectures: e.target.value })} />
+                      </label>
+                    </>
+                  )}
+                  {kind === 'import' && format === 'raw' && (
+                    <label className="field field--wide" htmlFor={f('files')}>
+                      Files <span className="field__hint">paths relative to the source URL; end a directory with /</span>
+                      <textarea
+                        id={f('files')}
+                        className="input input--mono textarea new-task__short"
+                        value={draft.files}
+                        placeholder={'tools/\ndocs/guide.pdf'}
+                        onChange={(e) => set({ files: e.target.value })}
+                      />
+                    </label>
+                  )}
+                  <label className="field" htmlFor={f('rps')}>
+                    Requests per second
                     <input
-                      id={f('exclude')}
-                      className="input input--mono"
-                      value={draft.exclude}
-                      placeholder="internal-*"
-                      onChange={(e) => set({ exclude: e.target.value })}
-                      spellCheck={false}
+                      id={f('rps')}
+                      className="input"
+                      type="number"
+                      min={0}
+                      value={draft.rps}
+                      placeholder="10"
+                      aria-invalid={!!err('rps') || undefined}
+                      onChange={(e) => set({ rps: e.target.value })}
                     />
                   </label>
-                )}
-                {needSource && format === 'apt' && (
-                  <>
-                    <label className="field" htmlFor={f('dist')}>
-                      Suite
-                      <input id={f('dist')} className="input input--mono" value={draft.distribution} placeholder="stable" onChange={(e) => set({ distribution: e.target.value })} />
-                    </label>
-                    <label className="field" htmlFor={f('comps')}>
-                      Components
-                      <input id={f('comps')} className="input input--mono" value={draft.components} placeholder="main" onChange={(e) => set({ components: e.target.value })} />
-                    </label>
-                    <label className="field" htmlFor={f('archs')}>
-                      Architectures
-                      <input id={f('archs')} className="input input--mono" value={draft.architectures} placeholder="amd64" onChange={(e) => set({ architectures: e.target.value })} />
-                    </label>
-                  </>
-                )}
-                {kind === 'import' && format === 'raw' && (
-                  <label className="field field--wide" htmlFor={f('files')}>
-                    Files <span className="field__hint">paths relative to the source URL; end a directory with /</span>
-                    <textarea
-                      id={f('files')}
-                      className="input input--mono textarea new-task__short"
-                      value={draft.files}
-                      placeholder={'tools/\ndocs/guide.pdf'}
-                      onChange={(e) => set({ files: e.target.value })}
+                  <label className="field" htmlFor={f('conc')}>
+                    At once
+                    <input
+                      id={f('conc')}
+                      className="input"
+                      type="number"
+                      min={0}
+                      max={16}
+                      value={draft.concurrency}
+                      placeholder="4"
+                      aria-invalid={!!err('concurrency') || undefined}
+                      onChange={(e) => set({ concurrency: e.target.value })}
                     />
                   </label>
-                )}
-                <label className="field" htmlFor={f('rps')}>
-                  Requests per second
-                  <input
-                    id={f('rps')}
-                    className="input"
-                    type="number"
-                    min={0}
-                    value={draft.rps}
-                    placeholder="10"
-                    aria-invalid={!!err('rps') || undefined}
-                    onChange={(e) => set({ rps: e.target.value })}
-                  />
-                </label>
-                <label className="field" htmlFor={f('conc')}>
-                  At once
-                  <input
-                    id={f('conc')}
-                    className="input"
-                    type="number"
-                    min={0}
-                    max={16}
-                    value={draft.concurrency}
-                    placeholder="4"
-                    aria-invalid={!!err('concurrency') || undefined}
-                    onChange={(e) => set({ concurrency: e.target.value })}
-                  />
-                </label>
-              </div>
-            </details>
+                </div>
+              </details>
+            )}
 
             {create.isError && (
               <p className="form-error" role="alert">

@@ -1002,6 +1002,31 @@ paths:
               schema: { $ref: "#/components/schemas/BlobStore" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /blob-stores:test:
+    post:
+      tags: [blob-stores]
+      operationId: testBlobStore
+      summary: Test an S3 blob store's settings without saving them
+      description: |
+        Checks that the bucket is reachable with the credentials and that a
+        small object under `tmp/` can be written, read back and deleted (steps
+        `bucket`, `write`, `read`, `delete`; a failing step names the S3 error
+        code). Nothing is saved. When `name` is an existing S3 store and the
+        secret is left out with its stored access key, the stored secret is
+        used. Only S3 stores are tested. Requires `system:blobstores:admin`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BlobStoreInput" }
+      responses:
+        "200":
+          description: Outcome (also when the test failed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SettingsTestResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /blob-stores/{name}:
     parameters:
       - name: name
@@ -1379,7 +1404,10 @@ paths:
             Free text plus qualifiers: `format:npm`, `repo:npm-hosted`, `sha256:ab12`,
             `cve:CVE-2026-1234`, `unused:>90d`, `license:GPL-3.0`, `published:<2026-01-01`,
             `security:findings` (pending, clean, findings, quarantined, failed, unsupported); `cve:` also matches aliases. Each free-text word is
-            a prefix match on the package coordinates.
+            a prefix match on the package coordinates. A bare advisory id
+            (`CVE-2021-44228`, `GHSA-…`, `PYSEC-…`, `RUSTSEC-…`) counts as `cve:`, and a
+            bare word of 8 to 64 hex digits with a letter and a digit matches a
+            digest prefix or the package name.
           schema: { type: string }
         - name: sort
           in: query
@@ -4320,6 +4348,12 @@ components:
             dedup_saved_bytes: { $ref: "#/components/schemas/Bytes" }
             created_at: { $ref: "#/components/schemas/Timestamp" }
             write_latency_ms: { type: [number, "null"] }
+            from_config:
+              type: boolean
+              description: >-
+                Defined by the server configuration (`storage.*`). Its
+                connection settings are the ones in effect and change only
+                there; the API can set its soft quota.
             encryption:
               type: string
               description: e.g. "SSE-S3", "SSE-KMS", "none"

@@ -147,5 +147,6 @@ function ResolvedPackage({ repo, ns, name, version }: { repo: string; ns?: strin
       </Panel>
     );
   }
-  return <PackageDetail id={current.id} versions={versions} />;
+  // Keyed by version: a scan result or a pending delete belongs to one version.
+  return <PackageDetail key={current.id} id={current.id} versions={versions} />;
 }

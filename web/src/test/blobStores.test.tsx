@@ -137,4 +137,88 @@ describe('blob stores', () => {
     renderApp('/blob-stores/nope');
     expect(await screen.findByText('This blob store does not exist.')).toBeInTheDocument();
   });
+
+  it('tests S3 settings before adding the store and says why they fail', async () => {
+    const posts: string[] = [];
+    server.events.on('request:start', ({ request }) => {
+      if (request.method === 'POST') posts.push(new URL(request.url).pathname);
+    });
+    const user = userEvent.setup();
+    renderApp('/blob-stores?add=true');
+    const form = await screen.findByRole('form', { name: 'Add a blob store' });
+    await user.click(within(form).getByRole('radio', { name: 'S3 / MinIO' }));
+    await user.type(within(form).getByLabelText('Name'), 'ux-s3bad');
+    await user.type(within(form).getByLabelText('Bucket'), 'no-such-bucket');
+    await user.type(within(form).getByLabelText('Endpoint'), 'http://minio:9000');
+    await user.click(within(form).getByRole('button', { name: 'Add blob store' }));
+    expect(await within(form).findByRole('alert')).toHaveTextContent(
+      'Connection test failed (bucket): bucket "no-such-bucket" not found at http://minio:9000 (NoSuchBucket)',
+    );
+    // Not saved: the next click says it saves anyway.
+    expect(posts).toEqual(['/api/v1/blob-stores:test']);
+    expect(within(form).getByRole('button', { name: 'Add anyway' })).toBeInTheDocument();
+
+    await user.clear(within(form).getByLabelText('Bucket'));
+    await user.type(within(form).getByLabelText('Bucket'), 'artifacts');
+    await user.click(within(form).getByRole('button', { name: 'Test connection' }));
+    expect(await within(form).findByRole('status')).toHaveTextContent('Connected: bucket, write, read back, delete work');
+    expect(within(form).getByRole('button', { name: 'Add blob store' })).toBeInTheDocument();
+  });
+
+  it('marks a store from the server configuration and offers no connection editing', async () => {
+    renderApp('/blob-stores/s3-eu-primary');
+    const config = await screen.findByRole('region', { name: 'Configuration' });
+    expect(within(config).getByText('From server configuration')).toBeInTheDocument();
+    const manage = screen.getByRole('region', { name: 'Manage' });
+    expect(within(manage).queryByRole('button', { name: 'Edit connection' })).not.toBeInTheDocument();
+    expect(within(manage).getByRole('button', { name: 'Delete s3-eu-primary' })).toBeDisabled();
+  });
+
+  it('edits the connection of an S3 store in use: credentials and addressing, not the location', async () => {
+    const puts: BlobStoreInput[] = [];
+    server.events.on('request:start', async ({ request }) => {
+      if (request.method === 'PUT') puts.push((await request.clone().json()) as BlobStoreInput);
+    });
+    const user = userEvent.setup();
+    renderApp('/blob-stores/s3-archive');
+    const manage = await screen.findByRole('region', { name: 'Manage' });
+    await user.click(within(manage).getByRole('button', { name: 'Edit connection' }));
+    const form = within(manage).getByRole('form', { name: 'Connection of s3-archive' });
+    expect(within(form).getByLabelText('Bucket')).toBeDisabled();
+    expect(within(form).getByLabelText('Endpoint')).toBeDisabled();
+
+    await user.clear(within(form).getByLabelText('Access key id'));
+    await user.type(within(form).getByLabelText('Access key id'), 'ARCHIVE02');
+    expect(within(form).getByText('A new access key needs its secret.')).toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Save connection' })).toBeDisabled();
+    await user.type(within(form).getByLabelText('Secret access key'), 'new-secret');
+    await user.click(within(form).getByLabelText('Path-style addressing (MinIO and most S3-compatible servers)'));
+    await user.click(within(form).getByRole('button', { name: 'Save connection' }));
+
+    await waitFor(() => expect(within(manage).getByRole('button', { name: 'Edit connection' })).toBeInTheDocument());
+    expect(puts.at(-1)).toEqual({
+      name: 's3-archive',
+      kind: 's3',
+      soft_quota_bytes: 40e12,
+      s3: { bucket: 'acme-archive', endpoint: 'https://minio.acme.example:9000', prefix: 'hangar', use_path_style: true, access_key_id: 'ARCHIVE02', secret_access_key: 'new-secret' },
+    });
+    const config = screen.getByRole('region', { name: 'Configuration' });
+    expect(within(config).getByText('Path-style')).toBeInTheDocument();
+  });
+
+  it('runs a blob compaction from the reclaimable total, after confirming', async () => {
+    const runs: string[] = [];
+    server.events.on('request:start', ({ request }) => {
+      if (request.method === 'POST' && request.url.includes('/tasks/')) runs.push(new URL(request.url).pathname);
+    });
+    const user = userEvent.setup();
+    renderApp('/blob-stores');
+    await screen.findByRole('article', { name: 's3-eu-primary' });
+    const card = screen.getByRole('article', { name: 'Reclaimable now' });
+    await user.click(await within(card).findByRole('button', { name: 'Run compaction' }));
+    await user.click(within(screen.getByRole('alertdialog', { name: 'Run blob compaction now?' })).getByRole('button', { name: 'Run compaction' }));
+    expect(await within(card).findByRole('link', { name: 'Compaction running' })).toBeInTheDocument();
+    expect(runs).toEqual(['/api/v1/tasks/t_compact/run']);
+    expect(screen.getAllByRole('button', { name: 'Move repositories (planned)' })[0]).toBeDisabled();
+  });
 });

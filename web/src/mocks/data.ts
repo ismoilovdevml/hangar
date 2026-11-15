@@ -354,7 +354,8 @@ export const blobStores: BlobStore[] = [
   {
     id: 'b_01', name: 's3-eu-primary', kind: 's3', state: 'ok', location: 's3://acme-artifacts/hangar', soft_quota_bytes: 12 * TB,
     used_bytes: 4.62 * TB, capacity_bytes: 12 * TB, repository_count: 9, blob_count: 1_204_331, reclaimable_bytes: 48 * GB,
-    dedup_saved_bytes: 1.3 * TB, created_at: '2026-01-10T08:00:00Z', write_latency_ms: 24, encryption: 'SSE-S3',
+    dedup_saved_bytes: 1.3 * TB, created_at: '2026-01-10T08:00:00Z', write_latency_ms: 24, encryption: 'SSE-S3', from_config: true,
+    s3: { endpoint: 'https://s3.eu-central-1.amazonaws.com', region: 'eu-central-1', bucket: 'acme-artifacts', prefix: 'hangar', use_path_style: false },
   },
   {
     id: 'b_02', name: 'fs-local', kind: 'fs', state: 'unknown', location: '/var/lib/hangar/blobs', fs: { path: '/var/lib/hangar/blobs' },
@@ -365,6 +366,7 @@ export const blobStores: BlobStore[] = [
     id: 'b_03', name: 's3-archive', kind: 's3', state: 'read_only', location: 's3://acme-archive/hangar', soft_quota_bytes: 40 * TB,
     used_bytes: 18 * TB, capacity_bytes: 40 * TB, repository_count: 1, blob_count: 3_002_118, reclaimable_bytes: 0,
     dedup_saved_bytes: 2.2 * TB, created_at: '2025-03-02T08:00:00Z', write_latency_ms: 61, encryption: 'SSE-KMS',
+    s3: { endpoint: 'https://minio.acme.example:9000', bucket: 'acme-archive', prefix: 'hangar', access_key_id: 'ARCHIVE01', use_path_style: false },
   },
 ];
 

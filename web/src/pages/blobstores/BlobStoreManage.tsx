@@ -9,6 +9,7 @@ import { Panel } from '../../components/Panel';
 import { Select } from '../../components/Select';
 import { QUOTA_UNITS, quotaBytes, quotaToForm, type QuotaUnit } from '../../lib/blobStores';
 import { formatBytes, formatCompact } from '../../lib/format';
+import { BlobStoreConnection } from './BlobStoreConnection';
 
 function message(err: unknown, action: string): string {
   if (err instanceof ApiRequestError) {
@@ -18,7 +19,10 @@ function message(err: unknown, action: string): string {
   return 'Cannot reach the server. Check your connection and try again.';
 }
 
-/** Soft quota editor and deletion. Location and credentials are fixed once a store holds data. */
+/**
+ * Soft quota, the connection of S3 stores added here, and deletion. Stores
+ * from the server configuration only take a quota.
+ */
 export function BlobStoreManage({ s }: { s: BlobStore }) {
   const navigate = useNavigate();
   const canAdmin = usePermissions().can('admin', 'system', 'blobstores');
@@ -87,9 +91,13 @@ export function BlobStoreManage({ s }: { s: BlobStore }) {
         )}
       </form>
 
+      {s.kind === 's3' && !s.from_config && canAdmin && <BlobStoreConnection s={s} />}
+
       <div className="store-manage__delete">
         <p className="danger-zone__text">
-          {inUse
+          {s.from_config
+            ? 'This store is defined by the server configuration (storage.*); it cannot be deleted here.'
+            : inUse
             ? `Deleting needs an empty store: it still holds ${s.repository_count} ${s.repository_count === 1 ? 'repository' : 'repositories'} and ${formatCompact(s.blob_count)} blobs (${formatBytes(s.used_bytes)}).`
             : 'The store holds no repositories and no blobs. Deleting it removes the definition; files on the backend are not touched.'}
         </p>
@@ -97,7 +105,7 @@ export function BlobStoreManage({ s }: { s: BlobStore }) {
           <button
             type="button"
             className="button button--danger-outline"
-            disabled={!canAdmin || inUse}
+            disabled={!canAdmin || inUse || !!s.from_config}
             title={!canAdmin ? 'Needs the blob store admin privilege' : undefined}
             onClick={() => {
               remove.reset();
