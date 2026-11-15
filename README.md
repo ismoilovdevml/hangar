@@ -2,7 +2,10 @@
 
 A self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go modules, Helm charts, Cargo crates, APT and RPM packages and raw files, in one Go binary backed by PostgreSQL.
 
+[![Release](https://img.shields.io/github/v/release/ismoilovdevml/hangar)](https://github.com/ismoilovdevml/hangar/releases/latest)
 [![Go version](https://img.shields.io/github/go-mod/go-version/ismoilovdevml/hangar)](go.mod)
+
+**[Website](https://ismoilovdevml.github.io/hangar/)** · **[Live demo](https://ismoilovdevml.github.io/hangar/demo/)** · **[Documentation](https://ismoilovdevml.github.io/hangar/docs.html)** · [Releases](https://github.com/ismoilovdevml/hangar/releases)
 
 ![Hangar overview](docs/screenshots/overview.png)
 
