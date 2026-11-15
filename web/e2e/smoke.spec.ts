@@ -69,7 +69,7 @@ test('overview renders live data at desktop and phone width', async ({ page }) =
   for (const [name, size] of [['overview-1440', DESKTOP], ['overview-390', PHONE]] as const) {
     await page.setViewportSize(size);
     await page.goto('/');
-    await expect(page.getByText('4.82 TB', { exact: true })).toBeVisible();
+    await expect(page.getByText('4.82 TiB', { exact: true })).toBeVisible();
     await expect(page.getByText('98.3%', { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: /Review 7 critical vulnerabilities/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /log4j-core/ })).toBeVisible();
