@@ -200,7 +200,7 @@ describe('blob stores', () => {
     expect(puts.at(-1)).toEqual({
       name: 's3-archive',
       kind: 's3',
-      soft_quota_bytes: 40e12,
+      soft_quota_bytes: 40 * 1024 ** 4,
       s3: { bucket: 'acme-archive', endpoint: 'https://minio.acme.example:9000', prefix: 'hangar', use_path_style: true, access_key_id: 'ARCHIVE02', secret_access_key: 'new-secret' },
     });
     const config = screen.getByRole('region', { name: 'Configuration' });

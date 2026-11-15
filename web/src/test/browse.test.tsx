@@ -229,8 +229,8 @@ describe('package browser: package', () => {
     const table = await screen.findByRole('table', { name: 'Layers' });
     expect(within(table).getByText('Image config')).toBeInTheDocument();
     expect(within(table).getAllByText(/^sha256:/)).toHaveLength(3);
-    expect(screen.getByText('3 layers, 186 MB compressed.')).toBeInTheDocument(); // single-platform image: no platform note
-    expect(screen.getByRole('region', { name: 'Version' })).toHaveTextContent('Compressed size186 MB');
+    expect(screen.getByText('3 layers, 177 MiB compressed.')).toBeInTheDocument(); // single-platform image: no platform note
+    expect(screen.getByRole('region', { name: 'Version' })).toHaveTextContent('Compressed size177 MiB');
   });
 
   it('deletes a whole package after typing its name', async () => {
