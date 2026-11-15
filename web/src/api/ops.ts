@@ -168,14 +168,20 @@ export async function fetchPreviewCsv(body: CleanupPolicyInput): Promise<Blob> {
 
 /* ---------------------------------------------------------------- tasks */
 
+/**
+ * GET /tasks for every query under opsKeys.taskList (they share the cache):
+ * a list without `running` (an older server, a proxy rewriting the answer)
+ * reads as nothing running.
+ */
+export async function fetchTaskList(signal?: AbortSignal): Promise<TaskList> {
+  const l = await apiFetch<TaskList>('/tasks', { signal });
+  return { ...l, items: l.items ?? [], running: l.running ?? [] };
+}
+
 export function useTasks() {
   return useQuery({
     queryKey: opsKeys.taskList,
-    // A list without `running` (an older server, a proxy rewriting the answer) reads as nothing running.
-    queryFn: async ({ signal }) => {
-      const l = await apiFetch<TaskList>('/tasks', { signal });
-      return { ...l, items: l.items ?? [], running: l.running ?? [] };
-    },
+    queryFn: ({ signal }) => fetchTaskList(signal),
     // Live events keep progress current; polling is the fallback without them.
     refetchInterval: (q) => (q.state.data?.running.length ? 10_000 : 60_000),
   });

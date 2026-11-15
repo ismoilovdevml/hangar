@@ -1,10 +1,8 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { apiFetch } from '../../api/client';
 import { useSystemHealth } from '../../api/health';
 import { useBlobStores, useOverview, useSession, useUpstreamHealth } from '../../api/hooks';
-import { opsKeys, useCanSystem } from '../../api/ops';
-import type { TaskList } from '../../api/opsTypes';
+import { fetchTaskList, opsKeys, useCanSystem } from '../../api/ops';
 import type { OverviewRange } from '../../api/types';
 import { useDismissed } from '../../lib/dismissed';
 import { todoItems, type TodoItem } from '../../lib/overview';
@@ -15,7 +13,7 @@ function useTasksIfAllowed() {
   const canRead = useCanSystem('tasks', 'read');
   return useQuery({
     queryKey: opsKeys.taskList,
-    queryFn: ({ signal }) => apiFetch<TaskList>('/tasks', { signal }),
+    queryFn: ({ signal }) => fetchTaskList(signal),
     enabled: canRead,
   });
 }
