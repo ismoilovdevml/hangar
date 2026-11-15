@@ -102,8 +102,21 @@ describe('access & audit: members', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Add member' });
     expect(within(dialog).getByLabelText('Username')).toHaveFocus();
     await user.click(within(dialog).getByRole('button', { name: 'Add member' }));
-    expect(within(dialog).getByText(/Start with a letter or digit/)).toBeInTheDocument();
+    // Empty is "required", not a lecture on allowed characters.
+    expect(within(dialog).getByText('Enter a username.')).toBeInTheDocument();
     expect(within(dialog).getByText(/At least 12 characters/)).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText('Username'), '-x');
+    expect(within(dialog).getByText(/Start with a letter or digit/)).toBeInTheDocument();
+    await user.clear(within(dialog).getByLabelText('Username'));
+
+    // A taken username is said under the field, once, without the server's wording.
+    await user.type(within(dialog).getByLabelText('Username'), accessState.users[0]!.username);
+    await user.type(within(dialog).getByLabelText('Initial password'), 'a long initial passphrase');
+    await user.click(within(dialog).getByRole('button', { name: 'Add member' }));
+    expect(await within(dialog).findByText(`A member named ${accessState.users[0]!.username} already exists.`)).toBeInTheDocument();
+    expect(dialog).not.toHaveTextContent(/already exists: already exists|create user/);
+    await user.clear(within(dialog).getByLabelText('Username'));
+    await user.clear(within(dialog).getByLabelText('Initial password'));
 
     await user.type(within(dialog).getByLabelText('Username'), 'o.rahimov');
     await user.type(within(dialog).getByLabelText(/Display name/), 'Otabek Rahimov');
@@ -346,6 +359,8 @@ describe('access & audit: roles and audit', () => {
     expect(await within(table).findByText('CI deployer')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'New role' }));
     const dialog = await screen.findByRole('dialog', { name: 'New role' });
+    await user.click(within(dialog).getByRole('button', { name: 'Create role' }));
+    expect(within(dialog).getByText('Enter a role name.')).toBeInTheDocument();
     await user.type(within(dialog).getByLabelText('Name'), 'npm team');
     const first = within(dialog).getByRole('group', { name: 'Privilege 1' });
     const pattern = within(first).getByLabelText('Repository name or pattern');
@@ -415,7 +430,7 @@ describe('my account', () => {
     await user.clear(within(pw).getByLabelText('Repeat new password'));
     await user.type(within(pw).getByLabelText('Repeat new password'), 'a much longer passphrase');
     await user.click(within(pw).getByRole('button', { name: 'Change password' }));
-    expect(await within(pw).findByText('the current password is incorrect')).toBeInTheDocument();
+    expect(await within(pw).findByText('The current password is incorrect.')).toBeInTheDocument();
     await user.clear(within(pw).getByLabelText('Current password'));
     await user.type(within(pw).getByLabelText('Current password'), 'password1234');
     await user.click(within(pw).getByRole('button', { name: 'Change password' }));

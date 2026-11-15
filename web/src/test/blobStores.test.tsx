@@ -16,14 +16,14 @@ describe('blob stores', () => {
     renderApp('/blob-stores');
     await screen.findByRole('article', { name: 's3-eu-primary' });
     const totals = screen.getByRole('region', { name: 'Storage totals' });
-    expect(within(totals).getByRole('article', { name: 'Saved by deduplication' })).toHaveTextContent('3.51TB');
-    expect(within(totals).getByRole('article', { name: 'Growth' })).toHaveTextContent('+38GB / day');
+    expect(within(totals).getByRole('article', { name: 'Saved by deduplication' })).toHaveTextContent('3.51TiB');
+    expect(within(totals).getByRole('article', { name: 'Growth' })).toHaveTextContent('+38GiB / day7-day average');
     expect(within(totals).getByRole('article', { name: 'Reclaimable now' })).toHaveTextContent('Freed by the next blob compaction');
 
     const stores = screen.getByRole('region', { name: 'Blob stores' });
     const primary = within(stores).getByRole('article', { name: 's3-eu-primary' });
     expect(within(primary).getByText('Healthy')).toBeInTheDocument();
-    expect(within(primary).getByRole('meter', { name: 's3-eu-primary usage' })).toHaveAttribute('aria-valuetext', '4.62 TB of 12 TB');
+    expect(within(primary).getByRole('meter', { name: 's3-eu-primary usage' })).toHaveAttribute('aria-valuetext', '4.62 TiB of 12 TiB');
     expect(within(primary).getByText('SSE-S3')).toBeInTheDocument();
     const local = within(stores).getByRole('article', { name: 'fs-local' });
     expect(within(local).getByText('Not checked yet')).toBeInTheDocument();
@@ -135,7 +135,8 @@ describe('blob stores', () => {
 
   it('says when a store does not exist', async () => {
     renderApp('/blob-stores/nope');
-    expect(await screen.findByText('This blob store does not exist.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Blob store not found' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to blob stores' })).toHaveAttribute('href', '/blob-stores');
   });
 
   it('tests S3 settings before adding the store and says why they fail', async () => {
@@ -199,7 +200,7 @@ describe('blob stores', () => {
     expect(puts.at(-1)).toEqual({
       name: 's3-archive',
       kind: 's3',
-      soft_quota_bytes: 40e12,
+      soft_quota_bytes: 40 * 1024 ** 4,
       s3: { bucket: 'acme-archive', endpoint: 'https://minio.acme.example:9000', prefix: 'hangar', use_path_style: true, access_key_id: 'ARCHIVE02', secret_access_key: 'new-secret' },
     });
     const config = screen.getByRole('region', { name: 'Configuration' });

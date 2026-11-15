@@ -254,7 +254,7 @@ describe('signing key panel', () => {
     server.use(http.get('*/api/v1/repositories/:name/signing-key', () => HttpResponse.json({ code: 'internal', message: 'internal error' }, { status: 500 })));
     renderApp('/repositories/internal-apt/settings');
     const p = await panel();
-    expect(await within(p).findByText('Could not load the signing key.')).toBeInTheDocument();
+    expect(await within(p).findByText(/^Could not load the signing key\. /)).toBeInTheDocument();
     expect(within(p).getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 

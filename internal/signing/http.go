@@ -128,7 +128,7 @@ func (s *Service) writeError(w http.ResponseWriter, r *http.Request, err error) 
 		return
 	}
 	code := core.HTTPStatus(err)
-	msg := err.Error()
+	msg := core.Message(err)
 	if code == http.StatusInternalServerError {
 		s.log.ErrorContext(r.Context(), "signing key request failed", "method", r.Method, "path", r.URL.Path, "error", err)
 		msg = "internal error"

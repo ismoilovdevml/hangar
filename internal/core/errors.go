@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -39,6 +40,22 @@ var (
 	// ErrNotImplemented: the feature exists in the contract but not yet in this build.
 	ErrNotImplemented = errors.New("not implemented")
 )
+
+// Message is the text of err for an API client. Validation errors end in
+// ": invalid argument" (the ErrInvalid sentinel they wrap), which tells the
+// reader nothing the status code and error code do not already say; that
+// suffix is dropped. Other sentinels stay: "not found" and "already exists"
+// complete the sentence.
+func Message(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if suffix := ": " + ErrInvalid.Error(); errors.Is(err, ErrInvalid) && len(msg) > len(suffix) {
+		msg = strings.TrimSuffix(msg, suffix)
+	}
+	return msg
+}
 
 // HTTPStatus maps an error from this package to the HTTP status a handler
 // should answer with when it has no format-specific mapping of its own.

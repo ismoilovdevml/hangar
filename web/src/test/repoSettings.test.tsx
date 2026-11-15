@@ -65,7 +65,7 @@ describe('repository settings', () => {
     expect(within(form).queryByRole('textbox', { name: 'Name' })).not.toBeInTheDocument();
     expect(within(form).getByText('Cannot be changed after creation')).toBeInTheDocument();
     expect(within(form).getByLabelText('Remote URL')).toHaveValue('https://registry.npmjs.org');
-    expect(within(form).getByLabelText('Metadata cached for')).toHaveValue('30m0s');
+    expect(within(form).getByLabelText('Metadata cached for')).toHaveValue('30m');
     const save = screen.getByRole('button', { name: 'Save changes' });
     expect(save).toBeDisabled();
 
@@ -79,8 +79,34 @@ describe('repository settings', () => {
     // The request listener reads the body asynchronously.
     await waitFor(() => expect(puts).toHaveLength(1));
     expect(puts[0]).toMatchObject({ name: 'npmjs-proxy', format: 'npm', type: 'proxy', blob_store: 'fs-local', description: 'Cached npmjs.org', online: true });
-    expect(puts[0]!.config.proxy).toMatchObject({ remote_url: 'https://registry.npmjs.org', metadata_ttl: '45m', negative_cache_ttl: '10m0s' });
+    expect(puts[0]!.config.proxy).toMatchObject({ remote_url: 'https://registry.npmjs.org', metadata_ttl: '45m', negative_cache_ttl: '10m' });
     expect(repo('npmjs-proxy').config.proxy?.metadata_ttl).toBe('45m');
+  });
+
+  it('puts a refused remote URL under the field, in words', async () => {
+    server.use(
+      http.put('*/api/v1/repositories/npmjs-proxy', () =>
+        HttpResponse.json(
+          {
+            code: 'invalid_argument',
+            message: 'repository "npmjs-proxy": remote url http://169.254.169.254/latest: address 169.254.169.254: blocked by outbound address policy',
+          },
+          { status: 400 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp('/repositories/npmjs-proxy/settings');
+    const form = await screen.findByRole('form', { name: 'Settings of npmjs-proxy' });
+    const url = within(form).getByLabelText('Remote URL');
+    await user.clear(url);
+    await user.type(url, 'http://169.254.169.254/latest');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(url).toHaveAttribute('aria-invalid', 'true'));
+    expect(url).toHaveAccessibleDescription(/169\.254\.169\.254 is blocked by the outbound address policy/);
+    await waitFor(() => expect(url).toHaveFocus());
+    expect(screen.getByText('The server refused a setting: see the highlighted field.')).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent('invalid argument');
   });
 
   it('shows the YAML and copyable client configuration for the repository', async () => {
@@ -149,6 +175,8 @@ describe('repository settings', () => {
 
   it('says when the repository does not exist', async () => {
     renderApp('/repositories/missing-repo/settings');
-    expect(await screen.findByText('This repository does not exist, or you cannot see it.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Repository not found' })).toBeInTheDocument();
+    expect(screen.getByText('missing-repo')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to repositories' })).toHaveAttribute('href', '/repositories');
   });
 });

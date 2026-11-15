@@ -156,6 +156,8 @@ export default defineConfig(({ mode }) => {
       // Tests render whole pages against the mock server; leave room for a
       // loaded machine (parallel workers, CI runners). See src/test/setup.ts.
       testTimeout: 20_000,
+      // Times render in the browser's zone; tests pin it (and switch it where they test zones).
+      env: { TZ: 'UTC' },
     },
   };
 });

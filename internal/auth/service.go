@@ -392,7 +392,7 @@ func dbErr(err error, what string) error {
 	if errors.As(err, &pg) {
 		switch pg.Code {
 		case "23505":
-			return fmt.Errorf("%s: already exists: %w", what, core.ErrAlreadyExists)
+			return fmt.Errorf("%s: %w", what, core.ErrAlreadyExists)
 		case "23514", "22P02", "23502":
 			return fmt.Errorf("%s: %s: %w", what, pg.Message, core.ErrInvalid)
 		}

@@ -1,10 +1,8 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { apiFetch } from '../../api/client';
 import { useSystemHealth } from '../../api/health';
-import { useOverview, useSession, useUpstreamHealth } from '../../api/hooks';
-import { opsKeys, useCanSystem } from '../../api/ops';
-import type { TaskList } from '../../api/opsTypes';
+import { useBlobStores, useOverview, useSession, useUpstreamHealth } from '../../api/hooks';
+import { fetchTaskList, opsKeys, useCanSystem } from '../../api/ops';
 import type { OverviewRange } from '../../api/types';
 import { useDismissed } from '../../lib/dismissed';
 import { todoItems, type TodoItem } from '../../lib/overview';
@@ -15,7 +13,7 @@ function useTasksIfAllowed() {
   const canRead = useCanSystem('tasks', 'read');
   return useQuery({
     queryKey: opsKeys.taskList,
-    queryFn: ({ signal }) => apiFetch<TaskList>('/tasks', { signal }),
+    queryFn: ({ signal }) => fetchTaskList(signal),
     enabled: canRead,
   });
 }
@@ -40,6 +38,8 @@ export function useTodo(range: OverviewRange): Todo {
   const health = useSystemHealth();
   const tasks = useTasksIfAllowed();
   const canAdminBlobStores = useCanSystem('blobstores', 'admin');
+  // With the stores known, the quota reminder names the ones without a quota.
+  const stores = useBlobStores(useCanSystem('blobstores', 'read')).data?.items;
   const now = useNow(60_000);
   const [dismissed, dismiss] = useDismissed();
   const m = overview.data;
@@ -56,9 +56,10 @@ export function useTodo(range: OverviewRange): Todo {
         username: session.data?.user.username,
         tasks: tasks.data?.items,
         canAdminBlobStores,
+        blobStores: stores,
         now,
       }).filter((t) => !t.dismissible || !dismissed.has(t.id)),
-    [m, upstreams.data, sys, session.data, tasks.data, canAdminBlobStores, now, dismissed],
+    [m, upstreams.data, sys, session.data, tasks.data, canAdminBlobStores, stores, now, dismissed],
   );
   return { items: items || undefined, error: overview.isError, retry: () => void overview.refetch(), dismiss };
 }

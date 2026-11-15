@@ -1,5 +1,6 @@
 import { getRouteApi } from '@tanstack/react-router';
-import { useOverview, useUpstreamHealth } from '../../api/hooks';
+import { useBlobStores, useOverview, useUpstreamHealth } from '../../api/hooks';
+import { useCanSystem } from '../../api/ops';
 import { useNow } from '../../lib/useNow';
 import { OutcomeCard, SecurityCard, StorageCard, UpstreamCard } from './Cards';
 import { Hero } from './Hero';
@@ -16,6 +17,8 @@ export function OverviewPage() {
   const overview = useOverview(range);
   const upstreams = useUpstreamHealth(range);
   const todo = useTodo(range);
+  // Which stores lack a quota; only users who may read the stores learn their names.
+  const stores = useBlobStores(useCanSystem('blobstores', 'read')).data?.items;
   const now = useNow(60_000);
   const m = overview.data;
   const retry = () => void overview.refetch();
@@ -35,7 +38,7 @@ export function OverviewPage() {
         />
         <OutcomeCard m={m} error={overview.isError} />
         <TodoCard items={todo.items} error={todo.error} onRetry={todo.retry} onDismiss={todo.dismiss} />
-        <StorageCard m={m} error={overview.isError} />
+        <StorageCard m={m} error={overview.isError} stores={stores} />
         <SecurityCard m={m} error={overview.isError} />
         <UpstreamCard items={upstreams.data?.items} error={upstreams.isError} onRetry={() => void upstreams.refetch()} m={m} />
         <MostDownloaded />

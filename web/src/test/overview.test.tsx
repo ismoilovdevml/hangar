@@ -29,8 +29,8 @@ describe('overview', () => {
 
     const storage = card(/^Storage/);
     expect(storage).toHaveAttribute('href', '/blob-stores');
-    expect(within(storage).getByText('4.82 TB')).toBeInTheDocument();
-    expect(within(storage).getByText('Docker 60% · 7 formats · 40% of quota')).toBeInTheDocument();
+    expect(within(storage).getByText('4.82 TiB')).toBeInTheDocument();
+    expect(within(storage).getByText('Docker 61% · 7 formats · 40% of quota')).toBeInTheDocument();
 
     const security = card(/^Security/);
     expect(security).toHaveAttribute('href', '/vulnerabilities');

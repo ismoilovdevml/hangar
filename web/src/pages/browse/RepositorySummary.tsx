@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router';
+import { NotFound } from '../../components/States';
 import { ApiRequestError } from '../../api/client';
 import { useAllRepositories, useRepository } from '../../api/catalog';
 import { ClientSetup } from '../../components/ClientSetup';
@@ -17,10 +18,12 @@ import { FormatIcon } from '../../components/FormatIcon';
 export function RepositorySummary({ repo }: { repo: string }) {
   const q = useRepository(repo);
   if (q.isError) {
-    const notFound = q.error instanceof ApiRequestError && q.error.status === 404;
+    if (q.error instanceof ApiRequestError && q.error.status === 404) {
+      return <NotFound pane kind="Repository" name={repo} back={{ to: '/browse' }} backLabel="Packages" />;
+    }
     return (
       <Panel className="browse-empty" role="status">
-        {notFound ? <p>Repository {repo} does not exist, or you cannot see it.</p> : <ErrorNote what="the repository" error={q.error} onRetry={() => void q.refetch()} />}
+        <ErrorNote what="the repository" error={q.error} onRetry={() => void q.refetch()} />
       </Panel>
     );
   }

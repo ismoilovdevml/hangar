@@ -386,17 +386,17 @@ func (h *handler) writeError(w http.ResponseWriter, r *http.Request, err error) 
 	case errors.As(err, &limited):
 		writeErrorBody(w, http.StatusTooManyRequests, "rate_limited", limited.Error(), limited.wait)
 	case errors.Is(err, core.ErrUnauthenticated):
-		writeErrorBody(w, http.StatusUnauthorized, "unauthenticated", err.Error(), 0)
+		writeErrorBody(w, http.StatusUnauthorized, "unauthenticated", core.Message(err), 0)
 	case errors.Is(err, core.ErrForbidden):
-		writeErrorBody(w, http.StatusForbidden, "forbidden", err.Error(), 0)
+		writeErrorBody(w, http.StatusForbidden, "forbidden", core.Message(err), 0)
 	case errors.Is(err, core.ErrNotFound):
-		writeErrorBody(w, http.StatusNotFound, "not_found", err.Error(), 0)
+		writeErrorBody(w, http.StatusNotFound, "not_found", core.Message(err), 0)
 	case errors.Is(err, core.ErrAlreadyExists):
-		writeErrorBody(w, http.StatusConflict, "conflict", err.Error(), 0)
+		writeErrorBody(w, http.StatusConflict, "conflict", core.Message(err), 0)
 	case errors.Is(err, core.ErrInvalid):
-		writeErrorBody(w, http.StatusBadRequest, "invalid_argument", err.Error(), 0)
+		writeErrorBody(w, http.StatusBadRequest, "invalid_argument", core.Message(err), 0)
 	case errors.Is(err, core.ErrNotImplemented):
-		writeErrorBody(w, http.StatusNotImplemented, "not_implemented", err.Error(), 0)
+		writeErrorBody(w, http.StatusNotImplemented, "not_implemented", core.Message(err), 0)
 	case errors.Is(err, context.Canceled) || errors.Is(r.Context().Err(), context.Canceled):
 		// The client went away (navigated off, closed the connection): not a
 		// server failure. 499 keeps it out of the server error counts.

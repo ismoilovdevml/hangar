@@ -3,6 +3,8 @@ import { useId, useState, type ReactNode } from 'react';
 import { IconClose, IconPlus } from '../../components/icons';
 import { Pill } from '../../components/Pill';
 import { Select } from '../../components/Select';
+import { ErrorDetails } from '../../components/States';
+import { cleanServerMessage, explainConnectionFailure } from '../../lib/apiError';
 import type { GroupRole, TestResult } from './settingsApi';
 
 /** Shown next to a value the configuration file sets. */
@@ -199,11 +201,18 @@ const STEP_NAME: Record<string, string> = {
 };
 
 /** The outcome of a "Test" button, announced politely. */
+/**
+ * A connection test: one plain sentence for a failure, each step once, and
+ * the raw error (which repeats Go's whole chain) once under Details.
+ */
 export function TestResultView({ result }: { result: TestResult }) {
+  const failedStep = result.steps.find((s) => s.status === 'failed');
+  const raw = result.ok ? null : (failedStep?.message || result.message);
+  const plain = raw ? (explainConnectionFailure(raw) ?? cleanServerMessage(result.message || raw)) : result.message;
   return (
     <div className={result.ok ? 'test-result test-result--ok' : 'test-result test-result--bad'} role="status" aria-live="polite">
       <p className="test-result__summary">
-        <strong>{result.ok ? 'Test passed' : 'Test failed'}</strong> · {result.message}
+        <strong>{result.ok ? 'Test passed' : 'Test failed'}</strong> · {plain}
         {result.latency_ms > 0 && <span className="meta"> · {result.latency_ms} ms</span>}
       </p>
       <ol className="test-result__steps">
@@ -211,10 +220,12 @@ export function TestResultView({ result }: { result: TestResult }) {
           <li key={s.name}>
             <Pill tone={STEP_TONE[s.status]}>{STEP_LABEL[s.status]}</Pill>
             <span className="test-result__name">{STEP_NAME[s.name] ?? s.name}</span>
-            <span className="test-result__msg">{s.message}</span>
+            {/* The failed step's text is the raw error: it is in Details, not repeated here. */}
+            {s !== failedStep && <span className="test-result__msg">{s.message}</span>}
           </li>
         ))}
       </ol>
+      {raw && <ErrorDetails detail={raw} />}
       {result.user && (
         <dl className="facts facts--compact test-result__user">
           <div>

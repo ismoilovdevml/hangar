@@ -41,7 +41,12 @@ func (a *API) upstreamHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now().UTC()
-	start, _, _, err := overviewWindow(r.URL.Query().Get("range"), now)
+	offset, err := tzOffsetParam(r)
+	if err != nil {
+		a.writeErr(w, r, err)
+		return
+	}
+	start, _, _, err := overviewWindow(r.URL.Query().Get("range"), now, offset)
 	if err != nil {
 		a.writeErr(w, r, err)
 		return

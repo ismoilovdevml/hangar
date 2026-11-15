@@ -86,7 +86,7 @@ describe('repository settings round-trip', () => {
   it('flips only the online flag for the offline switch', () => {
     const body = storedInput(proxy, false);
     expect(body.online).toBe(false);
-    expect(body.config.proxy?.metadata_ttl).toBe('30m0s');
+    expect(body.config.proxy?.metadata_ttl).toBe('30m');
   });
 
   it('writes client configuration, with publish steps for hosted repositories', () => {

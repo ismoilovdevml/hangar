@@ -188,7 +188,9 @@ func TestCatalogIntegration(t *testing.T) {
 		stores[0].DedupSavedBytes != 1000 || stores[0].Location() != "/data" {
 		t.Errorf("store = %+v", stores[0])
 	}
-	if totals.CapacityBytes == nil || *totals.CapacityBytes != quota || totals.GrowthBytesPerDay != 5000/7 || totals.DaysToFull == nil {
+	// The seeded blobs are two days old: the rate averages over those two days, not seven.
+	if totals.CapacityBytes == nil || *totals.CapacityBytes != quota || totals.GrowthWindowDays < 1.9 || totals.GrowthWindowDays > 2.1 ||
+		totals.GrowthBytesPerDay < 2400 || totals.GrowthBytesPerDay > 2600 || totals.DaysToFull == nil {
 		t.Errorf("totals = %+v", totals)
 	}
 
@@ -263,5 +265,28 @@ func TestCatalogIntegration(t *testing.T) {
 	fd, err := c.FormatDownloads(ctx)
 	if err != nil || fd["npm"] != 55 || fd["maven"] != 7 {
 		t.Errorf("format downloads = %v %v", fd, err)
+	}
+}
+
+func TestGrowthRate(t *testing.T) {
+	now := time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)
+	at := func(d time.Duration) *time.Time { v := now.Add(-d); return &v }
+	cases := []struct {
+		name   string
+		first  *time.Time
+		days   float64
+		perDay int64
+		growth int64
+	}{
+		{"no blobs", nil, 0, 0, 0},
+		{"a few hours", at(6 * time.Hour), 0.25, 0, 231_000_000},
+		{"two days", at(48 * time.Hour), 2, 50, 100},
+		{"a month", at(30 * 24 * time.Hour), 7, 100, 700},
+	}
+	for _, c := range cases {
+		days, perDay := growthRate(c.growth, c.first, now)
+		if days != c.days || perDay != c.perDay {
+			t.Errorf("%s: growthRate = %v days, %d/day; want %v, %d", c.name, days, perDay, c.days, c.perDay)
+		}
 	}
 }

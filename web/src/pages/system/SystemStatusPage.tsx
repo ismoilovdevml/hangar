@@ -8,7 +8,8 @@ import { ErrorNote } from '../../components/ErrorNote';
 import { IconRefresh } from '../../components/opsIcons';
 import { Pill } from '../../components/Pill';
 import { formatUptime } from '../../lib/system';
-import { formatUtc } from '../../lib/tasks';
+import { formatTime, formatUtc } from '../../lib/format';
+import { Time } from '../../components/Time';
 import { useNow } from '../../lib/useNow';
 import { STATUS_REFRESH_MS, systemKeys, useSystemNodes } from './api';
 import { StateMark } from './icons';
@@ -20,7 +21,6 @@ import {
   isTimestamp,
   period,
   problemKeys,
-  shortTime,
   summarize,
   versionText,
   type HealthStatus,
@@ -56,23 +56,25 @@ interface LiveProps {
   paused: boolean;
   fetching: boolean;
   updatedAt?: number;
+  /** The last refresh failed: the pill must not claim live data. */
+  failed?: boolean;
   onPause: (paused: boolean) => void;
   onRefresh: () => void;
 }
 
 /** "Live · every 15 s" toggles auto-refresh; the round button refreshes now. */
-function LiveControls({ paused, fetching, updatedAt, onPause, onRefresh }: LiveProps) {
-  const updated = updatedAt ? `Updated ${formatUtc(new Date(updatedAt).toISOString(), { seconds: true })}` : undefined;
+function LiveControls({ paused, fetching, updatedAt, failed, onPause, onRefresh }: LiveProps) {
+  const updated = updatedAt ? `Updated ${formatTime(updatedAt, { seconds: true })}` : undefined;
   return (
     <div className="live" role="group" aria-label="Refresh status">
       <button
         type="button"
-        className={`live__toggle glass${paused ? ' live__toggle--paused' : ''}`}
+        className={`live__toggle glass${paused ? ' live__toggle--paused' : failed ? ' live__toggle--failed' : ''}`}
         onClick={() => onPause(!paused)}
-        title={paused ? 'Resume auto-refresh' : 'Pause auto-refresh'}
+        title={paused ? 'Resume auto-refresh' : failed ? 'The last update failed; it retries on its own' : 'Pause auto-refresh'}
       >
         <span className="live__dot" aria-hidden="true" />
-        {paused ? 'Paused' : `Live · every ${STATUS_REFRESH_MS / 1000} s`}{' '}
+        {paused ? 'Paused' : failed ? 'Last update failed · retrying' : `Live · every ${STATUS_REFRESH_MS / 1000} s`}{' '}
         <span className="visually-hidden">{paused ? '– resume' : '– pause'}</span>
       </button>
       <button
@@ -150,12 +152,13 @@ function BlobStoresAction({ healthy }: { healthy: boolean }) {
   );
 }
 
+/** Hover text of a relative time: the local time with its zone, and UTC. */
+const hover = (iso: string) => `${formatTime(iso, { seconds: true })} · ${formatUtc(iso)}`;
+
 function FactValue({ value, now }: { value: string; now: Date }) {
   if (isTimestamp(value)) {
     return (
-      <time dateTime={value} title={formatUtc(value, { seconds: true })}>
-        {shortTime(value, now)}
-      </time>
+      <Time value={value} mode="short" now={now} />
     );
   }
   return <>{value}</>;
@@ -216,14 +219,12 @@ function CheckRow({ s, node, open, onToggle, now, canLogs, canSettings }: RowPro
               {s.since && (
                 <>
                   {h.label} since{' '}
-                  <time dateTime={s.since} title={formatUtc(s.since, { seconds: true })}>
-                    {shortTime(s.since, now)}
-                  </time>
+                  <Time value={s.since} mode="short" now={now} />
                   {' · '}
                 </>
               )}
               {s.since ? 'checked ' : 'Checked '}
-              <time dateTime={s.checked_at} title={formatUtc(s.checked_at, { seconds: true })}>
+              <time dateTime={s.checked_at} title={hover(s.checked_at)}>
                 {ago(s.checked_at, now)}
               </time>
             </span>
@@ -260,11 +261,11 @@ function NodeChecks({ node, multi, now, isOpen, toggle, canLogs, canSettings }: 
   if (node.hostname && node.hostname !== node.id) meta.push(`Host ${node.hostname}`);
   if (!multi) meta.push(leader ? 'Scheduler leader' : 'Scheduler follower');
   if (multi) meta.push(versionText(node.version));
-  meta.push(<span title={`Started ${formatUtc(node.started_at)}`}>Up {formatUptime(node.uptime_seconds)}</span>);
+  meta.push(<span title={`Started ${formatTime(node.started_at)}`}>Up {formatUptime(node.uptime_seconds)}</span>);
   meta.push(
     <span>
       Heartbeat{' '}
-      <time dateTime={node.last_heartbeat} title={formatUtc(node.last_heartbeat, { seconds: true })}>
+      <time dateTime={node.last_heartbeat} title={hover(node.last_heartbeat)}>
         {ago(node.last_heartbeat, now)}
       </time>
     </span>,
@@ -388,6 +389,7 @@ export function SystemStatusPage() {
       paused={paused}
       fetching={nodes.isFetching}
       updatedAt={nodes.dataUpdatedAt || undefined}
+      failed={nodes.isError}
       onPause={setPaused}
       onRefresh={() => {
         void qc.refetchQueries({ queryKey: systemKeys.nodes });

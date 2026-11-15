@@ -43,8 +43,11 @@ function Activity({ m }: { m: OverviewMetrics }) {
   );
 }
 
-function Bars({ buckets, range }: { buckets: TrafficBucket[]; range: OverviewRange }) {
-  const recorded = buckets.some((b) => b.requests !== null);
+function Bars({ buckets: all, range }: { buckets: TrafficBucket[]; range: OverviewRange }) {
+  // Intervals before counting started (a restart) carry nothing: the chart starts at the first recorded one.
+  const first = all.findIndex((b) => b.requests !== null);
+  const buckets = first > 0 ? all.slice(first) : all;
+  const recorded = first >= 0;
   if (buckets.length === 0 || !recorded) {
     return <p className="today__nobars meta">Requests per interval are not recorded for this range.</p>;
   }

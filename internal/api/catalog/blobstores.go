@@ -58,9 +58,10 @@ type BlobStore struct {
 	UsedBytes        int64 // live blobs (deduplicated)
 	BlobCount        int64
 	RepositoryCount  int64
-	ReclaimableBytes int64 // soft-deleted blobs
-	DedupSavedBytes  int64 // asset bytes minus stored bytes
-	GrowthBytes7d    int64 // bytes of blobs created in the last 7 days
+	ReclaimableBytes int64      // soft-deleted blobs
+	DedupSavedBytes  int64      // asset bytes minus stored bytes
+	GrowthBytes7d    int64      // bytes of blobs created in the last 7 days
+	FirstBlobAt      *time.Time // when the oldest blob was written; nil without blobs
 }
 
 // Location renders where the bytes live: a path or s3://bucket/prefix.
@@ -83,15 +84,19 @@ type Totals struct {
 	UsedBytes         int64
 	CapacityBytes     *int64 // nil unless every store has a soft quota
 	DedupSavedBytes   int64
-	GrowthBytesPerDay int64 // average over the last 7 days
-	DaysToFull        *float64
-	ReclaimableBytes  int64
+	GrowthBytesPerDay int64 // average over GrowthWindowDays; 0 with less than a day of history
+	// GrowthWindowDays is how many days the growth average covers: 7, or the
+	// age of the oldest blob when that is younger. Under 1 the history is
+	// too short to extrapolate and GrowthBytesPerDay is 0.
+	GrowthWindowDays float64
+	DaysToFull       *float64
+	ReclaimableBytes int64
 }
 
 const blobStoreSelect = `
 	SELECT s.id::text, s.name, s.kind, s.config, s.soft_quota_bytes, s.created_at,
 		COALESCE(b.used, 0)::bigint, COALESCE(b.cnt, 0)::bigint, COALESCE(b.reclaimable, 0)::bigint,
-		COALESCE(b.growth, 0)::bigint,
+		COALESCE(b.growth, 0)::bigint, b.first,
 		(SELECT count(*) FROM repositories r WHERE r.blob_store_id = s.id),
 		COALESCE((SELECT sum(a.size) FROM assets a JOIN repositories r ON r.id = a.repo_id WHERE r.blob_store_id = s.id), 0)::bigint
 	FROM blob_stores s
@@ -99,7 +104,8 @@ const blobStoreSelect = `
 		SELECT sum(size) FILTER (WHERE soft_deleted_at IS NULL) AS used,
 			count(*) FILTER (WHERE soft_deleted_at IS NULL) AS cnt,
 			sum(size) FILTER (WHERE soft_deleted_at IS NOT NULL) AS reclaimable,
-			sum(size) FILTER (WHERE created_at > now() - interval '7 days') AS growth
+			sum(size) FILTER (WHERE created_at > now() - interval '7 days') AS growth,
+			min(created_at) AS first
 		FROM blobs WHERE store_id = s.id
 	) b`
 
@@ -108,7 +114,7 @@ func scanBlobStore(row pgx.Row) (*BlobStore, error) {
 	var cfg []byte
 	var logical int64
 	if err := row.Scan(&s.ID, &s.Name, &s.Kind, &cfg, &s.SoftQuotaBytes, &s.CreatedAt, &s.UsedBytes, &s.BlobCount,
-		&s.ReclaimableBytes, &s.GrowthBytes7d, &s.RepositoryCount, &logical); err != nil {
+		&s.ReclaimableBytes, &s.GrowthBytes7d, &s.FirstBlobAt, &s.RepositoryCount, &logical); err != nil {
 		return nil, err
 	}
 	s.CreatedAt = s.CreatedAt.UTC()
@@ -137,6 +143,7 @@ func (c *Catalog) BlobStores(ctx context.Context) ([]*BlobStore, Totals, error) 
 	var capacity int64
 	quotas := 0
 	var growth7d int64
+	var first *time.Time
 	for rows.Next() {
 		s, err := scanBlobStore(rows)
 		if err != nil {
@@ -148,6 +155,9 @@ func (c *Catalog) BlobStores(ctx context.Context) ([]*BlobStore, Totals, error) 
 		t.DedupSavedBytes += s.DedupSavedBytes
 		t.ReclaimableBytes += s.ReclaimableBytes
 		growth7d += s.GrowthBytes7d
+		if s.FirstBlobAt != nil && (first == nil || s.FirstBlobAt.Before(*first)) {
+			first = s.FirstBlobAt
+		}
 		if s.SoftQuotaBytes != nil {
 			quotas++
 			capacity += *s.SoftQuotaBytes
@@ -156,7 +166,7 @@ func (c *Catalog) BlobStores(ctx context.Context) ([]*BlobStore, Totals, error) 
 	if err := rows.Err(); err != nil {
 		return nil, Totals{}, fmt.Errorf("list blob stores: %w", err)
 	}
-	t.GrowthBytesPerDay = growth7d / 7
+	t.GrowthWindowDays, t.GrowthBytesPerDay = growthRate(growth7d, first, time.Now())
 	if len(out) > 0 && quotas == len(out) {
 		t.CapacityBytes = &capacity
 		if t.GrowthBytesPerDay > 0 {
@@ -165,6 +175,25 @@ func (c *Catalog) BlobStores(ctx context.Context) ([]*BlobStore, Totals, error) 
 		}
 	}
 	return out, t, nil
+}
+
+// growthWindow is the longest history the growth rate averages over.
+const growthWindow = 7 * 24 * time.Hour
+
+// growthRate averages the bytes written in the last 7 days over the days the
+// stores have actually held data, so a registry filled a few hours ago does
+// not report a seventh of its size as daily growth. With less than a day of
+// history it reports no rate at all: a few hours do not predict a day.
+func growthRate(growth7d int64, first *time.Time, now time.Time) (windowDays float64, perDay int64) {
+	if first == nil {
+		return 0, 0
+	}
+	window := min(max(now.Sub(*first), 0), growthWindow)
+	windowDays = window.Hours() / 24
+	if windowDays < 1 {
+		return windowDays, 0
+	}
+	return windowDays, int64(float64(growth7d) / windowDays)
 }
 
 // BlobStore returns one store by name (core.ErrNotFound if absent).

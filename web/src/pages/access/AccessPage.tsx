@@ -211,7 +211,7 @@ function AllTokens({ ownerKind, status, q, onChange }: AllTokensProps) {
       {tokens.isError ? (
         <ErrorNote what="tokens" error={tokens.error} privilege="system:tokens:read" onRetry={() => void tokens.refetch()} />
       ) : (
-        <TokenTable caption="All access tokens" tokens={tokens.data?.items ?? []} showOwner busy={tokens.isFetching} empty={tokens.isPending ? 'Loading…' : 'No tokens match.'} />
+        <TokenTable caption="All access tokens" tokens={tokens.data?.items ?? []} showOwner busy={tokens.isFetching} loading={tokens.isPending} empty={'No tokens match.'} />
       )}
       <div className="repo-footer">
         <p className="meta">Revoked tokens are not listed; their history is in the audit log.</p>

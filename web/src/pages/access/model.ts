@@ -5,6 +5,7 @@
 import { ApiRequestError } from '../../api/client';
 import type { Tone } from '../../lib/format';
 import type { Member, Token } from './api';
+import { errorSentence } from '../../lib/apiError';
 
 /* ---------------------------------------------------------------- privileges */
 
@@ -151,15 +152,16 @@ export function expiryPresets(maxDays: number): number[] {
   return out;
 }
 
-/** End of the day `days` from now, in UTC, as an RFC 3339 string. */
+/** The moment `days` from now, as an RFC 3339 string. */
 export function expiresInDays(days: number, now: Date = new Date()): string {
   return new Date(now.getTime() + days * DAY).toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
-/** Expiry for a custom date (yyyy-mm-dd), at 23:59:59 UTC; error text if outside 1 day … maxDays. */
+/** Expiry for a custom date (yyyy-mm-dd), at 23:59:59 in the browser's zone; error text if outside 1 day … maxDays. */
 export function customExpiry(date: string, maxDays: number, now: Date = new Date()): { value: string | null; error: string | null } {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { value: null, error: 'Pick a date.' };
-  const at = new Date(`${date}T23:59:59Z`);
+  // Without an offset the date-time is local: the end of the day the user picked, where they are.
+  const at = new Date(`${date}T23:59:59`);
   if (Number.isNaN(at.getTime())) return { value: null, error: 'Pick a valid date.' };
   if (at.getTime() <= now.getTime()) return { value: null, error: 'The date must be in the future.' };
   if (at.getTime() > now.getTime() + maxDays * DAY) return { value: null, error: `At most ${maxDays} days from today.` };
@@ -204,20 +206,7 @@ export function expiryText(iso: string, now: Date = new Date()): string {
   return diff > 0 ? `in ${span}` : `${span} ago`;
 }
 
-export function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(iso));
-}
-
-export function formatDateTime(iso: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'UTC',
-    timeZoneName: 'short',
-  }).format(new Date(iso));
-}
+export { formatDate } from '../../lib/format';
 
 /* ---------------------------------------------------------------- users */
 
@@ -385,9 +374,8 @@ export function errorText(err: unknown): string {
     if (err.code === 'read_only_token') return 'You signed in with a read-only token, which cannot change anything.';
     if (err.status === 403) return 'You do not have permission to do this.';
     if (err.status === 423 && err.retryAfter) return `Locked after repeated wrong passwords. Try again in ${Math.ceil(err.retryAfter / 60)} min.`;
-    return err.body?.message ?? err.message;
   }
-  return err instanceof Error ? err.message : 'Something went wrong.';
+  return errorSentence(err);
 }
 
 /** Generates a random passphrase-like password (for "Generate" in the password fields). */

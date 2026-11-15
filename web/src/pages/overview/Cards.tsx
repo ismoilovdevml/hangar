@@ -6,7 +6,7 @@ import { GATES } from '../../lib/gates';
 import { ErrorNote } from '../../components/ErrorNote';
 import { FORMAT_META, formatBytes, formatCompact, formatPercent } from '../../lib/format';
 import { upstreamAuthProblem } from '../../lib/repositories';
-import { headlineUpstream, plural, ratioPercent, storageNote, successRatio, urlHost } from '../../lib/overview';
+import { headlineUpstream, plural, ratioPercent, storageNote, successRatio, urlHost, type StoreQuota } from '../../lib/overview';
 
 function CardSkeleton() {
   return (
@@ -74,7 +74,7 @@ export function OutcomeCard({ m, error }: { m?: OverviewMetrics; error: boolean 
 
 /* ---------------------------------------------------------------- storage */
 
-export function StorageCard({ m, error }: { m?: OverviewMetrics; error: boolean }) {
+export function StorageCard({ m, error, stores }: { m?: OverviewMetrics; error: boolean; stores?: StoreQuota[] }) {
   if (!m) {
     return (
       <div className="ov-card ov-stat glass">
@@ -102,7 +102,7 @@ export function StorageCard({ m, error }: { m?: OverviewMetrics; error: boolean 
           />
         ))}
       </span>
-      <span className="ov-stat__note">{storageNote(m, label)}</span>
+      <span className="ov-stat__note">{storageNote(m, label, stores)}</span>
     </Link>
   );
 }

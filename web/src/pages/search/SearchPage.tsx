@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { ApiRequestError } from '../../api/client';
+import { cleanServerMessage } from '../../lib/apiError';
 import { flatItems, useAllRepositories, useSearch } from '../../api/catalog';
 import { useFormats } from '../../api/hooks';
 import type { FacetValue, SearchHit, SearchResult, SearchSort } from '../../api/types';
@@ -9,7 +10,8 @@ import { FormatBadge } from '../../components/FormatBadge';
 import { FormatIcon } from '../../components/FormatIcon';
 import { Pill } from '../../components/Pill';
 import { Select } from '../../components/Select';
-import { FORMAT_META, formatCompact, relativeTime } from '../../lib/format';
+import { FORMAT_META, formatCompact } from '../../lib/format';
+import { Time } from '../../components/Time';
 import { hasVersion, hitName, securityPill } from '../../lib/packages';
 import { isFormat } from '../../lib/repositories';
 import { PHONE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
@@ -22,6 +24,7 @@ import {
   SEARCH_SORTS,
   setQualifier,
   toggleQualifierValue,
+  queryProblems,
   type SecurityState,
 } from '../../lib/searchQuery';
 import { useNow } from '../../lib/useNow';
@@ -81,6 +84,9 @@ export function SearchPage() {
   const first = results.data?.pages[0];
   const hits = flatItems(results.data);
   const invalid = results.error instanceof ApiRequestError && results.error.status === 400 ? results.error : null;
+  // Every problem at once, in words, under the box: the server stops at the first and speaks Go.
+  const problems = useMemo(() => queryProblems(q, { formats: context.formats }), [q, context.formats]);
+  const serverOnly = invalid && !problems.some((p) => p.level === 'error') ? cleanServerMessage(invalid.body?.message ?? 'The query is not valid.') : null;
 
   return (
     <div className="screen search-screen">
@@ -89,6 +95,19 @@ export function SearchPage() {
           Find any package
         </h1>
         <QueryBar ref={bar} value={q} onSubmit={(v) => setQuery(v)} context={context} onArrowDown={() => focusResult(0)} />
+        {(problems.length > 0 || serverOnly) && (
+          // The live region wraps the list so the list keeps its role (and its items) for screen readers.
+          <div role={invalid ? 'alert' : 'status'}>
+            <ul className="search-problems" aria-label="Problems in the query">
+              {problems.map((p, i) => (
+                <li key={`${p.token}-${i}`} className={p.level === 'error' ? 'search-problems__error' : 'search-problems__warn'}>
+                  <code className="inline-code">{p.token}</code> {p.message}
+                </li>
+              ))}
+              {serverOnly && <li className="search-problems__error">{serverOnly}</li>}
+            </ul>
+          </div>
+        )}
         <div className="search-try">
           <span className="meta">Try:</span>
           {EXAMPLES.map((ex) => (
@@ -101,15 +120,13 @@ export function SearchPage() {
 
       {!q ? (
         <QueryHelp />
-      ) : (
+      ) : invalid ? null : (
         <div className="search-body">
           {first && <Facets q={q} result={first} onChange={(next) => setQuery(next, false)} />}
           <section className="search-results" aria-labelledby="results-title">
             <div className="search-results__head">
               <h2 id="results-title" className="search-results__count" aria-live="polite">
-                {invalid ? (
-                  'Check the query'
-                ) : first ? (
+                {first ? (
                   <>
                     <strong>{first.total.toLocaleString('en-GB')}</strong> {first.total === 1 ? 'package' : 'packages'} for “{q}”
                   </>
@@ -122,11 +139,7 @@ export function SearchPage() {
               <SortSelect value={sort} onChange={(s) => void navigate({ search: (p) => ({ ...p, sort: s === 'relevance' ? undefined : s }), replace: true })} />
             </div>
 
-            {invalid ? (
-              <p className="form-error" role="alert">
-                {invalid.body?.message ?? 'The query is not valid.'}
-              </p>
-            ) : results.isError ? (
+            {results.isError ? (
               <ErrorNote what="search results" error={results.error} onRetry={() => void results.refetch()} />
             ) : first && hits.length === 0 ? (
               <NoResults q={q} onClear={(next) => setQuery(next)} />
@@ -225,7 +238,12 @@ function ResultList({
                   {hasVersion(h.version) && ` · ${h.version} newest`}
                   {` · ${h.versions} ${h.versions === 1 ? 'version' : 'versions'}`}
                   {` · ${formatCompact(h.downloads)} ${h.downloads === 1 ? 'download' : 'downloads'}`}
-                  {h.published_at && ` · ${relativeTime(h.published_at, now).toLowerCase()}`}
+                  {h.published_at && (
+                    <>
+                      {' · '}
+                      <Time value={h.published_at} mode="relative" now={now} inline />
+                    </>
+                  )}
                 </span>
               </span>
               <Pill tone={pill.tone} className="result__pill">

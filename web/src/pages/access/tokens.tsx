@@ -3,7 +3,7 @@ import { useSession } from '../../api/hooks';
 import { DataTable, type Column } from '../../components/DataTable';
 import { Pill } from '../../components/Pill';
 import { Select } from '../../components/Select';
-import { relativeTime } from '../../lib/format';
+import { Time } from '../../components/Time';
 import { useNow } from '../../lib/useNow';
 import { useCreateToken, usePermissions, useRepositoryNames, useRevokeToken, useRotateToken, type Token, type TokenCreated } from './api';
 import {
@@ -71,11 +71,12 @@ interface TokenTableProps {
   tokens: Token[];
   showOwner?: boolean;
   busy?: boolean;
+  loading?: boolean;
   empty?: string;
 }
 
 /** Tokens with what they can do, restrictions, last use (time and address), expiry, Rotate and Revoke. */
-export function TokenTable({ caption, tokens, showOwner, busy, empty }: TokenTableProps) {
+export function TokenTable({ caption, tokens, showOwner, busy, loading, empty }: TokenTableProps) {
   const now = useNow();
   const session = useSession();
   const warnMs = parseGoDuration(session.data?.token_policy?.expiry_warning) ?? undefined;
@@ -134,7 +135,7 @@ export function TokenTable({ caption, tokens, showOwner, busy, empty }: TokenTab
         </div>
       ),
     },
-    { key: 'created', priority: 3, header: 'Created', className: 'meta', cell: (t) => formatDate(t.created_at) },
+    { key: 'created', priority: 3, header: 'Created', className: 'meta', cell: (t) => <Time value={t.created_at} mode="date" /> },
     {
       key: 'used',
       priority: 3,
@@ -142,7 +143,7 @@ export function TokenTable({ caption, tokens, showOwner, busy, empty }: TokenTab
       cell: (t) =>
         t.last_used_at ? (
           <div className="cell-stack">
-            <span>{relativeTime(t.last_used_at, now)}</span>
+            <Time value={t.last_used_at} mode="relative" now={now} />
             {t.last_used_ip && <span className="meta mono">{t.last_used_ip}</span>}
           </div>
         ) : (
@@ -158,8 +159,8 @@ export function TokenTable({ caption, tokens, showOwner, busy, empty }: TokenTab
         return (
           <div className="cell-stack">
             <Pill tone={TOKEN_STATE_META[st].tone}>{TOKEN_STATE_META[st].label}</Pill>
-            <span className="meta" title={t.expires_at}>
-              {formatDate(t.expires_at)} · {expiryText(t.expires_at, now)}
+            <span className="meta">
+              <Time value={t.expires_at} mode="date" /> · {expiryText(t.expires_at, now)}
             </span>
           </div>
         );
@@ -187,7 +188,7 @@ export function TokenTable({ caption, tokens, showOwner, busy, empty }: TokenTab
 
   return (
     <>
-      <DataTable caption={caption} columns={columns} rows={tokens} rowKey={(t) => t.id} busy={busy} minWidth={showOwner ? 1020 : 880} empty={empty ?? 'No tokens.'} />
+      <DataTable caption={caption} columns={columns} rows={tokens} rowKey={(t) => t.id} busy={busy} loading={loading} minWidth={showOwner ? 1020 : 880} empty={empty ?? 'No tokens.'} />
       {revoking && (
         <ConfirmDialog
           title={`Revoke “${revoking.name}”?`}

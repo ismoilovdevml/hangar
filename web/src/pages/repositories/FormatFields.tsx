@@ -3,6 +3,7 @@
  * config.proxy.related_hosts), shown only for the format and type they apply to.
  */
 import { Select } from '../../components/Select';
+import { Combobox } from '../../components/Combobox';
 import {
   APT_DEFAULT_ARCHITECTURES,
   DISTRO_RELEASES,
@@ -45,23 +46,17 @@ export function FormatSettings({ form, set, errors, blur }: { form: RepoForm; se
           <label htmlFor={fieldId('distro')} className="field__label">
             Distribution release <span className="field__optional">optional</span>
           </label>
-          <input
+          <Combobox
             className="input input--mono"
             type="text"
-            list="repo-distro-releases"
-            autoComplete="off"
             spellCheck={false}
             placeholder={form.type === 'proxy' ? 'Detect from the remote' : form.format === 'apt' ? 'Debian:12' : 'Rocky Linux:9'}
             value={form.distro}
-            onChange={(e) => set('distro', e.target.value)}
+            options={form.format ? (DISTRO_RELEASES[form.format] ?? []) : []}
+            onChange={(v) => set('distro', v)}
             onBlur={blur('distro')}
             {...invalidProps('distro', errors, 'repo-distro-hint')}
           />
-          <datalist id="repo-distro-releases">
-            {(form.format ? (DISTRO_RELEASES[form.format] ?? []) : []).map((r) => (
-              <option key={r} value={r} />
-            ))}
-          </datalist>
           {!errors.distro && (
             <span id="repo-distro-hint" className="field__hint">
               {form.type === 'proxy'

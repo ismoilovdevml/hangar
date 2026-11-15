@@ -23,6 +23,8 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { CopyButton } from '../../components/CopyButton';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
+import { EmptyState, Loading } from '../../components/States';
+import { cleanServerMessage } from '../../lib/apiError';
 import { IconTrash } from '../../components/icons';
 import { IconDownload } from '../../components/opsIcons';
 import { NotAvailable } from '../../components/NotAvailable';
@@ -38,6 +40,7 @@ import { useNow } from '../../lib/useNow';
 import { imageWhere, packageAt, scannable } from '../../lib/vulnerabilities';
 import { Fact } from './AssetDetail';
 import { dateTime, deleteMessage, shortDigest } from './detailUtil';
+import { Time } from '../../components/Time';
 import { FormatIcon } from '../../components/FormatIcon';
 import { Markdown, MarkdownInline } from '../../components/Markdown';
 import { safeHref, safeImageSrc } from '../../components/urlPolicy';
@@ -108,14 +111,8 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
   const newest = versions[0]?.id === c.id;
   const cached = repo.data?.type === 'proxy';
   const base = { repo: search.repo ?? c.repository, path: search.path, member: search.member, ns: c.namespace || undefined, name: c.name };
-  const hasFindings = !!findings.data;
-  const available: BrowseTab[] = [
-    'readme',
-    'versions',
-    'files',
-    'repositories',
-    ...(hasFindings ? (['security'] as const) : []),
-  ];
+  // The tab is always there: without findings to list it says why (not scanned yet, no advisory source…).
+  const available: BrowseTab[] = ['readme', 'versions', 'files', 'repositories', 'security'];
   const tab: BrowseTab = search.tab && available.includes(search.tab) ? search.tab : 'readme';
   const setTab = (t: BrowseTab) => void navigate({ to: '/browse', search: (s) => ({ ...s, tab: t === 'readme' ? undefined : t }), replace: true });
 
@@ -256,7 +253,7 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
           )}
           {tab === 'files' && (c.format === 'docker' && c.image ? <LayersTable image={c.image} /> : <FilesTable c={c} now={now} />)}
           {tab === 'repositories' && <RepositoriesTab c={c} now={now} />}
-          {tab === 'security' && findings.data && <FindingsTable items={findings.data.items} />}
+          {tab === 'security' && <SecurityTab c={c} q={findings} />}
         </div>
       </Panel>
 
@@ -662,7 +659,7 @@ function VersionsTable({ c, newestId, cached, canDelete, onDelete, onDeleteAll, 
   if (q.isError) return <ErrorNote what="versions" error={q.error} onRetry={() => void q.refetch()} />;
   return (
     <div className="pkg-table">
-      <DataTable caption="Versions" columns={columns} rows={rows} rowKey={(v) => v.id} busy={q.isFetching} minWidth={640} empty={q.isPending ? 'Loading…' : 'No versions.'} />
+      <DataTable caption="Versions" columns={columns} rows={rows} rowKey={(v) => v.id} busy={q.isFetching} minWidth={640} loading={q.isPending} empty={'No versions.'} />
       <LoadMore q={q} />
       {onDeleteAll && (
         <div className="pkg-more">
@@ -802,13 +799,13 @@ function FilesTable({ c, now }: { c: ComponentDetail; now: Date }) {
       header: 'Last downloaded',
       align: 'right',
       className: 'col-last meta',
-      cell: (a) => (a.last_downloaded_at ? relativeTime(a.last_downloaded_at, now) : 'Never'),
+      cell: (a) => (a.last_downloaded_at ? <Time value={a.last_downloaded_at} mode="relative" now={now} /> : 'Never'),
     },
   ];
   if (q.isError) return <ErrorNote what="files" error={q.error} onRetry={() => void q.refetch()} />;
   return (
     <div className="pkg-table">
-      <DataTable caption={layers ? 'Layers' : 'Files'} columns={columns} rows={rows} rowKey={(a) => a.id} busy={q.isFetching} minWidth={760} empty={q.isPending ? 'Loading…' : 'No files.'} />
+      <DataTable caption={layers ? 'Layers' : 'Files'} columns={columns} rows={rows} rowKey={(a) => a.id} busy={q.isFetching} minWidth={760} loading={q.isPending} empty={'No files.'} />
       <LoadMore q={q} />
     </div>
   );
@@ -849,7 +846,7 @@ function RepositoriesTab({ c, now }: { c: ComponentDetail; now: Date }) {
       priority: 3,
       header: 'Published or cached',
       className: 'meta',
-      cell: (h) => <time dateTime={h.published_at}>{relativeTime(h.published_at, now)}</time>,
+      cell: (h) => <Time value={h.published_at} mode="relative" now={now} />,
     },
     { key: 'dl', priority: 2, header: 'Downloads', align: 'right', className: 'col-last muted', cell: (h) => formatCompact(h.download_count ?? 0) },
   ];
@@ -875,6 +872,43 @@ function RepositoriesTab({ c, now }: { c: ComponentDetail; now: Date }) {
 }
 
 const SEVERITY_TONE = { critical: 'bad', high: 'warn', medium: 'warn', low: 'neutral', unknown: 'neutral' } as const;
+
+/** The Vulnerabilities tab: the findings, or why there are none to list. */
+function SecurityTab({ c, q }: { c: ComponentDetail; q: ReturnType<typeof useComponentFindings> }) {
+  const canRescan = usePermissions().can('write', 'system', 'security');
+  if (q.isPending) return <Loading label="Loading vulnerabilities…" />;
+  if (q.isError) return <ErrorNote what="the vulnerabilities" error={q.error} onRetry={() => void q.refetch()} />;
+  if (q.data) return <FindingsTable items={q.data.items} />;
+  const rescan = canRescan ? (
+    <Link to="/vulnerabilities" className="button button--secondary button--sm">
+      Rescan on Vulnerabilities
+    </Link>
+  ) : undefined;
+  switch (c.scan.state) {
+    case 'pending':
+      return (
+        <EmptyState title="Not scanned yet" action={rescan}>
+          Packages are checked against the advisory database when they arrive and again on every daily rescan.
+        </EmptyState>
+      );
+    case 'unsupported':
+      return (
+        <EmptyState title={unsupportedText(c.scan.scan_error, c.format)}>
+          {c.format === 'docker'
+            ? 'Images are scanned when the server has an image scanner (Trivy) configured.'
+            : 'No advisory database covers these packages, so they cannot be checked for known vulnerabilities.'}
+        </EmptyState>
+      );
+    case 'failed':
+      return (
+        <EmptyState title="The last scan failed" action={rescan}>
+          {c.scan.scan_error ? cleanServerMessage(c.scan.scan_error) : 'The scanner did not finish; the next rescan tries again.'}
+        </EmptyState>
+      );
+    default:
+      return <EmptyState title="This server does not scan packages">Vulnerability scanning is not available on this server.</EmptyState>;
+  }
+}
 
 function FindingsTable({ items }: { items: Finding[] }) {
   const columns: Column<Finding>[] = [

@@ -1,4 +1,6 @@
 import { useId, useState, type ReactNode } from 'react';
+import { ErrorMessage, PickerLoadError } from '../../components/States';
+import { ApiRequestError } from '../../api/client';
 import { useRepositories } from '../../api/hooks';
 import {
   errorText,
@@ -31,8 +33,8 @@ import {
 } from '../../lib/cleanup';
 import { scheduleToCron, describeCron } from '../../lib/cron';
 import { formatBytes } from '../../lib/format';
+import { Time } from '../../components/Time';
 import { ALL_FORMATS, isFormat } from '../../lib/repositories';
-import { formatUtc } from '../../lib/tasks';
 import { RunHistory } from './RunHistory';
 import { ScheduleField } from './ScheduleField';
 
@@ -142,6 +144,13 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
   delete previewErrors.name;
   delete previewErrors.schedule;
 
+  // A pattern the server refused lands under the field too (the client check may not know every rule).
+  const refusedGlob =
+    previewM.error instanceof ApiRequestError && /keep_matching/i.test(previewM.error.body?.message ?? '')
+      ? `${/bad glob "([^"]*)"/.exec(previewM.error.body?.message ?? '')?.[1] ?? 'A pattern'} is not a valid pattern`
+      : null;
+  const globError = (showErrors && errors.keepMatching) || refusedGlob;
+
   const runPreview = () => {
     setShowErrors(true);
     if (Object.keys(previewErrors).length) return;
@@ -193,13 +202,13 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
       ),
     },
     { key: 'repo', priority: 2, header: 'Repository', className: 'muted', cell: (c) => c.repository },
-    { key: 'published', priority: 3, header: 'Published', className: 'muted nowrap', cell: (c) => formatUtc(c.published_at).replace(/, \d\d:\d\d UTC$/, '') },
+    { key: 'published', priority: 3, header: 'Published', className: 'muted nowrap', cell: (c) => <Time value={c.published_at} mode="date" /> },
     {
       key: 'download',
       priority: 3,
       header: 'Last download',
       className: 'muted nowrap',
-      cell: (c) => (c.last_downloaded_at ? formatUtc(c.last_downloaded_at).replace(/, \d\d:\d\d UTC$/, '') : 'Never'),
+      cell: (c) => (c.last_downloaded_at ? <Time value={c.last_downloaded_at} mode="date" /> : 'Never'),
     },
     {
       key: 'size',
@@ -213,7 +222,11 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
 
   let previewBody: ReactNode;
   if (previewM.isError) {
-    previewBody = <p className="form-error">{errorText(previewM.error, 'The preview failed.')}</p>;
+    previewBody = refusedGlob ? (
+      <p className="form-error">Fix the pattern under “tags matching” and preview again.</p>
+    ) : (
+      <ErrorMessage error={previewM.error} message={errorText(previewM.error, 'The preview failed.')} />
+    );
   } else if (!preview) {
     previewBody = (
       <p className="meta">
@@ -354,12 +367,19 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
                     placeholder="release-*, latest, v*.*.*"
                     spellCheck={false}
                     autoComplete="off"
+                    aria-invalid={globError ? true : undefined}
                     aria-describedby={`${ids.globs}-hint`}
                   />
                 </span>
-                <span className="field__hint rule__error" id={`${ids.globs}-hint`}>
-                  Comma-separated globs; matching versions are never deleted.
-                </span>
+                {globError ? (
+                  <span className="field__error rule__error" id={`${ids.globs}-hint`}>
+                    {globError}
+                  </span>
+                ) : (
+                  <span className="field__hint rule__error" id={`${ids.globs}-hint`}>
+                    Comma-separated globs; matching versions are never deleted.
+                  </span>
+                )}
               </div>
               {showErrors && errors.criteria && <p className="field__error">{errors.criteria}</p>}
             </div>
@@ -394,7 +414,7 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
                       variant="inline"
                       className="chip__select"
                       value=""
-                      placeholder={repos.isPending ? 'Loading repositories…' : candidates.length === 0 ? 'No more repositories' : 'Add repository'}
+                      placeholder={repos.isPending ? 'Loading repositories…' : repos.isError ? 'Repositories could not be loaded' : candidates.length === 0 ? 'No more repositories' : 'Add repository'}
                       disabled={repos.isPending || candidates.length === 0}
                       options={candidates.map((r) => ({ value: r.name, label: r.name, hint: r.type }))}
                       onChange={(v) => update({ repositories: [...draft.repositories, v] })}
@@ -403,7 +423,11 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
                   </li>
                 )}
               </ul>
-              {repos.isError && <p className="field__error">Could not load repositories.</p>}
+              {repos.isError && (
+                <p>
+                  <PickerLoadError what="repositories" onRetry={() => void repos.refetch()} />
+                </p>
+              )}
               {showErrors && errors.repositories && <p className="field__error">{errors.repositories}</p>}
             </div>
 

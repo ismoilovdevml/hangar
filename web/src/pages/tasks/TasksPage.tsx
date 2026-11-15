@@ -8,6 +8,8 @@ import { IconSearch } from '../../components/icons';
 import { IconRefresh } from '../../components/opsIcons';
 import { Meter } from '../../components/Meter';
 import { NotAvailable } from '../../components/NotAvailable';
+import { Time } from '../../components/Time';
+import { formatDuration, formatTime, zoneLabel } from '../../lib/format';
 import { PageHeader } from '../../components/PageHeader';
 import { Select } from '../../components/Select';
 import { Panel } from '../../components/Panel';
@@ -16,9 +18,6 @@ import {
   ALL_TASK_TYPES,
   estimateRemaining,
   filterTasks,
-  formatDuration,
-  formatNextRun,
-  formatUtc,
   isActive,
   remainingText,
   RUN_STATUS,
@@ -165,7 +164,7 @@ export function TasksPage() {
           .filter(Boolean)
           .join(' · ');
         return (
-          <span title={r.finished_at ? `Finished ${formatUtc(r.finished_at)}` : undefined}>
+          <span title={r.finished_at ? `Finished ${formatTime(r.finished_at)}` : undefined}>
             <StatusDot tone={meta.tone} label={text || meta.label} />
           </span>
         );
@@ -178,9 +177,7 @@ export function TasksPage() {
       className: 'muted nowrap',
       cell: (t) =>
         t.next_run_at && t.enabled !== false ? (
-          <time dateTime={t.next_run_at} title={formatUtc(t.next_run_at)}>
-            {formatNextRun(t.next_run_at, now)}
-          </time>
+          <Time value={t.next_run_at} mode="future" now={now} />
         ) : (
           <NotAvailable reason={t.schedule ? 'not scheduled while disabled' : 'manual only'} />
         ),
@@ -202,7 +199,7 @@ export function TasksPage() {
     <div className="screen">
       <PageHeader
         title="Scheduled tasks"
-        description="Maintenance the registry does on its own, mostly at night. Times are in UTC."
+        description={`Maintenance the registry does on its own, mostly at night. Schedules are in UTC; run times are your local time (${zoneLabel()}).`}
         actions={
           canRun ? (
             <Link to="/tasks/new" search={{}} className="button button--primary">

@@ -2,6 +2,7 @@ import { useId, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useSession } from '../../api/hooks';
 import { IconPlus } from '../../components/icons';
+import { ErrorNote } from '../../components/ErrorNote';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
@@ -189,9 +190,9 @@ function MyTokens() {
         ). Give each integration its own token with only the permissions it needs.
       </p>
       {tokens.isError ? (
-        <FormError error={tokens.error} />
+        <ErrorNote what="your tokens" error={tokens.error} onRetry={() => void tokens.refetch()} />
       ) : (
-        <TokenTable caption="Your access tokens" tokens={tokens.data?.items ?? []} busy={tokens.isFetching} empty={tokens.isPending ? 'Loading…' : 'You have no tokens yet.'} />
+        <TokenTable caption="Your access tokens" tokens={tokens.data?.items ?? []} busy={tokens.isFetching} loading={tokens.isPending} empty={'You have no tokens yet.'} />
       )}
       {creating && <CreateTokenDialog onClose={() => setCreating(false)} />}
     </Panel>
@@ -218,7 +219,7 @@ function MySessions() {
     >
       {notice && <Notice message={notice} />}
       {sessions.isError ? (
-        <FormError error={sessions.error} />
+        <ErrorNote what="your sessions" error={sessions.error} onRetry={() => void sessions.refetch()} />
       ) : sessions.data ? (
         <SessionList sessions={sessions.data.items} onEnd={setEnding} busy={endOne.isPending} />
       ) : (

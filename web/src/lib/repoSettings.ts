@@ -1,5 +1,6 @@
 import type { Repository, RepositoryInput } from '../api/types';
 import { clientLines, type ClientTarget, type CodeLine } from './clientSnippets';
+import { shortGoDuration } from './format';
 import {
   formatSettingKeys,
   GO_DEFAULT_SUMDBS,
@@ -32,9 +33,10 @@ export function repoToForm(r: Repository): RepoForm {
     blobStore: r.blob_store ?? '',
     writePolicy: c.hosted?.write_policy ?? 'allow',
     remoteUrl: p?.remote_url ?? '',
-    metadataTtl: p?.metadata_ttl ?? '',
-    contentTtl: p?.content_ttl ?? '',
-    negativeTtl: p?.negative_cache_ttl ?? '',
+    // The server answers Go's long form ("24h0m0s"); the form and YAML show what the wizard took ("24h").
+    metadataTtl: shortGoDuration(p?.metadata_ttl ?? ''),
+    contentTtl: shortGoDuration(p?.content_ttl ?? ''),
+    negativeTtl: shortGoDuration(p?.negative_cache_ttl ?? ''),
     authKind: p?.auth?.kind ?? 'none',
     authUsername: p?.auth?.username ?? '',
     authHeader: p?.auth?.header_name ?? '',

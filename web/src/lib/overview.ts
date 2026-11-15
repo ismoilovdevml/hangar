@@ -4,7 +4,7 @@ import { DOCS } from './docs';
 import type { Format, OverviewMetrics, OverviewRange, ScanSummary, TrafficBucket, UpstreamHealth } from '../api/types';
 
 type Token = components['schemas']['Token'];
-import type { Tone } from './format';
+import { formatClock, formatShortTime, type Tone } from './format';
 import { upstreamAuthProblem } from './repositories';
 
 export function plural(n: number, one: string, many = `${one}s`): string {
@@ -42,11 +42,10 @@ export function scanPill(scan: ScanSummary): { text: string; tone: Tone } {
   }
 }
 
+/** Axis label of a bucket, in the browser's zone like every other time. */
 export function bucketLabel(iso: string, range: OverviewRange): string {
   const d = new Date(iso);
-  if (range === '1h' || range === 'today') {
-    return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
-  }
+  if (range === '1h' || range === 'today') return formatClock(d);
   if (range === '7d') return new Intl.DateTimeFormat('en-GB', { weekday: 'short' }).format(d);
   return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(d);
 }
@@ -61,15 +60,17 @@ export function axisLabels(buckets: TrafficBucket[], range: OverviewRange): stri
   return [...picks.map((i) => bucketLabel(buckets[i]!.start, range)), 'Now'];
 }
 
-/** Start of the window the server counts requests over for `range` (UTC midnight for "today"). */
+/** Start of the window the server counts requests over for `range` (the viewer's midnight for "today"). */
 export function rangeStart(range: OverviewRange, generatedAt: string): Date {
   const now = new Date(generatedAt).getTime();
   const DAY = 86_400_000;
   switch (range) {
     case '1h':
       return new Date(now - 3_600_000);
-    case 'today':
-      return new Date(now - (now % DAY));
+    case 'today': {
+      const d = new Date(now);
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    }
     case '7d':
       return new Date(now - 7 * DAY);
     case '30d':
@@ -87,11 +88,7 @@ export function coverageNote(m: OverviewMetrics, now: Date = new Date()): string
   const start = new Date(from);
   if (Number.isNaN(start.getTime())) return null;
   if (start.getTime() - rangeStart(m.range, m.generated_at).getTime() < 60_000) return null;
-  const sameDay = start.toDateString() === now.toDateString();
-  const fmt = new Intl.DateTimeFormat('en-GB', sameDay
-    ? { hour: '2-digit', minute: '2-digit', hour12: false }
-    : { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
-  return `Counted since ${fmt.format(start)}`;
+  return `Counted since ${formatShortTime(start, now)}`;
 }
 
 /** Package coordinates in the format's idiom, from namespace + name. */
@@ -148,6 +145,7 @@ export type TodoLink =
   | { kind: 'tasks' }
   | { kind: 'task'; id: string }
   | { kind: 'blob-stores' }
+  | { kind: 'blob-store'; name: string }
   | { kind: 'repository'; name: string }
   /** Documentation outside the app (opens in a new tab). */
   | { kind: 'docs'; href: string };
@@ -183,8 +181,18 @@ export interface TodoInput {
   /** Scheduled tasks, when the user may read them. */
   tasks?: Task[];
   canAdminBlobStores?: boolean;
+  /** Every blob store with its quota, when the user may read them. */
+  blobStores?: StoreQuota[];
   now?: Date;
 }
+
+/** The part of a blob store the quota notes need. */
+export interface StoreQuota {
+  name: string;
+  soft_quota_bytes?: number | null;
+}
+
+const withoutQuota = (stores: StoreQuota[]) => stores.filter((s) => !s.soft_quota_bytes || s.soft_quota_bytes <= 0);
 
 const TONE_ORDER = { bad: 0, warn: 1, info: 2 } as const;
 
@@ -335,27 +343,51 @@ export function todoItems(input: TodoInput): TodoItem[] {
   }
 
   if (input.canAdminBlobStores && (m.storage.capacity_bytes === null || m.storage.capacity_bytes <= 0)) {
-    out.push({
-      id: 'quota',
-      tone: 'info',
-      tag: 'SETUP',
-      title: 'Set a storage quota',
-      detail: 'Get warned before the disk fills',
-      link: { kind: 'blob-stores' },
-    });
+    // With the stores known, name the ones without a quota; a store with one is not nagged about.
+    const missing = input.blobStores ? withoutQuota(input.blobStores) : null;
+    if (missing === null || missing.length > 0) {
+      const one = missing?.length === 1 ? missing[0]!.name : null;
+      out.push({
+        id: 'quota',
+        tone: 'info',
+        tag: 'SETUP',
+        title: 'Set a storage quota',
+        detail: one
+          ? `Blob store ${one} has no quota: get warned before it fills`
+          : missing && input.blobStores!.length > 1
+            ? `${missing.length} of ${input.blobStores!.length} blob stores have no quota`
+            : 'Get warned before the disk fills',
+        link: one ? { kind: 'blob-store', name: one } : { kind: 'blob-stores' },
+      });
+    }
   }
 
   return out.sort((a, b) => TONE_ORDER[a.tone] - TONE_ORDER[b.tone]);
 }
 
+/**
+ * What the storage card says about quotas. The server reports a capacity
+ * only when every store has a quota; otherwise the stores themselves (when
+ * the user may read them) tell which lack one. Without either it says nothing
+ * rather than guess.
+ */
+export function quotaNote(m: OverviewMetrics, stores?: StoreQuota[]): string | null {
+  const cap = m.storage.capacity_bytes;
+  if (cap !== null && cap > 0) return `${Math.round((m.storage.used_bytes / cap) * 100)}% of quota`;
+  if (!stores || stores.length === 0) return null;
+  const missing = withoutQuota(stores);
+  if (missing.length === stores.length) return stores.length === 1 ? 'no quota' : 'no quotas';
+  return missing.length === 1 ? `no quota on ${missing[0]!.name}` : `${missing.length} of ${stores.length} stores without quota`;
+}
+
 /** The storage card's footnote: which formats fill it and whether a quota applies. */
-export function storageNote(m: OverviewMetrics, label: (f: Format) => string): string {
+export function storageNote(m: OverviewMetrics, label: (f: Format) => string, stores?: StoreQuota[]): string {
   const rows = m.storage_by_format.filter((f) => f.bytes > 0);
   const total = rows.reduce((n, f) => n + f.bytes, 0);
-  const cap = m.storage.capacity_bytes;
-  const quota = cap === null || cap <= 0 ? 'no quota' : `${Math.round((m.storage.used_bytes / cap) * 100)}% of quota`;
-  if (rows.length === 0 || total <= 0) return `Nothing stored yet · ${quota}`;
-  if (rows.length === 1) return `All ${label(rows[0]!.format)} · ${quota}`;
+  const quota = quotaNote(m, stores);
+  const tail = quota ? ` · ${quota}` : '';
+  if (rows.length === 0 || total <= 0) return `Nothing stored yet${tail}`;
+  if (rows.length === 1) return `All ${label(rows[0]!.format)}${tail}`;
   const top = rows[0]!;
-  return `${label(top.format)} ${Math.round((top.bytes / total) * 100)}% · ${rows.length} formats · ${quota}`;
+  return `${label(top.format)} ${Math.round((top.bytes / total) * 100)}% · ${rows.length} formats${tail}`;
 }

@@ -65,7 +65,7 @@ describe('audit log', () => {
     renderApp('/audit?range=custom&from=2026-01-01T00:00:00.000Z&to=2026-01-02T00:00:00.000Z');
     expect(await screen.findByText('No events match these filters.', { exact: false })).toBeInTheDocument();
     expect(valueOf(screen.getByLabelText('Time range'))).toBe('custom');
-    expect(screen.getByLabelText('From (UTC)')).toHaveValue('2026-01-01T00:00');
+    expect(screen.getByLabelText('From')).toHaveValue('2026-01-01T00:00');
   });
 
   it('pages with the server cursor', async () => {

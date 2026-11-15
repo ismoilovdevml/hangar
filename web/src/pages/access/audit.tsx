@@ -6,10 +6,10 @@ import { ErrorNote } from '../../components/ErrorNote';
 import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
 import { Segmented } from '../../components/Segmented';
-import { relativeTime } from '../../lib/format';
+import { Time } from '../../components/Time';
 import { useNow } from '../../lib/useNow';
 import { accessKeys, type AuditEvent, type AuditEventPage } from './api';
-import { AUDIT_CATEGORIES, describeAudit, formatDateTime } from './model';
+import { AUDIT_CATEGORIES, describeAudit } from './model';
 
 const OUTCOME_TONE: Record<string, 'ok' | 'warn' | 'bad'> = { success: 'ok', denied: 'warn', error: 'bad' };
 
@@ -31,9 +31,9 @@ export function AuditTab({ category, onCategory }: { category: string; onCategor
       header: 'When',
       className: 'col-first nowrap',
       cell: (e) => (
-        <span className="cell-stack" title={e.at}>
-          <span>{relativeTime(e.at, now)}</span>
-          <span className="meta">{formatDateTime(e.at)}</span>
+        <span className="cell-stack">
+          <Time value={e.at} mode="relative" now={now} />
+          <Time value={e.at} className="meta" />
         </span>
       ),
     },
@@ -88,7 +88,7 @@ export function AuditTab({ category, onCategory }: { category: string; onCategor
           rowKey={(e) => String(e.id)}
           busy={pages.isFetching}
           minWidth={820}
-          empty={pages.isPending ? 'Loading…' : 'No events of this type yet.'}
+          loading={pages.isPending} empty={'No events of this type yet.'}
         />
       )}
       <div className="repo-footer">
@@ -145,7 +145,7 @@ export function RecentAccessActivity({ onShowAll }: { onShowAll: () => void }) {
                   {e.outcome !== 'success' ? ` (${e.outcome})` : ''}
                 </span>
                 <span className="meta">
-                  {relativeTime(e.at, now)}
+                  <Time value={e.at} mode="relative" now={now} />
                   {e.ip ? ` · ${e.ip}` : ''}
                 </span>
               </span>

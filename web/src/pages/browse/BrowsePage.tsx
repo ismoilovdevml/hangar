@@ -2,6 +2,7 @@ import { useId, useRef, useState } from 'react';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import { flatItems, useComponentAssets, useComponentLookup } from '../../api/catalog';
 import type { BrowseEntry, PublishedComponent } from '../../api/types';
+import { NotFound } from '../../components/States';
 import { ErrorNote } from '../../components/ErrorNote';
 import { IconSearch } from '../../components/icons';
 import { IconChevronRight } from '../../components/opsIcons';
@@ -148,26 +149,18 @@ function ResolvedPackage({ repo, ns, name, version, onRawDeleted }: { repo: stri
   const versions = lookup.data.items.filter((c) => ns === undefined || (c.namespace ?? '') === ns);
   const current = version !== undefined ? versions.find((c) => c.version === version) : versions[0];
   if (!current) {
-    return (
-      <Panel className="browse-empty" role="status">
-        <p>
-          {version ? (
-            <>
-              Version <strong>{version}</strong> of <strong>{name}</strong> is not in {repo}.{' '}
-              {versions.length > 0 && (
-                <Link to="/browse" search={{ repo: search.repo, member: search.member, ns, name }}>
-                  Show the newest version
-                </Link>
-              )}
-            </>
-          ) : (
-            <>
-              <strong>{name}</strong> is not in {repo}, or you cannot see it.
-            </>
-          )}
-        </p>
-      </Panel>
-    );
+    if (version && versions.length > 0) {
+      return (
+        <NotFound pane kind="Version" name={`${name} ${version}`} back={{ to: '/browse', search: { repo: search.repo } }} backLabel={repo}>
+          <p>
+            <Link to="/browse" search={{ repo: search.repo, member: search.member, ns, name }} className="link-strong link-underline">
+              Show the newest version of {name}
+            </Link>
+          </p>
+        </NotFound>
+      );
+    }
+    return <NotFound pane kind="Package" name={name} back={{ to: '/browse', search: { repo: search.repo } }} backLabel={repo} />;
   }
   // A raw "package" is one stored file: show it as the file it is.
   if (current.format === 'raw') return <RawFile c={current} treeRepo={search.repo ?? repo} onDeleted={onRawDeleted} />;

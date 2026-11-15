@@ -1,5 +1,6 @@
 import { keepPreviousData, queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, resetCsrfToken } from './client';
+import { tzOffsetMinutes } from '../lib/format';
 import type {
   AuthProviders,
   BlobStoreList,
@@ -119,7 +120,8 @@ export function useOverview(range: OverviewRange) {
   return useQuery({
     queryKey: queryKeys.overview(range),
     queryFn: ({ signal }) =>
-      apiFetch<OverviewMetrics>('/metrics/overview', { query: { range }, signal }),
+      // Days start at the viewer's midnight, as the times on the card are local.
+      apiFetch<OverviewMetrics>('/metrics/overview', { query: { range, tz_offset: tzOffsetMinutes() || undefined }, signal }),
     refetchInterval: 60_000,
     placeholderData: keepPreviousData,
   });
@@ -142,7 +144,7 @@ export function useRecentComponents() {
 export function useUpstreamHealth(range: OverviewRange) {
   return useQuery({
     queryKey: queryKeys.upstreamHealth(range),
-    queryFn: ({ signal }) => apiFetch<Page<UpstreamHealth>>('/upstreams/health', { query: { range }, signal }),
+    queryFn: ({ signal }) => apiFetch<Page<UpstreamHealth>>('/upstreams/health', { query: { range, tz_offset: tzOffsetMinutes() || undefined }, signal }),
     refetchInterval: 30_000,
     placeholderData: keepPreviousData,
   });
@@ -172,7 +174,11 @@ export function useClientEndpoints() {
 export function useRepositories(query: ListRepositoriesQuery, enabled = true) {
   return useQuery({
     queryKey: queryKeys.repositoryList(query),
-    queryFn: ({ signal }) => apiFetch<RepositoryList>('/repositories', { query, signal }),
+    queryFn: async ({ signal }) => {
+      const l = await apiFetch<RepositoryList>('/repositories', { query, signal });
+      // Missing parts of the answer read as empty rather than breaking the page.
+      return { ...l, items: l.items ?? [], counts: { all: 0, hosted: 0, proxy: 0, group: 0, ...(l.counts as RepositoryList['counts'] | undefined) } };
+    },
     placeholderData: keepPreviousData,
     enabled,
   });
@@ -204,7 +210,11 @@ export function useRepositoriesByFormat(format: Format | undefined) {
 export function useBlobStores(enabled = true) {
   return useQuery({
     queryKey: queryKeys.blobStores,
-    queryFn: ({ signal }) => apiFetch<BlobStoreList>('/blob-stores', { signal }),
+    queryFn: async ({ signal }) => {
+      const l = await apiFetch<BlobStoreList>('/blob-stores', { signal });
+      const zero = { used_bytes: 0, capacity_bytes: null, dedup_saved_bytes: 0, growth_bytes_per_day: 0, days_to_full: null, reclaimable_bytes: 0 };
+      return { ...l, items: l.items ?? [], totals: { ...zero, ...l.totals } };
+    },
     enabled,
   });
 }

@@ -24,7 +24,8 @@ describe('vulnerabilities', () => {
     await waitFor(() => expect(policy).toHaveTextContent(/On in \d+ of \d+ repositories|Off in every repository/));
     const trend = screen.getByRole('region', { name: 'Last 30 days · critical + high' });
     expect(await within(trend).findByRole('img', { name: /^Open critical and high findings: / })).toBeInTheDocument();
-    expect(await screen.findByText(/9 scanned · OSV · checked 40 min ago/)).toBeInTheDocument();
+    // 18 packages: the 9 not counted as scanned are said why.
+    expect(await screen.findByText(/9 of 18 scanned \(6 unsupported, 1 failed, 2 not yet\) · OSV · checked 40 min ago/)).toBeInTheDocument();
 
     const impact = await screen.findByRole('region', { name: 'Impact' });
     await waitFor(() => expect(impact).toHaveTextContent('Upgrading 4 packages fixes 5 of 8 findings that builds actually use.'));
@@ -36,7 +37,7 @@ describe('vulnerabilities', () => {
     expect(names.slice(0, 4)).toEqual(['com.acme:ledger-core', 'System.Security.Cryptography.Xml', 'Newtonsoft.Json', '@acme/ui-kit']);
     const xml = row('System.Security.Cryptography.Xml');
     expect(within(xml).getByText('8.0.2, 10.0.8')).toBeInTheDocument();
-    expect(within(xml).getByText('2 high · 8.1')).toBeInTheDocument();
+    expect(within(xml).getByText('2 high · CVSS 8.1')).toBeInTheDocument();
     expect(within(xml).getByText('→ 8.0.4 / 10.0.10')).toBeInTheDocument();
     expect(within(xml).getByText('GHSA-g8r8-53c2-pm3f · CVE-2026-47304')).toBeInTheDocument();
     expect(xml).toHaveTextContent('14 by 2 clients');
@@ -44,7 +45,7 @@ describe('vulnerabilities', () => {
     // Unused packages are dimmed and last.
     const unused = row('System.Net.Http');
     expect(unused).toHaveClass('is-unused');
-    expect(unused).toHaveTextContent('0 not used');
+    expect(unused).toHaveTextContent('0 · unused for 30 d');
     expect(within(row('org.apache.logging.log4j:log4j-core')).getByText('No fix yet')).toBeInTheDocument();
   });
 
@@ -81,7 +82,9 @@ describe('vulnerabilities', () => {
     await waitFor(() => expect(within(table).getAllByText(/./, { selector: '.vplan__name' }).map((n) => n.textContent)).toEqual(['Newtonsoft.Json']));
     await user.clear(screen.getByRole('searchbox', { name: 'Search packages and advisories' }));
     await user.type(screen.getByRole('searchbox', { name: 'Search packages and advisories' }), 'nothing-like-this');
-    expect(await within(table).findByText(/No package matches these filters/)).toBeInTheDocument();
+    expect(await within(table).findByText('No packages match these filters.')).toBeInTheDocument();
+    // The banner still describes the whole plan, not an all-clear.
+    expect(screen.getByRole('region', { name: 'Impact' })).not.toHaveTextContent(/No open vulnerabilities/);
   });
 
   it('expands a package into its findings and opens one in the drawer', async () => {
@@ -146,7 +149,7 @@ describe('vulnerabilities', () => {
     const waived = findingsState.findings.filter((f) => f.status === 'waived').map((f) => f.id);
     expect(waived.sort()).toEqual(['f_3', 'f_8']);
     expect(Date.parse(findingsState.findings.find((f) => f.id === 'f_8')!.waiver_until!) - Date.now()).toBeGreaterThan(29 * 86_400_000);
-    await waitFor(() => expect(within(row('System.Security.Cryptography.Xml')).getByText('1 high · 8.1')).toBeInTheDocument());
+    await waitFor(() => expect(within(row('System.Security.Cryptography.Xml')).getByText('1 high · CVSS 8.1')).toBeInTheDocument());
     expect(screen.getByRole('tab', { name: 'Waived · 2' })).toBeInTheDocument();
   });
 
@@ -192,8 +195,8 @@ describe('vulnerabilities', () => {
     renderApp('/vulnerabilities');
     const rescan = await screen.findByRole('button', { name: 'Rescan' });
     await user.click(rescan);
-    expect(await screen.findByRole('button', { name: 'Rescanning 0%' })).toBeDisabled();
-    expect(screen.getByText('Rescanning · 0 of 12 packages')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Rescanning…' })).toBeDisabled();
+    expect(screen.getByText('Rescanning · 0 of 12 packages (0%)')).toBeInTheDocument();
     expect(screen.getByRole('progressbar', { name: 'Rescan progress' })).toHaveAttribute('aria-valuenow', '0');
     expect(findingsState.rescan?.state).toBe('running');
   });
@@ -241,7 +244,7 @@ describe('vulnerabilities', () => {
     renderApp('/vulnerabilities');
     expect(await screen.findByText('Scanning is turned off on this server')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Rescan' })).not.toBeInTheDocument();
-    expect(await screen.findByText('Could not load the fix plan.')).toBeInTheDocument();
+    expect(await screen.findByText(/^Could not load the fix plan\. /)).toBeInTheDocument();
     findingsState.planFails = false;
     await user.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await plan()).toBeInTheDocument();
@@ -266,10 +269,12 @@ describe('vulnerabilities', () => {
     await screen.findByRole('heading', { level: 1, name: 'payments-api' });
     const head = screen.getByRole('region', { name: 'payments-api 2.14.0' });
     const tabs = within(head).getByRole('tablist', { name: 'Package details' });
-    // No empty "Vulnerabilities" tab for an image nobody scanned.
+    // The tab stays and says why there is nothing to list, instead of disappearing.
     await waitFor(() => expect(within(tabs).getAllByRole('tab').map((t) => t.textContent)).toContain('Versions 3'));
-    await new Promise((r) => setTimeout(r, 50));
-    expect(within(tabs).queryByRole('tab', { name: 'Vulnerabilities' })).not.toBeInTheDocument();
+    await userEvent.click(within(tabs).getByRole('tab', { name: 'Vulnerabilities' }));
+    const panel = screen.getByRole('tabpanel');
+    expect(await within(panel).findByText('Image scanning not configured')).toBeInTheDocument();
+    expect(within(panel).getByText(/image scanner \(Trivy\)/)).toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: 'Version' })).getByText('Image scanning not configured')).toBeInTheDocument();
   });
 
@@ -277,7 +282,7 @@ describe('vulnerabilities', () => {
     findingsState.images = true;
     const user = userEvent.setup();
     renderApp('/vulnerabilities');
-    expect(await screen.findByText(/9 scanned · OSV \+ Trivy · checked 40 min ago/)).toBeInTheDocument();
+    expect(await screen.findByText(/scanned \(6 unsupported, 1 failed, 2 not yet\) · OSV \+ Trivy · checked 40 min ago/)).toBeInTheDocument();
     const table = await plan();
     const image = await waitFor(() => row('auth-gateway'));
     expect(within(image).getByText('3.2.0')).toBeInTheDocument();

@@ -24,6 +24,7 @@ import { ProxyChoice } from '../settings/ProxyChoice';
 import { FormatSettings } from './FormatFields';
 import { errorId, fieldId, invalidProps } from './repoFormHelpers';
 import './repoForm.css';
+import { PickerLoadError } from '../../components/States';
 
 const AUTH_KINDS: { value: AuthKind; label: string }[] = [
   { value: 'none', label: 'None (public registry)' },
@@ -224,7 +225,9 @@ function GroupMembers({
                 ? 'Pick a format first'
                 : repos.isPending
                   ? 'Loading repositories…'
-                  : candidates.length === 0
+                  : repos.isError
+                    ? 'Repositories could not be loaded'
+                    : candidates.length === 0
                     ? `No other ${FORMAT_META[form.format].label} repositories`
                     : 'Choose a repository…'
             }
@@ -243,6 +246,7 @@ function GroupMembers({
             Add member
           </button>
         </div>
+        {repos.isError && <PickerLoadError what="repositories" onRetry={() => void repos.refetch()} />}
         <FieldError field="members" errors={errors} />
       </div>
 

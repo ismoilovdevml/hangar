@@ -548,12 +548,20 @@ paths:
         - name: range
           in: query
           schema: { $ref: "#/components/schemas/OverviewRange" }
+        - name: tz_offset
+          in: query
+          description: |
+            The viewer's offset from UTC in minutes east (UTC+5 is 300), so
+            days ("today", day buckets) start at the viewer's midnight.
+            Default 0 (UTC).
+          schema: { type: integer, minimum: -840, maximum: 840 }
       responses:
         "200":
           description: Metrics
           content:
             application/json:
               schema: { $ref: "#/components/schemas/OverviewMetrics" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
   /upstreams/health:
     get:
@@ -571,6 +579,13 @@ paths:
           in: query
           description: Window of `latency_ms` and `requests` (default `today`)
           schema: { $ref: "#/components/schemas/OverviewRange" }
+        - name: tz_offset
+          in: query
+          description: |
+            The viewer's offset from UTC in minutes east (UTC+5 is 300), so
+            days ("today", day buckets) start at the viewer's midnight.
+            Default 0 (UTC).
+          schema: { type: integer, minimum: -840, maximum: 840 }
       responses:
         "200":
           description: Upstreams
@@ -4237,8 +4252,9 @@ components:
         blob_store:
           type: string
           description: |
-            Required for hosted and proxy repositories. Ignored for groups,
-            which store nothing; their responses leave it out.
+            Blob store of a hosted or proxy repository; on create, `default`
+            (the configured store) when omitted. Ignored for groups, which
+            store nothing; their responses leave it out.
         online:
           type: boolean
           description: Optional; true when omitted
@@ -4394,7 +4410,17 @@ components:
             used_bytes: { $ref: "#/components/schemas/Bytes" }
             capacity_bytes: { type: [integer, "null"] }
             dedup_saved_bytes: { $ref: "#/components/schemas/Bytes" }
-            growth_bytes_per_day: { type: integer }
+            growth_bytes_per_day:
+              type: integer
+              description: >-
+                Bytes written per day, averaged over `growth_window_days`; 0
+                while the stores hold less than a day of history.
+            growth_window_days:
+              type: number
+              description: >-
+                Days the growth average covers: 7, or the age of the oldest
+                blob when that is younger. Under 1 there is not enough
+                history for a rate.
             days_to_full: { type: [number, "null"] }
             reclaimable_bytes:
               allOf: [{ $ref: "#/components/schemas/Bytes" }]

@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { ApiRequestError } from '../../api/client';
 import { useSession } from '../../api/hooks';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
@@ -6,7 +7,8 @@ import { IconSearch } from '../../components/icons';
 import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
 import { Select } from '../../components/Select';
-import { relativeTime } from '../../lib/format';
+import { zoneLabel } from '../../lib/format';
+import { Time } from '../../components/Time';
 import { useNow } from '../../lib/useNow';
 import {
   useCreateMember,
@@ -32,7 +34,7 @@ import {
   ACTIONS,
   describePrivilege,
   describeUserAgent,
-  formatDate,
+  expiryText,
   generatePassword,
   groupRepoAccess,
   nameList,
@@ -128,7 +130,7 @@ export function MembersTab({ kind, filters, onFilters, onOpen }: MembersTabProps
       priority: 3,
       header: 'Last active',
       className: 'muted nowrap',
-      cell: (m) => (m.last_active_at ? relativeTime(m.last_active_at, now) : 'Never'),
+      cell: (m) => (m.last_active_at ? <Time value={m.last_active_at} mode="relative" now={now} /> : 'Never'),
     },
     {
       key: 'status',
@@ -188,7 +190,7 @@ export function MembersTab({ kind, filters, onFilters, onOpen }: MembersTabProps
           rowKey={(m) => m.id}
           busy={list.isFetching}
           minWidth={820}
-          empty={list.isPending ? 'Loading…' : filters.q || filters.role || filters.status ? 'Nobody matches these filters.' : sa ? 'No service accounts yet.' : 'No members yet.'}
+          loading={list.isPending} empty={filters.q || filters.role || filters.status ? 'Nobody matches these filters.' : sa ? 'No service accounts yet.' : 'No members yet.'}
         />
       )}
       <div className="repo-footer">
@@ -292,8 +294,18 @@ export function MemberDialog({ kind, member, onClose, onCreated }: MemberDialogP
   const ids = { user: useId(), name: useId(), email: useId(), desc: useId(), pw: useId() };
   const external = member && member.source !== 'local';
 
+  // A name the server already has comes back as 409: it belongs under the name field, not in a banner.
+  const taken = save.error instanceof ApiRequestError && save.error.status === 409 && !member;
   const errors = {
-    username: !USERNAME_RE.test(username) ? 'Start with a letter or digit; letters, digits and . _ @ + - only.' : null,
+    username: !username.trim()
+      ? sa
+        ? 'Enter a name.'
+        : 'Enter a username.'
+      : !USERNAME_RE.test(username)
+        ? 'Start with a letter or digit; letters, digits and . _ @ + - only.'
+        : taken
+          ? `${sa ? 'A service account' : 'A member'} named ${username} already exists.`
+          : null,
     email: email && !/^[^\s@]+@[^\s@]+$/.test(email) ? 'Enter a valid email address.' : null,
     password: !member && !sa && password.length < 12 ? 'At least 12 characters (the server may require more).' : null,
   };
@@ -311,6 +323,9 @@ export function MemberDialog({ kind, member, onClose, onCreated }: MemberDialogP
         onSuccess: (m) => {
           onCreated?.(m);
           onClose();
+        },
+        onError: (err) => {
+          if (err instanceof ApiRequestError && err.status === 409) document.getElementById(ids.user)?.focus();
         },
       });
     }
@@ -330,8 +345,19 @@ export function MemberDialog({ kind, member, onClose, onCreated }: MemberDialogP
     >
       <form className="dialog-form" onSubmit={submit} noValidate>
         <div className="form-grid">
-          <Field id={ids.user} label={sa ? 'Name' : 'Username'} error={submitted && errors.username}>
-            <input className="input" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" spellCheck={false} readOnly={!!external} data-autofocus />
+          <Field id={ids.user} label={sa ? 'Name' : 'Username'} error={(submitted || taken) && errors.username}>
+            <input
+              className="input"
+              value={username}
+              onChange={(e) => {
+                if (taken) save.reset();
+                setUsername(e.target.value);
+              }}
+              autoComplete="off"
+              spellCheck={false}
+              readOnly={!!external}
+              data-autofocus
+            />
           </Field>
           <Field id={ids.name} label={<>Display name <span className="field__optional">(optional)</span></>}>
             <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={200} readOnly={!!external} />
@@ -363,7 +389,7 @@ export function MemberDialog({ kind, member, onClose, onCreated }: MemberDialogP
           )}
         </div>
         <RolePicker value={roles} onChange={setRoles} />
-        <FormError error={save.error} />
+        {!taken && <FormError error={save.error} />}
         <div className="dialog-actions">
           <button type="button" className="button button--secondary" onClick={onClose}>
             Cancel
@@ -447,7 +473,8 @@ export function SessionList({ sessions, onEnd, busy }: SessionListProps) {
               {describeUserAgent(s.user_agent)} {s.current && <Pill tone="ok">This session</Pill>}
             </span>
             <span className="meta">
-              {s.ip ?? 'unknown address'} · signed in {formatDate(s.created_at)} · active {relativeTime(s.last_seen_at, now).toLowerCase()}
+              {s.ip ?? 'unknown address'} · signed in <Time value={s.created_at} mode="date" /> · active{' '}
+              <Time value={s.last_seen_at} mode="relative" now={now} inline />
               {s.remember ? ' · remembered' : ''}
             </span>
           </span>
@@ -499,13 +526,17 @@ export function UserDrawer({ id, canWrite, canDelete, canManageTokens, onClose }
 
   return (
     <Dialog title={m ? m.display_name || m.username : 'Loading…'} description={m ? (sa ? 'Service account' : m.username) : undefined} onClose={onClose} drawer>
-      {member.isError && <FormError error={member.error} />}
+      {member.isError && <ErrorNote what="this member" error={member.error} onRetry={() => void member.refetch()} />}
       {m && (
         <div className="drawer">
           <div className="drawer__status">
             <Avatar name={m.display_name || m.username} size={44} />
             <StatusDot tone={USER_STATUS_META[status].tone} label={USER_STATUS_META[status].label} />
-            {status === 'locked' && m.locked_until && <span className="meta">until {formatDate(m.locked_until)}</span>}
+            {status === 'locked' && m.locked_until && (
+              <span className="meta">
+                unlocks at <Time value={m.locked_until} mode="short" /> ({zoneLabel(new Date(m.locked_until))}), {expiryText(m.locked_until)}
+              </span>
+            )}
             {m.must_change_password && <MustChangeBadge />}
           </div>
           {notice && <Notice message={notice} />}
@@ -671,11 +702,13 @@ function Overview({ member: m }: { member: Member }) {
       <dt>Live tokens</dt>
       <dd>{m.token_count}</dd>
       <dt>Last active</dt>
-      <dd>{m.last_active_at ? relativeTime(m.last_active_at, now) : 'Never'}</dd>
+      <dd>{m.last_active_at ? <Time value={m.last_active_at} mode="relative" now={now} /> : 'Never'}</dd>
       {m.created_at && (
         <>
           <dt>Created</dt>
-          <dd>{formatDate(m.created_at)}</dd>
+          <dd>
+            <Time value={m.created_at} mode="date" />
+          </dd>
         </>
       )}
     </dl>
@@ -692,9 +725,9 @@ function OwnerTokens({ owner, canCreate, onCreate }: { owner: string; canCreate:
         </button>
       )}
       {tokens.isError ? (
-        <FormError error={tokens.error} />
+        <ErrorNote what={`the tokens of ${owner}`} error={tokens.error} onRetry={() => void tokens.refetch()} />
       ) : (
-        <TokenTable caption={`Tokens of ${owner}`} tokens={tokens.data?.items ?? []} busy={tokens.isFetching} empty={tokens.isPending ? 'Loading…' : 'No tokens.'} />
+        <TokenTable caption={`Tokens of ${owner}`} tokens={tokens.data?.items ?? []} busy={tokens.isFetching} loading={tokens.isPending} empty={'No tokens.'} />
       )}
     </div>
   );
@@ -703,7 +736,7 @@ function OwnerTokens({ owner, canCreate, onCreate }: { owner: string; canCreate:
 function UserSessions({ id, canWrite }: { id: string; canWrite: boolean }) {
   const sessions = useUserSessions(id);
   const end = useEndUserSession();
-  if (sessions.isError) return <FormError error={sessions.error} />;
+  if (sessions.isError) return <ErrorNote what="the sessions" error={sessions.error} onRetry={() => void sessions.refetch()} />;
   if (!sessions.data) return <p className="meta">Loading…</p>;
   return (
     <div className="drawer__section">
@@ -725,7 +758,7 @@ export function PermissionsReport({ id }: { id: string }) {
   const [showAll, setShowAll] = useState(false);
   const filterId = useId();
   const listId = useId();
-  if (report.isError) return <FormError error={report.error} />;
+  if (report.isError) return <ErrorNote what="the permissions" error={report.error} onRetry={() => void report.refetch()} />;
   const r = report.data;
   if (!r) return <p className="meta">Loading…</p>;
   const repos = r.repositories.filter((x) => !filter || x.name.includes(filter.trim().toLowerCase()));

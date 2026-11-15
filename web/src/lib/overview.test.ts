@@ -80,10 +80,20 @@ describe('storageNote', () => {
       { ...m, storage: { ...m.storage, capacity_bytes: null }, storage_by_format: [{ format: 'nuget', bytes: 421e6 }] },
       () => 'NuGet',
     );
-    expect(note).toBe('All NuGet · no quota');
+    // Without the stores the note does not guess.
+    expect(note).toBe('All NuGet');
+    const bare = { ...m, storage: { ...m.storage, capacity_bytes: null }, storage_by_format: [] };
+    expect(storageNote(bare, () => '', [{ name: 'default' }])).toBe('Nothing stored yet · no quota');
+    expect(storageNote(bare, () => '', [{ name: 'default' }, { name: 'local-fs', soft_quota_bytes: 2 * 1024 ** 3 }])).toBe(
+      'Nothing stored yet · no quota on default',
+    );
+    expect(storageNote(bare, () => '', [{ name: 'a' }, { name: 'b' }, { name: 'c', soft_quota_bytes: 1 }])).toBe(
+      'Nothing stored yet · 2 of 3 stores without quota',
+    );
+    expect(storageNote(bare, () => '', [{ name: 'a' }, { name: 'b' }])).toBe('Nothing stored yet · no quotas');
   });
   it('gives the biggest format share and the quota use', () => {
-    expect(storageNote(overview('today'), (f) => f.toUpperCase())).toBe('DOCKER 60% · 7 formats · 40% of quota');
+    expect(storageNote(overview('today'), (f) => f.toUpperCase())).toBe('DOCKER 61% · 7 formats · 40% of quota');
   });
 });
 

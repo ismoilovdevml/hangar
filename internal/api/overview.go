@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/api/catalog"
@@ -10,9 +11,28 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/rollup"
 )
 
-// overviewWindow returns the requests window start and the traffic buckets for rng.
-func overviewWindow(rng string, now time.Time) (start, bucketStart time.Time, bucket time.Duration, err error) {
-	day := now.Truncate(24 * time.Hour) // UTC midnight
+// maxTZOffset bounds ?tz_offset: real zones lie within UTC-12 and UTC+14.
+const maxTZOffset = 14 * 60
+
+// tzOffsetParam parses ?tz_offset, the viewer's offset from UTC in minutes
+// east (UTC+5 is 300), so "today" starts at the viewer's midnight. Absent
+// means UTC.
+func tzOffsetParam(r *http.Request) (time.Duration, error) {
+	s := r.URL.Query().Get("tz_offset")
+	if s == "" {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < -maxTZOffset || n > maxTZOffset {
+		return 0, fmt.Errorf("tz_offset %q: want minutes east of UTC, %d..%d: %w", s, -maxTZOffset, maxTZOffset, core.ErrInvalid)
+	}
+	return time.Duration(n) * time.Minute, nil
+}
+
+// overviewWindow returns the requests window start and the traffic buckets
+// for rng. Days start at midnight in the zone `offset` east of UTC.
+func overviewWindow(rng string, now time.Time, offset time.Duration) (start, bucketStart time.Time, bucket time.Duration, err error) {
+	day := now.Add(offset).Truncate(24 * time.Hour).Add(-offset) // the viewer's midnight
 	switch rng {
 	case "1h":
 		return now.Add(-time.Hour), now.Truncate(5 * time.Minute).Add(-55 * time.Minute), 5 * time.Minute, nil
@@ -97,7 +117,12 @@ func (a *API) overview(w http.ResponseWriter, r *http.Request) {
 	}
 	rng := r.URL.Query().Get("range")
 	now := time.Now().UTC()
-	start, bucketStart, bucket, err := overviewWindow(rng, now)
+	offset, err := tzOffsetParam(r)
+	if err != nil {
+		a.writeErr(w, r, err)
+		return
+	}
+	start, bucketStart, bucket, err := overviewWindow(rng, now, offset)
 	if err != nil {
 		a.writeErr(w, r, err)
 		return

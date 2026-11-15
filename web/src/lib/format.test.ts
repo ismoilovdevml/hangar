@@ -1,14 +1,59 @@
-import { describe, expect, it } from 'vitest';
-import { formatBytes, formatCompact, formatSignedPercent, initials, relativeTime, splitBytes } from './format';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  formatBytes,
+  formatClock,
+  formatCompact,
+  formatDate,
+  formatDuration,
+  formatShare,
+  formatShortTime,
+  formatSignedPercent,
+  formatTime,
+  formatUtc,
+  initials,
+  relativeFuture,
+  relativeTime,
+  shortGoDuration,
+  splitBytes,
+  tzOffsetMinutes,
+  zoneLabel,
+} from './format';
 import { clientSetup } from './clientSnippets';
 
 describe('format helpers', () => {
-  it('formats bytes with SI units', () => {
-    expect(splitBytes(4.82e12)).toEqual({ value: '4.82', unit: 'TB' });
-    expect(formatBytes(12e12)).toBe('12 TB');
-    expect(formatBytes(812e9)).toBe('812 GB');
-    expect(formatBytes(2.1e12)).toBe('2.1 TB');
+  it('formats bytes in IEC units', () => {
+    expect(splitBytes(4.82 * 1024 ** 4)).toEqual({ value: '4.82', unit: 'TiB' });
+    expect(formatBytes(12 * 1024 ** 4)).toBe('12 TiB');
+    expect(formatBytes(812 * 1024 ** 3)).toBe('812 GiB');
+    expect(formatBytes(1536)).toBe('1.5 KiB');
+    expect(formatBytes(1000)).toBe('1000 B');
+    expect(formatBytes(2 * 1024 ** 3)).toBe('2 GiB');
     expect(formatBytes(0)).toBe('0 B');
+  });
+
+  it('never rounds a non-zero share to 0%', () => {
+    expect(formatShare(0.002)).toBe('<1%');
+    expect(formatShare(0)).toBe('0%');
+    expect(formatShare(0.42)).toBe('42%');
+    expect(formatShare(0.998)).toBe('>99%');
+    expect(formatShare(1)).toBe('100%');
+  });
+
+  it('formats durations without zero units', () => {
+    expect(formatDuration(4_000)).toBe('4 s');
+    expect(formatDuration(75_000)).toBe('1 min 15 s');
+    expect(formatDuration(3_900_000)).toBe('1 h 5 min');
+    expect(formatDuration(86_400_000)).toBe('1 d');
+    expect(formatDuration(93_784_000)).toBe('1 d 2 h');
+    expect(shortGoDuration('24h0m0s')).toBe('24h');
+    expect(shortGoDuration('10m0s')).toBe('10m');
+    expect(shortGoDuration('1h30m0s')).toBe('1h30m');
+    expect(shortGoDuration('1h0m30s')).toBe('1h30s');
+    expect(shortGoDuration('0s')).toBe('0s');
+    expect(shortGoDuration('90s')).toBe('90s');
+    expect(shortGoDuration('500ms')).toBe('500ms');
+    expect(shortGoDuration('24h')).toBe('24h');
+    expect(shortGoDuration('soon')).toBe('soon');
   });
 
   it('formats counts, trends, names and times', () => {
@@ -20,6 +65,40 @@ describe('format helpers', () => {
     const now = new Date('2026-11-03T09:00:00');
     expect(relativeTime('2026-11-03T08:59:30', now)).toBe('Just now');
     expect(relativeTime('2026-11-03T08:56:00', now)).toBe('4 min ago');
+  });
+
+  describe('times in the browser zone', () => {
+    const saved = process.env.TZ;
+    afterEach(() => {
+      process.env.TZ = saved;
+    });
+
+    it('shows Tashkent time with the zone and UTC on hover', () => {
+      process.env.TZ = 'Asia/Tashkent';
+      const at = '2026-11-11T07:23:05Z';
+      expect(zoneLabel(new Date(at))).toBe('UTC+5');
+      expect(tzOffsetMinutes(new Date(at))).toBe(300);
+      expect(formatTime(at)).toBe('11 Nov 2026, 12:23 (UTC+5)');
+      expect(formatTime(at, { seconds: true, zone: false })).toBe('11 Nov 2026, 12:23:05');
+      expect(formatUtc(at)).toBe('11 Nov 2026, 07:23:05 UTC');
+      expect(formatClock(at, { ms: true })).toBe('12:23:05.000');
+      // 21:00 UTC is already the next day in Tashkent.
+      expect(formatDate('2026-11-11T21:00:00Z')).toBe('12 Nov 2026');
+      const now = new Date('2026-11-11T09:00:00Z');
+      expect(formatShortTime(at, now)).toBe('12:23');
+      expect(formatShortTime('2026-11-10T18:00:00Z', now)).toBe('10 Nov 23:00');
+      expect(relativeFuture('2026-11-11T09:14:00Z', now)).toBe('In 14 min');
+      expect(relativeFuture('2026-11-11T21:00:00Z', now)).toBe('Tomorrow 02:00');
+    });
+
+    it('labels other offsets', () => {
+      process.env.TZ = 'Asia/Kolkata';
+      expect(zoneLabel(new Date('2026-11-11T00:00:00Z'))).toBe('UTC+5:30');
+      process.env.TZ = 'America/Sao_Paulo';
+      expect(zoneLabel(new Date('2026-11-11T00:00:00Z'))).toBe('UTC-3');
+      process.env.TZ = 'UTC';
+      expect(formatTime('2026-11-11T07:23:05Z')).toBe('11 Nov 2026, 07:23 (UTC)');
+    });
   });
 
   it('builds client setup lines from server-provided URLs', () => {

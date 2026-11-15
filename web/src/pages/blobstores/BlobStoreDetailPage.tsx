@@ -1,4 +1,5 @@
 import { getRouteApi, Link } from '@tanstack/react-router';
+import { NotFound } from '../../components/States';
 import { ApiRequestError } from '../../api/client';
 import { useAllRepositories, useBlobStore } from '../../api/catalog';
 import { usePermissions } from '../../api/permissions';
@@ -12,8 +13,9 @@ import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
 import { dedupShare, quotaRatio, storeBadge, storeProblem } from '../../lib/blobStores';
 import { formatBytes, formatCompact } from '../../lib/format';
+import { Time } from '../../components/Time';
 import { isFormat, repoStatusMeta, TYPE_META } from '../../lib/repositories';
-import { formatUtc } from '../../lib/tasks';
+import { formatTime } from '../../lib/format';
 import { BlobStoreManage } from './BlobStoreManage';
 import '../../styles/catalog.css';
 import './blobstores.css';
@@ -26,11 +28,13 @@ export function BlobStoreDetailPage() {
   const canAdmin = usePermissions().can('admin', 'system', 'blobstores');
 
   if (store.isError) {
-    const notFound = store.error instanceof ApiRequestError && store.error.status === 404;
+    if (store.error instanceof ApiRequestError && store.error.status === 404) {
+      return <NotFound kind="Blob store" name={name} back={{ to: '/blob-stores' }} backLabel="blob stores" />;
+    }
     return (
       <div className="screen">
-        <PageHeader title={name} description={notFound ? 'This blob store does not exist.' : undefined} eyebrow={<Link to="/blob-stores">Blob stores</Link>} />
-        {!notFound && <ErrorNote what="the blob store" error={store.error} privilege="system:blobstores:read" onRetry={() => void store.refetch()} />}
+        <PageHeader title={name} eyebrow={<Link to="/blob-stores">Blob stores</Link>} />
+        <ErrorNote what="the blob store" error={store.error} privilege="system:blobstores:read" onRetry={() => void store.refetch()} />
       </div>
     );
   }
@@ -112,7 +116,7 @@ function Usage({ s }: { s: BlobStore }) {
             {s.checked_at ? (
               <>
                 {s.state_detail ?? 'Checked'}
-                <span className="meta"> · {formatUtc(s.checked_at, { seconds: true })}</span>
+                <span className="meta"> · {formatTime(s.checked_at, { seconds: true })}</span>
               </>
             ) : (
               'Not checked yet'
@@ -171,7 +175,9 @@ function Configuration({ s }: { s: BlobStore }) {
         {s.created_at && (
           <>
             <dt>Created</dt>
-            <dd>{new Date(s.created_at).toISOString().slice(0, 10)}</dd>
+            <dd>
+              <Time value={s.created_at} mode="date" />
+            </dd>
           </>
         )}
       </dl>
@@ -221,7 +227,7 @@ function UsedBy({ s }: { s: BlobStore }) {
           rowKey={(r) => r.id}
           busy={repos.isFetching}
           minWidth={620}
-          empty={repos.isPending ? 'Loading…' : 'No repository keeps its files here yet.'}
+          loading={repos.isPending} empty={'No repository keeps its files here yet.'}
         />
       )}
       {repos.data && rows.length < s.repository_count && (

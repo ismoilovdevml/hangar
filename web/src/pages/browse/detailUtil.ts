@@ -1,10 +1,8 @@
 import { ApiRequestError } from '../../api/client';
+import { formatTime, formatUtc } from '../../lib/format';
 
-/** A timestamp spelled out in UTC, for titles next to relative times. */
-export const dateTime = (iso: string) =>
-  new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }).format(
-    new Date(iso),
-  ) + ' UTC';
+/** A timestamp spelled out, for titles next to relative times: local with its zone, then UTC. */
+export const dateTime = (iso: string) => `${formatTime(iso)} · ${formatUtc(iso, { seconds: false })}`;
 
 /** "sha256:0123abcd…ef01" */
 export const shortDigest = (d: string) => {

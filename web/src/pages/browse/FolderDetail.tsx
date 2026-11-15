@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { browseFolderQuery } from '../../api/browse';
+import { NotFound } from '../../components/States';
 import { ApiRequestError } from '../../api/client';
 import type { BrowseEntry } from '../../api/types';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
-import { formatBytes, relativeTime } from '../../lib/format';
+import { formatBytes } from '../../lib/format';
+import { Time } from '../../components/Time';
 import { useNow } from '../../lib/useNow';
 
 const KIND_LABEL: Record<BrowseEntry['kind'], string> = { folder: 'Folder', package: 'Package', version: 'Version', asset: 'File' };
@@ -32,10 +34,12 @@ export function FolderDetail({ repo, path, onOpen, onUp }: FolderDetailProps) {
   const name = path ? (path.replace(/\/$/, '').split('/').pop() ?? path) : `Files in ${repo}`;
 
   if (q.isError) {
-    const notFound = q.error instanceof ApiRequestError && q.error.status === 404;
+    if (q.error instanceof ApiRequestError && q.error.status === 404) {
+      return <NotFound pane kind="Repository" name={repo} back={{ to: '/browse' }} backLabel="Packages" />;
+    }
     return (
       <Panel className="browse-empty" role="status">
-        {notFound ? <p>Repository {repo} does not exist, or you cannot see it.</p> : <ErrorNote what="the folder" error={q.error} onRetry={() => void q.refetch()} />}
+        <ErrorNote what="the folder" error={q.error} onRetry={() => void q.refetch()} />
       </Panel>
     );
   }
@@ -62,7 +66,7 @@ export function FolderDetail({ repo, path, onOpen, onUp }: FolderDetailProps) {
       header: 'Updated',
       align: 'right',
       className: 'col-last meta',
-      cell: (e) => (e.asset ? relativeTime(e.asset.updated_at, now) : ''),
+      cell: (e) => (e.asset ? <Time value={e.asset.updated_at} mode="relative" now={now} /> : ''),
     },
   ];
 
@@ -96,7 +100,7 @@ export function FolderDetail({ repo, path, onOpen, onUp }: FolderDetailProps) {
           rowKey={(e) => e.path}
           busy={pages.some((p) => p.isFetching)}
           minWidth={560}
-          empty={q.isPending ? 'Loading…' : 'This folder is empty.'}
+          loading={q.isPending} empty={'This folder is empty.'}
         />
         {last.data?.next_cursor && (
           <div className="pkg-more">

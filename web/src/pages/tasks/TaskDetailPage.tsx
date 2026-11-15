@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { NotFound } from '../../components/States';
 import { useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link, useRouterState } from '@tanstack/react-router';
 import { subscribeLiveEvents } from '../../api/events';
@@ -9,14 +10,13 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
 import { Meter } from '../../components/Meter';
 import { NotAvailable } from '../../components/NotAvailable';
+import { Time } from '../../components/Time';
+import { formatDuration, formatTime, relativeFuture } from '../../lib/format';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
 import {
   estimateRemaining,
-  formatDuration,
-  formatNextRun,
-  formatUtc,
   isActive,
   remainingText,
   RUN_STATUS,
@@ -246,11 +246,11 @@ function RunDetail({ taskId, run }: { taskId: string; run: TaskRun }) {
       <dl className="facts">
         <div>
           <dt>Started</dt>
-          <dd>{run.started_at ? formatUtc(run.started_at, { seconds: true }) : 'Not started'}</dd>
+          <dd>{run.started_at ? <Time value={run.started_at} seconds /> : 'Not started'}</dd>
         </div>
         <div>
           <dt>Finished</dt>
-          <dd>{run.finished_at ? formatUtc(run.finished_at, { seconds: true }) : isActive(run) ? 'Still running' : <NotAvailable />}</dd>
+          <dd>{run.finished_at ? <Time value={run.finished_at} seconds /> : isActive(run) ? 'Still running' : <NotAvailable />}</dd>
         </div>
         <div>
           <dt>Duration</dt>
@@ -314,17 +314,13 @@ export function TaskDetailPage() {
   }, [running, cursor, firstPage, qc, taskId]);
 
   if (task.isError) {
-    const notFound = task.error instanceof ApiRequestError && task.error.status === 404;
+    if (task.error instanceof ApiRequestError && task.error.status === 404) {
+      return <NotFound kind="Task" named="with id" name={taskId} back={{ to: '/tasks' }} backLabel="scheduled tasks" />;
+    }
     return (
       <div className="screen">
-        <PageHeader title={notFound ? 'Task not found' : 'Task'} description={<Link to="/tasks">All scheduled tasks</Link>} />
-        {notFound ? (
-          <Panel>
-            <p>There is no task with id {taskId}. It may have been deleted.</p>
-          </Panel>
-        ) : (
-          <ErrorNote what="this task" error={task.error} privilege="system:tasks:read" onRetry={() => void task.refetch()} />
-        )}
+        <PageHeader title="Task" description={<Link to="/tasks">All scheduled tasks</Link>} />
+        <ErrorNote what="this task" error={task.error} privilege="system:tasks:read" onRetry={() => void task.refetch()} />
       </div>
     );
   }
@@ -347,7 +343,7 @@ export function TaskDetailPage() {
       className: 'col-first nowrap',
       cell: (r) => (
         <Link to="/tasks/$taskId" params={{ taskId }} search={(s) => ({ ...s, run: r.id })} aria-current={selected?.id === r.id ? 'true' : undefined} className="run-link">
-          {formatUtc(r.started_at ?? r.created_at)}
+          <Time value={r.started_at ?? r.created_at} />
         </Link>
       ),
     },
@@ -413,7 +409,7 @@ export function TaskDetailPage() {
             </div>
             <div>
               <dt>Next run</dt>
-              <dd>{t.next_run_at && t.enabled !== false ? `${formatNextRun(t.next_run_at, now)} (${formatUtc(t.next_run_at)})` : 'Not scheduled'}</dd>
+              <dd>{t.next_run_at && t.enabled !== false ? `${relativeFuture(t.next_run_at, now)} (${formatTime(t.next_run_at)})` : 'Not scheduled'}</dd>
             </div>
             <div>
               <dt>State</dt>
@@ -440,7 +436,7 @@ export function TaskDetailPage() {
               rowKey={(r) => r.id}
               minWidth={620}
               busy={runs.isFetching}
-              empty={runs.isPending ? 'Loading…' : 'This task has not run yet.'}
+              loading={runs.isPending} empty={'This task has not run yet.'}
             />
           )}
           <div className="repo-footer">

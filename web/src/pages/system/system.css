@@ -30,6 +30,8 @@
 }
 .live__toggle { padding: 0 14px; color: var(--ok-ink); }
 .live__toggle--paused { color: var(--ink-2); }
+.live__toggle--failed { color: var(--warn-ink); }
+.live__toggle--failed .live__dot { background: var(--warn); }
 .live__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
 .live__toggle--paused .live__dot { background: var(--ink-3); opacity: .55; }
 .live__refresh { width: 38px; padding: 0; color: var(--ink-2); }

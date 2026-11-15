@@ -1,5 +1,7 @@
+import { describeError } from '../lib/apiError';
 import { isForbidden } from '../lib/gates';
 import { NoAccessNote } from './NoAccess';
+import { ErrorDetails } from './States';
 
 interface ErrorNoteProps {
   what: string;
@@ -10,14 +12,19 @@ interface ErrorNoteProps {
   privilege?: string;
 }
 
+/** A load that failed: what could not be loaded, why in plain words, Retry, and the raw answer under Details. */
 export function ErrorNote({ what, onRetry, error, privilege }: ErrorNoteProps) {
   if (isForbidden(error)) return <NoAccessNote what={what} privilege={privilege} />;
+  const why = error === undefined ? null : describeError(error);
   return (
     <div className="error-note" role="alert">
-      <span>Could not load {what}.</span>
+      <span className="error-note__text">
+        Could not load {what}.{why && ` ${why.message}`}
+      </span>
       <button type="button" className="button button--secondary button--sm" onClick={onRetry}>
         Retry
       </button>
+      {why?.detail && <ErrorDetails detail={why.detail} />}
     </div>
   );
 }

@@ -63,7 +63,7 @@ describe('vulnerability helpers', () => {
     expect(upgradeCommands(p).split('\n')).toHaveLength(2);
     expect(lineFor(p, '10.0.8')?.to).toBe('10.0.10');
     expect(advisoryIds(p)).toBe('GHSA-g8r8-53c2-pm3f · CVE-2026-47304 + 1 more');
-    expect(findingsSummary(p)).toBe('2 high + 1 · 8.1');
+    expect(findingsSummary(p)).toBe('3 findings · 2 high · CVSS 8.1');
     expect(upgradeTargets({ upgrades: [line(['1.0.0'], null)] })).toBeNull();
   });
 

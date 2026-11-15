@@ -202,7 +202,7 @@ describe('package browser: package', () => {
     await within(table).findByRole('link', { name: '2.13.1' });
     expect(within(table).getAllByRole('row')).toHaveLength(4);
     expect(within(table).getAllByText('Newest')).toHaveLength(1);
-    expect(within(table).getByText('186 MB')).toBeInTheDocument();
+    expect(within(table).getByText('177 MiB')).toBeInTheDocument();
     await user.click(within(table).getByRole('link', { name: '2.13.1' }));
     await waitFor(() => expect(search(history).get('version')).toBe('2.13.1'));
     expect(await screen.findByRole('region', { name: 'payments-api 2.13.1' })).toBeInTheDocument();
@@ -229,8 +229,8 @@ describe('package browser: package', () => {
     const table = await screen.findByRole('table', { name: 'Layers' });
     expect(within(table).getByText('Image config')).toBeInTheDocument();
     expect(within(table).getAllByText(/^sha256:/)).toHaveLength(3);
-    expect(screen.getByText('3 layers, 186 MB compressed.')).toBeInTheDocument(); // single-platform image: no platform note
-    expect(screen.getByRole('region', { name: 'Version' })).toHaveTextContent('Compressed size186 MB');
+    expect(screen.getByText('3 layers, 177 MiB compressed.')).toBeInTheDocument(); // single-platform image: no platform note
+    expect(screen.getByRole('region', { name: 'Version' })).toHaveTextContent('Compressed size177 MiB');
   });
 
   it('deletes a whole package after typing its name', async () => {
@@ -330,8 +330,8 @@ describe('package browser: package', () => {
 
   it('says when a version does not exist', async () => {
     renderApp('/browse?repo=docker-prod&name=payments-api&version=9.9.9');
-    expect(await screen.findByText(/is not in docker-prod/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Show the newest version' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Version not found' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Show the newest version of payments-api' })).toBeInTheDocument();
   });
 
   it('resolves the overview’s links, which carry no namespace', async () => {

@@ -6,6 +6,7 @@ import type { Repository, RepositoryCounts, RepositoryType } from '../../api/typ
 import { CopyButton } from '../../components/CopyButton';
 import { DataTable, type Column, type TableSort } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
+import { NotAvailable } from '../../components/NotAvailable';
 import { IconDatabase, IconGlobe, IconGroup, IconPackage, IconPlus, IconSearch } from '../../components/icons';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
@@ -13,11 +14,11 @@ import { FormatName } from '../../components/FormatIcon';
 import { formatOptions } from '../../components/formatOptions';
 import { Select } from '../../components/Select';
 import { StatusDot } from '../../components/Pill';
-import { formatBytes, relativeTime } from '../../lib/format';
+import { formatBytes } from '../../lib/format';
+import { Time } from '../../components/Time';
 import { GATES } from '../../lib/gates';
 import { PHONE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
 import { plural } from '../../lib/overview';
-import { formatUtc } from '../../lib/tasks';
 import { useNow } from '../../lib/useNow';
 import { ALL_FORMATS, displayUrl, isFormat, isRepoSort, repoStatusMeta, repoSubtitle, TYPE_META } from '../../lib/repositories';
 
@@ -31,7 +32,8 @@ const CARD_ICON: Record<RepositoryType, ComponentType<SVGProps<SVGSVGElement> & 
   group: IconGroup,
 };
 
-function CountCards({ counts }: { counts: RepositoryCounts | undefined }) {
+/** Counts per type; a dash, not a skeleton, when the counts failed to load. */
+function CountCards({ counts, failed }: { counts: RepositoryCounts | undefined; failed?: boolean }) {
   return (
     <section className="count-cards" aria-label="Repository counts">
       {(['hosted', 'proxy', 'group'] as const).map((t) => {
@@ -43,7 +45,7 @@ function CountCards({ counts }: { counts: RepositoryCounts | undefined }) {
               <Icon size={20} />
             </span>
             <span className="count-card__text">
-              <span className="count-card__number">{counts ? counts[t] : <span className="skeleton" style={{ width: 36, height: 28 }} />}</span>{' '}
+              <span className="count-card__number">{counts ? (counts[t] ?? 0) : failed ? <NotAvailable reason="could not be loaded" /> : <span className="skeleton" style={{ width: 36, height: 28 }} />}</span>{' '}
               <span className="count-card__label">
                 {meta.label} · {meta.card}
               </span>
@@ -283,9 +285,7 @@ export function RepositoriesPage() {
       className: 'meta nowrap',
       cell: (r) =>
         r.last_activity_at ? (
-          <time dateTime={r.last_activity_at} title={formatUtc(r.last_activity_at)}>
-            {relativeTime(r.last_activity_at, now)}
-          </time>
+          <Time value={r.last_activity_at} mode="relative" now={now} />
         ) : (
           'No activity yet'
         ),
@@ -346,7 +346,7 @@ export function RepositoriesPage() {
         }
       />
 
-      <CountCards counts={filtered ? totals.data?.counts : data?.counts} />
+      <CountCards counts={filtered ? totals.data?.counts : data?.counts} failed={filtered ? totals.isError : list.isError} />
 
       <Panel flush className="repo-panel" aria-label="Repository list">
         <div className="repo-toolbar">
@@ -396,6 +396,7 @@ export function RepositoriesPage() {
             rows={data?.items ?? []}
             rowKey={(r) => r.id}
             busy={list.isFetching}
+            loading={list.isPending}
             minWidth={980}
             empty={empty}
             sort={order}

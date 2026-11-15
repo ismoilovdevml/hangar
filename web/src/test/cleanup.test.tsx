@@ -28,6 +28,17 @@ describe('cleanup policies', () => {
     expect(screen.getByRole('button', { name: 'Save policy' })).toBeDisabled();
   });
 
+  it('says under the field when a keep pattern is not valid', async () => {
+    const user = userEvent.setup();
+    renderApp('/cleanup?create=true');
+    await screen.findByRole('heading', { level: 2, name: 'New policy' });
+    const globs = screen.getByLabelText('tags matching');
+    await user.type(globs, '[[bad');
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+    expect(globs).toHaveAttribute('aria-invalid', 'true');
+    expect(globs).toHaveAccessibleDescription('[bad is not a valid pattern: the [ is never closed');
+  });
+
   it('previews, then creates a policy and shows it in the URL', async () => {
     const user = userEvent.setup();
     const { history } = renderApp('/cleanup?create=true');
@@ -50,7 +61,7 @@ describe('cleanup policies', () => {
     expect(create).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Preview' }));
     // feat-sso-2 (110 days) and feat-sso-3 (95 days) are older than 30 days; 3.2.0 is kept by the glob.
-    expect(await screen.findByRole('heading', { name: '2 versions · 418 MB would be freed' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '2 versions · 418 MiB would be freed' })).toBeInTheDocument();
     const table = screen.getByRole('table', { name: 'Versions this policy would delete' });
     expect(within(table).getByText('auth-gateway:feat-sso-3')).toBeInTheDocument();
     expect(within(table).queryByText('auth-gateway:3.2.0')).not.toBeInTheDocument();
@@ -118,7 +129,7 @@ describe('cleanup policies', () => {
     renderApp('/cleanup?policy=docker-lean');
     const history = await screen.findByRole('table', { name: 'Latest runs of docker-lean' });
     expect(await within(history).findByText('Blob store s3-eu-primary unavailable')).toBeInTheDocument();
-    expect(within(history).getByText('31 GB')).toBeInTheDocument();
+    expect(within(history).getByText('31 GiB')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Run now/ }));
     const dialog = screen.getByRole('alertdialog', { name: 'Run docker-lean now?' });

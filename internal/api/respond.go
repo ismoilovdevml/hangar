@@ -80,7 +80,7 @@ func (a *API) logFailure(r *http.Request, msg string, err error) {
 // with StatusClientClosedRequest.
 func (a *API) writeErr(w http.ResponseWriter, r *http.Request, err error) {
 	code := core.HTTPStatus(err)
-	msg := err.Error()
+	msg := core.Message(err)
 	if code >= http.StatusInternalServerError && clientGone(r, err) {
 		a.logger().DebugContext(r.Context(), "api request canceled by the client", "method", r.Method, "path", r.URL.Path, "error", err)
 		WriteError(w, StatusClientClosedRequest, "canceled", "request canceled")

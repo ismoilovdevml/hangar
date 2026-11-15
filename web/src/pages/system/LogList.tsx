@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Pill } from '../../components/Pill';
 import { clock, inlineAttrs, LEVEL_TONE, offsets, recordJson, rowHeight, visibleRange, type LogRecord } from './model';
+import { formatUtc } from '../../lib/format';
 
 /** Viewport height used before layout (and in environments without it). */
 const FALLBACK_VIEWPORT = 560;
@@ -84,7 +85,7 @@ export function LogList({ records, label }: LogListProps) {
         aria-posinset={i + 1}
       >
         <button type="button" className="log-row__line" aria-expanded={isOpen} aria-controls={isOpen ? detailId : undefined} onClick={() => toggle(k)}>
-          <time className="log-row__time" dateTime={r.time}>
+          <time className="log-row__time" dateTime={r.time} title={formatUtc(r.time)}>
             {clock(r.time)}
           </time>
           <Pill tone={LEVEL_TONE[r.level]} className="log-row__level">

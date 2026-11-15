@@ -3,8 +3,7 @@ import { useSystemHealth } from '../../api/health';
 import { useAuthProviders, useBlobStores, useSession, useSystemStatus } from '../../api/hooks';
 import { IconChevronRight } from '../../components/opsIcons';
 import { canSee, visibleHub, type AppPath, type HubEntry, type HubEntryId } from '../../nav';
-import { formatBytes, instanceName } from '../../lib/format';
-import { formatUtc } from '../../lib/tasks';
+import { formatBytes, formatDate, instanceName } from '../../lib/format';
 import { useSystemNodes } from '../system/api';
 import { summarize, versionText } from '../system/model';
 import { useIdentityProviders, useProxies } from './settingsApi';
@@ -147,7 +146,7 @@ export function SettingsHubPage() {
         <p className="hub-foot">
           Hangar {versionText(sys.version)}
           {sys.build?.commit && <> · {sys.build.commit.slice(0, 12)}</>}
-          {sys.build?.date && <> · built {formatUtc(sys.build.date).split(',')[0]}</>}
+          {sys.build?.date && <> · built {formatDate(sys.build.date)}</>}
           {' · '}
           <Link to="/system/status" className={`hub-foot__status hub-foot__status--${health.tone}`}>
             <span className={`status__dot dot-${health.tone}`} aria-hidden="true" />

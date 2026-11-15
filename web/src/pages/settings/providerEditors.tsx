@@ -7,7 +7,7 @@ import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { CopyButton } from '../../components/CopyButton';
 import { Panel } from '../../components/Panel';
 import { Select } from '../../components/Select';
-import { formatUtc } from '../../lib/tasks';
+import { formatTime } from '../../lib/format';
 import { useCanSystem } from '../../api/ops';
 import { useRoles } from '../access/api';
 import { Field, FileBadge, ListInput, RoleMappingTable, RolesInput, SecretInput, TestResultView, Toggle } from './controls';
@@ -284,7 +284,7 @@ function storedLine(enabled: boolean, updatedAt?: string | null, updatedBy?: str
   return (
     <>
       {enabled ? 'In use.' : 'Saved, sign-in is off.'}
-      {updatedAt && ` Last saved ${formatUtc(updatedAt)}${updatedBy ? ` by ${updatedBy}` : ''}.`}
+      {updatedAt && ` Last saved ${formatTime(updatedAt)}${updatedBy ? ` by ${updatedBy}` : ''}.`}
     </>
   );
 }
