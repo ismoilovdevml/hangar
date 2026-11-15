@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **API error code for rate limits**: a remote's 429 surfacing through the REST
+  API answers `rate_limited` (it was `upstream_unavailable`).
+- **Docs**: registry logins stay valid until they expire after a token is
+  revoked or a password changes; the failed-authentication limit also refuses
+  valid credentials from the same address (CI behind NAT); the npm README's
+  known limits match the cluster lock and tombstones.
+
 - **Faster first load of the web UI**: the build writes brotli and gzip
   copies of its scripts, styles and page, and the server sends the one the
   browser accepts (`Vary: Accept-Encoding`; hashed assets stay cached for a

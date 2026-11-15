@@ -40,6 +40,8 @@ func errorCode(err error) string {
 		return "quarantined"
 	case errors.Is(err, core.ErrOffline):
 		return "offline"
+	case errors.Is(err, core.ErrRateLimited):
+		return "rate_limited"
 	case errors.Is(err, core.ErrUpstream):
 		return "upstream_unavailable"
 	case errors.Is(err, core.ErrNotImplemented):

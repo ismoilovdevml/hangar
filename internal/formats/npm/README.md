@@ -73,9 +73,11 @@ assets are served on the tarball route.
 
 - Packuments of hosted repositories are rendered per request from the
   version manifests (one blob read per version).
-- Package-state updates are serialised per node; concurrent publishes of the
-  same package on different nodes can race on dist-tags.
-- Unpublished version numbers can be published again (no tombstones).
+- Package-state updates (publish, dist-tags, deprecate, unpublish) are
+  serialised per package across the cluster through the shared lock service,
+  or within the process on a single node.
+- Unpublished version numbers leave a tombstone and cannot be published again,
+  unless `reuse_unpublished_versions` is set.
 - Web login, `npm access`/`npm owner`/teams and
   provenance attachments (`.sigstore`, accepted but not stored) are not implemented.
 
