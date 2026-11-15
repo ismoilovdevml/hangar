@@ -7,7 +7,7 @@ A self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go modules, 
 
 **[Website](https://ismoilovdevml.github.io/hangar/)** · **[Live demo](https://ismoilovdevml.github.io/hangar/demo/)** · **[Documentation](https://ismoilovdevml.github.io/hangar/docs.html)** · [Releases](https://github.com/ismoilovdevml/hangar/releases)
 
-![Hangar overview](docs/screenshots/overview.png)
+![Hangar overview](docs/screenshots/overview.jpg)
 
 ## What it does
 
@@ -23,14 +23,14 @@ A self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go modules, 
 
 | | |
 |---|---|
-| ![Package page](docs/screenshots/package.png) | ![Search](docs/screenshots/search.png) |
+| ![Package page](docs/screenshots/package.jpg) | ![Search](docs/screenshots/search.jpg) |
 | Package page with the install command, digest and checksums | Search across all repositories with filters |
-| ![Repositories](docs/screenshots/repositories.png) | ![New proxy repository](docs/screenshots/new-proxy-repository.png) |
+| ![Repositories](docs/screenshots/repositories.jpg) | ![New proxy repository](docs/screenshots/new-proxy-repository.jpg) |
 | Hosted, proxy and group repositories | Creating an npm proxy, with the same settings as YAML |
-| ![Access tokens](docs/screenshots/access-tokens.png) | ![Cleanup policies](docs/screenshots/cleanup-policies.png) |
-| Access tokens with scopes and expiry | Cleanup policy editor |
-| ![Blob stores](docs/screenshots/blob-stores.png) | |
-| Blob stores with usage and deduplication | |
+| ![Access tokens](docs/screenshots/access-tokens.jpg) | ![Cleanup policies](docs/screenshots/cleanup-policies.jpg) |
+| Creating an access token with a preset and expiry | Cleanup policy editor |
+| ![Blob stores](docs/screenshots/blob-stores.jpg) | ![Vulnerabilities](docs/screenshots/vulnerabilities.jpg) |
+| Blob stores with usage and deduplication | Vulnerabilities with severity, trend and the fix plan |
 
 ## Quick start
 
