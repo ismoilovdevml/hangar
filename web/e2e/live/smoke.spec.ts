@@ -67,8 +67,9 @@ test('an administrator signs in, creates a repository and an access token', asyn
   await page.getByRole('radio', { name: /Hosted/ }).check({ force: true });
   await page.getByLabel('Name', { exact: true }).fill(repo);
   await page.getByRole('button', { name: 'Create repository' }).click();
-  await expect(page).toHaveURL(/\/repositories(\?|$)/);
-  await expect(page.getByRole('link', { name: repo, exact: true })).toBeVisible();
+  // The new repository's page opens, ready to connect a client.
+  await expect(page).toHaveURL(new RegExp(`/repositories/${repo}/settings$`));
+  await expect(page.getByRole('form', { name: `Settings of ${repo}` })).toBeVisible();
   const created = await request.get(`/api/v1/repositories/${repo}`, { headers: bearer });
   expect(created.status()).toBe(200);
   expect(await created.json()).toMatchObject({ name: repo, format: 'raw', type: 'hosted' });
