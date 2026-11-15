@@ -119,7 +119,13 @@ const SHOTS: Shot[] = [
   },
 
   // Packages and search
+  { name: 'browse-files', path: '/browse?repo=docker-prod&files=%2F' },
   { name: 'browse-package', path: '/browse?repo=npm-internal&ns=%40acme&name=ui-kit&version=5.3.1' },
+  {
+    name: 'browse-versions',
+    path: '/browse?repo=npm-internal&ns=%40acme&name=ui-kit&version=5.3.1',
+    act: (p) => p.getByRole('tab', { name: /^Versions/ }).click(),
+  },
   { name: 'search', path: '/search?q=format%3Anpm' },
 
   // Vulnerabilities
