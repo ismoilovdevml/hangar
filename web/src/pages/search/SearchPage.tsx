@@ -96,14 +96,17 @@ export function SearchPage() {
         </h1>
         <QueryBar ref={bar} value={q} onSubmit={(v) => setQuery(v)} context={context} onArrowDown={() => focusResult(0)} />
         {(problems.length > 0 || serverOnly) && (
-          <ul className="search-problems" aria-label="Problems in the query" role={invalid ? 'alert' : undefined}>
-            {problems.map((p, i) => (
-              <li key={`${p.token}-${i}`} className={p.level === 'error' ? 'search-problems__error' : 'search-problems__warn'}>
-                <code className="inline-code">{p.token}</code> {p.message}
-              </li>
-            ))}
-            {serverOnly && <li className="search-problems__error">{serverOnly}</li>}
-          </ul>
+          // The live region wraps the list so the list keeps its role (and its items) for screen readers.
+          <div role={invalid ? 'alert' : 'status'}>
+            <ul className="search-problems" aria-label="Problems in the query">
+              {problems.map((p, i) => (
+                <li key={`${p.token}-${i}`} className={p.level === 'error' ? 'search-problems__error' : 'search-problems__warn'}>
+                  <code className="inline-code">{p.token}</code> {p.message}
+                </li>
+              ))}
+              {serverOnly && <li className="search-problems__error">{serverOnly}</li>}
+            </ul>
+          </div>
         )}
         <div className="search-try">
           <span className="meta">Try:</span>
