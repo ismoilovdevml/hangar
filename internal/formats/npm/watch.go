@@ -28,12 +28,14 @@ func (h *handler) watch(bus core.EventBus) {
 		if c.Namespace != "" {
 			name.Full = c.Namespace + "/" + c.Name
 		}
-		go func() {
-			if err := h.dropEmptyState(core.WithPrincipal(context.Background(), systemPrincipal()), repo, name); err != nil {
-				h.deps.Logger.WarnContext(ctx, "npm package state after delete", "repository", repo.Name, "package", name.Full, "err", err)
-			}
-		}()
+		go h.dropEmptyStateLogged(core.WithPrincipal(context.Background(), systemPrincipal()), repo, name)
 	})
+}
+
+func (h *handler) dropEmptyStateLogged(ctx context.Context, repo *core.Repository, name pkgName) {
+	if err := h.dropEmptyState(ctx, repo, name); err != nil {
+		h.deps.Logger.WarnContext(ctx, "npm package state after delete", "repository", repo.Name, "package", name.Full, "err", err)
+	}
 }
 
 // dropEmptyState deletes the state document of a package without versions
