@@ -28,6 +28,7 @@ import {
 } from '../../lib/audit';
 import { relativeTime, zoneLabel } from '../../lib/format';
 import { Time } from '../../components/Time';
+import { Combobox } from '../../components/Combobox';
 
 const route = getRouteApi('/app/audit');
 
@@ -138,7 +139,7 @@ export function AuditPage() {
   const now = win.now;
   const query = useMemo(() => auditQuery(search, now), [search, now]);
   const events = useAuditEvents(query);
-  const ids = { actor: useId(), action: useId(), target: useId(), outcome: useId(), range: useId(), from: useId(), to: useId(), list: useId() };
+  const ids = { actor: useId(), action: useId(), target: useId(), outcome: useId(), range: useId(), from: useId(), to: useId() };
 
   const [draft, setDraft] = useState<TextDraft>(() => toDraft(search));
   const [synced, setSynced] = useState(filterKey);
@@ -212,22 +213,16 @@ export function AuditPage() {
           </div>
           <div className="field">
             <label htmlFor={ids.action}>Action</label>
-            <input
+            <Combobox
               id={ids.action}
               className="input input--mono"
-              list={ids.list}
+              options={ACTION_SUGGESTIONS}
               value={draft.action}
-              onChange={(e) => setDraft({ ...draft, action: e.target.value })}
+              onChange={(action) => setDraft({ ...draft, action })}
               placeholder="repository.*"
-              autoComplete="off"
               spellCheck={false}
               aria-describedby={`${ids.action}-hint`}
             />
-            <datalist id={ids.list}>
-              {ACTION_SUGGESTIONS.map((a) => (
-                <option key={a} value={a} />
-              ))}
-            </datalist>
             <span className="field__hint" id={`${ids.action}-hint`}>
               Exact, or a prefix ending in *
             </span>

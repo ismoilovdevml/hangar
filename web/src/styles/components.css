@@ -436,3 +436,4 @@ select.input:disabled { opacity: .7; }
 .state-notfound__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .link-underline { text-decoration: underline; text-underline-offset: 2px; }
 .standalone-screen { min-height: 100vh; padding: 32px 16px; background: var(--wall-color); }
+.select-option--mono .select-option__label { font-family: var(--font-mono); font-size: 13px; }
