@@ -2,6 +2,59 @@
 
 ## Unreleased
 
+- **Times are local, everywhere**: every timestamp in the web UI (Audit log
+  rows and details, Access & audit, tasks, tokens, sessions, cluster, System
+  status and logs, Settings) is shown in the browser's time zone with the
+  zone named, e.g. "11 Nov 2026, 12:23 (UTC+5)", and the same instant in UTC
+  on hover. The Audit log's custom range is entered in local time. Exports
+  (CSV, NDJSON, log downloads) and cron schedules stay in UTC. Relative times
+  carry the full time in their hover text.
+- **Overview days start at the viewer's midnight**: `GET /metrics/overview`
+  and `GET /upstreams/health` take `tz_offset` (minutes east of UTC), so
+  "Today" no longer begins at 05:00 in UTC+5; the chart starts at the first
+  recorded interval instead of a row of "not recorded" bars.
+- **One byte unit**: sizes are shown in binary units (KiB, MiB, GiB), and
+  durations in their short form (repository TTLs read "24h", not
+  "24h0m0s").
+- **Storage numbers that respect quotas**: the Overview's storage card and
+  the quota reminder name the blob stores without a quota (and link to the
+  one) instead of "no quota" while other stores have one. Blob store growth
+  is averaged over the days the stores actually hold data
+  (`growth_window_days`), and not extrapolated from less than a day.
+  Deduplication savings under 1% read "<1%".
+- **Error, empty and loading states**: an unknown address shows a 404 inside
+  the app shell (with search and links); `/repositories/<name>` and
+  `/packages` lead to the page meant. A page that fails to render shows
+  "This page could not be shown" with Retry inside the shell, instead of the
+  router's developer screen. Every "Could not load …" says why in plain
+  words, with the server's answer under Details. A missing repository, blob
+  store, task, package or version has one not-found page. Pickers say when
+  their options failed to load (with Retry) instead of "none exist", tables
+  show placeholder rows while loading, and live status pills say when the
+  last update failed.
+- **Errors in words, at the field**: a refused repository setting (such as
+  a remote URL blocked by the outbound address policy) is shown under its
+  field; a taken member or role name and an empty one say so under the
+  name; a bad "keep tags matching" pattern is caught at the field;
+  connection tests (proxies, LDAP, OIDC) give one sentence about the likely
+  cause and the raw error once, under Details; search lists every problem in
+  a query, warns about unknown qualifiers and formats, and no longer squeezes
+  the error into the facet column.
+- **API error messages**: validation messages no longer end in ": invalid
+  argument", and duplicates read "… already exists" once. `POST
+  /repositories` without `blob_store` uses the `default` store; messages name
+  fields as the API spells them (`blob_store`, `http_port`).
+- **Vulnerabilities**: a search that matches nothing no longer turns the
+  banner into "No open vulnerabilities"; the findings pill reads
+  "8 findings · 2 critical · CVSS 10.0" (breakdown on hover); the pull
+  column and the in-use window are labelled apart; a rescan no longer moves
+  the header or repeats its progress, and the scan line says why some
+  packages are not counted ("60 of 65 scanned (5 unsupported)"). The package
+  page keeps its Vulnerabilities tab and says why it is empty.
+- **Locked accounts** show when they unlock ("unlocks at 12:12 (UTC+5), in
+  14 min") instead of only the date.
+- **Suggestion lists** (Audit log action, distribution release) use an
+  app-styled list with keyboard support instead of the browser's own popup.
 - **API error code for rate limits**: a remote's 429 surfacing through the REST
   API answers `rate_limited` (it was `upstream_unavailable`).
 - **Docs**: registry logins stay valid until they expire after a token is
