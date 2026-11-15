@@ -244,6 +244,13 @@
   of the summary instead of covering it.
 - **Signed-in devices** are grouped by device and address, five at a time,
   with each session's expiry.
+- **Demo build of the web UI**: `npm run build:demo` in `web/` builds the UI
+  with its in-browser sample server into `web/dist-demo/`, served from
+  `/hangar/demo/` on the project website. It starts signed in, every page and
+  form works against sample data, and changes reset on reload. Links of the
+  form `demo/#/repositories` open a page directly. The product build is
+  unchanged and contains no mock code. `npm run site:screenshots -- <site-dir>`
+  takes the website's UI screenshots from it.
 
 - **Release checks are opt-in**: the test, lint and deploy-check jobs of the
   release workflow run only when the repository variable `RELEASE_TESTS` is

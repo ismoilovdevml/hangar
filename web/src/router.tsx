@@ -444,6 +444,8 @@ export function createAppRouter(queryClient: QueryClient, history?: RouterHistor
     routeTree,
     context: { queryClient },
     history,
+    // "/" in the product; the demo build is served from a sub-path.
+    basepath: import.meta.env.BASE_URL,
     defaultPreload: 'intent',
     // A page that throws shows an error inside the shell, not the router's developer screen.
     defaultErrorComponent: RouteError,

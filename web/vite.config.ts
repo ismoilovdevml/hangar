@@ -13,13 +13,13 @@ const require = createRequire(import.meta.url);
  * Serves (and, on build, emits) MSW's service worker only when mock mode is on,
  * so production bundles never contain it.
  */
-function mockServiceWorker(enabled: boolean): Plugin {
+function mockServiceWorker(enabled: boolean, base: string): Plugin {
   const file = 'mockServiceWorker.js';
   const source = () => readFileSync(require.resolve(`msw/${file}`), 'utf8');
   const serve: Connect.NextHandleFunction = (req, res, next) => {
-    if (req.url !== `/${file}`) return next();
+    if (req.url !== `${base}${file}`) return next();
     res.setHeader('Content-Type', 'text/javascript');
-    res.setHeader('Service-Worker-Allowed', '/');
+    res.setHeader('Service-Worker-Allowed', base);
     res.end(source());
   };
   return {
@@ -111,9 +111,15 @@ function bootScreenFirst(): Plugin {
   };
 }
 
+/** Where the demo build is served: the project website's /demo/ page. */
+const DEMO_BASE = '/hangar/demo/';
+
 export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env };
-  const mocks = env.VITE_API_MOCKS === 'true';
+  // `vite build --mode demo`: the mocked UI as a static site under DEMO_BASE (npm run build:demo).
+  const demo = mode === 'demo';
+  const mocks = demo || env.VITE_API_MOCKS === 'true';
+  const base = demo ? (env.HANGAR_DEMO_BASE ?? DEMO_BASE) : '/';
   const backend = env.HANGAR_BACKEND_URL ?? 'http://localhost:8080';
   // The Host header is kept (no changeOrigin), so the server's same-origin check
   // sees the browser's Origin and Host agree. In mock mode nothing is proxied.
@@ -126,8 +132,16 @@ export default defineConfig(({ mode }) => {
       };
 
   return {
-    plugins: [react(), mockServiceWorker(mocks), bootScreenFirst(), precompress()],
+    base,
+    // The website serves plain files: the demo gets no precompressed copies.
+    plugins: [react(), mockServiceWorker(mocks, base), bootScreenFirst(), ...(demo ? [] : [precompress()])],
+    define: demo
+      ? { 'import.meta.env.VITE_API_MOCKS': JSON.stringify('true'), 'import.meta.env.VITE_DEMO': JSON.stringify('true') }
+      : undefined,
+    // The demo's cookie jar needs no public suffix list (src/demo/tldts.ts).
+    resolve: demo ? { alias: { tldts: resolve(import.meta.dirname, 'src/demo/tldts.ts') } } : undefined,
     build: {
+      ...(demo ? { outDir: 'dist-demo', emptyOutDir: true } : {}),
       rolldownOptions: {
         output: {
           codeSplitting: {
