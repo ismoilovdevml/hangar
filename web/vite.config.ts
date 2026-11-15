@@ -138,6 +138,8 @@ export default defineConfig(({ mode }) => {
     define: demo
       ? { 'import.meta.env.VITE_API_MOCKS': JSON.stringify('true'), 'import.meta.env.VITE_DEMO': JSON.stringify('true') }
       : undefined,
+    // The demo's cookie jar needs no public suffix list (src/demo/tldts.ts).
+    resolve: demo ? { alias: { tldts: resolve(import.meta.dirname, 'src/demo/tldts.ts') } } : undefined,
     build: {
       ...(demo ? { outDir: 'dist-demo', emptyOutDir: true } : {}),
       rolldownOptions: {
