@@ -173,7 +173,7 @@ test('command palette opens with the keyboard shortcut', async ({ page }) => {
   await expect(dialog).toBeVisible();
   await page.keyboard.type('tasks');
   await page.screenshot({ path: shot('palette-1440') });
-  await page.keyboard.press('ArrowDown');
+  // A matching page is the first option; Enter opens it.
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1, name: 'Scheduled tasks' })).toBeVisible();
 });
