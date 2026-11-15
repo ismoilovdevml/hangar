@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.8 (2026-11-15)
+
 - **Times are local, everywhere**: every timestamp in the web UI (Audit log
   rows and details, Access & audit, tasks, tokens, sessions, cluster, System
   status and logs, Settings) is shown in the browser's time zone with the
@@ -242,8 +244,6 @@
   of the summary instead of covering it.
 - **Signed-in devices** are grouped by device and address, five at a time,
   with each session's expiry.
-
-## v0.1.8 (2026-11-11)
 
 - **Release checks are opt-in**: the test, lint and deploy-check jobs of the
   release workflow run only when the repository variable `RELEASE_TESTS` is
