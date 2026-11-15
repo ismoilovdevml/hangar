@@ -264,8 +264,9 @@ contact the database directly; private modules belong in `GONOSUMDB` anyway.
 - Plain HTTP: a `GOPROXY` with `http://` works for repositories with anonymous
   read, but the go command never sends credentials over HTTP (neither from
   `.netrc` nor from the URL). Private repositories need HTTPS.
-- Browse tree: module path segments, the module, `@v`, versions, then the
-  `.info`, `.mod` and `.zip` of each version. The package view shows the
+- Browse tree: module path segments, then the module and its versions; the
+  repository's Files view has `@v` and the `.info`, `.mod` and `.zip` of each
+  version. The package view shows the
   README at the module root and the licence found in its `LICENSE` file.
 - Vulnerability scanning uses the OSV `Go` ecosystem (module path and version).
 - Quarantined versions are not advertised: they leave `@v/list`; when a

@@ -6,7 +6,7 @@
 .facts dt { font-size: 13px; color: var(--ink-3); }
 .facts dd { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
 .facts__wide { grid-column: 1 / -1; }
-.facts__mono { font-family: var(--font-mono); font-size: 13px !important; font-weight: 500 !important; }
+.facts__mono { font-family: var(--font-mono); font-variant-ligatures: none; font-size: 13px !important; font-weight: 500 !important; }
 .facts__copy { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; }
 .facts__copy > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 

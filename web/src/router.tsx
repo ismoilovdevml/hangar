@@ -186,6 +186,8 @@ export interface BrowseSearch {
   asset?: string;
   /** Group member that holds the selected package (browsing a group). */
   member?: string;
+  /** The repository's stored files: the folder shown ("/" for the root) or, with `asset`, a file's path. */
+  files?: string;
 }
 
 const browseRoute = createRoute({
@@ -201,6 +203,7 @@ const browseRoute = createRoute({
     path: str(s.path),
     asset: str(s.asset),
     member: str(s.member),
+    files: str(s.files),
   }),
   component: BrowsePage,
 });

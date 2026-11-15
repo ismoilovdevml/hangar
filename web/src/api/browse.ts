@@ -11,28 +11,31 @@ import type { AssetDetail, BrowsePage, ComponentInfo, PublishedComponentPage } f
 
 export const BROWSE_PAGE = 200;
 
+/** `packages`: the tree clients consume (folders down to packages); `files`: every stored file. */
+export type BrowseView = 'packages' | 'files';
+
 export const browseKeys = {
   all: ['browse'] as const,
-  folder: (repo: string, path: string, cursor: string) => ['browse', 'folder', repo, path, cursor] as const,
+  folder: (repo: string, path: string, cursor: string, view: BrowseView) => ['browse', 'folder', repo, path, cursor, view] as const,
   asset: (id: string) => ['browse', 'asset', id] as const,
   info: (id: string) => ['components', 'info', id] as const,
   holders: (name: string) => ['components', 'holders', name] as const,
 };
 
 /** One page of a folder's children (`path` is "" for the root or ends in "/"). */
-export const browseFolderQuery = (repo: string, path: string, cursor?: string) =>
+export const browseFolderQuery = (repo: string, path: string, cursor?: string, view: BrowseView = 'files') =>
   queryOptions({
-    queryKey: browseKeys.folder(repo, path, cursor ?? ''),
+    queryKey: browseKeys.folder(repo, path, cursor ?? '', view),
     queryFn: ({ signal }) =>
       apiFetch<BrowsePage>(`/repositories/${encodeURIComponent(repo)}/browse`, {
-        query: { path, cursor, limit: BROWSE_PAGE },
+        query: { path, cursor, limit: BROWSE_PAGE, view },
         signal,
       }),
     staleTime: 30_000,
   });
 
-export function useBrowseFolder(repo: string | undefined, path: string, cursor?: string) {
-  return useQuery({ ...browseFolderQuery(repo ?? '', path, cursor), enabled: !!repo });
+export function useBrowseFolder(repo: string | undefined, path: string, cursor?: string, view: BrowseView = 'files') {
+  return useQuery({ ...browseFolderQuery(repo ?? '', path, cursor, view), enabled: !!repo });
 }
 
 export function useAsset(id: string | undefined) {

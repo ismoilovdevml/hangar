@@ -74,6 +74,8 @@ type Service struct {
 	comps core.ComponentService
 	blobs core.BlobStores
 	log   *slog.Logger
+	// manifests caches parsed container image manifests by digest.
+	manifests manifestCache
 }
 
 // New returns a service reading assets through comps and blobs.

@@ -25,7 +25,8 @@ a:hover { color: var(--lake-ink-hover); }
 
 :focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
-code, pre, kbd { font-family: var(--font-mono); }
+/* code is copied character by character: no ligatures (<!-- and -> stay as typed) */
+code, pre, kbd, samp { font-family: var(--font-mono); font-variant-ligatures: none; }
 
 .wall {
   min-height: 100vh;

@@ -19,6 +19,8 @@ export interface ClientTarget {
   type?: RepositoryType;
   /** Hosted repositories, and groups with a write member, also accept uploads. */
   publishes?: boolean;
+  /** Reading needs no credentials (the repository allows anonymous read). */
+  anonymousRead?: boolean;
   /** Who is signed in; a placeholder is shown when unknown. */
   username?: string;
   /** A real token to put in the snippets (shown once after creating one); a placeholder otherwise. */
@@ -26,6 +28,8 @@ export interface ClientTarget {
 }
 
 export interface ClientSetup {
+  /** Shell commands to run first (e.g. exporting the token), kept out of a config file block. */
+  shell?: CodeLine[];
   /** Read access: configure the client with the repository and a token. */
   setup: CodeLine[];
   /** Upload commands; empty when the repository does not accept uploads. */
@@ -41,6 +45,15 @@ const dockerHost = (url: string) => url.replace(/^https?:\/\//, '').split('/')[0
 const withCredentials = (url: string, user: string, token = TOKEN) => url.replace(/^(https?:\/\/)/, `$1${user}:${token}@`);
 const c = (text: string): CodeLine => ({ text, comment: true });
 const l = (text: string): CodeLine => ({ text });
+/** Clients that refuse plain http to other hosts accept it for these. */
+const LOOPBACK = /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?$/;
+const plainHttp = (url: string) => url.startsWith('http://');
+/** Whether `url` is plain http to a host that is not this machine. */
+const remoteHttp = (url: string) => plainHttp(url) && !LOOPBACK.test(dockerHost(url));
+/** The registry name cargo knows a repository by: `crates-io` is cargo's own source name. */
+const cargoRegistry = (repo: string) => (repo === 'crates-io' ? 'hangar-crates-io' : repo);
+/** A repository that stands in for a public one: proxies and groups (not hosted, nor unknown). */
+const mirrors = (t: ClientTarget) => t.type === 'proxy' || t.type === 'group';
 
 /**
  * Copyable client configuration for one repository, matching the format
@@ -55,10 +68,12 @@ export function clientSetup(t: ClientTarget): ClientSetup {
   switch (t.format) {
     case 'nuget': {
       const index = `${url}index.json`;
+      // .NET 9 and later refuse http sources unless the source allows it.
+      const insecure = plainHttp(url) ? ' --allow-insecure-connections' : '';
       return {
         setup: [
           c('# The service index is public; restoring packages needs the token'),
-          l(`dotnet nuget add source ${index} -n ${repo} -u ${user} -p ${tok} --store-password-in-clear-text`),
+          l(`dotnet nuget add source ${index} -n ${repo} -u ${user} -p ${tok} --store-password-in-clear-text${insecure}`),
         ],
         publish: t.publishes ? [l(`dotnet nuget push <package>.nupkg -s ${index} -k ${tok}`)] : [],
       };
@@ -70,29 +85,33 @@ export function clientSetup(t: ClientTarget): ClientSetup {
       };
     case 'pypi':
       return {
-        setup: [l(`pip config set global.index-url ${withCredentials(`${url}simple/`, '__token__', tok)}`)],
+        setup: [
+          l(`pip config set global.index-url ${withCredentials(`${url}simple/`, '__token__', tok)}`),
+          // pip ignores plain-http indexes on other hosts unless they are trusted.
+          ...(remoteHttp(url) ? [l(`pip config set global.trusted-host ${dockerHost(url).replace(/:\d+$/, '')}`)] : []),
+        ],
         publish: t.publishes ? [l(`twine upload --repository-url ${url} -u __token__ -p ${tok} dist/*`)] : [],
       };
     case 'maven': {
       const server = `    <server><id>${repo}</id><username>${user}</username><password>\${env.HANGAR_TOKEN}</password></server>`;
-      // A hosted repository holds only your own artifacts, so it is not a mirror for everything.
-      const mirror = t.type !== 'hosted';
+      // A proxy or group stands in for Maven Central: mirror everything to it. A hosted
+      // repository holds only your own artifacts, so it is added next to Central instead.
+      const read = mirrors(t)
+        ? [l('  <mirrors>'), l(`    <mirror><id>${repo}</id><mirrorOf>*</mirrorOf><url>${url}</url></mirror>`), l('  </mirrors>')]
+        : [
+            l('  <profiles>'),
+            l(`    <profile><id>${repo}</id>`),
+            l(`      <repositories><repository><id>${repo}</id><url>${url}</url></repository></repositories>`),
+            l('    </profile>'),
+            l('  </profiles>'),
+            l(`  <activeProfiles><activeProfile>${repo}</activeProfile></activeProfiles>`),
+          ];
       return {
-        setup: [
-          c(`# export HANGAR_TOKEN=${tok}`),
-          c('<!-- ~/.m2/settings.xml -->'),
-          l('<settings>'),
-          l('  <servers>'),
-          l(server),
-          l('  </servers>'),
-          ...(mirror
-            ? [l('  <mirrors>'), l(`    <mirror><id>${repo}</id><mirrorOf>*</mirrorOf><url>${url}</url></mirror>`), l('  </mirrors>')]
-            : []),
-          l('</settings>'),
-        ],
+        shell: [l(`export HANGAR_TOKEN=${tok}`)],
+        setup: [c('<!-- ~/.m2/settings.xml -->'), l('<settings>'), l('  <servers>'), l(server), l('  </servers>'), ...read, l('</settings>')],
         publish: t.publishes
           ? [
-              c('<!-- pom.xml -->'),
+              c('<!-- pom.xml; the <server> above holds the credentials -->'),
               l('<distributionManagement>'),
               l(`  <repository><id>${repo}</id><url>${url}</url></repository>`),
               l('</distributionManagement>'),
@@ -106,6 +125,9 @@ export function clientSetup(t: ClientTarget): ClientSetup {
       const host = t.host ?? (image ? dockerHost(image) : '');
       return {
         setup: [
+          ...(t.url && remoteHttp(t.url)
+            ? [c(`# Plain http: add "${host}" to "insecure-registries" in the Docker daemon settings first`)]
+            : []),
           l(`echo '${tok}' | docker login ${host} -u ${user} --password-stdin`),
           ...(image ? [l(`docker pull ${image}/<image>:<tag>`)] : []),
         ],
@@ -131,35 +153,51 @@ export function clientSetup(t: ClientTarget): ClientSetup {
       };
     case 'go': {
       const proxy = url.replace(/\/+$/, '');
+      const publish = t.publishes
+        ? [c('# A module zip built with golang.org/x/mod/zip (see the Go guide)'), l(`curl -u token:${tok} --upload-file <version>.zip ${url}<module>/@v/<version>.zip`)]
+        : [];
+      const goproxy = l(`go env -w GOPROXY=${proxy},direct`);
+      const private_ = [
+        c('# Private modules: fetch them through Hangar, never ask sum.golang.org'),
+        l('go env -w GOPRIVATE=<module prefix> GONOPROXY=none GONOSUMDB=<module prefix>'),
+      ];
+      if (plainHttp(url)) {
+        // The go command never sends .netrc credentials over plain http.
+        return {
+          setup: t.anonymousRead
+            ? [c('# Anonymous read is on: no credentials needed'), goproxy, ...private_]
+            : [
+                c('# The go command sends credentials over HTTPS only, and this server is plain http.'),
+                c(`# Serve Hangar over HTTPS, or turn on anonymous read for ${repo}; then:`),
+                goproxy,
+                ...private_,
+              ],
+          publish,
+        };
+      }
       return {
-        setup: [
-          l(`go env -w GOPROXY=${proxy},direct`),
-          c('# Private modules: fetch them through Hangar, never ask sum.golang.org'),
-          l('go env -w GOPRIVATE=<module prefix> GONOPROXY=none GONOSUMDB=<module prefix>'),
-          c('# ~/.netrc (the go command sends it over HTTPS only)'),
-          l(`machine ${dockerHost(url)} login token password ${tok}`),
-        ],
-        publish: t.publishes
-          ? [c('# A module zip built with golang.org/x/mod/zip (see the Go guide)'), l(`curl -u token:${tok} --upload-file <version>.zip ${url}<module>/@v/<version>.zip`)]
-          : [],
+        // The go command matches the netrc machine against host[:port] of the URL.
+        setup: [goproxy, ...private_, c('# ~/.netrc'), l(`machine ${dockerHost(url)} login token password ${tok}`)],
+        publish,
       };
     }
     case 'cargo': {
       // Proxies and groups stand in for crates.io; a hosted repository is named per dependency.
-      const replace = t.type !== 'hosted';
-      const env = `CARGO_REGISTRIES_${repo.toUpperCase().replace(/-/g, '_')}_TOKEN`;
+      const replace = mirrors(t);
+      const reg = cargoRegistry(repo);
+      const env = `CARGO_REGISTRIES_${reg.toUpperCase().replace(/-/g, '_')}_TOKEN`;
       return {
         setup: [
           c('# ~/.cargo/config.toml'),
           l('[registry]'),
           l('global-credential-providers = ["cargo:token"]'),
-          l(`[registries.${repo}]`),
+          l(`[registries.${reg}]`),
           l(`index = "sparse+${url}index/"`),
-          ...(replace ? [l('[source.crates-io]'), l(`replace-with = "${repo}"`)] : []),
+          ...(replace ? [l('[source.crates-io]'), l(`replace-with = "${reg}"`)] : []),
           c(`# Then store the token (or export ${env}=${tok})`),
-          l(`echo '${tok}' | cargo login --registry ${repo}`),
+          l(`echo '${tok}' | cargo login --registry ${reg}`),
         ],
-        publish: t.publishes ? [l(`cargo publish --registry ${repo}`)] : [],
+        publish: t.publishes ? [l(`cargo publish --registry ${reg}`)] : [],
       };
     }
     case 'apt': {
@@ -220,8 +258,10 @@ export function clientSetup(t: ClientTarget): ClientSetup {
 
 /** Set-up and publish lines in one block, the publish part under its own heading. */
 export function clientLines(t: ClientTarget): CodeLine[] {
-  const { setup, publish } = clientSetup(t);
-  return publish.length ? [...setup, c('# Publish'), ...publish] : setup;
+  const { shell = [], setup, publish } = clientSetup(t);
+  // One block: shell commands become comments so the config part stays copyable.
+  const head = shell.map((x) => c(`# ${x.text}`));
+  return publish.length ? [...head, ...setup, c('# Publish'), ...publish] : [...head, ...setup];
 }
 
 /** One package version to install. */
@@ -244,8 +284,10 @@ export interface InstallCommand {
  * of the format (npm, pnpm and Yarn; dotnet and PackageReference; Maven and
  * Gradle; pip and uv; docker and Podman; curl). Empty without a repository URL.
  */
-export function installCommands(t: Pick<ClientTarget, 'format' | 'url'> & { repository?: string }, p: PackageVersion): InstallCommand[] {
+export function installCommands(t: Pick<ClientTarget, 'format' | 'url' | 'username' | 'token'> & { repository?: string }, p: PackageVersion): InstallCommand[] {
   if (!t.url) return [];
+  const user = t.username || '<username>';
+  const tok = t.token || TOKEN;
   const url = slash(t.url);
   const v = p.version;
   const full = p.namespace ? `${p.namespace}/${p.name}` : p.name;
@@ -279,9 +321,13 @@ export function installCommands(t: Pick<ClientTarget, 'format' | 'url'> & { repo
           id: 'gradle',
           label: 'Gradle',
           lines: [
-            c('// build.gradle.kts'),
+            c('// build.gradle.kts; HANGAR_TOKEN holds your token'),
             l('repositories {'),
-            l(`    maven { url = uri("${url}") }`),
+            l('    maven {'),
+            l(`        url = uri("${url}")`),
+            ...(plainHttp(url) ? [l('        isAllowInsecureProtocol = true')] : []),
+            l(`        credentials { username = "${user}"; password = System.getenv("HANGAR_TOKEN") }`),
+            l('    }'),
             l('}'),
             l('dependencies {'),
             l(`    implementation("${p.namespace ?? ''}:${p.name}:${v}")`),
@@ -289,11 +335,15 @@ export function installCommands(t: Pick<ClientTarget, 'format' | 'url'> & { repo
           ],
         },
       ];
-    case 'pypi':
+    case 'pypi': {
+      // --index-url replaces the configured index, credentials included: carry the token.
+      const index = withCredentials(`${url}simple/`, '__token__', tok);
+      const trusted = remoteHttp(url) ? ` --trusted-host ${dockerHost(url).replace(/:\d+$/, '')}` : '';
       return [
-        { id: 'pip', label: 'pip', lines: [l(`pip install ${p.name}==${v} --index-url ${url}simple/`)] },
-        { id: 'uv', label: 'uv', lines: [l(`uv pip install ${p.name}==${v} --index-url ${url}simple/`)] },
+        { id: 'pip', label: 'pip', lines: [l(`pip install ${p.name}==${v} --index-url ${index}${trusted}`)] },
+        { id: 'uv', label: 'uv', lines: [l(`uv pip install ${p.name}==${v} --index-url ${index}`)] },
       ];
+    }
     case 'docker': {
       const image = `${t.url.replace(/\/+$/, '')}/${full}:${v}`;
       return [
@@ -301,17 +351,19 @@ export function installCommands(t: Pick<ClientTarget, 'format' | 'url'> & { repo
         { id: 'podman', label: 'Podman', lines: [l(`podman pull ${image}`)] },
       ];
     }
-    case 'cargo':
+    case 'cargo': {
+      const reg = t.repository ? cargoRegistry(t.repository) : '<registry>';
       return [
-        { id: 'cargo', label: 'cargo add', lines: [l(`cargo add ${p.name}@${v} --registry ${t.repository ?? '<registry>'}`)] },
-        { id: 'toml', label: 'Cargo.toml', lines: [c('# [dependencies]'), l(`${p.name} = { version = "${v}", registry = "${t.repository ?? '<registry>'}" }`)] },
+        { id: 'cargo', label: 'cargo add', lines: [l(`cargo add ${p.name}@${v} --registry ${reg}`)] },
+        { id: 'toml', label: 'Cargo.toml', lines: [c('# [dependencies]'), l(`${p.name} = { version = "${v}", registry = "${reg}" }`)] },
       ];
+    }
     case 'apt':
       return [{ id: 'apt', label: 'apt', lines: [l(`sudo apt-get install ${p.name}=${v}`)] }];
     case 'rpm':
       return [{ id: 'dnf', label: 'dnf', lines: [l(`sudo dnf install ${p.name}-${v}`)] }];
     case 'raw':
-      return [{ id: 'curl', label: 'curl', lines: [l(`curl -u <username>:${TOKEN} -fLO ${url}${full.replace(/^\/+/, '')}`)] }];
+      return [{ id: 'curl', label: 'curl', lines: [l(`curl -u ${user}:${TOKEN} -fLO ${url}${full.replace(/^\/+/, '')}`)] }];
     case 'go': {
       // Go components are named by module path; versions carry the leading "v".
       const proxy = url.replace(/\/+$/, '');

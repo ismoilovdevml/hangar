@@ -105,6 +105,9 @@ func (f *Format) Mount(r chi.Router, deps core.Deps) {
 	h := &handler{f: f, deps: deps}
 	r.HandleFunc("/", h.serve)
 	r.HandleFunc("/*", h.serve)
+	if deps.Events != nil && deps.Repos != nil {
+		h.watch(deps.Events)
+	}
 }
 
 // Challenge implements core.Challenger: npm's JSON error with a Basic

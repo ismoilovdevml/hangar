@@ -164,6 +164,7 @@ export const repoClientTarget = (r: Repository, username?: string): ClientTarget
   url: r.url,
   type: r.type,
   publishes: acceptsUploads(r),
+  anonymousRead: r.config.anonymous_read,
   username,
 });
 

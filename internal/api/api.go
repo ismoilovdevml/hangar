@@ -54,6 +54,7 @@ type Catalog interface {
 	Browse(ctx context.Context, q catalog.BrowseQuery) ([]catalog.BrowseNode, error)
 	Asset(ctx context.Context, id string) (*catalog.AssetDetail, error)
 	ComponentSizes(ctx context.Context, ids []string) (map[string]int64, error)
+	PackageNames(ctx context.Context, repoID, after string, limit int) ([]catalog.BrowseComponent, error)
 }
 
 // PackageInfo extracts a version's README, licences and keywords from its
@@ -63,6 +64,9 @@ type PackageInfo interface {
 	// Member reads a file of the version's package archive (README images,
 	// the package icon), at most limit bytes.
 	Member(ctx context.Context, repo *core.Repository, c *core.Component, name string, limit int64) ([]byte, error)
+	// ContainerImage describes a docker version from its stored manifests (nil when
+	// they are not stored).
+	ContainerImage(ctx context.Context, repo *core.Repository, namespace, name, digest, mediaType string) (*pkginfo.ContainerImage, error)
 }
 
 // Searcher runs global searches (implemented by search.Service).

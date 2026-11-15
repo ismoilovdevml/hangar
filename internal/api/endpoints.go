@@ -90,14 +90,20 @@ func (a *API) upstreamHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 type clientEndpoint struct {
-	Format     string `json:"format"`
-	Endpoint   string `json:"endpoint"`
-	Repository string `json:"repository"`
+	Format     string        `json:"format"`
+	Endpoint   string        `json:"endpoint"`
+	Repository string        `json:"repository"`
+	Type       core.RepoType `json:"type"`
+	// Publishes is set when clients can upload through the endpoint: a
+	// hosted repository, or a group with a write member.
+	Publishes     bool `json:"publishes"`
+	AnonymousRead bool `json:"anonymous_read"`
 }
 
 // typeRank prefers the repository clients should point at: a group
-// aggregates hosted and proxy content behind one URL.
-var typeRank = map[core.RepoType]int{core.RepoGroup: 0, core.RepoHosted: 1, core.RepoProxy: 2}
+// aggregates hosted and proxy content behind one URL, and a proxy resolves
+// public dependencies, which a hosted repository alone cannot.
+var typeRank = map[core.RepoType]int{core.RepoGroup: 0, core.RepoProxy: 1, core.RepoHosted: 2}
 
 // clientEndpoints suggests one endpoint per format among the online
 // repositories the caller may read, most-downloaded format first.
@@ -140,7 +146,9 @@ func (a *API) clientEndpoints(w http.ResponseWriter, r *http.Request) {
 		if format == "docker" {
 			ep = a.registryHost(repo)
 		}
-		items = append(items, clientEndpoint{Format: format, Endpoint: ep, Repository: repo.Name})
+		publishes := repo.Type == core.RepoHosted || (repo.Type == core.RepoGroup && repo.Config.Group != nil && repo.Config.Group.WriteMember != "")
+		items = append(items, clientEndpoint{Format: format, Endpoint: ep, Repository: repo.Name, Type: repo.Type,
+			Publishes: publishes, AnonymousRead: repo.Config.AnonymousRead})
 	}
 	sort.Slice(items, func(i, j int) bool {
 		ui, uj := usage[items[i].Format], usage[items[j].Format]

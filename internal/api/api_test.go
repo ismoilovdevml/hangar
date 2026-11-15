@@ -370,12 +370,16 @@ func TestUpstreamHealthAndEndpoints(t *testing.T) {
 	}
 
 	f.api.Catalog = fakeCatalog{usage: map[string]int64{"docker": 10, "npm": 900, "maven": 3}}
+	// A proxy resolves public dependencies: it is preferred over a hosted repository.
+	f.env.AddRepo(t, &core.Repository{Name: "maven-central", Format: "maven", Type: core.RepoProxy,
+		Config: core.RepoConfig{AnonymousRead: true, Proxy: &core.ProxyConfig{RemoteURL: "https://repo.example.com/maven2"}}})
 	var eps page[clientEndpoint]
 	_ = json.Unmarshal(f.expect("admin", "GET", "/api/v1/me/client-endpoints", nil, 200), &eps)
 	want := []clientEndpoint{
-		{Format: "npm", Endpoint: "http://hangar.test/repository/npm-all/", Repository: "npm-all"},
-		{Format: "docker", Endpoint: "cr.hangar.test", Repository: "docker-hosted"},
-		{Format: "maven", Endpoint: "http://hangar.test/repository/maven-releases/", Repository: "maven-releases"},
+		{Format: "npm", Endpoint: "http://hangar.test/repository/npm-all/", Repository: "npm-all", Type: core.RepoGroup},
+		{Format: "docker", Endpoint: "cr.hangar.test", Repository: "docker-hosted", Type: core.RepoHosted, Publishes: true},
+		{Format: "maven", Endpoint: "http://hangar.test/repository/maven-central/", Repository: "maven-central", Type: core.RepoProxy,
+			AnonymousRead: true},
 	}
 	if len(eps.Items) != 3 {
 		t.Fatalf("endpoints = %+v", eps.Items)

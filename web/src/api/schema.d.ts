@@ -221,7 +221,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Endpoints the current user should configure in their clients, most-used format first */
+        /**
+         * Endpoints the current user should configure in their clients, most-used format first
+         * @description One repository per format among the online repositories the caller may read: a group when there is one, else a proxy, else a hosted repository.
+         */
         get: operations["listClientEndpoints"];
         put?: never;
         post?: never;
@@ -929,7 +932,7 @@ export interface paths {
         get: operations["getAsset"];
         put?: never;
         post?: never;
-        /** @description Deletes the file. Requires `repo:<name>:delete`; audited as `asset.delete` (refusals with outcome "denied"). The blob reference is released, so a blob no other asset uses becomes eligible for compaction. Deleting the last file of a version deletes the version. */
+        /** @description Deletes the file. Requires `repo:<name>:delete`; audited as `asset.delete` (refusals with outcome "denied"). The blob reference is released, so a blob no other asset uses becomes eligible for compaction. Deleting the last file of a version deletes the version. Docker files (layers, manifests) are refused with 400: they are deleted with their version. */
         delete: operations["deleteAsset"];
         options?: never;
         head?: never;
@@ -2424,6 +2427,11 @@ export interface components {
             /** @description Registry host for docker, base URL for everything else (built from server.base_url) */
             endpoint: string;
             repository: string;
+            type: components["schemas"]["RepositoryType"];
+            /** @description Clients can upload through it (a hosted repository, or a group with a write member) */
+            publishes: boolean;
+            /** @description Reading needs no credentials */
+            anonymous_read: boolean;
         };
         ClientEndpointPage: {
             items: components["schemas"]["ClientEndpoint"][];
@@ -3193,7 +3201,7 @@ export interface components {
             download_count?: number;
             /** Format: date-time */
             last_downloaded_at?: string | null;
-            /** @description Content size; reported by the versions listing */
+            /** @description Content size; reported by the versions listing. Docker: the compressed image (config plus layers, from the manifest; for a multi-platform index, linux/amd64 or its first platform), absent when no platform manifest of the index is stored. */
             size_bytes?: components["schemas"]["Bytes"];
         };
         PublishedComponentPage: {
@@ -3201,6 +3209,7 @@ export interface components {
             next_cursor?: components["schemas"]["NextCursor"];
         };
         ComponentDetail: components["schemas"]["PublishedComponent"] & {
+            /** @description Content size; docker the compressed image, as in the versions listing */
             size_bytes: components["schemas"]["Bytes"];
             /** @description Primary digest (OCI manifest digest or main file sha256) */
             digest?: string;
@@ -3228,6 +3237,36 @@ export interface components {
             attributes?: {
                 [key: string]: unknown;
             };
+            image?: components["schemas"]["ContainerImage"];
+        };
+        /** @description Docker versions whose manifests are stored: what the manifest (and, for a multi-platform index, its platform manifests) says clients pull. */
+        ContainerImage: {
+            media_type: string;
+            /**
+             * Format: int64
+             * @description Config plus layers, compressed; null when the platform manifest is not stored
+             */
+            size_bytes: number | null;
+            /** @description Index only; the platform layers and size_bytes describe (linux/amd64, else the first) */
+            platform?: string;
+            config?: components["schemas"]["ContainerBlob"];
+            layers: components["schemas"]["ContainerBlob"][];
+            /** @description Index only; attestation manifests are left out */
+            platforms?: {
+                /** @example linux/arm64/v8 */
+                platform: string;
+                digest: string;
+                /**
+                 * Format: int64
+                 * @description null when that platform's manifest is not stored
+                 */
+                size_bytes: number | null;
+            }[];
+        };
+        ContainerBlob: {
+            digest: string;
+            media_type: string;
+            size_bytes: components["schemas"]["Bytes"];
         };
         Asset: {
             id: string;
@@ -5921,6 +5960,8 @@ export interface operations {
             query?: {
                 /** @description Folder in the browse tree, e.g. "@acme/" or "com/acme/ledger-core/"; empty for the root */
                 path?: string;
+                /** @description `files` (default): every folder and file. `packages`: what clients consume; folders down to packages, without files, without folders that hold no package, and without the folders a package keeps its versions and files in (nested packages, such as a Go module's /v2, stay). apt and rpm list one package entry per name at the root. Raw repositories show their files. */
+                view?: "files" | "packages";
                 /** @description Opaque cursor from the previous page's `next_cursor` */
                 cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];

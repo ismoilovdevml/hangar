@@ -1,4 +1,6 @@
-import { useBrowseFolder } from '../../api/browse';
+import { useState } from 'react';
+import { useQueries } from '@tanstack/react-query';
+import { browseFolderQuery } from '../../api/browse';
 import { ApiRequestError } from '../../api/client';
 import type { BrowseEntry } from '../../api/types';
 import { DataTable, type Column } from '../../components/DataTable';
@@ -12,15 +14,22 @@ const KIND_LABEL: Record<BrowseEntry['kind'], string> = { folder: 'Folder', pack
 
 interface FolderDetailProps {
   repo: string;
+  /** "" for the root of the repository's stored files. */
   path: string;
   onOpen: (e: BrowseEntry) => void;
+  /** Opens the parent folder (the stored files view). */
+  onUp?: () => void;
 }
 
-/** Right pane for a plain folder: what it holds. */
-export function FolderDetail({ repo, path, onOpen }: FolderDetailProps) {
-  const q = useBrowseFolder(repo, path);
+/** Right pane for a folder of stored files: what it holds. */
+export function FolderDetail({ repo, path, onOpen, onUp }: FolderDetailProps) {
+  // Pages after the first that were asked for.
+  const [more, setMore] = useState<string[]>([]);
+  const pages = useQueries({ queries: [undefined, ...more].map((cursor) => browseFolderQuery(repo, path, cursor)) });
+  const q = pages[0]!;
+  const last = pages[pages.length - 1]!;
   const now = useNow();
-  const name = path.replace(/\/$/, '').split('/').pop() ?? path;
+  const name = path ? (path.replace(/\/$/, '').split('/').pop() ?? path) : `Files in ${repo}`;
 
   if (q.isError) {
     const notFound = q.error instanceof ApiRequestError && q.error.status === 404;
@@ -30,7 +39,7 @@ export function FolderDetail({ repo, path, onOpen }: FolderDetailProps) {
       </Panel>
     );
   }
-  const items = q.data?.items ?? [];
+  const items = pages.flatMap((p) => p.data?.items ?? []);
   const group = items.some((e) => e.repositories);
   const columns: Column<BrowseEntry>[] = [
     {
@@ -58,24 +67,44 @@ export function FolderDetail({ repo, path, onOpen }: FolderDetailProps) {
   ];
 
   return (
-    <Panel className="pkg-head" aria-label={`Folder ${path}`}>
+    <Panel className="pkg-head" aria-label={path ? `Folder ${path}` : `Files in ${repo}`}>
       <div className="folder-head">
-        <h1 className="pkg-head__title">{name}/</h1>
+        <h1 className="pkg-head__title">{path ? `${name}/` : name}</h1>
         <p className="pkg-head__meta">
-          <span className="facts__mono">{path}</span> in {repo}
+          {path ? (
+            <>
+              <span className="facts__mono">{path}</span> in {repo}
+            </>
+          ) : (
+            'Every file the repository stores, as clients address it.'
+          )}
+          {onUp && (
+            <>
+              {' · '}
+              <button type="button" className="link-button link-strong" onClick={onUp}>
+                Up one folder
+              </button>
+            </>
+          )}
         </p>
       </div>
       <div className="pkg-table">
         <DataTable
-          caption={`Contents of ${path}`}
+          caption={path ? `Contents of ${path}` : `Files in ${repo}`}
           columns={columns}
           rows={items}
           rowKey={(e) => e.path}
-          busy={q.isFetching}
+          busy={pages.some((p) => p.isFetching)}
           minWidth={560}
           empty={q.isPending ? 'Loading…' : 'This folder is empty.'}
         />
-        {q.data?.next_cursor && <p className="meta pkg-more">Showing the first {items.length} entries; expand the folder in the tree to page through all of them.</p>}
+        {last.data?.next_cursor && (
+          <div className="pkg-more">
+            <button type="button" className="button button--secondary button--sm" onClick={() => setMore((m) => [...m, last.data!.next_cursor!])}>
+              Load more
+            </button>
+          </div>
+        )}
       </div>
     </Panel>
   );

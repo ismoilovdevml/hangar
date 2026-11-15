@@ -286,6 +286,10 @@ paths:
       tags: [auth]
       operationId: listClientEndpoints
       summary: Endpoints the current user should configure in their clients, most-used format first
+      description: >-
+        One repository per format among the online repositories the caller
+        may read: a group when there is one, else a proxy, else a hosted
+        repository.
       parameters:
         - $ref: "#/components/parameters/Limit"
       responses:
@@ -964,6 +968,16 @@ paths:
           in: query
           description: Folder in the browse tree, e.g. "@acme/" or "com/acme/ledger-core/"; empty for the root
           schema: { type: string }
+        - name: view
+          in: query
+          description: >-
+            `files` (default): every folder and file. `packages`: what
+            clients consume; folders down to packages, without files,
+            without folders that hold no package, and without the folders a
+            package keeps its versions and files in (nested packages, such
+            as a Go module's /v2, stay). apt and rpm list one package entry
+            per name at the root. Raw repositories show their files.
+          schema: { type: string, enum: [files, packages], default: files }
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
       responses:
@@ -1312,6 +1326,8 @@ paths:
         `asset.delete` (refusals with outcome "denied"). The blob reference
         is released, so a blob no other asset uses becomes eligible for
         compaction. Deleting the last file of a version deletes the version.
+        Docker files (layers, manifests) are refused with 400: they are
+        deleted with their version.
       responses:
         "204": { description: Deleted }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -3370,13 +3386,20 @@ components:
         expiry_warning: { $ref: "#/components/schemas/Duration" }
     ClientEndpoint:
       type: object
-      required: [format, endpoint, repository]
+      required: [format, endpoint, repository, type, publishes, anonymous_read]
       properties:
         format: { $ref: "#/components/schemas/Format" }
         endpoint:
           type: string
           description: Registry host for docker, base URL for everything else (built from server.base_url)
         repository: { type: string }
+        type: { $ref: "#/components/schemas/RepositoryType" }
+        publishes:
+          type: boolean
+          description: Clients can upload through it (a hosted repository, or a group with a write member)
+        anonymous_read:
+          type: boolean
+          description: Reading needs no credentials
     ClientEndpointPage:
       type: object
       required: [items]
@@ -4427,7 +4450,11 @@ components:
         last_downloaded_at: { type: [string, "null"], format: date-time }
         size_bytes:
           $ref: "#/components/schemas/Bytes"
-          description: Content size; reported by the versions listing
+          description: >-
+            Content size; reported by the versions listing. Docker: the
+            compressed image (config plus layers, from the manifest; for a
+            multi-platform index, linux/amd64 or its first platform), absent
+            when no platform manifest of the index is stored.
     PublishedComponentPage:
       type: object
       required: [items]
@@ -4442,7 +4469,9 @@ components:
         - type: object
           required: [size_bytes, checksums, install_command, signed, quarantined]
           properties:
-            size_bytes: { $ref: "#/components/schemas/Bytes" }
+            size_bytes:
+              $ref: "#/components/schemas/Bytes"
+              description: Content size; docker the compressed image, as in the versions listing
             digest:
               type: string
               description: Primary digest (OCI manifest digest or main file sha256)
@@ -4469,6 +4498,46 @@ components:
             attributes:
               type: object
               additionalProperties: true
+            image: { $ref: "#/components/schemas/ContainerImage" }
+    ContainerImage:
+      type: object
+      description: >-
+        Docker versions whose manifests are stored: what the manifest (and,
+        for a multi-platform index, its platform manifests) says clients pull.
+      required: [media_type, size_bytes, layers]
+      properties:
+        media_type: { type: string }
+        size_bytes:
+          type: [integer, "null"]
+          format: int64
+          description: Config plus layers, compressed; null when the platform manifest is not stored
+        platform:
+          type: string
+          description: Index only; the platform layers and size_bytes describe (linux/amd64, else the first)
+        config: { $ref: "#/components/schemas/ContainerBlob" }
+        layers:
+          type: array
+          items: { $ref: "#/components/schemas/ContainerBlob" }
+        platforms:
+          type: array
+          description: Index only; attestation manifests are left out
+          items:
+            type: object
+            required: [platform, digest, size_bytes]
+            properties:
+              platform: { type: string, examples: [linux/arm64/v8] }
+              digest: { type: string }
+              size_bytes:
+                type: [integer, "null"]
+                format: int64
+                description: null when that platform's manifest is not stored
+    ContainerBlob:
+      type: object
+      required: [digest, media_type, size_bytes]
+      properties:
+        digest: { type: string }
+        media_type: { type: string }
+        size_bytes: { $ref: "#/components/schemas/Bytes" }
     Asset:
       type: object
       required: [id, path, kind, blob_digest, content_type, size_bytes, created_at]

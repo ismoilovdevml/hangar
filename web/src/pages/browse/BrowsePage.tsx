@@ -1,6 +1,7 @@
 import { useId, useRef, useState } from 'react';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
-import { useComponentLookup } from '../../api/catalog';
+import { flatItems, useComponentAssets, useComponentLookup } from '../../api/catalog';
+import type { BrowseEntry, PublishedComponent } from '../../api/types';
 import { ErrorNote } from '../../components/ErrorNote';
 import { IconSearch } from '../../components/icons';
 import { IconChevronRight } from '../../components/opsIcons';
@@ -11,7 +12,7 @@ import { BrowseTree, type TreeSelection } from './BrowseTree';
 import { FolderDetail } from './FolderDetail';
 import { PackageDetail } from './PackageDetail';
 import { RepositorySummary } from './RepositorySummary';
-import { entrySearch, parentPath } from './treeModel';
+import { entrySearch, parentPath, versionSearch } from './treeModel';
 import '../../styles/catalog.css';
 import './browse.css';
 
@@ -34,7 +35,7 @@ const SINGLE_COLUMN = '(max-width: 1000px)';
 export function BrowsePage() {
   const search = route.useSearch();
   const navigate = useNavigate();
-  const { repo, name, path } = search;
+  const { repo, name, path, files } = search;
   const treeId = useId();
   const mainRef = useRef<HTMLDivElement>(null);
   const [treeHidden, setTreeHidden] = useState(readTreeHidden);
@@ -49,13 +50,26 @@ export function BrowsePage() {
   };
 
   const onSelect = (s: TreeSelection) => {
-    void navigate({ to: '/browse', search: s.kind === 'repo' ? { repo: s.repo.name } : entrySearch(s.repo, s.entry) });
+    void navigate({
+      to: '/browse',
+      search: s.kind === 'repo' ? { repo: s.repo.name } : s.kind === 'version' ? versionSearch(s.repo, s.entry, s.version) : entrySearch(s.repo, s.entry),
+    });
     if (window.matchMedia?.(SINGLE_COLUMN).matches) mainRef.current?.scrollIntoView({ block: 'start' });
   };
   const toFolder = (p: string) => void navigate({ to: '/browse', search: { repo, path: p || undefined }, replace: true });
+  // The Files view walks the stored files: folders of any kind open as folders.
+  const toFiles = (p: string, asset?: string, replace = false) => void navigate({ to: '/browse', search: { repo, files: p || '/', asset }, replace });
+  const openFile = (e: BrowseEntry) => (e.kind === 'asset' ? toFiles(e.path, e.asset?.id) : toFiles(e.path));
 
   let pane;
-  if (!repo) {
+  if (repo && files !== undefined) {
+    const folder = files === '/' ? '' : files;
+    pane = search.asset ? (
+      <AssetDetail key={search.asset} id={search.asset} treeRepo={repo} onDeleted={() => toFiles(parentPath(folder), undefined, true)} />
+    ) : (
+      <FolderDetail key={folder} repo={repo} path={folder} onOpen={openFile} onUp={folder ? () => toFiles(parentPath(folder)) : undefined} />
+    );
+  } else if (!repo) {
     pane = (
       <>
         <PageHeader title="Packages" description="Browse every repository, package, version and file." />
@@ -73,9 +87,9 @@ export function BrowsePage() {
   } else if (search.asset) {
     pane = <AssetDetail key={search.asset} id={search.asset} treeRepo={repo} onDeleted={() => toFolder(parentPath(path ?? ''))} />;
   } else if (name) {
-    pane = <ResolvedPackage repo={search.member ?? repo} ns={search.ns} name={name} version={search.version} />;
+    pane = <ResolvedPackage repo={search.member ?? repo} ns={search.ns} name={name} version={search.version} onRawDeleted={() => toFolder(parentPath(path ?? ''))} />;
   } else if (path && path.endsWith('/')) {
-    pane = <FolderDetail repo={repo} path={path} onOpen={(e) => void navigate({ to: '/browse', search: entrySearch(repo, e) })} />;
+    pane = <FolderDetail key={path} repo={repo} path={path} onOpen={(e) => void navigate({ to: '/browse', search: entrySearch(repo, e) })} />;
   } else {
     pane = <RepositorySummary repo={repo} />;
   }
@@ -95,7 +109,15 @@ export function BrowsePage() {
           <IconChevronRight size={16} />
         </button>
         <div className="browse__tree" id={treeId} hidden={treeHidden}>
-          <BrowseTree repo={repo} path={path} onSelect={onSelect} />
+          {/* The Files view is not a tree node: the tree marks the repository. */}
+          <BrowseTree
+            repo={repo}
+            path={files !== undefined ? '' : path}
+            ns={files !== undefined ? undefined : search.ns}
+            name={files !== undefined ? undefined : name}
+            version={files !== undefined ? undefined : search.version}
+            onSelect={onSelect}
+          />
         </div>
       </div>
       <div className="browse__main" ref={mainRef}>
@@ -106,7 +128,7 @@ export function BrowsePage() {
 }
 
 /** Finds the component for repo / ns / name / version, then shows it. */
-function ResolvedPackage({ repo, ns, name, version }: { repo: string; ns?: string; name: string; version?: string }) {
+function ResolvedPackage({ repo, ns, name, version, onRawDeleted }: { repo: string; ns?: string; name: string; version?: string; onRawDeleted: () => void }) {
   const search = route.useSearch();
   const lookup = useComponentLookup(repo, name);
   if (lookup.isError) {
@@ -147,6 +169,28 @@ function ResolvedPackage({ repo, ns, name, version }: { repo: string; ns?: strin
       </Panel>
     );
   }
+  // A raw "package" is one stored file: show it as the file it is.
+  if (current.format === 'raw') return <RawFile c={current} treeRepo={search.repo ?? repo} onDeleted={onRawDeleted} />;
   // Keyed by version: a scan result or a pending delete belongs to one version.
   return <PackageDetail key={current.id} id={current.id} versions={versions} />;
+}
+
+function RawFile({ c, treeRepo, onDeleted }: { c: PublishedComponent; treeRepo: string; onDeleted: () => void }) {
+  const assets = useComponentAssets(c.id);
+  if (assets.isError) {
+    return (
+      <Panel>
+        <ErrorNote what="the file" error={assets.error} onRetry={() => void assets.refetch()} />
+      </Panel>
+    );
+  }
+  const file = flatItems(assets.data)[0];
+  if (!file) {
+    return (
+      <Panel aria-busy={assets.isPending || undefined} className="browse-empty" role="status">
+        <p>{assets.isPending ? 'Loading…' : 'This file no longer exists.'}</p>
+      </Panel>
+    );
+  }
+  return <AssetDetail key={file.id} id={file.id} treeRepo={treeRepo} onDeleted={onDeleted} />;
 }

@@ -117,7 +117,22 @@ function toDetail(s: Seed, now: number): ComponentDetail {
     install_command: installCommand(s),
     signed: false,
     quarantined: false,
+    ...(s.format === 'docker' ? { image: imageOf(s) } : {}),
     ...s.extra,
+  };
+}
+
+/** What a docker version's manifest says: a config and three layers adding up to its size. */
+function imageOf(s: Seed): ComponentDetail['image'] {
+  const config = 7_400;
+  const parts = [0.52, 0.38];
+  const layers = parts.map((f) => Math.round((s.size - config) * f));
+  layers.push(s.size - config - layers.reduce((a, b) => a + b, 0));
+  return {
+    media_type: 'application/vnd.oci.image.manifest.v1+json',
+    size_bytes: s.size,
+    config: { digest: `sha256:${hex(`${s.id}config`)}`, media_type: 'application/vnd.oci.image.config.v1+json', size_bytes: config },
+    layers: layers.map((n, i) => ({ digest: `sha256:${hex(`${s.id}layer-${i + 1}`)}`, media_type: 'application/vnd.oci.image.layer.v1.tar+gzip', size_bytes: n })),
   };
 }
 
@@ -353,9 +368,7 @@ function storageDir(format: string, tree: string): string {
 
 function folderKind(format: string, tree: string, c: ComponentDetail | undefined): BrowseEntry['kind'] {
   if (!c) return 'folder';
-  const full = c.namespace ? `${c.namespace}/${c.name}` : c.name;
-  const pkg =
-    format === 'maven' ? `${(c.namespace ?? '').replace(/\./g, '/')}/${c.name}/` : format === 'npm' || format === 'docker' || format === 'nuget' || format === 'pypi' ? `${full}/` : '';
+  const pkg = packageFolder(format, c);
   if (pkg && tree.toLowerCase() === pkg.toLowerCase()) return 'package';
   if ((format === 'maven' || format === 'nuget') && tree.toLowerCase() === `${pkg}${c.version}/`.toLowerCase()) return 'version';
   return 'folder';
@@ -406,14 +419,41 @@ function browse(repos: readonly Repository[], name: string, tree: string, params
       byKey.set(key, { entry, first: folder ? a.component : undefined });
     }
   }
+  const packagesView = params.get('view') === 'packages' && repo.format !== 'raw';
+  if (packagesView && (repo.format === 'apt' || repo.format === 'rpm')) {
+    // No package folders in pool/ paths: one entry per package name at the root.
+    const names = new Map<string, BrowseEntry>();
+    if (!tree) {
+      for (const c of [...state.components].sort(byNewest)) {
+        if (!sources.includes(c.repository) || names.has(c.name)) continue;
+        names.set(c.name, { name: c.name, path: `${c.name}/`, kind: 'package', repository: c.repository, component: { id: c.id, namespace: '', name: c.name, version: c.version } });
+      }
+    }
+    const rows = [...names.values()].sort((a, b) => (a.name < b.name ? -1 : 1));
+    return { repository: repo.name, format: repo.format, path: tree, ...page(rows, params, 50) };
+  }
   const rows = [...byKey.entries()]
     .sort(([a], [b]) => (a < b ? -1 : 1))
+    // The packages view: no files, no folder without a package, nothing inside a package.
+    .filter(([, { entry, first }]) => !packagesView || (entry.kind === 'folder' && first && !insidePackage(repo.format, entry.path, first)))
     .map(([, { entry, first }]) => {
       if (entry.kind !== 'folder') return entry;
       const kind = folderKind(repo.format, entry.path, first);
       return kind === 'folder' || !first ? entry : { ...entry, kind, component: { id: first.id, namespace: first.namespace ?? '', name: first.name, version: first.version } };
     });
   return { repository: repo.name, format: repo.format, path: tree, ...page(rows, params, 50) };
+}
+
+/** The tree folder of c's package ("" when the format has none). */
+function packageFolder(format: string, c: ComponentDetail): string {
+  const full = c.namespace ? `${c.namespace}/${c.name}` : c.name;
+  return format === 'maven' ? `${(c.namespace ?? '').replace(/\./g, '/')}/${c.name}/` : format === 'npm' || format === 'docker' || format === 'nuget' || format === 'pypi' ? `${full}/` : '';
+}
+
+/** Whether a tree folder lies inside c's own package folder (its versions and files). */
+function insidePackage(format: string, tree: string, c: ComponentDetail): boolean {
+  const pkg = packageFolder(format, c).toLowerCase();
+  return !!pkg && tree.length > pkg.length && tree.toLowerCase().startsWith(pkg);
 }
 
 function findAsset(id: string, readable: string[]): StoredAsset | undefined {

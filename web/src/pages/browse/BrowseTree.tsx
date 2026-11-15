@@ -1,13 +1,27 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Link } from '@tanstack/react-router';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { browseFolderQuery, browseKeys } from '../../api/browse';
-import { useAllRepositories } from '../../api/catalog';
-import type { BrowseEntry, BrowsePage, Repository } from '../../api/types';
+import { catalogKeys, componentLookupQuery, useAllRepositories } from '../../api/catalog';
+import type { BrowseEntry, BrowsePage, PublishedComponent, Repository } from '../../api/types';
 import { ErrorNote } from '../../components/ErrorNote';
 import { formatBytes } from '../../lib/format';
 import { TYPE_META } from '../../lib/repositories';
 import { FormatIcon } from '../../components/FormatIcon';
-import { ancestorKeys, flattenTree, isFocusable, move, nodeKey, rowId, splitKey, type FolderState, type Row } from './treeModel';
+import {
+  ancestorKeys,
+  flattenTree,
+  isFocusable,
+  move,
+  nodeKey,
+  packageTreePath,
+  rowId,
+  splitKey,
+  versionKey,
+  type FolderState,
+  type Row,
+  type VersionState,
+} from './treeModel';
 
 /** Row height in pixels; rows are fixed-height so the list can be virtualised. */
 export const ROW_HEIGHT = 34;
@@ -16,27 +30,47 @@ const OVERSCAN = 12;
 /** Viewport height assumed before the element is measured (and in test DOMs). */
 const FALLBACK_VIEWPORT = 640;
 
-export type TreeSelection = { kind: 'repo'; repo: Repository } | { kind: 'entry'; repo: string; entry: BrowseEntry };
+export type TreeSelection =
+  | { kind: 'repo'; repo: Repository }
+  | { kind: 'entry'; repo: string; entry: BrowseEntry }
+  | { kind: 'version'; repo: string; entry: BrowseEntry; version: PublishedComponent };
 
 interface BrowseTreeProps {
   /** Selected repository and node path, from the URL. */
   repo?: string;
   path?: string;
+  /** The package shown (a link may name it without a tree path), and its version. */
+  ns?: string;
+  name?: string;
+  version?: string;
   onSelect: (s: TreeSelection) => void;
 }
 
+/** Versions of one package, merged over the members that hold it (first member wins), newest first. */
+function mergeVersions(lists: (PublishedComponent[] | undefined)[], ns: string): PublishedComponent[] {
+  const seen = new Map<string, PublishedComponent>();
+  for (const list of lists) for (const c of list ?? []) if ((c.namespace ?? '') === ns && !seen.has(c.version)) seen.set(c.version, c);
+  return [...seen.values()].sort((a, b) => (a.published_at < b.published_at ? 1 : a.published_at > b.published_at ? -1 : 0));
+}
+
 /**
- * Left pane: repositories at the root, each a lazily loaded path hierarchy.
- * An ARIA tree with one focus stop (aria-activedescendant), so that only the
- * rows in view need to exist in the DOM.
+ * Left pane: repositories at the root, each a lazily loaded tree of what
+ * clients consume: folders down to packages, and each package's versions.
+ * Stored files are on the repository's Files view (raw repositories, whose
+ * files are their content, show them here). An ARIA tree with one focus
+ * stop (aria-activedescendant), so that only the rows in view need to exist
+ * in the DOM.
  */
-export function BrowseTree({ repo, path, onSelect }: BrowseTreeProps) {
+export function BrowseTree({ repo, path, ns, name, version, onSelect }: BrowseTreeProps) {
   const qc = useQueryClient();
   const repos = useAllRepositories();
   const treeId = useId();
   const filterId = useId();
   const [filter, setFilter] = useState('');
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(repo ? ancestorKeys(repo, path) : []));
+  // A link to a package names it, not its folder: find the folder from the format's layout.
+  const format = repos.data?.find((r) => r.name === repo)?.format;
+  const treePath = path ?? (name && format ? packageTreePath(format, ns, name) : undefined);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(repo ? ancestorKeys(repo, treePath) : []));
   /** Pages after the first that were asked for, per container key. */
   const [more, setMore] = useState<Record<string, string[]>>({});
   const [active, setActive] = useState<string | null>(null);
@@ -44,15 +78,16 @@ export function BrowseTree({ repo, path, onSelect }: BrowseTreeProps) {
   const [scrollTop, setScrollTop] = useState(0);
   const [viewport, setViewport] = useState(FALLBACK_VIEWPORT);
 
-  const selectedKey = repo ? nodeKey(repo, path) : null;
+  const pkgKey = repo ? nodeKey(repo, treePath) : null;
+  const selectedKey = pkgKey && version && treePath?.endsWith('/') ? versionKey(pkgKey, version) : pkgKey;
 
   // A selection made elsewhere (a link, the back button) opens its folders
-  // and takes the keyboard focus.
+  // (a package: its versions) and takes the keyboard focus.
   const [followed, setFollowed] = useState(selectedKey);
   if (followed !== selectedKey) {
     setFollowed(selectedKey);
     if (repo) {
-      const need = ancestorKeys(repo, path).filter((k) => !expanded.has(k));
+      const need = ancestorKeys(repo, treePath).filter((k) => !expanded.has(k));
       if (need.length) setExpanded(new Set([...expanded, ...need]));
     }
     if (selectedKey) setActive(selectedKey);
@@ -68,7 +103,7 @@ export function BrowseTree({ repo, path, onSelect }: BrowseTreeProps) {
       }),
     [expanded, more],
   );
-  const results = useQueries({ queries: requests.map((q) => browseFolderQuery(q.repo, q.path, q.cursor)) });
+  const results = useQueries({ queries: requests.map((q) => browseFolderQuery(q.repo, q.path, q.cursor, 'packages')) });
 
   const folders = useMemo(() => {
     const map = new Map<string, FolderState>();
@@ -84,15 +119,48 @@ export function BrowseTree({ repo, path, onSelect }: BrowseTreeProps) {
     return map;
   }, [requests, results]);
 
+  // Expanded packages list their versions, from every member that holds them.
+  const packages = useMemo(() => {
+    const out: { key: string; entry: BrowseEntry; holders: string[] }[] = [];
+    for (const [parent, st] of folders) {
+      const r = splitKey(parent).repo;
+      for (const e of st.pages.flatMap((p) => p.items)) {
+        const key = nodeKey(r, e.path);
+        if (e.kind === 'package' && e.component && expanded.has(key)) out.push({ key, entry: e, holders: e.repositories ?? [e.repository] });
+      }
+    }
+    return out;
+  }, [folders, expanded]);
+  const lookups = packages.flatMap((p) => p.holders.map((h) => ({ key: p.key, q: componentLookupQuery(h, p.entry.component!.name) })));
+  const lookupResults = useQueries({ queries: lookups.map((l) => l.q) });
+  const versions = useMemo(() => {
+    const map = new Map<string, VersionState>();
+    for (const p of packages) {
+      const mine = lookups.map((l, i) => (l.key === p.key ? lookupResults[i]! : null)).filter((x) => x !== null);
+      map.set(p.key, {
+        items: mergeVersions(
+          mine.map((x) => x.data?.items),
+          p.entry.component?.namespace ?? '',
+        ),
+        loading: mine.some((x) => x.isPending && !x.isError),
+        error: mine.some((x) => x.isError),
+      });
+    }
+    return map;
+    // lookups is derived from packages; the results array identity changes with every fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [packages, lookupResults]);
+
   const rows = useMemo(
     () =>
       flattenTree({
         repos: sorted,
         expanded,
         folder: (r, p) => folders.get(nodeKey(r, p)),
+        versions: (k) => versions.get(k),
         filter: filter.trim().toLowerCase(),
       }),
-    [sorted, expanded, folders, filter],
+    [sorted, expanded, folders, versions, filter],
   );
   const indexOf = useCallback((key: string | null) => (key ? rows.findIndex((r) => r.key === key) : -1), [rows]);
 
@@ -149,7 +217,10 @@ export function BrowseTree({ repo, path, onSelect }: BrowseTreeProps) {
     const cursor = st?.pages[st.pages.length - 1]?.next_cursor;
     if (cursor) setMore((m) => ({ ...m, [key]: [...(m[key] ?? []), cursor] }));
   };
-  const retry = (r: string, p: string) => void qc.invalidateQueries({ queryKey: [...browseKeys.all, 'folder', r, p] });
+  const retry = (r: string, p: string) => {
+    void qc.invalidateQueries({ queryKey: [...browseKeys.all, 'folder', r, p] });
+    void qc.invalidateQueries({ queryKey: [...catalogKeys.components, 'lookup'] });
+  };
 
   const activate = (row: Row) => {
     setActive(row.key);
@@ -161,6 +232,9 @@ export function BrowseTree({ repo, path, onSelect }: BrowseTreeProps) {
       case 'entry':
         if (row.container && !row.expanded) toggle(row.key, true);
         onSelect({ kind: 'entry', repo: row.repo, entry: row.entry });
+        break;
+      case 'version':
+        onSelect({ kind: 'version', repo: row.repo, entry: row.entry, version: row.version });
         break;
       case 'more':
         loadMore(row.repo, row.path);
@@ -252,7 +326,14 @@ export function BrowseTree({ repo, path, onSelect }: BrowseTreeProps) {
         </p>
       )}
       {repos.data && sorted.length === 0 && <p className="meta tree-status">No repositories you can read yet.</p>}
-      {repos.data && sorted.length > 0 && filter && rows.length === 0 && <p className="meta tree-status">Nothing loaded matches “{filter}”.</p>}
+      {repos.data && sorted.length > 0 && filter.trim() && (
+        <p className="meta tree-status">
+          {rows.length === 0 && `Nothing loaded matches “${filter.trim()}”. `}
+          <Link to="/search" search={{ q: filter.trim() }} className="link-strong">
+            Search all packages for “{filter.trim()}”
+          </Link>
+        </p>
+      )}
 
       {repos.data && rows.length > 0 && (
         <div
@@ -302,10 +383,32 @@ function TreeRow({ row, id, top, active, selected, onActivate, onToggle }: TreeR
   const className = ['tree-row', active ? 'is-active' : '', selected ? 'is-selected' : ''].filter(Boolean).join(' ');
   const style = { top, height: ROW_HEIGHT, ...indent };
 
+  if (row.type === 'version') {
+    const v = row.version.version;
+    return (
+      <div
+        id={id}
+        role="treeitem"
+        aria-level={row.level}
+        aria-setsize={row.setSize}
+        aria-posinset={row.posInSet}
+        aria-selected={selected}
+        className={className}
+        style={style}
+        onClick={onActivate}
+      >
+        <span className="tree-row__chevron" aria-hidden="true" />
+        <EntryIcon kind="version" />
+        <TreeName name={v} />
+        {row.newest && <span className="tree-row__meta">newest</span>}
+      </div>
+    );
+  }
+
   if (row.type !== 'repo' && row.type !== 'entry') {
     const label: Record<typeof row.type, ReactNode> = {
       loading: 'Loading…',
-      empty: row.path ? 'Empty folder' : 'Nothing stored here yet',
+      empty: row.pkg ? 'No versions' : row.path ? 'Empty folder' : 'Nothing stored here yet',
       more: 'Load more',
       retry: 'Could not load. Retry',
     };
@@ -360,15 +463,33 @@ function TreeRow({ row, id, top, active, selected, onActivate, onToggle }: TreeR
       ) : (
         <EntryIcon kind={row.entry.kind} />
       )}
-      <span className="tree-row__name" title={name}>
-        {name}
-      </span>
+      <TreeName name={name} />
       {row.type === 'repo' ? (
         <span className={`tree-row__badge tone-${TYPE_META[row.repo.type].tone}`}>{TYPE_META[row.repo.type].label}</span>
       ) : (
         <EntryMeta entry={row.entry} />
       )}
     </div>
+  );
+}
+
+/** Characters kept at the end of a cut name: versions and extensions tell siblings apart. */
+const TAIL = 12;
+
+/** A row's name, cut in the middle when it does not fit, so its end stays readable. */
+function TreeName({ name }: { name: string }) {
+  if (name.length <= TAIL + 8) {
+    return (
+      <span className="tree-row__name" title={name}>
+        <span className="tree-row__head">{name}</span>
+      </span>
+    );
+  }
+  return (
+    <span className="tree-row__name" title={name}>
+      <span className="tree-row__head">{name.slice(0, -TAIL)}</span>
+      <span className="tree-row__tail">{name.slice(-TAIL)}</span>
+    </span>
   );
 }
 

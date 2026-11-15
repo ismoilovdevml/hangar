@@ -51,6 +51,8 @@ export function AssetDetail({ id, treeRepo, onDeleted }: AssetDetailProps) {
   }
 
   const canDelete = perms.can('delete', 'repo', a.repository);
+  // Layers and manifests are shared by tags: docker content is deleted by version, never one file.
+  const docker = a.format === 'docker';
   const name = baseName(a.path);
   const sha256 = a.checksums.sha256 ?? a.blob_digest.replace(/^sha256:/, '');
   const otherSums = Object.entries(a.checksums)
@@ -78,20 +80,28 @@ export function AssetDetail({ id, treeRepo, onDeleted }: AssetDetailProps) {
                 <IconDownload size={16} /> Download
               </a>
             )}
-            <button
-              type="button"
-              className="button button--danger-outline"
-              disabled={!canDelete}
-              title={canDelete ? undefined : 'Needs delete rights on this repository'}
-              onClick={() => {
-                remove.reset();
-                setConfirm(true);
-              }}
-            >
-              Delete file
-            </button>
+            {!docker && (
+              <button
+                type="button"
+                className="button button--danger-outline"
+                disabled={!canDelete}
+                title={canDelete ? undefined : 'Needs delete rights on this repository'}
+                onClick={() => {
+                  remove.reset();
+                  setConfirm(true);
+                }}
+              >
+                Delete file
+              </button>
+            )}
           </div>
         </div>
+        {docker && (
+          <p className="meta">
+            Layers and manifests are shared by the image&apos;s tags, so they are not deleted one by one: delete the version (tag), and layers no other version
+            uses are released for compaction.
+          </p>
+        )}
 
         <dl className="facts">
           <Fact label="Repository">

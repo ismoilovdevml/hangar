@@ -10,6 +10,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/api/apitest"
 	"github.com/ismoilovdevml/hangar/internal/api/catalog"
+	"github.com/ismoilovdevml/hangar/internal/api/pkginfo"
 	"github.com/ismoilovdevml/hangar/internal/audit"
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/service/component"
@@ -213,7 +214,7 @@ func TestBrowseWithPostgres(t *testing.T) {
 
 	check := func(what string, got browseResult, want ...string) {
 		t.Helper()
-		if s := summary(got.Items); !reflect.DeepEqual(s, want) {
+		if s := summary(got.Items); (len(s) > 0 || len(want) > 0) && !reflect.DeepEqual(s, want) {
 			t.Errorf("%s = %v, want %v", what, s, want)
 		}
 	}
@@ -284,6 +285,36 @@ func TestBrowseWithPostgres(t *testing.T) {
 	if want := []string{"f1:asset", "f2:asset", "f3:asset", "sub:folder", "zz:folder"}; !reflect.DeepEqual(all, want) {
 		t.Errorf("raw pages = %v, want %v", all, want)
 	}
+	// The packages view: folders down to packages, never files or a package's own folders.
+	pv := func(repo, path string) browseResult { return e.browse("admin", repo, path, "view", "packages") }
+	check("packages npm root", pv("npm-hosted", ""), "@acme:folder", "lodash:package")
+	check("packages npm package", pv("npm-hosted", "@acme/ui-kit/"))
+	check("packages maven artifact", pv("maven-releases", "com/acme/ledger-core/"))
+	check("packages docker image", pv("docker-hosted", "team/app/"))
+	check("packages go module", pv("go-hosted", "github.com/Acme/x/"), "v2:package")
+	check("packages nuget id", pv("nuget-hosted", "newtonsoft.json/"))
+	check("packages raw root", pv("raw-hosted", ""), "dir:folder", "readme.txt:asset")
+	check("packages group root", pv("npm-all", ""), "@acme:folder", "lodash:package", "react:package")
+	f.expect("admin", "GET", "/api/v1/repositories/raw-hosted/browse?view=tree", nil, 400)
+
+	// apt and rpm keep packages in pool/ paths: their packages view lists names.
+	deb := e.repo("apt-hosted", "apt", core.RepoHosted)
+	e.file(deb, e.s.Component(deb, "", "curl", "8.0", e.now.Add(-time.Hour), 0, "ci"), "pool/main/c/curl/curl_8.0_amd64.deb")
+	e.file(deb, e.s.Component(deb, "", "curl", "8.1", e.now, 0, "ci"), "pool/main/c/curl/curl_8.1_amd64.deb")
+	e.file(deb, e.s.Component(deb, "", "zlib", "1.3", e.now, 0, "ci"), "pool/main/z/zlib/zlib_1.3_amd64.deb")
+	debRoot := pv("apt-hosted", "")
+	check("packages apt root", debRoot, "curl:package", "zlib:package")
+	if c := debRoot.Items[0]; c.Path != "curl/" || c.Component == nil || c.Component.Version != "8.1" {
+		t.Errorf("apt curl = %+v", c)
+	}
+	check("packages apt deeper", pv("apt-hosted", "curl/"))
+	check("files apt root", e.browse("admin", "apt-hosted", ""), "pool:folder")
+	page1 := e.browse("admin", "apt-hosted", "", "view", "packages", "limit", "1")
+	if check("apt page 1", page1, "curl:package"); page1.NextCursor == nil {
+		t.Fatal("apt page 1 has no cursor")
+	}
+	check("apt page 2", e.browse("admin", "apt-hosted", "", "view", "packages", "limit", "1", "cursor", *page1.NextCursor), "zlib:package")
+
 	f.expect("admin", "GET", "/api/v1/repositories/raw-hosted/browse?cursor=bogus", nil, 400)
 	f.expect("admin", "GET", "/api/v1/repositories/raw-hosted/browse?path=a//b", nil, 400)
 	f.expect("admin", "GET", "/api/v1/repositories/nope/browse", nil, 404)
@@ -335,6 +366,8 @@ func TestAssetEndpointsWithPostgres(t *testing.T) {
 	tgz := e.file(npm, ui, "@acme/ui-kit/-/ui-kit-5.3.1.tgz")
 	meta := e.file(npm, ui, "@acme/ui-kit/-/meta/5.3.1.json")
 	cached := e.file(proxy, "", "lodash/-/lodash-4.17.21.tgz")
+	docker := e.repo("docker-hosted", "docker", core.RepoHosted)
+	dockerTag := e.file(docker, e.s.Component(docker, "team", "app", "1.0", e.now, 0, "ci"), "team/app/manifests/1.0")
 
 	// Detail: coordinates, checksums, blob dates, download link.
 	var d assetDetailJSON
@@ -373,6 +406,10 @@ func TestAssetEndpointsWithPostgres(t *testing.T) {
 		t.Errorf("blob after delete: refs %d, soft-deleted %v", refs, soft)
 	}
 
+	// Docker layers and manifests are never deleted one file at a time.
+	f.expect("admin", "DELETE", "/api/v1/assets/"+dockerTag, nil, 400)
+	f.expect("admin", "GET", "/api/v1/assets/"+dockerTag, nil, 200)
+
 	// Deleting the last file of a version deletes the version too.
 	f.expect("alice", "DELETE", "/api/v1/assets/"+meta, nil, 204)
 	f.expect("alice", "GET", "/api/v1/components/"+ui, nil, 404)
@@ -407,4 +444,44 @@ func TestVersionsReportSizes(t *testing.T) {
 		p.Items[1].SizeBytes == nil || *p.Items[1].SizeBytes != int64(len("left-pad/-/left-pad-1.0.0.tgz")) {
 		t.Errorf("versions = %+v", p.Items)
 	}
+
+	// Docker versions are sized by their image, from the manifest; an index
+	// none of whose platforms is stored has no size.
+	docker := e.repo("docker-hosted", "docker", core.RepoHosted)
+	sized := e.s.Component(docker, "team", "app", "1.0", e.now, 0, "ci")
+	unsized := e.s.Component(docker, "team", "app", "1.1", e.now.Add(-time.Hour), 0, "ci")
+	e.file(docker, sized, "team/app/manifests/1.0")
+	for id, d := range map[string]string{sized: "sha256:sized", unsized: "sha256:unsized"} {
+		if _, err := pool.Exec(context.Background(), `UPDATE components SET attributes = jsonb_build_object('digest', $2::text) WHERE id = $1`, id, d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	size := int64(3_000_000)
+	f.api.PackageInfo = fakeContainerImages{"sha256:sized": {MediaType: "application/vnd.oci.image.manifest.v1+json", SizeBytes: &size,
+		Layers: []pkginfo.ContainerBlob{{Digest: "sha256:l1", SizeBytes: size}}}, "sha256:unsized": {MediaType: "application/vnd.oci.image.index.v1+json"}}
+	var dp page[publishedComponent]
+	_ = json.Unmarshal(f.expect("admin", "GET", "/api/v1/components/"+sized+"/versions", nil, 200), &dp)
+	if len(dp.Items) != 2 || dp.Items[0].SizeBytes == nil || *dp.Items[0].SizeBytes != size || dp.Items[1].SizeBytes != nil {
+		t.Errorf("docker versions = %+v", dp.Items)
+	}
+	var d componentDetail
+	_ = json.Unmarshal(f.expect("admin", "GET", "/api/v1/components/"+sized, nil, 200), &d)
+	if d.SizeBytes != size || d.Image == nil || len(d.Image.Layers) != 1 {
+		t.Errorf("docker detail = %+v", d)
+	}
+}
+
+// fakeContainerImages answers ContainerImage by manifest digest.
+type fakeContainerImages map[string]*pkginfo.ContainerImage
+
+func (fakeContainerImages) Info(context.Context, *core.Repository, *core.Component) (*pkginfo.Info, error) {
+	return &pkginfo.Info{}, nil
+}
+
+func (fakeContainerImages) Member(context.Context, *core.Repository, *core.Component, string, int64) ([]byte, error) {
+	return nil, core.ErrNotFound
+}
+
+func (f fakeContainerImages) ContainerImage(_ context.Context, _ *core.Repository, _, _, digest, _ string) (*pkginfo.ContainerImage, error) {
+	return f[digest], nil
 }

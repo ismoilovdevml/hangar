@@ -4,6 +4,7 @@
  */
 import {
   keepPreviousData,
+  queryOptions,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -84,16 +85,19 @@ const nextCursor = (last: { next_cursor?: string | null }): Cursor => last.next_
 /* ---------------------------------------------------------------- components */
 
 /** Every version of `name` in `repo`, newest first (all namespaces sharing the base name). */
-export function useComponentLookup(repo: string | undefined, name: string | undefined) {
-  return useQuery({
-    queryKey: catalogKeys.lookup(repo ?? '', name ?? ''),
-    enabled: !!repo && !!name,
+/** Every version named `name` in repository `repo` (any namespace), newest first. */
+export const componentLookupQuery = (repo: string, name: string) =>
+  queryOptions({
+    queryKey: catalogKeys.lookup(repo, name),
     queryFn: ({ signal }) =>
       apiFetch<PublishedComponentPage>('/components', {
         query: { repository: repo, name, sort: '-published_at', limit: 1000 },
         signal,
       }),
   });
+
+export function useComponentLookup(repo: string | undefined, name: string | undefined) {
+  return useQuery({ ...componentLookupQuery(repo ?? '', name ?? ''), enabled: !!repo && !!name });
 }
 
 export function useComponent(id: string | undefined) {
@@ -164,6 +168,43 @@ export function useDeleteComponent() {
     onSuccess: (_void, id) => {
       // Everything about the deleted component (detail, versions, files...) is gone; asking again would 404.
       qc.removeQueries({ predicate: (q) => q.queryKey[0] === 'components' && q.queryKey[2] === id });
+      void qc.invalidateQueries({ queryKey: catalogKeys.components });
+      void qc.invalidateQueries({ queryKey: catalogKeys.search });
+      void qc.invalidateQueries({ queryKey: queryKeys.repositories });
+      void qc.invalidateQueries({ queryKey: queryKeys.blobStores });
+    },
+  });
+}
+
+/** A package delete that stopped part way: `deleted` of the versions went before `cause`. */
+export class PartialDeleteError extends Error {
+  constructor(
+    readonly deleted: number,
+    readonly cause: unknown,
+  ) {
+    super(`deleted ${deleted} versions before an error`);
+  }
+}
+
+/** Deletes every version of a package, one request per version, stopping at the first failure. */
+export function useDeletePackage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      let deleted = 0;
+      for (const id of ids) {
+        try {
+          await apiFetch<void>(`/components/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        } catch (err) {
+          // Already gone counts as deleted.
+          if (!(err instanceof ApiRequestError && err.status === 404)) throw new PartialDeleteError(deleted, err);
+        }
+        deleted++;
+        qc.removeQueries({ predicate: (q) => q.queryKey[0] === 'components' && q.queryKey[2] === id });
+      }
+      return deleted;
+    },
+    onSettled: () => {
       void qc.invalidateQueries({ queryKey: catalogKeys.components });
       void qc.invalidateQueries({ queryKey: catalogKeys.search });
       void qc.invalidateQueries({ queryKey: queryKeys.repositories });
