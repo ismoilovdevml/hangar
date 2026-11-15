@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -34,13 +35,13 @@ func TestOverviewWindowTimeZone(t *testing.T) {
 
 func TestTZOffsetParam(t *testing.T) {
 	for q, want := range map[string]time.Duration{"": 0, "300": 5 * time.Hour, "-180": -3 * time.Hour, "840": 14 * time.Hour} {
-		got, err := tzOffsetParam(httptest.NewRequest("GET", "/x?tz_offset="+q, nil))
+		got, err := tzOffsetParam(httptest.NewRequest(http.MethodGet, "/x?tz_offset="+q, nil))
 		if err != nil || got != want {
 			t.Errorf("tz_offset=%q = %v %v, want %v", q, got, err, want)
 		}
 	}
 	for _, q := range []string{"abc", "841", "-841", "5.5"} {
-		if _, err := tzOffsetParam(httptest.NewRequest("GET", "/x?tz_offset="+q, nil)); err == nil {
+		if _, err := tzOffsetParam(httptest.NewRequest(http.MethodGet, "/x?tz_offset="+q, nil)); err == nil {
 			t.Errorf("tz_offset=%q accepted", q)
 		}
 	}
