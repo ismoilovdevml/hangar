@@ -4,8 +4,8 @@
  *   npm run site:screenshots -- <site-dir> [shot-name ...]
  *
  * Builds the demo (`vite build --mode demo`), serves dist-demo/ on a local
- * port, walks through the pages below in Chromium and writes 1440x900 JPEGs
- * to <site-dir>/assets/img/ui/. Shot names after the directory take only
+ * port, walks through the pages below in Chromium and writes JPEGs (1440x900
+ * unless a shot says otherwise) to <site-dir>/assets/img/ui/. Shot names after the directory take only
  * those. Run on demand after UI changes; it is not part of CI.
  */
 import { readFile } from 'node:fs/promises';
@@ -32,6 +32,8 @@ interface Shot {
   path: string;
   /** Clicks and typing after the page loaded. */
   act?: (page: Page) => Promise<void>;
+  /** Defaults to 1440x900. */
+  viewport?: { width: number; height: number };
 }
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -55,6 +57,7 @@ const scrollTo = (target: Locator) =>
 const SHOTS: Shot[] = [
   // Overview
   { name: 'overview', path: '/' },
+  { name: 'overview-phone', path: '/', viewport: { width: 390, height: 844 } },
   {
     name: 'command-palette',
     path: '/',
@@ -116,7 +119,6 @@ const SHOTS: Shot[] = [
   },
 
   // Packages and search
-  { name: 'browse', path: '/browse' },
   { name: 'browse-package', path: '/browse?repo=npm-internal&ns=%40acme&name=ui-kit&version=5.3.1' },
   { name: 'search', path: '/search?q=format%3Anpm' },
 
@@ -129,10 +131,7 @@ const SHOTS: Shot[] = [
   { name: 'access-members', path: '/access' },
   { name: 'access-add-member', path: '/access', act: (p) => button(p, 'Add member') },
   { name: 'access-member', path: '/access', act: (p) => p.getByText('Jasur Karimov', { exact: true }).first().click() },
-  { name: 'access-roles', path: '/access?tab=roles' },
   { name: 'access-new-role', path: '/access?tab=roles', act: (p) => button(p, 'New role') },
-  { name: 'access-service-accounts', path: '/access?tab=service-accounts' },
-  { name: 'access-tokens', path: '/access?tab=tokens' },
   {
     name: 'access-new-token',
     path: '/access?tab=tokens',
@@ -265,6 +264,7 @@ async function main() {
     const context = await browser.newContext({ viewport: VIEWPORT, reducedMotion: 'reduce', locale: 'en-GB', timezoneId: 'UTC' });
     for (const shot of shots) {
       const page = await context.newPage();
+      if (shot.viewport) await page.setViewportSize(shot.viewport);
       const problems: string[] = [];
       page.on('pageerror', (e) => problems.push(e.message));
       page.on('console', (m) => m.type() === 'error' && problems.push(m.text()));
