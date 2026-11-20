@@ -34,7 +34,7 @@ import {
   type Toggle,
 } from '../../lib/cleanup';
 import { scheduleToCron, describeCron } from '../../lib/cron';
-import { formatBytes } from '../../lib/format';
+import { formatBytes, formatCount } from '../../lib/format';
 import { Time } from '../../components/Time';
 import { ALL_FORMATS, isFormat } from '../../lib/repositories';
 import { RunHistory } from './RunHistory';
@@ -521,7 +521,7 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
             />
             {preview.data.component_count > preview.data.sample.length && (
               <p className="meta preview-panel__foot">
-                Showing {preview.data.sample.length} of {new Intl.NumberFormat('en-US').format(preview.data.component_count)}. Export CSV for the full list.
+                Showing {preview.data.sample.length} of {formatCount(preview.data.component_count)}. Export CSV for the full list.
               </p>
             )}
           </>

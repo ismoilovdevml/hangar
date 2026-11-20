@@ -5,7 +5,7 @@ import { ErrorNote } from '../../components/ErrorNote';
 import { NotAvailable } from '../../components/NotAvailable';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
-import { formatBytes, formatDuration } from '../../lib/format';
+import { formatBytes, formatCount, formatDuration } from '../../lib/format';
 import { RUN_STATUS, runDuration } from '../../lib/tasks';
 import { Time } from '../../components/Time';
 import { useNow } from '../../lib/useNow';
@@ -25,7 +25,7 @@ export function RunHistory({ policy }: { policy: string }) {
       align: 'right',
       className: 'nowrap',
       cell: (r) =>
-        typeof r.components_deleted === 'number' ? new Intl.NumberFormat('en-US').format(r.components_deleted) : <NotAvailable reason="not reported" />,
+        typeof r.components_deleted === 'number' ? formatCount(r.components_deleted) : <NotAvailable reason="not reported" />,
     },
     {
       key: 'freed',

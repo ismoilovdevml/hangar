@@ -4,11 +4,11 @@ import { DOCS } from './docs';
 import type { Format, OverviewMetrics, OverviewRange, ScanSummary, TrafficBucket, UpstreamHealth } from '../api/types';
 
 type Token = components['schemas']['Token'];
-import { formatClock, formatShortTime, type Tone } from './format';
+import { formatClock, formatCount, formatShortTime, localTimesInText, type Tone } from './format';
 import { upstreamAuthProblem } from './repositories';
 
 export function plural(n: number, one: string, many = `${one}s`): string {
-  return `${n} ${n === 1 ? one : many}`;
+  return `${formatCount(n)} ${n === 1 ? one : many}`;
 }
 
 /**
@@ -213,7 +213,7 @@ function healthItem(p: HealthProblem): TodoItem {
     tone: down ? 'bad' : 'warn',
     tag: down ? 'OUTAGE' : 'DEGRADED',
     title: p.name === 'node' ? `${p.label} is not responding` : `${p.label} ${down ? 'down' : 'degraded'}${where}`,
-    detail: p.detail || 'See System status for the cause',
+    detail: p.detail ? localTimesInText(p.detail) : 'See System status for the cause',
     link: { kind: 'system-status' },
   };
 }

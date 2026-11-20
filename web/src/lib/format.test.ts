@@ -3,7 +3,9 @@ import {
   formatBytes,
   formatClock,
   formatCompact,
+  formatCount,
   formatDate,
+  formatDayMonth,
   formatDuration,
   formatShare,
   formatShortTime,
@@ -11,6 +13,7 @@ import {
   formatTime,
   formatUtc,
   initials,
+  localTimesInText,
   relativeFuture,
   relativeTime,
   shortGoDuration,
@@ -29,6 +32,15 @@ describe('format helpers', () => {
     expect(formatBytes(1000)).toBe('1000 B');
     expect(formatBytes(2 * 1024 ** 3)).toBe('2 GiB');
     expect(formatBytes(0)).toBe('0 B');
+  });
+
+  it('writes counts and calendar days one way', () => {
+    expect(formatCount(76992)).toBe('76,992');
+    expect(formatCount(1_234_567)).toBe('1,234,567');
+    expect(formatCount(7)).toBe('7');
+    expect(formatDayMonth('2026-10-26')).toBe('26 Oct');
+    expect(formatDayMonth('2026-01-01')).toBe('1 Jan');
+    expect(formatDayMonth('not a day')).toBe('not a day');
   });
 
   it('never rounds a non-zero share to 0%', () => {
@@ -89,6 +101,12 @@ describe('format helpers', () => {
       expect(formatShortTime('2026-11-10T18:00:00Z', now)).toBe('10 Nov 23:00');
       expect(relativeFuture('2026-11-11T09:14:00Z', now)).toBe('In 14 min');
       expect(relativeFuture('2026-11-11T21:00:00Z', now)).toBe('Tomorrow 02:00');
+      // Instants inside server-written text, as the server writes them (RFC 3339, UTC).
+      expect(localTimesInText('No heartbeat since 2026-11-15T08:34:39.547Z')).toBe('No heartbeat since 15 Nov 2026, 13:34 (UTC+5)');
+      expect(localTimesInText('From 2026-11-15T08:34:39Z to 2026-11-15T10:00:00+02:00.')).toBe(
+        'From 15 Nov 2026, 13:34 (UTC+5) to 15 Nov 2026, 13:00 (UTC+5).',
+      );
+      expect(localTimesInText('Disk 2026-11 at 91%')).toBe('Disk 2026-11 at 91%');
     });
 
     it('labels other offsets', () => {

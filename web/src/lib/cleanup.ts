@@ -1,7 +1,7 @@
 import type { CleanupCriteria, CleanupPolicy, CleanupPolicyInput } from '../api/opsTypes';
 import type { Format } from '../api/types';
 import { cronToSchedule, scheduleToCron, type ScheduleDraft } from './cron';
-import { formatBytes } from './format';
+import { formatBytes, formatCount } from './format';
 
 /** Same rule as repository names; the name is part of the policy's URL. */
 export const POLICY_NAME_RE = /^[a-z0-9][a-z0-9-]{1,62}$/;
@@ -180,7 +180,7 @@ export function summarizeCriteria(c: CleanupCriteria | undefined): string {
 }
 
 export function previewHeadline(count: number, bytes: number): string {
-  const n = new Intl.NumberFormat('en-US').format(count);
+  const n = formatCount(count);
   if (count === 0) return 'Nothing would be deleted';
   return `${n} ${count === 1 ? 'version' : 'versions'} · ${formatBytes(bytes)} would be freed`;
 }

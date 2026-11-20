@@ -1,7 +1,7 @@
 import type { OverviewMetrics, OverviewRange, TrafficBucket } from '../../api/types';
 import { ErrorNote } from '../../components/ErrorNote';
 import { Segmented } from '../../components/Segmented';
-import { formatCompact, longDate, RANGES } from '../../lib/format';
+import { formatCompact, formatCount, longDate, RANGES } from '../../lib/format';
 import { bucketLabel, coverageNote } from '../../lib/overview';
 
 const BAR_HEIGHT = 44;
@@ -24,7 +24,7 @@ const BUCKET_UNIT: Record<OverviewRange, string> = {
 
 /** Counts read in full up to 9,999 and compactly above. */
 function count(n: number): string {
-  return n < 10_000 ? n.toLocaleString('en-GB') : formatCompact(n);
+  return n < 10_000 ? formatCount(n) : formatCompact(n);
 }
 
 function Activity({ m }: { m: OverviewMetrics }) {

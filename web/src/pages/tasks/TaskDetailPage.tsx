@@ -11,7 +11,7 @@ import { ErrorNote } from '../../components/ErrorNote';
 import { Meter } from '../../components/Meter';
 import { NotAvailable } from '../../components/NotAvailable';
 import { Time } from '../../components/Time';
-import { formatDuration, formatTime, relativeFuture } from '../../lib/format';
+import { formatCount, formatDuration, formatTime, relativeFuture } from '../../lib/format';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { Pill } from '../../components/Pill';
@@ -87,7 +87,7 @@ function RunLog({ taskId, run }: { taskId: string; run: TaskRun }) {
   );
 }
 
-const count = (n: number | undefined) => (n ?? 0).toLocaleString('en-US');
+const count = (n: number | undefined) => formatCount(n ?? 0);
 
 function bytesText(n: number | undefined): string {
   let v = n ?? 0;
