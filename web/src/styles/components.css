@@ -16,6 +16,9 @@
 .button--primary:hover { background: #285D79; color: var(--ink-inverse); }
 .button--secondary { background: var(--glass-bg-strong); color: var(--ink); border: 1px solid var(--track); }
 .button--secondary:hover { background: var(--surface-solid); color: var(--ink); }
+/* A row or toolbar action that should not compete with the content: text until hovered. */
+.button--ghost { background: transparent; color: var(--ink-2); border: 1px solid transparent; }
+.button--ghost:hover { background: var(--surface-muted); color: var(--ink); }
 .button--secondary[aria-pressed='true'] { background: var(--lake-soft); color: var(--lake-ink); border-color: var(--lake); }
 .button--dark { min-height: 48px; background: var(--ink-strong); color: var(--ink-inverse); font-size: 15px; }
 .button--dark:hover { background: #22344A; }

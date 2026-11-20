@@ -159,12 +159,12 @@ export function FixPlanTable({ items, tab, windowDays, inUseDays, expanded, onTo
                           <CopyTextButton
                             text={commands}
                             label="Copy upgrade"
-                            className="button button--sm vplan__copy"
+                            className="button button--secondary button--sm"
                             ariaLabel={p.image ? `Copy the Dockerfile line for ${p.package}` : `Copy the upgrade command for ${p.package}`}
                           />
                         )}
                         {canWrite && tab !== 'waived' && (
-                          <button type="button" className="button button--secondary button--sm" onClick={() => onWaive(p)} aria-label={`Waive ${p.package}`}>
+                          <button type="button" className="button button--ghost button--sm" onClick={() => onWaive(p)} aria-label={`Waive ${p.package}`}>
                             Waive
                           </button>
                         )}

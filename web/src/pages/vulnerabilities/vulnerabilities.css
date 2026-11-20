@@ -95,11 +95,9 @@
 }
 .vplan__assign { color: var(--lake-ink); font-weight: 700; }
 .vplan__owner--btn:hover, .vplan__assign:hover { background: var(--surface-muted); }
-/* the two buttons stack when the column is narrow, so the table fits instead of scrolling */
-.vplan__actions { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
-.vplan__actions .button--sm { min-height: 32px; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 700; }
-.vplan__copy { background: var(--lake); color: var(--ink-inverse); border: 0; }
-.vplan__copy:hover { background: #285D79; color: var(--ink-inverse); }
+/* Row actions sit on one line: a quiet secondary copy and a ghost waive, so the rows read before their buttons. */
+.vplan__actions { display: inline-flex; align-items: center; gap: 4px; flex-wrap: nowrap; justify-content: flex-end; }
+.vplan__actions .button--sm { min-height: 32px; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 600; }
 .vplan__detail > td { padding: 0 18px 12px 50px; border-top: 0; background: var(--glass-bg-strong); }
 .vplan__findings { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border-radius: 12px; overflow: hidden; border: 1px solid var(--hairline); }
 .vplan__findings > li + li { border-top: 1px solid var(--hairline); }
@@ -219,6 +217,7 @@
 .vsum__value { font-size: 14px; font-weight: 700; line-height: 1.6; color: var(--ink-strong); }
 .vsum__note { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vsum__note a { color: var(--lake-ink); font-weight: 600; }
+.vsum__note--wrap { white-space: normal; }
 .vsum__chart { display: block; width: 100%; height: 34px; margin: 3px 0 1px; }
 .vsum__bar { fill: var(--chart-3); }
 .vsum__axis { stroke: var(--hairline-strong); stroke-width: 1; }
