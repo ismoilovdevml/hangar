@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/quarantine"
 	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
@@ -433,17 +434,11 @@ func (h *handler) findTarball(ctx context.Context, repo *core.Repository, rel st
 }
 
 func (h *handler) checkQuarantine(ctx context.Context, a *core.Asset) error {
-	if a.ComponentID == "" {
-		return nil
-	}
-	c, err := h.deps.Components.GetComponentByID(ctx, a.ComponentID)
+	c, err := quarantine.Blocked(ctx, h.deps.Components, a)
 	if err != nil {
-		if errors.Is(err, core.ErrNotFound) {
-			return nil
-		}
 		return err
 	}
-	if c.Quarantined {
+	if c != nil {
 		return fmt.Errorf("%s@%s: %w", c.Name, c.Version, core.ErrQuarantined)
 	}
 	return nil

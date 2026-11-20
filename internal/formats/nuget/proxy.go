@@ -156,6 +156,13 @@ func (h *handler) fetch(ctx context.Context, repo *core.Repository, abs, lid str
 	if rel, ok := strings.CutPrefix(abs, h.remoteBase(repo)+"/"); ok {
 		req.Path = rel
 	} else {
+		// Remote paths are checked for dot segments by the Upstream; an
+		// absolute URL is not, so check it here. URLs come from the service
+		// index and registration documents, and their package part from
+		// the request.
+		if hasDotSegment(abs) {
+			return nil, fmt.Errorf("upstream resource %s has a dot segment: %w", abs, core.ErrUpstream)
+		}
 		// The service index itself is under the remote URL, so this lookup
 		// never recurses.
 		idx, err := h.upstreamIndex(ctx, repo)
@@ -173,6 +180,22 @@ func (h *handler) fetch(ctx context.Context, repo *core.Repository, abs, lid str
 		return nil, fmt.Errorf("upstream resource %s is outside the remote and its related hosts: %w", abs, core.ErrUpstream)
 	}
 	return resp, err
+}
+
+// hasDotSegment reports whether the path of the absolute URL abs has a "."
+// or ".." segment, percent-encoded or not. A URL that does not parse is
+// left to the Upstream, which refuses it.
+func hasDotSegment(abs string) bool {
+	u, err := url.Parse(abs)
+	if err != nil {
+		return false
+	}
+	for seg := range strings.SplitSeq(u.EscapedPath(), "/") {
+		if s, err := url.PathUnescape(seg); err != nil || s == "." || s == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 // fetchDoc fetches a JSON document of at most limit bytes. 404 is ErrNotFound.
@@ -396,16 +419,13 @@ func (h *handler) cachePackage(ctx context.Context, repo *core.Repository, lid, 
 	if err != nil {
 		return nil, err
 	}
-	md, assets, err := h.storePackage(ctx, repo, bs, up)
+	_, assets, err := h.storePackage(ctx, repo, bs, up, &identity{lid: lid, lver: lver})
 	if err != nil {
 		if assets != nil && (errors.Is(err, core.ErrForbidden) || errors.Is(err, core.ErrUnauthenticated)) {
 			h.log().WarnContext(ctx, "nuget package served without caching", "repo", repo.Name, "package", lid+"/"+lver, "err", err)
 			return assets, nil
 		}
 		return nil, fmt.Errorf("cache %s: %w", abs, err)
-	}
-	if lowerID(md.ID) != lid {
-		h.log().WarnContext(ctx, "nuget upstream package id differs from request", "repo", repo.Name, "want", lid, "got", md.ID)
 	}
 	return nil, nil
 }

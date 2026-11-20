@@ -74,6 +74,13 @@ func (h *handler) groupRepodata(ctx context.Context, group *core.Repository, roo
 	if gd != nil {
 		next.prev = gd.rd
 	}
+	if len(pkgs) == 0 && gd == nil {
+		// root comes from the request path, so only roots that hold
+		// packages are kept: any client could otherwise grow the map
+		// without bound with made-up roots. An empty root is cheap to
+		// rebuild on every request.
+		return next, nil
+	}
 	h.groupMu.Lock()
 	h.groups[ck] = next
 	h.groupMu.Unlock()

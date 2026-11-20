@@ -468,12 +468,15 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request, e *entity) {
 		return
 	}
 	a := e.asset
-	if a.Kind != core.AssetMetadata && a.ComponentID != "" {
-		c, err := h.deps.Components.GetComponentByID(ctx, a.ComponentID)
-		if err == nil && c.Quarantined {
-			h.fail(w, r, fmt.Errorf("%s:%s:%s is quarantined by a security policy: %w", c.Namespace, c.Name, c.Version, core.ErrQuarantined))
-			return
+	// Every asset of a component is checked, whatever its kind: a proxy
+	// caches non-unique SNAPSHOT files (artifacts that may change upstream)
+	// as metadata assets of their component.
+	if c, err := quarantine.Blocked(ctx, h.deps.Components, a); err != nil || c != nil {
+		if err == nil {
+			err = fmt.Errorf("%s:%s:%s is quarantined by a security policy: %w", c.Namespace, c.Name, c.Version, core.ErrQuarantined)
 		}
+		h.fail(w, r, err)
+		return
 	}
 	rc, err := h.open(ctx, e)
 	if err != nil {

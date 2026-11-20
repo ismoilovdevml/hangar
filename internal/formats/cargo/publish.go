@@ -19,6 +19,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/archive"
 )
 
 // Publish limits.
@@ -27,6 +28,10 @@ const (
 	maxCrateBytes    = 256 << 20 // one .crate file
 	maxCrateEntries  = 100000    // files in a .crate
 	maxManifestBytes = 4 << 20   // Cargo.toml inside the .crate
+	// maxCrateUnpacked bounds the uncompressed size of a .crate: every
+	// entry is checked, so a small gzip bomb would otherwise cost gigabytes
+	// of decompression per publish.
+	maxCrateUnpacked = 1 << 30
 	maxDeps          = 1000
 )
 
@@ -80,6 +85,9 @@ func (h *handler) writeTarget(ctx context.Context, repo *core.Repository) (*core
 		}
 		if m.Type != core.RepoHosted || m.Format != Name {
 			return nil, fmt.Errorf("group %q write member %q is not a hosted %s repository: %w", repo.Name, m.Name, Name, core.ErrInvalid)
+		}
+		if !m.Online {
+			return nil, fmt.Errorf("write member %q of %q: %w", m.Name, repo.Name, core.ErrOffline)
 		}
 		return m, nil
 	}
@@ -436,7 +444,7 @@ func checkCrate(ctx context.Context, bs core.BlobStore, d core.Digest, m *publis
 	}
 	defer gz.Close()
 	root := m.Name + "-" + m.Vers + "/"
-	tr := tar.NewReader(gz)
+	tr := tar.NewReader(archive.Limit(gz, maxCrateUnpacked, ".crate file"))
 	var manifest []byte
 	for i := 0; ; i++ {
 		if i >= maxCrateEntries {
@@ -445,6 +453,9 @@ func checkCrate(ctx context.Context, bs core.BlobStore, d core.Digest, m *publis
 		hdr, err := tr.Next()
 		if errors.Is(err, io.EOF) {
 			break
+		}
+		if errors.Is(err, archive.ErrTooLarge) {
+			return err
 		}
 		if err != nil {
 			return fmt.Errorf(".crate file is not a valid tar archive: %w", core.ErrInvalid)

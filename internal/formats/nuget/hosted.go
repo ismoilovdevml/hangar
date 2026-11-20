@@ -38,10 +38,18 @@ func (h *handler) putPackage(ctx context.Context, bs core.BlobStore, r io.Reader
 	return uploaded{digest: d, size: n, sha512: hex.EncodeToString(sum.Sum(nil))}, nil
 }
 
+// identity is a package version as NuGet compares them: the lowercased id
+// and the lowercased normalized version without build metadata.
+type identity struct{ lid, lver string }
+
 // storePackage reads the manifest of a stored package and publishes the
-// package version into repo as the context principal. When the publish
-// itself fails, the assets it tried to write are returned with the error.
-func (h *handler) storePackage(ctx context.Context, repo *core.Repository, bs core.BlobStore, up uploaded) (*Metadata, []*core.Asset, error) {
+// package version into repo as the context principal. When want is set,
+// the manifest must name that package version: a proxy cache fill stores
+// the remote's archive under the id and version the archive declares, so
+// an archive declaring another package would otherwise be cached, and
+// served, as that package. When the publish itself fails, the assets it
+// tried to write are returned with the error.
+func (h *handler) storePackage(ctx context.Context, repo *core.Repository, bs core.BlobStore, up uploaded, want *identity) (*Metadata, []*core.Asset, error) {
 	rc, err := bs.Get(ctx, up.digest)
 	if err != nil {
 		return nil, nil, err
@@ -52,14 +60,18 @@ func (h *handler) storePackage(ctx context.Context, repo *core.Repository, bs co
 		return nil, nil, err
 	}
 	if isSymbolPackage(md) {
-		return nil, nil, fmt.Errorf("%s %s is a symbol package; push it to the symbol endpoint: %w", md.ID, md.Version, core.ErrInvalid)
+		return nil, nil, fmt.Errorf("%s %s is a symbol package; %w: %w", md.ID, md.Version, errSymbols, core.ErrInvalid)
+	}
+	v, _ := ParseVersion(md.Version) // validated by ParseNuspec
+	lid, lver := lowerID(md.ID), v.Lower()
+	if want != nil && (lid != want.lid || lver != want.lver) {
+		return nil, nil, fmt.Errorf("upstream archive of %s %s declares %s %s in its manifest; not caching it: %w",
+			want.lid, want.lver, md.ID, md.Version, core.ErrUpstream)
 	}
 	nd, nn, err := bs.Put(ctx, bytes.NewReader(nuspec))
 	if err != nil {
 		return nil, nil, fmt.Errorf("store nuspec: %w", err)
 	}
-	v, _ := ParseVersion(md.Version) // validated by ParseNuspec
-	lid, lver := lowerID(md.ID), v.Lower()
 	listed, err := h.pushListed(ctx, repo, md, lid, lver)
 	if err != nil {
 		return md, nil, err
@@ -132,6 +144,12 @@ func isSymbolPackage(md *Metadata) bool {
 	return false
 }
 
+// systemPrincipal is who the server acts as for writes a caller's own
+// request needs but its privilege does not cover (see setListed).
+func systemPrincipal() *core.Principal {
+	return &core.Principal{Name: "system", Kind: core.PrincipalServiceAccount, Source: "system", Roles: []string{"Admin"}}
+}
+
 // writeTarget resolves the hosted repository that receives writes addressed
 // to repo: itself, or a group's write member.
 func (h *handler) writeTarget(ctx context.Context, repo *core.Repository) (*core.Repository, error) {
@@ -197,7 +215,7 @@ func (h *handler) push(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	md, _, err := h.storePackage(ctx, target, bs, up)
+	md, _, err := h.storePackage(ctx, target, bs, up, nil)
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -207,62 +225,19 @@ func (h *handler) push(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
-// pushSymbols handles PUT api/v2/symbolpackage: the .snupkg is stored next
-// to the package it belongs to, which must already exist.
+// errSymbols explains why symbol packages are refused: nothing serves them
+// back (there is no symbol server endpoint), so storing one would only take
+// space and let the push look successful.
+var errSymbols = errors.New("symbol packages (.snupkg) are not supported by this repository; " +
+	"embed the symbols in the package (DebugType embedded) or push them to a symbol server")
+
+// pushSymbols handles PUT api/v2/symbolpackage. The service index no longer
+// advertises the endpoint, so clients do not push symbols on their own; an
+// explicit push is authorized like any write and then refused with 400.
 func (h *handler) pushSymbols(w http.ResponseWriter, r *http.Request) {
-	target, r, ok := h.prepareWrite(w, r, core.ActionWrite)
-	if !ok {
-		return
+	if _, r, ok := h.prepareWrite(w, r, core.ActionWrite); ok {
+		h.fail(w, r, fmt.Errorf("%w: %w", errSymbols, core.ErrInvalid))
 	}
-	ctx := r.Context()
-	body, err := packageBody(r)
-	if err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	bs, err := h.deps.Blobs.ForRepository(ctx, target)
-	if err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	up, err := h.putPackage(ctx, bs, body)
-	if err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	rc, err := bs.Get(ctx, up.digest)
-	if err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	md, _, err := ReadNupkg(rc, up.size)
-	_ = rc.Close()
-	if err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	v, _ := ParseVersion(md.Version)
-	lid, lver := lowerID(md.ID), v.Lower()
-	if _, err := h.deps.Components.GetComponent(ctx, target.ID, "", lid, lver); err != nil {
-		if errors.Is(err, core.ErrNotFound) {
-			err = fmt.Errorf("push %s %s before its symbols: %w", md.ID, md.Version, core.ErrInvalid)
-		}
-		h.fail(w, r, err)
-		return
-	}
-	_, _, err = h.deps.Components.Publish(ctx, target, core.PublishRequest{
-		Component: &core.Component{Name: lid, Version: lver},
-		Assets: []*core.Asset{{
-			Path: snupkgPath(lid, lver), Kind: core.AssetContent, BlobDigest: up.digest, Size: up.size,
-			ContentType: contentTypeNupkg, Checksums: map[string]string{"sha512": up.sha512},
-			Attributes: map[string]any{attrID: md.ID, attrVersion: md.Version},
-		}},
-	})
-	if err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusCreated)
 }
 
 // unlist handles DELETE api/v2/package/{id}/{version}.
@@ -344,9 +319,17 @@ func (h *handler) pathComponent(w http.ResponseWriter, r *http.Request, repo *co
 	return comp, true
 }
 
-// setListed flips the listed flag of a package version and audits it.
+// setListed flips the listed flag of a package version and audits it as
+// the caller. Unlisting is NuGet's delete: the caller was authorized for
+// delete, which does not include the write the flag is stored with, so the
+// flag is stored as the server. Relisting needs write and stays the
+// caller's own write.
 func (h *handler) setListed(ctx context.Context, repo *core.Repository, comp *core.Component, listed bool) error {
-	_, _, err := h.deps.Components.Publish(ctx, repo, core.PublishRequest{
+	pctx := ctx
+	if !listed {
+		pctx = core.WithPrincipal(ctx, systemPrincipal())
+	}
+	_, _, err := h.deps.Components.Publish(pctx, repo, core.PublishRequest{
 		Component: &core.Component{Name: comp.Name, Version: comp.Version, Attributes: map[string]any{attrListed: listed}},
 	})
 	if err != nil {

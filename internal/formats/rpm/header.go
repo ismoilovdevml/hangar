@@ -16,10 +16,13 @@ import (
 // "header structures": an 8-byte magic, the index entry count and data
 // size, the index entries (16 bytes each) and the data store.
 
+// Header size limits, checked before anything is read for a header. Real
+// headers have hundreds of index entries and a few megabytes of data; the
+// limits leave ample room above that.
 const (
 	leadSize       = 96
 	maxHeaderBytes = 256 << 20 // index + data of one header
-	maxIndex       = 1 << 20
+	maxIndex       = 0xffff    // index entries of one header
 )
 
 var (
@@ -135,11 +138,15 @@ func readHeader(r io.Reader) (*header, int64, error) {
 	if il > maxIndex || int64(il)*16+int64(dl) > maxHeaderBytes {
 		return nil, 0, fmt.Errorf("rpm header too large: %w", core.ErrInvalid)
 	}
-	buf := make([]byte, int(il)*16+int(dl))
-	if _, err := io.ReadFull(r, buf); err != nil {
+	// The lengths are the sender's claim: the buffer grows with the bytes
+	// that actually arrive instead of being allocated up front, so a
+	// short body claiming a 256 MiB header costs what it sent.
+	n := int64(il)*16 + int64(dl)
+	buf, err := io.ReadAll(io.LimitReader(r, n))
+	if err != nil || int64(len(buf)) != n {
 		return nil, 0, fmt.Errorf("truncated rpm header: %w", core.ErrInvalid)
 	}
-	h := &header{entries: make(map[uint32]entry, il), data: buf[il*16:]}
+	h := &header{entries: make(map[uint32]entry), data: buf[il*16:]}
 	for i := uint32(0); i < il; i++ {
 		e := buf[i*16 : i*16+16]
 		tag := binary.BigEndian.Uint32(e[0:4])

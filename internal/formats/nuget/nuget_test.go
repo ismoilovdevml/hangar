@@ -67,6 +67,9 @@ func newFixture(t *testing.T) *fixture {
 	env.AuthZ.Grant("alice", "repo:*:read", "repo:*:write", "repo:*:delete")
 	env.Auth.AddUser("reader", "pw")
 	env.AuthZ.Grant("reader", "repo:*:read")
+	// The server's own writes (the listed flag of an unlist) run as
+	// "system", which production authorizes through the Admin role.
+	env.AuthZ.Grant("system", "repo:*:admin")
 	return &fixture{t: t, env: env, h: formats.NewHandler(env.Deps(), nuget.New()), token: token}
 }
 
@@ -158,11 +161,15 @@ func TestServiceIndex(t *testing.T) {
 		"RegistrationsBaseUrl/3.6.0": base + "v3/registration-gz-semver2/",
 		"SearchQueryService/3.5.0":   base + "query",
 		"PackagePublish/2.0.0":       base + "api/v2/package",
-		"SymbolPackagePublish/4.9.0": base + "api/v2/symbolpackage",
 	} {
 		if hosted[typ] != id {
 			t.Errorf("%s = %q, want %q", typ, hosted[typ], id)
 		}
+	}
+	// Symbol packages are not supported: without the resource, dotnet
+	// nuget push does not send them.
+	if id, ok := hosted["SymbolPackagePublish/4.9.0"]; ok {
+		t.Errorf("SymbolPackagePublish advertised at %s", id)
 	}
 	if _, ok := types("nuget-proxy")["PackagePublish/2.0.0"]; ok {
 		t.Error("proxy advertises PackagePublish")
@@ -551,6 +558,73 @@ func TestUnlistRelistDelete(t *testing.T) {
 	}
 	if rec := f.get("/repository/nuget-hard/v3-flatcontainer/acme.lib/index.json"); rec.Code != http.StatusNotFound {
 		t.Errorf("after hard delete = %d", rec.Code)
+	}
+}
+
+// TestUnlistWithDeleteOnly: unlisting is NuGet's delete, so the delete
+// privilege is enough; the listed flag it stores is not the caller's write.
+// Relisting still needs write.
+func TestUnlistWithDeleteOnly(t *testing.T) {
+	f := newFixture(t)
+	f.mustPush("nuget-hosted", "Acme.Lib", "1.0.0", "")
+	f.env.Auth.AddUser("deleter", "pw")
+	f.env.AuthZ.Grant("deleter", "repo:*:read", "repo:*:delete")
+	deleter := map[string]string{"Authorization": "Basic ZGVsZXRlcjpwdw=="} // deleter:pw
+
+	if rec := f.do(http.MethodDelete, "/repository/nuget-hosted/api/v2/package/Acme.Lib/1.0.0", nil, deleter); rec.Code != http.StatusNoContent {
+		t.Fatalf("unlist with delete only = %d %s", rec.Code, rec.Body)
+	}
+	var reg regIndex
+	f.getJSON("/repository/nuget-hosted/v3/registration/acme.lib/index.json", &reg)
+	if reg.Items[0].Items[0].CatalogEntry.Listed {
+		t.Error("version still listed")
+	}
+	evs := f.env.Audit.Events("component.unlist")
+	if len(evs) != 1 || evs[0].Actor != "deleter" {
+		t.Errorf("unlist audit = %+v, want one event by deleter", evs)
+	}
+	if rec := f.do(http.MethodPost, "/repository/nuget-hosted/api/v2/package/Acme.Lib/1.0.0", nil, deleter); rec.Code != http.StatusForbidden {
+		t.Errorf("relist with delete only = %d, want 403", rec.Code)
+	}
+}
+
+// TestSymbolPushRefused: symbol packages are refused after authorization,
+// and nothing is stored.
+func TestSymbolPushRefused(t *testing.T) {
+	f := newFixture(t)
+	f.mustPush("nuget-hosted", "Acme.Lib", "1.0.0", "")
+	sym := nupkg(t, "Acme.Lib", "1.0.0", `<packageTypes><packageType name="SymbolsPackage" /></packageTypes>`)
+	for _, c := range []struct {
+		name, path, key string
+		want            int
+	}{
+		{"anonymous", "/repository/nuget-hosted/api/v2/symbolpackage", "", http.StatusUnauthorized},
+		{"symbol endpoint", "/repository/nuget-hosted/api/v2/symbolpackage", f.token, http.StatusBadRequest},
+		{"package endpoint", "/repository/nuget-hosted/api/v2/package", f.token, http.StatusBadRequest},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			hdr := map[string]string{"Content-Type": "application/octet-stream"}
+			if c.key != "" {
+				hdr["X-NuGet-ApiKey"] = c.key
+			}
+			rec := f.do(http.MethodPut, c.path, bytes.NewReader(sym), hdr)
+			if rec.Code != c.want {
+				t.Fatalf("push = %d %s, want %d", rec.Code, rec.Body, c.want)
+			}
+			if c.want == http.StatusBadRequest && !strings.Contains(rec.Body.String(), "symbol packages (.snupkg) are not supported") {
+				t.Errorf("message = %q", rec.Body)
+			}
+		})
+	}
+	repo, _ := f.env.Repos.Get(t.Context(), "nuget-hosted")
+	page, err := f.env.Components.ListAssets(t.Context(), core.AssetQuery{RepositoryID: repo.ID, PathPrefix: "v3-flatcontainer/acme.lib/", Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range page.Items {
+		if strings.HasSuffix(a.Path, ".snupkg") {
+			t.Errorf("symbol package stored at %s", a.Path)
+		}
 	}
 }
 

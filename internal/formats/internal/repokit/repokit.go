@@ -25,6 +25,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/quarantine"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 	"github.com/ismoilovdevml/hangar/internal/routing"
 	"github.com/ismoilovdevml/hangar/internal/signing"
@@ -150,6 +151,9 @@ func (b *Base) WriteTarget(ctx context.Context, repo *core.Repository) (*core.Re
 		}
 		if m.Type != core.RepoHosted || m.Format != b.Format {
 			return nil, fmt.Errorf("group %q write member %q is not a hosted %s repository: %w", repo.Name, m.Name, b.Format, core.ErrInvalid)
+		}
+		if !m.Online {
+			return nil, fmt.Errorf("write member %q of %q: %w", m.Name, repo.Name, core.ErrOffline)
 		}
 		return m, nil
 	}
@@ -373,18 +377,13 @@ func (b *Base) Quarantined(ctx context.Context, repoID string) (map[string]bool,
 }
 
 // CheckQuarantine fails with core.ErrQuarantined when a's component is quarantined.
+// A failed lookup is returned: the check fails closed (quarantine.Blocked).
 func (b *Base) CheckQuarantine(ctx context.Context, a *core.Asset) error {
-	if a.ComponentID == "" {
-		return nil
-	}
-	c, err := b.Deps.Components.GetComponentByID(ctx, a.ComponentID)
+	c, err := quarantine.Blocked(ctx, b.Deps.Components, a)
 	if err != nil {
-		if errors.Is(err, core.ErrNotFound) {
-			return nil
-		}
 		return err
 	}
-	if c.Quarantined {
+	if c != nil {
 		return fmt.Errorf("%s %s: %w", c.Name, c.Version, core.ErrQuarantined)
 	}
 	return nil

@@ -486,7 +486,11 @@ func readZipFile(f *zip.File, limit int64) ([]byte, bool) {
 }
 
 // scanTarGz calls visit for each regular file of a gzip-compressed tar
-// stream until visit returns true or maxTarEntries entries were seen.
+// stream until visit returns true, maxTarEntries entries were seen,
+// maxTarBytes were decompressed or ctx ends. tar.Reader decompresses every
+// entry it skips, so the byte bound is what keeps a small gzip bomb from
+// costing gigabytes of decompression; past it the stream reads as
+// truncated and the scan stops with what it found.
 func (x *extraction) scanTarGz(ctx context.Context, r io.Reader, visit func(name string, r io.Reader) bool) {
 	gz, err := gzip.NewReader(r)
 	if err != nil {
@@ -494,9 +498,13 @@ func (x *extraction) scanTarGz(ctx context.Context, r io.Reader, visit func(name
 		return
 	}
 	defer gz.Close()
-	tr := tar.NewReader(gz)
-	for i := 0; i < maxTarEntries; i++ {
+	tr := tar.NewReader(io.LimitReader(gz, maxTarBytes))
+	for i := 0; i < maxTarEntries && ctx.Err() == nil; i++ {
 		h, err := tr.Next()
+		if errors.Is(err, io.ErrUnexpectedEOF) {
+			x.s.log.WarnContext(ctx, "extract package info: archive truncated or larger than the scan limit",
+				"component", x.c.ID, "limit", maxTarBytes)
+		}
 		if err != nil {
 			return
 		}

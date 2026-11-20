@@ -16,12 +16,18 @@ import (
 	"github.com/ulikunitz/xz"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/archive"
 )
 
 // Limits on what is read from a .deb.
 const (
 	maxControlTar  = 64 << 20 // compressed control member
 	maxControlFile = 1 << 20  // the control file itself
+	// maxControlUnpacked bounds the uncompressed bytes of the control
+	// member read looking for the control file. Real control archives are
+	// kilobytes (md5sums of a large package: a few megabytes); xz and zstd
+	// expand a 64 MiB member to far more than memory and time allow.
+	maxControlUnpacked = 256 << 20
 )
 
 const arMagic = "!<arch>\n"
@@ -107,7 +113,7 @@ func controlFromTar(member string, r io.Reader) ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("unsupported control archive %s: %w", member, core.ErrInvalid)
 	}
-	t := tar.NewReader(tr)
+	t := tar.NewReader(archive.Limit(tr, maxControlUnpacked, member))
 	for {
 		h, err := t.Next()
 		if errors.Is(err, io.EOF) {

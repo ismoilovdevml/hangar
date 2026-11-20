@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/quarantine"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
@@ -75,10 +76,24 @@ func (h *handler) serviceIndex(w http.ResponseWriter, r *http.Request) {
 		add(base+"vulnerabilities/index.json", "Known vulnerabilities, for NuGet Audit", vulnerabilityType)
 	}
 	if _, err := h.writeTarget(r.Context(), repo); err == nil {
+		// No SymbolPackagePublish: symbol packages are not supported, and
+		// without the resource dotnet nuget push does not send them.
 		add(base+"api/v2/package", "Push, unlist and relist", "PackagePublish/2.0.0")
-		add(base+"api/v2/symbolpackage", "Symbol package push", "SymbolPackagePublish/4.9.0")
 	}
 	h.writeJSON(w, r, map[string]any{"version": "3.0.0", "resources": res}, false)
+}
+
+// pathID returns the lowercased {id} URL param, or false (after answering
+// 404) when it is not a valid package id. The id becomes part of upstream
+// URLs and cache paths: an id such as ".." would climb out of the package's
+// directory in both.
+func pathID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	id := chi.URLParam(r, "id")
+	if ValidateID(id) != nil {
+		http.Error(w, "package not found", http.StatusNotFound)
+		return "", false
+	}
+	return lowerID(id), true
 }
 
 // flatIndex handles GET v3-flatcontainer/{id}/index.json.
@@ -87,9 +102,13 @@ func (h *handler) flatIndex(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	lid, ok := pathID(w, r)
+	if !ok {
+		return
+	}
 	ctx, tally := proxy.WithCacheTally(r.Context())
 	defer tally.Record(Name, r.Method)
-	vs, err := h.versions(ctx, repo, lowerID(chi.URLParam(r, "id")), 0)
+	vs, err := h.versions(ctx, repo, lid, 0)
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -107,9 +126,12 @@ func (h *handler) flatFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	lid, ok := pathID(w, r)
+	if !ok {
+		return
+	}
 	ctx, tally := proxy.WithCacheTally(r.Context())
 	defer tally.Record(Name, r.Method)
-	lid := lowerID(chi.URLParam(r, "id"))
 	v, err := ParseVersion(chi.URLParam(r, "version"))
 	file := strings.ToLower(chi.URLParam(r, "file"))
 	if err != nil {
@@ -132,11 +154,12 @@ func (h *handler) flatFile(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	if asset.ComponentID != "" {
-		if c, err := h.deps.Components.GetComponentByID(ctx, asset.ComponentID); err == nil && c.Quarantined {
-			h.fail(w, r, fmt.Errorf("%s %s: %w", lid, lver, core.ErrQuarantined))
-			return
+	if c, err := quarantine.Blocked(ctx, h.deps.Components, asset); err != nil || c != nil {
+		if err == nil {
+			err = fmt.Errorf("%s %s: %w", lid, lver, core.ErrQuarantined)
 		}
+		h.fail(w, r, err)
+		return
 	}
 	bs, err := h.deps.Blobs.ForRepository(ctx, holder)
 	if err != nil {
@@ -182,9 +205,12 @@ func (h *handler) registration(w http.ResponseWriter, r *http.Request) (*core.Re
 	if !ok {
 		return nil, nil, false
 	}
+	lid, ok := pathID(w, r)
+	if !ok {
+		return nil, nil, false
+	}
 	ctx, tally := proxy.WithCacheTally(r.Context())
 	defer tally.Record(Name, r.Method)
-	lid := lowerID(chi.URLParam(r, "id"))
 	es, err := h.entries(ctx, repo, lid, 0)
 	if err != nil {
 		h.fail(w, r, err)

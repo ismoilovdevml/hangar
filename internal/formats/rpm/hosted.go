@@ -375,7 +375,10 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	root, _ := rootOf(p, formatConfig(target).RepodataDepth)
-	if err := h.reindex(ctx, target, root); err != nil {
+	// Repodata is the server's own metadata: regenerating it after an
+	// authorized delete must not need the caller's write privilege (a
+	// delete-only caller would otherwise leave it listing the package).
+	if err := h.reindex(core.WithPrincipal(ctx, systemPrincipal()), target, root); err != nil {
 		h.Fail(w, r, fmt.Errorf("package deleted, but regenerating repodata failed: %w", err))
 		return
 	}

@@ -13,6 +13,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/archive"
 )
 
 // Chart API versions (Chart.yaml apiVersion).
@@ -25,6 +26,11 @@ const (
 const (
 	maxChartYAML  = 1 << 20 // Chart.yaml
 	maxTarEntries = 10000   // entries scanned looking for Chart.yaml
+	// maxChartTar bounds the uncompressed bytes read looking for
+	// Chart.yaml (`helm package` writes it first, so real charts stop
+	// almost at once). tar.Reader decompresses every entry it skips: without
+	// a bound a small gzip bomb costs gigabytes of decompression.
+	maxChartTar = 256 << 20
 )
 
 // Maintainer is one entry of Chart.yaml maintainers.
@@ -140,7 +146,7 @@ func ReadChart(r io.Reader) (*Metadata, error) {
 		return nil, fmt.Errorf("chart archive is not gzip-compressed: %w", core.ErrInvalid)
 	}
 	defer gz.Close()
-	tr := tar.NewReader(gz)
+	tr := tar.NewReader(archive.Limit(gz, maxChartTar, "chart archive"))
 	for range maxTarEntries {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {

@@ -147,7 +147,7 @@ type handler struct {
 	cacheBytes int
 
 	groupMu sync.Mutex
-	groups  map[string]*groupData // by group id + "/" + root
+	groups  map[string]*groupData // by group id + "/" + root; only roots that held packages
 
 	pins repomdPins
 }

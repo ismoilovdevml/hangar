@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/quarantine"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
@@ -150,11 +151,12 @@ func (h *handler) serveFile(w http.ResponseWriter, r *http.Request, cands [][2]s
 		h.fail(w, r, err)
 		return
 	}
-	if asset.ComponentID != "" {
-		if c, err := h.deps.Components.GetComponentByID(ctx, asset.ComponentID); err == nil && c.Quarantined {
-			h.fail(w, r, fmt.Errorf("%s %s: %w", c.Name, c.Version, core.ErrQuarantined))
-			return
+	if c, err := quarantine.Blocked(ctx, h.deps.Components, asset); err != nil || c != nil {
+		if err == nil {
+			err = fmt.Errorf("%s %s: %w", c.Name, c.Version, core.ErrQuarantined)
 		}
+		h.fail(w, r, err)
+		return
 	}
 	bs, err := h.deps.Blobs.ForRepository(ctx, holder)
 	if err != nil {

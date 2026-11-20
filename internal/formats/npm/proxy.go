@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/quarantine"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 	"github.com/ismoilovdevml/hangar/internal/routing"
 )
@@ -83,10 +84,38 @@ func (h *handler) storeProxyDoc(ctx context.Context, repo *core.Repository, path
 	return assets[0], nil
 }
 
-// proxyDoc returns the remote packument, served from cache while it is
+// proxyDoc returns the remote packument without the versions quarantined in
+// repo, as hosted packuments leave theirs out: a client that sees a
+// version picks it and then fails on its tarball instead of resolving to
+// another one. A failed quarantine lookup fails the request.
+func (h *handler) proxyDoc(ctx context.Context, repo *core.Repository, name pkgName, abbreviated bool) (*packument, error) {
+	doc, err := h.remoteDoc(ctx, repo, name, abbreviated)
+	if err != nil {
+		return nil, err
+	}
+	scope := name.Scope
+	blocked, err := quarantine.Versions(ctx, h.deps.Components, repo.ID, &scope, name.Base)
+	if err != nil {
+		return nil, fmt.Errorf("quarantined versions of %s: %w", name.Full, err)
+	}
+	if len(blocked) == 0 {
+		return doc, nil
+	}
+	for v := range blocked {
+		delete(doc.Versions, v)
+		delete(doc.Time, v)
+	}
+	if len(doc.Versions) == 0 {
+		return nil, fmt.Errorf("package %s: every version is quarantined: %w", name.Full, core.ErrNotFound)
+	}
+	doc.normalizeTags()
+	return doc, nil
+}
+
+// remoteDoc returns the remote packument, served from cache while it is
 // younger than MetadataTTL and revalidated (conditional GET) afterwards. If
 // the remote is unreachable a stale cached copy is served.
-func (h *handler) proxyDoc(ctx context.Context, repo *core.Repository, name pkgName, abbreviated bool) (*packument, error) {
+func (h *handler) remoteDoc(ctx context.Context, repo *core.Repository, name pkgName, abbreviated bool) (*packument, error) {
 	if err := routing.Check(ctx, repo, name.Full); err != nil {
 		return nil, err
 	}

@@ -172,7 +172,10 @@ func (h *handler) deletePool(w http.ResponseWriter, r *http.Request) {
 		h.Fail(w, r, err)
 		return
 	}
-	if err := h.reindex(ctx, target); err != nil {
+	// The indexes are the server's own metadata: regenerating them after
+	// an authorized delete must not need the caller's write privilege (a
+	// delete-only caller would otherwise leave them listing the package).
+	if err := h.reindex(core.WithPrincipal(ctx, systemPrincipal()), target); err != nil {
 		h.Fail(w, r, fmt.Errorf("package deleted, but regenerating the indexes failed: %w", err))
 		return
 	}

@@ -3,6 +3,7 @@ package nuget_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -196,6 +197,7 @@ func TestDotnetClient(t *testing.T) {
 		Config: core.RepoConfig{Group: &core.GroupConfig{Members: []string{"nuget-hosted", "nuget-proxy"}, WriteMember: "nuget-hosted"}}})
 	token := s.env.Auth.AddToken("ci")
 	s.env.AuthZ.Grant("ci", "repo:nuget-*:read", "repo:nuget-*:write", "repo:nuget-*:delete")
+	s.env.AuthZ.Grant("system", "repo:*:admin") // unlist stores the listed flag as the server
 
 	// 1. Publish a dependency to the remote feed.
 	upCfg := filepath.Join(d.root, "upstream.config")
@@ -328,10 +330,12 @@ func TestDotnetClient(t *testing.T) {
 		t.Errorf("relist = %d", resp.StatusCode)
 	}
 
-	// Symbols were pushed alongside the packages.
+	// Symbol packages are not supported: the service index does not
+	// advertise a symbol endpoint, so the push above (of a project that
+	// builds a .snupkg) sent only the package, and succeeded.
 	if _, err := s.env.Components.GetAsset(t.Context(), mustRepo(t, s.env, "nuget-hosted").ID,
-		"v3-flatcontainer/acme.widgets/1.2.3/acme.widgets.1.2.3.snupkg"); err != nil {
-		t.Errorf("symbol package not stored: %v", err)
+		"v3-flatcontainer/acme.widgets/1.2.3/acme.widgets.1.2.3.snupkg"); !errors.Is(err, core.ErrNotFound) {
+		t.Errorf("symbol package lookup = %v, want not found", err)
 	}
 }
 
