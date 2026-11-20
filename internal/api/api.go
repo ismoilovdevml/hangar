@@ -165,8 +165,9 @@ type API struct {
 	ExtraRoutes     []RouteRegistrar
 	EventsHeartbeat time.Duration // SSE keep-alive comment interval (default 15s)
 
-	hubMu sync.Mutex
-	hub   *hub
+	hubMu     sync.Mutex
+	hub       *hub
+	hubClosed bool
 }
 
 // Error is the error body of every API response (schema Error in openapi.yaml).
@@ -302,10 +303,14 @@ func (a *API) Mount(r chi.Router) {
 	})
 }
 
-// Close releases background resources (the event stream subscriptions).
+// Close releases background resources (the event stream subscriptions) and
+// ends every open event stream; later streams are refused. Call it when
+// shutdown begins (server.Config.OnShutdown): an open stream never finishes
+// on its own and would hold the graceful shutdown until its deadline.
 func (a *API) Close() {
 	a.hubMu.Lock()
 	defer a.hubMu.Unlock()
+	a.hubClosed = true
 	if a.hub != nil {
 		a.hub.close()
 		a.hub = nil

@@ -87,6 +87,9 @@ type app struct {
 	// watchConnectorPorts reports the dedicated ports of docker repository
 	// connectors (nil if the docker format is not built in).
 	watchConnectorPorts func(context.Context, func(map[int]string))
+	// closeStreams ends the open SSE streams when shutdown begins: they never
+	// finish on their own and would hold the graceful shutdown.
+	closeStreams func()
 }
 
 func (a *app) onClose(f func()) { a.closers = append(a.closers, f) }
@@ -533,6 +536,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	}
 	restAPI.BlobStoreTester = blobStoreTester{keyring: keyring}
 	a.onClose(restAPI.Close)
+	a.closeStreams = restAPI.Close
 
 	trusted, err := server.ParseTrustedProxies(cfg.Server.TrustedProxies)
 	if err != nil {
