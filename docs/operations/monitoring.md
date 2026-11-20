@@ -86,7 +86,8 @@ to `secrets/metrics.bearer_token` (owner 65532, mode 600), add
 `auth: bearer` under `metrics:` in `config/hangar.yaml` and restart.
 
 Generate a token with `openssl rand -hex 32`. Prometheus configurations for
-each mode (the job must stay named `hangar`):
+each mode (the job name must contain `hangar`, which the HangarDown alert
+selects; the Helm chart's ServiceMonitor names it after the release's Service):
 
 ```yaml
 # metrics.auth: none, metrics.allowed_cidrs: [10.0.5.0/24] (the Prometheus subnet)
@@ -425,7 +426,7 @@ in Grafana to match Prometheus.
 | [HangarNotReady](runbooks.md#hangarnotready) | critical | A node has failed readiness for 5 minutes. |
 | [HangarDependencyDown](runbooks.md#hangardependencydown) | critical | A readiness dependency has been down for 2 minutes. |
 | [HangarHigh5xxRate](runbooks.md#hangarhigh5xxrate) | critical | More than 5% of a node's requests fail with 5xx for 10 minutes. |
-| [HangarUpstreamCircuitOpen](runbooks.md#hangarupstreamcircuitopen) | warning | A proxy remote's circuit breaker has been open for 5 minutes. |
+| [HangarUpstreamCircuitOpen](runbooks.md#hangarupstreamcircuitopen) | warning | A proxy remote has been offline for 5 minutes while remote fetches on that node failed in the last 15 minutes. |
 | [HangarBlobStoreErrors](runbooks.md#hangarblobstoreerrors) | critical | More than 5 blob store operations of one kind failed in 10 minutes. |
 | [HangarDatabasePoolSaturated](runbooks.md#hangardatabasepoolsaturated) | warning | Over 90% of the pool has been in use for 10 minutes. |
 | [HangarJobFailures](runbooks.md#hangarjobfailures) | warning | A job failed permanently in the last hour. |

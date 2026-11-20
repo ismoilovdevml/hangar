@@ -436,7 +436,7 @@
     {
       "type": "table",
       "title": "Remotes not healthy",
-      "description": "Current state of remotes that are not healthy, per node.",
+      "description": "Current state of remotes that are not healthy, per node. Remotes not used since the node started (unknown) are left out.",
       "id": 8,
       "datasource": {
         "type": "prometheus",
@@ -454,7 +454,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "hangar_upstream_state{instance=~\"$instance\",state!=\"healthy\"} == 1",
+          "expr": "hangar_upstream_state{instance=~\"$instance\",state!~\"healthy|unknown\"} == 1",
           "legendFormat": "",
           "refId": "A",
           "instant": true,

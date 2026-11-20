@@ -15,6 +15,11 @@ tests:
         values: "1 0 0 0 0 0 0 0"
       - series: 'hangar_dependency_up{instance="n1",dependency="database"}'
         values: "1 0 0 0 0"
+      # Another release name (chart ServiceMonitor job) and an unrelated job.
+      - series: 'up{job="prod-hangar",instance="n2"}'
+        values: "1 1 0 0 0 0"
+      - series: 'up{job="node",instance="n3"}'
+        values: "1 1 0 0 0 0"
     alert_rule_test:
       - eval_time: 5m
         alertname: HangarDown
@@ -23,6 +28,11 @@ tests:
             exp_annotations:
               summary: "Hangar node n1 is not answering scrapes"
               description: "Prometheus could not scrape n1 for 2 minutes. The process is down, hung, or unreachable from Prometheus."
+              runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangardown"
+          - exp_labels: { severity: critical, job: prod-hangar, instance: n2 }
+            exp_annotations:
+              summary: "Hangar node n2 is not answering scrapes"
+              description: "Prometheus could not scrape n2 for 2 minutes. The process is down, hung, or unreachable from Prometheus."
               runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangardown"
       - eval_time: 7m
         alertname: HangarNotReady
@@ -69,6 +79,8 @@ tests:
         values: "1x10"
       - series: 'hangar_upstream_state{instance="n2",repository="npmjs",state="offline"}'
         values: "0x10"
+      - series: 'hangar_upstream_fetches_total{instance="n1",format="npm",result="circuit_open"}'
+        values: "0+3x10"
       - series: 'hangar_blobstore_operations_total{instance="n1",driver="s3",op="put",result="error"}'
         values: "0+2x20"
       - series: 'hangar_jobs_total{instance="n1",type="blob.gc",result="failed"}'
@@ -94,7 +106,7 @@ tests:
           - exp_labels: { severity: warning, repository: npmjs }
             exp_annotations:
               summary: "Proxy remote of npmjs is offline (circuit breaker open)"
-              description: "Requests for content not yet cached in npmjs fail fast; cached content is still served."
+              description: "Requests for content not yet cached in npmjs fail fast; cached content is still served. Remote fetches have been failing in the last 15 minutes."
               runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangarupstreamcircuitopen"
       - eval_time: 15m
         alertname: HangarBlobStoreErrors
@@ -144,6 +156,27 @@ tests:
               summary: "Database pool on n1 is 95% in use"
               description: "Requests are waiting for database connections; latency rises and requests may time out."
               runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangardatabasepoolsaturated"
+
+  # One failed fetch, then no traffic: the remote stays "offline", but the
+  # alert resolves once the failure is older than 15 minutes.
+  - interval: 1m
+    input_series:
+      - series: 'hangar_upstream_state{instance="n1",repository="pypi-idle",state="offline"}'
+        values: "1x60"
+      - series: 'hangar_upstream_fetches_total{instance="n1",format="pypi",result="error"}'
+        values: "0 1x59"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HangarUpstreamCircuitOpen
+        exp_alerts:
+          - exp_labels: { severity: warning, repository: pypi-idle }
+            exp_annotations:
+              summary: "Proxy remote of pypi-idle is offline (circuit breaker open)"
+              description: "Requests for content not yet cached in pypi-idle fail fast; cached content is still served. Remote fetches have been failing in the last 15 minutes."
+              runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangarupstreamcircuitopen"
+      - eval_time: 40m
+        alertname: HangarUpstreamCircuitOpen
+        exp_alerts: []
 
   - interval: 1m
     input_series:
