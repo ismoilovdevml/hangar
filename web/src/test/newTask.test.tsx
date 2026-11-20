@@ -131,6 +131,33 @@ describe('new import and pre-warm tasks', () => {
     server.events.removeAllListeners();
   });
 
+  it('shows every problem at its field and opens More options when one is inside it', async () => {
+    const user = userEvent.setup();
+    renderApp('/tasks/new?kind=import&repository=npm-internal');
+    const form = await screen.findByRole('form', { name: 'New task' });
+    await user.type(within(form).getByLabelText('Task name'), 'import-nightly');
+    await user.type(within(form).getByLabelText('Source URL'), 'https://old.example.com/repository/npm/');
+    await user.type(within(form).getByLabelText(/^Newest/), '-2');
+    // Set inside More options, which is then closed again.
+    const more = within(form).getByText('More options').closest('details')!;
+    await user.click(within(form).getByText('More options'));
+    await user.type(within(form).getByLabelText('Requests per second'), '-5');
+    await user.click(within(form).getByText('More options'));
+    expect(more).not.toHaveAttribute('open');
+
+    await user.click(within(form).getByRole('button', { name: /Create and run/ }));
+    expect(within(form).getByRole('alert')).toHaveTextContent('2 fields need attention');
+    // The closed section opens to show its problem, and each message is tied to its field.
+    expect(more).toHaveAttribute('open');
+    const rps = within(form).getByLabelText('Requests per second');
+    expect(rps).toHaveAttribute('aria-invalid', 'true');
+    expect(rps).toHaveAccessibleDescription('A positive number');
+    const newest = within(form).getByLabelText(/^Newest/);
+    expect(newest).toHaveAccessibleDescription('A positive number');
+    // The focus goes to the first field with a problem.
+    await waitFor(() => expect(newest).toHaveFocus());
+  });
+
   it('does not start maintenance on its own when opened by link', async () => {
     renderApp('/tasks/new?kind=maintenance');
     const form = await screen.findByRole('form', { name: 'New task' });
