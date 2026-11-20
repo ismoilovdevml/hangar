@@ -23,7 +23,7 @@ Client source URL: `https://<hangar>/repository/<repo>/index.json`.
 | PUT | `api/v2/package` | `PackagePublish/2.0.0` push (multipart, `X-NuGet-ApiKey`) |
 | DELETE | `api/v2/package/{id}/{ver}` | unlist (or delete, see config) |
 | POST | `api/v2/package/{id}/{ver}` | relist |
-| PUT | `api/v2/symbolpackage` | `SymbolPackagePublish/4.9.0` (.snupkg stored next to the package) |
+| PUT | `api/v2/symbolpackage` | refused with 400: symbol packages (.snupkg) are not supported, and the service index does not advertise `SymbolPackagePublish` |
 
 Registration paging follows nuget.org: below 128 versions all pages (64
 versions each) are inlined in the index, from 128 on pages are linked.
@@ -36,7 +36,7 @@ versions each) are inlined in the index, from 128 on pages are linked.
   `listed`, `semver2`, `sha512`, `nuspec` (manifest metadata, catalog-entry
   shaped), `description`, `authors`.
 - Assets at their flat container paths: `.nupkg` (content, `sha512`
-  checksum), `.nuspec` (content, extracted on push), optional `.snupkg`.
+  checksum), `.nuspec` (content, extracted on push).
 - Proxy metadata cache: `_upstream/index.json`, `_upstream/flat/{id}/index.json`,
   `_upstream/registration/{id}.json` (assembled catalog entries), kind metadata.
 

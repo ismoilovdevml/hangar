@@ -76,8 +76,9 @@ func (h *handler) serviceIndex(w http.ResponseWriter, r *http.Request) {
 		add(base+"vulnerabilities/index.json", "Known vulnerabilities, for NuGet Audit", vulnerabilityType)
 	}
 	if _, err := h.writeTarget(r.Context(), repo); err == nil {
+		// No SymbolPackagePublish: symbol packages are not supported, and
+		// without the resource dotnet nuget push does not send them.
 		add(base+"api/v2/package", "Push, unlist and relist", "PackagePublish/2.0.0")
-		add(base+"api/v2/symbolpackage", "Symbol package push", "SymbolPackagePublish/4.9.0")
 	}
 	h.writeJSON(w, r, map[string]any{"version": "3.0.0", "resources": res}, false)
 }

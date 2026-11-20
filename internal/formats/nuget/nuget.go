@@ -12,7 +12,7 @@
 //	PUT  api/v2/package                                     push (multipart .nupkg)
 //	DELETE api/v2/package/{id}/{ver}                        unlist (or delete, see Config)
 //	POST api/v2/package/{id}/{ver}                          relist
-//	PUT  api/v2/symbolpackage                               push a .snupkg
+//	PUT  api/v2/symbolpackage                               refused: symbol packages are not supported
 //
 // Hives: "registration" (SemVer 1 only, identity encoding),
 // "registration-gz" (SemVer 1 only, gzip) and "registration-gz-semver2" (all
@@ -22,7 +22,7 @@
 // lowercased id, version the lowercased normalized version without build
 // metadata. The original id, full version, listed flag and manifest metadata
 // are component attributes. Assets are the .nupkg and the .nuspec at their
-// flat container paths, plus the optional .snupkg.
+// flat container paths.
 //
 // Proxy repositories point at the feed's base URL (https://api.nuget.org);
 // the upstream service index is read from Config.ServiceIndex. Metadata is
@@ -207,10 +207,6 @@ func nupkgPath(lid, lver string) string {
 
 func nuspecPath(lid, lver string) string {
 	return flatPrefix + lid + "/" + lver + "/" + lid + ".nuspec"
-}
-
-func snupkgPath(lid, lver string) string {
-	return flatPrefix + lid + "/" + lver + "/" + lid + "." + lver + ".snupkg"
 }
 
 type handler struct {
