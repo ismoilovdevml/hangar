@@ -46,8 +46,9 @@ export function CleanupPage() {
         {notice ?? ''}
       </p>
       {notice && (
-        <div className="notice" aria-hidden="true">
-          {notice}
+        <div className="notice">
+          {/* Announced by the status line above; the button stays reachable. */}
+          <span aria-hidden="true">{notice}</span>
           <button type="button" className="button button--secondary button--sm" onClick={() => setNotice(null)}>
             Dismiss
           </button>

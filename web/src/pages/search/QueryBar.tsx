@@ -20,7 +20,9 @@ export const QueryBar = forwardRef<QueryBarHandle, QueryBarProps>(function Query
   const [synced, setSynced] = useState(value);
   const [caret, setCaret] = useState(value.length);
   const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
+  // The suggestion picked with the arrow keys or the pointer. None until then,
+  // so Enter after a plain word ("security") searches instead of completing it.
+  const [active, setActive] = useState<number | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const listId = useId();
   const optionId = (i: number) => `${listId}-opt-${i}`;
@@ -35,7 +37,7 @@ export const QueryBar = forwardRef<QueryBarHandle, QueryBarProps>(function Query
 
   const suggestions: Suggestion[] = open ? suggest(draft, caret, context) : [];
   const shown = suggestions.length > 0;
-  const safeActive = Math.min(active, Math.max(0, suggestions.length - 1));
+  const safeActive = active === null || !shown ? null : Math.min(active, suggestions.length - 1);
 
   const pendingCaret = useRef<number | null>(null);
   useEffect(() => {
@@ -48,7 +50,7 @@ export const QueryBar = forwardRef<QueryBarHandle, QueryBarProps>(function Query
     const next = applySuggestion(draft, caret, s);
     setDraft(next.q);
     setCaret(next.caret);
-    setActive(0);
+    setActive(null);
     pendingCaret.current = next.caret;
     setOpen(s.partial);
     input.current?.focus();
@@ -64,16 +66,18 @@ export const QueryBar = forwardRef<QueryBarHandle, QueryBarProps>(function Query
     if (shown) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setActive((safeActive + 1) % suggestions.length);
+        setActive(safeActive === null ? 0 : (safeActive + 1) % suggestions.length);
         return;
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setActive((safeActive - 1 + suggestions.length) % suggestions.length);
+        setActive(safeActive === null ? suggestions.length - 1 : (safeActive - 1 + suggestions.length) % suggestions.length);
         return;
       }
+      // Enter takes a suggestion only once one is picked, else it submits the
+      // search; Tab completes the picked one or the first.
       if (e.key === 'Enter' || e.key === 'Tab') {
-        const s = suggestions[safeActive];
+        const s = e.key === 'Tab' ? suggestions[safeActive ?? 0] : safeActive === null ? undefined : suggestions[safeActive];
         if (s) {
           e.preventDefault();
           accept(s);
@@ -107,7 +111,7 @@ export const QueryBar = forwardRef<QueryBarHandle, QueryBarProps>(function Query
           aria-autocomplete="list"
           aria-expanded={shown}
           aria-controls={listId}
-          aria-activedescendant={shown ? optionId(safeActive) : undefined}
+          aria-activedescendant={safeActive === null ? undefined : optionId(safeActive)}
           aria-keyshortcuts="/"
           autoComplete="off"
           autoCapitalize="off"
@@ -117,7 +121,7 @@ export const QueryBar = forwardRef<QueryBarHandle, QueryBarProps>(function Query
           onChange={(e) => {
             setDraft(e.target.value);
             setCaret(e.target.selectionStart ?? e.target.value.length);
-            setActive(0);
+            setActive(null);
             setOpen(true);
           }}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? draft.length)}

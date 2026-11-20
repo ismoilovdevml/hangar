@@ -68,7 +68,10 @@ describe('cleanup policies', () => {
 
     await user.click(create);
     await waitFor(() => expect(search(history).get('policy')).toBe('docker-dev-prune'));
-    expect(await screen.findByText('Policy docker-dev-prune created.', { selector: '.notice' })).toBeInTheDocument();
+    expect(await screen.findByText('Policy docker-dev-prune created.', { selector: '.notice > span' })).toBeInTheDocument();
+    // The status line announces it; the visible copy's button stays reachable.
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByText('Policy docker-dev-prune created.', { selector: '.notice > span' })).not.toBeInTheDocument();
     const saved = opsMockState.policies.find((p) => p.name === 'docker-dev-prune')!;
     expect(saved).toMatchObject({
       format: 'docker',
@@ -98,7 +101,7 @@ describe('cleanup policies', () => {
     await screen.findByText('Preview · nothing is deleted yet');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save policy' })).toBeEnabled());
     await user.click(screen.getByRole('button', { name: 'Save policy' }));
-    expect(await screen.findByText('Policy docker-lean saved.', { selector: '.notice' })).toBeInTheDocument();
+    expect(await screen.findByText('Policy docker-lean saved.', { selector: '.notice > span' })).toBeInTheDocument();
     expect(opsMockState.policies.find((p) => p.name === 'docker-lean')!.criteria.keep_newest).toBe(1);
   });
 

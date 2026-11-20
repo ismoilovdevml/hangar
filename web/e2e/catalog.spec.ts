@@ -80,6 +80,8 @@ test('search with qualifiers, facets and keyboard', async ({ page }) => {
   await box.pressSequentially('repo:docker-p');
   await expect(page.getByRole('option', { name: /repo:docker-prod/ })).toBeVisible();
   await page.screenshot({ path: shot('search-suggest-1440') });
+  // Enter takes a suggestion only once the arrows picked it.
+  await box.press('ArrowDown');
   await box.press('Enter');
   await box.press('Enter');
   await expect(page).toHaveURL(/q=repo%3Adocker-prod/);

@@ -48,6 +48,18 @@ describe('command palette', () => {
     await waitFor(() => expect(trigger).toHaveFocus());
   });
 
+  it('stays closed while another dialog is open', async () => {
+    const user = userEvent.setup();
+    renderApp('/account');
+    await user.click(await screen.findByRole('button', { name: 'New token' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New personal access token' });
+    const name = within(dialog).getByLabelText('Name');
+    await waitFor(() => expect(name).toHaveFocus());
+    await user.keyboard('{Meta>}k{/Meta}');
+    expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument();
+    expect(name).toHaveFocus();
+  });
+
   it.each([
     ['proxies', 'Proxies', '/settings/proxies', ''],
     ['sso', 'Authentication', '/settings/authentication', ''],

@@ -42,6 +42,8 @@ export function CommandPaletteProvider({ children, onSignOut }: ProviderProps) {
     const onKey = (e: globalThis.KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
+        // Another modal (a dialog, a drawer) owns the keyboard: opening behind it would steal its focus.
+        if (document.querySelector('[aria-modal="true"]:not(.palette)')) return;
         setOpen((v) => !v);
       }
     };
