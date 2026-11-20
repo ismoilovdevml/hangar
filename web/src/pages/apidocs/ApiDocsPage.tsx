@@ -556,7 +556,7 @@ function TryIt({ op, auth, pathParams, queryParams, pathValues, setPathValues, q
           </label>
           <textarea
             id={`${formId}-body`}
-            className="textarea input--mono try__body"
+            className="input input--mono textarea try__body"
             rows={Math.min(14, Math.max(4, body.split('\n').length))}
             value={body}
             onChange={(e) => setBody(e.target.value)}

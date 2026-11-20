@@ -512,41 +512,45 @@ npm install @acme/ui-kit
 | --- | --- |
 | Button | stable |
 | Table | beta |
-
-<script>alert('never runs')</script>
-<img src="javascript:alert(1)" alt="blocked image">
-[Unsafe link](javascript:alert(1))
 `;
 
 /** A signed README image URL as the server issues them (the mock accepts any signature). */
 const imageURL = (componentID: string, kind: 'u' | 'p', source: string) =>
   `/api/v1/components/${componentID}/readme-images/mock-signature?${new URLSearchParams({ [kind]: source })}`;
 
+/**
+ * @acme/ui-kit's facts and README. Exported for the test that adds hostile
+ * markup to it; the README here is what the public demo shows.
+ */
+export function uiKitInfo(id: string): ComponentInfo {
+  return {
+    description: 'Acme UI components',
+    licenses: ['MIT'],
+    keywords: ['react', 'ui', 'components'],
+    homepage: 'https://ui.example.com',
+    readme: {
+      format: 'markdown',
+      // The public demo leaves out the badge whose host is down, so its console stays clean.
+      content: import.meta.env.VITE_DEMO === 'true' ? UI_KIT_README.replace('![Offline](https://offline.example.com/badge.svg)\n', '') : UI_KIT_README,
+      source: 'README in the version manifest',
+      truncated: false,
+      images: {
+        'https://ci.example.com/acme/ui-kit/badge.svg': imageURL(id, 'u', 'https://ci.example.com/acme/ui-kit/badge.svg'),
+        'http://img.example.com/npm/v/@acme/ui-kit.svg': imageURL(id, 'u', 'https://img.example.com/npm/v/@acme/ui-kit.svg'),
+        'https://img.example.com/coverage/acme/ui-kit.svg': imageURL(id, 'u', 'https://img.example.com/coverage/acme/ui-kit.svg'),
+        'https://offline.example.com/badge.svg': imageURL(id, 'u', 'https://offline.example.com/badge.svg'),
+        'docs/screenshot.svg': imageURL(id, 'p', 'package/docs/screenshot.svg'),
+      },
+    },
+    readme_images: 'proxy',
+  };
+}
+
 function componentInfo(c: ComponentDetail): ComponentInfo {
   switch (c.id) {
     case 'c_311':
     case 'c_309':
-      return {
-        description: 'Acme UI components',
-        licenses: ['MIT'],
-        keywords: ['react', 'ui', 'components'],
-        homepage: 'https://ui.example.com',
-        readme: {
-          format: 'markdown',
-          // The public demo leaves out the badge whose host is down, so its console stays clean.
-          content: import.meta.env.VITE_DEMO === 'true' ? UI_KIT_README.replace('![Offline](https://offline.example.com/badge.svg)\n', '') : UI_KIT_README,
-          source: 'README in the version manifest',
-          truncated: false,
-          images: {
-            'https://ci.example.com/acme/ui-kit/badge.svg': imageURL(c.id, 'u', 'https://ci.example.com/acme/ui-kit/badge.svg'),
-            'http://img.example.com/npm/v/@acme/ui-kit.svg': imageURL(c.id, 'u', 'https://img.example.com/npm/v/@acme/ui-kit.svg'),
-            'https://img.example.com/coverage/acme/ui-kit.svg': imageURL(c.id, 'u', 'https://img.example.com/coverage/acme/ui-kit.svg'),
-            'https://offline.example.com/badge.svg': imageURL(c.id, 'u', 'https://offline.example.com/badge.svg'),
-            'docs/screenshot.svg': imageURL(c.id, 'p', 'package/docs/screenshot.svg'),
-          },
-        },
-        readme_images: 'proxy',
-      };
+      return uiKitInfo(c.id);
     case 'c_ledger':
       return { description: 'Double-entry ledger engine', licenses: ['Apache License 2.0'], keywords: [], readme_images: 'proxy' };
     case 'c_1207':

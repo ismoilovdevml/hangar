@@ -12,7 +12,7 @@ import { fetchWholeBuffer, isOlderServer, LOGS_REFRESH_MS, useLogStream, useSyst
 import { AutoRefresh } from './AutoRefresh';
 import { LogList } from './LogList';
 import { isLogLevel, LOG_LEVELS, toJsonLines, type SystemLogsSearch } from './model';
-import { zoneLabel } from '../../lib/format';
+import { formatCount, zoneLabel } from '../../lib/format';
 import './system.css';
 
 const route = getRouteApi('/app/system/logs');
@@ -168,8 +168,8 @@ function LogsView({ filters, nodeOptions, onNode, onFilter }: LogsViewProps) {
                   ? filtered
                     ? 'No records match these filters.'
                     : 'No records in the buffer yet.'
-                  : `Showing ${stream.records.length.toLocaleString('en-US')} record${stream.records.length === 1 ? '' : 's'}`}
-                {stream.buffer && ` · node ${node} keeps ${stream.buffer.size.toLocaleString('en-US')} of ${stream.buffer.capacity.toLocaleString('en-US')}`}
+                  : `Showing ${formatCount(stream.records.length)} record${stream.records.length === 1 ? '' : 's'}`}
+                {stream.buffer && ` · node ${node} keeps ${formatCount(stream.buffer.size)} of ${formatCount(stream.buffer.capacity)}`}
               </p>
               {stream.error !== undefined && <p className="field__error">The last refresh failed: {errorText(stream.error)}</p>}
             </div>

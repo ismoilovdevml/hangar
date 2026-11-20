@@ -29,6 +29,7 @@ import { IconTrash } from '../../components/icons';
 import { IconDownload } from '../../components/opsIcons';
 import { NotAvailable } from '../../components/NotAvailable';
 import { Panel } from '../../components/Panel';
+import { BreakableName } from '../../components/BreakableName';
 import { Pill } from '../../components/Pill';
 import { Toast } from '../../components/Toast';
 import { formatBytes, formatCompact, relativeTime } from '../../lib/format';
@@ -187,7 +188,7 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
           <PackageMark format={c.format} iconUrl={info.data?.icon_url} />
           <div className="pkg-head__text">
             <div className="pkg-head__titles">
-              <h1 className="pkg-head__title">{label}</h1>
+              <h1 className="pkg-head__title"><BreakableName name={label} /></h1>
               {hasVersion(c.version) && <Pill tone="info">{c.version}</Pill>}
               {newest && versions.length > 1 && <Pill tone="ok">Newest</Pill>}
               {c.signed && <Pill tone="ok">Signed</Pill>}
@@ -379,10 +380,6 @@ function Tabs({
           {counts[t] !== undefined && <span className="pkg-tabs__count"> {counts[t]}</span>}
         </button>
       ))}
-      {/* The server does not list dependents yet (GET /components/{id}/dependents answers 501). */}
-      <button type="button" role="tab" aria-selected={false} aria-disabled="true" disabled tabIndex={-1} className="pkg-tabs__tab is-planned" title="Planned: not available yet">
-        Dependents <span className="pkg-tabs__count">(planned)</span>
-      </button>
     </div>
   );
 }

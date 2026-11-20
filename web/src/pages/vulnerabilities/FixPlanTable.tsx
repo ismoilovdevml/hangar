@@ -1,10 +1,11 @@
 import { Fragment, type ReactNode } from 'react';
 import type { PackagePlan, PlanFinding } from '../../api/types';
+import { BreakableName } from '../../components/BreakableName';
 import { MarkdownInline } from '../../components/Markdown';
 import { Pill } from '../../components/Pill';
 import { TableScroll } from '../../components/TableScroll';
 import { plural } from '../../lib/overview';
-import { formatDate } from '../../lib/format';
+import { formatCount, formatDate } from '../../lib/format';
 import {
   advisoryIds,
   findingsSummary,
@@ -104,7 +105,7 @@ export function FixPlanTable({ items, tab, windowDays, inUseDays, expanded, onTo
                           <Chevron />
                         </button>
                         <span className="vplan__names">
-                          <span className="vplan__name">{p.package}</span>
+                          <span className="vplan__name"><BreakableName name={p.package} /></span>
                           <span className="vplan__ids">{advisoryIds(p)}</span>
                         </span>
                       </div>
@@ -208,7 +209,7 @@ function PulledCell({ p, inUseDays }: { p: PackagePlan; inUseDays: number }) {
   if (p.pulls > 0) {
     return (
       <>
-        <b>{p.pulls.toLocaleString('en-US')}</b> by {plural(p.clients, 'client')}
+        <b>{formatCount(p.pulls)}</b> by {plural(p.clients, 'client')}
       </>
     );
   }

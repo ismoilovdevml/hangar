@@ -51,6 +51,13 @@
 .panel__head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
 .panel--flush > .panel__head { padding: 18px 22px 12px; }
 .panel__title { font-size: 16px; font-weight: 700; color: var(--ink); }
+/* A button that reads as a link, at the size of the text around it. */
+.link-button {
+  display: inline; min-height: 0; padding: 0; border: 0; background: none;
+  font: inherit; font-weight: 600; color: var(--lake-ink); text-align: left; overflow-wrap: anywhere; cursor: pointer;
+}
+.link-button:hover { color: var(--lake-ink-hover); text-decoration: underline; }
+.link-button:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
 .panel__link { font-size: 13px; font-weight: 600; }
 .panel__actions { display: flex; align-items: center; gap: 14px; }
 .live-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ink-3); }

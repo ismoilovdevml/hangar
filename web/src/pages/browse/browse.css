@@ -52,8 +52,6 @@
 .tree-row--retry { color: var(--bad-ink); }
 
 .folder-head { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.link-button { padding: 0; border: 0; background: none; color: var(--lake-ink); font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
-.link-button:hover { text-decoration: underline; }
 .member-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; counter-reset: member; }
 .member-list__item { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; counter-increment: member; }
 .member-list__item::before { content: counter(member) "."; width: 18px; color: var(--ink-3); font-size: 13px; }
@@ -82,7 +80,6 @@
 .pkg-tabs__tab:hover { color: var(--ink); }
 .pkg-tabs__tab.is-active { color: var(--lake-ink); border-bottom-color: var(--lake); }
 .pkg-tabs__count { font-weight: 500; color: var(--ink-3); }
-.pkg-tabs__tab.is-planned, .pkg-tabs__tab.is-planned:hover { color: var(--ink-3); cursor: default; }
 .pkg-panel { min-width: 0; display: flex; flex-direction: column; gap: 18px; }
 .pkg-table { margin: 0 -22px -22px; border-top: 1px solid var(--hairline); }
 .pkg-table .data-table th { padding-top: 12px; }

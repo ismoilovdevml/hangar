@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
-import { catalogState } from '../mocks/catalog';
+import { catalogState, uiKitInfo } from '../mocks/catalog';
 import { session } from '../mocks/data';
 import { server } from '../mocks/node';
 import { renderApp } from './render';
@@ -139,6 +139,14 @@ describe('package browser: tree', () => {
 
 describe('package browser: package', () => {
   it('shows a package: header, version card, set-me-up clients and a safely rendered README', async () => {
+    // A README that tries scripts and javascript: URLs; the demo's own README has none.
+    server.use(
+      http.get('*/api/v1/components/c_311/info', () => {
+        const info = uiKitInfo('c_311');
+        const hostile = `<script>alert('never runs')</script>\n<img src="javascript:alert(1)" alt="blocked image">\n[Unsafe link](javascript:alert(1))\n`;
+        return HttpResponse.json({ ...info, readme: info.readme && { ...info.readme, content: `${info.readme.content}\n${hostile}` } });
+      }),
+    );
     const user = userEvent.setup();
     renderApp('/browse?repo=npm-internal&ns=@acme&name=ui-kit');
     const head = await screen.findByRole('region', { name: '@acme/ui-kit 5.3.1' });
@@ -301,8 +309,8 @@ describe('package browser: package', () => {
     await user.click(await screen.findByRole('tab', { name: 'Vulnerabilities' }));
     expect(within(screen.getByRole('table', { name: 'Vulnerabilities' })).getByText('CVE-2026-0001')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Version' })).toHaveTextContent('1 high');
-    // Dependents is planned on the server (501): shown as such, never asked for.
-    expect(screen.getByRole('tab', { name: 'Dependents (planned)' })).toBeDisabled();
+    // The server does not list dependents (501): no tab for them, and never asked for.
+    expect(screen.queryByRole('tab', { name: /Dependents/ })).not.toBeInTheDocument();
     expect(asked.some((p) => p.endsWith('/dependents') || p.endsWith('/sbom'))).toBe(false);
     server.events.removeAllListeners();
   });

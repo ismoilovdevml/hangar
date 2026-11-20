@@ -50,10 +50,13 @@ describe('search', () => {
     const box = await screen.findByRole('combobox', { name: 'Search query' });
     await user.type(box, 'form');
     expect(await screen.findByRole('option', { name: /format:/ })).toBeInTheDocument();
-    await user.keyboard('{Enter}');
+    // Nothing is picked until the arrows pick it.
+    expect(box).not.toHaveAttribute('aria-activedescendant');
+    await user.keyboard('{ArrowDown}{Enter}');
     expect(box).toHaveValue('format:');
     await user.keyboard('ma');
     const option = await screen.findByRole('option', { name: /format:maven/ });
+    await user.keyboard('{ArrowDown}');
     expect(box).toHaveAttribute('aria-activedescendant', option.id);
     await user.keyboard('{Tab}');
     expect(box).toHaveValue('format:maven ');
@@ -71,6 +74,17 @@ describe('search', () => {
     expect(links[1]).toHaveFocus();
     await user.keyboard('{Escape}');
     expect(box).toHaveFocus();
+  });
+
+  it('searches on Enter while suggestions are open but none is picked', async () => {
+    const user = userEvent.setup();
+    const { history } = renderApp('/search');
+    const box = await screen.findByRole('combobox', { name: 'Search query' });
+    await user.type(box, 'security');
+    expect(await screen.findByRole('option', { name: /security:/ })).toBeInTheDocument();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(q(history)).toBe('security'));
+    expect(box).toHaveValue('security');
   });
 
   it('focuses the box with "/"', async () => {

@@ -4,7 +4,7 @@ import type { OverviewMetrics, UpstreamHealth } from '../../api/types';
 import { useGate } from '../../api/permissions';
 import { GATES } from '../../lib/gates';
 import { ErrorNote } from '../../components/ErrorNote';
-import { FORMAT_META, formatBytes, formatCompact, formatPercent } from '../../lib/format';
+import { FORMAT_META, formatBytes, formatCompact, formatCount, formatPercent } from '../../lib/format';
 import { upstreamAuthProblem } from '../../lib/repositories';
 import { headlineUpstream, plural, ratioPercent, storageNote, successRatio, urlHost, type StoreQuota } from '../../lib/overview';
 
@@ -140,7 +140,7 @@ export function SecurityCard({ m, error }: { m?: OverviewMetrics; error: boolean
     note = 'No package has been scanned yet';
   } else {
     value = critical > 0 ? { text: `${critical} critical`, tone: 'bad' } : { text: open > 0 ? 'No critical' : 'Clean', tone: 'ok' };
-    const scanned = scanning ? ` · ${scanning.scanned_components.toLocaleString('en-GB')} scanned` : '';
+    const scanned = scanning ? ` · ${formatCount(scanning.scanned_components)} scanned` : '';
     note = critical > 0 ? `In ${plural(m.issues.packages_affected, 'package')} · ${m.issues.quarantined} quarantined` : `${plural(open, 'open finding')}${scanned}`;
   }
   return (

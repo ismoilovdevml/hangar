@@ -2,8 +2,7 @@
 
 .settings-screen .panel { gap: 16px; }
 .settings-form { display: flex; flex-direction: column; gap: 18px; }
-.settings-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
-.settings-fieldset:disabled .input { background: var(--surface-muted); color: var(--ink-2); }
+/* .settings-fieldset is in repositories/repoForm.css. */
 .settings-file-note code { font-size: 12px; }
 .settings-subsection { display: flex; flex-direction: column; gap: 12px; }
 .form-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -106,7 +105,6 @@
 .proxy-row__result { flex-basis: 100%; margin: 0; }
 .proxy-name { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .proxy-host { font-size: 13px; overflow-wrap: anywhere; color: var(--ink-2); }
-.row-actions { display: inline-flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .proxy-add { align-self: flex-start; gap: 6px; }
 
 /* short form */
@@ -161,12 +159,6 @@
 
 .auth-screen { width: 100%; max-width: 860px; margin: 0 auto; gap: var(--gap); }
 .auth-screen .page-header { align-items: center; }
-.link-button {
-  display: inline; min-height: 0; padding: 0; border: 0; background: none;
-  font: inherit; font-weight: 700; color: var(--lake-ink); cursor: pointer;
-}
-.link-button:hover { color: var(--lake-ink-hover); }
-.link-button:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
 .settings-screen .note { margin: 0; padding: 10px 14px; border-radius: var(--r-small); background: var(--surface-muted); color: var(--ink-2); font-size: 13px; }
 
 /* status chips next to the title */
@@ -215,7 +207,7 @@
   max-width: 100%; padding: 3px 8px; border-radius: 6px; background: var(--surface-muted);
   font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-2); overflow-wrap: anywhere;
 }
-.auth-summary__toggle { font-size: 12px; }
+.link-button.auth-summary__toggle { font-size: 12px; }
 
 .auth-setup { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; border-radius: var(--r-control); background: rgba(255, 255, 255, .6); border: 1px solid var(--hairline); }
 .auth-setup__summary { display: flex; align-items: center; gap: 10px; min-height: 32px; font-size: 13px; font-weight: 700; color: var(--lake-ink); cursor: pointer; list-style: none; }

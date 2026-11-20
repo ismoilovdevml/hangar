@@ -10,7 +10,7 @@ import { FormatBadge } from '../../components/FormatBadge';
 import { FormatIcon } from '../../components/FormatIcon';
 import { Pill } from '../../components/Pill';
 import { Select } from '../../components/Select';
-import { FORMAT_META, formatCompact } from '../../lib/format';
+import { FORMAT_META, formatCompact, formatCount } from '../../lib/format';
 import { Time } from '../../components/Time';
 import { hasVersion, hitName, securityPill } from '../../lib/packages';
 import { isFormat } from '../../lib/repositories';
@@ -128,7 +128,7 @@ export function SearchPage() {
               <h2 id="results-title" className="search-results__count" aria-live="polite">
                 {first ? (
                   <>
-                    <strong>{first.total.toLocaleString('en-GB')}</strong> {first.total === 1 ? 'package' : 'packages'} for “{q}”
+                    <strong>{formatCount(first.total)}</strong> {first.total === 1 ? 'package' : 'packages'} for “{q}”
                   </>
                 ) : results.isError ? (
                   'Search failed'

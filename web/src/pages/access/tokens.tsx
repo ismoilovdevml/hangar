@@ -4,6 +4,7 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { Pill } from '../../components/Pill';
 import { Select } from '../../components/Select';
 import { Time } from '../../components/Time';
+import { useDetailsOpen } from '../../lib/useDetailsOpen';
 import { useNow } from '../../lib/useNow';
 import { useCreateToken, usePermissions, useRepositoryNames, useRevokeToken, useRotateToken, type Token, type TokenCreated } from './api';
 import {
@@ -364,6 +365,7 @@ function TokenForm({ owner, ownerId, onCreated, onCancel }: { owner?: string; ow
   const [networks, setNetworks] = useState('');
   const [readOnly, setReadOnly] = useState(mustReadOnly);
   const [submitted, setSubmitted] = useState(false);
+  const restrictions = useDetailsOpen(readOnly || networks !== '');
   const create = useCreateToken();
   const ids = { name: useId(), date: useId(), networks: useId() };
 
@@ -404,12 +406,12 @@ function TokenForm({ owner, ownerId, onCreated, onCancel }: { owner?: string; ow
         <legend className="field__label">Expires</legend>
         <div className="chip-row">
           {presets.map((d) => (
-            <label key={d} className={expiry === d ? 'chip is-on' : 'chip'}>
+            <label key={d} className={expiry === d ? 'choice-chip is-on' : 'choice-chip'}>
               <input type="radio" name="expiry" className="visually-hidden" checked={expiry === d} onChange={() => setExpiry(d)} />
               {d === 365 ? '1 year' : `${d} days`}
             </label>
           ))}
-          <label className={expiry === 'custom' ? 'chip is-on' : 'chip'}>
+          <label className={expiry === 'custom' ? 'choice-chip is-on' : 'choice-chip'}>
             <input type="radio" name="expiry" className="visually-hidden" checked={expiry === 'custom'} onChange={() => setExpiry('custom')} />
             Custom date
           </label>
@@ -470,7 +472,7 @@ function TokenForm({ owner, ownerId, onCreated, onCancel }: { owner?: string; ow
         {draft.preset === 'custom' && <CustomEditor draft={draft} setDraft={setDraft} privileges={privileges} whose={whose} />}
       </fieldset>
 
-      <details className="advanced" open={readOnly || networks !== ''}>
+      <details className="advanced" {...restrictions}>
         <summary className="advanced__summary">Restrictions (optional)</summary>
         <div className="dialog-form">
           <label className="checkbox">
@@ -487,7 +489,7 @@ function TokenForm({ owner, ownerId, onCreated, onCancel }: { owner?: string; ow
             hint="IP addresses or CIDR networks, one per line, e.g. 203.0.113.7 or 10.20.0.0/16. Empty: any address."
           >
             <textarea
-              className="textarea input--mono"
+              className="input input--mono textarea"
               rows={3}
               value={networks}
               onChange={(e) => setNetworks(e.target.value)}
@@ -672,14 +674,14 @@ function CustomEditor({
           );
         })}
       </div>
-      <div className="system-grid" role="group" aria-label="Administration areas">
+      <div className="area-grid" role="group" aria-label="Administration areas">
         <span className="field__label">Administration</span>
         {SYSTEM_AREAS.map((a) => {
           const id = `sys-${a.id}`;
           const max: SystemLevel = privileges ? ownerLevel(privileges, a.id) : 'admin';
           const current = draft.system[a.id] ?? '';
           return (
-            <div key={a.id} className="system-grid__row">
+            <div key={a.id} className="area-grid__row">
               <label htmlFor={id}>
                 <span className="option__title">{a.label}</span>
                 <span className="option__hint">{max === '' ? `${whose} grant no access here` : a.hint}</span>

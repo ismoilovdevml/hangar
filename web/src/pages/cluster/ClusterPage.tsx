@@ -6,7 +6,6 @@ import { NotAvailable } from '../../components/NotAvailable';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
-import { DOCS } from '../../lib/docs';
 import { versionText } from '../../lib/format';
 import { Time } from '../../components/Time';
 import { formatUptime } from '../../lib/system';
@@ -54,8 +53,7 @@ function NodeCard({ n, now }: { n: ClusterNode; now: Date }) {
 }
 
 /**
- * The nodes serving this registry, from GET /nodes, and an honest word on
- * replication, which the server does not do yet.
+ * The nodes serving this registry, from GET /nodes.
  */
 export function ClusterPage() {
   const cluster = useClusterStatus();
@@ -111,23 +109,6 @@ export function ClusterPage() {
             )}
           </>
         )}
-      </Panel>
-
-      <Panel
-        title={
-          <>
-            Replication <Pill tone="neutral">Planned</Pill>
-          </>
-        }
-        titleId="replication-title"
-      >
-        <p className="meta">
-          Copying repositories to edge or disaster-recovery sites is not available yet. For availability today, run two or more nodes on shared,
-          highly available PostgreSQL and storage.{' '}
-          <a href={DOCS.highAvailability} target="_blank" rel="noreferrer">
-            High availability guide
-          </a>
-        </p>
       </Panel>
     </div>
   );

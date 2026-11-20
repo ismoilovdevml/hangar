@@ -240,6 +240,27 @@ describe('access & audit: tokens', () => {
     });
   });
 
+  it('keeps the restrictions open while you change them', async () => {
+    const user = userEvent.setup();
+    renderApp('/account');
+    await user.click(await screen.findByRole('button', { name: 'New token' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New personal access token' });
+    const restrictions = within(dialog).getByText('Restrictions (optional)').closest('details')!;
+    expect(restrictions).not.toHaveAttribute('open');
+    await user.click(within(dialog).getByText('Restrictions (optional)'));
+    await waitFor(() => expect(restrictions).toHaveAttribute('open'));
+    const readOnly = within(dialog).getByRole('checkbox', { name: /Read-only/ });
+    await user.click(readOnly);
+    await user.click(readOnly);
+    const networks = within(dialog).getByLabelText('Works only from these addresses');
+    await user.type(networks, '10.0.0.0/8');
+    await user.clear(networks);
+    expect(restrictions).toHaveAttribute('open');
+    // Expiry choices: only the chosen one is marked.
+    const chips = within(dialog).getByRole('group', { name: 'Expires' }).querySelectorAll('.choice-chip');
+    expect([...chips].filter((c) => c.classList.contains('is-on'))).toHaveLength(1);
+  });
+
   it('greys out what the owner cannot grant and explains why', async () => {
     server.use(
       http.get('*/api/v1/auth/session', () =>

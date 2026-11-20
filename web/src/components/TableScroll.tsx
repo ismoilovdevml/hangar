@@ -35,19 +35,20 @@ export function TableScroll({ label, children }: { label: string; children: Reac
   const frameRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Rows may have changed with any render: fit again before the browser paints.
-  useLayoutEffect(() => {
-    if (scrollRef.current && frameRef.current) fit(scrollRef.current, frameRef.current);
-  });
-
   useLayoutEffect(() => {
     const scroller = scrollRef.current;
     const frame = frameRef.current;
     if (!scroller || !frame) return;
+    fit(scroller, frame);
     let width = scroller.clientWidth;
     let live = true;
     const onScroll = () => edges(scroller, frame);
     scroller.addEventListener('scroll', onScroll, { passive: true });
+    // Fit again when rows or cells change, not on every render of the page
+    // around the table (a poll that changes nothing then costs no layout).
+    // Mutation callbacks run before the browser paints.
+    const mo = new MutationObserver(() => fit(scroller, frame));
+    mo.observe(scroller, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'data-priority'] });
     const ro =
       typeof ResizeObserver === 'undefined'
         ? null
@@ -62,6 +63,7 @@ export function TableScroll({ label, children }: { label: string; children: Reac
     return () => {
       live = false;
       scroller.removeEventListener('scroll', onScroll);
+      mo.disconnect();
       ro?.disconnect();
     };
   }, []);

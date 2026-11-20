@@ -39,7 +39,8 @@ describe('repositories list', () => {
     const groupRow = within(table).getByText('docker-all').closest('tr')!;
     expect(dockerAll.size_bytes).toBeGreaterThan(0);
     expect(within(groupRow).getByText('via 3 members')).toBeInTheDocument();
-    expect(within(groupRow).getByText(`${dockerAll.component_count} versions`)).toBeInTheDocument();
+    expect(within(groupRow).getByText(`${dockerAll.component_count.toLocaleString('en-US')} versions`)).toBeInTheDocument();
+    expect(within(groupRow).getByText(/^\d{1,3}(,\d{3})+ versions$/)).toBeInTheDocument();
     expect(within(groupRow).getByTitle(/blobs they share are counted once/)).toHaveTextContent(
       `${formatBytes(dockerAll.size_bytes)} via 3 members`,
     );

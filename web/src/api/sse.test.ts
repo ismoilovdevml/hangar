@@ -1,9 +1,12 @@
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
+import { browseKeys } from './browse';
+import { catalogKeys } from './catalog';
 import { applyLiveEvent } from './events';
+import { findingKeys } from './findings';
 import { queryKeys } from './hooks';
 import { createSseParser, openEventStream, type SseMessage, type StreamStatus } from './sse';
-import type { Page, PublishedComponent, UpstreamHealth } from './types';
+import type { LiveEvent, Page, UpstreamHealth } from './types';
 import { recentComponents, upstreams } from '../mocks/data';
 
 describe('SSE parser', () => {
@@ -88,30 +91,31 @@ describe('openEventStream', () => {
 });
 
 describe('applyLiveEvent', () => {
-  it('prepends published components, marks quarantines, drops deletions and updates upstreams', () => {
+  it('refetches what lists packages after component events and updates upstreams in place', () => {
     const qc = new QueryClient();
     const recent = recentComponents();
-    qc.setQueryData<Page<PublishedComponent>>(queryKeys.recentComponents, { items: recent, next_cursor: null });
     qc.setQueryData<Page<UpstreamHealth>>(queryKeys.upstreamHealth('today'), { items: upstreams, next_cursor: null });
-    const invalidated: unknown[] = [];
-    const inv = (k: readonly unknown[]) => invalidated.push(k);
+    const keysAfter = (event: LiveEvent) => {
+      const keys: unknown[] = [];
+      applyLiveEvent(qc, event, (k) => keys.push(k));
+      return keys;
+    };
 
-    const fresh = { ...recent[0]!, id: 'c_new', name: 'fresh' };
-    applyLiveEvent(qc, { type: 'component.published', data: fresh }, inv);
-    applyLiveEvent(qc, { type: 'component.quarantined', data: { id: recent[1]!.id, name: 'x', version: '1' } }, inv);
-    applyLiveEvent(qc, { type: 'component.deleted', data: { id: recent[2]!.id } }, inv);
+    const published = keysAfter({ type: 'component.published', data: { ...recent[0]!, id: 'c_new', name: 'fresh' } });
+    for (const key of [['metrics', 'overview'], queryKeys.repositories, catalogKeys.components, catalogKeys.search, browseKeys.all, findingKeys.all]) {
+      expect(published).toContainEqual(key);
+    }
+    expect(keysAfter({ type: 'component.deleted', data: { id: recent[2]!.id } })).toEqual(published);
+    const quarantined = keysAfter({ type: 'component.quarantined', data: { id: recent[1]!.id, name: 'x', version: '1' } });
+    expect(quarantined).toEqual(expect.arrayContaining([catalogKeys.search, findingKeys.all, ['metrics', 'overview']]));
+
     const npm = upstreams[1]!;
-    applyLiveEvent(qc, { type: 'upstream.status', data: { name: npm.name, url: npm.url, state: 'healthy', previous: 'slow' } }, inv);
-
-    const items = qc.getQueryData<Page<PublishedComponent>>(queryKeys.recentComponents)!.items;
-    expect(items[0]!.id).toBe('c_new');
-    expect(items.find((c) => c.id === recent[1]!.id)!.scan.state).toBe('quarantined');
-    expect(items.some((c) => c.id === recent[2]!.id)).toBe(false);
+    const invalidated = keysAfter({ type: 'upstream.status', data: { name: npm.name, url: npm.url, state: 'healthy', previous: 'slow' } });
     const up = qc.getQueryData<Page<UpstreamHealth>>(queryKeys.upstreamHealth('today'))!.items;
     // The new state is applied; the recorded latency stays.
     expect(up.find((u) => u.name === 'npmjs-proxy')).toMatchObject({ state: 'healthy', latency_ms: npm.latency_ms });
     expect(up).toHaveLength(upstreams.length);
     expect(invalidated).toContainEqual(queryKeys.upstreams);
-    expect(invalidated).toContainEqual(['metrics', 'overview']);
+    expect(invalidated).toContainEqual(queryKeys.systemStatus);
   });
 });

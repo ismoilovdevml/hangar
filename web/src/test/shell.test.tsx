@@ -13,17 +13,17 @@ describe('app shell', () => {
     for (const label of ['Overview', 'Packages', 'Search', 'Repositories', 'Blob stores', 'Cleanup policies', 'Vulnerabilities', 'Access & audit', 'Scheduled tasks', 'Cluster & replication']) {
       expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument();
     }
-    // The mock cluster has a degraded and a silent node: the card says what System status says.
-    const card = (await within(nav).findByText('1 check needs attention')).closest('a')!;
-    expect(card).toHaveClass('system-card--warn');
-    expect(within(nav).getByText('2 of 3 nodes · v1.0.0')).toBeInTheDocument();
     const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' });
     expect(await within(crumbs).findByText('acme-platform')).toBeInTheDocument();
     expect(within(crumbs).getByText('Overview')).toHaveAttribute('aria-current', 'page');
-    // The Overview's header shows the same state instead of the search button.
+    // The mock cluster has a degraded and a silent node: the Overview's header
+    // says what System status says, instead of the search button and once:
+    // the sidebar leaves its status card out here.
     const pill = await screen.findByRole('link', { name: '1 check needs attention' });
     expect(pill).toHaveAttribute('href', '/system/status');
     expect(pill).toHaveClass('status-pill--warn');
+    expect(screen.getAllByText('1 check needs attention')).toHaveLength(1);
+    expect(nav.querySelector('.system-card')).toBeNull();
     expect(screen.queryByText('All systems normal')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Search packages, digests, CVEs/ })).not.toBeInTheDocument();
   });
@@ -43,10 +43,7 @@ describe('app shell', () => {
   it('is grey, not green, while the status loads', async () => {
     server.use(http.get('*/api/v1/system/status', () => new Promise<never>(() => {})));
     renderApp('/');
-    const nav = await screen.findByRole('navigation', { name: 'Primary' });
-    const card = (await within(nav).findByText('Checking status…')).closest('a')!;
-    expect(card).toHaveClass('system-card--neutral');
-    const header = screen.getByRole('banner');
+    const header = await screen.findByRole('banner');
     expect(await within(header).findByRole('link', { name: 'Checking status…' })).toHaveClass('status-pill--neutral');
   });
 
@@ -68,10 +65,8 @@ describe('app shell', () => {
   it('says when the system status cannot be read', async () => {
     server.use(http.get('*/api/v1/system/status', () => HttpResponse.json({ code: 'internal', message: 'boom' }, { status: 500 })));
     renderApp('/');
-    const nav = await screen.findByRole('navigation', { name: 'Primary' });
-    expect(await within(nav).findByText('Status unavailable', {}, { timeout: 4000 })).toBeInTheDocument();
-    const header = screen.getByRole('banner');
-    expect(within(header).getByRole('link', { name: 'Status unavailable' })).toHaveAttribute('href', '/system/status');
+    const header = await screen.findByRole('banner');
+    expect(await within(header).findByRole('link', { name: 'Status unavailable' }, { timeout: 4000 })).toHaveAttribute('href', '/system/status');
   });
 
   it('keeps the sidebar free of an instance badge; the breadcrumb names the instance', async () => {

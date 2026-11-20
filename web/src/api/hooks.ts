@@ -13,7 +13,6 @@ import type {
   OverviewMetrics,
   OverviewRange,
   Page,
-  PublishedComponent,
   Repository,
   RepositoryInput,
   RepositoryList,
@@ -28,7 +27,6 @@ export const queryKeys = {
   authProviders: ['auth', 'providers'] as const,
   formats: ['formats'] as const,
   overview: (range: OverviewRange) => ['metrics', 'overview', range] as const,
-  recentComponents: ['components', 'recent'] as const,
   upstreams: ['upstreams', 'health'] as const,
   upstreamHealth: (range: OverviewRange) => ['upstreams', 'health', range] as const,
   clientEndpoints: ['me', 'client-endpoints'] as const,
@@ -50,13 +48,20 @@ export function useSession() {
   return useQuery(sessionQuery);
 }
 
+/**
+ * How often the shell's indicators (the status pill and card, the bell's To do
+ * list) poll. They are on every page, so once a minute, and never in a hidden
+ * tab; live events and window focus refresh them sooner.
+ */
+export const SHELL_POLL_MS = 60_000;
+
 /** GET /system/status; read it through useSystemHealth() for anything that shows health. */
 export function useSystemStatus() {
   return useQuery({
     queryKey: queryKeys.systemStatus,
     queryFn: ({ signal }) => apiFetch<SystemStatus>('/system/status', { signal, allowUnauthorized: true }),
-    // As often as the System status screen, so the two never tell different stories for long.
-    refetchInterval: 15_000,
+    refetchInterval: SHELL_POLL_MS,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -126,21 +131,9 @@ export function useOverview(range: OverviewRange) {
     queryFn: ({ signal }) =>
       // Days start at the viewer's midnight, as the times on the card are local.
       apiFetch<OverviewMetrics>('/metrics/overview', { query: { range, tz_offset: tzOffsetMinutes() || undefined }, signal }),
-    refetchInterval: 60_000,
+    refetchInterval: SHELL_POLL_MS,
+    refetchIntervalInBackground: false,
     placeholderData: keepPreviousData,
-  });
-}
-
-export const RECENT_LIMIT = 6;
-
-export function useRecentComponents() {
-  return useQuery({
-    queryKey: queryKeys.recentComponents,
-    queryFn: ({ signal }) =>
-      apiFetch<Page<PublishedComponent>>('/components', {
-        query: { sort: '-published_at', limit: RECENT_LIMIT },
-        signal,
-      }),
   });
 }
 
@@ -149,7 +142,8 @@ export function useUpstreamHealth(range: OverviewRange) {
   return useQuery({
     queryKey: queryKeys.upstreamHealth(range),
     queryFn: ({ signal }) => apiFetch<Page<UpstreamHealth>>('/upstreams/health', { query: { range, tz_offset: tzOffsetMinutes() || undefined }, signal }),
-    refetchInterval: 30_000,
+    refetchInterval: SHELL_POLL_MS,
+    refetchIntervalInBackground: false,
     placeholderData: keepPreviousData,
   });
 }

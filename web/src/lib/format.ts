@@ -20,6 +20,13 @@ export function formatBytes(bytes: number): string {
   return `${value} ${unit}`;
 }
 
+const COUNT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+
+/** A count in full with thousands separators, the one way to show one: 76992 → "76,992". */
+export function formatCount(n: number): string {
+  return COUNT.format(n);
+}
+
 /** 18_400_000 → "18.4M", 1200 → "1.2K". */
 export function formatCompact(n: number): string {
   const abs = Math.abs(n);
@@ -105,6 +112,21 @@ export function formatTime(v: When, opts: { seconds?: boolean; zone?: boolean } 
   if (!d) return String(v);
   const text = `${formatDate(d)}, ${formatClock(d, { seconds: opts.seconds })}`;
   return opts.zone === false ? text : `${text} (${zoneLabel(d)})`;
+}
+
+/**
+ * Server-written text with RFC 3339 instants in it ("No heartbeat since
+ * 2026-11-15T08:34:39.547Z"), with each instant as formatTime shows it.
+ */
+export function localTimesInText(text: string): string {
+  return text.replace(/\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})/g, (iso) => formatTime(iso));
+}
+
+/** A calendar day sent without a time ("2026-10-26") as "26 Oct": the day as written, in no zone. */
+export function formatDayMonth(day: string): string {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(day);
+  const month = m ? MONTH[Number(m[1]) - 1] : undefined;
+  return m && month ? `${Number(m[2])} ${month}` : day;
 }
 
 /** The same instant in UTC, for hover text: "11 Nov 2026, 07:23:05 UTC". */

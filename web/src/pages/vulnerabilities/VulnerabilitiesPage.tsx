@@ -19,7 +19,7 @@ import { FormatIcon } from '../../components/FormatIcon';
 import { IconSearch } from '../../components/icons';
 import { Panel } from '../../components/Panel';
 import { Select, type SelectOption } from '../../components/Select';
-import { relativeTime } from '../../lib/format';
+import { formatCount, formatDayMonth, relativeTime } from '../../lib/format';
 import { plural } from '../../lib/overview';
 import { errorText, hasFilters, PLAN_TABS, planQuery, type VulnSearch } from '../../lib/vulnerabilities';
 import { FindingDrawer } from './FindingDrawer';
@@ -51,14 +51,14 @@ function ScanState({ status, canRescan, canFollow }: { status?: ScanningStatus; 
   // "60 of 65 scanned (5 unsupported)": the packages a rescan walks are all of them, so say why some are not counted.
   const total = c.scanned + c.failed + c.never + c.unsupported;
   const rest = [c.unsupported && `${c.unsupported} unsupported`, c.failed && `${c.failed} failed`, c.never && `${c.never} not yet`].filter(Boolean).join(', ');
-  const coverage = total > c.scanned ? `${c.scanned.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} scanned (${rest})` : `${c.scanned.toLocaleString('en-US')} scanned`;
+  const coverage = total > c.scanned ? `${formatCount(c.scanned)} of ${formatCount(total)} scanned (${rest})` : `${formatCount(c.scanned)} scanned`;
   return (
     <div className="vhead__scan">
       <span className="vhead__meta" role="status">
         {!status.enabled
           ? 'Scanning is turned off on this server'
           : running
-            ? `Rescanning · ${run.done.toLocaleString('en-US')} of ${plural(run.total, 'package')} (${pct}%)`
+            ? `Rescanning · ${formatCount(run.done)} of ${plural(run.total, 'package')} (${pct}%)`
             : `${coverage} · ${status.images?.enabled ? 'OSV + Trivy' : 'OSV'} · ${c.last_scan_at ? `checked ${relativeTime(c.last_scan_at).toLowerCase()}` : 'not checked yet'}`}
         {status.enabled && status.images?.enabled && status.images.error && (
           <span className="vhead__warn" title={status.images.error}>
@@ -376,7 +376,7 @@ export function VulnerabilitiesPage() {
           <p className="meta" aria-live="polite">
             {data
               ? `${plural(items.length, 'package')}${filtered ? ' match' : ''} · pulls of the last ${data.window_days} days${
-                  data.pulls_since ? `, recorded since ${new Date(`${data.pulls_since}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}` : ''
+                  data.pulls_since ? `, recorded since ${formatDayMonth(data.pulls_since)}` : ''
                 } · in use = downloaded in the last ${data.in_use_days} days`
               : ' '}
           </p>

@@ -14,26 +14,9 @@
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   padding: 10px 14px; border-radius: var(--r-control); background: var(--ok-bg); color: var(--ok-ink); font-size: 14px; font-weight: 600;
 }
-.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 14px 20px; margin: 0; }
-.facts > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.facts dt { font-size: 12px; font-weight: 600; color: var(--ink-3); }
-.facts dd { margin: 0; font-size: 14px; color: var(--ink); overflow-wrap: anywhere; }
+/* .facts itself is in catalog.css. */
 .facts--compact { grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 10px 18px; }
 .facts--compact code { font-size: 12px; }
-
-/* ---------- confirm dialog ---------- */
-.dialog-scrim {
-  position: fixed; inset: 0; z-index: var(--z-modal); display: flex; align-items: center; justify-content: center;
-  padding: 16px; background: var(--scrim);
-}
-.dialog {
-  width: min(480px, 100%); max-height: calc(100vh - 32px); overflow-y: auto;
-  display: flex; flex-direction: column; gap: 14px; padding: 22px;
-  border-radius: var(--r-panel); background: var(--surface-solid); box-shadow: var(--shadow-modal);
-}
-.dialog__title { font-size: 18px; font-weight: 700; color: var(--ink-strong); }
-.dialog__body { display: flex; flex-direction: column; gap: 8px; font-size: 14px; color: var(--ink-2); overflow-wrap: anywhere; }
-.dialog__actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 
 /* ---------- cleanup ---------- */
 .cleanup-layout { display: flex; flex-wrap: wrap; gap: var(--gap); align-items: flex-start; }
@@ -241,9 +224,7 @@
 }
 .new-task__actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
 .new-task__actions .checkbox { margin-right: auto; }
-.link-button { border: 0; background: none; padding: 0; font: inherit; font-size: 12px; font-weight: 600; color: var(--lake-ink); cursor: pointer; }
-.link-button:hover { text-decoration: underline; }
-.link-button:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
+.new-task .link-button { font-size: 12px; }
 .import-result { display: flex; flex-direction: column; gap: 8px; }
 .import-result__items { margin: 0; padding-left: 18px; font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); max-height: 160px; overflow: auto; }
 @media (max-width: 720px) {

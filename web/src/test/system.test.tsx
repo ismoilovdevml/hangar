@@ -316,7 +316,7 @@ describe('system model', () => {
 });
 
 describe('cluster & replication', () => {
-  it('lists the nodes from the server and says replication is planned', async () => {
+  it('lists the nodes from the server, with no promise of replication', async () => {
     renderApp('/cluster');
     const nodes = await screen.findByRole('list', { name: 'Cluster nodes' });
     const cards = await within(nodes).findAllByRole('listitem');
@@ -326,9 +326,7 @@ describe('cluster & replication', () => {
     expect(cards[0]).toHaveTextContent('v1.0.0');
     expect(screen.getByText('All 3 nodes are healthy')).toBeInTheDocument();
     expect(screen.getByText(/Quorum held · hangar-1 runs scheduled tasks/)).toBeInTheDocument();
-    const replication = screen.getByRole('region', { name: /Replication/ });
-    expect(replication).toHaveTextContent('Planned');
-    expect(within(replication).getByRole('link', { name: 'High availability guide' })).toHaveAttribute('href', expect.stringContaining('high-availability.md'));
+    expect(screen.queryByRole('region', { name: /Replication/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/This screen is in progress/)).not.toBeInTheDocument();
   });
 

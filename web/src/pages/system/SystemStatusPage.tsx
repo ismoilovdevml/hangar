@@ -8,7 +8,7 @@ import { ErrorNote } from '../../components/ErrorNote';
 import { IconRefresh } from '../../components/opsIcons';
 import { Pill } from '../../components/Pill';
 import { formatUptime } from '../../lib/system';
-import { formatTime, formatUtc } from '../../lib/format';
+import { formatTime, formatUtc, localTimesInText } from '../../lib/format';
 import { Time } from '../../components/Time';
 import { useNow } from '../../lib/useNow';
 import { STATUS_REFRESH_MS, systemKeys, useSystemNodes } from './api';
@@ -190,7 +190,7 @@ function CheckRow({ s, node, open, onToggle, now, canLogs, canSettings }: RowPro
         <span className="check__name">
           {s.label} <span className="visually-hidden">({h.label.toLowerCase()})</span>
         </span>
-        <span className="check__summary">{s.detail}</span>
+        <span className="check__summary">{localTimesInText(s.detail)}</span>
         <span className="check__end">
           {s.status !== 'healthy' && <Pill tone={h.tone}>{h.label}</Pill>}
           {metric && <span className="check__metric">{metric}</span>}

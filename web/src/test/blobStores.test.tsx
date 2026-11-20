@@ -238,6 +238,6 @@ describe('blob stores', () => {
     await user.click(within(screen.getByRole('alertdialog', { name: 'Run blob compaction now?' })).getByRole('button', { name: 'Run compaction' }));
     expect(await within(card).findByRole('link', { name: 'Compaction running' })).toBeInTheDocument();
     expect(runs).toEqual(['/api/v1/tasks/t_compact/run']);
-    expect(screen.getAllByRole('button', { name: 'Move repositories (planned)' })[0]).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Move repositories/ })).not.toBeInTheDocument();
   });
 });

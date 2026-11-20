@@ -179,19 +179,22 @@ export function Sidebar() {
         </button>
         </div>
 
-        <Link to="/system/status" className={`system-card system-card--${health.tone}`}>
-          <span className="system-card__body" role="status" aria-live="polite">
-            <span className="system-card__state">
-              <span className={`status__dot dot-${health.tone}${health.tone === 'neutral' ? '' : ' status__dot--halo'}`} aria-hidden="true" />
-              {health.text}
-            </span>
-            {sys && !health.error && (
-              <span className="system-card__meta">
-                {sys.nodes_up} of {sys.nodes_total} {sys.nodes_total === 1 ? 'node' : 'nodes'} · {versionText(sys.version)}
+        {/* The Overview's top bar shows the same state (TopBar's StatusPill): one place at a time. */}
+        {pathname !== '/' && (
+          <Link to="/system/status" className={`system-card system-card--${health.tone}`}>
+            <span className="system-card__body" role="status" aria-live="polite">
+              <span className="system-card__state">
+                <span className={`status__dot dot-${health.tone}${health.tone === 'neutral' ? '' : ' status__dot--halo'}`} aria-hidden="true" />
+                {health.text}
               </span>
-            )}
-          </span>
-        </Link>
+              {sys && !health.error && (
+                <span className="system-card__meta">
+                  {sys.nodes_up} of {sys.nodes_total} {sys.nodes_total === 1 ? 'node' : 'nodes'} · {versionText(sys.version)}
+                </span>
+              )}
+            </span>
+          </Link>
+        )}
       </div>
     </nav>
   );
