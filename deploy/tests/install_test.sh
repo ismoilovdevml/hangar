@@ -24,6 +24,8 @@ setup() {
 	: >"$T/log/docker.log"
 	: >"$T/log/chown.log"
 	: >"$T/log/curl.log"
+	: >"$T/log/curl-args.log"
+	: >"$T/log/curl-config.log"
 
 	cat >"$T/bin/docker" <<'EOF'
 #!/usr/bin/env bash
@@ -41,6 +43,7 @@ compose)
 	exec\ -T\ postgres\ pg_dump*)
 		# Like the real exec, read stdin: under `curl | bash` that is the script.
 		cat >/dev/null
+		[[ -z "${FAKE_DUMP_FAILS:-}" ]] || exit 1
 		echo "PGDMP fake dump" ;;
 	pull*) [[ -z "${FAKE_OFFLINE:-}" ]] ;;
 	"up -d --remove-orphans")
@@ -67,10 +70,13 @@ EOF
 
 	cat >"$T/bin/curl" <<'EOF'
 #!/usr/bin/env bash
-out="" url=""
+echo "$*" >>"$FAKE_LOG/curl-args.log"
+out="" url="" write=""
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	-o) out=$2; shift 2 ;;
+	-w) write=$2; shift 2 ;;
+	--config) [[ "$2" != - ]] || cat >>"$FAKE_LOG/curl-config.log"; shift 2 ;;
 	--retry | --connect-timeout | --max-time) shift 2 ;;
 	http*) url=$1; shift ;;
 	*) shift ;;
@@ -82,7 +88,13 @@ case "$url" in
 */readyz) [[ -z "${FAKE_NOT_READY:-}" ]] ;;
 */api/v1/system/status) echo '{"version":"9.9.9","nodes":[]}' ;;
 https://api.github.com/repos/ismoilovdevml/hangar/releases/latest)
+	# Rate limited: 403, which -f turns into exit 22.
+	[[ -z "${FAKE_API_LIMITED:-}" ]] || exit 22
 	printf '{\n  "tag_name": "%s",\n  "name": "x"\n}\n' "${FAKE_LATEST:-v9.9.9}" ;;
+https://github.com/ismoilovdevml/hangar/releases/latest)
+	# The redirect to the latest release's tag page (curl -L -w url_effective).
+	[[ "$write" == '%{url_effective}' ]] || exit 2
+	printf 'https://github.com/ismoilovdevml/hangar/releases/tag/%s' "${FAKE_LATEST:-v9.9.9}" ;;
 https://github.com/ismoilovdevml/hangar/releases/download/*)
 	f=$FAKE_RELEASES/${url#https://github.com/ismoilovdevml/hangar/releases/download/}
 	[[ -f "$f" ]] || exit 22
@@ -109,6 +121,7 @@ EOF
 	export FAKE_MIRROR=http://mirror.example.com/hangar
 	export HANGAR_INSTALL_TTY=$T/no-terminal HANGAR_INSTALL_READY_TIMEOUT=2
 	unset FAKE_RUNNING_DIR FAKE_PG_RUNNING FAKE_OFFLINE FAKE_NOT_READY FAKE_NO_LOCAL_IMAGES FAKE_LATEST FAKE_NO_PASSWORD
+	unset FAKE_DUMP_FAILS FAKE_API_LIMITED GITHUB_TOKEN
 }
 
 teardown() { rm -rf "$T"; }
@@ -345,6 +358,58 @@ test_latest_version_lookup() {
 	check "exit 0" ok
 	check "latest asked from the API" contains "$T/log/curl.log" "api.github.com/repos/ismoilovdevml/hangar/releases/latest"
 	check "latest image" env_is "$T/d" HANGAR_IMAGE ghcr.io/ismoilovdevml/hangar:9.9.11
+	check "no token, no auth header" test ! -s "$T/log/curl-config.log"
+}
+
+# The API's unauthenticated limit (60 an hour) is used up: the redirect of
+# the release page names the latest tag instead.
+test_latest_version_rate_limited() {
+	make_release v9.9.11
+	export FAKE_LATEST=v9.9.11 FAKE_API_LIMITED=1
+	run_install --data-dir "$T/d" --yes
+	check "exit 0" ok
+	check "release page asked" contains "$T/log/curl.log" "https://github.com/ismoilovdevml/hangar/releases/latest"
+	check "latest image" env_is "$T/d" HANGAR_IMAGE ghcr.io/ismoilovdevml/hangar:9.9.11
+}
+
+test_latest_version_with_token() {
+	make_release v9.9.11
+	export FAKE_LATEST=v9.9.11 GITHUB_TOKEN=ghp_0123456789secret
+	run_install --data-dir "$T/d" --yes
+	check "exit 0" ok
+	check "API asked with the token" contains "$T/log/curl-config.log" 'header = "Authorization: Bearer ghp_0123456789secret"'
+	check "token not on a command line" absent "$T/log/curl-args.log" "ghp_0123456789secret"
+	check "latest image" env_is "$T/d" HANGAR_IMAGE ghcr.io/ismoilovdevml/hangar:9.9.11
+}
+
+# A failed pre-upgrade backup, then a re-run: .env already names the new
+# version, but the database is still at the old one and is backed up now.
+test_backup_retried_after_failed_upgrade() {
+	local D=$T/srv/hangar
+	run_install --data-dir "$D" --version v9.9.9 --yes
+	check "first run" ok
+	make_release v9.9.10
+	export FAKE_PG_RUNNING=1 FAKE_DUMP_FAILS=1
+	: >"$T/log/docker.log"
+	run_install --data-dir "$D" --version v9.9.10 --yes
+	check "backup failure stops the upgrade" failed_with "database backup failed"
+	check "not started" absent "$T/log/docker.log" "compose up"
+	check "upgrade start recorded" env_is "$D" HANGAR_UPGRADE_FROM v9.9.9
+	unset FAKE_DUMP_FAILS
+	rm -f "$D"/backups/pre-upgrade-*.dump
+	: >"$T/log/docker.log"
+	run_install --data-dir "$D" --version v9.9.10 --yes
+	check "re-run" ok
+	check "database dumped on the re-run" contains "$T/log/docker.log" "pg_dump"
+	check "dump named after the old version" test -n "$(find "$D/backups" -name 'pre-upgrade-v9.9.9-*.dump')"
+	check "marker removed" absent "$D/.env" "HANGAR_UPGRADE_FROM"
+	check "version updated" env_is "$D" HANGAR_VERSION v9.9.10
+	check "upgrade message" contains "$OUT" "(was v9.9.9)"
+	# Once backed up, the next run of the same version does not dump again.
+	: >"$T/log/docker.log"
+	run_install --data-dir "$D" --version v9.9.10 --yes
+	check "third run" ok
+	check "no second dump" absent "$T/log/docker.log" "pg_dump"
 }
 
 test_interactive_domain_with_caddy() {
