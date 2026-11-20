@@ -1,18 +1,32 @@
 name: Release
 
-# Publishes a release from a version tag, after the full test suite passes on
-# the tagged commit (the jobs test-go, lint-go, test-web and deploy-check;
-# nothing is built or pushed until all four are green). Setting the repository
-# variable RELEASE_SKIP_TESTS to 'true' skips them (emergency only); any
-# other value runs them. The tag must match the Helm chart's appVersion.
+# Publishes a release from a version tag, after the full test suite and the
+# security scans pass on the tagged commit (the jobs test-go, lint-go,
+# test-web, deploy-check and security; nothing is built for publishing or
+# pushed until all five are green). Setting the repository variable
+# RELEASE_SKIP_TESTS to 'true' skips them (emergency only); any other value
+# runs them. The tag must match the Helm chart's version and appVersion.
 #   - container image ghcr.io/<owner>/hangar (linux/amd64 + linux/arm64, built
 #     natively per architecture, web UI embedded), smoke-tested per architecture
 #     against PostgreSQL before it is tagged <version>, <major>.<minor> and latest
 #   - the image scan adapter ghcr.io/<owner>/hangar-scanner (the official
 #     Trivy image plus a cross-compiled binary), smoke-tested by digest before
 #     it gets the same tags
+#   - the Helm chart as an OCI artifact, oci://ghcr.io/<owner>/charts/hangar,
+#     version <version>, pushed only after both images passed
 #   - hangar binaries for linux (amd64, arm64) with SHA256SUMS
-#   - a GitHub Release with the binaries, the compose stack (one archive) and deploy/install.sh
+#   - a GitHub Release with the binaries, the compose stack (one archive),
+#     deploy/install.sh, the SBOMs and the signature bundles
+#
+# Supply chain (docs/deploy/verify-release.md):
+#   - both images (by digest, every platform) and the chart are signed with
+#     cosign, keyless: the certificate names this workflow and the tag
+#   - SPDX JSON SBOMs (syft) of each image platform are attached to the image
+#     as cosign attestations and to the GitHub Release, as are the SBOMs of
+#     the binaries
+#   - SLSA build provenance (actions/attest-build-provenance) for both images,
+#     the chart and every release file
+#   - every release file has a cosign bundle <file>.sigstore.json
 #
 # Tags: vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-PRERELEASE. Pre-releases get
 # only the <version> image tag and are not marked as the latest release.
@@ -34,6 +48,11 @@ concurrency:
   group: release-${{ inputs.version || github.ref_name }}
   cancel-in-progress: false
 
+env:
+  # The Trivy release the scan adapter image is built on
+  # (deploy/scanner/Dockerfile); the release gate scans with the same one.
+  TRIVY_IMAGE: aquasec/trivy:0.76.1
+
 jobs:
   meta:
     name: Version
@@ -44,6 +63,7 @@ jobs:
       minor: ${{ steps.v.outputs.minor }}
       prerelease: ${{ steps.v.outputs.prerelease }}
       image: ${{ steps.v.outputs.image }}
+      chart: ${{ steps.v.outputs.chart }}
       commit: ${{ steps.v.outputs.commit }}
       epoch: ${{ steps.v.outputs.epoch }}
       date: ${{ steps.v.outputs.date }}
@@ -74,13 +94,15 @@ jobs:
             echo "minor=${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
             echo "prerelease=$prerelease"
             echo "image=ghcr.io/${OWNER,,}/hangar"
+            echo "chart=ghcr.io/${OWNER,,}/charts/hangar"
             echo "commit=$(git rev-parse --short=12 HEAD)"
             echo "epoch=$epoch"
             echo "date=$(date -u -d "@$epoch" +%Y-%m-%dT%H:%M:%SZ)"
           } >> "$GITHUB_OUTPUT"
 
-  # ---- Release gate: the tagged commit must pass every test before any
-  # image, binary or release is published. These jobs run in parallel.
+  # ---- Release gate: the tagged commit must pass every test and scan before
+  # any image, binary, chart or release is published. These jobs run in
+  # parallel.
   test-go:
     name: Go tests (race, PostgreSQL)
     needs: meta
@@ -133,7 +155,7 @@ jobs:
           version: v2.15.0
 
   test-web:
-    name: Web (lint, typecheck, vitest, build)
+    name: Web (audit, lint, typecheck, vitest, build)
     needs: meta
     if: vars.RELEASE_SKIP_TESTS != 'true'
     runs-on: ubuntu-24.04
@@ -147,13 +169,17 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm --prefix web ci --no-audit --no-fund
+      # Only what ships in the embedded UI: development tooling never reaches
+      # a browser.
+      - name: npm audit (runtime dependencies, high and critical)
+        run: npm --prefix web audit --omit=dev --audit-level=high
       - run: npm --prefix web run lint
       - run: npm --prefix web run typecheck
       - run: npm --prefix web test
       - run: npm --prefix web run build
 
   deploy-check:
-    name: Installer tests and helm lint
+    name: Installer tests, helm lint and kubeconform
     needs: meta
     if: vars.RELEASE_SKIP_TESTS != 'true'
     runs-on: ubuntu-24.04
@@ -164,20 +190,94 @@ jobs:
       - uses: azure/setup-helm@v4
         with:
           version: v4.3.1
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - name: Install kubeconform
+        run: go install github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
       - name: Installer tests
         run: bash deploy/tests/install_test.sh
-      - name: helm lint and template
+      # KUBECONFORM_REQUIRED makes helm-template fail instead of skipping the
+      # schema validation when kubeconform is missing.
+      - name: helm lint, template and kubeconform
+        env:
+          KUBECONFORM_REQUIRED: "1"
         run: make helm-lint helm-template
+
+  security:
+    name: Security scans (govulncheck, Trivy)
+    needs: meta
+    if: vars.RELEASE_SKIP_TESTS != 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.version }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./cmd/... ./internal/... ./deploy/...
+      - uses: docker/setup-buildx-action@v4
+      # Built here only to be scanned: the published images are built by the
+      # image and scanner jobs after this gate, from the same commit and
+      # the same base images.
+      - name: Build the server image to scan
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: hangar:scan
+          build-args: |
+            VERSION=${{ needs.meta.outputs.version }}
+            COMMIT=${{ needs.meta.outputs.commit }}
+            SOURCE_DATE_EPOCH=${{ needs.meta.outputs.epoch }}
+          cache-from: type=gha,scope=release-amd64
+      - name: Build the scan adapter image to scan
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/scanner/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: hangar-scanner:scan
+          build-args: |
+            VERSION=${{ needs.meta.outputs.version }}
+            COMMIT=${{ needs.meta.outputs.commit }}
+          cache-from: type=gha,scope=release-scanner
+      # Fails on CRITICAL vulnerabilities that have a fixed version; those
+      # without a fix are reported by the scan adapter in production instead.
+      - name: Trivy (CRITICAL with a fix fails the release)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/trivy-cache"
+          for img in hangar:scan hangar-scanner:scan; do
+            echo "::group::trivy image $img"
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$RUNNER_TEMP/trivy-cache:/root/.cache/trivy" \
+              "$TRIVY_IMAGE" image --scanners vuln --severity CRITICAL --ignore-unfixed \
+              --exit-code 1 --no-progress "$img"
+            echo "::endgroup::"
+          done
 
   image:
     name: Image (${{ matrix.arch }})
-    needs: [meta, test-go, lint-go, test-web, deploy-check]
-    # Every test job passed, or the tests were skipped on purpose.
+    needs: [meta, test-go, lint-go, test-web, deploy-check, security]
+    # Every gate job passed, or the gate was skipped on purpose.
     if: >-
       ${{ !cancelled() && needs.meta.result == 'success' &&
       (vars.RELEASE_SKIP_TESTS == 'true' ||
       (needs.test-go.result == 'success' && needs.lint-go.result == 'success' &&
-      needs.test-web.result == 'success' && needs.deploy-check.result == 'success')) }}
+      needs.test-web.result == 'success' && needs.deploy-check.result == 'success' &&
+      needs.security.result == 'success')) }}
     strategy:
       fail-fast: true
       matrix:
@@ -266,6 +366,20 @@ jobs:
       - name: Container logs
         if: always()
         run: docker logs smoke 2>&1 | tail -n 100 || true
+      - uses: anchore/sbom-action/download-syft@v0
+        id: syft
+      # The manifest job attaches it to the multi-arch image as a cosign
+      # attestation; the release job publishes it with the release.
+      - name: SBOM
+        env:
+          SYFT: ${{ steps.syft.outputs.cmd }}
+          REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/sbom
+          "$SYFT" scan "registry:$REF" --platform "linux/$ARCH" \
+            -o "spdx-json=/tmp/sbom/hangar-image-linux-$ARCH.spdx.json"
       - name: Export digest
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
@@ -278,20 +392,35 @@ jobs:
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sbom-image-${{ matrix.arch }}
+          path: /tmp/sbom/*
+          if-no-files-found: error
+          retention-days: 1
 
   manifest:
-    name: Image manifest and tags
+    name: Image manifest, tags and signatures
     needs: [meta, image]
     if: ${{ !cancelled() && needs.image.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
+      id-token: write  # keyless cosign signing and build provenance
+      attestations: write
+    outputs:
+      digest: ${{ steps.index.outputs.digest }}
     steps:
       - uses: actions/download-artifact@v8
         with:
           path: /tmp/digests
           pattern: digests-*
+          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          path: /tmp/sbom
+          pattern: sbom-image-*
           merge-multiple: true
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
@@ -299,7 +428,9 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: sigstore/cosign-installer@v3
       - name: Create the multi-arch image
+        id: index
         working-directory: /tmp/digests
         env:
           IMAGE: ${{ needs.meta.outputs.image }}
@@ -325,20 +456,42 @@ jobs:
             --annotation "index:org.opencontainers.image.description=Self-hosted package registry" \
             "${sources[@]}"
           docker buildx imagetools inspect "$IMAGE:$SEMVER"
+          digest=$(docker buildx imagetools inspect "$IMAGE:$SEMVER" --format '{{json .Manifest}}' | jq -r .digest)
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::no index digest for $IMAGE:$SEMVER: $digest"; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      # The index and every manifest in it, so a pull of one platform by
+      # digest verifies too.
+      - name: Sign and attach the SBOMs
+        env:
+          REF: ${{ needs.meta.outputs.image }}@${{ steps.index.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes --recursive "$REF"
+          for f in /tmp/sbom/*.spdx.json; do
+            cosign attest --yes --type spdxjson --predicate "$f" "$REF"
+          done
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ needs.meta.outputs.image }}
+          subject-digest: ${{ steps.index.outputs.digest }}
+          push-to-registry: true
 
   scanner:
     name: Scan adapter image
-    needs: [meta, test-go, lint-go, test-web, deploy-check]
-    # Every test job passed, or the tests were skipped on purpose.
+    needs: [meta, test-go, lint-go, test-web, deploy-check, security]
+    # Every gate job passed, or the gate was skipped on purpose.
     if: >-
       ${{ !cancelled() && needs.meta.result == 'success' &&
       (vars.RELEASE_SKIP_TESTS == 'true' ||
       (needs.test-go.result == 'success' && needs.lint-go.result == 'success' &&
-      needs.test-web.result == 'success' && needs.deploy-check.result == 'success')) }}
+      needs.test-web.result == 'success' && needs.deploy-check.result == 'success' &&
+      needs.security.result == 'success')) }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
+      id-token: write  # keyless cosign signing and build provenance
+      attestations: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -378,6 +531,7 @@ jobs:
           docker run --rm "$REF" version | grep -q "hangar-scanner $VERSION "
           docker run --rm --entrypoint trivy "$REF" --version
       - name: Tag
+        id: tag
         env:
           IMAGE: ${{ needs.meta.outputs.image }}-scanner
           DIGEST: ${{ steps.build.outputs.digest }}
@@ -392,16 +546,116 @@ jobs:
           fi
           docker buildx imagetools create "${tags[@]}" "$IMAGE@$DIGEST"
           docker buildx imagetools inspect "$IMAGE:$SEMVER"
+          # Sign what the tag points at (the smoke-tested manifests).
+          digest=$(docker buildx imagetools inspect "$IMAGE:$SEMVER" --format '{{json .Manifest}}' | jq -r .digest)
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::no index digest for $IMAGE:$SEMVER: $digest"; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - uses: anchore/sbom-action/download-syft@v0
+        id: syft
+      - uses: sigstore/cosign-installer@v3
+      - name: SBOMs, signature and SBOM attestations
+        env:
+          SYFT: ${{ steps.syft.outputs.cmd }}
+          REF: ${{ needs.meta.outputs.image }}-scanner@${{ steps.tag.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/sbom
+          for arch in amd64 arm64; do
+            f=/tmp/sbom/hangar-scanner-image-linux-$arch.spdx.json
+            "$SYFT" scan "registry:$REF" --platform "linux/$arch" -o "spdx-json=$f"
+          done
+          cosign sign --yes --recursive "$REF"
+          for f in /tmp/sbom/*.spdx.json; do
+            cosign attest --yes --type spdxjson --predicate "$f" "$REF"
+          done
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ needs.meta.outputs.image }}-scanner
+          subject-digest: ${{ steps.tag.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sbom-scanner
+          path: /tmp/sbom/*
+          if-no-files-found: error
+          retention-days: 1
+
+  chart:
+    name: Helm chart (OCI)
+    needs: [meta, manifest, scanner]
+    # Only after both images it installs passed their smoke tests and were
+    # tagged: the chart's appVersion is their tag.
+    if: >-
+      ${{ !cancelled() && needs.manifest.result == 'success' &&
+      needs.scanner.result == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write  # keyless cosign signing and build provenance
+      attestations: write
+    env:
+      CHART: ${{ needs.meta.outputs.chart }}
+      VERSION: ${{ needs.meta.outputs.version }}
+      SEMVER: ${{ needs.meta.outputs.semver }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.version }}
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.3.1
+      - uses: sigstore/cosign-installer@v3
+      - name: Package
+        run: |
+          set -euo pipefail
+          # Same check as the Version job: the chart must install this release.
+          deploy/scripts/check-chart-version.sh "$VERSION"
+          helm package deploy/helm/hangar --destination "$RUNNER_TEMP/chart"
+          pkg="$RUNNER_TEMP/chart/hangar-$SEMVER.tgz"
+          [[ -f "$pkg" ]] || { echo "::error::helm package did not write hangar-$SEMVER.tgz"; ls -l "$RUNNER_TEMP/chart"; exit 1; }
+          echo "PKG=$pkg" >> "$GITHUB_ENV"
+      - name: Push
+        id: push
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | helm registry login ghcr.io --username "$ACTOR" --password-stdin
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
+          helm push "$PKG" "oci://${CHART%/hangar}" 2>&1 | tee "$RUNNER_TEMP/push.log"
+          digest=$(grep -oE 'sha256:[0-9a-f]{64}' "$RUNNER_TEMP/push.log" | tail -n 1 || true)
+          if [[ -z "$digest" ]]; then
+            digest=$(docker buildx imagetools inspect "$CHART:$SEMVER" --format '{{json .Manifest}}' | jq -r .digest)
+          fi
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::no digest for $CHART:$SEMVER: $digest"; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Sign
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "$CHART@$DIGEST"
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ needs.meta.outputs.chart }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - name: Pull the published chart
+        run: |
+          set -euo pipefail
+          helm show chart "oci://$CHART" --version "$SEMVER" | tee "$RUNNER_TEMP/chart.yaml"
+          grep -Eq "^appVersion: \"?$SEMVER\"?$" "$RUNNER_TEMP/chart.yaml"
 
   binaries:
     name: Binaries
-    needs: [meta, test-go, lint-go, test-web, deploy-check]
-    # Every test job passed, or the tests were skipped on purpose.
+    needs: [meta, test-go, lint-go, test-web, deploy-check, security]
+    # Every gate job passed, or the gate was skipped on purpose.
     if: >-
       ${{ !cancelled() && needs.meta.result == 'success' &&
       (vars.RELEASE_SKIP_TESTS == 'true' ||
       (needs.test-go.result == 'success' && needs.lint-go.result == 'success' &&
-      needs.test-web.result == 'success' && needs.deploy-check.result == 'success')) }}
+      needs.test-web.result == 'success' && needs.deploy-check.result == 'success' &&
+      needs.security.result == 'success')) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -439,6 +693,16 @@ jobs:
           done
           ./dist/hangar-linux-amd64 version | tee /tmp/version.txt
           grep -q "hangar $VERSION " /tmp/version.txt
+      - uses: anchore/sbom-action/download-syft@v0
+        id: syft
+      - name: SBOMs of the binaries
+        env:
+          SYFT: ${{ steps.syft.outputs.cmd }}
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            "$SYFT" scan "file:dist/hangar-linux-$arch" -o "spdx-json=dist/hangar-linux-$arch.spdx.json"
+          done
       - uses: actions/upload-artifact@v7
         with:
           name: binaries
@@ -448,13 +712,16 @@ jobs:
 
   release:
     name: GitHub Release
-    needs: [meta, manifest, scanner, binaries]
+    needs: [meta, manifest, scanner, chart, binaries]
     if: >-
       ${{ !cancelled() && needs.manifest.result == 'success' &&
-      needs.scanner.result == 'success' && needs.binaries.result == 'success' }}
+      needs.scanner.result == 'success' && needs.chart.result == 'success' &&
+      needs.binaries.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      id-token: write  # keyless cosign signing and build provenance
+      attestations: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -463,6 +730,11 @@ jobs:
         with:
           name: binaries
           path: assets
+      - uses: actions/download-artifact@v8
+        with:
+          path: assets
+          pattern: sbom-*
+          merge-multiple: true
       - name: Collect assets
         run: |
           set -euo pipefail
@@ -475,14 +747,28 @@ jobs:
             -czf assets/hangar-compose.tar.gz compose.yaml hangar.yaml Caddyfile \
             compose.connectors.example.yaml registry.caddy
           cp deploy/install.sh assets/install.sh
-          chmod +x assets/hangar-* assets/install.sh
+          chmod +x assets/hangar-linux-amd64 assets/hangar-linux-arm64 assets/install.sh
           (cd assets && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: assets/*
+      - uses: sigstore/cosign-installer@v3
+      # One bundle (signature, certificate, transparency log entry) per file.
+      - name: Sign the release files
+        working-directory: assets
+        run: |
+          set -euo pipefail
+          for f in *; do
+            cosign sign-blob --yes --bundle "$f.sigstore.json" "$f" > /dev/null
+          done
+          ls -l
       - name: Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.meta.outputs.version }}
           SEMVER: ${{ needs.meta.outputs.semver }}
           IMAGE: ${{ needs.meta.outputs.image }}
+          CHART: ${{ needs.meta.outputs.chart }}
           PRERELEASE: ${{ needs.meta.outputs.prerelease }}
           REPO: ${{ github.repository }}
         run: |
@@ -495,11 +781,22 @@ jobs:
             sudo bash -s -- --version $VERSION
           \`\`\`
 
+          Kubernetes: \`helm install hangar oci://$CHART --version $SEMVER\`
+          ([install-helm.md](https://github.com/$REPO/blob/$VERSION/docs/deploy/install-helm.md)).
+
           Container image: \`$IMAGE:$SEMVER\` (linux/amd64, linux/arm64); image scan adapter
           \`$IMAGE-scanner:$SEMVER\` (with \`install.sh --with-trivy\`).
           Upgrade an installation: re-run the installer with \`--data-dir <dir> --version $VERSION\`.
           Deployment guides: [docs/deploy](https://github.com/$REPO/tree/$VERSION/docs/deploy).
-          Verify downloads with \`sha256sum -c SHA256SUMS\`.
+
+          ## Verify
+
+          The images, the chart and every file of this release are signed with
+          cosign (keyless, by this repository's release workflow) and have SLSA
+          build provenance; SBOMs (SPDX JSON) are attached to the images and to
+          this release. Check downloads with \`sha256sum -c SHA256SUMS\` and the
+          signatures as described in
+          [verify-release.md](https://github.com/$REPO/blob/$VERSION/docs/deploy/verify-release.md).
 
           EOF
           flags=()

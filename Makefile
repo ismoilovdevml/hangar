@@ -102,8 +102,12 @@ helm-lint: ## helm lint the chart with every value set in deploy/helm/hangar/ci
 	@set -e; for v in $(HELM_CI_VALUES); do echo "helm lint -f $$v"; helm lint --strict $(HELM_CHART) -f $$v; done
 
 .PHONY: helm-template
-helm-template: ## Render the chart with every CI value set (kubeconform validates when installed)
-	@set -e; for v in $(HELM_CI_VALUES); do \
+helm-template: ## Render the chart with every CI value set (kubeconform validates when installed; KUBECONFORM_REQUIRED=1 makes it mandatory)
+	@set -e; \
+	if [ "$$KUBECONFORM_REQUIRED" = 1 ] && ! command -v kubeconform >/dev/null 2>&1; then \
+		echo "helm-template: KUBECONFORM_REQUIRED=1 but kubeconform is not installed" >&2; exit 1; \
+	fi; \
+	for v in $(HELM_CI_VALUES); do \
 		echo "helm template -f $$v"; \
 		helm template hangar $(HELM_CHART) -n hangar -f $$v > /dev/null; \
 		if command -v kubeconform >/dev/null 2>&1; then \
@@ -111,6 +115,11 @@ helm-template: ## Render the chart with every CI value set (kubeconform validate
 		fi; \
 	done; \
 	command -v kubeconform >/dev/null 2>&1 || echo "helm-template: kubeconform not installed; manifests NOT schema-validated"
+
+.PHONY: helm-package
+helm-package: ## Package the chart into bin/chart (the archive the release pushes to oci://ghcr.io/<owner>/charts)
+	@mkdir -p $(BIN_DIR)/chart
+	helm package $(HELM_CHART) --destination $(BIN_DIR)/chart
 
 .PHONY: compose-config
 compose-config: ## Validate deploy/compose with the settings install.sh writes
