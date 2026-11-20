@@ -115,7 +115,7 @@ storage:
     # Must be longer than 24h (the Docker upload session lifetime). Backups of
     # the blob store must finish within this period after the database dump.
     grace_period: 48h
-    # Blobs deleted per transaction.
+    # Candidate blobs listed at a time (each is deleted in its own transaction).
     batch_size: 100
     # Abandoned temporary uploads older than this are removed; negative
     # disables temp cleanup.

@@ -12,16 +12,21 @@
 //
 // # Concurrency
 //
-// Each batch runs in one transaction that locks its candidate rows with
-// FOR UPDATE SKIP LOCKED, deletes the bytes, then deletes the rows. Under
-// that lock PostgreSQL re-evaluates the candidate condition against the
-// latest committed row, so a row that gained a reference is never deleted.
-// Several collectors (cluster nodes) can run at once without overlap.
+// A batch lists up to BatchSize candidate rows without locking them. Each
+// candidate is then collected in its own short transaction that locks its
+// row with FOR UPDATE SKIP LOCKED (re-checking the candidate condition),
+// deletes the bytes, then deletes the row. Under that lock PostgreSQL
+// re-evaluates the candidate condition against the latest committed row, so
+// a row that gained a reference is never deleted. Several collectors
+// (cluster nodes) can run at once without overlap. A transaction holds one
+// row lock for one storage call, never a whole batch across a hundred, so
+// publishes are not held up behind a slow store and no transaction idles
+// for long (idle_in_transaction_session_timeout).
 //
 // A publish that references a candidate concurrently either holds the row
-// lock first (GC then skips the row), or waits for the batch to commit; in
-// that case the row and the bytes are gone when its upsert proceeds and
-// inserts a new row. Every publish that takes the first reference of a blob
+// lock first (GC then skips the row), or waits for that blob's transaction
+// to commit; in that case the row and the bytes are gone when its upsert
+// proceeds and inserts a new row. Every publish that takes the first reference of a blob
 // therefore confirms the bytes still exist after its upsert, under the row
 // lock and inside its transaction, and fails if they do not (see
 // internal/service/component). A Put also restarts the grace period of an
@@ -78,7 +83,8 @@ type Options struct {
 	// deleted (storage.gc.grace_period). It is also the minimum age of a blob
 	// the orphan scan reports, so in-flight uploads are not listed.
 	GracePeriod time.Duration
-	// BatchSize is the number of blobs deleted per transaction (storage.gc.batch_size).
+	// BatchSize is the number of candidate blobs listed at a time
+	// (storage.gc.batch_size); each is deleted in its own transaction.
 	BatchSize int
 	// TempMaxAge is the age after which abandoned temp uploads are removed
 	// (storage.gc.temp_max_age). Negative disables temp cleanup.
@@ -226,15 +232,22 @@ func (c *Collector) collectStore(ctx context.Context, st storeRow, req Request, 
 		return sr, fmt.Errorf("open: %w", err)
 	}
 
-	failed := []string{} // digests whose bytes could not be deleted this run
-	fruitless := 0       // consecutive batches in which nothing could be deleted
+	// Digests left out of later batches of this run: bytes that could not be
+	// deleted, and rows another session held locked (another collector, or a
+	// publish taking a reference). Every listed digest is either collected or
+	// excluded, so the loop ends.
+	excluded := []string{}
+	fruitless := 0 // consecutive batches in which nothing could be deleted
 	for ctx.Err() == nil {
-		n, err := c.deleteBatch(ctx, st.id, store, &sr, &failed)
+		n, err := c.deleteBatch(ctx, st.id, store, &sr, &excluded)
 		if err != nil {
 			return sr, err
 		}
-		if n.picked == 0 {
+		if n.listed == 0 {
 			break
+		}
+		if n.picked == 0 {
+			continue // every candidate was locked elsewhere
 		}
 		sr.Batches++
 		if req.OnProgress != nil {
@@ -278,82 +291,112 @@ func (c *Collector) collectStore(ctx context.Context, st storeRow, req Request, 
 // row deleted nothing.
 const maxFruitlessBatches = 3
 
-type batchCounts struct{ picked, deleted int }
+// listed candidates, picked (locked) ones, and deleted ones.
+type batchCounts struct{ listed, picked, deleted int }
 
-// deleteBatch locks up to BatchSize eligible rows, deletes their bytes and
-// then their rows, in one transaction.
-func (c *Collector) deleteBatch(ctx context.Context, storeID string, store core.BlobStore, sr *StoreResult, failed *[]string) (batchCounts, error) {
+// eligible is the candidate condition; $1 is the store id, $2 the grace
+// period in seconds. Eligibility uses the database clock, the same clock
+// that set soft_deleted_at and created_at.
+const eligible = `store_id = $1 AND ref_count = 0
+	AND (soft_deleted_at < now() - make_interval(secs => $2)
+	     OR (soft_deleted_at IS NULL AND created_at < now() - make_interval(secs => $2)))`
+
+// deleteBatch lists up to BatchSize eligible rows and collects each one in
+// its own transaction (collectBlob). Digests that could not be collected are
+// added to excluded.
+func (c *Collector) deleteBatch(ctx context.Context, storeID string, store core.BlobStore, sr *StoreResult, excluded *[]string) (batchCounts, error) {
+	rows, err := c.pool.Query(ctx, `SELECT digest FROM blobs WHERE `+eligible+`
+		AND digest <> ALL($3) ORDER BY digest LIMIT $4`,
+		storeID, c.opts.GracePeriod.Seconds(), *excluded, c.opts.BatchSize)
+	if err != nil {
+		return batchCounts{}, fmt.Errorf("select candidates: %w", err)
+	}
+	cands, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return batchCounts{}, fmt.Errorf("select candidates: %w", err)
+	}
+	n := batchCounts{listed: len(cands)}
+	for _, digest := range cands {
+		out, err := c.collectBlob(ctx, storeID, store, digest)
+		if err != nil {
+			return n, err
+		}
+		switch out.result {
+		case blobSkipped:
+			*excluded = append(*excluded, digest)
+			continue
+		case blobFailed:
+			*excluded = append(*excluded, digest)
+			sr.Failed++
+		case blobDeleted:
+			sr.Deleted++
+			sr.FreedBytes += out.size
+			n.deleted++
+		case blobMissing:
+			sr.Deleted++
+			sr.Missing++
+			n.deleted++
+		}
+		n.picked++
+	}
+	return n, nil
+}
+
+type blobResult int
+
+const (
+	blobSkipped blobResult = iota // locked elsewhere, or no longer eligible
+	blobFailed                    // the store could not delete the bytes; the row stays
+	blobDeleted
+	blobMissing // the bytes were already gone; the row is removed
+)
+
+type blobOutcome struct {
+	result blobResult
+	size   int64
+}
+
+// collectBlob deletes one blob's bytes and then its row, holding the row
+// lock throughout, so a publish cannot reference the blob in between: it
+// waits for the lock and then finds no row (see the package comment).
+func (c *Collector) collectBlob(ctx context.Context, storeID string, store core.BlobStore, digest string) (blobOutcome, error) {
 	tx, err := c.pool.Begin(ctx)
 	if err != nil {
-		return batchCounts{}, fmt.Errorf("begin: %w", err)
+		return blobOutcome{}, fmt.Errorf("begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 
-	// Eligibility uses the database clock, the same clock that set
-	// soft_deleted_at and created_at.
-	rows, err := tx.Query(ctx, `
-		SELECT digest, size FROM blobs
-		WHERE store_id = $1 AND ref_count = 0
-		  AND (soft_deleted_at < now() - make_interval(secs => $2)
-		       OR (soft_deleted_at IS NULL AND created_at < now() - make_interval(secs => $2)))
-		  AND digest <> ALL($3)
-		ORDER BY digest
-		LIMIT $4
-		FOR UPDATE SKIP LOCKED`,
-		storeID, c.opts.GracePeriod.Seconds(), *failed, c.opts.BatchSize)
+	var size int64
+	err = tx.QueryRow(ctx, `SELECT size FROM blobs WHERE `+eligible+` AND digest = $3 FOR UPDATE SKIP LOCKED`,
+		storeID, c.opts.GracePeriod.Seconds(), digest).Scan(&size)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return blobOutcome{result: blobSkipped}, nil
+	}
 	if err != nil {
-		return batchCounts{}, fmt.Errorf("select candidates: %w", err)
+		return blobOutcome{}, fmt.Errorf("lock candidate: %w", err)
 	}
-	type cand struct {
-		digest string
-		size   int64
+	out := blobOutcome{result: blobDeleted, size: size}
+	err = store.Delete(ctx, core.Digest(digest))
+	switch {
+	case err == nil:
+	case errors.Is(err, core.ErrNotFound):
+		out = blobOutcome{result: blobMissing}
+	case ctx.Err() != nil:
+		return blobOutcome{}, ctx.Err()
+	default:
+		c.opts.Logger.Warn("delete blob failed", "store_id", storeID, "digest", digest, "error", err)
+		return blobOutcome{result: blobFailed}, nil
 	}
-	cands, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (cand, error) {
-		var c cand
-		err := r.Scan(&c.digest, &c.size)
-		return c, err
-	})
-	if err != nil {
-		return batchCounts{}, fmt.Errorf("select candidates: %w", err)
-	}
-	if len(cands) == 0 {
-		return batchCounts{}, nil
-	}
-
-	done := make([]string, 0, len(cands))
-	var freed, missing int64
-	for _, cd := range cands {
-		err := store.Delete(ctx, core.Digest(cd.digest))
-		switch {
-		case err == nil:
-			freed += cd.size
-		case errors.Is(err, core.ErrNotFound):
-			missing++
-		case ctx.Err() != nil:
-			return batchCounts{}, ctx.Err()
-		default:
-			c.opts.Logger.Warn("delete blob failed", "store_id", storeID, "digest", cd.digest, "error", err)
-			*failed = append(*failed, cd.digest)
-			sr.Failed++
-			continue
-		}
-		done = append(done, cd.digest)
-	}
-	if len(done) > 0 {
-		// The rows are locked, so ref_count cannot have changed; the
-		// condition is a guard against a future change to that invariant.
-		if _, err := tx.Exec(ctx, `DELETE FROM blobs WHERE store_id = $1 AND digest = ANY($2) AND ref_count = 0`,
-			storeID, done); err != nil {
-			return batchCounts{}, fmt.Errorf("delete rows: %w", err)
-		}
+	// The row is locked, so ref_count cannot have changed; the condition is
+	// a guard against a future change to that invariant.
+	if _, err := tx.Exec(ctx, `DELETE FROM blobs WHERE store_id = $1 AND digest = $2 AND ref_count = 0`,
+		storeID, digest); err != nil {
+		return blobOutcome{}, fmt.Errorf("delete row: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return batchCounts{}, fmt.Errorf("commit: %w", err)
+		return blobOutcome{}, fmt.Errorf("commit: %w", err)
 	}
-	sr.Deleted += int64(len(done))
-	sr.Missing += missing
-	sr.FreedBytes += freed
-	return batchCounts{picked: len(cands), deleted: len(done)}, nil
+	return out, nil
 }
 
 // cleanTemp calls the driver's temp cleanup; the filesystem and S3 drivers
