@@ -104,7 +104,7 @@ folder in client paths:
 |---|---|
 | npm | scope, package, then the package's files (tarballs, manifests) |
 | Maven | groupId segments, artifactId, version, files |
-| NuGet | package id, version, `.nupkg` / `.nuspec` / `.snupkg` |
+| NuGet | package id, version, `.nupkg` / `.nuspec` |
 | PyPI | project, files |
 | Go | module path segments, module, `@v`, version, `.info` / `.mod` / `.zip` |
 | Cargo | crate, version, `.crate` |

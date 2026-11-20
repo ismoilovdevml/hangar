@@ -2,6 +2,179 @@
 
 ## Unreleased
 
+## v0.1.9 (2026-11-20)
+
+A security and reliability release. Upgrading is recommended for every
+installation; read **Upgrade notes** first.
+
+### Upgrade notes
+
+- **Repository-level proxies are checked like remote URLs.** A repository
+  whose `config.proxy.http.proxy` points at a private, loopback or
+  link-local address is refused on save and blocked when dialled. List the
+  address in `http.allow_private_networks`, or define it as a named proxy
+  (Settings › Proxies) and use `proxy_name`. Until then any other update of
+  such a repository is refused too.
+- **S3 blob stores managed through the API need static keys.** Creating,
+  changing or testing an S3 store through the API without an access key is
+  refused unless the new `storage.allow_ambient_credentials` is `true`
+  (`HANGAR_STORAGE_ALLOW_AMBIENT_CREDENTIALS`). The default store from the
+  configuration file and existing keyless stores keep working.
+- **Sealed values are not accepted as input.** API, YAML and UI inputs
+  refuse `hgs1.…` secrets (400); omit the field to keep the stored secret.
+- **Moving a secret's target needs the secret again.** Changing an OIDC
+  issuer origin, an LDAP URL, a proxy's scheme, host or port, or an S3
+  endpoint (also in `:test`) requires `client_secret`, `bind_password`,
+  `password` or `s3.secret_access_key` to be entered again.
+- **Compose installs:** `secrets/` is mounted read-only and the one-time
+  admin password moves to `<data>/bootstrap/initial-admin-password`.
+  `install.sh` creates `bootstrap/` and moves an existing password; upgrade
+  with `install.sh` rather than copying `compose.yaml` by hand.
+- **Helm:** the chart is 0.1.9 and defaults to the 0.1.9 images (it pointed
+  at 0.1.0, and `imageScanning.enabled` pulled a scanner tag that does not
+  exist). `config.auth.oidc.client_secret` and
+  `config.auth.ldap.bind_password` in values now fail the render; pass them
+  with `extraEnv` from a Secret.
+- **npm login tokens are scoped to the repository** (and a group's write
+  member) and no longer reach other repositories or the REST API.
+- **Unknown blob store names are an error**: a repository whose named blob
+  store is missing no longer writes to the `default` store.
+- The development compose project is now `hangar-dev`, so its old volumes
+  (`hangar_postgres`, …) are no longer used.
+
+### Security
+
+- **SSRF through a repository proxy (critical)**: a repository's own
+  `http.proxy` was added to the server-wide list of trusted proxy addresses,
+  which skipped the outbound address guard for that address for every
+  repository; a repository admin could reach cloud metadata or internal
+  services. Only operator proxies are trusted now, and repository proxies
+  pass the same policy as remote URLs.
+- **Sealed secrets could be opened by replay (critical)**: a sealed `hgs1.`
+  value copied from the database or a backup could be pasted into a
+  repository or import task credential, and Hangar sent its plaintext to the
+  configured host. Sealed input is refused everywhere a secret is accepted.
+- **Stored secrets follow their endpoint**: OIDC, LDAP, proxy and blob store
+  saves and connection tests no longer send a stored secret to a changed
+  host.
+- **Probe and S3 dials refuse cloud metadata addresses**; API-managed S3
+  stores no longer sign requests with the host's ambient AWS credentials.
+- **Image imports** send registry credentials only to the source's own
+  origin or an https token service.
+- **Sign-in providers cannot grant more than their editor holds**: saving an
+  enabled OIDC or LDAP provider needs every privilege of its default and
+  mapped roles (a settings admin could map new users to Admin).
+- **Tokens minted through a token stay inside its limits**: a token created
+  or rotated with an API or session token can't outlive it and inherits its
+  allowed networks; rotating a token through itself no longer extends its
+  life. Creating tokens in the web UI is unchanged.
+- **Unlocking a user** needs the same coverage as resetting their password.
+- **`GET /users/{self}/permissions`** with a scoped token shows only what
+  the token can do.
+- **npm login** counts against `auth.login_rate` (429 with `Retry-After`)
+  and refuses users who can't read the repository.
+- **Opening a Docker connector port** (`connector.http_port`) needs
+  `system:repos:admin`.
+- **Forwarded headers**: behind trusted proxies, `X-Forwarded-Proto` and
+  `X-Forwarded-Host` come from the outermost trusted proxy's entry, not the
+  client's.
+- **IPv6 clients** are grouped by /64 for sign-in lockout and the login rate
+  limit.
+- **Event streams** (`/api/v1/events`) close within about 30 s of sign-out,
+  session or token expiry or revocation, or the account being disabled; role
+  changes apply to open streams.
+- **NuGet proxy cache poisoning**: a proxied `.nupkg` whose manifest names a
+  different id or version than the one requested is no longer cached under
+  the manifest's identity (the client gets 502). Invalid ids in flat
+  container and registration paths return 404.
+- **Upstream URLs with dot segments** (`.`/`..`, also percent-encoded) taken
+  from an index or a redirect are refused for every format, so they can't
+  climb out of the remote's path with its credentials.
+- **Archive bombs**: uploads are refused with 400 when the archive expands
+  past a cap (Helm chart over 256 MiB, `.deb` control member over 256 MiB,
+  `.crate` over 1 GiB); package info stops reading after 1 GiB.
+- **RPM**: header lengths are no longer trusted for allocation (a 112-byte
+  request could reserve 512 MiB); headers with more than 65,535 index
+  entries are refused. Group metadata is kept only for roots that hold
+  packages, so arbitrary paths no longer grow memory.
+- **Quarantine fails closed**: if the quarantine lookup fails, downloads
+  answer 500 instead of serving the file (Maven, PyPI, NuGet, Go, Cargo,
+  Helm). Quarantined Maven non-unique SNAPSHOTs return 403. npm proxy and
+  group packuments hide quarantined versions, and `latest` moves to the
+  highest remaining one.
+- **Offline write members**: group uploads to an offline write member return
+  503 (PyPI, Go, Cargo, APT, RPM).
+- **Delete-only users** can delete APT and RPM packages and unlist NuGet
+  packages; the indexes are regenerated instead of failing with 403.
+- **NuGet symbol packages** are no longer accepted (they were stored but
+  never served): the service index has no `SymbolPackagePublish`, and a
+  symbol push returns 400.
+
+### Reliability
+
+- **Stopping the server no longer hangs while a web UI tab is open**: event
+  streams end when shutdown begins, instead of holding it for
+  `server.shutdown_timeout`.
+- **Docker connector ports** drain and stop together with the main port;
+  stopping takes at most `drain_delay` + `shutdown_timeout`.
+- **Deadlock fixed** (PostgreSQL 40P01) between download statistics and
+  component deletes or publishes. While the database is unreachable,
+  download counts for at most 10,000 assets are kept in memory; the rest are
+  dropped with a warning.
+- **Background jobs in HA**: each node takes one job of a type at a time, so
+  idle nodes pick up the backlog. Image scans longer than 10 minutes finish
+  instead of being retried and dropped (the per-job limit is
+  `max(10m, 2×(scanner.timeout+1m))`, 32 minutes by default). On shutdown,
+  running jobs are cancelled and returned to the queue.
+- **Idle transactions**: database sessions idle inside a transaction for 5
+  minutes are ended, unless PostgreSQL or the database URL
+  (`idle_in_transaction_session_timeout`) sets otherwise.
+- **Blob GC** deletes each blob in its own short transaction instead of
+  holding a batch of row locks across storage calls;
+  `storage.gc.batch_size` is now how many candidates are listed at a time.
+
+### Web UI
+
+- Dialogs keep their own size and padding; the new-token dialog scrolls with
+  Create and Cancel always visible, and only the chosen expiry is
+  highlighted.
+- Search: Enter runs the search; a suggestion is inserted only when picked
+  with the arrow keys or the mouse.
+- ⌘K no longer opens behind an open dialog; the Cleanup notice's Dismiss
+  button is reachable with a screen reader.
+- Optional sections (token restrictions, upstream connection, sign-in setup)
+  no longer close while you edit them.
+- Fewer background requests: status and upstream health refresh once a
+  minute and pause in hidden tabs; the sign-in page no longer re-renders
+  every second.
+- Package lists, search and findings refresh when packages are published,
+  quarantined or deleted.
+- The Overview shows the system status once, server messages show local
+  times, counts have thousands separators ("76,992 versions"), and long
+  package names wrap at dots and slashes.
+- Placeholders for unbuilt features are gone (Dependents tab, Move
+  repositories, Replication); the Cluster page is named Cluster.
+- The demo shows the real release version and a clean sample README.
+
+### Deployment, CI and observability
+
+- **Releases run the full test suite by default** (set the repository
+  variable `RELEASE_SKIP_TESTS=true` to skip), refuse a tag that doesn't
+  match the chart's `appVersion`, and tag the scanner image only after its
+  smoke test passes. Go tests under `deploy/` now run with the rest.
+- **Helm**: NetworkPolicies for Trivy and the scan adapter; `helm test`
+  works with `networkPolicy.ingressFrom`; the migration Job gets
+  `extraEnv`, `extraEnvFrom`, `extraVolumes`, `extraVolumeMounts`,
+  `podLabels`, `podAnnotations` and an existing ServiceAccount.
+- **Installer**: a failed pre-upgrade backup is retried on the next run
+  instead of being skipped; `GITHUB_TOKEN` is used for the version lookup,
+  with a fallback when the API rate limit is hit.
+- **Alerts and dashboards**: `HangarUpstreamCircuitOpen` resolves once a
+  remote is idle; `HangarDown` matches any job containing `hangar`; "Remotes
+  not healthy" leaves out remotes not used yet; the RSS and error panels are
+  fixed. `make alerts-check` runs the alert rule tests when `promtool` is
+  installed.
+
 ## v0.1.8 (2026-11-15)
 
 - **Times are local, everywhere**: every timestamp in the web UI (Audit log

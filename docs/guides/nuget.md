@@ -177,7 +177,10 @@ dotnet nuget push out/Acme.Tiny.1.0.0.nupkg \
 ```
 
 Pushing to the group URL stores the package in its `write_member`. Symbol packages
-(`.snupkg`) are accepted and stored next to the package.
+(`.snupkg`) are not supported: the service index does not advertise a symbol
+endpoint, so `dotnet nuget push` sends only the `.nupkg`, and a direct symbol
+push is refused with 400. Embed symbols in the package (`<DebugType>embedded</DebugType>`)
+or publish them to a symbol server.
 
 ## Unlist, relist, delete
 
