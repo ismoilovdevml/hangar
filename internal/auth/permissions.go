@@ -146,7 +146,16 @@ func (s *Service) EffectivePermissions(ctx context.Context, userID string) (*Eff
 	if u.Source != SourceLocal {
 		out.Notes = append(out.Notes, fmt.Sprintf("Roles granted through %s group mappings are applied at sign-in and are not included.", u.Source))
 	}
-	out.Notes = append(out.Notes, "Personal access tokens are further limited to their scopes.")
+	// A token asking about its own owner learns only what the token itself
+	// may do: the report is what the caller can act on, and the full
+	// account view would list repositories outside the token's scopes.
+	var scopes []core.Privilege
+	if p := core.PrincipalFrom(ctx); p.ID == u.ID && p.Scopes != nil {
+		scopes = p.Scopes
+		out.Notes = append(out.Notes, "Limited to the scopes of the token making this request.")
+	} else {
+		out.Notes = append(out.Notes, "Personal access tokens are further limited to their scopes.")
+	}
 
 	repos, truncated, err := s.allRepositories(ctx)
 	if err != nil {
@@ -156,7 +165,7 @@ func (s *Service) EffectivePermissions(ctx context.Context, userID string) (*Eff
 		out.Notes = append(out.Notes, fmt.Sprintf("Only the first %d repositories were evaluated.", maxPermissionRepos))
 	}
 	for _, r := range repos {
-		rp := evaluate(roles, core.RepoResource(r.Name), r.Config.AnonymousRead)
+		rp := evaluate(roles, scopes, core.RepoResource(r.Name), r.Config.AnonymousRead)
 		if len(rp.Actions) == 0 {
 			continue
 		}
@@ -164,7 +173,7 @@ func (s *Service) EffectivePermissions(ctx context.Context, userID string) (*Eff
 		out.Repositories = append(out.Repositories, rp)
 	}
 	for _, area := range SystemAreas {
-		if rp := evaluate(roles, core.SystemResource(area), false); len(rp.Actions) > 0 {
+		if rp := evaluate(roles, scopes, core.SystemResource(area), false); len(rp.Actions) > 0 {
 			out.System = append(out.System, rp)
 		}
 	}
@@ -172,11 +181,17 @@ func (s *Service) EffectivePermissions(ctx context.Context, userID string) (*Eff
 }
 
 // evaluate lists the allowed actions on res and every grant behind them.
-func evaluate(roles []RoleGrant, res core.Resource, anonymousRead bool) ResourcePermissions {
+// Non-nil scopes (a token's) drop role grants the scopes do not allow, as
+// the authorizer does; anonymous read applies to every caller anyway.
+func evaluate(roles []RoleGrant, scopes []core.Privilege, res core.Resource, anonymousRead bool) ResourcePermissions {
 	rp := ResourcePermissions{Resource: res.String(), Name: res.Name, Actions: []core.Action{}, Grants: []Grant{}}
 	for _, a := range Actions {
 		allowed := false
-		for _, r := range roles {
+		granting := roles
+		if scopes != nil && !anyAllows(scopes, a, res) {
+			granting = nil
+		}
+		for _, r := range granting {
 			for _, p := range r.Privileges {
 				if p.Allows(a, res) {
 					allowed = true

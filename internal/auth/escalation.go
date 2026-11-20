@@ -105,6 +105,16 @@ func (s *Service) requireCoversRoles(ctx context.Context, auditAction, target st
 	return s.requireCovers(ctx, auditAction, target, what, want)
 }
 
+// RequireCoversRoles fails with ErrForbidden, and audits the denial as
+// auditAction on target, unless the context principal covers every
+// privilege the named roles grant. Packages that hand out roles indirectly
+// (the sign-in settings' default roles and group mappings) use it so that
+// configuring them is no wider than binding the roles directly. Names that
+// are not roles grant nothing and are ignored.
+func (s *Service) RequireCoversRoles(ctx context.Context, auditAction, target string, roles []string) error {
+	return s.requireCoversRoles(ctx, auditAction, target, roles)
+}
+
 // requireCoversUser: the caller covers everything account u holds. Acting on
 // yourself needs no coverage.
 func (s *Service) requireCoversUser(ctx context.Context, auditAction string, u *User) error {

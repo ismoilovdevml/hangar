@@ -90,28 +90,47 @@ func resolveClient(r *http.Request, trusted TrustedProxies) core.RequestInfo {
 			}
 		}
 	}
+	// proxies counts the trusted proxies in front of the peer (the
+	// trusted hops passed over); the peer is one more.
+	proxies := 0
 	for i := len(hops) - 1; i >= 0; i-- {
 		a, err := netip.ParseAddr(hops[i])
 		if err != nil {
 			break
 		}
 		info.RemoteIP = a.Unmap().String()
-		if !trusted.contains(a) {
+		if !trusted.contains(a) || i == 0 {
 			break
 		}
+		proxies++
 	}
-	if p := firstValue(r.Header.Get("X-Forwarded-Proto")); p == "http" || p == "https" {
+	if p := forwardedValue(r.Header.Values("X-Forwarded-Proto"), proxies); p == "http" || p == "https" {
 		info.Scheme = p
 	}
-	if h := firstValue(r.Header.Get("X-Forwarded-Host")); h != "" {
+	if h := forwardedValue(r.Header.Values("X-Forwarded-Host"), proxies); h != "" {
 		info.Host = h
 	}
 	return info
 }
 
-func firstValue(h string) string {
-	v, _, _ := strings.Cut(h, ",")
-	return strings.ToLower(strings.TrimSpace(v))
+// forwardedValue picks, from the comma-separated values of every line of an
+// X-Forwarded-Proto or X-Forwarded-Host header, the one the outermost
+// trusted proxy (the one the client talked to) wrote. Proxies append, so
+// that is the entry `proxies` places left of the last one, as with
+// X-Forwarded-For; entries further left came from the client and are never
+// used. Proxies that replace the header instead of appending leave fewer
+// entries, and the leftmost one present is then a proxy's own.
+func forwardedValue(lines []string, proxies int) string {
+	var vals []string
+	for _, l := range lines {
+		for v := range strings.SplitSeq(l, ",") {
+			vals = append(vals, strings.ToLower(strings.TrimSpace(v)))
+		}
+	}
+	if len(vals) == 0 {
+		return ""
+	}
+	return vals[max(len(vals)-1-proxies, 0)]
 }
 
 func validRequestID(s string) bool {

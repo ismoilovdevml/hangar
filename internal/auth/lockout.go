@@ -37,11 +37,33 @@ func lockoutName(username string) string { return strings.ToLower(username) }
 
 // clientKey is the caller's address as stored, "" when unknown.
 func clientKey(ctx context.Context) string {
-	a, err := netip.ParseAddr(core.RequestInfoFrom(ctx).RemoteIP)
+	return AddressKey(core.RequestInfoFrom(ctx).RemoteIP)
+}
+
+// AddressKey is the key sign-in failures and login attempts are counted
+// under for client address ip: an IPv4 address as is, an IPv6 address by
+// its /64 network, and "" when ip is not an address. A single IPv6 client
+// usually holds a whole /64 and can pick a fresh address for every
+// attempt, so counting per address would never lock it out.
+func AddressKey(ip string) string {
+	a, err := netip.ParseAddr(ip)
 	if err != nil {
 		return ""
 	}
-	return a.Unmap().String()
+	a = a.Unmap()
+	if a.Is6() {
+		p, _ := a.WithZone("").Prefix(64)
+		return p.String()
+	}
+	return a.String()
+}
+
+// AllowLogin takes one attempt from the per-address login rate limit
+// (auth.login_rate) for the context's client address (see AddressKey). It
+// reports false, with how long to wait, when none is left. Every endpoint
+// that checks a password for an interactive or client login uses it.
+func (s *Service) AllowLogin(ctx context.Context) (bool, time.Duration) {
+	return s.loginLimiter.Allow(AddressKey(core.RequestInfoFrom(ctx).RemoteIP))
 }
 
 // signInLocked returns a *LockedError while username is locked out for the

@@ -39,6 +39,14 @@ func TestResolveClient(t *testing.T) {
 		{"chain of trusted proxies", "10.1.1.1:5000", "198.51.100.9, 192.168.1.10, 10.2.2.2", "", "", "198.51.100.9", "http", "hangar.local"},
 		{"spoofed left-most entry ignored", "10.1.1.1:5000", "6.6.6.6, 198.51.100.9", "", "", "198.51.100.9", "http", "hangar.local"},
 		{"garbage proto ignored", "192.168.1.10:1", "", "gopher", "", "192.168.1.10", "http", "hangar.local"},
+		// Regression: the left-most (client-written) X-Forwarded-Proto/Host
+		// entry won over the one the proxy appended.
+		{"client entries before the proxy's ignored", "10.1.1.1:5000", "198.51.100.9", "http, https", "evil.example, cr.example.com",
+			"198.51.100.9", "https", "cr.example.com"},
+		{"outermost trusted proxy's entry in a chain", "10.1.1.1:5000", "198.51.100.9, 192.168.1.10", "http, https, http",
+			"evil.example, cr.example.com, internal:8080", "198.51.100.9", "https", "cr.example.com"},
+		{"proxies that replace the header", "10.1.1.1:5000", "198.51.100.9, 192.168.1.10", "https", "cr.example.com",
+			"198.51.100.9", "https", "cr.example.com"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

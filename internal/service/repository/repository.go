@@ -290,6 +290,9 @@ func (s *Service) Create(ctx context.Context, in *core.Repository) (*core.Reposi
 		if err := s.authorizeExposure(ctx, tx, "repository.create", r, nil); err != nil {
 			return err
 		}
+		if err := s.authorizeListener(ctx, "repository.create", r, nil); err != nil {
+			return err
+		}
 		cfg, err := encodeConfig(r.Config)
 		if err != nil {
 			return err
@@ -371,6 +374,9 @@ SELECT r.id::text, r.format, r.type, coalesce(bs.name, ''), r.config
 			return fmt.Errorf("update repository %q: %w", r.Name, err)
 		}
 		if err := s.authorizeExposure(ctx, tx, "repository.update", r, prev); err != nil {
+			return err
+		}
+		if err := s.authorizeListener(ctx, "repository.update", r, oldCfg); err != nil {
 			return err
 		}
 		cfg, err := encodeConfig(r.Config)

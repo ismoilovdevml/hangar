@@ -3,6 +3,7 @@ package auth_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -250,5 +251,90 @@ func TestRotateToken(t *testing.T) {
 	}
 	if _, err := e.Svc.RotateToken(admin, sa.ID, auth.RotateInput{}); !errors.Is(err, core.ErrNotFound) {
 		t.Fatalf("rotating a revoked token: %v", err)
+	}
+}
+
+// Regression: a short-lived or address-restricted token minted (or rotated
+// into) a long-lived unrestricted token. A token caller's new tokens stay
+// within its expiry, networks and scopes; a password or browser sign-in is
+// not limited.
+func TestTokenMintedByTokenInheritsLimits(t *testing.T) {
+	e := authtest.New(t, auth.Config{})
+	admin := e.Admin(t)
+	mustCreateUser(t, e, admin, "tina", "Publisher")
+	tina := e.As(t, "tina", pw)
+	now := e.Clock.Now()
+	parentExp := now.Add(2 * time.Hour)
+	parent, parentSecret, err := e.Svc.CreateToken(tina, auth.TokenInput{
+		Name: "ci", Scopes: privs("repo:npm-*:write", "repo:npm-*:read"), ExpiresAt: parentExp,
+		AllowedCIDRs: []string{"10.20.0.0/16"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := from("10.20.0.1")
+	p, err := e.Svc.Authenticate(ctx, core.Credentials{Token: parentSecret})
+	if err != nil {
+		t.Fatal(err)
+	}
+	viaToken := core.WithPrincipal(ctx, p)
+
+	cases := []struct {
+		name      string
+		in        auth.TokenInput
+		wantCIDRs []string // nil: refused with ErrForbidden
+	}{
+		{"longer than the caller", auth.TokenInput{Scopes: privs("repo:npm-*:read"), ExpiresAt: now.Add(300 * 24 * time.Hour)}, nil},
+		{"no networks inherits the caller's", auth.TokenInput{Scopes: privs("repo:npm-*:read"), ExpiresAt: now.Add(time.Hour)}, []string{"10.20.0.0/16"}},
+		{"narrower network", auth.TokenInput{Scopes: privs("repo:npm-*:read"), ExpiresAt: now.Add(time.Hour), AllowedCIDRs: []string{"10.20.5.0/24"}}, []string{"10.20.5.0/24"}},
+		{"same expiry as the caller", auth.TokenInput{Scopes: privs("repo:npm-*:read"), ExpiresAt: parentExp}, []string{"10.20.0.0/16"}},
+		{"wider network", auth.TokenInput{Scopes: privs("repo:npm-*:read"), ExpiresAt: now.Add(time.Hour), AllowedCIDRs: []string{"10.0.0.0/8"}}, nil},
+		{"disjoint network", auth.TokenInput{Scopes: privs("repo:npm-*:read"), ExpiresAt: now.Add(time.Hour), AllowedCIDRs: []string{"192.0.2.1"}}, nil},
+		{"wider scopes", auth.TokenInput{Scopes: privs("repo:*:read"), ExpiresAt: now.Add(time.Hour)}, nil},
+	}
+	for i, c := range cases {
+		c.in.Name = fmt.Sprintf("child-%d", i)
+		tok, _, err := e.Svc.CreateToken(viaToken, c.in)
+		if c.wantCIDRs == nil {
+			if !errors.Is(err, core.ErrForbidden) {
+				t.Errorf("%s: err = %v, want forbidden", c.name, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%s: %v", c.name, err)
+			continue
+		}
+		if !slices.Equal(tok.AllowedCIDRs, c.wantCIDRs) {
+			t.Errorf("%s: allowed_cidrs = %v, want %v", c.name, tok.AllowedCIDRs, c.wantCIDRs)
+		}
+	}
+
+	// Rotating through the token cannot outlive it either.
+	res, err := e.Svc.RotateToken(viaToken, parent.ID, auth.RotateInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Token.ExpiresAt.After(parentExp) || !slices.Equal(res.Token.AllowedCIDRs, []string{"10.20.0.0/16"}) {
+		t.Fatalf("rotated through itself: expires %s (caller %s), cidrs %v", res.Token.ExpiresAt, parentExp, res.Token.AllowedCIDRs)
+	}
+
+	// A session token from a client login (npm login) is a token too.
+	sess, sessExp, err := e.Svc.Issue(tina, principalOf(t, e, "tina"), core.TokenRequest{Name: "npm", TTL: 24 * time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp, err := e.Svc.Authenticate(context.Background(), core.Credentials{Token: sess})
+	if err != nil {
+		t.Fatal(err)
+	}
+	viaSession := core.WithPrincipal(context.Background(), sp)
+	if _, _, err := e.Svc.CreateToken(viaSession, auth.TokenInput{Name: "long", Scopes: privs("repo:*:read"), ExpiresAt: sessExp.Add(time.Hour)}); !errors.Is(err, core.ErrForbidden) {
+		t.Fatalf("session token mints a longer token: %v", err)
+	}
+
+	// A password (or browser) sign-in still creates long-lived tokens.
+	if _, _, err := e.Svc.CreateToken(tina, auth.TokenInput{Name: "year", Scopes: privs("repo:*:read"), ExpiresAt: now.Add(300 * 24 * time.Hour)}); err != nil {
+		t.Fatalf("signed-in user creates a long-lived token: %v", err)
 	}
 }

@@ -1,11 +1,13 @@
 package npm
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 )
@@ -48,6 +50,13 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request, repo *core.Repos
 		return fmt.Errorf("name and password are required: %w", core.ErrInvalid)
 	}
 	ctx := r.Context()
+	// The same per-address login rate limit as the web sign-in, so this
+	// endpoint is no faster a way to guess passwords.
+	if l, ok := h.deps.Tokens.(loginLimiter); ok {
+		if allowed, wait := l.AllowLogin(ctx); !allowed {
+			return &core.RetryAfterError{After: wait, Err: fmt.Errorf("too many login attempts: %w", core.ErrRateLimited)}
+		}
+	}
 	p, err := h.deps.Auth.Authenticate(ctx, core.Credentials{Username: body.Name, Password: body.Password})
 	if err != nil {
 		return err
@@ -56,9 +65,14 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request, repo *core.Repos
 		return fmt.Errorf("incorrect username or password: %w", core.ErrUnauthenticated)
 	}
 	ctx = core.WithPrincipal(ctx, p)
+	// No token for a repository the user cannot read.
+	if err := h.authorize(ctx, core.ActionRead, repo); err != nil {
+		return err
+	}
 	secret, exp, err := h.deps.Tokens.Issue(ctx, p, core.TokenRequest{
-		TTL:  repoConfig(repo).loginTokenTTL(),
-		Name: "npm login (" + repo.Name + ")",
+		TTL:    repoConfig(repo).loginTokenTTL(),
+		Scopes: loginScopes(repo),
+		Name:   "npm login (" + repo.Name + ")",
 		// Marks the token as npm login's own, which npm logout may revoke.
 		Extra: map[string]any{claimNPMLogin: repo.Name},
 	})
@@ -71,6 +85,24 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request, repo *core.Repos
 		"ok": true, "id": "org.couchdb.user:" + p.Name, "rev": "1", "token": secret,
 	})
 	return nil
+}
+
+// loginLimiter is the login rate limit of the token issuer
+// (auth.Service.AllowLogin): one attempt per call for the context's client.
+type loginLimiter interface {
+	AllowLogin(ctx context.Context) (bool, time.Duration)
+}
+
+// loginScopes limits an npm login token to what npm does with it: the
+// repository logged in to and, for a group, the write member its publishes
+// land in. The user's roles still decide the actions; the token reaches no
+// other repository and no administration API.
+func loginScopes(repo *core.Repository) []core.Privilege {
+	scopes := []core.Privilege{{Domain: core.DomainRepo, Pattern: repo.Name, Action: core.ActionAdmin}}
+	if g := repo.Config.Group; repo.Type == core.RepoGroup && g != nil && g.WriteMember != "" {
+		scopes = append(scopes, core.Privilege{Domain: core.DomainRepo, Pattern: g.WriteMember, Action: core.ActionAdmin})
+	}
+	return scopes
 }
 
 // claimNPMLogin is the token claim that marks tokens minted by npm login;

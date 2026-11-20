@@ -391,6 +391,11 @@ func (s *Service) UnlockUser(ctx context.Context, id string) (*User, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Lifting a lockout reopens password guessing on the account, so it
+	// is an act on the account like a password reset.
+	if err := s.requireCoversUser(ctx, AuditUserUnlock, u); err != nil {
+		return nil, err
+	}
 	wasLocked := u.lockedAt(s.now())
 	if _, err := s.pool.Exec(ctx, `
 		UPDATE users SET failed_logins = 0, failed_window_start = NULL, locked_until = NULL, updated_at = now()

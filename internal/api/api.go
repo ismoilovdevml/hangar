@@ -164,6 +164,14 @@ type API struct {
 	AuthRoutes      RouteRegistrar
 	ExtraRoutes     []RouteRegistrar
 	EventsHeartbeat time.Duration // SSE keep-alive comment interval (default 15s)
+	// Revalidate checks that the credentials of a request (session, token
+	// or password) still hold and returns the principal as it stands now
+	// (current roles). The event stream calls it every EventsRevalidate
+	// (default 30s) and ends when it fails, so signing out, revoking a
+	// token, expiry or disabling the account also ends open streams. Nil
+	// never re-checks.
+	Revalidate       func(ctx context.Context) (*core.Principal, error)
+	EventsRevalidate time.Duration
 
 	hubMu     sync.Mutex
 	hub       *hub

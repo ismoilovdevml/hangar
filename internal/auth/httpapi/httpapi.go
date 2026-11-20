@@ -215,6 +215,26 @@ func Middleware(svc *auth.Service, opts Options) func(http.Handler) http.Handler
 	}
 }
 
+// Revalidate returns the API.Revalidate of requests authenticated by
+// Middleware: it checks again that the request's credentials hold, as they
+// would on a new request, and returns the current principal. A browser
+// session must still exist and not have expired (signing out or ending the
+// session ends it); a token must still be live; any account must still be
+// enabled. Failures return core.ErrUnauthenticated.
+func Revalidate(svc *auth.Service) func(ctx context.Context) (*core.Principal, error) {
+	return func(ctx context.Context) (*core.Principal, error) {
+		if ra := authFrom(ctx); ra != nil && ra.session != nil {
+			p, _, err := svc.SessionPrincipal(ctx, ra.secret)
+			return p, err
+		}
+		p := core.PrincipalFrom(ctx)
+		if p.IsAnonymous() {
+			return p, nil
+		}
+		return svc.ReloadPrincipal(ctx, p)
+	}
+}
+
 // challenge is the WWW-Authenticate value of 401 answers to requests whose
 // Authorization header failed: Bearer, so browsers never open a password
 // dialog for the web UI's requests.
