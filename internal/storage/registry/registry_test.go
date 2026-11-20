@@ -93,7 +93,7 @@ func TestFallbackStaticAndErrors(t *testing.T) {
 		err  error
 	}{
 		{"static", hostedOn("default"), pinned, nil},
-		{"unknown name falls back", hostedOn("nowhere"), fallback, nil},
+		{"unknown name is not found", hostedOn("nowhere"), nil, core.ErrNotFound},
 		{"empty name falls back", hostedOn(""), fallback, nil},
 		{"group", &core.Repository{Name: "raw-g", Type: core.RepoGroup}, nil, core.ErrInvalid},
 		{"nil", nil, nil, core.ErrInvalid},

@@ -88,8 +88,10 @@ type Options struct {
 	Drivers map[string]Factory
 	// Static pins stores by name; they are used without consulting the database.
 	Static map[string]core.BlobStore
-	// Fallback serves repositories whose blob store name is empty or not in
-	// the blob_stores table. Nil makes those lookups fail with ErrNotFound.
+	// Fallback serves repositories whose blob store name is empty. Nil makes
+	// those lookups fail with ErrNotFound. A name that is not in the
+	// blob_stores table always fails with ErrNotFound: serving it from
+	// another store would put its blobs where nothing records them.
 	Fallback core.BlobStore
 	// RecheckAfter bounds how stale a cached store may be. Default 30s.
 	RecheckAfter time.Duration
@@ -170,9 +172,6 @@ func (r *Registry) ByName(ctx context.Context, name string) (core.BlobStore, err
 	r.mu.Unlock()
 
 	v, err, _ := r.sf.Do(name, func() (any, error) { return r.load(ctx, name) })
-	if errors.Is(err, core.ErrNotFound) {
-		return r.fallback(name)
-	}
 	if err != nil {
 		return nil, err
 	}
