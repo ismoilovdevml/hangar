@@ -38,10 +38,18 @@ func (h *handler) putPackage(ctx context.Context, bs core.BlobStore, r io.Reader
 	return uploaded{digest: d, size: n, sha512: hex.EncodeToString(sum.Sum(nil))}, nil
 }
 
+// identity is a package version as NuGet compares them: the lowercased id
+// and the lowercased normalized version without build metadata.
+type identity struct{ lid, lver string }
+
 // storePackage reads the manifest of a stored package and publishes the
-// package version into repo as the context principal. When the publish
-// itself fails, the assets it tried to write are returned with the error.
-func (h *handler) storePackage(ctx context.Context, repo *core.Repository, bs core.BlobStore, up uploaded) (*Metadata, []*core.Asset, error) {
+// package version into repo as the context principal. When want is set,
+// the manifest must name that package version: a proxy cache fill stores
+// the remote's archive under the id and version the archive declares, so
+// an archive declaring another package would otherwise be cached, and
+// served, as that package. When the publish itself fails, the assets it
+// tried to write are returned with the error.
+func (h *handler) storePackage(ctx context.Context, repo *core.Repository, bs core.BlobStore, up uploaded, want *identity) (*Metadata, []*core.Asset, error) {
 	rc, err := bs.Get(ctx, up.digest)
 	if err != nil {
 		return nil, nil, err
@@ -54,12 +62,16 @@ func (h *handler) storePackage(ctx context.Context, repo *core.Repository, bs co
 	if isSymbolPackage(md) {
 		return nil, nil, fmt.Errorf("%s %s is a symbol package; push it to the symbol endpoint: %w", md.ID, md.Version, core.ErrInvalid)
 	}
+	v, _ := ParseVersion(md.Version) // validated by ParseNuspec
+	lid, lver := lowerID(md.ID), v.Lower()
+	if want != nil && (lid != want.lid || lver != want.lver) {
+		return nil, nil, fmt.Errorf("upstream archive of %s %s declares %s %s in its manifest; not caching it: %w",
+			want.lid, want.lver, md.ID, md.Version, core.ErrUpstream)
+	}
 	nd, nn, err := bs.Put(ctx, bytes.NewReader(nuspec))
 	if err != nil {
 		return nil, nil, fmt.Errorf("store nuspec: %w", err)
 	}
-	v, _ := ParseVersion(md.Version) // validated by ParseNuspec
-	lid, lver := lowerID(md.ID), v.Lower()
 	listed, err := h.pushListed(ctx, repo, md, lid, lver)
 	if err != nil {
 		return md, nil, err
@@ -203,7 +215,7 @@ func (h *handler) push(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	md, _, err := h.storePackage(ctx, target, bs, up)
+	md, _, err := h.storePackage(ctx, target, bs, up, nil)
 	if err != nil {
 		h.fail(w, r, err)
 		return
