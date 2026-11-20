@@ -77,9 +77,13 @@ type FileConfig struct {
 	HTTP httpclient.Options
 }
 
-// Roles finds role names that do not exist (implemented by *auth.Service).
+// Roles finds role names that do not exist and checks that the caller may
+// grant roles (implemented by *auth.Service).
 type Roles interface {
 	MissingRoles(ctx context.Context, names []string) ([]string, error)
+	// RequireCoversRoles fails with core.ErrForbidden unless the context
+	// principal holds every privilege the named roles grant.
+	RequireCoversRoles(ctx context.Context, auditAction, target string, roles []string) error
 }
 
 // Options are the collaborators of a Service.

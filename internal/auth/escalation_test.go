@@ -75,6 +75,10 @@ func TestEscalationMatrix(t *testing.T) {
 		{"helpdesk deletes the admin", asHelp, func(c context.Context) error { return e.Svc.DeleteUser(c, admin2.ID) }, false},
 		{"helpdesk requires the admin to change password", asHelp, func(c context.Context) error { _, err := e.Svc.RequirePasswordChange(c, adminID); return err }, false},
 		{"helpdesk ends the admin's sessions", asHelp, func(c context.Context) error { _, err := e.Svc.RevokeSessions(c, adminID, ""); return err }, false},
+		// Regression: unlocking skipped the coverage check, so helpdesk could
+		// lift a lockout on an administrator under password guessing.
+		{"helpdesk unlocks the admin", asHelp, func(c context.Context) error { _, err := e.Svc.UnlockUser(c, adminID); return err }, false},
+		{"helpdesk unlocks a plain user", asHelp, func(c context.Context) error { _, err := e.Svc.UnlockUser(c, plain.ID); return err }, true},
 
 		// Role bindings.
 		{"helpdesk binds Admin to itself", asHelp, func(c context.Context) error { return e.Svc.BindRole(c, auth.AdminRole, help.ID) }, false},

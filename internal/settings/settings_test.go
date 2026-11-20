@@ -388,6 +388,71 @@ func TestPermissions(t *testing.T) {
 	}
 }
 
+// Regression: system:settings:admin alone could configure a sign-in
+// provider whose default roles or group mapping grant Admin, and so make
+// itself (or anyone the provider signs in) an administrator. Saving an
+// enabled provider needs every privilege its roles grant.
+func TestSignInMappingNeedsTheRolesItGrants(t *testing.T) {
+	e := newEnv(t, settings.Options{})
+	if _, err := e.Svc.CreateRole(e.admin, auth.RoleInput{Name: "SignInAdmin", Privileges: []core.Privilege{
+		core.MustParsePrivilege("system:settings:admin"), core.MustParsePrivilege("repo:*:read"),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	pw := "correct horse battery 42"
+	if _, err := e.Svc.CreateUser(e.admin, auth.UserInput{Username: "sso-admin", Kind: auth.KindUser, Password: &pw, Roles: []string{"SignInAdmin"}}); err != nil {
+		t.Fatal(err)
+	}
+	ctx := e.As(t, "sso-admin", pw)
+	mapping := func(group, def []string) settings.Mapping {
+		m := settings.Mapping{DefaultRoles: def, AutoCreate: true}
+		if group != nil {
+			m.GroupRoles = []settings.GroupRole{{Group: "/ops", Roles: group}}
+		}
+		return m
+	}
+	cases := []struct {
+		name    string
+		enabled bool
+		m       settings.Mapping
+		ok      bool
+	}{
+		{"default role Admin", true, mapping(nil, []string{auth.AdminRole}), false},
+		{"group mapped to Admin", true, mapping([]string{auth.AdminRole}, []string{"Reader"}), false},
+		{"group mapped to Publisher (writes)", true, mapping([]string{"Publisher"}, nil), false},
+		{"Reader only, within the caller's rights", true, mapping([]string{"Reader"}, []string{"Reader"}), true},
+		{"disabled provider grants nothing", false, mapping([]string{auth.AdminRole}, nil), true},
+	}
+	for _, c := range cases {
+		oin := validOIDC("https://sso.example.com/realms/acme")
+		oin.Enabled, oin.Mapping = c.enabled, c.m
+		_, oerr := e.svc.PutOIDC(ctx, oin)
+		lin := settings.LDAPInput{LDAPSettings: settings.LDAPSettings{Enabled: c.enabled, URL: "ldaps://dc1.example.com",
+			BindDN: "CN=svc", UserBaseDN: "DC=example,DC=com", UserFilter: "(uid={username})", Mapping: c.m}, BindPassword: "bind secret"}
+		_, lerr := e.svc.PutLDAP(ctx, lin)
+		for provider, err := range map[string]error{"oidc": oerr, "ldap": lerr} {
+			switch {
+			case c.ok && err != nil:
+				t.Errorf("%s %s: %v, want saved", provider, c.name, err)
+			case !c.ok && !errors.Is(err, core.ErrForbidden):
+				t.Errorf("%s %s: %v, want forbidden", provider, c.name, err)
+			}
+		}
+	}
+	// An administrator may map Admin.
+	in := validOIDC("https://sso.example.com/realms/acme")
+	in.Mapping = mapping([]string{auth.AdminRole}, nil)
+	if _, err := e.svc.PutOIDC(e.admin, in); err != nil {
+		t.Fatalf("admin maps Admin: %v", err)
+	}
+	// Re-pointing that provider (another issuer) re-grants Admin, so the
+	// settings administrator cannot save it either.
+	in.IssuerURL = "https://evil.example.com/realms/acme"
+	if _, err := e.svc.PutOIDC(ctx, in); !errors.Is(err, core.ErrForbidden) {
+		t.Fatalf("settings admin re-points an Admin-granting provider: %v", err)
+	}
+}
+
 func TestProxies(t *testing.T) {
 	e := newEnv(t, settings.Options{})
 	ctx := e.admin

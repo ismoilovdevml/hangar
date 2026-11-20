@@ -371,7 +371,7 @@ func (s *Service) PutOIDC(ctx context.Context, in OIDCInput) (*OIDC, error) {
 		cfg := in.config(secret)
 		s.problems(fe, cfg.Problems())
 		checkPreset(fe, in.Preset)
-		if err := s.checkMapping(ctx, fe, in.Mapping); err != nil {
+		if err := s.checkMapping(ctx, fe, in.Mapping, in.Enabled, AuditOIDCUpdate, "settings:oidc"); err != nil {
 			return err
 		}
 		if err := fe.err(); err != nil {
@@ -439,7 +439,7 @@ func (s *Service) PutLDAP(ctx context.Context, in LDAPInput) (*LDAP, error) {
 		cfg := in.config(password)
 		s.problems(fe, cfg.Problems())
 		checkPreset(fe, in.Preset)
-		if err := s.checkMapping(ctx, fe, in.Mapping); err != nil {
+		if err := s.checkMapping(ctx, fe, in.Mapping, in.Enabled, AuditLDAPUpdate, "settings:ldap"); err != nil {
 			return err
 		}
 		if err := fe.err(); err != nil {
@@ -512,8 +512,14 @@ func (s *Service) problems(fe FieldErrors, ps []auth.FieldError) {
 }
 
 // checkMapping reports mapping problems by row ("group_roles[2].roles")
-// and roles that do not exist.
-func (s *Service) checkMapping(ctx context.Context, fe FieldErrors, m Mapping) error {
+// and roles that do not exist. An enabled provider hands its default and
+// mapped roles to whoever it signs in, so saving one needs every privilege
+// those roles grant, as binding them to a user does: otherwise
+// system:settings:admin alone could map a group (or everyone) to Admin.
+// The whole mapping is checked on every save, not only changed rows,
+// because changing the issuer or directory re-points the existing grants.
+// A disabled provider grants nothing and may always be saved.
+func (s *Service) checkMapping(ctx context.Context, fe FieldErrors, m Mapping, enabled bool, auditAction, target string) error {
 	if len(m.GroupRoles) > 1000 {
 		fe.add("group_roles", "has more than 1000 rows")
 	}
@@ -558,7 +564,16 @@ func (s *Service) checkMapping(ctx context.Context, fe FieldErrors, m Mapping) e
 			fe.add("default_roles", fmt.Sprintf("role %q does not exist", role))
 		}
 	}
-	return nil
+	if !enabled {
+		return nil
+	}
+	var granted []string
+	for _, role := range append(names, m.DefaultRoles...) {
+		if auth.ValidRoleName(role) && !slices.Contains(missing, role) && !slices.Contains(granted, role) {
+			granted = append(granted, role)
+		}
+	}
+	return s.opts.Roles.RequireCoversRoles(ctx, auditAction, target, granted)
 }
 
 // diffFields names the top-level JSON fields that differ between two
