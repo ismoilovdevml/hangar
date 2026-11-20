@@ -9,8 +9,13 @@
 # For development, `make dev-deps` starts only the dependencies and `make dev`
 # runs hangar from source against them. Credentials below are local
 # development defaults; override them with an .env file next to this one.
+#
+# The project is hangar-dev, so it never shares containers, networks or
+# volumes with an installed stack (project hangar) on the same host. Before
+# v0.1.9 it was hangar: earlier dev volumes are hangar_postgres, hangar_minio,
+# ... (docker volume ls); remove them when no longer needed.
 
-name: hangar
+name: hangar-dev
 
 x-healthcheck: &healthcheck
   interval: 5s
