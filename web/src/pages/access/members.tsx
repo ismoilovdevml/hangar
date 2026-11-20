@@ -1,9 +1,9 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { ApiRequestError } from '../../api/client';
 import { useSession } from '../../api/hooks';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
-import { IconSearch } from '../../components/icons';
+import { FilterSearch } from '../../components/FilterSearch';
 import { Panel } from '../../components/Panel';
 import { Pill, StatusDot } from '../../components/Pill';
 import { Select } from '../../components/Select';
@@ -155,7 +155,7 @@ export function MembersTab({ kind, filters, onFilters, onOpen }: MembersTabProps
   return (
     <Panel flush aria-label={sa ? 'Service accounts' : 'Members'}>
       <div className="repo-toolbar">
-        <SearchBox value={filters.q ?? ''} label={sa ? 'Search service accounts' : 'Search members'} onChange={(q) => onFilters({ ...filters, q })} />
+        <FilterSearch value={filters.q ?? ''} label={sa ? 'Search service accounts' : 'Search members'} onChange={(q) => onFilters({ ...filters, q })} />
         <div className="repo-toolbar__filters">
           <div className="filter-select">
             <label htmlFor={roleId} className="filter-select__label">
@@ -216,35 +216,6 @@ export function MembersTab({ kind, filters, onFilters, onOpen }: MembersTabProps
         </div>
       </div>
     </Panel>
-  );
-}
-
-/** Search input that commits after a short pause. */
-export function SearchBox({ value, label, onChange }: { value: string; label: string; onChange: (v: string | undefined) => void }) {
-  const [draft, setDraft] = useState(value);
-  const [synced, setSynced] = useState(value);
-  if (value !== synced) {
-    setSynced(value);
-    setDraft(value);
-  }
-  const commit = useRef(onChange);
-  useEffect(() => {
-    commit.current = onChange;
-  }, [onChange]);
-  useEffect(() => {
-    if (draft.trim() === value) return;
-    const t = setTimeout(() => commit.current(draft.trim() || undefined), 300);
-    return () => clearTimeout(t);
-  }, [draft, value]);
-  const id = useId();
-  return (
-    <div className="filter-search">
-      <label htmlFor={id} className="visually-hidden">
-        {label}
-      </label>
-      <IconSearch size={16} />
-      <input id={id} className="filter-search__input" type="search" placeholder={label} value={draft} onChange={(e) => setDraft(e.target.value)} autoComplete="off" spellCheck={false} />
-    </div>
   );
 }
 

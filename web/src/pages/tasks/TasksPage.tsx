@@ -1,10 +1,10 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useState } from 'react';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { isMissingEndpoint, useCanSystem, useTaskLiveUpdates, useTasks } from '../../api/ops';
 import type { Task, TaskRun, TaskType } from '../../api/opsTypes';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
-import { IconSearch } from '../../components/icons';
+import { FilterSearch } from '../../components/FilterSearch';
 import { IconRefresh } from '../../components/opsIcons';
 import { Meter } from '../../components/Meter';
 import { NotAvailable } from '../../components/NotAvailable';
@@ -65,44 +65,6 @@ function RunningBanner({ run, task, canRun, onMessage }: { run: TaskRun; task?: 
       </div>
       {canRun && task && <TaskActions task={task} active={run} size="md" onMessage={onMessage} />}
     </section>
-  );
-}
-
-/** Name filter: typed locally, written to the URL after a short pause. */
-function NameFilter({ value, onChange }: { value: string; onChange: (q: string | undefined) => void }) {
-  const [draft, setDraft] = useState(value);
-  const [synced, setSynced] = useState(value);
-  if (value !== synced) {
-    setSynced(value);
-    setDraft(value);
-  }
-  const commit = useRef(onChange);
-  useEffect(() => {
-    commit.current = onChange;
-  }, [onChange]);
-  useEffect(() => {
-    if (draft.trim() === value) return;
-    const t = setTimeout(() => commit.current(draft.trim() || undefined), 300);
-    return () => clearTimeout(t);
-  }, [draft, value]);
-  const id = useId();
-  return (
-    <div className="filter-search">
-      <label htmlFor={id} className="visually-hidden">
-        Filter tasks by name
-      </label>
-      <IconSearch size={16} />
-      <input
-        id={id}
-        className="filter-search__input"
-        type="search"
-        placeholder="Filter by name"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        autoComplete="off"
-        spellCheck={false}
-      />
-    </div>
   );
 }
 
@@ -244,7 +206,7 @@ export function TasksPage() {
                 onChange={(v) => setFilter({ status: TASK_STATUS_FILTERS.find((f) => f.id === v)?.id })}
               />
             </div>
-            <NameFilter value={search.q ?? ''} onChange={(q) => setFilter({ q })} />
+            <FilterSearch value={search.q ?? ''} label="Filter tasks by name" placeholder="Filter by name" onChange={(q) => setFilter({ q })} />
           </div>
         </div>
         {tasks.isError && isMissingEndpoint(tasks.error) ? (

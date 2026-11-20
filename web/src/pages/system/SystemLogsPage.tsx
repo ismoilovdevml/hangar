@@ -1,10 +1,10 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useState } from 'react';
 import { getRouteApi } from '@tanstack/react-router';
 import { ApiRequestError } from '../../api/client';
 import { saveBlob, useCanSystem } from '../../api/ops';
 import { errorText } from '../../lib/apiError';
 import { ErrorNote } from '../../components/ErrorNote';
-import { IconSearch } from '../../components/icons';
+import { FilterSearch } from '../../components/FilterSearch';
 import { IconDownload } from '../../components/opsIcons';
 import { PageHeader } from '../../components/PageHeader';
 import { Select, type SelectOption } from '../../components/Select';
@@ -17,45 +17,6 @@ import { formatCount, zoneLabel } from '../../lib/format';
 import './system.css';
 
 const route = getRouteApi('/app/system/logs');
-
-/** Text filter: typed locally, written to the URL after a short pause. */
-function TextFilter({ value, onChange }: { value: string; onChange: (q: string | undefined) => void }) {
-  const [draft, setDraft] = useState(value);
-  const [synced, setSynced] = useState(value);
-  if (value !== synced) {
-    setSynced(value);
-    setDraft(value);
-  }
-  const commit = useRef(onChange);
-  useEffect(() => {
-    commit.current = onChange;
-  }, [onChange]);
-  useEffect(() => {
-    if (draft.trim() === value) return;
-    const t = setTimeout(() => commit.current(draft.trim() || undefined), 350);
-    return () => clearTimeout(t);
-  }, [draft, value]);
-  const id = useId();
-  return (
-    <div className="filter-search log-filter">
-      <label htmlFor={id} className="visually-hidden">
-        Filter log records
-      </label>
-      <IconSearch size={16} />
-      <input
-        id={id}
-        className="filter-search__input"
-        type="search"
-        placeholder="Filter text, e.g. nuget-proxy"
-        value={draft}
-        maxLength={200}
-        onChange={(e) => setDraft(e.target.value)}
-        autoComplete="off"
-        spellCheck={false}
-      />
-    </div>
-  );
-}
 
 function Forbidden() {
   return (
@@ -135,7 +96,14 @@ function LogsView({ filters, nodeOptions, onNode, onFilter }: LogsViewProps) {
                 onChange={(v) => onFilter({ level: isLogLevel(v) ? v : undefined })}
               />
             </div>
-            <TextFilter value={filters.q ?? ''} onChange={(q) => onFilter({ q })} />
+            <FilterSearch
+              className="log-filter"
+              value={filters.q ?? ''}
+              label="Filter log records"
+              placeholder="Filter text, e.g. nuget-proxy"
+              maxLength={200}
+              onChange={(q) => onFilter({ q })}
+            />
           </div>
           <button type="button" className="button button--secondary" onClick={() => void onDownload()} disabled={download.busy || stream.status !== 'ready'}>
             <IconDownload size={16} />

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode, type SVGProps } from 'react';
+import { useId, type ComponentType, type ReactNode, type SVGProps } from 'react';
 import { getRouteApi, Link, useRouterState } from '@tanstack/react-router';
 import { useRepositories } from '../../api/hooks';
 import { useGate } from '../../api/permissions';
@@ -7,7 +7,8 @@ import { CopyButton } from '../../components/CopyButton';
 import { DataTable, type Column, type TableSort } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
 import { NotAvailable } from '../../components/NotAvailable';
-import { IconDatabase, IconGlobe, IconGroup, IconPackage, IconPlus, IconSearch } from '../../components/icons';
+import { IconDatabase, IconGlobe, IconGroup, IconPackage, IconPlus } from '../../components/icons';
+import { FilterSearch } from '../../components/FilterSearch';
 import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import { FormatName } from '../../components/FormatIcon';
@@ -128,45 +129,6 @@ const TABS: { id: RepositoryType | undefined; label: string; key: keyof Reposito
   { id: 'proxy', label: 'Proxy', key: 'proxy' },
   { id: 'group', label: 'Group', key: 'group' },
 ];
-
-/** Name filter: typed locally, written to the URL after a short pause. */
-function NameFilter({ value, onChange }: { value: string; onChange: (q: string | undefined) => void }) {
-  const [draft, setDraft] = useState(value);
-  const [synced, setSynced] = useState(value);
-  // The URL changed from elsewhere (tab click, back button): adopt it.
-  if (value !== synced) {
-    setSynced(value);
-    setDraft(value);
-  }
-  const commit = useRef(onChange);
-  useEffect(() => {
-    commit.current = onChange;
-  }, [onChange]);
-  useEffect(() => {
-    if (draft.trim() === value) return;
-    const t = setTimeout(() => commit.current(draft.trim() || undefined), 300);
-    return () => clearTimeout(t);
-  }, [draft, value]);
-  const id = useId();
-  return (
-    <div className="filter-search">
-      <label htmlFor={id} className="visually-hidden">
-        Filter by name
-      </label>
-      <IconSearch size={16} />
-      <input
-        id={id}
-        className="filter-search__input"
-        type="search"
-        placeholder="Filter by name"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        autoComplete="off"
-        spellCheck={false}
-      />
-    </div>
-  );
-}
 
 /**
  * Stored size. A group stores nothing itself: it shows what it serves, its
@@ -381,7 +343,7 @@ export function RepositoriesPage() {
                 onChange={(v) => setFilter({ format: isFormat(v) ? v : undefined })}
               />
             </div>
-            <NameFilter value={q ?? ''} onChange={(v) => setFilter({ q: v })} />
+            <FilterSearch value={q ?? ''} label="Filter by name" onChange={(v) => setFilter({ q: v })} />
           </div>
         </div>
 
