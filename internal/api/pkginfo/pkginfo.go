@@ -29,11 +29,13 @@ const Extractor = 2
 
 // Size bounds: a README is cut at MaxReadme bytes; any single document or
 // archive member read during extraction at maxMember bytes; tar archives are
-// scanned for at most maxTarEntries entries.
+// scanned for at most maxTarEntries entries and maxTarBytes uncompressed
+// bytes.
 const (
 	MaxReadme     = 512 << 10
 	maxMember     = 8 << 20
 	maxTarEntries = 10000
+	maxTarBytes   = 1 << 30
 	maxDescLen    = 4 << 10
 )
 
