@@ -2,6 +2,7 @@ package observability
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -9,10 +10,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.yaml.in/yaml/v3"
 
 	"github.com/ismoilovdevml/hangar/internal/httpclient"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
+	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
 const (
@@ -22,15 +25,92 @@ const (
 	dashboardDir  = "../../deploy/observability/grafana"
 )
 
+// collectorList is a prometheus.Registerer that only remembers what was
+// registered, so the collectors of other packages can be described.
+type collectorList []prometheus.Collector
+
+func (l *collectorList) Register(c prometheus.Collector) error { *l = append(*l, c); return nil }
+
+func (l *collectorList) MustRegister(cs ...prometheus.Collector) { *l = append(*l, cs...) }
+
+func (l *collectorList) Unregister(prometheus.Collector) bool { return false }
+
+// otherMetricRegistrations are the RegisterMetrics functions of other
+// packages that cmd/hangar/wire.go calls on the node's registry.
+var otherMetricRegistrations = map[string]func(prometheus.Registerer) error{
+	"proxy":      proxy.RegisterMetrics,
+	"httpclient": httpclient.RegisterMetrics,
+	"routing":    routing.RegisterMetrics,
+}
+
 // knownMetrics is every hangar_* metric a node can export: this package's
-// plus the proxy cache counters.
-func knownMetrics() []string {
-	return append(allHangarMetrics(), proxy.MetricCacheRequests, proxy.MetricCacheHitBytes, proxy.MetricNegativeCacheEvictions,
-		proxy.MetricUpstreamDNSFailures, httpclient.MetricDNSCacheRequests, httpclient.MetricDNSErrors,
-		proxy.MetricIndexEntriesSkipped)
+// plus those of otherMetricRegistrations, as their collectors describe them.
+func knownMetrics(t testing.TB) []string {
+	t.Helper()
+	var cs collectorList
+	for pkg, register := range otherMetricRegistrations {
+		if err := register(&cs); err != nil {
+			t.Fatalf("%s.RegisterMetrics: %v", pkg, err)
+		}
+	}
+	out := allHangarMetrics()
+	for _, n := range describedNames(cs...) {
+		if strings.HasPrefix(n, "hangar_") {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 var reMetricRef = regexp.MustCompile(`hangar_[a-z0-9_]+`)
+
+// reMetricLiteral matches a Go string literal that is a whole hangar_* name.
+var reMetricLiteral = regexp.MustCompile(`"(hangar_[a-z0-9_]*[a-z0-9])"`)
+
+// notMetrics are hangar_* string literals in the code that are not metric
+// names (cookie names).
+var notMetrics = []string{"hangar_csrf", "hangar_session", "hangar_oidc_state"}
+
+// TestEveryMetricInTheCodeIsKnown keeps knownMetrics complete: every metric
+// name written in cmd/ or internal/ must be one of the collectors above, so a
+// metric added in another package cannot skip the documentation and
+// dashboard checks below by being left out of this file.
+func TestEveryMetricInTheCodeIsKnown(t *testing.T) {
+	known := knownMetrics(t)
+	found := 0
+	for _, root := range []string{"../../cmd", "../../internal"} {
+		err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
+				return nil
+			}
+			b, err := os.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			for _, m := range reMetricLiteral.FindAllStringSubmatch(string(b), -1) {
+				n := m[1]
+				if slices.Contains(notMetrics, n) {
+					continue
+				}
+				found++
+				if !slices.Contains(known, n) {
+					t.Errorf("%s names metric %s, which knownMetrics does not know: add the package's RegisterMetrics "+
+						"to otherMetricRegistrations (or the name to notMetrics if it is not a metric) and document it", p, n)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if found < 50 {
+		t.Errorf("only %d metric names found in the code; is the scan broken?", found)
+	}
+}
 
 // baseMetric strips the histogram series suffixes.
 func baseMetric(n string, known []string) string {
@@ -50,13 +130,14 @@ func TestEveryMetricIsDocumented(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, n := range knownMetrics() {
-		if !strings.Contains(string(doc), "`"+n+"`") {
-			t.Errorf("%s is not documented in docs/operations/monitoring.md", n)
+	known := knownMetrics(t)
+	for _, n := range known {
+		// A row of the metric tables, not just a mention in prose.
+		if !strings.Contains(string(doc), "\n| `"+n+"` |") {
+			t.Errorf("%s has no row in the metric tables of docs/operations/monitoring.md", n)
 		}
 	}
 	// And the document names no metric that does not exist.
-	known := knownMetrics()
 	for _, ref := range reMetricRef.FindAllString(string(doc), -1) {
 		if b := baseMetric(ref, known); !slices.Contains(known, b) {
 			t.Errorf("monitoring.md mentions unknown metric %s", ref)
@@ -65,7 +146,7 @@ func TestEveryMetricIsDocumented(t *testing.T) {
 }
 
 func TestDashboardsAndAlertsUseExistingMetrics(t *testing.T) {
-	known := knownMetrics()
+	known := knownMetrics(t)
 	files, err := filepath.Glob(filepath.Join(dashboardDir, "*.json"))
 	if err != nil || len(files) != 6 {
 		t.Fatalf("dashboards = %v, %v", files, err)

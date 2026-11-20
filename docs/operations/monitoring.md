@@ -143,10 +143,16 @@ Labels never carry user-controlled values:
   matched are `route="unmatched"`.
 - `method` is one of the standard HTTP methods or `OTHER`; `code` is the
   status code or `other` outside 100–599.
-- Repository names appear only in `hangar_upstream_state` (one series per proxy
-  repository and state, capped at 512 repositories) and store names only in the
-  blob store usage gauges (capped at 64 stores). Both sets are created by
-  administrators.
+- Repository names appear in `hangar_upstream_state` (one series per proxy
+  repository and state, capped at 512 repositories), in the per-repository
+  proxy metrics (those with a `repository` label) and in
+  `hangar_routing_blocked_total`; store names appear only in the blob store
+  usage gauges (capped at 64 stores). Repositories, stores and routing rules
+  are created by administrators.
+- The `host` label of `hangar_proxy_upstream_requests_total` is the remote's
+  host or a host that matched the repository's `related_hosts` (or a format's
+  built-in file hosts). It is not capped: a suffix pattern such as
+  `.cdn.example.com` adds one series per subdomain the remote links to.
 - `format`, job `type` and similar values from code or configuration are capped
   (32 formats, 64 job types); anything beyond becomes `other`.
 
@@ -214,6 +220,20 @@ run finishes after start the usage gauges are absent.
 | `hangar_upstream_dns_cache_requests_total` | counter | `result` | Remote host name lookups by DNS cache result: `hit`, `miss` (asked the resolver), `stale` (the resolver failed; the last answer was used), `negative` (a remembered failure). |
 | `hangar_upstream_dns_errors_total` | counter | `kind` | Failed queries to the system resolver for remote host names: `timeout`, `temporary`, `not_found`, `other`. Retries count. A rising `timeout` rate points at overloaded DNS servers. |
 | `hangar_proxy_upstream_dns_failures_total` | counter | `repository` | Remote requests that failed on a DNS timeout or temporary error. They count towards the circuit breaker at most once per second. |
+| `hangar_proxy_upstream_requests_total` | counter | `repository`, `host`, `result` | HTTP requests proxy repositories sent to their remote and its related hosts, by final result: `2xx` … `5xx`, `rate_limited` (a 429 beyond the `Retry-After` budget, or the host is still held back after one), `error` (connection, TLS, timeout, or refused by the outbound address policy), `circuit_open` (refused by the open breaker without contacting the host) or `offline` (the repository is in offline mode). A request that was retried counts once, with its last result. Unlike `hangar_upstream_fetches_total` it names the repository and the host, so it shows which remote, or which download host behind it, fails. |
+| `hangar_proxy_upstream_request_duration_seconds` | histogram | `repository` | Time from sending a remote request to its response headers, retries and their waits included. Only requests that got a response are observed (not `error`, `circuit_open`, `offline` or `rate_limited` results). |
+| `hangar_proxy_upstream_retries_total` | counter | `repository`, `reason` | Retries of remote requests by `reason`: `error` (connection failure), `5xx`, `rate_limited` (a 429 within the `Retry-After` budget). A steady rate means a remote is flaky even when the final results are `2xx`. |
+| `hangar_proxy_upstream_resumes_total` | counter | `repository` | Interrupted remote downloads continued with a `Range` request instead of starting over. |
+| `hangar_proxy_upstream_inflight_requests` | gauge | `repository` | Remote requests in progress: waiting for a slot, waiting for headers or streaming a body. Requests queued for a slot count too, so with `max_concurrent_requests` set a value above that limit means requests wait for the remote. |
+
+### Routing rules
+
+[Routing rules](../guides/routing-rules.md) keep internal package names away
+from proxy remotes and group members (dependency confusion protection).
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `hangar_routing_blocked_total` | counter | `format`, `repository`, `member`, `rule` | Package names a routing rule kept from a proxy remote or a group member. `repository` holds the rule, `member` is the excluded group member (empty for proxy rules), `rule` is `block`, `allow` (the name was not on a proxy's allow list) or `exclusive` (another member reserves the name). Every exclusion is counted; it is also logged and audited as `routing.blocked`, at most once per 10 minutes per node for the same repository, member, rule and package name. A rise for one package name on a proxy means builds asked a public remote for an internal name: either a client is missing the internal repository or someone is probing for a dependency confusion; the audit log names the package. |
 
 ### Database
 
@@ -409,9 +429,9 @@ Hangar does not send trace headers to proxy remotes. Jobs start new traces.
 | `hangar-overview.json` | Is every node ready? How much traffic, how many errors, how slow? Is the database pool saturated? |
 | `hangar-formats.json` | Which formats carry the traffic, fail or are slow? How many bytes go in and out? How well do proxy caches work? |
 | `hangar-storage.json` | How full are the blob stores and their filesystems? Are blob store operations failing or slow? |
-| `hangar-upstreams.json` | Which proxy remotes are offline, blocked or slow? How often do fetches fail and how long do they take? |
+| `hangar-upstreams.json` | Which proxy remotes are offline, blocked or slow? How often do fetches fail and how long do they take? Which repository, and which host behind it, fails, retries or keeps clients waiting? |
 | `hangar-jobs.json` | Is the job queue draining? Which jobs fail or take long? Is NATS connected? |
-| `hangar-auth.json` | Is someone guessing passwords? Are accounts being locked? Is the audit trail complete? |
+| `hangar-auth.json` | Is someone guessing passwords? Are accounts being locked? Is the audit trail complete? Are routing rules turning away internal package names, and which rules fire? |
 
 The dashboards use `$__rate_interval`, so set the data source's scrape interval
 in Grafana to match Prometheus.
@@ -437,3 +457,11 @@ in Grafana to match Prometheus.
 | [HangarAuthBruteForce](runbooks.md#hangarauthbruteforce) | warning | More than 50 failed authentications in 5 minutes, sustained for 5 minutes. |
 | [HangarAccountLockouts](runbooks.md#hangaraccountlockouts) | warning | More than 3 accounts locked in 15 minutes. |
 | [HangarAuditEventsDropped](runbooks.md#hangarauditeventsdropped) | critical | Any audit event was rejected or lost. |
+
+Routing rule exclusions (`hangar_routing_blocked_total`) and remote retries
+have dashboards but no alert on purpose: an exclusion is a rule doing its
+job, and a retry that ends in success needs no one at night. Watch them on
+`hangar-auth.json` and `hangar-upstreams.json`, and read the
+`routing.blocked` audit events when a rule fires for a name you do not
+expect. A remote that stays down is covered by
+[HangarUpstreamCircuitOpen](runbooks.md#hangarupstreamcircuitopen).
