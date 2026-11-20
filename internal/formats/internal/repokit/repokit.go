@@ -152,6 +152,9 @@ func (b *Base) WriteTarget(ctx context.Context, repo *core.Repository) (*core.Re
 		if m.Type != core.RepoHosted || m.Format != b.Format {
 			return nil, fmt.Errorf("group %q write member %q is not a hosted %s repository: %w", repo.Name, m.Name, b.Format, core.ErrInvalid)
 		}
+		if !m.Online {
+			return nil, fmt.Errorf("write member %q of %q: %w", m.Name, repo.Name, core.ErrOffline)
+		}
 		return m, nil
 	}
 	return nil, nil

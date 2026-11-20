@@ -81,6 +81,9 @@ func (h *handler) writeTarget(ctx context.Context, repo *core.Repository) (*core
 		if m.Type != core.RepoHosted || m.Format != Name {
 			return nil, fmt.Errorf("group %q write member %q is not a hosted %s repository: %w", repo.Name, m.Name, Name, core.ErrInvalid)
 		}
+		if !m.Online {
+			return nil, fmt.Errorf("write member %q of %q: %w", m.Name, repo.Name, core.ErrOffline)
+		}
 		return m, nil
 	}
 	return nil, nil
