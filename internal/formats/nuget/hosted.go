@@ -132,6 +132,12 @@ func isSymbolPackage(md *Metadata) bool {
 	return false
 }
 
+// systemPrincipal is who the server acts as for writes a caller's own
+// request needs but its privilege does not cover (see setListed).
+func systemPrincipal() *core.Principal {
+	return &core.Principal{Name: "system", Kind: core.PrincipalServiceAccount, Source: "system", Roles: []string{"Admin"}}
+}
+
 // writeTarget resolves the hosted repository that receives writes addressed
 // to repo: itself, or a group's write member.
 func (h *handler) writeTarget(ctx context.Context, repo *core.Repository) (*core.Repository, error) {
@@ -344,9 +350,17 @@ func (h *handler) pathComponent(w http.ResponseWriter, r *http.Request, repo *co
 	return comp, true
 }
 
-// setListed flips the listed flag of a package version and audits it.
+// setListed flips the listed flag of a package version and audits it as
+// the caller. Unlisting is NuGet's delete: the caller was authorized for
+// delete, which does not include the write the flag is stored with, so the
+// flag is stored as the server. Relisting needs write and stays the
+// caller's own write.
 func (h *handler) setListed(ctx context.Context, repo *core.Repository, comp *core.Component, listed bool) error {
-	_, _, err := h.deps.Components.Publish(ctx, repo, core.PublishRequest{
+	pctx := ctx
+	if !listed {
+		pctx = core.WithPrincipal(ctx, systemPrincipal())
+	}
+	_, _, err := h.deps.Components.Publish(pctx, repo, core.PublishRequest{
 		Component: &core.Component{Name: comp.Name, Version: comp.Version, Attributes: map[string]any{attrListed: listed}},
 	})
 	if err != nil {

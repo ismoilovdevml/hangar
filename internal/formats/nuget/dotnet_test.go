@@ -196,6 +196,7 @@ func TestDotnetClient(t *testing.T) {
 		Config: core.RepoConfig{Group: &core.GroupConfig{Members: []string{"nuget-hosted", "nuget-proxy"}, WriteMember: "nuget-hosted"}}})
 	token := s.env.Auth.AddToken("ci")
 	s.env.AuthZ.Grant("ci", "repo:nuget-*:read", "repo:nuget-*:write", "repo:nuget-*:delete")
+	s.env.AuthZ.Grant("system", "repo:*:admin") // unlist stores the listed flag as the server
 
 	// 1. Publish a dependency to the remote feed.
 	upCfg := filepath.Join(d.root, "upstream.config")
