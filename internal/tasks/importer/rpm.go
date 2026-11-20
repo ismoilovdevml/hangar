@@ -1,10 +1,9 @@
 package importer
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,9 +11,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/klauspost/compress/zstd"
-	"github.com/ulikunitz/xz"
 )
 
 // rpm: a yum/dnf repository. repodata/repomd.xml names the primary metadata
@@ -61,27 +57,30 @@ type rpmAdapter struct {
 	byName map[string][]rpmPackage
 }
 
-func decompress(name string, b []byte) ([]byte, error) {
-	var r io.Reader
-	var err error
-	switch {
-	case strings.HasSuffix(name, ".gz"):
-		r, err = gzip.NewReader(bytes.NewReader(b))
-	case strings.HasSuffix(name, ".xz"):
-		r, err = xz.NewReader(bytes.NewReader(b))
-	case strings.HasSuffix(name, ".zst"):
-		var d *zstd.Decoder
-		if d, err = zstd.NewReader(bytes.NewReader(b)); err == nil {
-			defer d.Close()
-			r = d
+// readPrimary streams the <package> elements of primary.xml from r to fn,
+// one at a time: the document is never held whole in memory.
+func readPrimary(r io.Reader, fn func(rpmPackage) error) error {
+	dec := xml.NewDecoder(r)
+	for {
+		tok, err := dec.Token()
+		if errors.Is(err, io.EOF) {
+			return nil
 		}
-	default:
-		return b, nil
+		if err != nil {
+			return err
+		}
+		se, ok := tok.(xml.StartElement)
+		if !ok || se.Name.Local != "package" {
+			continue
+		}
+		var p rpmPackage
+		if err := dec.DecodeElement(&p, &se); err != nil {
+			return err
+		}
+		if err := fn(p); err != nil {
+			return err
+		}
 	}
-	if err != nil {
-		return nil, err
-	}
-	return io.ReadAll(io.LimitReader(r, 2<<30))
 }
 
 func (a *rpmAdapter) load(ctx context.Context) error {
@@ -118,24 +117,29 @@ func (a *rpmAdapter) load(ctx context.Context) error {
 			a.err = fmt.Errorf("%s: %w", href, err)
 			return
 		}
-		body, err := decompress(href, raw)
+		body, done, err := openIndex(href, raw, maxIndexUnpacked)
 		if err != nil {
 			a.err = fmt.Errorf("%s: %w", href, err)
 			return
 		}
-		var primary struct {
-			Packages []rpmPackage `xml:"package"`
-		}
-		if err := xml.Unmarshal(body, &primary); err != nil {
+		defer done()
+		byName := map[string][]rpmPackage{}
+		n := 0
+		err = readPrimary(body, func(p rpmPackage) error {
+			if p.Name == "" || p.Location.Href == "" || strings.Contains(p.Location.Href, "..") {
+				return nil
+			}
+			if n++; n > maxIndexPackages {
+				return errTooManyPackages
+			}
+			byName[p.Name] = append(byName[p.Name], p)
+			return nil
+		})
+		if err != nil {
 			a.err = fmt.Errorf("%s: %w", href, err)
 			return
 		}
-		a.byName = map[string][]rpmPackage{}
-		for _, p := range primary.Packages {
-			if p.Name != "" && p.Location.Href != "" && !strings.Contains(p.Location.Href, "..") {
-				a.byName[p.Name] = append(a.byName[p.Name], p)
-			}
-		}
+		a.byName = byName
 	})
 	return a.err
 }

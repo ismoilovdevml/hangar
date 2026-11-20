@@ -19,7 +19,20 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/ismoilovdevml/hangar/internal/archive"
 	"github.com/ismoilovdevml/hangar/internal/core"
+)
+
+// Bounds of what is read from a downloaded .crate, the ones the cargo
+// format applies to a published crate: a crate the format would refuse is
+// not worth decompressing in full here either.
+const (
+	maxCrateUnpacked = 1 << 30 // uncompressed tar stream
+	maxCrateEntries  = 100000  // files in the crate
+	// maxCrateKept bounds the Cargo.toml and README files kept while
+	// looking for the readme the manifest names: the JSON metadata that
+	// carries the README may not be larger.
+	maxCrateKept = 16 << 20
 )
 
 // Cargo: the sparse index protocol. config.json names the download URL
@@ -205,10 +218,13 @@ func readCargoManifest(dl *download, root string) (*cargoManifest, string) {
 	if err != nil {
 		return nil, ""
 	}
-	tr := tar.NewReader(gz)
+	// The bounds end the walk early; what was read so far still serves (the
+	// upload goes ahead, and the registry judges the crate itself).
+	tr := tar.NewReader(archive.Limit(gz, maxCrateUnpacked, ".crate file"))
 	var m *cargoManifest
 	files := map[string][]byte{}
-	for {
+	kept := 0
+	for entries := 0; entries < maxCrateEntries && kept < maxCrateKept; entries++ {
 		h, err := tr.Next()
 		if err != nil {
 			break
@@ -217,6 +233,7 @@ func readCargoManifest(dl *download, root string) (*cargoManifest, string) {
 		if name == root+"Cargo.toml" || strings.HasPrefix(strings.ToLower(name), strings.ToLower(root+"README")) {
 			b, _ := io.ReadAll(io.LimitReader(tr, 1<<20))
 			files[name] = b
+			kept += len(b)
 		}
 	}
 	if b, ok := files[root+"Cargo.toml"]; ok {
