@@ -49,9 +49,9 @@ jobs:
           go mod tidy
           git diff --exit-code go.mod go.sum
       - name: go vet
-        run: go vet ./cmd/... ./internal/... && go vet -tags e2e ./test/e2e/... && go vet -tags webui ./internal/webui/
+        run: go vet ./cmd/... ./internal/... ./deploy/... && go vet -tags e2e ./test/e2e/... && go vet -tags webui ./internal/webui/
       - name: go test
-        run: go test -race -count=1 -coverprofile=coverage.out ./cmd/... ./internal/... ./test/...
+        run: go test -race -count=1 -coverprofile=coverage.out ./cmd/... ./internal/... ./test/... ./deploy/...
       - name: build
         run: make build
 
@@ -80,7 +80,7 @@ jobs:
       - name: govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./cmd/... ./internal/...
+          govulncheck ./cmd/... ./internal/... ./deploy/...
 
   web:
     name: Web (lint, typecheck, test, build)

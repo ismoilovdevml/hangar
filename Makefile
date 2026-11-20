@@ -21,7 +21,8 @@ SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct 2>/dev/null)
 HELM_CHART  := deploy/helm/hangar
 HELM_CI_VALUES := $(wildcard $(HELM_CHART)/ci/*-values.yaml)
 # Explicit package roots: web/node_modules may contain stray Go packages.
-GO_PACKAGES := ./cmd/... ./internal/... ./test/...
+# deploy/ holds the compose stack tests and the healthcheck binary.
+GO_PACKAGES := ./cmd/... ./internal/... ./test/... ./deploy/...
 WEB_PRESENT := $(wildcard web/package.json)
 
 # Local development defaults for dev/run/migrate (values already in the
@@ -90,7 +91,11 @@ docker: ## Build the container image ($(IMAGE))
 ## ---- Deployment artifacts (deploy/) ----------------------------------
 
 .PHONY: deploy-check
-deploy-check: helm-lint helm-template compose-config deploy-scripts-check ## Validate the Helm chart, compose stack and scripts
+deploy-check: chart-version-check helm-lint helm-template compose-config deploy-scripts-check alerts-check ## Validate the Helm chart, compose stack, scripts and alert rules
+
+.PHONY: chart-version-check
+chart-version-check: ## Chart.yaml version/appVersion equal, and not older than the latest release tag
+	deploy/scripts/check-chart-version.sh
 
 .PHONY: helm-lint
 helm-lint: ## helm lint the chart with every value set in deploy/helm/hangar/ci
@@ -104,7 +109,8 @@ helm-template: ## Render the chart with every CI value set (kubeconform validate
 		if command -v kubeconform >/dev/null 2>&1; then \
 			helm template hangar $(HELM_CHART) -n hangar -f $$v | kubeconform -strict -ignore-missing-schemas -summary; \
 		fi; \
-	done
+	done; \
+	command -v kubeconform >/dev/null 2>&1 || echo "helm-template: kubeconform not installed; manifests NOT schema-validated"
 
 .PHONY: compose-config
 compose-config: ## Validate deploy/compose with the settings install.sh writes
@@ -124,6 +130,17 @@ docker-scanner: ## Build the scan adapter image (hangar-scanner:dev)
 deploy-scripts-check: ## shellcheck the deploy scripts and run the installer tests
 	shellcheck -x deploy/scripts/*.sh deploy/install.sh deploy/tests/*.sh test/e2e/run-docker.sh test/e2e/ldap/run.sh
 	bash deploy/tests/install_test.sh
+
+ALERT_RULES := deploy/observability/prometheus/hangar-alerts.yml
+ALERT_TESTS := deploy/observability/prometheus/hangar-alerts.test.yml
+
+.PHONY: alerts-check
+alerts-check: ## promtool check and unit-test the alert rules (skipped without promtool)
+	@if command -v promtool >/dev/null 2>&1; then \
+		promtool check rules $(ALERT_RULES) && promtool test rules $(ALERT_TESTS); \
+	else \
+		echo "alerts-check: promtool not installed; alert rules NOT checked"; \
+	fi
 
 ## ---- Quality -----------------------------------------------------------
 
