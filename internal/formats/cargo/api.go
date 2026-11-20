@@ -15,6 +15,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/formats/internal/quarantine"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/repokit"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 	"github.com/ismoilovdevml/hangar/internal/routing"
 )
@@ -360,7 +361,7 @@ func (h *handler) listOwners(w http.ResponseWriter, r *http.Request) {
 	}
 	target := repo
 	if repo.Type == core.RepoGroup {
-		if t, err := h.writeTarget(ctx, repo); err == nil && t != nil {
+		if t, err := repokit.WriteTarget(ctx, h.deps.Repos, Name, repo); err == nil && t != nil {
 			target = t
 		}
 	}

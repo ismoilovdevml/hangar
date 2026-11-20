@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/repokit"
 	"github.com/ismoilovdevml/hangar/internal/routing"
 )
 
@@ -128,30 +129,24 @@ func (h *handler) servingRepos(ctx context.Context, repo *core.Repository, image
 	return repos, nil, nil
 }
 
-// writeTarget resolves where a write addressed to repo lands: the repository
-// itself if hosted, a group's write member, or errReadOnly.
+// writeTarget resolves where a write addressed to repo lands
+// (repokit.WriteTarget) or fails with errReadOnly: the registry API
+// answers a repository that cannot take the write, including a group whose
+// write member is not a hosted docker repository, with 405 UNSUPPORTED.
 func (h *handler) writeTarget(ctx context.Context, repo *core.Repository) (*core.Repository, error) {
-	switch repo.Type {
-	case core.RepoHosted:
-		return repo, nil
-	case core.RepoGroup:
-		if repo.Config.Group == nil || repo.Config.Group.WriteMember == "" {
-			return nil, fmt.Errorf("group %q has no write member: %w", repo.Name, errReadOnly)
-		}
-		m, err := h.deps.Repos.Get(ctx, repo.Config.Group.WriteMember)
-		if err != nil {
-			return nil, fmt.Errorf("write member of %q: %w", repo.Name, err)
-		}
-		if m.Type != core.RepoHosted || m.Format != Name {
-			return nil, fmt.Errorf("write member %q of %q is not a hosted docker repository: %w", m.Name, repo.Name, errReadOnly)
-		}
-		if !m.Online {
-			return nil, fmt.Errorf("write member %q: %w", m.Name, core.ErrOffline)
-		}
-		return m, nil
-	default:
+	t, err := repokit.WriteTarget(ctx, h.deps.Repos, Name, repo)
+	var wm *repokit.WriteMemberError
+	switch {
+	case errors.As(err, &wm):
+		return nil, fmt.Errorf("%w: %w", err, errReadOnly)
+	case err != nil:
+		return nil, err
+	case t == nil && repo.Type == core.RepoGroup:
+		return nil, fmt.Errorf("group %q has no write member: %w", repo.Name, errReadOnly)
+	case t == nil:
 		return nil, fmt.Errorf("%s repository %q: %w", repo.Type, repo.Name, errReadOnly)
 	}
+	return t, nil
 }
 
 // target resolves and authorizes the write target of rq. It answers the

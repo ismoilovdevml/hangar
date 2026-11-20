@@ -2,7 +2,8 @@
 // rpm) share: request authorization and errors, path checks, group member
 // resolution, serving stored assets and generated documents, publishing
 // regenerated metadata, signing with the repository key, and the proxy
-// cache for remote mirrors (metadata with a TTL, content forever).
+// cache for remote mirrors (metadata with a TTL, content forever). Every
+// format resolves the target of a write with WriteTarget.
 package repokit
 
 import (
@@ -138,6 +139,18 @@ func CleanPath(p string) (string, error) {
 // WriteTarget resolves the repository an upload to repo is stored in: repo
 // itself when hosted, a group's hosted write member, or nil (read-only).
 func (b *Base) WriteTarget(ctx context.Context, repo *core.Repository) (*core.Repository, error) {
+	return WriteTarget(ctx, b.Deps.Repos, b.Format, repo)
+}
+
+// WriteTarget resolves the repository a write addressed to repo is stored
+// in, for every format: repo itself when hosted; a group's write member,
+// which must be an online hosted repository of format (an offline one
+// fails with core.ErrOffline, any other with a *WriteMemberError); nil when
+// repo takes no writes (a proxy, a group without a write member). Formats
+// answer nil with their protocol's read-only error. Authorization is the
+// caller's: the principal needs write on the target and, through a group,
+// on the group.
+func WriteTarget(ctx context.Context, repos core.RepositoryService, format string, repo *core.Repository) (*core.Repository, error) {
 	switch repo.Type {
 	case core.RepoHosted:
 		return repo, nil
@@ -145,12 +158,12 @@ func (b *Base) WriteTarget(ctx context.Context, repo *core.Repository) (*core.Re
 		if repo.Config.Group == nil || repo.Config.Group.WriteMember == "" {
 			return nil, nil
 		}
-		m, err := b.Deps.Repos.Get(ctx, repo.Config.Group.WriteMember)
+		m, err := repos.Get(ctx, repo.Config.Group.WriteMember)
 		if err != nil {
 			return nil, err
 		}
-		if m.Type != core.RepoHosted || m.Format != b.Format {
-			return nil, fmt.Errorf("group %q write member %q is not a hosted %s repository: %w", repo.Name, m.Name, b.Format, core.ErrInvalid)
+		if m.Type != core.RepoHosted || m.Format != format {
+			return nil, &WriteMemberError{Group: repo.Name, Member: m.Name, Format: format}
 		}
 		if !m.Online {
 			return nil, fmt.Errorf("write member %q of %q: %w", m.Name, repo.Name, core.ErrOffline)
@@ -159,6 +172,19 @@ func (b *Base) WriteTarget(ctx context.Context, repo *core.Repository) (*core.Re
 	}
 	return nil, nil
 }
+
+// WriteMemberError is a group write member that is not a hosted repository
+// of the group's format. It is core.ErrInvalid.
+type WriteMemberError struct {
+	Group, Member, Format string
+}
+
+func (e *WriteMemberError) Error() string {
+	return fmt.Sprintf("group %q write member %q is not a hosted %s repository", e.Group, e.Member, e.Format)
+}
+
+// Unwrap makes errors.Is(err, core.ErrInvalid) hold.
+func (e *WriteMemberError) Unwrap() error { return core.ErrInvalid }
 
 // AuthorizeWrite resolves the write target of repo and checks the
 // principal may write to it (and, for a group, to the group). It answers

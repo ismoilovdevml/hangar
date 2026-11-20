@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/repokit"
 )
 
 // uploaded is a package archive stored in a blob store.
@@ -151,28 +152,18 @@ func systemPrincipal() *core.Principal {
 }
 
 // writeTarget resolves the hosted repository that receives writes addressed
-// to repo: itself, or a group's write member.
+// to repo (repokit.WriteTarget); one that takes no writes is core.ErrInvalid.
 func (h *handler) writeTarget(ctx context.Context, repo *core.Repository) (*core.Repository, error) {
-	switch repo.Type {
-	case core.RepoHosted:
-		return repo, nil
-	case core.RepoGroup:
-		if repo.Config.Group == nil || repo.Config.Group.WriteMember == "" {
-			return nil, fmt.Errorf("group %q has no write member: %w", repo.Name, core.ErrInvalid)
-		}
-		m, err := h.deps.Repos.Get(ctx, repo.Config.Group.WriteMember)
-		if err != nil {
-			return nil, err
-		}
-		if m.Type != core.RepoHosted || m.Format != Name {
-			return nil, fmt.Errorf("write member %q of %q is not a hosted nuget repository: %w", m.Name, repo.Name, core.ErrInvalid)
-		}
-		if !m.Online {
-			return nil, fmt.Errorf("repository %q: %w", m.Name, core.ErrOffline)
-		}
-		return m, nil
+	t, err := repokit.WriteTarget(ctx, h.deps.Repos, Name, repo)
+	switch {
+	case err != nil:
+		return nil, err
+	case t == nil && repo.Type == core.RepoGroup:
+		return nil, fmt.Errorf("group %q has no write member: %w", repo.Name, core.ErrInvalid)
+	case t == nil:
+		return nil, fmt.Errorf("repository %q is a %s repository and does not accept pushes: %w", repo.Name, repo.Type, core.ErrInvalid)
 	}
-	return nil, fmt.Errorf("repository %q is a %s repository and does not accept pushes: %w", repo.Name, repo.Type, core.ErrInvalid)
+	return t, nil
 }
 
 // packageBody returns the package bytes of a push: the first part of a
