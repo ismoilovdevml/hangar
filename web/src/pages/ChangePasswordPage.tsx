@@ -7,6 +7,7 @@ import { leaveAfterLogout, queryKeys, useLogout, useSession, useSystemStatus } f
 import { IconLogo } from '../components/icons';
 import { PasswordChecklist } from '../components/PasswordChecklist';
 import { DEFAULT_PASSWORD_POLICY, passwordChecks } from '../lib/passwordPolicy';
+import { errorText } from '../lib/apiError';
 import { safeRedirect } from '../lib/redirect';
 import { forgetSignInPassword, peekSignInPassword } from '../lib/signInPassword';
 import { toast } from '../lib/toast';
@@ -16,16 +17,13 @@ const route = getRouteApi('/change-password');
 
 function changeError(err: unknown): string {
   if (err instanceof ApiRequestError) {
-    const msg = (err.body?.message ?? '').replace(/: invalid argument$/, '');
-    if (err.status === 400 && msg.includes('current password is incorrect')) return 'The current password is wrong.';
+    if (err.status === 400 && (err.body?.message ?? '').includes('current password is incorrect')) return 'The current password is wrong.';
     if (err.status === 423) {
       const mins = err.retryAfter ? Math.ceil(err.retryAfter / 60) : null;
       return `Your account is locked after repeated wrong passwords. ${mins ? `Try again in ${mins} min` : 'Try again later'}, or ask an administrator to unlock it.`;
     }
-    if (msg) return msg.charAt(0).toUpperCase() + msg.slice(1) + (msg.endsWith('.') ? '' : '.');
-    return 'The password could not be changed. Please try again.';
   }
-  return 'Cannot reach the server. Check your connection and try again.';
+  return errorText(err, { action: 'change the password' });
 }
 
 /**

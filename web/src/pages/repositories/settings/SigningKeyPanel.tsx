@@ -4,6 +4,7 @@
  */
 import { useState } from 'react';
 import { ApiRequestError } from '../../../api/client';
+import { errorText, type ErrorTextOptions } from '../../../lib/apiError';
 import { useChangeSigningKey, useSigningKey } from '../../../api/catalog';
 import { usePermissions } from '../../../api/permissions';
 import type { Repository } from '../../../api/types';
@@ -19,16 +20,12 @@ const ALGORITHMS: Record<string, string> = { rsa4096: 'RSA 4096', ed25519: 'Ed25
 /** Upper-case hex in groups of four, as gpg prints it. */
 const groupHex = (fp: string) => fp.replace(/(.{4})(?=.)/g, '$1 ');
 
-const isStatus = (err: unknown, status: number) => err instanceof ApiRequestError && err.status === status;
+const KEY_ERRORS: ErrorTextOptions = {
+  action: 'change this key',
+  status: { 501: 'The server has no secret key (HANGAR_SECRET_KEY), so it cannot store signing keys.' },
+};
 
-function changeError(err: unknown): string {
-  if (err instanceof ApiRequestError) {
-    if (err.status === 403) return 'You do not have permission to change this key.';
-    if (err.status === 501) return 'The server has no secret key (HANGAR_SECRET_KEY), so it cannot store signing keys.';
-    return err.body?.message ?? 'The server could not change the key.';
-  }
-  return 'Cannot reach the server. Check your connection and try again.';
-}
+const isStatus = (err: unknown, status: number) => err instanceof ApiRequestError && err.status === status;
 
 export function SigningKeyPanel({ repo }: { repo: Repository }) {
   const shared = repo.config.format?.signing_key === 'shared';
@@ -148,7 +145,7 @@ export function SigningKeyPanel({ repo }: { repo: Repository }) {
           confirmLabel="Rotate key"
           tone="danger"
           busy={change.isPending}
-          error={change.isError ? changeError(change.error) : null}
+          error={change.isError ? errorText(change.error, KEY_ERRORS) : null}
           onCancel={close}
           onConfirm={() => change.mutate({ kind: 'rotate' }, { onSuccess: onDone('Signing key rotated') })}
         >
@@ -165,7 +162,7 @@ export function SigningKeyPanel({ repo }: { repo: Repository }) {
           title={shared ? 'Import the shared signing key' : `Import a signing key for ${repo.name}`}
           confirmLabel="Import key"
           busy={change.isPending}
-          error={missingKey ? 'Paste the private key.' : change.isError ? changeError(change.error) : null}
+          error={missingKey ? 'Paste the private key.' : change.isError ? errorText(change.error, KEY_ERRORS) : null}
           onCancel={close}
           onConfirm={() => {
             if (!privateKey.trim()) {

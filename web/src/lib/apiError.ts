@@ -1,4 +1,4 @@
-import { ApiRequestError } from '../api/client';
+import { ApiRequestError, PASSWORD_CHANGE_REQUIRED } from '../api/client';
 
 /**
  * Turns failures into words for people. The API answers `{code, message}`;
@@ -106,6 +106,44 @@ export function describeError(err: unknown): ErrorDescription {
 
 /** Just the sentence, for places that have room for one line. */
 export const errorSentence = (err: unknown) => describeError(err).message;
+
+export interface ErrorTextOptions {
+  /**
+   * What the user tried, as it reads after "to": "delete the blob store". It
+   * names the refusal ("You do not have permission to delete the blob store.")
+   * and an answer without the API's error body ("The server could not delete
+   * the blob store.").
+   */
+  action?: string;
+  /** Sentences of the caller's own for some statuses, used first: `{ 409: 'A blob store with this name already exists.' }`. */
+  status?: Partial<Record<number, string>>;
+}
+
+const NO_CONNECTION = 'Cannot reach the server. Check your connection and try again.';
+
+/**
+ * The one sentence a failed request shows next to the control that made it
+ * (a dialog, a form, a button). Load failures use ErrorNote, which adds Retry
+ * and the raw answer; both read the same describeError.
+ */
+export function errorText(err: unknown, { action, status }: ErrorTextOptions = {}): string {
+  if (err instanceof ApiRequestError) {
+    const own = status?.[err.status];
+    if (own) return own;
+    if (err.code === PASSWORD_CHANGE_REQUIRED) {
+      return 'Set a new password first: tokens and other changes are blocked until this account’s password is changed (My account → Password).';
+    }
+    if (err.status === 403 && err.code !== 'csrf_failed' && err.code !== 'read_only_token') {
+      return `You do not have permission to ${action ?? 'do this'}.`;
+    }
+    if (!err.body && action && err.status < 500) return `The server could not ${action}.`;
+    return describeError(err).message;
+  }
+  // fetch() rejects with a TypeError when the request never got an answer.
+  if (err instanceof TypeError) return NO_CONNECTION;
+  if (err instanceof SyntaxError) return describeError(err).message;
+  return action ? `Could not ${action}. Try again.` : 'Something went wrong. Try again.';
+}
 
 /**
  * A connection test's failure (proxy, directory, identity provider) as one

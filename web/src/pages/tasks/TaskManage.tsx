@@ -5,7 +5,8 @@
  */
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { errorText, useDeleteTask, useUpdateTask } from '../../api/ops';
+import { useDeleteTask, useUpdateTask } from '../../api/ops';
+import { errorText } from '../../lib/apiError';
 import type { Task } from '../../api/opsTypes';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { cronToSchedule, scheduleToCron, type ScheduleDraft } from '../../lib/cron';
@@ -49,7 +50,7 @@ export function TaskManageActions({ task, editing, onEdit }: { task: Task; editi
           tone="danger"
           typeToConfirm={task.name}
           busy={remove.isPending}
-          error={remove.isError ? errorText(remove.error, 'The task could not be deleted.') : null}
+          error={remove.isError ? errorText(remove.error, { action: 'delete the task' }) : null}
           onCancel={() => setConfirm(false)}
           onConfirm={() => remove.mutate(undefined, { onSuccess: () => void navigate({ to: '/tasks' }) })}
         >
@@ -101,7 +102,7 @@ export function TaskEditForm({ task, onSaved, onCancel }: { task: Task; onSaved:
       </label>
       {update.isError && (
         <p className="form-error" role="alert">
-          {errorText(update.error, 'The task could not be saved.')}
+          {errorText(update.error, { action: 'save the task' })}
         </p>
       )}
       <div className="task-edit__actions">

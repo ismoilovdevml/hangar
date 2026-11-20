@@ -2,10 +2,8 @@
  * Access model for the UI: privileges, token scopes and expiry, user state.
  * Pure functions only, so they are unit-tested without rendering.
  */
-import { ApiRequestError } from '../../api/client';
 import type { Tone } from '../../lib/format';
 import type { Member, Token } from './api';
-import { errorSentence } from '../../lib/apiError';
 import { globMatch, parsePrivilege, type Action, type Privilege } from '../../lib/privileges';
 
 /* ---------------------------------------------------------------- privileges */
@@ -348,18 +346,6 @@ export interface AccessSearch extends MemberFilters {
 
 
 /* ---------------------------------------------------------------- misc */
-
-/** The message to show for a failed request. */
-export function errorText(err: unknown): string {
-  if (err instanceof ApiRequestError) {
-    if (err.code === 'password_change_required')
-      return 'Set a new password first: tokens and other changes are blocked until this account’s password is changed (My account → Password).';
-    if (err.code === 'read_only_token') return 'You signed in with a read-only token, which cannot change anything.';
-    if (err.status === 403) return 'You do not have permission to do this.';
-    if (err.status === 423 && err.retryAfter) return `Locked after repeated wrong passwords. Try again in ${Math.ceil(err.retryAfter / 60)} min.`;
-  }
-  return errorSentence(err);
-}
 
 /** Generates a random passphrase-like password (for "Generate" in the password fields). */
 export function generatePassword(): string {

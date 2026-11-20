@@ -1,9 +1,9 @@
 import { useId, useState, type ReactNode } from 'react';
 import { ErrorMessage, PickerLoadError } from '../../components/States';
 import { ApiRequestError } from '../../api/client';
+import { errorText } from '../../lib/apiError';
 import { useRepositories } from '../../api/hooks';
 import {
-  errorText,
   fetchPreviewCsv,
   saveBlob,
   useDeleteCleanupPolicy,
@@ -185,7 +185,7 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
       const blob = await fetchPreviewCsv(draftToInput({ ...draft, name: errors.name ? 'preview' : draft.name }));
       saveBlob(blob, policyFilename(draft.name, new Date()));
     } catch (e) {
-      setCsvError(errorText(e, 'Could not export the preview.'));
+      setCsvError(errorText(e, { action: 'export the preview' }));
     } finally {
       setCsvBusy(false);
     }
@@ -233,7 +233,7 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
     previewBody = refusedGlob ? (
       <p className="form-error">Fix the pattern under “tags matching” and preview again.</p>
     ) : (
-      <ErrorMessage error={previewM.error} message={errorText(previewM.error, 'The preview failed.')} />
+      <ErrorMessage error={previewM.error} message={errorText(previewM.error, { action: 'preview the policy' })} />
     );
   } else if (!preview) {
     previewBody = (
@@ -507,7 +507,7 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
           </p>
         )}
         {csvError && <p className="form-error preview-panel__error">{csvError}</p>}
-        {saveM.isError && <p className="form-error preview-panel__error">{errorText(saveM.error, 'The policy could not be saved.')}</p>}
+        {saveM.isError && <p className="form-error preview-panel__error">{errorText(saveM.error, { action: 'save the policy' })}</p>}
         {previewBody && <div className="preview-panel__body">{previewBody}</div>}
         {preview && (
           <>
@@ -536,7 +536,7 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
           confirmLabel="Run cleanup now"
           tone="danger"
           busy={runM.isPending}
-          error={runM.isError ? errorText(runM.error, 'The run could not be started.') : null}
+          error={runM.isError ? errorText(runM.error, { action: 'run the policy' }) : null}
           onCancel={() => setConfirm(null)}
           onConfirm={() => runM.mutate(policy.name, { onSuccess: () => setConfirm(null) })}
         >
@@ -560,7 +560,7 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
           confirmLabel="Delete policy"
           tone="danger"
           busy={deleteM.isPending}
-          error={deleteM.isError ? errorText(deleteM.error, 'The policy could not be deleted.') : null}
+          error={deleteM.isError ? errorText(deleteM.error, { action: 'delete the policy' }) : null}
           onCancel={() => setConfirm(null)}
           onConfirm={() =>
             deleteM.mutate(policy.name, {

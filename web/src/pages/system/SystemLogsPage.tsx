@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { getRouteApi } from '@tanstack/react-router';
 import { ApiRequestError } from '../../api/client';
-import { errorText, saveBlob, useCanSystem } from '../../api/ops';
+import { saveBlob, useCanSystem } from '../../api/ops';
+import { errorText } from '../../lib/apiError';
 import { ErrorNote } from '../../components/ErrorNote';
 import { IconSearch } from '../../components/icons';
 import { IconDownload } from '../../components/opsIcons';
@@ -93,7 +94,7 @@ function LogsView({ filters, nodeOptions, onNode, onFilter }: LogsViewProps) {
       saveBlob(new Blob([toJsonLines(records)], { type: 'application/x-ndjson' }), `hangar-logs-${node || 'node'}-${stamp}.jsonl`);
       setDownload({ busy: false });
     } catch (err) {
-      setDownload({ busy: false, error: `Download failed: ${errorText(err)}` });
+      setDownload({ busy: false, error: `Download failed: ${errorText(err, { action: 'download the logs' })}` });
     }
   };
 
@@ -152,7 +153,7 @@ function LogsView({ filters, nodeOptions, onNode, onFilter }: LogsViewProps) {
             <p className="meta panel-note">This server does not keep logs in memory yet. Upgrade Hangar to read them here.</p>
           ) : (
             <div className="panel-note">
-              <p className="meta">{errorText(stream.error, 'The logs could not be loaded.')}</p>
+              <p className="meta">{errorText(stream.error, { action: 'load the logs' })}</p>
               <ErrorNote what="the log records" onRetry={stream.refresh} />
             </div>
           )

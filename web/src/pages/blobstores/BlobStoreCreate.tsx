@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { ApiRequestError } from '../../api/client';
+import { errorText } from '../../lib/apiError';
 import { useCreateBlobStore } from '../../api/catalog';
 import { Panel } from '../../components/Panel';
 import { Segmented } from '../../components/Segmented';
@@ -22,15 +22,6 @@ import { useConnectionTest } from './useConnectionTest';
 const FIELD_ORDER: BlobStoreField[] = ['name', 'quota', 'path', 'endpoint', 'bucket', 'accessKeyId', 'secretAccessKey'];
 const id = (f: BlobStoreField) => `store-${f}`;
 const errId = (f: BlobStoreField) => `store-${f}-error`;
-
-function submitMessage(err: unknown): string {
-  if (err instanceof ApiRequestError) {
-    if (err.status === 403) return 'You do not have permission to add blob stores.';
-    if (err.status === 409) return 'A blob store with this name already exists.';
-    return err.body?.message ?? 'The server could not add the blob store.';
-  }
-  return 'Cannot reach the server. Check your connection and try again.';
-}
 
 /** Form for a new filesystem or S3 store. The secret key is write-only: sent once, never shown again. */
 export function BlobStoreCreate({ onClose }: { onClose: () => void }) {
@@ -192,7 +183,7 @@ export function BlobStoreCreate({ onClose }: { onClose: () => void }) {
         )}
         {create.isError && (
           <p className="form-error" role="alert">
-            {submitMessage(create.error)}
+            {errorText(create.error, { action: 'add the blob store', status: { 409: 'A blob store with this name already exists.' } })}
           </p>
         )}
         {form.kind === 's3' && <TestOutcome result={tested} pending={check.pending} error={check.error} />}

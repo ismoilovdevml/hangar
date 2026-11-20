@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiRequestError, apiFetch } from '../../api/client';
 import { queryKeys } from '../../api/hooks';
 import type { components } from '../../api/schema';
-import { errorSentence } from '../../lib/apiError';
+import { errorText } from '../../lib/apiError';
 
 type Schemas = components['schemas'];
 
@@ -150,11 +150,8 @@ export function fieldErrorsOf(err: unknown): Record<string, string> {
   return {};
 }
 
-/** A sentence for an error that is not about one field. */
+/** A sentence for an error that is not about one field; field errors are shown at their fields. */
 export function errorMessage(err: unknown): string {
-  if (err instanceof ApiRequestError) {
-    if (err.status === 403) return 'You do not have permission to change these settings.';
-    if (err.status === 400 && Object.keys(fieldErrorsOf(err)).length > 0) return 'Fix the highlighted fields and save again.';
-  }
-  return errorSentence(err);
+  const onFields = Object.keys(fieldErrorsOf(err)).length > 0;
+  return errorText(err, { action: 'change these settings', status: onFields ? { 400: 'Fix the highlighted fields and save again.' } : undefined });
 }

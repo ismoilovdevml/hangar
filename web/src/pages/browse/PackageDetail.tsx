@@ -24,7 +24,7 @@ import { CopyButton } from '../../components/CopyButton';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
 import { EmptyState, Loading } from '../../components/States';
-import { cleanServerMessage } from '../../lib/apiError';
+import { cleanServerMessage, errorText } from '../../lib/apiError';
 import { IconTrash } from '../../components/icons';
 import { IconDownload } from '../../components/opsIcons';
 import { NotAvailable } from '../../components/NotAvailable';
@@ -206,7 +206,7 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
             {c.quarantined && c.quarantine_reason && <p className="form-error">Quarantined: {c.quarantine_reason}</p>}
             {scan.isError && (
               <p className="form-error" role="alert">
-                {scanError(scan.error)}
+                {errorText(scan.error, { action: 'scan this package' })}
               </p>
             )}
             {scan.data && scan.data.scan.status !== 'ok' && (
@@ -315,14 +315,6 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
       )}
     </div>
   );
-}
-
-function scanError(err: unknown): string {
-  if (err instanceof ApiRequestError) {
-    if (err.status === 403) return 'You do not have permission to scan this package.';
-    return err.body?.message ?? 'The server could not scan the package.';
-  }
-  return 'Cannot reach the server. Check your connection and try again.';
 }
 
 const TAB_LABEL: Record<BrowseTab, string> = {

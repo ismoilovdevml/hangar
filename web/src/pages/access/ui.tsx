@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { IconClose } from '../../components/icons';
 import { useEscapeLayer } from '../../lib/layers';
 import { initials } from '../../lib/format';
-import { errorText } from './model';
+import { errorText } from '../../lib/apiError';
 import { ErrorMessage } from '../../components/States';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
