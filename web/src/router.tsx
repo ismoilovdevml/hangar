@@ -426,7 +426,7 @@ const routeTree = rootRoute.addChildren([
     tasksRoute,
     newTaskRoute,
     taskDetailRoute,
-    page('/cluster', 'Cluster & replication', ClusterPage, false, GATES.cluster),
+    page('/cluster', 'Cluster', ClusterPage, false, GATES.cluster),
     systemStatusRoute,
     systemLogsRoute,
     auditRoute,

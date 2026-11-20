@@ -66,7 +66,7 @@ export function ClusterPage() {
   return (
     <div className="screen">
       <PageHeader
-        title="Cluster & replication"
+        title="Cluster"
         description="The Hangar nodes serving this registry. They share one database and one blob store, so any node answers any request."
         actions={
           <Link to="/system/status" className="button button--secondary">

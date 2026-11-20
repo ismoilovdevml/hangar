@@ -10,7 +10,7 @@ describe('app shell', () => {
   it('renders sidebar, top bar and system status', async () => {
     renderApp('/');
     const nav = await screen.findByRole('navigation', { name: 'Primary' });
-    for (const label of ['Overview', 'Packages', 'Search', 'Repositories', 'Blob stores', 'Cleanup policies', 'Vulnerabilities', 'Access & audit', 'Scheduled tasks', 'Cluster & replication']) {
+    for (const label of ['Overview', 'Packages', 'Search', 'Repositories', 'Blob stores', 'Cleanup policies', 'Vulnerabilities', 'Access & audit', 'Scheduled tasks', 'Cluster']) {
       expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument();
     }
     const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' });

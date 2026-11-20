@@ -20,11 +20,11 @@ describe('command palette', () => {
     await user.type(input, 'cluster');
     const options = within(dialog).getAllByRole('option');
     // A matching page ranks first; the package search is the fallback at the end.
-    expect(options[0]).toHaveTextContent('Cluster & replication');
+    expect(options[0]).toHaveTextContent('Cluster');
     expect(options.at(-1)).toHaveTextContent('Search packages for “cluster”');
     // ArrowUp at the top stays there instead of wrapping to the last option.
     await user.keyboard('{ArrowUp}');
-    expect(within(dialog).getByRole('option', { name: 'Cluster & replication' })).toHaveAttribute('aria-selected', 'true');
+    expect(within(dialog).getByRole('option', { name: 'Cluster' })).toHaveAttribute('aria-selected', 'true');
     await user.keyboard('{Enter}');
 
     await waitFor(() => expect(history.location.pathname).toBe('/cluster'));

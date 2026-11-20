@@ -116,7 +116,7 @@ test('a reader sees only what it can use, and who to ask for the rest', async ({
   }
   await page.setViewportSize(DESKTOP);
   const nav = page.getByRole('navigation', { name: 'Primary' });
-  for (const hidden of ['Blob stores', 'Cleanup policies', 'Access & audit', 'Scheduled tasks', 'Cluster & replication']) {
+  for (const hidden of ['Blob stores', 'Cleanup policies', 'Access & audit', 'Scheduled tasks', 'Cluster']) {
     await expect(nav.getByRole('link', { name: hidden, exact: true })).toHaveCount(0);
   }
   await go(page, '/repositories');

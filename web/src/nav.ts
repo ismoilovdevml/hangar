@@ -120,7 +120,7 @@ export const NAV: NavSection[] = [
     title: 'Operations',
     items: [
       { to: '/tasks', label: 'Scheduled tasks', icon: IconClock, keywords: 'jobs cron', requires: GATES.tasks },
-      { to: '/cluster', label: 'Cluster & replication', icon: IconCluster, keywords: 'nodes edge ha', requires: GATES.cluster },
+      { to: '/cluster', label: 'Cluster', icon: IconCluster, keywords: 'nodes edge ha', requires: GATES.cluster },
       {
         to: '/system/status',
         label: 'System status',

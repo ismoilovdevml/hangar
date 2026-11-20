@@ -7,7 +7,7 @@ describe('sidebar', () => {
       ['Registry', ['Overview', 'Packages', 'Search', 'Repositories']],
       ['Storage', ['Blob stores', 'Cleanup policies']],
       ['Security', ['Vulnerabilities', 'Access & audit', 'Audit log']],
-      ['Operations', ['Scheduled tasks', 'Cluster & replication', 'System status', 'System logs']],
+      ['Operations', ['Scheduled tasks', 'Cluster', 'System status', 'System logs']],
       ['Settings', ['Settings', 'Authentication', 'Proxies']],
     ]);
   });
