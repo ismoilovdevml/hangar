@@ -5,7 +5,9 @@ import {
   highlight,
   highlightTerms,
   normalizeQuery,
+  qualifierExample,
   qualifierValues,
+  searchExamples,
   setQualifier,
   suggest,
   toggleQualifierValue,
@@ -68,5 +70,24 @@ describe('suggestions', () => {
     expect(suggest('a  b', 2, ctx)).toEqual([]);
     expect(suggest('format:npm', 10, ctx)).toEqual([]);
     expect(suggest('sha256:ab', 9, ctx)).toEqual([]);
+  });
+});
+
+describe('search examples', () => {
+  const repos = [
+    { name: 'npm-internal', format: 'npm', component_count: 40 },
+    { name: 'docker-prod', format: 'docker', component_count: 900 },
+    { name: 'raw-files', format: 'raw', component_count: 900 },
+    { name: 'all', format: 'docker', type: 'group', component_count: 1000 },
+  ];
+
+  it('name the fullest repository the user can read, so they find something', () => {
+    expect(searchExamples(repos)).toEqual(['format:docker', 'repo:docker-prod', 'sha256:9f2c', 'unused:>90d', 'security:findings']);
+    expect(qualifierExample('license', repos)).toBe('license:MIT');
+  });
+
+  it('name no repository when there is none', () => {
+    expect(searchExamples([])).toEqual(['format:npm', 'sha256:9f2c', 'unused:>90d', 'security:findings']);
+    expect(qualifierExample('repo', [])).toBeNull();
   });
 });

@@ -20,11 +20,14 @@ import {
   highlightTerms,
   normalizeQuery,
   QUALIFIERS,
+  qualifierExample,
+  searchExamples,
   qualifierValues,
   SEARCH_SORTS,
   setQualifier,
   toggleQualifierValue,
   queryProblems,
+  type ExampleRepository,
   type SecurityState,
 } from '../../lib/searchQuery';
 import { useNow } from '../../lib/useNow';
@@ -32,8 +35,6 @@ import { QueryBar, type QueryBarHandle } from './QueryBar';
 import './search.css';
 
 const route = getRouteApi('/app/search');
-
-const EXAMPLES = ['format:npm', 'repo:npm-hosted', 'sha256:9f2c', 'unused:>90d', 'security:findings'];
 
 const SECURITY_LABEL: Record<SecurityState, string> = {
   clean: 'Clean',
@@ -79,6 +80,9 @@ export function SearchPage() {
     [formats.data, repos.data],
   );
 
+  // Examples name the user's own repositories, so each finds something (none: examples that name no repository).
+  const examples = useMemo(() => searchExamples(repos.data ?? []), [repos.data]);
+
   const focusResult = (i: number) => list.current?.querySelectorAll<HTMLElement>('.result__link')[i]?.focus();
 
   const first = results.data?.pages[0];
@@ -94,7 +98,7 @@ export function SearchPage() {
         <h1 id="search-title" className="search-hero__title">
           Find any package
         </h1>
-        <QueryBar ref={bar} value={q} onSubmit={(v) => setQuery(v)} context={context} onArrowDown={() => focusResult(0)} />
+        <QueryBar ref={bar} value={q} onSubmit={(v) => setQuery(v)} context={context} example={examples.slice(0, 2).join(' ')} onArrowDown={() => focusResult(0)} />
         {(problems.length > 0 || serverOnly) && (
           // The live region wraps the list so the list keeps its role (and its items) for screen readers.
           <div role={invalid ? 'alert' : 'status'}>
@@ -110,7 +114,7 @@ export function SearchPage() {
         )}
         <div className="search-try">
           <span className="meta">Try:</span>
-          {EXAMPLES.map((ex) => (
+          {examples.map((ex) => (
             <Link key={ex} to="/search" search={{ q: ex }} className="search-try__chip">
               {ex}
             </Link>
@@ -119,7 +123,7 @@ export function SearchPage() {
       </section>
 
       {!q ? (
-        <QueryHelp />
+        <QueryHelp repos={repos.data ?? []} />
       ) : invalid ? null : (
         <div className="search-body">
           {first && <Facets q={q} result={first} onChange={(next) => setQuery(next, false)} />}
@@ -371,7 +375,7 @@ function NoResults({ q, onClear }: { q: string; onClear: (q: string) => void }) 
   );
 }
 
-function QueryHelp() {
+function QueryHelp({ repos }: { repos: readonly ExampleRepository[] }) {
   return (
     <section className="search-help glass" aria-labelledby="help-title">
       <h2 id="help-title" className="panel__title">
@@ -382,16 +386,24 @@ function QueryHelp() {
         <kbd className="kbd">/</kbd> to jump to the search box.
       </p>
       <dl className="search-help__list">
-        {QUALIFIERS.map((k) => (
-          <div key={k.key} className="search-help__row">
-            <dt>
-              <Link to="/search" search={{ q: k.example }} className="search-try__chip">
-                {k.example}
-              </Link>
-            </dt>
-            <dd>{k.hint}</dd>
-          </div>
-        ))}
+        {QUALIFIERS.map((k) => {
+          const example = qualifierExample(k.key, repos);
+          return (
+            <div key={k.key} className="search-help__row">
+              <dt>
+                {example ? (
+                  <Link to="/search" search={{ q: example }} className="search-try__chip">
+                    {example}
+                  </Link>
+                ) : (
+                  // No repository to name: the syntax, not a search that finds nothing.
+                  <code className="search-try__chip search-try__chip--syntax">{k.example}</code>
+                )}
+              </dt>
+              <dd>{k.hint}</dd>
+            </div>
+          );
+        })}
       </dl>
     </section>
   );

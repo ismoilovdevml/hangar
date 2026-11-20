@@ -89,9 +89,11 @@ export function TopBar({ onSignOut }: { onSignOut: () => void }) {
   const shortcut = isMac() ? '⌘K' : 'Ctrl K';
   // The Overview carries its own search box, so its header is bare and shows the system state instead.
   const bare = pathname === '/';
+  // The Search page is one big search box: a second one in the bar would compete with it (⌘K still opens the palette).
+  const ownSearch = pathname === '/search';
 
   return (
-    <header className={bare ? 'topbar topbar--bare' : 'topbar glass'}>
+    <header className={bare ? 'topbar topbar--bare' : ownSearch ? 'topbar topbar--no-search glass' : 'topbar glass'}>
       <nav aria-label="Breadcrumb" className="breadcrumb">
         <ol>
           <li>{instanceName(org?.name)}</li>
@@ -112,7 +114,7 @@ export function TopBar({ onSignOut }: { onSignOut: () => void }) {
 
       {bare ? (
         <StatusPill />
-      ) : (
+      ) : ownSearch ? null : (
         <button type="button" className="search-trigger" onClick={palette.open} aria-keyshortcuts="Meta+K Control+K">
           <IconSearch size={16} />
           <span className="search-trigger__text">Search packages, digests, CVEs</span>

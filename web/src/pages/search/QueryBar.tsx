@@ -6,6 +6,8 @@ interface QueryBarProps {
   value: string;
   onSubmit: (q: string) => void;
   context: SuggestContext;
+  /** A query or two shown in the placeholder ("format:npm repo:npm-internal"). */
+  example?: string;
   /** ArrowDown with no suggestion open moves focus into the results. */
   onArrowDown?: () => void;
 }
@@ -15,7 +17,7 @@ export interface QueryBarHandle {
 }
 
 /** Search box with qualifier completion (combobox with a listbox of suggestions). */
-export const QueryBar = forwardRef<QueryBarHandle, QueryBarProps>(function QueryBar({ value, onSubmit, context, onArrowDown }, ref) {
+export const QueryBar = forwardRef<QueryBarHandle, QueryBarProps>(function QueryBar({ value, onSubmit, context, example, onArrowDown }, ref) {
   const [draft, setDraft] = useState(value);
   const [synced, setSynced] = useState(value);
   const [caret, setCaret] = useState(value.length);
@@ -116,7 +118,7 @@ export const QueryBar = forwardRef<QueryBarHandle, QueryBarProps>(function Query
           autoComplete="off"
           autoCapitalize="off"
           spellCheck={false}
-          placeholder="Name, digest or qualifier, e.g. format:npm repo:npm-hosted"
+          placeholder={example ? `Name, digest or qualifier, e.g. ${example}` : 'Name, digest or qualifier'}
           value={draft}
           onChange={(e) => {
             setDraft(e.target.value);

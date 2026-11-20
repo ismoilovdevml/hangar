@@ -550,6 +550,8 @@
   .search-trigger .kbd { display: none; }
   .topbar--bare { padding: 0 2px; }
   .topbar--bare .status-pill { margin-right: auto; }
+  /* Without the search trigger the trail shares its row with the bell and the account. */
+  .topbar--no-search .breadcrumb { flex: 1 1 0; }
   .page-header__title { font-size: 28px; }
 }
 @media (max-width: 1100px) {
