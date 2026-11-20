@@ -11,6 +11,7 @@ import { IconArrowDown, IconArrowUp, IconClose } from '../../components/icons';
 import { Pill } from '../../components/Pill';
 import { Select } from '../../components/Select';
 import { FORMAT_META } from '../../lib/format';
+import { useDetailsOpen } from '../../lib/useDetailsOpen';
 import {
   GROUP_WRITE_FORMATS,
   TYPE_META,
@@ -280,6 +281,7 @@ function ProxySettings({
   blur: Blur;
   secretKept?: boolean;
 }) {
+  const advanced = useDetailsOpen(form.authKind !== 'none' || form.proxyMode !== 'inherit' || !!form.caBundle);
   const ttl = (field: 'metadataTtl' | 'contentTtl' | 'negativeTtl', label: string, hint: string) => (
     <div className="field">
       <label htmlFor={fieldId(field)} className="field__label">{label}</label>
@@ -323,7 +325,7 @@ function ProxySettings({
         {ttl('negativeTtl', 'Not-found cached for', 'Remembered 404s')}
       </div>
 
-      <details className="advanced field--wide" open={form.authKind !== 'none' || form.proxyMode !== 'inherit' || !!form.caBundle}>
+      <details className="advanced field--wide" {...advanced}>
         <summary className="advanced__summary">Upstream credentials and connection</summary>
         <div className="form-grid">
           <div className="field">

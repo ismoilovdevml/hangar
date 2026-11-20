@@ -445,7 +445,7 @@
   display: inline-block; max-width: 280px; vertical-align: middle;
   overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; color: var(--ink-2); white-space: nowrap;
 }
-.row-actions { display: inline-flex; gap: 6px; justify-content: flex-end; }
+.row-actions { display: inline-flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .repo-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--hairline); }
 .repo-footer__pager { display: flex; gap: 8px; }
 .repo-footer__pager .button { min-height: 44px; }

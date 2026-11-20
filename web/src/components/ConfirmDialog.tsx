@@ -77,7 +77,7 @@ export function ConfirmDialog({
     >
       <div
         ref={dialogRef}
-        className="dialog"
+        className="dialog dialog--plain"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}

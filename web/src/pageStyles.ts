@@ -6,7 +6,6 @@
 import './pages/access/access.css';
 import './pages/changePassword.css';
 import './components/passwordChecklist.css';
-import './components/passwordChecklist.css';
 import './pages/apidocs/apidocs.css';
 import './pages/repositories/repoForm.css';
 import './styles/catalog.css';

@@ -58,7 +58,7 @@ function FormDialog({ title, children, submitLabel, busy, error, onSubmit, onCan
         if (e.target === e.currentTarget && !busy) onCancel();
       }}
     >
-      <form ref={ref} className="dialog vdialog" role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={onKeyDown} onSubmit={submit} noValidate>
+      <form ref={ref} className="dialog dialog--plain vdialog" role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={onKeyDown} onSubmit={submit} noValidate>
         <h2 className="dialog__title" id={titleId}>
           {title}
         </h2>
@@ -161,7 +161,7 @@ export function WaiveDialog({ packageKey, packageName, findings, initial, onClos
         </label>
         <textarea
           id={reasonId}
-          className="textarea"
+          className="input textarea"
           rows={3}
           value={reason}
           maxLength={2000}

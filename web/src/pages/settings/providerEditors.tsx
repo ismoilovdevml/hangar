@@ -8,6 +8,7 @@ import { CopyButton } from '../../components/CopyButton';
 import { Panel } from '../../components/Panel';
 import { Select } from '../../components/Select';
 import { formatTime } from '../../lib/format';
+import { useDetailsOpen } from '../../lib/useDetailsOpen';
 import { useCanSystem } from '../../api/ops';
 import { useRoles } from '../access/api';
 import { Field, FileBadge, ListInput, RoleMappingTable, RolesInput, SecretInput, TestResultView, Toggle } from './controls';
@@ -114,6 +115,7 @@ function postLogoutUri(redirectUri?: string): string {
 
 function SetupSteps({ preset, redirectUri, open }: { preset: { name: string; id: string; steps: string[] }; redirectUri?: string; open: boolean }) {
   const where = preset.id === 'other' ? 'your provider' : preset.name;
+  const steps = useDetailsOpen(open);
   return (
     <div className="auth-setup">
       {redirectUri && (
@@ -125,7 +127,7 @@ function SetupSteps({ preset, redirectUri, open }: { preset: { name: string; id:
           </span>
         </div>
       )}
-      <details className="auth-setup__steps" open={open}>
+      <details className="auth-setup__steps" {...steps}>
         <summary className="auth-setup__summary">How to set up {where}</summary>
         <ol>
           {preset.steps.map((s) => (

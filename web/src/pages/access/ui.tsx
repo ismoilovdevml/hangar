@@ -16,7 +16,6 @@ interface DialogProps {
   /** A side drawer instead of a centred dialog. */
   drawer?: boolean;
   wide?: boolean;
-  footer?: ReactNode;
   /** False for a question that must be answered: no close button, and Escape and the scrim do nothing. */
   dismissible?: boolean;
 }
@@ -24,9 +23,11 @@ interface DialogProps {
 /**
  * Modal dialog: focus moves in on open and back to the opener on close, Tab
  * stays inside, Escape and the scrim close it. Escape closes only the topmost
- * layer, so a dialog opened from a drawer closes alone.
+ * layer, so a dialog opened from a drawer closes alone. Only the body
+ * scrolls; a `.dialog-form` that ends with its `.dialog-actions` keeps those
+ * buttons on screen at the bottom edge (access.css).
  */
-export function Dialog({ title, description, onClose, children, drawer, wide, footer, dismissible = true }: DialogProps) {
+export function Dialog({ title, description, onClose, children, drawer, wide, dismissible = true }: DialogProps) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descId = useId();
@@ -96,7 +97,6 @@ export function Dialog({ title, description, onClose, children, drawer, wide, fo
           )}
         </div>
         <div className="dialog__body">{children}</div>
-        {footer && <div className="dialog__foot">{footer}</div>}
       </div>
     </div>,
     document.body,
