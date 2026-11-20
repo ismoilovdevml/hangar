@@ -3,6 +3,7 @@ package auth_test
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"testing"
 	"time"
@@ -627,6 +628,40 @@ func TestEffectivePermissions(t *testing.T) {
 	for _, r := range adm.Repositories {
 		if len(r.Actions) != 4 {
 			t.Fatalf("admin on %s = %v", r.Name, r.Actions)
+		}
+	}
+
+	// Regression: a scoped token asking about its own owner was shown the
+	// whole account (every repository and system area the roles reach).
+	moCtx := e.As(t, "mo", pw)
+	_, secret, err := e.Svc.CreateToken(moCtx, auth.TokenInput{
+		Name: "narrow", Scopes: privs("repo:npm-internal:read"), ExpiresAt: e.Clock.Now().Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tp, err := e.Svc.Authenticate(context.Background(), core.Credentials{Token: secret})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scoped, err := e.Svc.EffectivePermissions(core.WithPrincipal(context.Background(), tp), mo.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string][]core.Action{}
+	for _, r := range scoped.Repositories {
+		got[r.Name] = r.Actions
+	}
+	want := map[string][]core.Action{
+		"npm-internal": {core.ActionRead},
+		"npm-public":   {core.ActionRead}, // anonymous read applies to the token too
+	}
+	if !maps.EqualFunc(got, want, slices.Equal) || len(scoped.System) != 0 {
+		t.Fatalf("token's own permissions = repos %v system %+v, want repos %v and no system", got, scoped.System, want)
+	}
+	for _, g := range scoped.Repositories[0].Grants {
+		if g.Action != core.ActionRead {
+			t.Fatalf("grant outside the token's scopes: %+v", g)
 		}
 	}
 }

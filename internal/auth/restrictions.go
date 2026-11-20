@@ -1,10 +1,12 @@
 package auth
 
 import (
+	"context"
 	"fmt"
 	"net/netip"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 )
@@ -58,6 +60,55 @@ func addressAllowed(cidrs []string, ip string) bool {
 	a = a.Unmap()
 	for _, c := range cidrs {
 		if p, err := netip.ParsePrefix(c); err == nil && p.Contains(a) {
+			return true
+		}
+	}
+	return false
+}
+
+// inheritTokenLimits keeps a personal access or service-account token that
+// a token-authenticated caller creates within the calling token's own
+// limits, so a short-lived or address-restricted token cannot mint a
+// longer-lived or unrestricted one: expires must not be later than the
+// calling token's expiry, and the allowed networks must lie inside the
+// calling token's (none requested means the calling token's). Scopes and
+// the read-only flag are checked by planToken. It returns the networks to
+// store. Callers signed in with a browser session (no token) are not
+// limited: that is how tokens are made in the web UI.
+func (s *Service) inheritTokenLimits(ctx context.Context, expires time.Time, cidrs []string) ([]string, error) {
+	cur, err := s.CurrentToken(ctx)
+	if err != nil || cur == nil {
+		return cidrs, err
+	}
+	if expires.After(cur.ExpiresAt) {
+		return nil, fmt.Errorf("token expires_at must not be later than the calling token's (%s): %w",
+			cur.ExpiresAt.UTC().Format(time.RFC3339), core.ErrForbidden)
+	}
+	if len(cur.AllowedCIDRs) == 0 {
+		return cidrs, nil
+	}
+	if len(cidrs) == 0 {
+		return normalizeCIDRs(cur.AllowedCIDRs)
+	}
+	for _, c := range cidrs {
+		if !prefixWithin(c, cur.AllowedCIDRs) {
+			return nil, fmt.Errorf("allowed network %s is outside the calling token's allowed networks %v: %w",
+				c, cur.AllowedCIDRs, core.ErrForbidden)
+		}
+	}
+	return cidrs, nil
+}
+
+// prefixWithin reports whether the network child lies entirely inside one
+// of parents. Unparsable values are never inside.
+func prefixWithin(child string, parents []string) bool {
+	c, err := netip.ParsePrefix(child)
+	if err != nil {
+		return false
+	}
+	for _, s := range parents {
+		p, err := netip.ParsePrefix(s)
+		if err == nil && p.Bits() <= c.Bits() && p.Contains(c.Addr()) {
 			return true
 		}
 	}

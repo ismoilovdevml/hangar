@@ -181,6 +181,9 @@ func (s *Service) planToken(ctx context.Context, in TokenInput) (*tokenPlan, err
 	if p.ReadOnly && !in.ReadOnly {
 		return nil, fmt.Errorf("a read-only token may only create read-only tokens: %w", core.ErrForbidden)
 	}
+	if in.AllowedCIDRs, err = s.inheritTokenLimits(ctx, in.ExpiresAt, in.AllowedCIDRs); err != nil {
+		return nil, err
+	}
 	plan := &tokenPlan{in: in, ownerID: p.ID, ownerName: p.Name, ownerKind: KindUser}
 	if p.Kind == core.PrincipalServiceAccount {
 		plan.ownerKind = KindServiceAccount
@@ -274,7 +277,8 @@ type RotateResult struct {
 }
 
 // RotateToken creates a replacement for a token with the same name, owner,
-// scopes, restrictions and lifetime (capped at the server maximum), and
+// scopes, restrictions and lifetime (capped at the server maximum and, when
+// the caller authenticated with a token, at that token's expiry), and
 // optionally ends the old one. The caller needs what CreateToken needs for
 // the owner (another principal's token: system:tokens:write, and only
 // service accounts), and system:tokens:delete to end someone else's token.
@@ -311,8 +315,18 @@ func (s *Service) RotateToken(ctx context.Context, id string, in RotateInput) (*
 	}
 	now := s.now()
 	lifetime := min(max(old.ExpiresAt.Sub(old.CreatedAt), time.Hour), s.cfg.MaxTokenLifetime)
+	expires := now.Add(lifetime)
+	// Rotating through a token cannot outlive that token (a token rotating
+	// itself replaces its secret, it does not extend its life).
+	cur, err := s.CurrentToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if cur != nil && expires.After(cur.ExpiresAt) {
+		expires = cur.ExpiresAt
+	}
 	plan, err := s.planToken(ctx, TokenInput{
-		Name: old.Name, Owner: old.Owner, Scopes: old.Scopes, ExpiresAt: now.Add(lifetime),
+		Name: old.Name, Owner: old.Owner, Scopes: old.Scopes, ExpiresAt: expires,
 		AllowedCIDRs: old.AllowedCIDRs, ReadOnly: old.ReadOnly,
 	})
 	if err != nil {
