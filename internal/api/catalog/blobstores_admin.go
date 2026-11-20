@@ -28,6 +28,9 @@ func (c *Catalog) configured(name string) bool { return slices.Contains(c.opts.C
 // access key changes. Stores defined by the server configuration only take a
 // new soft quota. The caller authorizes and audits.
 func (c *Catalog) UpdateBlobStore(ctx context.Context, name string, n NewBlobStore) (*BlobStore, error) {
+	if err := n.rejectSealed(); err != nil {
+		return nil, err
+	}
 	if n.Name == "" {
 		n.Name = name
 	}
@@ -81,6 +84,9 @@ FROM blob_stores s WHERE s.name = $1 FOR UPDATE OF s`, name).Scan(&id, &kind, &r
 			if (c.configured(name) && changed) || (moved && !empty) {
 				return c.locationLocked(name)
 			}
+			if changed && next.AccessKeyID == "" && !c.opts.AllowAmbientCredentials {
+				return errAmbientCredentials
+			}
 			switch {
 			case next.SecretAccessKey != "":
 				if c.opts.Sealer == nil {
@@ -94,6 +100,9 @@ FROM blob_stores s WHERE s.name = $1 FOR UPDATE OF s`, name).Scan(&id, &kind, &r
 			case next.AccessKeyID == "":
 				next.SecretSealed = ""
 			case next.AccessKeyID == cur.AccessKeyID:
+				if err := secretStaysWith(cur.Endpoint, next.Endpoint); err != nil {
+					return err
+				}
 				next.SecretSealed = cur.SecretSealed
 			default:
 				return fmt.Errorf("a new s3 access_key_id needs its secret_access_key: %w", core.ErrInvalid)
@@ -136,9 +145,12 @@ func (c *Catalog) BlobStoreTestConfig(ctx context.Context, n NewBlobStore) (map[
 	if n.S3 == nil || n.S3.Bucket == "" {
 		return nil, fmt.Errorf("s3 blob store needs s3.bucket: %w", core.ErrInvalid)
 	}
+	if err := n.rejectSealed(); err != nil {
+		return nil, err
+	}
 	in := *n.S3
 	sealed := ""
-	if in.AccessKeyID != "" && in.SecretAccessKey == "" {
+	if in.SecretAccessKey == "" {
 		var raw []byte
 		err := c.pool.QueryRow(ctx, `SELECT config FROM blob_stores WHERE name = $1 AND kind = $2`, n.Name, KindS3).Scan(&raw)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -146,10 +158,22 @@ func (c *Catalog) BlobStoreTestConfig(ctx context.Context, n NewBlobStore) (map[
 		}
 		var cur S3Config
 		_ = json.Unmarshal(raw, &cur)
-		if cur.AccessKeyID != in.AccessKeyID || cur.SecretSealed == "" {
-			return nil, fmt.Errorf("s3 access_key_id needs its secret_access_key: %w", core.ErrInvalid)
+		switch {
+		case in.AccessKeyID != "":
+			if cur.AccessKeyID != in.AccessKeyID || cur.SecretSealed == "" {
+				return nil, fmt.Errorf("s3 access_key_id needs its secret_access_key: %w", core.ErrInvalid)
+			}
+			if err := secretStaysWith(cur.Endpoint, in.Endpoint); err != nil {
+				return nil, err
+			}
+			sealed = cur.SecretSealed
+		case c.opts.AllowAmbientCredentials:
+		case c.configured(n.Name) && raw != nil && s3Endpoint(cur.Endpoint) == s3Endpoint(in.Endpoint):
+			// The operator's own store, at its own endpoint, tested as it is
+			// configured (with the ambient credentials).
+		default:
+			return nil, errAmbientCredentials
 		}
-		sealed = cur.SecretSealed
 	}
 	check := NewBlobStore{Name: "connection-test", Kind: KindS3, S3: &in}
 	if sealed != "" {
@@ -173,6 +197,16 @@ func (c *Catalog) BlobStoreTestConfig(ctx context.Context, n NewBlobStore) (map[
 		cfg["secret_access_key_sealed"] = sealed
 	}
 	return cfg, nil
+}
+
+// secretStaysWith refuses to send a stored S3 secret to another endpoint than
+// the one it was entered for (mirroring config.proxy.auth of repositories).
+func secretStaysWith(stored, next string) error {
+	if s3Endpoint(stored) == s3Endpoint(next) {
+		return nil
+	}
+	return fmt.Errorf("s3.endpoint changes from %s to %s: the stored secret_access_key is only used with the endpoint it was "+
+		"entered for; enter s3.secret_access_key again: %w", s3Endpoint(stored), s3Endpoint(next), core.ErrInvalid)
 }
 
 func (c *Catalog) locationLocked(name string) error {

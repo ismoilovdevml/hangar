@@ -13,6 +13,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/api/apitest"
 	"github.com/ismoilovdevml/hangar/internal/api/catalog"
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/secrets"
 	"github.com/ismoilovdevml/hangar/internal/service/cleanup"
 	"github.com/ismoilovdevml/hangar/internal/service/component"
 	"github.com/ismoilovdevml/hangar/internal/tasks"
@@ -180,11 +181,18 @@ func TestCleanupAndTasksAPI(t *testing.T) {
 	}
 
 	// Connection test: the tester's steps come back; nothing is saved.
-	s3In := map[string]any{"name": "s3-try", "kind": "s3", "s3": map[string]any{"bucket": "no-such-bucket", "endpoint": "http://minio.example.com:9000"}}
+	s3In := map[string]any{"name": "s3-try", "kind": "s3", "s3": map[string]any{"bucket": "no-such-bucket", "endpoint": "http://minio.example.com:9000",
+		"access_key_id": "AK", "secret_access_key": "SK"}}
 	f.expect("admin", "POST", "/api/v1/blob-stores:test", s3In, 501) // no tester wired
 	tester := &fakeStoreTester{fail: "bucket"}
 	f.api.BlobStoreTester = tester
 	f.expect("bob", "POST", "/api/v1/blob-stores:test", s3In, 403)
+	// Without keys the test would sign with the server's own cloud identity.
+	keyless := map[string]any{"name": "s3-try", "kind": "s3", "s3": map[string]any{"bucket": "b", "endpoint": "https://attacker.example.com"}}
+	if b := f.expect("admin", "POST", "/api/v1/blob-stores:test", keyless, 400); !strings.Contains(string(b), "allow_ambient_credentials") ||
+		tester.cfg != nil {
+		t.Errorf("keyless test without the opt-in: %s (tested %v)", b, tester.cfg)
+	}
 	var tr blobStoreTestResult
 	_ = json.Unmarshal(f.expect("admin", "POST", "/api/v1/blob-stores:test", s3In, 200), &tr)
 	if tr.OK || len(tr.Steps) != 1 || tr.Steps[0].Status != "failed" || tr.Message != "bucket failed" || tester.cfg["bucket"] != "no-such-bucket" {
@@ -221,6 +229,65 @@ func TestCleanupAndTasksAPI(t *testing.T) {
 	}
 	if got := outcomes("blobstore.delete"); got != "bob/denied,admin/success" {
 		t.Errorf("blobstore.delete audit = %s", got)
+	}
+}
+
+// TestBlobStoreSecretStaysWithEndpoint: a stored S3 secret is only used with
+// the endpoint it was entered for (test and update), and a sealed value is
+// never accepted as a secret.
+func TestBlobStoreSecretStaysWithEndpoint(t *testing.T) {
+	pool := apitest.MigratedPool(t)
+	s := apitest.Seeder{T: t, Pool: pool}
+	f := newFixture(t)
+	s.Store("default", "fs", nil)
+	key, err := secrets.NewKeyring("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.api.Catalog = catalog.New(pool, catalog.Options{Sealer: key, ConfiguredStores: []string{"default"}})
+	tester := &fakeStoreTester{}
+	f.api.BlobStoreTester = tester
+	const own = "https://s3.example.com"
+	f.expect("admin", "POST", "/api/v1/blob-stores", map[string]any{"name": "s3-bound", "kind": "s3",
+		"s3": map[string]any{"bucket": "b", "endpoint": own, "access_key_id": "AK", "secret_access_key": "victim-secret"}}, 201)
+	keep := func(endpoint string) map[string]any {
+		return map[string]any{"name": "s3-bound", "kind": "s3", "s3": map[string]any{"bucket": "b", "endpoint": endpoint, "access_key_id": "AK"}}
+	}
+
+	// The same endpoint (default port spelled out) uses the stored secret.
+	f.expect("admin", "POST", "/api/v1/blob-stores:test", keep(own+":443"), 200)
+	if sealed, _ := tester.cfg["secret_access_key_sealed"].(string); !strings.HasPrefix(sealed, secrets.Prefix) {
+		t.Fatalf("same endpoint: tested with %v", tester.cfg)
+	}
+	// Another endpoint needs the secret again, for a test and for an update.
+	tester.cfg = nil
+	for _, ep := range []string{"https://attacker.example.com", "http://s3.example.com", "https://s3.example.com:8443"} {
+		b := f.expect("admin", "POST", "/api/v1/blob-stores:test", keep(ep), 400)
+		if !strings.Contains(string(b), "enter s3.secret_access_key again") || tester.cfg != nil {
+			t.Errorf("test against %s: %s (tested %v)", ep, b, tester.cfg)
+		}
+		if b := f.expect("admin", "PUT", "/api/v1/blob-stores/s3-bound", keep(ep), 400); !strings.Contains(string(b), "enter s3.secret_access_key again") {
+			t.Errorf("update to %s: %s", ep, b)
+		}
+	}
+	// Sending the secret again moves it.
+	moved := keep("https://other.example.com")
+	moved["s3"].(map[string]any)["secret_access_key"] = "new-secret"
+	f.expect("admin", "PUT", "/api/v1/blob-stores/s3-bound", moved, 200)
+
+	// A sealed value is refused everywhere a secret is accepted.
+	victim, err := key.SealString("victim-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pasted := map[string]any{"name": "s3-pasted", "kind": "s3",
+		"s3": map[string]any{"bucket": "b", "endpoint": "https://attacker.example.com", "access_key_id": "AK", "secret_access_key": victim}}
+	for _, req := range []struct{ method, path string }{
+		{"POST", "/api/v1/blob-stores"}, {"POST", "/api/v1/blob-stores:test"}, {"PUT", "/api/v1/blob-stores/s3-bound"},
+	} {
+		if b := f.expect("admin", req.method, req.path, pasted, 400); !strings.Contains(string(b), "sealed value") {
+			t.Errorf("%s %s with a sealed secret: %s", req.method, req.path, b)
+		}
 	}
 }
 

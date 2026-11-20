@@ -48,6 +48,10 @@ type Options struct {
 	// RemoteCheck vets a proxy repository's remote URL on create and update
 	// (the outbound address policy); its error is returned as is.
 	RemoteCheck func(ctx context.Context, remoteURL string) error
+	// ProxyURLCheck vets the outbound proxy URL a proxy repository sets for
+	// itself (http.proxy) on create and update, with the outbound address
+	// policy of RemoteCheck; its error is returned as is.
+	ProxyURLCheck func(ctx context.Context, proxyURL string) error
 	// ProxyCheck, when set, vets the named outbound proxy a proxy repository
 	// selects (http.proxy_name) on create and update; its error is returned
 	// as is.
@@ -539,6 +543,11 @@ func (s *Service) prepare(ctx context.Context, in *core.Repository) (*core.Repos
 	}
 	if r.Type == core.RepoProxy && s.opts.RemoteCheck != nil {
 		if err := s.opts.RemoteCheck(ctx, r.Config.Proxy.RemoteURL); err != nil {
+			return nil, fmt.Errorf("repository %q: %w", r.Name, err)
+		}
+	}
+	if r.Type == core.RepoProxy && s.opts.ProxyURLCheck != nil {
+		if err := s.opts.ProxyURLCheck(ctx, r.Config.Proxy.HTTP.Proxy); err != nil {
 			return nil, fmt.Errorf("repository %q: %w", r.Name, err)
 		}
 	}

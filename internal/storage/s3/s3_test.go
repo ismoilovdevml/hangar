@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"slices"
@@ -581,5 +582,42 @@ func TestCustomCA(t *testing.T) {
 	}
 	if _, _, err := trusted.Put(ctx, strings.NewReader("over tls")); err != nil {
 		t.Fatalf("Put over TLS: %v", err)
+	}
+}
+
+// Stores set up through the API are limited: no ambient credentials without
+// static keys, and every connection goes through the dial guard.
+func TestOpenLimited(t *testing.T) {
+	f := newFakeS3(testBucket)
+	srv := httptest.NewServer(f)
+	t.Cleanup(srv.Close)
+	base := map[string]any{"endpoint": srv.URL, "bucket": testBucket, "use_path_style": true}
+
+	if _, err := OpenLimited(context.Background(), base, Limits{StaticCredentialsOnly: true}); !errors.Is(err, core.ErrInvalid) ||
+		!strings.Contains(err.Error(), "ambient") {
+		t.Fatalf("keyless with StaticCredentialsOnly: %v", err)
+	}
+	if _, err := OpenLimited(context.Background(), base, Limits{}); err != nil {
+		t.Fatalf("keyless without limits: %v", err)
+	}
+
+	withKeys := map[string]any{"access_key_id": "test", "secret_access_key": "test-secret"}
+	for k, v := range base {
+		withKeys[k] = v
+	}
+	errGuard := errors.New("blocked by test guard")
+	var seen []string
+	st, err := OpenLimited(context.Background(), withKeys, Limits{StaticCredentialsOnly: true, DialGuard: func(a netip.Addr) error {
+		seen = append(seen, a.String())
+		return errGuard
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.(*Store).Ping(context.Background()); !errors.Is(err, errGuard) {
+		t.Fatalf("guarded ping = %v, want the guard's error", err)
+	}
+	if len(seen) == 0 || seen[0] != "127.0.0.1" || f.count("HeadBucket")+f.count("GetBucketLocation") != 0 {
+		t.Fatalf("guard saw %v; requests reached the endpoint", seen)
 	}
 }

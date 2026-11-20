@@ -274,19 +274,39 @@ func TestDialGuard(t *testing.T) {
 	if _, err := get(f, byName); !errors.Is(err, errLoopback) {
 		t.Fatalf("no_proxy target = %v, want errLoopback", err)
 	}
-	// Per-remote proxies count as proxies too.
+	// A proxy a repository sets for itself is not the operator's: dialling
+	// it is checked like any other connection, so it cannot be used to reach
+	// an internal service or the cloud metadata endpoint.
 	f, _ = New(Options{environ: env(nil), DialGuard: blockLoopback})
 	c, err := f.ForUpstream("http://public.example/", core.UpstreamHTTP{Proxy: proxy.URL}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if resp, err := c.Get("http://public.example/x"); !errors.Is(err, errLoopback) {
+		if err == nil {
+			_ = resp.Body.Close()
+		}
+		t.Fatalf("per-remote proxy on loopback = %v, want errLoopback", err)
+	}
+	// ... nor does using one open its address to direct connections.
+	if _, err := get(f, proxy.URL+"/x"); !errors.Is(err, errLoopback) {
+		t.Fatalf("direct dial to a per-remote proxy address = %v, want errLoopback", err)
+	}
+	// An allow-listed per-remote proxy is reached.
+	_, proxyPort, _ := strings.Cut(strings.TrimPrefix(proxy.URL, "http://"), ":")
+	f, _ = New(Options{environ: env(nil), DialGuard: blockLoopback, DialAllowHost: func(h string) bool { return h == "localhost" }})
+	c, err = f.ForUpstream("http://public.example/", core.UpstreamHTTP{Proxy: "http://localhost:" + proxyPort}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	resp, err := c.Get("http://public.example/x")
 	if err != nil {
-		t.Fatalf("per-remote proxy = %v", err)
+		t.Fatalf("allow-listed per-remote proxy = %v", err)
 	}
+	b, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if u, _ := url.Parse(proxy.URL); !f.proxyAddrs[u.Host] {
-		t.Errorf("per-remote proxy %s not registered: %v", u.Host, f.proxyAddrs)
+	if string(b) != "via proxy" {
+		t.Fatalf("allow-listed per-remote proxy body = %q", b)
 	}
 }
 

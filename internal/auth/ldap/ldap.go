@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -40,8 +41,12 @@ type Dialer func(ctx context.Context) (Conn, error)
 // Options are optional collaborators of a Directory.
 type Options struct {
 	// Dial replaces the network dialer (tests).
-	Dial   Dialer
-	Logger *slog.Logger
+	Dial Dialer
+	// DialControl, when set, is the net.Dialer Control hook of the network
+	// dialer: it sees the IP address of every connection and can refuse it
+	// (the outbound address policy of a connection test).
+	DialControl func(network, address string, c syscall.RawConn) error
+	Logger      *slog.Logger
 }
 
 // Directory implements auth.Directory. Each sign-in uses its own
@@ -69,7 +74,7 @@ func New(cfg auth.LDAPConfig, opts Options) (*Directory, error) {
 		d.log = slog.Default()
 	}
 	if d.dial == nil {
-		dial, err := netDialer(cfg)
+		dial, err := netDialer(cfg, opts.DialControl)
 		if err != nil {
 			return nil, err
 		}
@@ -81,7 +86,7 @@ func New(cfg auth.LDAPConfig, opts Options) (*Directory, error) {
 	return d, nil
 }
 
-func netDialer(cfg auth.LDAPConfig) (Dialer, error) {
+func netDialer(cfg auth.LDAPConfig, control func(network, address string, c syscall.RawConn) error) (Dialer, error) {
 	u, err := url.Parse(cfg.URL)
 	if err != nil {
 		return nil, fmt.Errorf("auth.ldap.url: %w", err)
@@ -107,7 +112,7 @@ func netDialer(cfg auth.LDAPConfig) (Dialer, error) {
 		tc.RootCAs = pool
 	}
 	return func(ctx context.Context) (Conn, error) {
-		nd := &net.Dialer{Timeout: cfg.Timeout}
+		nd := &net.Dialer{Timeout: cfg.Timeout, Control: control}
 		if dl, ok := ctx.Deadline(); ok {
 			nd.Deadline = dl
 		}

@@ -239,3 +239,36 @@ func TestStoreConfig(t *testing.T) {
 		t.Errorf("sealed legacy key = %q", v)
 	}
 }
+
+// Sealed values are refused as input: every value opens with the same
+// keyring, so a ciphertext pasted in as a secret would be opened and sent to
+// the submitter's host.
+func TestCheckInput(t *testing.T) {
+	k := mustKeyring(t, newKey(t))
+	sealed, err := k.SealString("victim")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name    string
+		err     error
+		refused bool
+	}{
+		{"plain", CheckInput("f", "hunter2"), false},
+		{"empty", CheckInput("f", ""), false},
+		{"sealed", CheckInput("f", sealed), true},
+		{"sealed, padded", CheckInput("f", "  "+sealed), true},
+		{"forged", CheckInput("f", "hgs1.x.y.z"), true},
+		{"url plain", CheckURLInput("u", "https://u:pw@h.example/"), false},
+		{"url no password", CheckURLInput("u", "https://u@h.example/"), false},
+		{"url sealed", CheckURLInput("u", "https://u:"+sealed+"@h.example/"), true},
+	}
+	for _, tc := range tests {
+		if got := errors.Is(tc.err, ErrSealedInput) && errors.Is(tc.err, core.ErrInvalid); got != tc.refused {
+			t.Errorf("%s: err = %v, want refused %v", tc.name, tc.err, tc.refused)
+		}
+		if tc.err != nil && strings.Contains(tc.err.Error(), sealed) {
+			t.Errorf("%s: error echoes the value: %v", tc.name, tc.err)
+		}
+	}
+}

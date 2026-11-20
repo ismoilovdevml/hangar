@@ -40,6 +40,14 @@ type Options struct {
 	// (the "default" store). Their connection settings cannot be changed
 	// through the API and they cannot be deleted; the soft quota can be set.
 	ConfiguredStores []string
+	// AllowAmbientCredentials lets S3 blob stores created, changed or
+	// tested through the API without access keys use the server's ambient
+	// AWS credentials (environment, shared config, IRSA / EKS Pod Identity,
+	// the instance profile), from storage.allow_ambient_credentials. Off,
+	// such stores must carry static keys: otherwise anyone who may manage
+	// blob stores could have the server sign requests to an endpoint of
+	// their choosing with the server's own cloud identity.
+	AllowAmbientCredentials bool
 	// Logger receives repository statistics warnings (slog.Default if nil).
 	Logger *slog.Logger
 }

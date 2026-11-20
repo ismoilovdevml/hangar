@@ -117,6 +117,88 @@ func TestGuardCheckURL(t *testing.T) {
 	}
 }
 
+// A repository's own outbound proxy gets the remote URL policy: it cannot
+// name an internal address (only the operator's proxies may be internal).
+func TestGuardValidateProxy(t *testing.T) {
+	g, err := NewGuard([]string{"proxy.corp.example", "10.20.0.0/16"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.resolver = staticResolver{
+		"proxy.public.example": {netip.MustParseAddr("203.0.114.10")},
+		"metadata.evil.test":   {netip.MustParseAddr("169.254.169.254")},
+		"proxy.corp.example":   {netip.MustParseAddr("10.1.1.1")},
+	}
+	tests := []struct {
+		proxy   string
+		blocked bool
+	}{
+		{"", false},
+		{core.ProxyInherit, false},
+		{core.ProxyNone, false},
+		{"http://proxy.public.example:3128", false},
+		{"socks5://user:pw@proxy.public.example:1080", false},
+		{"http://169.254.169.254:80", true},
+		{"http://127.0.0.1:8080", true},
+		{"socks5://[::1]:1080", true},
+		{"https://10.0.0.5:3128", true},
+		{"http://metadata.evil.test:3128", true},
+		{"http://proxy.corp.example:3128", false}, // allow-listed host
+		{"http://10.20.0.9:3128", false},          // allow-listed CIDR
+		{"http://unresolvable.example.test:3128", false},
+	}
+	for _, tc := range tests {
+		err := g.ValidateProxy(context.Background(), tc.proxy)
+		if tc.blocked != (err != nil) {
+			t.Errorf("%q: err=%v, want blocked=%v", tc.proxy, err, tc.blocked)
+		}
+		if tc.blocked && (!errors.Is(err, core.ErrInvalid) || !errors.Is(err, ErrBlocked)) {
+			t.Errorf("%q: want ErrInvalid and ErrBlocked, got %v", tc.proxy, err)
+		}
+		if err != nil && strings.Contains(err.Error(), ":pw@") {
+			t.Errorf("%q: error leaks the password: %v", tc.proxy, err)
+		}
+	}
+}
+
+// Services an administrator configures may be internal, but never the
+// cloud metadata endpoint or other link-local addresses.
+func TestGuardCheckServiceAddr(t *testing.T) {
+	g, err := NewGuard([]string{"169.254.10.0/24"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		addr    string
+		blocked bool
+	}{
+		{"169.254.169.254", true},
+		{"169.254.170.2", true}, // ECS task credentials
+		{"::ffff:169.254.169.254", true},
+		{"fe80::1", true},
+		{"fd00:ec2::254", true},
+		{"100.100.100.200", true},
+		{"64:ff9b::a9fe:a9fe", true}, // NAT64 of 169.254.169.254
+		{"2002:a9fe:a9fe::1", true},  // 6to4 of 169.254.169.254
+		{"0.0.0.0", true},
+		{"::", true},
+		{"224.0.0.1", true},
+		{"255.255.255.255", true},
+		{"169.254.10.7", false}, // allow-listed
+		{"127.0.0.1", false},
+		{"10.0.0.1", false},
+		{"192.168.1.1", false},
+		{"fd00::1", false},
+		{"8.8.8.8", false},
+	}
+	for _, tc := range tests {
+		err := g.CheckServiceAddr(netip.MustParseAddr(tc.addr))
+		if got := errors.Is(err, ErrBlocked); got != tc.blocked {
+			t.Errorf("%s: blocked=%v, want %v (%v)", tc.addr, got, tc.blocked, err)
+		}
+	}
+}
+
 func TestFetchBlocksInternalRemotes(t *testing.T) {
 	var hits atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits.Add(1) }))

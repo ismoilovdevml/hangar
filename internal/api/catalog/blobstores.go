@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -14,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/secrets"
 )
 
 // Blob store kinds.
@@ -258,10 +260,51 @@ func (n *NewBlobStore) Validate() error {
 	return nil
 }
 
+// errAmbientCredentials refuses an S3 store without static keys (see
+// Options.AllowAmbientCredentials).
+var errAmbientCredentials = fmt.Errorf("s3 blob stores set up through the API need access_key_id and secret_access_key; "+
+	"the server's own cloud credentials (environment, IRSA, instance profile) are only used for them when the operator "+
+	"sets storage.allow_ambient_credentials (HANGAR_STORAGE_ALLOW_AMBIENT_CREDENTIALS): %w", core.ErrInvalid)
+
+// rejectSealed refuses an S3 secret submitted in sealed form
+// (secrets.ErrSealedInput).
+func (n *NewBlobStore) rejectSealed() error {
+	if n.S3 == nil {
+		return nil
+	}
+	return secrets.CheckInput("s3.secret_access_key", n.S3.SecretAccessKey)
+}
+
+// s3Endpoint is an S3 endpoint as scheme://host:port ("" is AWS S3, a bare
+// host implies https), for comparing where a stored secret may go.
+func s3Endpoint(e string) string {
+	if e == "" {
+		return "https://s3.amazonaws.com:443"
+	}
+	if !strings.Contains(e, "://") {
+		e = "https://" + e
+	}
+	u, err := url.Parse(e)
+	if err != nil || u.Host == "" {
+		return e
+	}
+	scheme, port := strings.ToLower(u.Scheme), u.Port()
+	if port == "" {
+		port = map[string]string{"http": "80", "https": "443"}[scheme]
+	}
+	return scheme + "://" + net.JoinHostPort(strings.ToLower(strings.TrimSuffix(u.Hostname(), ".")), port)
+}
+
 // CreateBlobStore validates and inserts a store. The caller authorizes and audits.
 func (c *Catalog) CreateBlobStore(ctx context.Context, n NewBlobStore) (*BlobStore, error) {
+	if err := n.rejectSealed(); err != nil {
+		return nil, err
+	}
 	if err := n.Validate(); err != nil {
 		return nil, err
+	}
+	if n.Kind == KindS3 && n.S3.AccessKeyID == "" && !c.opts.AllowAmbientCredentials {
+		return nil, errAmbientCredentials
 	}
 	var cfg any
 	switch n.Kind {

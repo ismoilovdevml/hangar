@@ -243,8 +243,17 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		return nil, err
 	}
 
+	// The SSRF guard checks remote URLs when repositories are saved, every
+	// redirect hop and, at connect time, every dialled address.
+	guard, err := proxy.NewGuard(cfg.HTTP.AllowPrivateNetworks)
+	if err != nil {
+		return nil, fmt.Errorf("http.allow_private_networks: %w", err)
+	}
+
 	// Blob storage: the configured store is pinned as "default"; other rows
-	// of blob_stores are opened on demand by driver kind.
+	// of blob_stores are opened on demand by driver kind. Those rows are
+	// set up through the API, so their connections never reach the cloud
+	// metadata endpoint (guard.CheckServiceAddr).
 	store, err := storage.Open(cfg.Storage)
 	if err != nil {
 		return nil, err
@@ -258,7 +267,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		if err != nil {
 			return nil, fmt.Errorf("blob store %s credentials: %w", sc.Name, err)
 		}
-		return s3.Open(ctx, m)
+		return s3.OpenLimited(ctx, m, s3.Limits{DialGuard: guard.CheckServiceAddr})
 	})
 	defaultStoreID, err := registry.EnsureStore(ctx, pool, DefaultBlobStore, cfg.Storage.Kind, storage.RegistryConfig(cfg.Storage))
 	if err != nil {
@@ -301,13 +310,6 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		}
 	}
 
-	// The SSRF guard checks remote URLs when repositories are saved, every
-	// redirect hop and, at connect time, every dialled address.
-	guard, err := proxy.NewGuard(cfg.HTTP.AllowPrivateNetworks)
-	if err != nil {
-		return nil, fmt.Errorf("http.allow_private_networks: %w", err)
-	}
-
 	// Repositories and components. The authorizer needs the repositories for
 	// anonymous read, and the repository service needs the authorizer. The
 	// settings service (named proxies) is built further down.
@@ -317,6 +319,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		RemoteCheck: func(ctx context.Context, remoteURL string) error {
 			return guard.ValidateRemote(ctx, remoteURL, false)
 		},
+		ProxyURLCheck: guard.ValidateProxy,
 		ProxyCheck: func(ctx context.Context, name string) error {
 			if settingsSvc == nil {
 				return nil
@@ -468,7 +471,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		File:    settings.FileConfig{OIDC: cfg.Auth.OIDC, LDAP: cfg.Auth.LDAP, HTTP: httpOpts},
 		BaseURL: cfg.Server.BaseURL, Keyring: keyring, AuthZ: authz, Audit: auditLog, Roles: authSvc, Events: bus,
 		ApplyAuth: signIn.Apply, ApplyOutbound: clients.SetOutbound, EnvironmentProxy: clients.EnvironmentProxy,
-		UserAgent: userAgent, DialGuard: guard.CheckAddr, DialAllowHost: guard.AllowsHost, Logger: log,
+		UserAgent: userAgent, DialGuard: guard.CheckAddr, DialAllowHost: guard.AllowsHost, ServiceDialGuard: guard.CheckServiceAddr, Logger: log,
 	})
 	if err != nil {
 		return nil, err
@@ -505,7 +508,8 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	}
 	// Repository totals: triggers log every change, this loop folds the log
 	// into stored totals (reads fold too) and recounts them periodically.
-	cat := catalog.New(pool, catalog.Options{Sealer: storeSealer(keyring), ConfiguredStores: []string{DefaultBlobStore}, Logger: log})
+	cat := catalog.New(pool, catalog.Options{Sealer: storeSealer(keyring), ConfiguredStores: []string{DefaultBlobStore},
+		AllowAmbientCredentials: cfg.Storage.AllowAmbientCredentials, Logger: log})
 	catCtx, stopCat := context.WithCancel(context.WithoutCancel(ctx))
 	catDone := make(chan struct{})
 	go func() { cat.RunStats(catCtx); close(catDone) }()
@@ -531,7 +535,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		AuthRoutes:     api.RouteFunc(func(r chi.Router) { httpapi.Register(r, authSvc, authOpts) }),
 		ExtraRoutes:    []api.RouteRegistrar{settingsSvc, signer},
 	}
-	restAPI.BlobStoreTester = blobStoreTester{keyring: keyring}
+	restAPI.BlobStoreTester = blobStoreTester{keyring: keyring, dialGuard: guard.CheckServiceAddr}
 	a.onClose(restAPI.Close)
 
 	trusted, err := server.ParseTrustedProxies(cfg.Server.TrustedProxies)

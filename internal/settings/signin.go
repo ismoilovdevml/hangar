@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net"
+	"net/url"
 	"regexp"
 	"slices"
 	"strings"
@@ -16,6 +18,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/auth"
 	"github.com/ismoilovdevml/hangar/internal/auth/oidc"
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/secrets"
 )
 
 // Keys of the settings table.
@@ -364,7 +367,8 @@ func (s *Service) PutOIDC(ctx context.Context, in OIDCInput) (*OIDC, error) {
 		if _, _, err := s.loadDoc(ctx, tx, keyOIDC, &old, true); err != nil {
 			return err
 		}
-		secret, sealed, fe, err := s.mergeSecret(old.ClientSecret, in.ClientSecret, in.ClearClientSecret, "client_secret")
+		secret, sealed, fe, err := s.mergeSecret(old.ClientSecret, in.ClientSecret, in.ClearClientSecret, "client_secret",
+			movedTo("issuer_url", old.IssuerURL, in.IssuerURL))
 		if err != nil {
 			return err
 		}
@@ -432,7 +436,8 @@ func (s *Service) PutLDAP(ctx context.Context, in LDAPInput) (*LDAP, error) {
 		if _, _, err := s.loadDoc(ctx, tx, keyLDAP, &old, true); err != nil {
 			return err
 		}
-		password, sealed, fe, err := s.mergeSecret(old.BindPassword, in.BindPassword, in.ClearBindPassword, "bind_password")
+		password, sealed, fe, err := s.mergeSecret(old.BindPassword, in.BindPassword, in.ClearBindPassword, "bind_password",
+			movedTo("url", old.URL, in.URL))
 		if err != nil {
 			return err
 		}
@@ -466,11 +471,25 @@ func (s *Service) PutLDAP(ctx context.Context, in LDAPInput) (*LDAP, error) {
 // mergeSecret decides the secret to store: a new value, the stored one
 // (empty input), or none (clear). It returns the plaintext, the sealed form
 // and FieldErrors to add problems to.
-func (s *Service) mergeSecret(stored, given string, clear bool, field string) (plain, sealed string, fe FieldErrors, err error) {
+//
+// moved describes how the input points the secret at another endpoint than
+// the one it was stored for (see movedTo; "" = same endpoint). The stored
+// secret is then not carried over: it is only ever sent to the host it was
+// entered for, so the input must enter it again (or clear it). That, and a
+// secret submitted in sealed form (secrets.ErrSealedInput), are returned as
+// err (FieldErrors, 400), which the test endpoints do not ignore.
+func (s *Service) mergeSecret(stored, given string, clear bool, field, moved string) (plain, sealed string, fe FieldErrors, err error) {
 	fe = FieldErrors{}
+	if secrets.IsSealed(strings.TrimSpace(given)) {
+		return "", "", fe, FieldErrors{field: "is a sealed value (" + secrets.Prefix + "...), which cannot be submitted; " +
+			"enter the secret itself, or leave it empty to keep the stored one"}
+	}
 	switch {
 	case clear:
 		return "", "", fe, nil
+	case given == "" && stored != "" && moved != "":
+		return "", "", fe, FieldErrors{field: moved + ": the stored " + field + " is only sent to the host it was entered for; " +
+			"enter it again, or clear it"}
 	case given != "":
 		if s.opts.Keyring == nil {
 			fe.add(field, errNoKeyring)
@@ -487,6 +506,46 @@ func (s *Service) mergeSecret(stored, given string, clear bool, field string) (p
 		return plain, stored, fe, nil
 	}
 	return "", "", fe, nil
+}
+
+// movedTo describes how next points a stored secret at another endpoint than
+// old: "" when both have the same scheme, host and port (default ports made
+// explicit), else a message naming field. An endpoint that was never stored
+// (old empty) has no secret to carry.
+func movedTo(field, old, next string) string {
+	if old == "" || sameEndpoint(old, next) {
+		return ""
+	}
+	return field + " changed from " + endpointOf(old) + " to " + endpointOf(next)
+}
+
+// endpoint is a URL's scheme, host and port, lower case, with the default
+// port of http, https, ldap and ldaps made explicit.
+func endpoint(raw string) (string, bool) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Host == "" {
+		return "", false
+	}
+	scheme := strings.ToLower(u.Scheme)
+	port := u.Port()
+	if port == "" {
+		port = map[string]string{"http": "80", "https": "443", "ldap": "389", "ldaps": "636"}[scheme]
+	}
+	return scheme + "://" + net.JoinHostPort(strings.ToLower(strings.TrimSuffix(u.Hostname(), ".")), port), true
+}
+
+func sameEndpoint(a, b string) bool {
+	ea, ok1 := endpoint(a)
+	eb, ok2 := endpoint(b)
+	return ok1 && ok2 && ea == eb
+}
+
+// endpointOf is the endpoint for messages ("(invalid URL)" if none).
+func endpointOf(raw string) string {
+	if e, ok := endpoint(raw); ok {
+		return e
+	}
+	return "(invalid URL)"
 }
 
 // presetPattern is the form of a preset name: a short lower-case slug.

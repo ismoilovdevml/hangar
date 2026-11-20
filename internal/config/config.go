@@ -167,6 +167,14 @@ type Storage struct {
 	FS   FSStorage `yaml:"fs"`
 	S3   S3Storage `yaml:"s3"`
 	GC   GC        `yaml:"gc"`
+	// AllowAmbientCredentials lets S3 blob stores that administrators add,
+	// change or test through the API/UI without access keys use this
+	// server's ambient AWS credentials (environment, shared config, IRSA /
+	// EKS Pod Identity, the instance profile). Off (the default), such stores
+	// need static keys, so the server's own cloud identity is never used to
+	// sign requests to an endpoint chosen through the API. The default store
+	// configured here (storage.s3) always may use them.
+	AllowAmbientCredentials bool `yaml:"allow_ambient_credentials"`
 }
 
 // MaxDrainDelay is the longest accepted server.drain_delay.

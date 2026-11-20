@@ -126,6 +126,12 @@ func TestAPIWithPostgres(t *testing.T) {
 	// Blob stores: create is authorized and audited.
 	in := map[string]any{"name": "s3-main", "kind": "s3", "s3": map[string]any{"bucket": "hangar", "prefix": "blobs"}}
 	f.expect("alice", "POST", "/api/v1/blob-stores", in, 403)
+	// Without keys a store would sign with the server's own cloud identity:
+	// only when the operator allows it (storage.allow_ambient_credentials).
+	if b := f.expect("admin", "POST", "/api/v1/blob-stores", in, 400); !strings.Contains(string(b), "allow_ambient_credentials") {
+		t.Errorf("keyless store without the opt-in: %s", b)
+	}
+	f.api.Catalog = catalog.New(pool, catalog.Options{AllowAmbientCredentials: true})
 	var bs blobStoreJSON
 	_ = json.Unmarshal(f.expect("admin", "POST", "/api/v1/blob-stores", in, 201), &bs)
 	if bs.Location != "s3://hangar/blobs" || bs.State != "unknown" {

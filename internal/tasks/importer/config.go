@@ -253,9 +253,28 @@ func checkRelPath(p string) error {
 
 // ---- secrets ----
 
+// rejectSealed refuses credentials submitted in sealed form.
+func (s Source) rejectSealed() error {
+	// Sealed values are produced by this server only and never returned. A
+	// ciphertext submitted as a credential (copied from the database or a
+	// backup) would be opened and sent in plaintext to the submitter's
+	// source URL, so it is refused; a stored credential is kept by leaving
+	// it empty.
+	for _, f := range []struct{ name, v string }{{"source.password", s.Password}, {"source.token", s.Token}} {
+		if strings.HasPrefix(strings.TrimSpace(f.v), sealedPrefix) {
+			return fmt.Errorf("%s: a sealed value (%s...) cannot be submitted as a credential; enter the credential itself, "+
+				"or leave it empty to keep the stored one: %w", f.name, sealedPrefix, core.ErrInvalid)
+		}
+	}
+	return nil
+}
+
 // sealSource seals the source's password and token, keeping prev's when the
 // client sent them back empty for the same URL and user.
 func (s *Service) sealSource(src *Source, prev *Source) error {
+	if err := src.rejectSealed(); err != nil {
+		return err
+	}
 	if prev != nil && src.URL == prev.URL && src.Username == prev.Username {
 		if src.Password == "" && src.Token == "" {
 			src.Password, src.Token = prev.Password, prev.Token

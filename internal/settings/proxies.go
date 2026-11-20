@@ -82,6 +82,15 @@ type ProxyInput struct {
 
 var proxyFileFields = []string{"scheme", "host", "port", "username", "password", "no_proxy", "redirect_hosts", "ca_pem", "default"}
 
+// proxyMoved describes how next points a proxy's stored password at another
+// proxy than old (see movedTo).
+func proxyMoved(old, next ProxySettings) string {
+	addr := func(p ProxySettings) string {
+		return p.Scheme + "://" + net.JoinHostPort(p.Host, strconv.Itoa(p.Port))
+	}
+	return movedTo("scheme, host or port", addr(old), addr(next))
+}
+
 // storedProxy is a row of outbound_proxies; Password is sealed.
 type storedProxy struct {
 	OutboundProxy
@@ -376,11 +385,11 @@ func (s *Service) storedProxy(ctx context.Context, name string) (*storedProxy, e
 // saveProxy validates in and inserts it (old == nil) or updates old.
 func (s *Service) saveProxy(ctx context.Context, old *storedProxy, in ProxyInput, fe FieldErrors) error {
 	in.normalize()
-	oldSecret := ""
+	oldSecret, moved := "", ""
 	if old != nil {
-		oldSecret = old.password
+		oldSecret, moved = old.password, proxyMoved(old.ProxySettings, in.ProxySettings)
 	}
-	_, sealed, sfe, err := s.mergeSecret(oldSecret, in.Password, in.ClearPassword, "password")
+	_, sealed, sfe, err := s.mergeSecret(oldSecret, in.Password, in.ClearPassword, "password", moved)
 	if err != nil {
 		return err
 	}

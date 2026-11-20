@@ -203,3 +203,36 @@ func TestUpstreamAuthFailureStatus(t *testing.T) {
 		t.Errorf("hosted = %s", b)
 	}
 }
+
+// TestSealedSecretsRefused: a ciphertext copied from the database or a
+// backup cannot be submitted as a repository's secret, or the server would
+// open it and send the plaintext to the submitter's host. Keeping a stored
+// secret works by leaving it out.
+func TestSealedSecretsRefused(t *testing.T) {
+	f := newFixture(t)
+	const sealed = "hgs1.0123456789ab.d3JhcHBlZA.Y2lwaGVydGV4dA"
+	const remote = "https://attacker.example.com/nuget/index.json"
+	bodies := []map[string]any{
+		{"remote_url": remote, "auth": map[string]any{"kind": "basic", "username": "x", "password": sealed}},
+		{"remote_url": remote, "auth": map[string]any{"kind": "bearer", "token": sealed}},
+		{"remote_url": remote, "auth": map[string]any{"kind": "header", "header_name": "Private-Token", "token": " " + sealed}},
+		{"remote_url": "https://x:" + sealed + "@attacker.example.com/nuget/index.json"},
+		{"remote_url": remote, "http": map[string]any{"proxy": "http://x:" + sealed + "@proxy.attacker.example.com:3128"}},
+	}
+	for i, proxyCfg := range bodies {
+		b := f.expect("admin", "POST", "/api/v1/repositories", map[string]any{"name": "nuget-sealed", "format": "nuget",
+			"type": "proxy", "blob_store": "default", "config": map[string]any{"proxy": proxyCfg}}, 400)
+		if !strings.Contains(string(b), "sealed value") {
+			t.Errorf("create %d: %s", i, b)
+		}
+	}
+	f.env.AddRepo(t, &core.Repository{Name: "nuget-own", Format: "nuget", Type: core.RepoProxy, BlobStore: "default",
+		Config: core.RepoConfig{Proxy: &core.ProxyConfig{RemoteURL: remote}}})
+	for i, proxyCfg := range bodies {
+		b := f.expect("admin", "PUT", "/api/v1/repositories/nuget-own",
+			map[string]any{"blob_store": "default", "config": map[string]any{"proxy": proxyCfg}}, 400)
+		if !strings.Contains(string(b), "sealed value") {
+			t.Errorf("update %d: %s", i, b)
+		}
+	}
+}

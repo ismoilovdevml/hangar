@@ -7,8 +7,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
@@ -421,10 +423,21 @@ func TestProxies(t *testing.T) {
 	if _, err := e.svc.CreateProxy(ctx, dmz); err != nil {
 		t.Fatal(err)
 	}
-	corp.Password, corp.Default, corp.Port = "", false, 3129
+	corp.Password, corp.Default = "", false
 	if _, err := e.svc.UpdateProxy(ctx, "corp", corp); err != nil {
 		t.Fatal(err)
 	}
+	// The stored password only goes to the proxy it was entered for: another
+	// port (or host, or scheme) needs it again.
+	corp.Port = 3129
+	if fe := fieldErrors(t, func() error { _, err := e.svc.UpdateProxy(ctx, "corp", corp); return err }()); !strings.Contains(fe["password"], "enter it again") {
+		t.Fatalf("moved without password: %v", fe)
+	}
+	corp.Password = "proxy-pw"
+	if _, err := e.svc.UpdateProxy(ctx, "corp", corp); err != nil {
+		t.Fatal(err)
+	}
+	corp.Password = ""
 	corp.Name = "renamed"
 	if fe := fieldErrors(t, func() error { _, err := e.svc.UpdateProxy(ctx, "corp", corp); return err }()); fe["name"] == "" {
 		t.Fatalf("rename: %v", fe)
@@ -487,8 +500,152 @@ func TestProxies(t *testing.T) {
 			t.Fatalf("audit leaks the proxy password: %s", b)
 		}
 	}
-	if len(audit) != 4 {
+	// Two creates, two updates (the refused ones are not saved), one delete.
+	if len(audit) != 5 {
 		t.Fatalf("audit = %+v", audit)
+	}
+}
+
+// TestSecretsStayWithTheirEndpoint: a stored secret is only ever sent to the
+// endpoint it was entered for. Saving or testing settings that point
+// elsewhere (issuer, directory URL, proxy address) without entering the
+// secret again is refused before anything is contacted, and a sealed value
+// is never accepted as a secret.
+func TestSecretsStayWithTheirEndpoint(t *testing.T) {
+	e := newEnv(t, settings.Options{})
+	var mu sync.Mutex
+	var hits []string
+	attacker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hits = append(hits, r.Method+" "+r.URL.String()+" "+r.Header.Get("Authorization")+" "+r.Header.Get("Proxy-Authorization"))
+		mu.Unlock()
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(attacker.Close)
+	sealed, err := e.key.SealString("victim-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	refused := func(name, field, want string, err error) {
+		t.Helper()
+		var fe settings.FieldErrors
+		if !errors.As(err, &fe) || !errors.Is(err, core.ErrInvalid) || !strings.Contains(fe[field], want) {
+			t.Errorf("%s: want field error %s ~ %q, got %v", name, field, want, err)
+		}
+	}
+
+	// OIDC.
+	if _, err := e.svc.PutOIDC(e.admin, validOIDC("https://sso.example.com/realms/acme")); err != nil {
+		t.Fatal(err)
+	}
+	moved := validOIDC(attacker.URL)
+	moved.ClientSecret = ""
+	_, err = e.svc.PutOIDC(e.admin, moved)
+	refused("oidc put, issuer moved", "client_secret", "enter it again", err)
+	_, err = e.svc.TestOIDC(e.admin, settings.OIDCTestInput{Settings: &moved})
+	refused("oidc test, issuer moved", "client_secret", "enter it again", err)
+	samePath := validOIDC("https://sso.example.com/realms/other")
+	samePath.ClientSecret = ""
+	if _, err := e.svc.PutOIDC(e.admin, samePath); err != nil {
+		t.Errorf("oidc put, same origin: %v", err)
+	}
+	pasted := validOIDC("https://sso.example.com/realms/acme")
+	pasted.ClientSecret = sealed
+	_, err = e.svc.PutOIDC(e.admin, pasted)
+	refused("oidc put, sealed secret", "client_secret", "sealed value", err)
+
+	// LDAP.
+	ldapIn := settings.LDAPInput{LDAPSettings: settings.LDAPSettings{Enabled: true, URL: "ldaps://dc1.example.com",
+		UserBaseDN: "DC=example,DC=com", BindDN: "CN=svc"}, BindPassword: "bind-pw"}
+	if _, err := e.svc.PutLDAP(e.admin, ldapIn); err != nil {
+		t.Fatal(err)
+	}
+	ldapIn.BindPassword = ""
+	ldapIn.URL = "ldaps://dc1.example.com:636" // the same endpoint
+	if _, err := e.svc.PutLDAP(e.admin, ldapIn); err != nil {
+		t.Errorf("ldap put, same endpoint: %v", err)
+	}
+	ldapIn.URL = "ldap://" + strings.TrimPrefix(attacker.URL, "http://")
+	_, err = e.svc.PutLDAP(e.admin, ldapIn)
+	refused("ldap put, url moved", "bind_password", "enter it again", err)
+	_, err = e.svc.TestLDAP(e.admin, settings.LDAPTestInput{Settings: &ldapIn})
+	refused("ldap test, url moved", "bind_password", "enter it again", err)
+	ldapIn.URL, ldapIn.BindPassword = "ldaps://dc1.example.com", sealed
+	_, err = e.svc.PutLDAP(e.admin, ldapIn)
+	refused("ldap put, sealed secret", "bind_password", "sealed value", err)
+
+	// Proxies.
+	corp := settings.ProxyInput{Name: "corp", Password: "proxy-pw", ProxySettings: settings.ProxySettings{
+		Scheme: "http", Host: "proxy.example.com", Port: 3128, Username: "svc"}}
+	if _, err := e.svc.CreateProxy(e.admin, corp); err != nil {
+		t.Fatal(err)
+	}
+	host, port, _ := strings.Cut(strings.TrimPrefix(attacker.URL, "http://"), ":")
+	draft := corp
+	draft.Password, draft.Host = "", host
+	draft.Port, _ = strconv.Atoi(port)
+	_, err = e.svc.TestProxy(e.admin, "corp", settings.ProxyTestInput{URL: "http://registry.example/", Settings: &draft})
+	refused("proxy test, host moved", "password", "enter it again", err)
+	_, err = e.svc.UpdateProxy(e.admin, "corp", draft)
+	refused("proxy put, host moved", "password", "enter it again", err)
+	draft = corp
+	draft.Password = sealed
+	_, err = e.svc.UpdateProxy(e.admin, "corp", draft)
+	refused("proxy put, sealed secret", "password", "sealed value", err)
+	draft.Name = "new"
+	_, err = e.svc.CreateProxy(e.admin, draft)
+	refused("proxy create, sealed secret", "password", "sealed value", err)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(hits) != 0 {
+		t.Errorf("the other endpoint was contacted: %q", hits)
+	}
+}
+
+// TestProbesUseServiceDialGuard: the OIDC and LDAP connection tests connect
+// through Options.ServiceDialGuard, so they cannot be pointed at the cloud
+// metadata endpoint (here: loopback stands in for it).
+func TestProbesUseServiceDialGuard(t *testing.T) {
+	var mu sync.Mutex
+	var seen []string
+	e := newEnv(t, settings.Options{ServiceDialGuard: func(a netip.Addr) error {
+		mu.Lock()
+		seen = append(seen, a.String())
+		mu.Unlock()
+		if a.IsLoopback() {
+			return errors.New("blocked by test policy")
+		}
+		return nil
+	}})
+	issuer := oidctest.New(t)
+	in := validOIDC(issuer.URL)
+	res, err := e.svc.TestOIDC(e.admin, settings.OIDCTestInput{Settings: &in})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.OK || res.Steps[0].Name != "discovery" || !strings.Contains(res.Steps[0].Message, "blocked by test policy") {
+		t.Fatalf("oidc test through the guard = %+v", res)
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	ldapIn := settings.LDAPInput{LDAPSettings: settings.LDAPSettings{Enabled: true, URL: "ldap://" + ln.Addr().String(),
+		UserBaseDN: "DC=example,DC=com"}}
+	res, err = e.svc.TestLDAP(e.admin, settings.LDAPTestInput{Settings: &ldapIn})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.OK || !strings.Contains(res.Message, "blocked by test policy") {
+		t.Fatalf("ldap test through the guard = %+v", res)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(seen) < 2 {
+		t.Fatalf("guard saw %v", seen)
 	}
 }
 
