@@ -80,7 +80,6 @@
 .pkg-tabs__tab:hover { color: var(--ink); }
 .pkg-tabs__tab.is-active { color: var(--lake-ink); border-bottom-color: var(--lake); }
 .pkg-tabs__count { font-weight: 500; color: var(--ink-3); }
-.pkg-tabs__tab.is-planned, .pkg-tabs__tab.is-planned:hover { color: var(--ink-3); cursor: default; }
 .pkg-panel { min-width: 0; display: flex; flex-direction: column; gap: 18px; }
 .pkg-table { margin: 0 -22px -22px; border-top: 1px solid var(--hairline); }
 .pkg-table .data-table th { padding-top: 12px; }

@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { extname, join, resolve } from 'node:path';
@@ -114,6 +115,20 @@ function bootScreenFirst(): Plugin {
 /** Where the demo build is served: the project website's /demo/ page. */
 const DEMO_BASE = '/hangar/demo/';
 
+/**
+ * The release the demo's mock server reports (src/mocks/version.ts):
+ * HANGAR_DEMO_VERSION, else the newest tag of this checkout, so the demo
+ * never shows a version Hangar never had. Empty when neither is known.
+ */
+function demoVersion(env: Record<string, string | undefined>): string {
+  if (env.HANGAR_DEMO_VERSION) return env.HANGAR_DEMO_VERSION;
+  try {
+    return execFileSync('git', ['describe', '--tags', '--abbrev=0'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch {
+    return '';
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env };
   // `vite build --mode demo`: the mocked UI as a static site under DEMO_BASE (npm run build:demo).
@@ -136,7 +151,11 @@ export default defineConfig(({ mode }) => {
     // The website serves plain files: the demo gets no precompressed copies.
     plugins: [react(), mockServiceWorker(mocks, base), bootScreenFirst(), ...(demo ? [] : [precompress()])],
     define: demo
-      ? { 'import.meta.env.VITE_API_MOCKS': JSON.stringify('true'), 'import.meta.env.VITE_DEMO': JSON.stringify('true') }
+      ? {
+          'import.meta.env.VITE_API_MOCKS': JSON.stringify('true'),
+          'import.meta.env.VITE_DEMO': JSON.stringify('true'),
+          'import.meta.env.VITE_DEMO_VERSION': JSON.stringify(demoVersion(env)),
+        }
       : undefined,
     // The demo's cookie jar needs no public suffix list (src/demo/tldts.ts).
     resolve: demo ? { alias: { tldts: resolve(import.meta.dirname, 'src/demo/tldts.ts') } } : undefined,

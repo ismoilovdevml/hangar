@@ -19,6 +19,7 @@ import type {
   UpstreamHealth,
 } from '../api/types';
 import type { SystemStatusDetail } from '../api/opsTypes';
+import { HANGAR_VERSION } from './version';
 
 const TB = 1024 ** 4;
 const GB = 1024 ** 3;
@@ -63,11 +64,11 @@ export const session: Session = {
 export const systemStatus: SystemStatusDetail = {
   state: 'ok',
   message: 'All systems normal',
-  version: '1.0.0',
+  version: HANGAR_VERSION,
   instance_name: 'acme-platform',
   nodes_up: 3,
   nodes_total: 3,
-  build: { version: '1.0.0', commit: '237ab95', date: '2026-11-03T18:00:00Z', go_version: 'go1.27.0' },
+  build: { version: HANGAR_VERSION, commit: '237ab95', date: '2026-11-03T18:00:00Z', go_version: 'go1.27.0' },
   uptime_seconds: 1_209_600,
   web_ui: true,
   base_url: 'https://pkg.acme.io',

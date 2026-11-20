@@ -7,6 +7,7 @@ import { http, HttpResponse } from 'msw';
 import type { components } from '../api/schema';
 import type { ApiError, SystemStatus } from '../api/types';
 import { summarize, type LogLevel, type LogPage, type LogRecord, type Subsystem, type SystemNode, type SystemNodeList } from '../pages/system/model';
+import { HANGAR_VERSION, OLDER_VERSION } from './version';
 
 const api = (path: string) => `*/api/v1${path}`;
 type Guard = (request: Request, mutating?: boolean) => Response | null;
@@ -112,17 +113,17 @@ function initialNodes(): SystemNode[] {
   );
   return [
     {
-      id: 'hangar-1', hostname: 'hangar-1', url: 'http://10.0.1.11:8080', version: '1.0.0', commit: '237ab95c1d2e',
+      id: 'hangar-1', hostname: 'hangar-1', url: 'http://10.0.1.11:8080', version: HANGAR_VERSION, commit: '237ab95c1d2e',
       started_at: iso(now - 1_209_600_000), uptime_seconds: 1_209_600, last_heartbeat: iso(now - 2_000),
       role: 'leader', status: 'healthy', stale: false, current: true, subsystems: leader,
     },
     {
-      id: 'hangar-2', hostname: 'hangar-2', url: 'http://10.0.2.11:8080', version: '1.0.0', commit: '237ab95c1d2e',
+      id: 'hangar-2', hostname: 'hangar-2', url: 'http://10.0.2.11:8080', version: HANGAR_VERSION, commit: '237ab95c1d2e',
       started_at: iso(now - 86_400_000), uptime_seconds: 86_400, last_heartbeat: iso(now - 9_000),
       role: 'follower', status: 'degraded', stale: false, current: false, subsystems: subsystems(true, 86_400_000),
     },
     {
-      id: 'hangar-3', hostname: 'hangar-3', url: 'http://10.0.3.11:8080', version: '0.9.4', commit: 'a91f00b7e6c3',
+      id: 'hangar-3', hostname: 'hangar-3', url: 'http://10.0.3.11:8080', version: OLDER_VERSION, commit: 'a91f00b7e6c3',
       started_at: iso(now - 7_200_000), uptime_seconds: 5_400, last_heartbeat: iso(now - 1_800_000),
       role: 'follower', status: 'down', stale: true, current: false, subsystems: subsystems(false, 5_400_000),
     },

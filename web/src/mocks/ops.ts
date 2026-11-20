@@ -23,6 +23,7 @@ import type {
 import type { ApiError, Format, PublishedComponent } from '../api/types';
 import { describeCron, nextRuns, parseCron } from '../lib/cron';
 import * as data from './data';
+import { HANGAR_VERSION } from './version';
 
 const api = (path: string) => `*/api/v1${path}`;
 type Guard = (request: Request, mutating?: boolean) => Response | null;
@@ -816,9 +817,9 @@ function clusterStatus(): ClusterStatus {
     state: 'ok',
     quorum: true,
     nodes: [
-      { id: 'n1', name: 'hangar-1', role: 'leader', zone: 'eu-central-1a', address: '10.0.1.11:8080', version: '1.0.0', healthy: true, cpu_pct: 34, memory_pct: 58, cache_disk_pct: 41, requests_per_second: 412, uptime_seconds: 1_209_600, last_heartbeat: now },
-      { id: 'n2', name: 'hangar-2', role: 'follower', zone: 'eu-central-1b', address: '10.0.2.11:8080', version: '1.0.0', healthy: true, cpu_pct: 29, memory_pct: 61, cache_disk_pct: 78, requests_per_second: 388, uptime_seconds: 1_209_000, last_heartbeat: now },
-      { id: 'n3', name: 'hangar-3', role: 'follower', zone: 'eu-central-1c', address: '10.0.3.11:8080', version: '1.0.0', healthy: true, cpu_pct: 22, memory_pct: 49, cache_disk_pct: 37, requests_per_second: 301, uptime_seconds: 86_400, last_heartbeat: now },
+      { id: 'n1', name: 'hangar-1', role: 'leader', zone: 'eu-central-1a', address: '10.0.1.11:8080', version: HANGAR_VERSION, healthy: true, cpu_pct: 34, memory_pct: 58, cache_disk_pct: 41, requests_per_second: 412, uptime_seconds: 1_209_600, last_heartbeat: now },
+      { id: 'n2', name: 'hangar-2', role: 'follower', zone: 'eu-central-1b', address: '10.0.2.11:8080', version: HANGAR_VERSION, healthy: true, cpu_pct: 29, memory_pct: 61, cache_disk_pct: 78, requests_per_second: 388, uptime_seconds: 1_209_000, last_heartbeat: now },
+      { id: 'n3', name: 'hangar-3', role: 'follower', zone: 'eu-central-1c', address: '10.0.3.11:8080', version: HANGAR_VERSION, healthy: true, cpu_pct: 22, memory_pct: 49, cache_disk_pct: 37, requests_per_second: 301, uptime_seconds: 86_400, last_heartbeat: now },
     ],
     dependencies: data.systemStatus.dependencies ?? [],
   };

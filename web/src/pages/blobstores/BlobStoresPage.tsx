@@ -221,10 +221,6 @@ function StoreCard({ store: s }: { store: BlobStore }) {
         <Link to="/blob-stores/$name" params={{ name: s.name }} className="button button--secondary button--sm">
           Details and repositories
         </Link>
-        {/* Online migration between stores is planned on the server (POST /blob-stores/{name}/move-repositories answers 501). */}
-        <button type="button" className="button button--secondary button--sm" disabled title="Planned: not available yet">
-          Move repositories (planned)
-        </button>
       </div>
     </article>
   );
