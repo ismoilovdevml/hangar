@@ -131,3 +131,36 @@ func TestLockoutSlowsDownDistributedGuessing(t *testing.T) {
 		t.Fatalf("cancelled client: %v", err)
 	}
 }
+
+// Regression: lockout counted every IPv6 address separately, so a client
+// rotating through its /64 was never locked out.
+func TestLockoutGroupsIPv6By64(t *testing.T) {
+	e := authtest.New(t, auth.Config{Lockout: auth.Lockout{MaxAttempts: 3, Window: 10 * time.Minute, Duration: 15 * time.Minute, SlowdownAfter: -1}})
+	admin := e.Admin(t)
+	mustCreateUser(t, e, admin, "alice", "Reader")
+	for i := range 3 {
+		_, _ = e.Svc.Login(from(fmt.Sprintf("2001:db8:1:2::%x", i+1)), "alice", "wrong password!!")
+	}
+	if _, err := e.Svc.Login(from("2001:db8:1:2:ffff::9"), "alice", pw); !isLocked(err) {
+		t.Fatalf("another address in the same /64: %v, want locked", err)
+	}
+	if _, err := e.Svc.Login(from("2001:db8:1:3::1"), "alice", pw); err != nil {
+		t.Fatalf("a different /64: %v", err)
+	}
+}
+
+func TestAddressKey(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"192.0.2.7", "192.0.2.7"},
+		{"::ffff:192.0.2.7", "192.0.2.7"},
+		{"2001:db8:1:2:3:4:5:6", "2001:db8:1:2::/64"},
+		{"2001:db8:1:2::9", "2001:db8:1:2::/64"},
+		{"fe80::1%eth0", "fe80::/64"},
+		{"", ""},
+		{"not-an-ip", ""},
+	} {
+		if got := auth.AddressKey(c.in); got != c.want {
+			t.Errorf("AddressKey(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
