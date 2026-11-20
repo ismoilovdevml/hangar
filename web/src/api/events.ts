@@ -1,9 +1,12 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { API_BASE } from './client';
-import { queryKeys, RECENT_LIMIT } from './hooks';
+import { browseKeys } from './browse';
+import { catalogKeys } from './catalog';
+import { findingKeys } from './findings';
+import { queryKeys } from './hooks';
 import { openEventStream, type StreamStatus } from './sse';
-import type { LiveEvent, LiveEventType, Page, PublishedComponent, UpstreamHealth } from './types';
+import type { LiveEvent, LiveEventType, Page, UpstreamHealth } from './types';
 
 export type LiveStatus = StreamStatus;
 
@@ -21,35 +24,28 @@ const isLiveType = (t: string): t is LiveEventType => (EVENT_TYPES as readonly s
 /** Query keys refetched (at most once per `delay`) after events that change them. */
 type Invalidate = (key: readonly unknown[]) => void;
 
-/** Applies one live event to the query cache. Exported for tests. */
+/**
+ * Applies one live event to the query cache. Exported for tests. Component
+ * events refetch what lists or counts packages (browse, package pages, search,
+ * findings); `invalidate` is batched, so a burst of publishes costs one refetch
+ * per screen that is open, and closed screens only go stale.
+ */
 export function applyLiveEvent(qc: QueryClient, event: LiveEvent, invalidate: Invalidate): void {
-  const recent = queryKeys.recentComponents;
   switch (event.type) {
     case 'component.published':
-      qc.setQueryData<Page<PublishedComponent>>(recent, (prev) => {
-        if (!prev) return prev;
-        const rest = prev.items.filter((c) => c.id !== event.data.id);
-        return { ...prev, items: [event.data, ...rest].slice(0, RECENT_LIMIT) };
-      });
+    case 'component.deleted':
       invalidate(['metrics', 'overview']);
       invalidate(queryKeys.repositories);
+      invalidate(catalogKeys.components);
+      invalidate(catalogKeys.search);
+      invalidate(browseKeys.all);
+      invalidate(findingKeys.all);
       break;
     case 'component.quarantined':
-      qc.setQueryData<Page<PublishedComponent>>(recent, (prev) =>
-        prev && {
-          ...prev,
-          items: prev.items.map((c) => (c.id === event.data.id ? { ...c, scan: { ...c.scan, state: 'quarantined' } } : c)),
-        },
-      );
       invalidate(['metrics', 'overview']);
-      break;
-    case 'component.deleted':
-      qc.setQueryData<Page<PublishedComponent>>(recent, (prev) =>
-        prev && { ...prev, items: prev.items.filter((c) => c.id !== event.data.id) },
-      );
-      invalidate(recent);
-      invalidate(['metrics', 'overview']);
-      invalidate(queryKeys.repositories);
+      invalidate(catalogKeys.components);
+      invalidate(catalogKeys.search);
+      invalidate(findingKeys.all);
       break;
     case 'task.progress':
     case 'task.finished':

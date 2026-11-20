@@ -116,9 +116,10 @@ export function SignInForm(props: SignInFormProps) {
   // A lockout (423) or rate limit (429) holds the name it was for: another
   // name may sign in at once (the server locks a name per address).
   const [retry, setRetry] = useState<{ at: number; secs: number; name: string; status: number; error: unknown } | null>(null);
-  const now = useNow(1000).getTime();
   const name = username.trim().toLowerCase();
   const held = retry && (retry.status === 429 || retry.name === name) ? retry : null;
+  // The clock runs only while a countdown is on screen.
+  const now = useNow(held ? 1000 : null, held?.at).getTime();
   // The clock ticks once a second, so it can lag the moment the wait started: clamp.
   const secsLeft = held === null ? null : Math.min(held.secs, Math.max(0, Math.ceil((held.at - now) / 1000)));
   const waiting = secsLeft !== null && secsLeft > 0;
