@@ -1,4 +1,4 @@
-// Package archive bounds what formats decompress from untrusted package
+// Package archive bounds what is decompressed from untrusted package
 // archives. A few kilobytes of gzip, xz or zstd can expand to gigabytes, and
 // tar.Reader decompresses every entry it skips, so a reader looking for one
 // small file (Chart.yaml, Cargo.toml, a .deb control file) still pays for

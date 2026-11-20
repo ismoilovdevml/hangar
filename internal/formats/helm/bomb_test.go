@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/ismoilovdevml/hangar/internal/archive"
+	"github.com/ismoilovdevml/hangar/internal/archive/archivetest"
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/formats/helm"
-	"github.com/ismoilovdevml/hangar/internal/formats/internal/archive"
-	"github.com/ismoilovdevml/hangar/internal/formats/internal/archive/archivetest"
 )
 
 // TestReadChartBoundsDecompression: a chart whose Chart.yaml sits behind

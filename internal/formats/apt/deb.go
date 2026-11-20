@@ -15,8 +15,8 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/ulikunitz/xz"
 
+	"github.com/ismoilovdevml/hangar/internal/archive"
 	"github.com/ismoilovdevml/hangar/internal/core"
-	"github.com/ismoilovdevml/hangar/internal/formats/internal/archive"
 )
 
 // Limits on what is read from a .deb.

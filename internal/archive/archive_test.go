@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ismoilovdevml/hangar/internal/archive"
 	"github.com/ismoilovdevml/hangar/internal/core"
-	"github.com/ismoilovdevml/hangar/internal/formats/internal/archive"
 )
 
 func TestLimit(t *testing.T) {

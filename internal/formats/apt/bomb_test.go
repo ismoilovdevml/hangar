@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ismoilovdevml/hangar/internal/archive/archivetest"
 	"github.com/ismoilovdevml/hangar/internal/formats/apt/apttest"
-	"github.com/ismoilovdevml/hangar/internal/formats/internal/archive/archivetest"
 )
 
 // deb frames members as an ar archive, the way dpkg-deb lays out a .deb.
