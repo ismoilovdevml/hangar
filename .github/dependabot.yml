@@ -1,0 +1,68 @@
+# Weekly dependency updates, grouped so a week brings a handful of pull
+# requests per ecosystem instead of one per package. Security updates are
+# not grouped by these rules: each advisory still gets its own pull request
+# as soon as it is published (with Dependabot security updates enabled in the
+# repository settings).
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      # golang.org/x/* move together and often depend on each other.
+      golang-x:
+        patterns: ["golang.org/x/*"]
+      otel:
+        patterns: ["go.opentelemetry.io/*"]
+      go-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build(deps-web)"
+    groups:
+      # What ships in the embedded UI.
+      web-runtime:
+        dependency-type: production
+        update-types: [minor, patch]
+      # Build, lint and test tooling.
+      web-tooling:
+        dependency-type: development
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Base images of the server, the scan adapter and the e2e client runner.
+  - package-ecosystem: docker
+    directories:
+      - /
+      - /deploy/scanner
+      - /test/e2e/runner
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "build(deps-docker)"
+    groups:
+      base-images:
+        patterns: ["*"]
