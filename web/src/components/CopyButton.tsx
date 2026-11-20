@@ -17,7 +17,7 @@ export function CopyButton({ text, label, className }: { text: string; label: st
 
   return (
     <>
-      <button type="button" className={['copy-button', className ?? ''].join(' ')} onClick={onCopy} aria-label={label}>
+      <button type="button" className={['copy-button', className ?? ''].join(' ')} onClick={onCopy} aria-label={label} title={label}>
         {copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
       </button>
       <span className="visually-hidden" aria-live="polite">

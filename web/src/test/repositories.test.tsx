@@ -29,7 +29,11 @@ describe('repositories list', () => {
     expect(within(row).getByText('registry.npmjs.org')).toBeInTheDocument();
     expect(within(row).getByText('Slow upstream')).toBeInTheDocument();
     expect(within(row).getByText('435 GiB')).toBeInTheDocument();
-    expect(within(row).getByRole('button', { name: 'Copy URL of npmjs-proxy' })).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Copy URL of npmjs-proxy' })).toHaveAttribute('title', 'Copy URL of npmjs-proxy');
+    // Browsing is a labelled action, not a bare cube icon.
+    const browse = within(row).getByRole('link', { name: 'Browse packages in npmjs-proxy' });
+    expect(browse).toHaveTextContent('Browse');
+    expect(browse).toHaveAttribute('href', '/browse?repo=npmjs-proxy');
     expect(within(within(table).getByText('ghcr-proxy').closest('tr')!).getByText('Authentication failed (401)')).toHaveAttribute(
       'title',
       'Check the proxy credentials.',
