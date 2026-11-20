@@ -16,15 +16,23 @@
 // The server-wide proxy and trust settings (Outbound) can be replaced while
 // the server runs (SetOutbound): clients already handed out pick the new
 // settings up with their next request.
+//
+// Each client owns its transport (connection pool). A request finds it with
+// two atomic loads: the settings in effect are an immutable value swapped as
+// a whole, and the transport is rebuilt only when they changed. Clients are
+// cached by remote, settings and credentials, up to Options.MaxClients; the
+// least recently requested one is dropped from the cache beyond that. A
+// dropped client keeps working for whoever holds it, and its idle
+// connections close after IdleConnTimeout like any other.
 package httpclient
 
 import (
+	"container/list"
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -35,6 +43,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -89,6 +98,11 @@ type Options struct {
 	// and outbound proxies) through this cache instead of asking the system
 	// resolver on each dial. DialGuard still checks each address dialled.
 	DNS *DNSCache
+	// MaxClients bounds the clients ForUpstream caches (default
+	// DefaultMaxClients). Callers such as the README image fetcher ask for
+	// a client per remote host, and repositories whose settings changed
+	// leave their old client behind, so an unbounded cache only grows.
+	MaxClients int
 
 	// environ overrides os.Getenv for tests.
 	environ func(string) string
@@ -137,22 +151,44 @@ type namedProxy struct {
 	route func(*url.URL) (*url.URL, error) // honours NoProxy
 }
 
+// DefaultMaxClients is the default of Options.MaxClients: room for every
+// proxy repository of a large installation plus the README image hosts
+// recently fetched from.
+const DefaultMaxClients = 1024
+
 // Factory implements core.HTTPClientFactory. It is safe for concurrent use.
 type Factory struct {
 	opts Options
 
-	mu         sync.Mutex
-	out        Outbound
-	baseRoots  *x509.CertPool
-	proxies    map[string]*namedProxy
-	envProxy   func(*url.URL) (*url.URL, error) // nil = no environment proxy
-	clients    map[string]*http.Client
-	transports map[string]*http.Transport
+	// settings are the outbound settings in effect, read without a lock on
+	// every request and dial.
+	settings atomic.Pointer[outboundState]
+
+	// mu guards the client cache and serializes SetOutbound.
+	mu      sync.Mutex
+	clients map[string]*list.Element // cacheKey -> element of lru
+	lru     *list.List               // of *cachedClient, most recently requested first
+}
+
+// outboundState is one version of the server-wide settings with what is
+// derived from them. SetOutbound replaces it as a whole; it is never
+// modified, so readers need no lock.
+type outboundState struct {
+	out       Outbound
+	baseRoots *x509.CertPool
+	proxies   map[string]*namedProxy
+	envProxy  func(*url.URL) (*url.URL, error) // nil = no environment proxy
 	// proxyAddrs are the host:port of the operator's outbound proxies
 	// (Outbound.Proxies and the environment proxy); connections to them skip
-	// DialGuard. Per-repository proxies are never added. Replaced as a whole
-	// by SetOutbound, never modified in place.
+	// DialGuard. Per-repository proxies are never added.
 	proxyAddrs map[string]bool
+}
+
+// cachedClient is an entry of the client cache.
+type cachedClient struct {
+	key    string
+	client *http.Client
+	live   *liveTransport
 }
 
 var _ core.HTTPClientFactory = (*Factory)(nil)
@@ -187,7 +223,10 @@ func New(opts Options) (*Factory, error) {
 	if opts.environ == nil {
 		opts.environ = os.Getenv
 	}
-	f := &Factory{opts: opts, clients: map[string]*http.Client{}, transports: map[string]*http.Transport{}}
+	if opts.MaxClients <= 0 {
+		opts.MaxClients = DefaultMaxClients
+	}
+	f := &Factory{opts: opts, clients: map[string]*list.Element{}, lru: list.New()}
 	if err := f.SetOutbound(FileOutbound(opts)); err != nil {
 		return nil, err
 	}
@@ -232,30 +271,32 @@ func (f *Factory) SetOutbound(o Outbound) error {
 	if o.Default != "" && proxies[o.Default] == nil {
 		return fmt.Errorf("default proxy %q is not defined: %w", o.Default, core.ErrInvalid)
 	}
-	env := f.environmentProxy(addrs)
+	st := &outboundState{out: o, baseRoots: roots, proxies: proxies, envProxy: f.environmentProxy(addrs), proxyAddrs: addrs}
 	f.mu.Lock()
-	old := f.transports
-	f.out, f.baseRoots, f.proxies, f.envProxy, f.proxyAddrs = o, roots, proxies, env, addrs
-	f.transports = map[string]*http.Transport{}
+	f.settings.Store(st)
+	live := make([]*liveTransport, 0, f.lru.Len())
+	for e := f.lru.Front(); e != nil; e = e.Next() {
+		live = append(live, e.Value.(*cachedClient).live)
+	}
 	f.mu.Unlock()
-	for _, t := range old {
-		t.CloseIdleConnections()
+	// Connections made with the old settings are not reused: each client
+	// builds a new transport with its next request. Closing the idle ones
+	// now frees them at once for the cached clients; a client dropped from
+	// the cache closes them when it next sends, or IdleConnTimeout does.
+	for _, l := range live {
+		l.CloseIdleConnections()
 	}
 	return nil
 }
 
 // Outbound returns the settings in effect.
 func (f *Factory) Outbound() Outbound {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return cloneOutbound(f.out)
+	return cloneOutbound(f.settings.Load().out)
 }
 
 // HasProxy reports whether a proxy called name is defined.
 func (f *Factory) HasProxy(name string) bool {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.proxies[name] != nil
+	return f.settings.Load().proxies[name] != nil
 }
 
 func cloneOutbound(o Outbound) Outbound {
@@ -359,38 +400,40 @@ func (f *Factory) ProxyFor(target string, cfg core.UpstreamHTTP) (*url.URL, erro
 	if err != nil {
 		return nil, fmt.Errorf("target %q: %w", target, core.ErrInvalid)
 	}
-	f.mu.Lock()
 	fn, _, err := f.route(cfg, u.Host)
-	f.mu.Unlock()
 	if err != nil || fn == nil {
 		return nil, err
 	}
 	return fn(&http.Request{URL: u})
 }
 
-// route returns the proxy function for requests of a remote at remoteHost
-// with cfg (nil = direct) and the named proxy it uses, if any. f.mu must be
-// held.
+// route is outboundState.route under the settings in effect.
 func (f *Factory) route(cfg core.UpstreamHTTP, remoteHost string) (func(*http.Request) (*url.URL, error), *namedProxy, error) {
+	return f.settings.Load().route(cfg, remoteHost)
+}
+
+// route returns the proxy function for requests of a remote at remoteHost
+// with cfg (nil = direct) and the named proxy it uses, if any.
+func (st *outboundState) route(cfg core.UpstreamHTTP, remoteHost string) (func(*http.Request) (*url.URL, error), *namedProxy, error) {
 	if err := cfg.ValidateProxy(); err != nil {
 		return nil, nil, err
 	}
 	var np *namedProxy
 	switch {
 	case cfg.ProxyName != "":
-		if np = f.proxies[cfg.ProxyName]; np == nil {
+		if np = st.proxies[cfg.ProxyName]; np == nil {
 			return nil, nil, fmt.Errorf("proxy %q does not exist: %w", cfg.ProxyName, core.ErrInvalid)
 		}
 	case cfg.Proxy == core.ProxyNone:
 		return nil, nil, nil
 	case cfg.Proxy == "" || cfg.Proxy == core.ProxyInherit:
-		if f.out.Default == "" {
-			if env := f.envProxy; env != nil {
+		if st.out.Default == "" {
+			if env := st.envProxy; env != nil {
 				return func(r *http.Request) (*url.URL, error) { return env(r.URL) }, nil, nil
 			}
 			return nil, nil, nil
 		}
-		np = f.proxies[f.out.Default]
+		np = st.proxies[st.out.Default]
 	default:
 		pu, err := proxyURL(cfg.Proxy, "", "")
 		if err != nil {
@@ -424,19 +467,17 @@ func (f *Factory) ForUpstream(remoteURL string, cfg core.UpstreamHTTP, auth *cor
 		}
 	}
 	key := cacheKey(remote, cfg, auth)
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if c, ok := f.clients[key]; ok {
+	if c := f.cached(key); c != nil {
 		return c, nil
 	}
-	// Built now so that invalid settings fail here rather than on the first
-	// request.
-	if _, err := f.transportLocked(cfg, remote.Host); err != nil {
+	// The transport is built now, outside the lock, so that invalid settings
+	// fail here rather than on the first request.
+	live := &liveTransport{f: f, cfg: cfg, remoteHost: remote.Host}
+	if _, err := live.current(); err != nil {
 		return nil, err
 	}
 	c := &http.Client{
-		Transport: &decorate{base: &liveTransport{f: f, cfg: cfg, remoteHost: remote.Host}, scheme: remote.Scheme, host: remote.Host,
-			auth: auth, userAgent: f.opts.UserAgent},
+		Transport: &decorate{base: live, scheme: remote.Scheme, host: remote.Host, auth: auth, userAgent: f.opts.UserAgent},
 		// No overall Timeout: large artifacts stream for minutes. Callers bound
 		// requests with their context; headers are bounded by ReadTimeout.
 		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
@@ -446,37 +487,80 @@ func (f *Factory) ForUpstream(remoteURL string, cfg core.UpstreamHTTP, auth *cor
 			return nil
 		},
 	}
-	f.clients[key] = c
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if e, ok := f.clients[key]; ok {
+		// Another caller built the same client meanwhile; ours has not
+		// connected yet and is dropped.
+		f.lru.MoveToFront(e)
+		return e.Value.(*cachedClient).client, nil
+	}
+	f.clients[key] = f.lru.PushFront(&cachedClient{key: key, client: c, live: live})
+	for f.lru.Len() > f.opts.MaxClients {
+		oldest := f.lru.Back()
+		f.lru.Remove(oldest)
+		delete(f.clients, oldest.Value.(*cachedClient).key)
+	}
 	return c, nil
 }
 
-// transportLocked returns the transport for a remote at remoteHost with cfg
-// under the settings in effect, building it on first use. f.mu must be held.
-func (f *Factory) transportLocked(cfg core.UpstreamHTTP, remoteHost string) (*http.Transport, error) {
-	key := transportKey(cfg, remoteHost)
-	if t, ok := f.transports[key]; ok {
-		return t, nil
+// cached returns the cached client for key, marking it recently used, or nil.
+func (f *Factory) cached(key string) *http.Client {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	e, ok := f.clients[key]
+	if !ok {
+		return nil
 	}
-	t, err := f.transport(cfg, remoteHost)
-	if err != nil {
-		return nil, err
-	}
-	f.transports[key] = t
-	return t, nil
+	f.lru.MoveToFront(e)
+	return e.Value.(*cachedClient).client
 }
 
-// liveTransport sends each request with the transport of the settings in
-// effect, so SetOutbound reaches clients already handed out.
+// liveTransport sends each request with a transport built for the settings
+// in effect, so SetOutbound reaches clients already handed out. Finding it
+// takes two atomic loads and no lock; it is rebuilt only after the settings
+// changed.
 type liveTransport struct {
 	f          *Factory
 	cfg        core.UpstreamHTTP
 	remoteHost string
+
+	mu  sync.Mutex // serializes rebuilds
+	cur atomic.Pointer[builtTransport]
+}
+
+// builtTransport is a transport and the settings it was built for.
+type builtTransport struct {
+	settings *outboundState
+	t        *http.Transport
+}
+
+// current returns the transport for the settings in effect, building it when
+// they changed since the last request. The transport of the previous
+// settings has its idle connections closed.
+func (l *liveTransport) current() (*http.Transport, error) {
+	st := l.f.settings.Load()
+	if b := l.cur.Load(); b != nil && b.settings == st {
+		return b.t, nil
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	st = l.f.settings.Load()
+	if b := l.cur.Load(); b != nil && b.settings == st {
+		return b.t, nil
+	}
+	t, err := l.f.transport(st, l.cfg, l.remoteHost)
+	if err != nil {
+		return nil, err
+	}
+	if old := l.cur.Swap(&builtTransport{settings: st, t: t}); old != nil {
+		old.t.CloseIdleConnections()
+	}
+	return t, nil
 }
 
 func (l *liveTransport) RoundTrip(r *http.Request) (*http.Response, error) {
-	l.f.mu.Lock()
-	t, err := l.f.transportLocked(l.cfg, l.remoteHost)
-	l.f.mu.Unlock()
+	t, err := l.current()
 	if err != nil {
 		if r.Body != nil {
 			_ = r.Body.Close()
@@ -488,25 +572,14 @@ func (l *liveTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 
 // CloseIdleConnections closes the idle connections of the current transport.
 func (l *liveTransport) CloseIdleConnections() {
-	l.f.mu.Lock()
-	t := l.f.transports[transportKey(l.cfg, l.remoteHost)]
-	l.f.mu.Unlock()
-	if t != nil {
-		t.CloseIdleConnections()
+	if b := l.cur.Load(); b != nil {
+		b.t.CloseIdleConnections()
 	}
 }
 
-func transportKey(cfg core.UpstreamHTTP, remoteHost string) string {
-	b, err := json.Marshal(cfg)
-	if err != nil {
-		return fmt.Sprintf("%#v\x00%s", cfg, remoteHost)
-	}
-	return string(b) + "\x00" + strings.ToLower(remoteHost)
-}
-
-// transport builds a transport for cfg. f.mu must be held.
-func (f *Factory) transport(cfg core.UpstreamHTTP, remoteHost string) (*http.Transport, error) {
-	proxy, np, err := f.route(cfg, remoteHost)
+// transport builds a transport for cfg under the settings st.
+func (f *Factory) transport(st *outboundState, cfg core.UpstreamHTTP, remoteHost string) (*http.Transport, error) {
+	proxy, np, err := st.route(cfg, remoteHost)
 	if err != nil {
 		return nil, err
 	}
@@ -518,9 +591,9 @@ func (f *Factory) transport(cfg core.UpstreamHTTP, remoteHost string) (*http.Tra
 	if cfg.ReadTimeout > 0 {
 		read = cfg.ReadTimeout.D()
 	}
-	roots := f.baseRoots
+	roots := st.baseRoots
 	if cfg.CABundle != "" || (np != nil && np.CAPEM != "") {
-		roots = f.baseRoots.Clone()
+		roots = st.baseRoots.Clone()
 		if cfg.CABundle != "" && !roots.AppendCertsFromPEM([]byte(cfg.CABundle)) {
 			return nil, fmt.Errorf("caBundle: no PEM certificates found: %w", core.ErrInvalid)
 		}
@@ -592,9 +665,7 @@ func (f *Factory) dialContext(timeout time.Duration) func(ctx context.Context, n
 		}}
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		host, _, _ := net.SplitHostPort(addr)
-		f.mu.Lock()
-		toProxy := f.proxyAddrs[strings.ToLower(addr)]
-		f.mu.Unlock()
+		toProxy := f.settings.Load().proxyAddrs[strings.ToLower(addr)]
 		if toProxy || (f.opts.DialAllowHost != nil && f.opts.DialAllowHost(strings.ToLower(strings.TrimSuffix(host, ".")))) {
 			return dial(ctx, plain, network, addr)
 		}
