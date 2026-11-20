@@ -24,6 +24,9 @@ const (
 	replaySize   = 256 // events kept for Last-Event-ID resume
 	clientBuffer = 64  // per-connection queue; a client that falls behind is disconnected
 	authzTTL     = time.Minute
+	// defaultEventsRevalidate is how often an open stream re-checks its
+	// credentials (API.EventsRevalidate).
+	defaultEventsRevalidate = 30 * time.Second
 )
 
 // liveEvent is one SSE message, already rendered for the UI.
@@ -308,12 +311,33 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 	}
 	tick := time.NewTicker(beat)
 	defer tick.Stop()
+	// The stream outlives the request's one authentication check: re-check
+	// the credentials now and then, end the stream once they no longer
+	// hold, and apply role changes to the events still sent.
+	var recheck <-chan time.Time
+	if a.Revalidate != nil {
+		every := a.EventsRevalidate
+		if every <= 0 {
+			every = defaultEventsRevalidate
+		}
+		t := time.NewTicker(every)
+		defer t.Stop()
+		recheck = t.C
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-client.lost:
 			return
+		case <-recheck:
+			p, err := a.Revalidate(ctx)
+			if err != nil || p.IsAnonymous() || p.PasswordChangeRequired {
+				return
+			}
+			authz.ctx = core.WithPrincipal(ctx, p)
+			clear(authz.entries)
+			continue
 		case <-tick.C:
 			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
 				return

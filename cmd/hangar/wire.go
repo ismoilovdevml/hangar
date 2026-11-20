@@ -532,6 +532,8 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		ExtraRoutes:    []api.RouteRegistrar{settingsSvc, signer},
 	}
 	restAPI.BlobStoreTester = blobStoreTester{keyring: keyring}
+	// Open event streams end when their session or token stops working.
+	restAPI.Revalidate = httpapi.Revalidate(authSvc)
 	a.onClose(restAPI.Close)
 
 	trusted, err := server.ParseTrustedProxies(cfg.Server.TrustedProxies)
