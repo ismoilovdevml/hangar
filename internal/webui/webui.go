@@ -9,6 +9,8 @@ package webui
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"html/template"
 	"io"
 	"io/fs"
@@ -49,10 +51,14 @@ var encodings = []struct{ token, ext string }{
 
 // spa serves the build in files. A file with precompressed variants is sent
 // in the best encoding the client accepts, with Vary: Accept-Encoding.
-// Content-hashed assets are cached for a year; index.html is revalidated on
-// every load so a new release is picked up at once.
+// Content-hashed assets are cached for a year. Every other file (index.html,
+// and the images and icons copied unhashed from web/public) is revalidated
+// on every use: each file and variant carries a strong ETag of its bytes, so
+// revalidating an unchanged file costs a 304 without a body, and a new
+// release is picked up at once.
 func spa(files fs.FS) http.Handler {
 	variants := precompressed(files)
+	etags := entityTags(files)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -64,8 +70,12 @@ func spa(files fs.FS) http.Handler {
 				if strings.HasPrefix(name, "assets/") {
 					// Vite emits content-hashed file names under assets/.
 					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				} else {
+					// Unhashed: the next release may put other bytes under
+					// the same name.
+					w.Header().Set("Cache-Control", "no-cache")
 				}
-				serveFile(w, r, files, name, variants[name])
+				serveFile(w, r, files, name, variants[name], etags)
 				return
 			}
 			if strings.HasPrefix(name, "assets/") {
@@ -77,8 +87,34 @@ func spa(files fs.FS) http.Handler {
 			}
 		}
 		w.Header().Set("Cache-Control", "no-cache")
-		serveFile(w, r, files, "index.html", variants["index.html"])
+		serveFile(w, r, files, "index.html", variants["index.html"], etags)
 	})
+}
+
+// entityTags returns a strong ETag for every regular file of files, keyed by
+// path: the first 128 bits of the sha256 of its bytes. Precompressed
+// variants are files of their own, so each content coding gets its own tag,
+// as RFC 9110 requires. The build is embedded and does not change while the
+// process runs, so the tags are computed once.
+func entityTags(files fs.FS) map[string]string {
+	out := map[string]string{}
+	_ = fs.WalkDir(files, ".", func(name string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		f, err := files.Open(name)
+		if err != nil {
+			return nil
+		}
+		defer func() { _ = f.Close() }()
+		h := sha256.New()
+		if _, err := io.Copy(h, f); err != nil {
+			return nil
+		}
+		out[name] = `"` + hex.EncodeToString(h.Sum(nil)[:16]) + `"`
+		return nil
+	})
+	return out
 }
 
 // precompressed maps each file of files that has precompressed variants to
@@ -102,8 +138,9 @@ func precompressed(files fs.FS) map[string][]string {
 }
 
 // serveFile sends name, or its variant in the encoding negotiated from the
-// request's Accept-Encoding among available.
-func serveFile(w http.ResponseWriter, r *http.Request, files fs.FS, name string, available []string) {
+// request's Accept-Encoding among available, with the ETag etags holds for
+// the file actually sent.
+func serveFile(w http.ResponseWriter, r *http.Request, files fs.FS, name string, available []string, etags map[string]string) {
 	h := w.Header()
 	if len(available) > 0 {
 		h.Add("Vary", "Accept-Encoding")
@@ -113,6 +150,10 @@ func serveFile(w http.ResponseWriter, r *http.Request, files fs.FS, name string,
 	}
 	enc := negotiate(r.Header.Get("Accept-Encoding"), available)
 	if enc == "" {
+		// http.ServeContent answers If-None-Match and If-Range from it.
+		if tag := etags[name]; tag != "" {
+			h.Set("ETag", tag)
+		}
 		f, err := files.Open(name)
 		if err != nil {
 			http.Error(w, "not found", http.StatusNotFound)
@@ -140,6 +181,16 @@ func serveFile(w http.ResponseWriter, r *http.Request, files fs.FS, name string,
 			ext = e.ext
 		}
 	}
+	if tag := etags[name+ext]; tag != "" {
+		h.Set("ETag", tag)
+		if noneMatch(r.Header.Get("If-None-Match"), tag) {
+			// RFC 9110 15.4.5: a 304 carries the validators, not the
+			// representation's metadata.
+			h.Del("Content-Type")
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	}
 	f, err := files.Open(name + ext)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -157,6 +208,22 @@ func serveFile(w http.ResponseWriter, r *http.Request, files fs.FS, name string,
 	if r.Method != http.MethodHead {
 		_, _ = io.Copy(w, f)
 	}
+}
+
+// noneMatch reports whether the If-None-Match header value matches etag, so
+// that the request is answered 304: "*", or a list holding etag compared
+// weakly (RFC 9110 13.1.2: a W/ prefix does not matter for If-None-Match).
+func noneMatch(header, etag string) bool {
+	if header == "" {
+		return false
+	}
+	for part := range strings.SplitSeq(header, ",") {
+		tag := strings.TrimSpace(part)
+		if tag == "*" || strings.TrimPrefix(tag, "W/") == etag {
+			return true
+		}
+	}
+	return false
 }
 
 // negotiate picks the encoding of available the Accept-Encoding header

@@ -35,6 +35,7 @@ func testBuild() fstest.MapFS {
 		"assets/app-1a2b.js.gz":  {Data: []byte("app-gz")},
 		"assets/font-3c4d.woff2": {Data: []byte("wOF2")},
 		"favicon.svg":            {Data: []byte("<svg/>")},
+		"lake-dawn.jpg":          {Data: []byte("\xff\xd8\xff wallpaper")},
 	}
 }
 
@@ -95,7 +96,8 @@ func TestSPACacheHeaders(t *testing.T) {
 		"/":                       "no-cache",
 		"/index.html":             "no-cache",
 		"/browse":                 "no-cache",
-		"/favicon.svg":            "",
+		"/favicon.svg":            "no-cache",
+		"/lake-dawn.jpg":          "no-cache",
 	} {
 		rec := get(t, h, p, "gzip, br")
 		if rec.Code != http.StatusOK {
@@ -109,6 +111,62 @@ func TestSPACacheHeaders(t *testing.T) {
 	rec := get(t, h, "/assets/font-3c4d.woff2", "gzip, br")
 	if rec.Header().Get("Content-Encoding") != "" || rec.Header().Get("Vary") != "" || rec.Body.String() != "wOF2" {
 		t.Errorf("woff2: %v %q", rec.Header(), rec.Body.String())
+	}
+}
+
+// Unhashed files (the login wallpaper) are revalidated instead of being
+// downloaded again: every response carries a strong ETag of the bytes sent,
+// and a request presenting it is answered 304 without a body.
+func TestSPAEntityTags(t *testing.T) {
+	h := spa(testBuild())
+	conditional := func(p, accept, ifNoneMatch string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, p, nil)
+		req.Header.Set("Accept-Encoding", accept)
+		req.Header.Set("If-None-Match", ifNoneMatch)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	tests := []struct {
+		name, path, accept string
+	}{
+		{"wallpaper", "/lake-dawn.jpg", "gzip, br"},
+		{"icon", "/favicon.svg", ""},
+		{"index identity", "/", ""},
+		{"index brotli", "/", "br"},
+		{"spa route gzip", "/repositories", "gzip"},
+		{"hashed asset brotli", "/assets/app-1a2b.js", "br"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			first := get(t, h, tc.path, tc.accept)
+			tag := first.Header().Get("ETag")
+			if first.Code != http.StatusOK || len(tag) != 34 || !strings.HasPrefix(tag, `"`) {
+				t.Fatalf("GET %s = %d, ETag %q; want 200 with a strong 128-bit tag", tc.path, first.Code, tag)
+			}
+			for _, inm := range []string{tag, "W/" + tag, `"other", ` + tag, "*"} {
+				rec := conditional(tc.path, tc.accept, inm)
+				if rec.Code != http.StatusNotModified || rec.Body.Len() != 0 || rec.Header().Get("ETag") != tag {
+					t.Errorf("If-None-Match %s = %d, %d bytes, ETag %q; want 304 without body", inm, rec.Code, rec.Body.Len(),
+						rec.Header().Get("ETag"))
+				}
+			}
+			if rec := conditional(tc.path, tc.accept, `"stale"`); rec.Code != http.StatusOK || rec.Body.String() != first.Body.String() {
+				t.Errorf("stale tag = %d %q; want the full response", rec.Code, rec.Body.String())
+			}
+		})
+	}
+
+	// Each content coding is its own representation with its own tag.
+	br := get(t, h, "/", "br").Header().Get("ETag")
+	gz := get(t, h, "/", "gzip").Header().Get("ETag")
+	id := get(t, h, "/", "").Header().Get("ETag")
+	if br == gz || br == id || gz == id {
+		t.Fatalf("ETags per encoding: br %s, gzip %s, identity %s; want three different tags", br, gz, id)
+	}
+	if rec := conditional("/", "gzip", br); rec.Code != http.StatusOK || rec.Body.String() != "index-gz" {
+		t.Fatalf("brotli tag on a gzip request = %d %q; want the gzip body", rec.Code, rec.Body.String())
 	}
 }
 
