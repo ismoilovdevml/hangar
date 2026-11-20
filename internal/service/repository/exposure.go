@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -94,6 +95,36 @@ func (s *Service) authorizeExposure(ctx context.Context, tx pgx.Tx, action strin
 			return fmt.Errorf("group %q: you may not write to %q, so it cannot be the write member: %w",
 				r.Name, wm, core.ErrForbidden)
 		}
+	}
+	return nil
+}
+
+// authorizeListener checks that the caller may open the plain-HTTP
+// listener a Docker connector's http_port asks for: it binds a TCP port on
+// every node, so it is server administration (system:repos:admin), not
+// administration of one repository. Keeping or removing the stored port
+// needs nothing more. oldCfg is the stored configuration, nil on create.
+func (s *Service) authorizeListener(ctx context.Context, action string, r *core.Repository, oldCfg []byte) error {
+	if s.opts.AuthZ == nil || r.Config.Connector == nil || r.Config.Connector.HTTPPort <= 0 {
+		return nil
+	}
+	var old core.RepoConfig
+	if len(oldCfg) > 0 {
+		if err := json.Unmarshal(oldCfg, &old); err != nil {
+			return fmt.Errorf("decode config: %w", err)
+		}
+	}
+	if old.Connector != nil && old.Connector.HTTPPort == r.Config.Connector.HTTPPort {
+		return nil
+	}
+	p := core.PrincipalFrom(ctx)
+	err := s.opts.AuthZ.Authorize(ctx, p, core.ActionAdmin, core.SystemResource(core.SystemRepos))
+	if err != nil && !errors.Is(err, core.ErrForbidden) && !errors.Is(err, core.ErrUnauthenticated) {
+		return err
+	}
+	if err != nil {
+		s.record(ctx, action, r.Name, core.OutcomeDenied, map[string]any{"http_port": r.Config.Connector.HTTPPort, "needs": "system:repos:admin"})
+		return fmt.Errorf("repository %q: opening a listener (connector http_port) needs system:repos:admin: %w", r.Name, core.ErrForbidden)
 	}
 	return nil
 }
