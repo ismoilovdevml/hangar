@@ -6,9 +6,34 @@ package quarantine
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 )
+
+// Blocked returns the component a belongs to when that component is
+// quarantined, nil when a may be served: it belongs to no component, or its
+// component is not quarantined or no longer exists. It fails closed: when
+// the component cannot be looked up the error is returned, and the caller
+// answers with it (a 5xx) instead of serving content it could not check.
+// Every format's download path calls this one function, so none of them
+// decides on its own what a failed lookup means.
+func Blocked(ctx context.Context, cs core.ComponentService, a *core.Asset) (*core.Component, error) {
+	if a == nil || a.ComponentID == "" {
+		return nil, nil
+	}
+	c, err := cs.GetComponentByID(ctx, a.ComponentID)
+	switch {
+	case errors.Is(err, core.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, fmt.Errorf("quarantine check of %s: %w", a.Path, err)
+	case c.Quarantined:
+		return c, nil
+	}
+	return nil, nil
+}
 
 // Versions returns the versions of the components named name (in namespace
 // ns; nil for any namespace) in repoID that are quarantined. A proxy

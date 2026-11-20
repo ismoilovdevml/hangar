@@ -2,12 +2,73 @@ package quarantine_test
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/core/coretest"
 	"github.com/ismoilovdevml/hangar/internal/formats/internal/quarantine"
 )
+
+// lookupFails is a component service whose component lookups fail, as
+// they do when the database is unreachable.
+type lookupFails struct {
+	*coretest.Components
+}
+
+var errDB = errors.New("database unreachable")
+
+func (lookupFails) GetComponentByID(context.Context, string) (*core.Component, error) {
+	return nil, errDB
+}
+
+func TestBlocked(t *testing.T) {
+	env := coretest.NewEnv(t)
+	repo := env.AddRepo(t, &core.Repository{Name: "raw-h", Format: "raw", Type: core.RepoHosted})
+	env.AuthZ.Grant("alice", "repo:*:write")
+	ctx := coretest.AsUser(t.Context(), "alice")
+	d, n, _ := env.Blob.Put(t.Context(), bytes.NewReader([]byte("x")))
+	publish := func(version string) *core.Asset {
+		_, assets, err := env.Components.Publish(ctx, repo, core.PublishRequest{
+			Component: &core.Component{Name: "lib", Version: version},
+			Assets:    []*core.Asset{{Path: "lib/" + version, BlobDigest: d, Size: n}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return assets[0]
+	}
+	clean, blocked := publish("1"), publish("2")
+	env.Components.SetQuarantined(blocked.ComponentID, true)
+
+	cases := []struct {
+		name        string
+		cs          core.ComponentService
+		asset       *core.Asset
+		wantBlocked bool
+		wantErr     error
+	}{
+		{name: "asset of no component", cs: env.Components, asset: &core.Asset{Path: "loose"}},
+		{name: "component not quarantined", cs: env.Components, asset: clean},
+		{name: "component quarantined", cs: env.Components, asset: blocked, wantBlocked: true},
+		{name: "component gone", cs: env.Components, asset: &core.Asset{Path: "x", ComponentID: "gone"}},
+		{name: "lookup fails closed", cs: lookupFails{env.Components}, asset: clean, wantErr: errDB},
+		{name: "lookup error even for a quarantined one", cs: lookupFails{env.Components}, asset: blocked, wantErr: errDB},
+		{name: "asset without component needs no lookup", cs: lookupFails{env.Components}, asset: &core.Asset{Path: "loose"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, err := quarantine.Blocked(t.Context(), tc.cs, tc.asset)
+			if !errors.Is(err, tc.wantErr) { // errors.Is(err, nil) holds only for a nil err
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+			if got := c != nil; got != tc.wantBlocked {
+				t.Fatalf("blocked = %v (%+v), want %v", got, c, tc.wantBlocked)
+			}
+		})
+	}
+}
 
 func TestVersionsAndComponents(t *testing.T) {
 	env := coretest.NewEnv(t)

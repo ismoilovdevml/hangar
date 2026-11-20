@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/quarantine"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 )
 
@@ -261,12 +262,12 @@ func (h *handler) getManifest(w http.ResponseWriter, r *http.Request, rq *reques
 		return
 	}
 	if hit.asset.ComponentID != "" {
-		c, err := h.deps.Components.GetComponentByID(ctx, hit.asset.ComponentID)
-		if err != nil && !errors.Is(err, core.ErrNotFound) {
+		c, err := quarantine.Blocked(ctx, h.deps.Components, hit.asset)
+		if err != nil {
 			h.internal(w, r, "quarantine check", err)
 			return
 		}
-		if err == nil && c.Quarantined {
+		if c != nil {
 			writeError(w, http.StatusForbidden, codeDenied, "image "+rq.name+":"+rq.ref+" is quarantined by a security policy")
 			return
 		}

@@ -109,12 +109,12 @@ func writeDoc(w http.ResponseWriter, r *http.Request, contentType string, b []by
 }
 
 func (h *handler) serveAsset(ctx context.Context, w http.ResponseWriter, r *http.Request, req request, f *served) {
-	if f.asset.ComponentID != "" {
-		c, err := h.deps.Components.GetComponentByID(ctx, f.asset.ComponentID)
-		if err == nil && c.Quarantined {
-			h.writeError(w, r, fmt.Errorf("%s@%s: %w", c.Name, c.Version, core.ErrQuarantined))
-			return
+	if c, err := quarantine.Blocked(ctx, h.deps.Components, f.asset); err != nil || c != nil {
+		if err == nil {
+			err = fmt.Errorf("%s@%s: %w", c.Name, c.Version, core.ErrQuarantined)
 		}
+		h.writeError(w, r, err)
+		return
 	}
 	bs, err := h.deps.Blobs.ForRepository(ctx, f.owner)
 	if err != nil {

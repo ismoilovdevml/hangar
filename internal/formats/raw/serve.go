@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/quarantine"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 	"github.com/ismoilovdevml/hangar/internal/routing"
 )
@@ -163,14 +164,12 @@ func (h *handler) find(ctx context.Context, repo *core.Repository, clean string)
 	if err != nil {
 		return nil, err
 	}
-	if a.ComponentID != "" {
-		c, err := h.deps.Components.GetComponentByID(ctx, a.ComponentID)
-		if err != nil && !errors.Is(err, core.ErrNotFound) {
-			return nil, err
-		}
-		if c != nil && c.Quarantined {
-			return nil, fmt.Errorf("%s: %w", clean, core.ErrQuarantined)
-		}
+	c, err := quarantine.Blocked(ctx, h.deps.Components, a)
+	if err != nil {
+		return nil, err
+	}
+	if c != nil {
+		return nil, fmt.Errorf("%s: %w", clean, core.ErrQuarantined)
 	}
 	return &located{repo: repo, asset: a}, nil
 }
