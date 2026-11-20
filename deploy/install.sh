@@ -599,6 +599,12 @@ chmod 755 "$data"
 [[ -n "$legacy" ]] && : >"$data/.migrating"
 make_dir "$data/config" 755 0
 make_dir "$data/secrets" 700 "$HANGAR_UID"
+make_dir "$data/bootstrap" 700 "$HANGAR_UID"
+# Up to v0.1.8 the server kept the one-time password in secrets/, which it
+# now mounts read-only; a password not yet replaced moves along.
+if [[ -f "$data/secrets/initial-admin-password" && ! -e "$data/bootstrap/initial-admin-password" ]]; then
+	mv "$data/secrets/initial-admin-password" "$data/bootstrap/initial-admin-password"
+fi
 make_dir "$data/blobs" 750 "$HANGAR_UID"
 make_dir "$data/nats" 750 "$HANGAR_UID"
 make_dir "$data/postgres" 700 "$POSTGRES_UID"
@@ -817,9 +823,9 @@ fi
 [[ -n "$(env_get "$env_file" HANGAR_INSTALLED)" ]] || env_set "$env_file" HANGAR_INSTALLED "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # On the first start of an empty database the server creates "admin" with a
-# one-time password and writes it to secrets/initial-admin-password (mode
+# one-time password and writes it to bootstrap/initial-admin-password (mode
 # 600); it deletes the file after the first password change.
-pw_file=$data/secrets/initial-admin-password
+pw_file=$data/bootstrap/initial-admin-password
 if ((fresh)); then
 	for _ in 1 2 3 4 5 6 7 8 9 10; do
 		[[ -s "$pw_file" ]] && break
