@@ -174,6 +174,13 @@ func (u *upstream) target(req core.UpstreamRequest) (*url.URL, bool, error) {
 		return nil, false, fmt.Errorf("upstream url %q: want an absolute http(s) URL: %w", core.RedactURL(req.URL), core.ErrInvalid)
 	}
 	t.Fragment = ""
+	// Dot segments are refused here as in resolve: an absolute URL (from an
+	// index or a redirect the remote served) must not climb out of the path
+	// it names, least of all on the remote's own origin, which gets its
+	// credentials.
+	if hasDotSegment(t.EscapedPath()) {
+		return nil, false, fmt.Errorf("upstream url %q: %w", core.RedactURL(req.URL), core.ErrInvalid)
+	}
 	if t.Scheme == u.base.Scheme && strings.EqualFold(t.Host, u.base.Host) {
 		return t, true, nil
 	}
@@ -184,6 +191,17 @@ func (u *upstream) target(req core.UpstreamRequest) (*url.URL, bool, error) {
 		t.Redacted(), t.Host, u.name, core.ErrInvalid)
 }
 
+// hasDotSegment reports whether an escaped URL path has a "." or ".."
+// segment (also when percent-encoded) or cannot be unescaped.
+func hasDotSegment(escapedPath string) bool {
+	for seg := range strings.SplitSeq(escapedPath, "/") {
+		if s, err := url.PathUnescape(seg); err != nil || s == ".." || s == "." {
+			return true
+		}
+	}
+	return false
+}
+
 // resolve joins path to the remote URL, keeping its escaping (npm's
 // "@scope%2fname") and rejecting dot segments that would climb out of it.
 func (u *upstream) resolve(path string) (*url.URL, error) {
@@ -192,10 +210,8 @@ func (u *upstream) resolve(path string) (*url.URL, error) {
 	if i := strings.IndexAny(pathOnly, "?#"); i >= 0 {
 		pathOnly = pathOnly[:i]
 	}
-	for seg := range strings.SplitSeq(pathOnly, "/") {
-		if s, err := url.PathUnescape(seg); err != nil || s == ".." || s == "." {
-			return nil, fmt.Errorf("upstream path %q: %w", path, core.ErrInvalid)
-		}
+	if hasDotSegment(pathOnly) {
+		return nil, fmt.Errorf("upstream path %q: %w", path, core.ErrInvalid)
 	}
 	t, err := url.Parse(strings.TrimSuffix(u.remoteRaw, "/") + "/" + p)
 	if err != nil || t.Host != u.base.Host || t.Scheme != u.base.Scheme {

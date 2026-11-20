@@ -97,6 +97,9 @@ func TestRelatedHostFetch(t *testing.T) {
 		"http://user:pw@" + hostOf(t, cdn) + "/x",                   // credentials in the URL
 		"/relative/path",                                            // not absolute
 		"https://" + strings.Split(hostOf(t, cdn), ":")[0] + ":1/x", // related host, other port
+		remote.URL + "/simple/../admin",                             // dot segment on the own origin
+		remote.URL + "/simple/%2e%2e/admin",                         // encoded dot segment
+		cdn.URL + "/pkgs/./a.tar.gz",                                // dot segment on a related host
 	} {
 		if _, err := u.Fetch(context.Background(), core.UpstreamRequest{URL: bad}); !errors.Is(err, core.ErrInvalid) {
 			t.Errorf("URL %q: want ErrInvalid, got %v", bad, err)
