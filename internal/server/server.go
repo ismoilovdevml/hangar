@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -150,12 +151,21 @@ type Config struct {
 	// DrainDelay keeps serving (with /readyz failing) before shutdown starts,
 	// so load balancers notice (server.drain_delay). 0 stops listening at once.
 	DrainDelay time.Duration
+	// OnDrain hooks are called when shutdown begins, before DrainDelay: other
+	// listeners that drain together with this one (connector ports).
+	OnDrain []func()
+	// OnShutdown hooks run after DrainDelay, concurrently with the shutdown
+	// of the main listener and under the same ShutdownTimeout deadline; Run
+	// returns once all of them have. They stop what http.Server.Shutdown
+	// cannot: long-lived responses such as SSE streams, which Shutdown would
+	// otherwise wait for until the deadline, and other listeners.
+	OnShutdown []func(context.Context)
 }
 
 // Run listens on cfg.Addr and serves h until ctx is cancelled, then shuts
 // down gracefully: readiness fails, new requests are still served for
 // DrainDelay, then the listener closes and in-flight requests get
-// ShutdownTimeout.
+// ShutdownTimeout, while the OnShutdown hooks run alongside.
 // ready (may be nil) is called with the bound address once listening.
 func Run(ctx context.Context, cfg Config, h http.Handler, hc *health.Checker, log *slog.Logger, ready func(net.Addr)) error {
 	srv := &http.Server{
@@ -192,6 +202,9 @@ func Run(ctx context.Context, cfg Config, h http.Handler, hc *health.Checker, lo
 	if hc != nil {
 		hc.SetDraining()
 	}
+	for _, f := range cfg.OnDrain {
+		f()
+	}
 	if cfg.DrainDelay > 0 {
 		// Answer "Connection: close" while draining, so clients and load
 		// balancers reconnect, and land on another node, for their next request.
@@ -200,7 +213,13 @@ func Run(ctx context.Context, cfg Config, h http.Handler, hc *health.Checker, lo
 	}
 	sctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
-	if err := srv.Shutdown(sctx); err != nil {
+	var hooks sync.WaitGroup
+	for _, f := range cfg.OnShutdown {
+		hooks.Go(func() { f(sctx) })
+	}
+	err = srv.Shutdown(sctx)
+	hooks.Wait()
+	if err != nil {
 		_ = srv.Close()
 		return fmt.Errorf("graceful shutdown: %w", err)
 	}

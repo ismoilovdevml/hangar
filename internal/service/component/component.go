@@ -60,6 +60,11 @@ type Options struct {
 	FlushInterval time.Duration
 	// MaxPending distinct buffered assets trigger an early flush. Default 1000.
 	MaxPending int
+	// MaxBuffered bounds the distinct assets whose counts are kept in memory
+	// while flushes fail (database unreachable). Downloads of further assets
+	// are dropped, counted and logged: the statistics are best-effort.
+	// Default 10 * MaxPending.
+	MaxBuffered int
 }
 
 // Service implements core.ComponentService on PostgreSQL. Call Close on
@@ -71,6 +76,7 @@ type Service struct {
 
 	mu      sync.Mutex
 	pending map[string]*download // by asset id
+	dropped int64                // downloads not buffered since the last flush (buffer full)
 	closed  bool
 	kick    chan struct{}
 	done    chan struct{}
@@ -97,6 +103,9 @@ func New(pool *pgxpool.Pool, opts Options) *Service {
 	}
 	if opts.MaxPending <= 0 {
 		opts.MaxPending = DefaultMaxPending
+	}
+	if opts.MaxBuffered <= 0 {
+		opts.MaxBuffered = 10 * opts.MaxPending
 	}
 	log := opts.Logger
 	if log == nil {
@@ -975,6 +984,12 @@ func (s *Service) RecordDownload(_ context.Context, asset *core.Asset) {
 	}
 	d := s.pending[asset.ID]
 	if d == nil {
+		if len(s.pending) >= s.opts.MaxBuffered {
+			// Flushes are failing: memory stays bounded, the count is lost.
+			s.dropped++
+			s.mu.Unlock()
+			return
+		}
 		d = &download{componentID: asset.ComponentID}
 		s.pending[asset.ID] = d
 	}
@@ -1010,12 +1025,23 @@ func (s *Service) flushLoop() {
 }
 
 // FlushDownloads writes buffered download statistics now. On failure the
-// counts are kept for the next attempt.
+// counts are kept for the next attempt, up to Options.MaxBuffered assets.
+//
+// The transaction locks components before assets, each in id order, like
+// every other writer of both tables (publish and the deletes lock the
+// component first): the opposite order deadlocks against a concurrent
+// delete or publish of the same component (SQLSTATE 40P01).
 func (s *Service) FlushDownloads(ctx context.Context) error {
 	s.mu.Lock()
 	batch := s.pending
 	s.pending = map[string]*download{}
+	dropped := s.dropped
+	s.dropped = 0
 	s.mu.Unlock()
+	if dropped > 0 {
+		s.log.Warn("download statistics dropped: too many assets buffered while flushes fail",
+			"dropped_downloads", dropped, "max_buffered_assets", s.opts.MaxBuffered)
+	}
 	if len(batch) == 0 {
 		return nil
 	}
@@ -1047,39 +1073,58 @@ func (s *Service) FlushDownloads(ctx context.Context) error {
 		compLasts = append(compLasts, comps[id].last)
 	}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `
-UPDATE assets a SET download_count = a.download_count + d.n,
-       last_downloaded_at = greatest(a.last_downloaded_at, d.at)
-  FROM unnest($1::uuid[], $2::bigint[], $3::timestamptz[]) AS d(id, n, at)
- WHERE a.id = d.id`, assetIDs, counts, lasts); err != nil {
-			return err
-		}
-		if len(compIDs) == 0 {
-			return nil
-		}
-		_, err := tx.Exec(ctx, `
+		// A multi-row UPDATE locks rows in plan order, not id order: lock
+		// them explicitly first. FOR NO KEY UPDATE is the lock the UPDATE
+		// takes anyway; it does not block asset inserts referencing the
+		// component.
+		if len(compIDs) > 0 {
+			if _, err := tx.Exec(ctx, `
+SELECT 1 FROM components WHERE id = ANY($1::uuid[]) ORDER BY id FOR NO KEY UPDATE`, compIDs); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `
 UPDATE components c SET download_count = c.download_count + d.n,
        last_downloaded_at = greatest(c.last_downloaded_at, d.at)
   FROM unnest($1::uuid[], $2::bigint[], $3::timestamptz[]) AS d(id, n, at)
- WHERE c.id = d.id`, compIDs, compCounts, compLasts)
+ WHERE c.id = d.id`, compIDs, compCounts, compLasts); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.Exec(ctx, `
+SELECT 1 FROM assets WHERE id = ANY($1::uuid[]) ORDER BY id FOR NO KEY UPDATE`, assetIDs); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `
+UPDATE assets a SET download_count = a.download_count + d.n,
+       last_downloaded_at = greatest(a.last_downloaded_at, d.at)
+  FROM unnest($1::uuid[], $2::bigint[], $3::timestamptz[]) AS d(id, n, at)
+ WHERE a.id = d.id`, assetIDs, counts, lasts)
 		return err
 	})
 	if err != nil {
-		s.mu.Lock()
-		for id, d := range batch {
-			if cur := s.pending[id]; cur != nil {
-				cur.n += d.n
-				if d.last.After(cur.last) {
-					cur.last = d.last
-				}
-			} else {
-				s.pending[id] = d
-			}
-		}
-		s.mu.Unlock()
+		s.requeue(batch)
 		return fmt.Errorf("flush downloads: %w", err)
 	}
 	return nil
+}
+
+// requeue puts the counts of a failed flush back for the next attempt.
+// Assets beyond MaxBuffered are dropped and counted.
+func (s *Service) requeue(batch map[string]*download) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, d := range batch {
+		if cur := s.pending[id]; cur != nil {
+			cur.n += d.n
+			if d.last.After(cur.last) {
+				cur.last = d.last
+			}
+		} else if len(s.pending) < s.opts.MaxBuffered {
+			s.pending[id] = d
+		} else {
+			s.dropped += d.n
+		}
+	}
 }
 
 // Close stops the flusher and writes the remaining download statistics.

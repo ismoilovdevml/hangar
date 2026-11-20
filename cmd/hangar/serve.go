@@ -98,9 +98,21 @@ func serveCmd(args []string, stderr io.Writer) error {
 	// repositories change.
 	host, mainPort := server.ListenHostPort(cfg.Server.Addr)
 	connectors := server.NewConnectorListeners(ctx, host, server.ConnectorOnly(a.router), srvCfg, log, mainPort)
-	defer connectors.Close()
+	defer connectors.Close() // when Run fails; a no-op after a graceful stop
 	if a.watchConnectorPorts != nil {
 		go a.watchConnectorPorts(ctx, connectors.Set)
+	}
+	// The connector ports drain and stop together with the main listener,
+	// under the same deadline, and the SSE streams end when shutdown starts
+	// instead of holding it until server.shutdown_timeout.
+	srvCfg.OnDrain = []func(){connectors.Drain}
+	srvCfg.OnShutdown = []func(context.Context){
+		connectors.Shutdown,
+		func(context.Context) {
+			if a.closeStreams != nil {
+				a.closeStreams()
+			}
+		},
 	}
 
 	err = server.Run(ctx, srvCfg, a.router, a.health, log, nil)

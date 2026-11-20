@@ -53,6 +53,7 @@ type hub struct {
 	clients map[*liveClient]struct{}
 	ring    []liveEvent
 	subs    []core.Subscription
+	closed  bool // clients added afterwards are dropped at once
 }
 
 func newHub(ctx context.Context, bus core.EventBus, render func(context.Context, core.Event) liveEvent, log *slog.Logger) (*hub, error) {
@@ -108,6 +109,11 @@ func (h *hub) add(types map[string]bool, lastID string) (*liveClient, []liveEven
 		}
 	}
 	h.clients[c] = struct{}{}
+	if h.closed {
+		// The stream raced with shutdown: end it at once instead of holding
+		// the server's graceful shutdown until its deadline.
+		c.drop()
+	}
 	return c, replay
 }
 
@@ -124,6 +130,7 @@ func (h *hub) close() {
 		_ = s.Unsubscribe()
 	}
 	h.subs = nil
+	h.closed = true
 	for c := range h.clients {
 		c.drop()
 	}
@@ -134,6 +141,9 @@ func (a *API) eventHub(ctx context.Context) (*hub, error) {
 	defer a.hubMu.Unlock()
 	if a.hub != nil {
 		return a.hub, nil
+	}
+	if a.hubClosed {
+		return nil, errors.New("event stream closed: server shutting down")
 	}
 	h, err := newHub(ctx, a.Deps.Events, a.renderEvent, a.logger())
 	if err != nil {

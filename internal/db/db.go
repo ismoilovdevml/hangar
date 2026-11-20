@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -44,7 +45,22 @@ type PoolOptions struct {
 	Tracer pgx.QueryTracer
 }
 
+// DefaultIdleInTransactionTimeout ends sessions that sit idle inside an
+// open transaction for this long (PostgreSQL idle_in_transaction_session_timeout).
+// Such a transaction holds its row locks and blocks vacuum; Hangar's own
+// transactions never wait that long between statements.
+const DefaultIdleInTransactionTimeout = 5 * time.Minute
+
+const idleInTxParam = "idle_in_transaction_session_timeout"
+
 // Open connects a pool and verifies the connection with a ping.
+//
+// Every connection gets idle_in_transaction_session_timeout =
+// DefaultIdleInTransactionTimeout unless the server already sets one
+// (postgresql.conf, or a per-role or per-database setting), or the database
+// URL does (?idle_in_transaction_session_timeout=10min; 0 disables it). No
+// statement_timeout is set: migrations and garbage collection run long
+// statements legitimately.
 func Open(ctx context.Context, url string, opts PoolOptions) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
@@ -64,6 +80,20 @@ func Open(ctx context.Context, url string, opts PoolOptions) (*pgxpool.Pool, err
 	}
 	if cfg.ConnConfig.RuntimeParams["application_name"] == "" {
 		cfg.ConnConfig.RuntimeParams["application_name"] = "hangar"
+	}
+	if _, set := cfg.ConnConfig.RuntimeParams[idleInTxParam]; !set {
+		// Set after connecting rather than as a startup parameter, which
+		// connection poolers such as PgBouncer refuse by default; and only
+		// where the server leaves it disabled, so its own setting wins.
+		ms := strconv.FormatInt(DefaultIdleInTransactionTimeout.Milliseconds(), 10)
+		cfg.AfterConnect = func(ctx context.Context, c *pgx.Conn) error {
+			_, err := c.Exec(ctx, `SELECT set_config('`+idleInTxParam+`', $1, false)
+WHERE current_setting('`+idleInTxParam+`') = '0'`, ms)
+			if err != nil {
+				return fmt.Errorf("set %s: %w", idleInTxParam, err)
+			}
+			return nil
+		}
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {

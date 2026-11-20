@@ -26,10 +26,11 @@ type ConnectorListeners struct {
 	base     context.Context
 	reserved map[int]bool
 
-	mu      sync.Mutex
-	servers map[int]*http.Server
-	failed  map[int]string // port -> last listen error, logged once
-	closed  bool
+	mu       sync.Mutex
+	servers  map[int]*http.Server
+	failed   map[int]string // port -> last listen error, logged once
+	draining bool
+	closed   bool
 }
 
 // NewConnectorListeners returns listeners bound to host (the host part of
@@ -96,6 +97,9 @@ func (c *ConnectorListeners) Set(ports map[int]string) {
 			continue
 		}
 		delete(c.failed, port)
+		if c.draining {
+			srv.SetKeepAlivesEnabled(false)
+		}
 		c.servers[port] = srv
 		c.log.Info("connector listening", "addr", srv.Addr, "repository", repo)
 	}
@@ -125,6 +129,8 @@ func (c *ConnectorListeners) listen(port int) (*http.Server, error) {
 	return srv, nil
 }
 
+// shutdown stops one listener with its own ShutdownTimeout: a port that is
+// no longer wanted while the server keeps running.
 func (c *ConnectorListeners) shutdown(port int, srv *http.Server) {
 	timeout := c.cfg.ShutdownTimeout
 	if timeout <= 0 {
@@ -132,6 +138,10 @@ func (c *ConnectorListeners) shutdown(port int, srv *http.Server) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+	c.shutdownCtx(ctx, port, srv)
+}
+
+func (c *ConnectorListeners) shutdownCtx(ctx context.Context, port int, srv *http.Server) {
 	if err := srv.Shutdown(ctx); err != nil {
 		_ = srv.Close()
 	}
@@ -150,9 +160,23 @@ func (c *ConnectorListeners) Ports() []int {
 	return out
 }
 
-// Close stops every listener, letting in-flight requests finish within the
-// shutdown timeout. Set does nothing afterwards.
-func (c *ConnectorListeners) Close() {
+// Drain answers "Connection: close" on every listener from now on, so
+// clients reconnect (to another node) for their next request, as the main
+// listener does during server.drain_delay. Pass it as Config.OnDrain.
+func (c *ConnectorListeners) Drain() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.draining = true
+	for _, srv := range c.servers {
+		srv.SetKeepAlivesEnabled(false)
+	}
+}
+
+// Shutdown stops every listener in parallel, letting in-flight requests
+// finish until ctx is done; requests still running then are cut off. Set
+// does nothing afterwards. Pass it as Config.OnShutdown, so the connector
+// ports stop together with the main listener and under its deadline.
+func (c *ConnectorListeners) Shutdown(ctx context.Context) {
 	c.mu.Lock()
 	c.closed = true
 	servers := c.servers
@@ -160,9 +184,22 @@ func (c *ConnectorListeners) Close() {
 	c.mu.Unlock()
 	var wg sync.WaitGroup
 	for port, srv := range servers {
-		wg.Go(func() { c.shutdown(port, srv) })
+		wg.Go(func() { c.shutdownCtx(ctx, port, srv) })
 	}
 	wg.Wait()
+}
+
+// Close stops every listener, letting in-flight requests finish within the
+// shutdown timeout. Set does nothing afterwards. After Shutdown it does
+// nothing.
+func (c *ConnectorListeners) Close() {
+	timeout := c.cfg.ShutdownTimeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	c.Shutdown(ctx)
 }
 
 // ConnectorOnly restricts h to what a connector port serves: the OCI API

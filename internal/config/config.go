@@ -182,7 +182,8 @@ type GC struct {
 	// GracePeriod is how long an unreferenced blob is kept before its bytes
 	// are deleted. Must be longer than MinGCGracePeriod.
 	GracePeriod time.Duration `yaml:"grace_period"`
-	// BatchSize is the number of blobs deleted per transaction.
+	// BatchSize is the number of candidate blobs listed at a time; each is
+	// deleted in its own short transaction.
 	BatchSize int `yaml:"batch_size"`
 	// TempMaxAge is the age after which abandoned temporary uploads are
 	// removed; negative disables temp cleanup.
