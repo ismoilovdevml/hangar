@@ -139,7 +139,7 @@ export function ProxiesPage() {
           tone="danger"
           busy={del.isPending}
           error={del.error ? errorMessage(del.error) : null}
-          onCancel={() => {
+          onClose={() => {
             setDeleting(null);
             del.reset();
           }}

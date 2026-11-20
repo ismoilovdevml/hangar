@@ -44,7 +44,9 @@ import {
 } from './tokenScopes';
 import { useSecretCloseGuard } from './secretGuard';
 import { SecretPanel } from './TokenReveal';
-import { ConfirmDialog, Dialog, Field, FormError } from './ui';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Dialog } from '../../components/Dialog';
+import { Field, FormError } from './ui';
 
 /* ---------------------------------------------------------------- list */
 
@@ -194,7 +196,7 @@ export function TokenTable({ caption, tokens, showOwner, busy, loading, empty }:
         <ConfirmDialog
           title={`Revoke “${revoking.name}”?`}
           confirmLabel="Revoke token"
-          danger
+          tone="danger"
           onConfirm={() => revoke.mutateAsync(revoking.id)}
           onClose={() => setRevoking(null)}
         >

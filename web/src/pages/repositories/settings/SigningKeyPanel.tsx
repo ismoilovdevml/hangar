@@ -146,7 +146,7 @@ export function SigningKeyPanel({ repo }: { repo: Repository }) {
           tone="danger"
           busy={change.isPending}
           error={change.isError ? errorText(change.error, KEY_ERRORS) : null}
-          onCancel={close}
+          onClose={close}
           onConfirm={() => change.mutate({ kind: 'rotate' }, { onSuccess: onDone('Signing key rotated') })}
         >
           <p>
@@ -163,7 +163,7 @@ export function SigningKeyPanel({ repo }: { repo: Repository }) {
           confirmLabel="Import key"
           busy={change.isPending}
           error={missingKey ? 'Paste the private key.' : change.isError ? errorText(change.error, KEY_ERRORS) : null}
-          onCancel={close}
+          onClose={close}
           onConfirm={() => {
             if (!privateKey.trim()) {
               setMissingKey(true);

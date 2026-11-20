@@ -204,7 +204,7 @@ export function AssetDetail({ id, treeRepo, onDeleted }: AssetDetailProps) {
           tone="danger"
           busy={remove.isPending}
           error={remove.isError ? deleteMessage(remove.error, 'files') : null}
-          onCancel={() => setConfirm(false)}
+          onClose={() => setConfirm(false)}
           onConfirm={() =>
             remove.mutate(a.id, {
               onSuccess: () => {

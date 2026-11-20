@@ -73,7 +73,7 @@ export function RepoActions({ repo }: { repo: Repository }) {
           confirmLabel="Invalidate cache"
           busy={invalidate.isPending}
           error={invalidate.isError ? errorText(invalidate.error, { action: 'invalidate the cache' }) : null}
-          onCancel={() => setConfirm(false)}
+          onClose={() => setConfirm(false)}
           onConfirm={() =>
             invalidate.mutate(undefined, {
               onSuccess: (r) => {

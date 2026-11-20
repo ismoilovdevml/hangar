@@ -172,7 +172,7 @@ describe('requiring a password change', () => {
     await user.click(within(table).getByRole('button', { name: 'Open Bekzod Yusupov' }));
     const drawer = await screen.findByRole('dialog', { name: 'Bekzod Yusupov' });
     await user.click(within(drawer).getByRole('button', { name: 'Require password change' }));
-    const confirm = await screen.findByRole('dialog', { name: 'Require a password change at next sign-in?' });
+    const confirm = await screen.findByRole('alertdialog', { name: 'Require a password change at next sign-in?' });
     await user.click(within(confirm).getByRole('button', { name: 'Require password change' }));
     expect(await within(drawer).findByText('They must set a new password at their next sign-in.')).toBeInTheDocument();
     expect(accessState.users.find((u) => u.id === 'u_09')?.must_change_password).toBe(true);

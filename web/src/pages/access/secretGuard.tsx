@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Dialog } from './ui';
+import { Dialog } from '../../components/Dialog';
 
 /**
  * Closing a dialog that shows a new secret: until "I have stored the token"

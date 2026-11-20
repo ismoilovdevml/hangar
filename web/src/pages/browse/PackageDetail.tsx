@@ -287,7 +287,7 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
           busy={removeAll.isPending}
           error={deleteAllError}
           typeToConfirm={c.name}
-          onCancel={() => setDeletingAll(false)}
+          onClose={() => setDeletingAll(false)}
           onConfirm={confirmDeleteAll}
         >
           <p>
@@ -304,7 +304,7 @@ export function PackageDetail({ id, versions }: PackageDetailProps) {
           tone="danger"
           busy={remove.isPending}
           error={remove.isError ? deleteMessage(remove.error, 'versions') : null}
-          onCancel={() => setToDelete(null)}
+          onClose={() => setToDelete(null)}
           onConfirm={confirmDelete}
         >
           <p>

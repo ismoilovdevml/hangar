@@ -378,7 +378,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
           tone="danger"
           busy={remove.isPending}
           error={remove.isError ? apiMessage(remove.error, 'delete') : null}
-          onCancel={() => setConfirmDelete(false)}
+          onClose={() => setConfirmDelete(false)}
           onConfirm={() =>
             remove.mutate(undefined, {
               onSuccess: () => {

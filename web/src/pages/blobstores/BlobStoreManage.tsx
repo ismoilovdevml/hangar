@@ -135,7 +135,7 @@ export function BlobStoreManage({ s }: { s: BlobStore }) {
           typeToConfirm={s.name}
           busy={remove.isPending}
           error={remove.isError ? errorText(remove.error, { action: 'delete the blob store' }) : null}
-          onCancel={() => setConfirm(false)}
+          onClose={() => setConfirm(false)}
           onConfirm={() => remove.mutate(undefined, { onSuccess: () => void navigate({ to: '/blob-stores' }) })}
         >
           <p>New repositories can no longer choose it. This cannot be undone.</p>

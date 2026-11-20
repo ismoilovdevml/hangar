@@ -66,7 +66,7 @@ export function TaskActions({ task, active, size = 'sm', onMessage }: TaskAction
           tone="danger"
           busy={run.isPending}
           error={run.isError ? errorText(run.error, { action: 'start the task' }) : null}
-          onCancel={() => {
+          onClose={() => {
             setConfirm(null);
             run.reset();
           }}
@@ -85,7 +85,7 @@ export function TaskActions({ task, active, size = 'sm', onMessage }: TaskAction
           tone="danger"
           busy={stop.isPending}
           error={stop.isError ? errorText(stop.error, { action: 'stop the task' }) : null}
-          onCancel={() => {
+          onClose={() => {
             setConfirm(null);
             stop.reset();
           }}

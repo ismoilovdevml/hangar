@@ -1,5 +1,7 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { useId, useState, type FormEvent, type ReactNode } from 'react';
+import { errorText } from '../lib/apiError';
+import { Dialog } from './Dialog';
+import { ErrorMessage } from './States';
 
 interface ConfirmDialogProps {
   title: string;
@@ -9,17 +11,26 @@ interface ConfirmDialogProps {
   cancelLabel?: string;
   /** Destructive actions get a red confirm button; Cancel is focused first either way. */
   tone?: 'danger' | 'primary';
+  /** The caller runs the action itself (a mutation's `isPending`). */
   busy?: boolean;
+  /** The caller's sentence for a failed action. */
   error?: string | null;
   /** When set, the user must type this exact text (e.g. the name) before confirming. */
   typeToConfirm?: string;
-  onConfirm: () => void;
-  onCancel: () => void;
+  /**
+   * Runs the action. A returned promise is awaited here: the dialog shows
+   * it as busy, closes when it resolves, and stays open with the error when
+   * it rejects. Without one the caller closes the dialog.
+   */
+  onConfirm: () => void | Promise<unknown>;
+  /** Cancel, Escape, the scrim, or an awaited action that succeeded. */
+  onClose: () => void;
 }
 
 /**
- * Modal confirmation for irreversible or expensive actions. Render it only
- * while open; it traps focus, closes on Escape and returns focus on close.
+ * Confirmation for irreversible or expensive actions. Render it only while
+ * open; it is a Dialog (focus trap, Escape, focus returns on close) that
+ * cannot be dismissed while the action runs.
  */
 export function ConfirmDialog({
   title,
@@ -31,72 +42,41 @@ export function ConfirmDialog({
   error,
   typeToConfirm,
   onConfirm,
-  onCancel,
+  onClose,
 }: ConfirmDialogProps) {
-  const titleId = useId();
-  const bodyId = useId();
   const inputId = useId();
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const cancelRef = useRef<HTMLButtonElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const [typed, setTyped] = useState('');
+  const [running, setRunning] = useState(false);
+  const [failure, setFailure] = useState<unknown>(null);
+  const working = busy || running;
   const ready = !typeToConfirm || typed === typeToConfirm;
 
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    (inputRef.current ?? cancelRef.current)?.focus();
-    return () => previous?.focus?.();
-  }, []);
-
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Escape' && !busy) {
-      e.stopPropagation();
-      onCancel();
-      return;
-    }
-    if (e.key !== 'Tab') return;
-    const focusables = dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input, select, textarea');
-    if (!focusables?.length) return;
-    const first = focusables[0]!;
-    const last = focusables[focusables.length - 1]!;
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (working || !ready) return;
+    const result = onConfirm();
+    if (!(result instanceof Promise)) return;
+    setRunning(true);
+    setFailure(null);
+    result.then(
+      () => onClose(),
+      (err: unknown) => {
+        setFailure(err);
+        setRunning(false);
+      },
+    );
   };
 
-  return createPortal(
-    <div
-      className="dialog-scrim"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !busy) onCancel();
-      }}
-    >
-      <div
-        ref={dialogRef}
-        className="dialog dialog--plain"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={bodyId}
-        onKeyDown={onKeyDown}
-      >
-        <h2 className="dialog__title" id={titleId}>
-          {title}
-        </h2>
-        <div className="dialog__body" id={bodyId}>
-          {children}
-        </div>
+  return (
+    <Dialog title={title} onClose={onClose} variant="plain" role="alertdialog" dismissible={!working}>
+      <form className="dialog-form" onSubmit={submit}>
+        <div className="dialog__text">{children}</div>
         {typeToConfirm && (
           <div className="field">
             <label htmlFor={inputId} className="field__label">
               Type <code className="inline-code">{typeToConfirm}</code> to confirm
             </label>
             <input
-              ref={inputRef}
               id={inputId}
               className="input input--mono"
               autoComplete="off"
@@ -104,36 +84,31 @@ export function ConfirmDialog({
               spellCheck={false}
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && ready && !busy) {
-                  e.preventDefault();
-                  onConfirm();
-                }
-              }}
+              data-autofocus
             />
           </div>
         )}
-        {error && (
+        {error ? (
           <p className="form-error" role="alert">
             {error}
           </p>
+        ) : (
+          failure !== null && <ErrorMessage error={failure} message={errorText(failure)} />
         )}
         <div className="dialog__actions">
-          <button ref={cancelRef} type="button" className="button button--secondary" onClick={onCancel} disabled={busy}>
+          <button type="button" className="button button--secondary" onClick={onClose} disabled={working} data-autofocus={typeToConfirm ? undefined : true}>
             {cancelLabel}
           </button>
           <button
-            type="button"
+            type="submit"
             className={tone === 'danger' ? 'button button--danger' : 'button button--primary'}
-            onClick={onConfirm}
-            disabled={busy || !ready}
-            aria-busy={busy || undefined}
+            disabled={working || !ready}
+            aria-busy={working || undefined}
           >
-            {busy ? 'Working…' : confirmLabel}
+            {working ? 'Working…' : confirmLabel}
           </button>
         </div>
-      </div>
-    </div>,
-    document.body,
+      </form>
+    </Dialog>
   );
 }

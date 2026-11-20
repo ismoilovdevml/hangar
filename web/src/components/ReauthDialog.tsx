@@ -4,7 +4,7 @@ import { useNavigate, useRouterState } from '@tanstack/react-router';
 import { apiFetch } from '../api/client';
 import { queryKeys, useAuthProviders } from '../api/hooks';
 import type { Session } from '../api/types';
-import { Dialog } from '../pages/access/ui';
+import { Dialog } from './Dialog';
 import { endReauth, useReauth } from '../lib/reauth';
 import { toast } from '../lib/toast';
 import { SignInForm } from './SignInForm';

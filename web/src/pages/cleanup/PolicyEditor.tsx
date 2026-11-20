@@ -537,7 +537,7 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
           tone="danger"
           busy={runM.isPending}
           error={runM.isError ? errorText(runM.error, { action: 'run the policy' }) : null}
-          onCancel={() => setConfirm(null)}
+          onClose={() => setConfirm(null)}
           onConfirm={() => runM.mutate(policy.name, { onSuccess: () => setConfirm(null) })}
         >
           <p>
@@ -561,7 +561,7 @@ export function PolicyEditor({ policy, canWrite, canDelete, onSaved, onDeleted }
           tone="danger"
           busy={deleteM.isPending}
           error={deleteM.isError ? errorText(deleteM.error, { action: 'delete the policy' }) : null}
-          onCancel={() => setConfirm(null)}
+          onClose={() => setConfirm(null)}
           onConfirm={() =>
             deleteM.mutate(policy.name, {
               onSuccess: () => {

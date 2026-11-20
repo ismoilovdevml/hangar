@@ -12,7 +12,8 @@ import { useChangePassword, useEndMyOtherSessions, useEndMySession, useMySession
 import { PermissionsReport, SessionList } from './members';
 import { expiryText, roleTone, SOURCE_LABEL } from './model';
 import { CreateTokenDialog, TokenTable } from './tokens';
-import { ConfirmDialog, Field, FormError, Notice } from './ui';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Field, FormError, Notice } from './ui';
 import './access.css';
 
 /** My account: profile, password, personal access tokens, sessions and what I may do. */

@@ -1,4 +1,4 @@
-/* Access & audit, My account: layout, dialogs, scope builder. Dawn tokens only. */
+/* Access, My account: layout, scope builder. Dawn tokens only. Dialogs are components/dialog.css. */
 
 /* ---------- layout ---------- */
 .access-layout { display: flex; flex-wrap: wrap; gap: var(--gap); align-items: flex-start; }
@@ -32,51 +32,6 @@ button.tabs__item { background: transparent; cursor: pointer; }
   background: var(--surface-muted); border: 1px solid var(--track); padding: 1px 6px; border-radius: 6px; white-space: nowrap;
 }
 
-/* ---------- dialogs ---------- */
-/*
- * Every modal: the Dialog (head, scrolling body) and the single-pane
- * ConfirmDialog and plan dialogs (dialog--plain). Defined here only: a second
- * definition elsewhere would override these (pageStyles.test.ts checks).
- */
-.dialog-scrim {
-  position: fixed; inset: 0; z-index: var(--z-modal); display: flex; justify-content: center; align-items: center;
-  padding: 16px; background: var(--scrim); overflow-y: auto;
-}
-.dialog-scrim--drawer { justify-content: flex-end; align-items: stretch; padding: 0; }
-.dialog {
-  --dialog-pad: 22px;
-  width: min(560px, 100%); max-height: calc(100vh - 32px); border-radius: var(--r-panel); background: var(--surface-solid);
-  box-shadow: var(--shadow-modal); display: flex; flex-direction: column;
-}
-.dialog:focus { outline: none; }
-.dialog--wide { width: min(760px, 100%); }
-.dialog--drawer { width: min(640px, 100%); max-height: none; height: 100%; border-radius: var(--r-panel) 0 0 var(--r-panel); }
-.dialog__head { flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px var(--dialog-pad) 8px; }
-.dialog__titles { min-width: 0; }
-.dialog__title { font-size: 20px; font-weight: 700; color: var(--ink-strong); letter-spacing: -.01em; overflow-wrap: anywhere; }
-.dialog__desc { margin-top: 4px; color: var(--ink-2); font-size: 14px; }
-/* Only the body scrolls: the title stays on top and a form's buttons stick to the bottom edge. */
-.dialog__body { flex: 1 1 auto; min-height: 0; padding: 8px var(--dialog-pad) var(--dialog-pad); overflow-y: auto; }
-.dialog__body > .dialog-form > .dialog-actions:last-child {
-  position: sticky; bottom: 0; z-index: 1;
-  margin: 0 calc(-1 * var(--dialog-pad)) calc(-1 * var(--dialog-pad));
-  padding: 14px var(--dialog-pad) var(--dialog-pad);
-  border-top: 1px solid var(--hairline); background: var(--surface-solid);
-}
-.dialog__text { color: var(--ink-2); font-size: 14px; line-height: 1.5; }
-.dialog__actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
-/* One pane: title, text and buttons padded as one. */
-.dialog--plain { width: min(480px, 100%); overflow-y: auto; gap: 14px; padding: var(--dialog-pad); }
-.dialog--plain .dialog__title { font-size: 18px; }
-.dialog--plain .dialog__body {
-  flex: none; display: flex; flex-direction: column; gap: 8px; padding: 0; overflow: visible;
-  font-size: 14px; color: var(--ink-2); overflow-wrap: anywhere;
-}
-.dialog-form { display: flex; flex-direction: column; gap: 16px; }
-.dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
-.dialog-section { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--hairline); padding-top: 14px; }
-.reauth__more { display: flex; flex-direction: column; gap: 6px; }
-.dialog-section__title { font-size: 14px; font-weight: 700; color: var(--ink); }
 .button--danger:disabled { opacity: .55; cursor: not-allowed; }
 .button--danger-ghost { background: transparent; color: var(--bad-ink); border: 1px solid var(--bad-bg); margin-right: auto; }
 .button--danger-ghost:hover { background: var(--bad-bg); }
@@ -193,11 +148,6 @@ select.input--sm { padding-right: 32px; background-position: right 10px center; 
   .privilege-row > .icon-button { grid-row: 1; grid-column: 2; }
   .session-list__row, .perm-list__row { flex-direction: column; align-items: flex-start; }
   .perm-list__grants { align-items: flex-start; text-align: left; }
-  .dialog-scrim { padding: 16px 8px; }
-  .dialog { --dialog-pad: 16px; }
-  .dialog__head { padding-top: 16px; padding-bottom: 6px; }
-  .dialog__body { padding-top: 6px; }
-  .dialog--drawer { border-radius: 0; }
   .area-grid__row .select { width: 110px; }
 }
 .perm-list__toggle { align-self: flex-start; margin-top: 8px; }

@@ -41,7 +41,7 @@ export function RunCompaction() {
           tone="danger"
           busy={run.isPending}
           error={run.isError ? errorText(run.error, { action: 'start the compaction' }) : null}
-          onCancel={() => setConfirm(false)}
+          onClose={() => setConfirm(false)}
           onConfirm={() =>
             run.mutate(task.id, {
               onSuccess: (r) => {

@@ -51,7 +51,7 @@ export function TaskManageActions({ task, editing, onEdit }: { task: Task; editi
           typeToConfirm={task.name}
           busy={remove.isPending}
           error={remove.isError ? errorText(remove.error, { action: 'delete the task' }) : null}
-          onCancel={() => setConfirm(false)}
+          onClose={() => setConfirm(false)}
           onConfirm={() => remove.mutate(undefined, { onSuccess: () => void navigate({ to: '/tasks' }) })}
         >
           <p>The task, its schedule and its run history are removed. This cannot be undone.</p>

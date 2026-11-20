@@ -1,0 +1,52 @@
+/*
+ * Every modal is components/Dialog: centred (head, scrolling body), a drawer,
+ * or one plain pane (dialog--plain) for ConfirmDialog. Defined here only: a
+ * second definition elsewhere would override these (pageStyles.test.ts checks).
+ * Dawn tokens only.
+ */
+.dialog-scrim {
+  position: fixed; inset: 0; z-index: var(--z-modal); display: flex; justify-content: center; align-items: center;
+  padding: 16px; background: var(--scrim); overflow-y: auto;
+}
+.dialog-scrim--drawer { justify-content: flex-end; align-items: stretch; padding: 0; }
+.dialog {
+  --dialog-pad: 22px;
+  width: min(560px, 100%); max-height: calc(100vh - 32px); border-radius: var(--r-panel); background: var(--surface-solid);
+  box-shadow: var(--shadow-modal); display: flex; flex-direction: column;
+}
+.dialog:focus { outline: none; }
+.dialog--wide { width: min(760px, 100%); }
+.dialog--drawer { width: min(640px, 100%); max-height: none; height: 100%; border-radius: var(--r-panel) 0 0 var(--r-panel); }
+.dialog__head { flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px var(--dialog-pad) 8px; }
+.dialog__titles { min-width: 0; }
+.dialog__title { font-size: 20px; font-weight: 700; color: var(--ink-strong); letter-spacing: -.01em; overflow-wrap: anywhere; }
+.dialog__desc { margin-top: 4px; color: var(--ink-2); font-size: 14px; }
+/* Only the body scrolls: the title stays on top and a form's buttons stick to the bottom edge. */
+.dialog__body { flex: 1 1 auto; min-height: 0; padding: 8px var(--dialog-pad) var(--dialog-pad); overflow-y: auto; }
+.dialog__body > .dialog-form > .dialog-actions:last-child {
+  position: sticky; bottom: 0; z-index: 1;
+  margin: 0 calc(-1 * var(--dialog-pad)) calc(-1 * var(--dialog-pad));
+  padding: 14px var(--dialog-pad) var(--dialog-pad);
+  border-top: 1px solid var(--hairline); background: var(--surface-solid);
+}
+.dialog__text { color: var(--ink-2); font-size: 14px; line-height: 1.5; }
+.dialog__actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+/* One pane: title, text and buttons padded as one. */
+.dialog--plain { width: min(480px, 100%); overflow-y: auto; gap: 14px; padding: var(--dialog-pad); }
+.dialog--plain .dialog__title { font-size: 18px; }
+.dialog--plain .dialog__body {
+  flex: none; display: flex; flex-direction: column; gap: 8px; padding: 0; overflow: visible;
+  font-size: 14px; color: var(--ink-2); overflow-wrap: anywhere;
+}
+.dialog-form { display: flex; flex-direction: column; gap: 16px; }
+.dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.dialog-section { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--hairline); padding-top: 14px; }
+.reauth__more { display: flex; flex-direction: column; gap: 6px; }
+.dialog-section__title { font-size: 14px; font-weight: 700; color: var(--ink); }
+@media (max-width: 640px) {
+  .dialog-scrim { padding: 16px 8px; }
+  .dialog { --dialog-pad: 16px; }
+  .dialog__head { padding-top: 16px; padding-bottom: 6px; }
+  .dialog__body { padding-top: 6px; }
+  .dialog--drawer { border-radius: 0; }
+}

@@ -50,7 +50,9 @@ import {
   type UserStatus,
 } from './model';
 import { CreateTokenDialog, TokenTable } from './tokens';
-import { Avatar, ConfirmDialog, Dialog, Field, FormError, Notice } from './ui';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Dialog } from '../../components/Dialog';
+import { Avatar, Field, FormError, Notice } from './ui';
 
 const STATUS_OPTIONS: { value: UserStatus | ''; label: string }[] = [
   { value: '', label: 'Any' },
@@ -604,7 +606,7 @@ export function UserDrawer({ id, canWrite, canDelete, canManageTokens, onClose }
   ];
 
   return (
-    <Dialog title={m ? m.display_name || m.username : 'Loading…'} description={m ? (sa ? 'Service account' : m.username) : undefined} onClose={onClose} drawer>
+    <Dialog title={m ? m.display_name || m.username : 'Loading…'} description={m ? (sa ? 'Service account' : m.username) : undefined} onClose={onClose} variant="drawer">
       {member.isError && <ErrorNote what="this member" error={member.error} onRetry={() => void member.refetch()} />}
       {m && (
         <div className="drawer">
@@ -707,7 +709,7 @@ export function UserDrawer({ id, canWrite, canDelete, canManageTokens, onClose }
         <ConfirmDialog
           title={`Disable ${m.display_name || m.username}?`}
           confirmLabel="Disable account"
-          danger
+          tone="danger"
           onConfirm={() => setDisabled.mutateAsync({ id: m.id, disabled: true }).then(() => setNotice('Account disabled.'))}
           onClose={() => setDialog(null)}
         >
@@ -728,7 +730,7 @@ export function UserDrawer({ id, canWrite, canDelete, canManageTokens, onClose }
         <ConfirmDialog
           title={`Delete ${m.username}?`}
           confirmLabel="Delete permanently"
-          danger
+          tone="danger"
           typeToConfirm={m.username}
           onConfirm={async () => {
             await del.mutateAsync(m.id);

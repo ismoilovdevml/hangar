@@ -21,7 +21,9 @@ import {
 import { parsePrivilege, type Privilege } from '../../lib/privileges';
 import { ACTIONS, describePrivilege, formatPrivilege, repoPatternError, ROLE_NAME_RE, roleTone, SYSTEM_AREAS } from './model';
 import { ScopeList } from './tokens';
-import { ConfirmDialog, Dialog, Field, FormError } from './ui';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Dialog } from '../../components/Dialog';
+import { Field, FormError } from './ui';
 
 const DOMAIN_OPTIONS = [
   { value: 'repo', label: 'Repositories' },
@@ -214,7 +216,7 @@ function RoleDialog({ role, canWrite, onClose }: { role: Role | null; canWrite: 
       title={role ? (editable ? `Edit role ${role.name}` : `Role ${role.name}`) : 'New role'}
       description={role?.builtin ? 'Built-in roles cannot be changed, but you can grant them to people.' : 'A role is a set of privileges. Grant it to people, service accounts or directory groups.'}
       onClose={onClose}
-      drawer
+      variant="drawer"
     >
       <form className="dialog-form" onSubmit={submit} noValidate>
         {editable && (
@@ -297,7 +299,7 @@ function RoleDialog({ role, canWrite, onClose }: { role: Role | null; canWrite: 
         <ConfirmDialog
           title={`Delete role ${role.name}?`}
           confirmLabel="Delete role"
-          danger
+          tone="danger"
           typeToConfirm={role.name}
           onConfirm={async () => {
             await del.mutateAsync(role.name);
