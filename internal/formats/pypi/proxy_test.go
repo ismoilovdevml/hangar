@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/core/coretest"
 )
 
 // remote is a fake index: project "foo" in JSON (files on the remote itself
@@ -355,5 +356,37 @@ func TestGroupReadFillsProxyWithGroupPrivilegeOnly(t *testing.T) {
 	}
 	if rec := f.get(t, "/repository/pypi-proxy/simple/foo/", "", "carol", "secret"); rec.Code != http.StatusForbidden {
 		t.Errorf("direct read of the member = %d, want 403", rec.Code)
+	}
+}
+
+// Regression: the quarantine filter of a proxy's project page read one page
+// of the project's components, so a quarantined version that sorted past
+// the first page (a project with more cached versions than a page holds)
+// stayed listed.
+func TestProxyHidesQuarantinedBeyondFirstPage(t *testing.T) {
+	f, rm, proxy := newProxyFixture(t, time.Hour)
+	if rec := f.get(t, "/repository/pypi-proxy/packages/foo/"+rm.wheel.filename, "", "bob", "secret"); rec.Code != http.StatusOK {
+		t.Fatalf("wheel = %d", rec.Code)
+	}
+	ctx := coretest.AsUser(t.Context(), "bob")
+	for i := range core.MaxPageSize {
+		// "0.0.NNNN" sorts before "1.0": the cached 1.0 lands on page two.
+		c := &core.Component{Name: "foo", Version: fmt.Sprintf("0.0.%04d", i)}
+		if _, _, err := f.env.Components.Publish(ctx, proxy, core.PublishRequest{Component: c}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c, err := f.env.Components.GetComponent(t.Context(), proxy.ID, "", "foo", "1.0")
+	if err != nil || !f.env.Components.SetQuarantined(c.ID, true) {
+		t.Fatalf("component foo 1.0: %v", err)
+	}
+	p := decodePage(t, f.get(t, "/repository/pypi-proxy/simple/foo/", pipAccept, "bob", "secret"))
+	for _, fl := range p.Files {
+		if fl.Filename == rm.wheel.filename {
+			t.Fatalf("quarantined %s listed: %+v", fl.Filename, p.Files)
+		}
+	}
+	if len(p.Files) != 3 {
+		t.Errorf("files = %+v, want the 3 not quarantined", p.Files)
 	}
 }

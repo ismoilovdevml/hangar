@@ -47,6 +47,16 @@ func Versions(ctx context.Context, cs core.ComponentService, repoID string, ns *
 	return out, err
 }
 
+// Named returns the quarantined components named name (in namespace ns;
+// nil for any namespace) of repoID by id, from every page of the listing.
+func Named(ctx context.Context, cs core.ComponentService, repoID string, ns *string, name string) (map[string]*core.Component, error) {
+	out := map[string]*core.Component{}
+	err := each(ctx, cs, core.ComponentQuery{RepositoryID: repoID, Namespace: ns, Name: name}, func(c *core.Component) {
+		out[c.ID] = c
+	})
+	return out, err
+}
+
 // Components returns the quarantined components of repoID by id.
 func Components(ctx context.Context, cs core.ComponentService, repoID string) (map[string]*core.Component, error) {
 	out := map[string]*core.Component{}

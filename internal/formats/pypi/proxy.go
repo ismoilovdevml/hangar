@@ -19,6 +19,7 @@ import (
 	"golang.org/x/net/html"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/quarantine"
 	"github.com/ismoilovdevml/hangar/internal/proxy"
 	"github.com/ismoilovdevml/hangar/internal/routing"
 )
@@ -89,17 +90,13 @@ func (h *handler) proxyProject(ctx context.Context, repo *core.Repository, name 
 }
 
 // quarantinedFiles returns the cached files of name that belong to a
-// quarantined component.
+// quarantined component. Every page of components is read: a project with
+// more cached versions than one page holds would otherwise list the
+// quarantined ones past the first page.
 func (h *handler) quarantinedFiles(ctx context.Context, repo *core.Repository, name string) (map[string]bool, error) {
-	page, err := h.deps.Components.ListComponents(ctx, core.ComponentQuery{RepositoryID: repo.ID, Name: name, Limit: core.MaxPageSize})
+	ids, err := quarantine.Named(ctx, h.deps.Components, repo.ID, nil, name)
 	if err != nil {
 		return nil, err
-	}
-	ids := map[string]bool{}
-	for _, c := range page.Items {
-		if c.Quarantined {
-			ids[c.ID] = true
-		}
 	}
 	if len(ids) == 0 {
 		return nil, nil
@@ -110,7 +107,7 @@ func (h *handler) quarantinedFiles(ctx context.Context, repo *core.Repository, n
 	}
 	out := map[string]bool{}
 	for _, a := range assets {
-		if ids[a.ComponentID] {
+		if ids[a.ComponentID] != nil {
 			out[strings.TrimPrefix(a.Path, "packages/"+name+"/")] = true
 		}
 	}
