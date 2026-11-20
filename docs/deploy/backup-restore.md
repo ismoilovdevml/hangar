@@ -32,7 +32,7 @@ Configuration is by environment variables:
 |---|---|
 | `HANGAR_DATABASE_URL` | Run `pg_dump`/`pg_restore` on this host against this URL (client 16+). |
 | `HANGAR_COMPOSE_FILE` | Instead: run them inside the compose stack's `postgres` service (`POSTGRES_USER`, `POSTGRES_DB`). |
-| `BLOB_SOURCE` | `fs:/var/lib/hangar/blobs` (rsync), `s3://bucket/prefix` (aws CLI; `S3_ENDPOINT_URL` for MinIO and others), `compose-minio` (the stack's MinIO via `mc`; `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `HANGAR_STORAGE_S3_BUCKET`), or `none`. |
+| `BLOB_SOURCE` | `fs:/var/lib/hangar/blobs` (rsync), `s3://bucket/prefix` (aws CLI; `S3_ENDPOINT_URL` for MinIO and others), `compose-minio` (the development stack's MinIO, `deploy/docker-compose.yml`, via `mc`; `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `HANGAR_STORAGE_S3_BUCKET`), or `none`. |
 | `BACKUP_DIR` | Parent directory (default `./backups`). |
 | `BACKUP_KEEP` | Keep this many backups, delete older ones (default 0: keep all). |
 | `HANGAR_URL` | Optional: records the running version in `MANIFEST`. |

@@ -6,10 +6,10 @@
 #   BLOB_SOURCE=fs:/var/lib/hangar/blobs \
 #     deploy/scripts/backup.sh
 #
-# Compose stack (run from the repository root, with the stack's .env loaded):
+# Compose stack installed by install.sh (data directory /srv/hangar; blobs
+# on the filesystem):
 #
-#   set -a; . deploy/compose/.env; set +a
-#   HANGAR_COMPOSE_FILE=deploy/compose/compose.yaml BLOB_SOURCE=compose-minio \
+#   HANGAR_COMPOSE_FILE=/srv/hangar/compose.yaml BLOB_SOURCE=fs:/srv/hangar/blobs \
 #   BACKUP_DIR=/srv/backups/hangar deploy/scripts/backup.sh
 #
 # Writes BACKUP_DIR/hangar-<UTC timestamp>/ with db.dump (pg_dump custom
