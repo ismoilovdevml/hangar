@@ -419,7 +419,13 @@ export function secretStored(f: RepoForm, stored: UpstreamAuth | null | undefine
 /** Client-side checks that mirror the server's; the server stays the authority. */
 export function validateRepoForm(
   f: RepoForm,
-  ctx: { memberTypes?: ReadonlyMap<string, RepositoryType>; storedAuth?: UpstreamAuth | null; storedRemoteUrl?: string } = {},
+  ctx: {
+    memberTypes?: ReadonlyMap<string, RepositoryType>;
+    storedAuth?: UpstreamAuth | null;
+    storedRemoteUrl?: string;
+    /** The user cannot list blob stores: no store means the server's default one. */
+    defaultBlobStore?: boolean;
+  } = {},
 ): RepoFormErrors {
   const keepSecret = secretStored(f, ctx.storedAuth, ctx.storedRemoteUrl);
   // A stored secret is not sent to a new host: it must be entered again.
@@ -431,7 +437,7 @@ export function validateRepoForm(
   else if (!NAME_PATTERN.test(f.name)) {
     e.name = 'Use 2–63 lowercase letters, digits and dashes, starting with a letter or digit.';
   }
-  if (f.type && f.type !== 'group' && !f.blobStore) e.blobStore = 'Choose where the bytes are kept.';
+  if (f.type && f.type !== 'group' && !f.blobStore && !ctx.defaultBlobStore) e.blobStore = 'Choose where the bytes are kept.';
 
   if (f.type === 'proxy') {
     if (!f.remoteUrl.trim()) e.remoteUrl = 'Enter the address of the registry to cache.';
@@ -532,7 +538,8 @@ export function toRepositoryInput(f: RepoForm): RepositoryInput {
     },
   };
   if (f.description.trim()) input.description = f.description.trim();
-  if (type !== 'group') input.blob_store = f.blobStore;
+  // Without a store the server uses its default one (hosted and proxy repositories).
+  if (type !== 'group' && f.blobStore) input.blob_store = f.blobStore;
   if (f.cleanupPolicy) input.config.cleanup_policies = [f.cleanupPolicy];
 
   if (type === 'hosted') input.config.hosted = { write_policy: f.writePolicy };

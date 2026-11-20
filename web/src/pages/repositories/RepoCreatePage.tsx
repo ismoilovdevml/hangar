@@ -11,7 +11,8 @@ import { FormatIcon, FormatName } from '../../components/FormatIcon';
 import { Select } from '../../components/Select';
 import { UnsavedChangesDialog } from '../../components/UnsavedChangesDialog';
 import { FORMAT_META } from '../../lib/format';
-import { isForbidden } from '../../lib/gates';
+import { GATES, isForbidden } from '../../lib/gates';
+import { useGate } from '../../api/permissions';
 import { useUnsavedChangesGuard } from '../../lib/unsavedChanges';
 import {
   ALL_FORMATS,
@@ -60,7 +61,11 @@ export function RepoCreatePage() {
   const [submitted, setSubmitted] = useState(false);
 
   const formats = useFormats();
-  const stores = useBlobStores();
+  // Listing stores needs system:blobstores:read, which a scoped repository admin (repo:npm-*:admin) lacks;
+  // the server then puts the repository on its default store, so the form says so instead of blocking.
+  const canListStores = useGate(GATES.blobStores);
+  const stores = useBlobStores(canListStores);
+  const defaultStore = !canListStores || (stores.isError && isForbidden(stores.error));
   const repos = useRepositoriesByFormat(form.type === 'group' ? form.format : undefined);
   const create = useCreateRepository();
   const guard = useUnsavedChangesGuard(nameTouched || JSON.stringify(form) !== JSON.stringify(initial));
@@ -79,11 +84,11 @@ export function RepoCreatePage() {
   const effective: RepoForm = {
     ...form,
     name: nameTouched || !form.format || !form.type ? form.name : `${form.format}-${form.type}`,
-    blobStore: form.blobStore || writableStores[0]?.name || '',
+    blobStore: defaultStore ? '' : form.blobStore || writableStores[0]?.name || '',
   };
 
   const memberTypes = useMemo(() => new Map((repos.data ?? []).map((r) => [r.name, r.type] as const)), [repos.data]);
-  const errors = validateRepoForm(effective, { memberTypes });
+  const errors = validateRepoForm(effective, { memberTypes, defaultBlobStore: defaultStore });
   const visible: RepoFormErrors = Object.fromEntries(
     Object.entries(errors).filter(([k]) => submitted || blurred[k as RepoFormField]),
   );
@@ -162,7 +167,15 @@ export function RepoCreatePage() {
         <FieldError field="name" errors={shownErrors} />
       </div>
 
-      {form.type !== 'group' && (
+      {form.type !== 'group' && defaultStore && (
+        <div className="field">
+          <span className="field__label">Blob store</span>
+          <span className="readonly-value">The server’s default store</span>
+          <span className="field__hint">Choosing another one needs the system:blobstores:read privilege.</span>
+          <FieldError field="blobStore" errors={shownErrors} />
+        </div>
+      )}
+      {form.type !== 'group' && !defaultStore && (
         <div className="field">
           <label htmlFor="repo-blobStore" className="field__label">Blob store</label>
           <Select
@@ -174,13 +187,13 @@ export function RepoCreatePage() {
             options={(stores.data?.items ?? []).map((b) => ({ value: b.name, label: blobStoreOption(b), disabled: !blobStoreWritable(b) }))}
             {...invalidProps('blobStore', shownErrors, 'repo-blob-hint')}
           />
-          {stores.isError && !isForbidden(stores.error) ? (
+          {stores.isError ? (
             <span id="repo-blob-hint">
               <PickerLoadError what="blob stores" onRetry={() => void stores.refetch()} />
             </span>
           ) : (
             <span id="repo-blob-hint" className="field__hint">
-              {stores.isError ? 'Listing blob stores needs the system:blobstores:read privilege.' : 'Where the bytes are kept'}
+              Where the bytes are kept
             </span>
           )}
           <FieldError field="blobStore" errors={shownErrors} />

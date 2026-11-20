@@ -314,6 +314,8 @@ export const handlers = [
     if (denied) return denied;
     await delay(100);
     const body = (await request.json()) as RepositoryInput;
+    // As the server does: hosted and proxy repositories without a store get the default one (the store built from the configuration).
+    if (body.type !== 'group' && !body.blob_store) body.blob_store = data.blobStores.find((b) => b.from_config)?.name ?? 'default';
     const invalid = validateRepository(body);
     if (invalid) return error(400, { code: 'invalid_argument', message: invalid });
     if (state.repositories.some((r) => r.name === body.name)) {

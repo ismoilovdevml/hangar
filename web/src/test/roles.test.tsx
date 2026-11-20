@@ -122,6 +122,29 @@ describe('repository admin of npm-* (repo:npm-*:admin)', () => {
     expect(await screen.findByText('Choosing a policy needs the system:cleanup:read privilege.')).toBeInTheDocument();
     expect(screen.queryByText(/not available on this server/)).not.toBeInTheDocument();
   });
+
+  it('creates a repository on the default blob store without listing the stores', async () => {
+    signInWith(NPM_ADMIN);
+    const asked = recordRequests();
+    const posts: Record<string, unknown>[] = [];
+    server.events.on('request:start', async ({ request }) => {
+      if (request.method === 'POST' && new URL(request.url).pathname === '/api/v1/repositories') posts.push((await request.clone().json()) as Record<string, unknown>);
+    });
+    const user = userEvent.setup();
+    const { history } = renderApp('/repositories/new?format=npm&type=hosted');
+    const name = await screen.findByLabelText('Name');
+    await user.clear(name);
+    await user.type(name, 'npm-team');
+    // No store list to pick from: the server's default store, said in words, and nothing to fix.
+    expect(screen.getByText('The server’s default store')).toBeInTheDocument();
+    expect(screen.getByText('Choosing another one needs the system:blobstores:read privilege.')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Blob store' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Create repository' }));
+    await waitFor(() => expect(history.location.pathname).toBe('/repositories/npm-team/settings'));
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).not.toHaveProperty('blob_store');
+    expect(asked).not.toContain('/blob-stores');
+  });
 });
 
 describe('operator (tasks and blob stores, read only)', () => {
