@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/auth"
@@ -74,6 +77,25 @@ func (r *TestResult) finish(okMsg string) {
 
 const testTimeout = 20 * time.Second
 
+// dialControl adapts an address policy to a net.Dialer Control hook; nil
+// for no policy.
+func dialControl(guard func(netip.Addr) error) func(network, address string, c syscall.RawConn) error {
+	if guard == nil {
+		return nil
+	}
+	return func(_, address string, _ syscall.RawConn) error {
+		host, _, err := net.SplitHostPort(address)
+		if err != nil {
+			return err
+		}
+		a, err := netip.ParseAddr(host)
+		if err != nil {
+			return fmt.Errorf("dial %s: not an IP address", address)
+		}
+		return guard(a.WithZone(""))
+	}
+}
+
 // ---------------------------------------------------------------- OIDC
 
 // OIDCTestInput is the body of POST /identity-providers/oidc:test. Without
@@ -95,7 +117,7 @@ func (s *Service) TestOIDC(ctx context.Context, in OIDCTestInput) (*TestResult, 
 	}
 	ctx, cancel := context.WithTimeout(ctx, testTimeout)
 	defer cancel()
-	res := probeOIDC(ctx, cfg)
+	res := probeOIDC(ctx, cfg, s.opts.ServiceDialGuard)
 	s.record(ctx, core.AuditEvent{Action: AuditOIDCTest, Target: "settings:oidc", Details: map[string]any{"ok": res.OK, "issuer": cfg.IssuerURL}})
 	return res, nil
 }
@@ -112,7 +134,8 @@ func (s *Service) oidcUnderTest(ctx context.Context, in *OIDCInput) (auth.OIDCCo
 	if _, _, err := s.loadDoc(ctx, s.pool, keyOIDC, &old, false); err != nil {
 		return auth.OIDCConfig{}, err
 	}
-	secret, _, fe, err := s.mergeSecret(old.ClientSecret, in.ClientSecret, in.ClearClientSecret, "client_secret")
+	secret, _, fe, err := s.mergeSecret(old.ClientSecret, in.ClientSecret, in.ClearClientSecret, "client_secret",
+		movedTo("issuer_url", old.IssuerURL, in.IssuerURL))
 	if err != nil {
 		return auth.OIDCConfig{}, err
 	}
@@ -136,11 +159,21 @@ type discoveryDoc struct {
 	EndSession    string `json:"end_session_endpoint"`
 }
 
-func probeOIDC(ctx context.Context, cfg auth.OIDCConfig) *TestResult {
+func probeOIDC(ctx context.Context, cfg auth.OIDCConfig, guard func(netip.Addr) error) *TestResult {
 	res := &TestResult{Steps: []TestStep{}}
 	started := time.Now()
 	defer func() { res.LatencyMS = time.Since(started).Milliseconds() }()
 	client, err := oidc.NewHTTPClient(cfg)
+	if err == nil && guard != nil {
+		// The discovery document names the other URLs fetched (keys, token
+		// endpoint): every connection is checked, not just the issuer's.
+		tr, ok := client.Transport.(*http.Transport)
+		if !ok {
+			err = fmt.Errorf("oidc client transport %T cannot be guarded", client.Transport)
+		} else {
+			tr.DialContext = (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second, Control: dialControl(guard)}).DialContext
+		}
+	}
 	if err != nil {
 		res.step("discovery", StepFailed, err.Error(), started)
 		res.finish("")
@@ -299,7 +332,7 @@ func (s *Service) TestLDAP(ctx context.Context, in LDAPTestInput) (*TestResult, 
 	}
 	res := &TestResult{Steps: []TestStep{}}
 	started := time.Now()
-	dir, err := ldap.New(cfg, ldap.Options{Logger: s.log})
+	dir, err := ldap.New(cfg, ldap.Options{Logger: s.log, DialControl: dialControl(s.opts.ServiceDialGuard)})
 	if err != nil {
 		res.step(ldap.StageConnect, StepFailed, err.Error(), started)
 		res.finish("")
@@ -353,7 +386,8 @@ func (s *Service) ldapUnderTest(ctx context.Context, in *LDAPInput) (auth.LDAPCo
 	if _, _, err := s.loadDoc(ctx, s.pool, keyLDAP, &old, false); err != nil {
 		return auth.LDAPConfig{}, err
 	}
-	password, _, fe, err := s.mergeSecret(old.BindPassword, in.BindPassword, in.ClearBindPassword, "bind_password")
+	password, _, fe, err := s.mergeSecret(old.BindPassword, in.BindPassword, in.ClearBindPassword, "bind_password",
+		movedTo("url", old.URL, in.URL))
 	if err != nil {
 		return auth.LDAPConfig{}, err
 	}
@@ -417,11 +451,11 @@ func (s *Service) proxyUnderTest(ctx context.Context, name string, in *ProxyInpu
 	}
 	in.normalize()
 	in.Name = name
-	old := ""
+	old, moved := "", ""
 	if stored != nil {
-		old = stored.password
+		old, moved = stored.password, proxyMoved(stored.ProxySettings, in.ProxySettings)
 	}
-	password, _, fe, err := s.mergeSecret(old, in.Password, in.ClearPassword, "password")
+	password, _, fe, err := s.mergeSecret(old, in.Password, in.ClearPassword, "password", moved)
 	if err != nil {
 		return httpclient.Proxy{}, err
 	}

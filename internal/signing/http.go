@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/secrets"
 )
 
 const maxImportBody = 1 << 20
@@ -36,6 +37,9 @@ func (s *Service) RegisterRoutes(r chi.Router) {
 		}
 		if in.PrivateKey == "" {
 			return nil, fmt.Errorf("private_key is required: %w", core.ErrInvalid)
+		}
+		if err := secrets.CheckInput("private_key", in.PrivateKey); err != nil {
+			return nil, err
 		}
 		return s.Import(r.Context(), repo, []byte(in.PrivateKey), in.Passphrase)
 	}))

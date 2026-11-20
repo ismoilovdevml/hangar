@@ -76,9 +76,11 @@ type Options struct {
 	// net.Dialer.Control). An error aborts the connection. This closes the DNS
 	// rebinding gap of URL checks: a name that resolved to a public address
 	// when checked cannot resolve to an internal one when dialled.
-	// Connections to an outbound proxy are not checked (the proxy is
-	// configured by the operator and may well be internal); the proxy
-	// enforces its own policy for the targets it reaches.
+	// Connections to the operator's outbound proxies (Outbound.Proxies and
+	// the environment proxy) are not checked: they may well be internal, and
+	// the proxy enforces its own policy for the targets it reaches. A proxy
+	// a repository sets for itself (UpstreamHTTP.Proxy) is checked like any
+	// other address.
 	DialGuard func(netip.Addr) error
 	// DialAllowHost, when set, exempts host names from DialGuard (allow-listed
 	// internal mirrors, which resolve to internal addresses by design).
@@ -146,8 +148,10 @@ type Factory struct {
 	envProxy   func(*url.URL) (*url.URL, error) // nil = no environment proxy
 	clients    map[string]*http.Client
 	transports map[string]*http.Transport
-	// proxyAddrs are the host:port of every configured outbound proxy;
-	// connections to them skip DialGuard.
+	// proxyAddrs are the host:port of the operator's outbound proxies
+	// (Outbound.Proxies and the environment proxy); connections to them skip
+	// DialGuard. Per-repository proxies are never added. Replaced as a whole
+	// by SetOutbound, never modified in place.
 	proxyAddrs map[string]bool
 }
 
@@ -392,7 +396,11 @@ func (f *Factory) route(cfg core.UpstreamHTTP, remoteHost string) (func(*http.Re
 		if err != nil {
 			return nil, nil, err
 		}
-		addProxyAddr(f.proxyAddrs, pu)
+		// A repository's own proxy is chosen by whoever administers the
+		// repository, not by the operator: connections to it stay under
+		// DialGuard (it is not added to proxyAddrs), or a repository could
+		// name an internal service or the cloud metadata endpoint as its
+		// "proxy" and reach it.
 		return http.ProxyURL(pu), nil, nil
 	}
 	remote := strings.ToLower(remoteHost)
@@ -554,7 +562,7 @@ func (f *Factory) transport(cfg core.UpstreamHTTP, remoteHost string) (*http.Tra
 }
 
 // dialContext returns the transport's dial function: plain for connections to
-// a configured proxy, guarded by DialGuard for everything else. With
+// an operator-configured proxy, guarded by DialGuard for everything else. With
 // Options.DNS, host names are resolved through the cache.
 func (f *Factory) dialContext(timeout time.Duration) func(ctx context.Context, network, addr string) (net.Conn, error) {
 	plain := &net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second}

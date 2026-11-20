@@ -41,11 +41,14 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -109,6 +112,23 @@ type Config struct {
 
 	// uploadLimits overrides the client's S3 limits (tests only).
 	uploadLimits *minio.UploadLimits
+	// limits are set by OpenLimited.
+	limits Limits
+}
+
+// Limits restrict a store whose settings come from the API rather than from
+// the server configuration (see OpenLimited).
+type Limits struct {
+	// StaticCredentialsOnly refuses a configuration without access_key_id
+	// and secret_access_key instead of using the ambient credential chain:
+	// the server's own cloud identity is not used to sign requests to an
+	// endpoint someone chose through the API.
+	StaticCredentialsOnly bool
+	// DialGuard, when set, is called with the IP address of every connection
+	// to the endpoint, after DNS resolution and right before connecting; an
+	// error aborts the connection. The ambient credential chain's own
+	// requests (instance metadata, STS) do not go through it.
+	DialGuard func(netip.Addr) error
 }
 
 // Store is an S3 blob store. It is safe for concurrent use.
@@ -133,6 +153,12 @@ var _ core.BlobStore = (*Store)(nil)
 // Unknown keys are rejected so typos do not silently fall back to defaults.
 // Open does not contact the endpoint; call Ping for that.
 func Open(ctx context.Context, cfg map[string]any) (core.BlobStore, error) {
+	return OpenLimited(ctx, cfg, Limits{})
+}
+
+// OpenLimited is Open with limits, for stores whose settings come from the
+// API (blob stores administrators add, and their connection test).
+func OpenLimited(ctx context.Context, cfg map[string]any, limits Limits) (core.BlobStore, error) {
 	raw, err := json.Marshal(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("s3 blob store config: %w: %w", err, core.ErrInvalid)
@@ -143,6 +169,7 @@ func Open(ctx context.Context, cfg map[string]any) (core.BlobStore, error) {
 	if err := dec.Decode(&c); err != nil {
 		return nil, fmt.Errorf("s3 blob store config: %w: %w", err, core.ErrInvalid)
 	}
+	c.limits = limits
 	return New(ctx, c)
 }
 
@@ -167,6 +194,10 @@ func New(_ context.Context, cfg Config) (*Store, error) {
 	if (cfg.AccessKeyID == "") != (cfg.SecretAccessKey == "") {
 		return nil, fmt.Errorf("s3 blob store: access_key_id and secret_access_key must be set together: %w", core.ErrInvalid)
 	}
+	if cfg.AccessKeyID == "" && cfg.limits.StaticCredentialsOnly {
+		return nil, fmt.Errorf("s3 blob store: access_key_id and secret_access_key are required; the server's ambient "+
+			"credentials are not used for this store: %w", core.ErrInvalid)
+	}
 	tr, err := transport(secure, cfg.CAFile)
 	if err != nil {
 		return nil, err
@@ -179,8 +210,24 @@ func New(_ context.Context, cfg Config) (*Store, error) {
 			&credentials.EnvAWS{},
 			&credentials.EnvMinio{},
 			&credentials.FileAWSCredentials{},
-			&credentials.IAM{Client: &http.Client{Transport: tr}},
+			// Its own transport: the instance metadata endpoint is exactly
+			// what the endpoint's DialGuard refuses.
+			&credentials.IAM{Client: &http.Client{Transport: tr.Clone()}},
 		})
+	}
+	if guard := cfg.limits.DialGuard; guard != nil {
+		tr.DialContext = (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second,
+			Control: func(_, address string, _ syscall.RawConn) error {
+				host, _, err := net.SplitHostPort(address)
+				if err != nil {
+					return err
+				}
+				a, err := netip.ParseAddr(host)
+				if err != nil {
+					return fmt.Errorf("dial %s: not an IP address", address)
+				}
+				return guard(a.WithZone(""))
+			}}).DialContext
 	}
 	region := cfg.Region
 	if region == "" {

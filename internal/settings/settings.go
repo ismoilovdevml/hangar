@@ -112,6 +112,10 @@ type Options struct {
 	UserAgent     string
 	DialGuard     func(netip.Addr) error
 	DialAllowHost func(host string) bool
+	// ServiceDialGuard, when set, checks every address the OIDC and LDAP
+	// connection tests dial (proxy.Guard.CheckServiceAddr): sign-in providers
+	// may be internal, the cloud metadata endpoint may not.
+	ServiceDialGuard func(netip.Addr) error
 	// PollInterval is how often the revision is checked (0 = default,
 	// negative = never).
 	PollInterval time.Duration

@@ -427,6 +427,10 @@ func (a *API) createRepository(w http.ResponseWriter, r *http.Request) {
 		a.writeErr(w, r, err)
 		return
 	}
+	if err := rejectSealedSecrets(in.Config); err != nil {
+		a.writeErr(w, r, err)
+		return
+	}
 	if len(a.Formats) > 0 && !slices.Contains(a.Formats, in.Format) {
 		a.writeErr(w, r, fmt.Errorf("format %q is not supported by this server: %w", in.Format, core.ErrInvalid))
 		return
@@ -461,6 +465,10 @@ func (a *API) updateRepository(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Name = name
 	if err := a.authorizeRepoAdmin(ctx, name, "repository.update"); err != nil {
+		a.writeErr(w, r, err)
+		return
+	}
+	if err := rejectSealedSecrets(in.Config); err != nil {
 		a.writeErr(w, r, err)
 		return
 	}

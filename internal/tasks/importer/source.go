@@ -277,7 +277,17 @@ func (s *source) answerChallenge(ctx context.Context, resp *http.Response, scope
 	}
 	req.Header.Set("User-Agent", s.agent)
 	// The token service of a registry is often another host: it gets the
-	// registry credentials as the protocol requires.
+	// registry credentials as the protocol requires, but only when the
+	// challenge came from the source itself (not from a host it redirected
+	// to) and only over TLS, unless the token service is the source's own
+	// origin. Otherwise anyone who can answer a request with a 401 (a
+	// redirect target, or a man in the middle of plain http) could name
+	// itself the token service and collect the credentials.
+	if s.creds.Username != "" || s.creds.Token != "" {
+		if err := s.realmMayGetCredentials(resp, realm); err != nil {
+			return false, err
+		}
+	}
 	switch {
 	case s.creds.Username != "":
 		req.SetBasicAuth(s.creds.Username, s.creds.Password)
@@ -310,6 +320,20 @@ func (s *source) answerChallenge(ctx context.Context, resp *http.Response, scope
 	s.tokens[scope] = tok
 	s.mu.Unlock()
 	return true, nil
+}
+
+// realmMayGetCredentials decides whether the source's credentials may be
+// sent to the token service realm named by the challenge in resp.
+func (s *source) realmMayGetCredentials(resp *http.Response, realm *url.URL) error {
+	if resp.Request == nil || resp.Request.URL == nil || !s.sameHost(resp.Request.URL) {
+		return fmt.Errorf("a host other than the source asked for a token from %s; the source credentials are only sent "+
+			"for challenges of %s: %w", core.RedactURL(realm.Host), s.base.Host, core.ErrUnauthenticated)
+	}
+	if realm.Scheme != "https" && !s.sameHost(realm) {
+		return fmt.Errorf("the source's token service %s is plain http on another host; the source credentials are only sent "+
+			"to an https token service or to the source itself: %w", core.RedactURL(realm.Scheme+"://"+realm.Host), core.ErrUnauthenticated)
+	}
+	return nil
 }
 
 // parseChallenge parses `Bearer realm="...",service="...",scope="..."`.

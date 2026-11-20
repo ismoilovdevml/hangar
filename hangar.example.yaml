@@ -120,6 +120,11 @@ storage:
     # Abandoned temporary uploads older than this are removed; negative
     # disables temp cleanup.
     temp_max_age: 24h
+  # Let S3 blob stores added, changed or tested through the API / UI without
+  # access keys use this server's ambient AWS credentials (environment,
+  # IRSA / EKS Pod Identity, instance profile). Off: they need static keys.
+  # The default store above always may.
+  allow_ambient_credentials: false
 
 nats:
   # Single node: run NATS JetStream inside the hangar process. Several nodes:

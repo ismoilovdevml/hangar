@@ -11,6 +11,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/secrets"
 )
 
 // authPresence is how an update body carries config.proxy.auth. A missing
@@ -69,6 +70,29 @@ func yamlAuthPresence(b []byte) authPresence {
 	default:
 		return authSent
 	}
+}
+
+// rejectSealedSecrets refuses a request body that carries a secret in sealed
+// form (secrets.ErrSealedInput). Sealed values are only ever produced by the
+// server and never returned by the API; the only way to keep a stored secret
+// is to leave it out, which keepSecrets handles.
+func rejectSealedSecrets(c core.RepoConfig) error {
+	p := c.Proxy
+	if p == nil {
+		return nil
+	}
+	if a := p.Auth; a != nil {
+		if err := secrets.CheckInput("config.proxy.auth.password", a.Password); err != nil {
+			return err
+		}
+		if err := secrets.CheckInput("config.proxy.auth.token", a.Token); err != nil {
+			return err
+		}
+	}
+	if err := secrets.CheckURLInput("config.proxy.remote_url", p.RemoteURL); err != nil {
+		return err
+	}
+	return secrets.CheckURLInput("config.proxy.http.proxy", p.HTTP.Proxy)
 }
 
 // keepSecrets carries the write-only secrets of old over to next, which an

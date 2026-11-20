@@ -63,6 +63,31 @@ var (
 // IsSealed reports whether s has the sealed form (it may still fail to open).
 func IsSealed(s string) bool { return strings.HasPrefix(s, Prefix) }
 
+// ErrSealedInput is returned for a secret submitted in sealed form. Every
+// sealed value opens with the same keyring wherever it was stored, so a
+// ciphertext copied from a backup or another row and submitted as "my
+// password" would be opened by Hangar and sent, in plaintext, to whatever
+// host the submitter chose. A stored secret is kept by leaving the field
+// out (or empty), never by sending its ciphertext back. It wraps
+// core.ErrInvalid (400).
+var ErrSealedInput = fmt.Errorf("a sealed value (%s...) cannot be submitted as a secret; enter the secret itself, "+
+	"or leave the field empty to keep the stored one: %w", Prefix, core.ErrInvalid)
+
+// CheckInput refuses a secret submitted through the API in sealed form (see
+// ErrSealedInput). field names the input for the message.
+func CheckInput(field, v string) error {
+	if IsSealed(strings.TrimSpace(v)) {
+		return fmt.Errorf("%s: %w", field, ErrSealedInput)
+	}
+	return nil
+}
+
+// CheckURLInput is CheckInput for the password in a URL's user information.
+func CheckURLInput(field, raw string) error {
+	_, err := mapURLPassword(raw, func(pw string) (string, error) { return pw, CheckInput(field+" password", pw) })
+	return err
+}
+
 // KeyIDOf returns the id of the key that sealed s.
 func KeyIDOf(s string) (string, bool) {
 	if !IsSealed(s) {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/netip"
 
 	"github.com/ismoilovdevml/hangar/internal/api"
 	"github.com/ismoilovdevml/hangar/internal/core"
@@ -11,8 +12,14 @@ import (
 )
 
 // blobStoreTester runs the connection test of POST /blob-stores:test with
-// the S3 driver, opening sealed secrets with the keyring.
-type blobStoreTester struct{ keyring *secrets.Keyring }
+// the S3 driver, opening sealed secrets with the keyring. The settings come
+// from the request, so every connection goes through dialGuard; whether the
+// ambient credentials may be used was decided by the catalog
+// (BlobStoreTestConfig, storage.allow_ambient_credentials).
+type blobStoreTester struct {
+	keyring   *secrets.Keyring
+	dialGuard func(netip.Addr) error
+}
 
 func (t blobStoreTester) TestBlobStore(ctx context.Context, kind string, cfg map[string]any) ([]api.BlobStoreCheck, error) {
 	if kind != s3.Kind {
@@ -27,7 +34,7 @@ func (t blobStoreTester) TestBlobStore(ctx context.Context, kind string, cfg map
 	} else if _, sealed := cfg["secret_access_key_sealed"]; sealed {
 		return nil, fmt.Errorf("the stored s3 secret cannot be opened without security.secret_key: %w", core.ErrNotImplemented)
 	}
-	st, err := s3.Open(ctx, cfg)
+	st, err := s3.OpenLimited(ctx, cfg, s3.Limits{DialGuard: t.dialGuard})
 	if err != nil {
 		return nil, err
 	}

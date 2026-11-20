@@ -91,6 +91,31 @@ func (g *Guard) ValidateRemote(ctx context.Context, remoteURL string, proxied bo
 	return nil
 }
 
+// ValidateProxy checks the outbound proxy URL a proxy repository sets for
+// itself (config.proxy.http.proxy) with the policy of remote URLs: the proxy
+// host must not be an internal address unless it is allow-listed. Only the
+// operator's proxies (http.proxy, named proxies, the environment) may be
+// internal without that. Values that are not proxy URLs ("", "inherit",
+// "none") pass. Errors wrap core.ErrInvalid so the API answers 400.
+func (g *Guard) ValidateProxy(ctx context.Context, proxyURL string) error {
+	switch proxyURL {
+	case "", core.ProxyInherit, core.ProxyNone:
+		return nil
+	}
+	u, err := url.Parse(proxyURL)
+	if err != nil {
+		return fmt.Errorf("proxy url: %w", core.ErrInvalid)
+	}
+	// The scheme (http, https, socks5) is checked by core.UpstreamHTTP; only
+	// the address matters here, so check it as if it were an http URL.
+	// Resolution failures are not a policy violation; every connection to the
+	// proxy is checked again when it is dialled.
+	if err := g.Check(ctx, &url.URL{Scheme: "http", Host: u.Host}, false); errors.Is(err, ErrBlocked) {
+		return fmt.Errorf("config.proxy.http.proxy %s: %w: %w", core.RedactURL(proxyURL), err, core.ErrInvalid)
+	}
+	return nil
+}
+
 // Check verifies that u may be requested. It returns an error wrapping
 // ErrBlocked for a policy violation, or a resolution error when the host
 // cannot be resolved and the request would not go through a proxy.
@@ -139,6 +164,52 @@ func (g *Guard) CheckAddr(a netip.Addr) error {
 		return fmt.Errorf("address %s: %w", a, ErrBlocked)
 	}
 	return nil
+}
+
+// CheckServiceAddr is the dial-time policy for services an administrator
+// points Hangar at (sign-in providers, blob stores added through the API).
+// These legitimately live on internal networks, so private and loopback
+// addresses are allowed; what is refused are addresses that are never such
+// a service but hand out the host's own credentials: link-local addresses
+// (the 169.254.169.254 cloud metadata endpoint), the AWS IPv6 metadata
+// endpoint, the Alibaba Cloud metadata endpoint, and unspecified, multicast
+// and broadcast addresses (also in their NAT64 and 6to4 forms). Allow-listed
+// addresses pass.
+func (g *Guard) CheckServiceAddr(a netip.Addr) error {
+	a = a.Unmap()
+	for _, p := range g.allowNets {
+		if p.Contains(a) {
+			return nil
+		}
+	}
+	if metadataAddr(a) {
+		return fmt.Errorf("address %s: %w", a, ErrBlocked)
+	}
+	return nil
+}
+
+var (
+	awsMetadataV6     = netip.MustParseAddr("fd00:ec2::254")
+	alibabaMetadataV4 = netip.MustParseAddr("100.100.100.200")
+	broadcastV4       = netip.MustParseAddr("255.255.255.255")
+)
+
+// metadataAddr reports whether a is an address CheckServiceAddr refuses.
+func metadataAddr(a netip.Addr) bool {
+	if !a.IsValid() || a.IsUnspecified() || a.IsLinkLocalUnicast() || a.IsLinkLocalMulticast() ||
+		a.IsInterfaceLocalMulticast() || a.IsMulticast() || a == awsMetadataV6 || a == alibabaMetadataV4 || a == broadcastV4 {
+		return true
+	}
+	if a.Is6() {
+		b := a.As16()
+		switch {
+		case nat64.Contains(a):
+			return metadataAddr(netip.AddrFrom4([4]byte{b[12], b[13], b[14], b[15]}))
+		case sixTo4.Contains(a):
+			return metadataAddr(netip.AddrFrom4([4]byte{b[2], b[3], b[4], b[5]}))
+		}
+	}
+	return false
 }
 
 // AllowsHost reports whether host (lower case, no trailing dot) is on the
