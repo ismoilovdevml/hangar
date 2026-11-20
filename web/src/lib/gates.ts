@@ -4,7 +4,7 @@
  * authorizes every call.
  */
 import { ApiRequestError, PASSWORD_CHANGE_REQUIRED } from '../api/client';
-import { allows, type PrivilegeAction } from './can';
+import { allows, type Action } from './privileges';
 
 /** A page or action, and the privilege an administrator would grant for it. */
 export interface Gate {
@@ -17,7 +17,7 @@ export interface Gate {
   instead?: { text: string; label: string; to: '/account' | '/settings/system' };
 }
 
-export function systemGate(area: string, action: PrivilegeAction, what: string): Gate {
+export function systemGate(area: string, action: Action, what: string): Gate {
   return { what, privilege: `system:${area}:${action}`, allowed: (p) => allows(p, 'system', area, action) };
 }
 

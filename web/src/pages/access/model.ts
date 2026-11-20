@@ -6,11 +6,9 @@ import { ApiRequestError } from '../../api/client';
 import type { Tone } from '../../lib/format';
 import type { Member, Token } from './api';
 import { errorSentence } from '../../lib/apiError';
+import { globMatch, parsePrivilege, type Action, type Privilege } from '../../lib/privileges';
 
 /* ---------------------------------------------------------------- privileges */
-
-export type Action = 'read' | 'write' | 'delete' | 'admin';
-export type Domain = 'repo' | 'system';
 
 export const ACTIONS: { id: Action; label: string; verb: string; hint: string }[] = [
   { id: 'read', label: 'Read', verb: 'read', hint: 'Download and browse packages' },
@@ -31,24 +29,6 @@ export const SYSTEM_AREAS: { id: string; label: string; hint: string }[] = [
   { id: 'cluster', label: 'Cluster', hint: 'Nodes and replication' },
   { id: 'settings', label: 'Settings', hint: 'Global settings' },
 ];
-
-export interface Privilege {
-  domain: Domain;
-  pattern: string;
-  action: Action | '*';
-}
-
-const ACTION_IDS = new Set<string>(['read', 'write', 'delete', 'admin', '*']);
-
-/** Parses "repo:npm-*:write", "system:users:admin" or "system:*"; null if malformed. */
-export function parsePrivilege(s: string): Privilege | null {
-  const parts = s.split(':');
-  if (parts.length === 2 && parts[0] === 'system' && parts[1] === '*') return { domain: 'system', pattern: '*', action: '*' };
-  if (parts.length !== 3) return null;
-  const [domain, pattern, action] = parts as [string, string, string];
-  if ((domain !== 'repo' && domain !== 'system') || !pattern || !ACTION_IDS.has(action)) return null;
-  return { domain, pattern, action: action as Action | '*' };
-}
 
 export function formatPrivilege(p: Privilege): string {
   if (p.domain === 'system' && p.pattern === '*' && p.action === '*') return 'system:*';
@@ -85,38 +65,6 @@ function actionLabel(a: Action | '*'): string {
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-/** Glob match with *, ? and [...] like Go's path.Match for names without "/". */
-export function globMatch(pattern: string, name: string): boolean {
-  let re = '^';
-  for (let i = 0; i < pattern.length; i++) {
-    const c = pattern[i]!;
-    if (c === '*') re += '[^/]*';
-    else if (c === '?') re += '[^/]';
-    else if (c === '[') {
-      const end = pattern.indexOf(']', i + 1);
-      if (end < 0) return false;
-      let cls = pattern.slice(i + 1, end);
-      if (cls.startsWith('^') || cls.startsWith('!')) cls = `^${cls.slice(1)}`;
-      re += `[${cls.replace(/\\/g, '\\\\')}]`;
-      i = end;
-    } else re += c.replace(/[.+^${}()|\\]/g, '\\$&');
-  }
-  try {
-    return new RegExp(`${re}$`).test(name);
-  } catch {
-    return false;
-  }
-}
-
-/** Whether privilege strings grant action on a resource (admin and * imply everything). */
-export function allows(privileges: readonly string[] | undefined, domain: Domain, name: string, action: Action): boolean {
-  return (privileges ?? []).some((s) => {
-    const p = parsePrivilege(s);
-    if (!p || p.domain !== domain || !globMatch(p.pattern, name)) return false;
-    return p.action === action || p.action === 'admin' || p.action === '*';
-  });
 }
 
 /* ---------------------------------------------------------------- token scopes */

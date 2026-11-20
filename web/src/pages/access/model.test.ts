@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  allows,
   groupSessions,
   customExpiry,
   describeAudit,
@@ -10,9 +9,7 @@ import {
   groupRepoAccess,
   nameList,
   expiryText,
-  globMatch,
   parseGoDuration,
-  parsePrivilege,
   repoPatternError,
   tokenState,
   uncoveredScopes,
@@ -23,28 +20,13 @@ const NOW = new Date('2026-11-04T10:00:00Z');
 const DAY = 86_400_000;
 
 describe('privileges', () => {
-  it('parses and describes the privilege forms', () => {
-    expect(parsePrivilege('repo:npm-*:write')).toEqual({ domain: 'repo', pattern: 'npm-*', action: 'write' });
-    expect(parsePrivilege('system:*')).toEqual({ domain: 'system', pattern: '*', action: '*' });
-    expect(parsePrivilege('repo:*:fly')).toBeNull();
-    expect(parsePrivilege('team:x:read')).toBeNull();
+  // Parsing and matching are lib/privileges (privileges.test.ts).
+  it('describes the privilege forms', () => {
     expect(describePrivilege('repo:npm-*:write')).toBe('Publish to repositories matching npm-*');
     expect(describePrivilege('repo:*:read')).toBe('Read every repository');
     expect(describePrivilege('repo:docker-prod:admin')).toBe('Administer repository docker-prod');
     expect(describePrivilege('system:audit:read')).toBe('Read access to Audit log');
     expect(describePrivilege('system:*')).toBe('Full control of every system area');
-  });
-
-  it('matches globs like the server and checks rights', () => {
-    expect(globMatch('npm-*', 'npm-internal')).toBe(true);
-    expect(globMatch('npm-*', 'docker-npm')).toBe(false);
-    expect(globMatch('npm-[ab]?', 'npm-a1')).toBe(true);
-    expect(globMatch('npm-[!a]*', 'npm-a1')).toBe(false);
-    expect(globMatch('a.b', 'axb')).toBe(false);
-    expect(allows(['repo:*:admin', 'system:*'], 'system', 'users', 'delete')).toBe(true);
-    expect(allows(['repo:*:read'], 'system', 'users', 'read')).toBe(false);
-    expect(allows(['system:users:read'], 'system', 'users', 'write')).toBe(false);
-    expect(allows(undefined, 'repo', 'x', 'read')).toBe(false);
   });
 
   it('validates repository patterns', () => {

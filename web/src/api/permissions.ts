@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { passes, type Gate } from '../lib/gates';
-import { can, canAdminRepo, type Action, type Domain } from '../lib/privileges';
+import { allows, canAdminRepo, type Action, type Domain } from '../lib/privileges';
 import { useSession } from './hooks';
 
 export interface Permissions {
@@ -18,7 +18,7 @@ export function usePermissions(): Permissions {
   return useMemo<Permissions>(() => {
     if (!privileges) return { can: () => true, canAdminRepo: () => true };
     return {
-      can: (action, domain, name) => can(privileges, action, domain, name),
+      can: (action, domain, name) => allows(privileges, domain, name, action),
       canAdminRepo: (repo) => canAdminRepo(privileges, repo),
     };
   }, [privileges]);

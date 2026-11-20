@@ -9,7 +9,6 @@ import { useNow } from '../../lib/useNow';
 import { useCreateToken, usePermissions, useRepositoryNames, useRevokeToken, useRotateToken, type Token, type TokenCreated } from './api';
 import {
   ACTIONS,
-  allows,
   customExpiry,
   describePrivilege,
   expiresInDays,
@@ -22,8 +21,8 @@ import {
   TOKEN_STATE_META,
   tokenState,
   uncoveredScopes,
-  type Action,
 } from './model';
+import { allows, type Action } from '../../lib/privileges';
 import {
   DEFAULT_DRAFT,
   draftScopes,

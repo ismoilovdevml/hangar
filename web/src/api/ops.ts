@@ -23,7 +23,7 @@ import type {
   TaskInput,
   LockfileResult,
 } from './opsTypes';
-import { allows, type PrivilegeAction } from '../lib/can';
+import { allows, type Action } from '../lib/privileges';
 import { applyTaskFinished, applyTaskProgress } from '../lib/tasks';
 import type { Page } from './types';
 import { errorSentence } from '../lib/apiError';
@@ -46,7 +46,7 @@ export function isMissingEndpoint(err: unknown): boolean {
 }
 
 /** Whether the signed-in user holds `system:<area>:<action>` (UI hints only; the server decides). */
-export function useCanSystem(area: string, action: PrivilegeAction): boolean {
+export function useCanSystem(area: string, action: Action): boolean {
   const session = useSession();
   return allows(session.data?.privileges, 'system', area, action);
 }

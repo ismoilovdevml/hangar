@@ -15,7 +15,7 @@ import {
   IconUsers,
 } from './components/icons';
 import { IconAudit, IconSettings } from './components/opsIcons';
-import { allows } from './lib/can';
+import { allows } from './lib/privileges';
 import { GATES, passes, type Gate } from './lib/gates';
 import { IconLogs, IconPulse } from './pages/system/icons';
 import { IconLock, IconRoute } from './pages/settings/icons';

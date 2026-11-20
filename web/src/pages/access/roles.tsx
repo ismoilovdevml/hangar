@@ -18,7 +18,8 @@ import {
   type Role,
   type RoleInput,
 } from './api';
-import { ACTIONS, describePrivilege, formatPrivilege, parsePrivilege, repoPatternError, ROLE_NAME_RE, roleTone, SYSTEM_AREAS, type Privilege } from './model';
+import { parsePrivilege, type Privilege } from '../../lib/privileges';
+import { ACTIONS, describePrivilege, formatPrivilege, repoPatternError, ROLE_NAME_RE, roleTone, SYSTEM_AREAS } from './model';
 import { ScopeList } from './tokens';
 import { ConfirmDialog, Dialog, Field, FormError } from './ui';
 

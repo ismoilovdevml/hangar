@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CleanupPolicy, TaskList, TaskRun } from '../api/opsTypes';
 import { auditExportUrl, auditQuery, flattenDetails, isoToLocalInput, localInputToIso, validateAuditSearch } from './audit';
-import { allows } from './can';
 import {
   draftFromPolicy,
   draftToInput,
@@ -38,19 +37,6 @@ const run = (over: Partial<TaskRun> = {}): TaskRun => ({
   created_at: '2026-11-04T10:00:00Z',
   started_at: '2026-11-04T10:00:00Z',
   ...over,
-});
-
-describe('allows', () => {
-  it('mirrors the server privilege rules', () => {
-    expect(allows(['system:*'], 'system', 'tasks', 'admin')).toBe(true);
-    expect(allows(['system:*'], 'repo', 'npm', 'read')).toBe(false);
-    expect(allows(['system:tasks:admin'], 'system', 'tasks', 'write')).toBe(true);
-    expect(allows(['system:tasks:read'], 'system', 'tasks', 'write')).toBe(false);
-    expect(allows(['repo:npm-*:write'], 'repo', 'npm-internal', 'write')).toBe(true);
-    expect(allows(['repo:npm-*:write'], 'repo', 'docker-prod', 'write')).toBe(false);
-    expect(allows(['repo:npm.x:read'], 'repo', 'npmax', 'read')).toBe(false);
-    expect(allows(undefined, 'system', 'audit', 'read')).toBe(false);
-  });
 });
 
 describe('cleanup draft', () => {

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from '@tanstack/react-router';
 import { useSession } from '../api/hooks';
 import { GATES, passes } from '../lib/gates';
-import { can } from '../lib/privileges';
+import { allows } from '../lib/privileges';
 import { canSee, NAV, SETTINGS_PAGES } from '../nav';
 import { CommandPaletteContext } from './commandPaletteContext';
 import { IconArrowRight, IconDatabase, IconKey, IconLogout, IconPackage, IconPlus, IconSearch, IconShield, IconUser } from './icons';
@@ -116,7 +116,7 @@ function CommandPaletteDialog({ onClose, onSignOut }: { onClose: () => void; onS
     return [...go, ...actions];
   }, [navigate, onSignOut, privileges]);
 
-  const entities = usePaletteEntities(query, { users: !privileges || can(privileges, 'read', 'system', 'users') });
+  const entities = usePaletteEntities(query, { users: !privileges || allows(privileges, 'system', 'users', 'read') });
 
   const found = useMemo<Command[]>(() => {
     if (!entities.query) return [];
