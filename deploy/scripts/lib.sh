@@ -12,8 +12,10 @@
 #   fs:/var/lib/hangar/blobs     filesystem store root (storage.fs.path); rsync
 #   s3://bucket[/prefix]         S3 store; aws CLI (AWS_* credentials,
 #                                S3_ENDPOINT_URL for MinIO and other endpoints)
-#   compose-minio                the compose stack's MinIO; mc in the minio-init
-#                                image, credentials from MINIO_ROOT_USER /
+#   compose-minio                the development stack's MinIO
+#                                (HANGAR_COMPOSE_FILE=deploy/docker-compose.yml;
+#                                the installed stack has none); mc in the
+#                                minio-init image, credentials from MINIO_ROOT_USER /
 #                                MINIO_ROOT_PASSWORD, bucket HANGAR_STORAGE_S3_BUCKET
 #   none                         database only
 

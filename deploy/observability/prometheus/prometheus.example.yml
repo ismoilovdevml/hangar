@@ -1,6 +1,6 @@
-# Minimal Prometheus configuration for Hangar. The job must be named "hangar"
-# (the HangarDown alert selects up{job="hangar"}). List every node: metrics
-# are per node, and the dashboards aggregate across them.
+# Minimal Prometheus configuration for Hangar. The job name must contain
+# "hangar" (the HangarDown alert selects up{job=~".*hangar.*"}). List every
+# node: metrics are per node, and the dashboards aggregate across them.
 
 global:
   scrape_interval: 15s

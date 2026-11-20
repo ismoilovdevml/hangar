@@ -26,6 +26,16 @@ spec:
       from:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+    {{- if .Values.tests.enabled }}
+    # The chart's `helm test` pod (tests/test-readyz.yaml) calls /readyz.
+    - ports:
+        - port: http
+          protocol: TCP
+      from:
+        - podSelector:
+            matchLabels:
+              {{- include "hangar.testSelectorLabels" . | nindent 14 }}
+    {{- end }}
     {{- if .Values.imageScanning.enabled }}
     # The scan adapter pulls the images to scan.
     - ports:

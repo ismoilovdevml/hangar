@@ -73,6 +73,12 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/component: scanner
 {{- end -}}
 
+{{- define "hangar.testSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "hangar.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: test
+{{- end -}}
+
 {{/* Image */}}
 {{- define "hangar.image" -}}
 {{- if .Values.image.digest -}}
@@ -197,12 +203,12 @@ offline render.
 {{- if not (or .Values.database.url .Values.database.existingSecret) -}}
 {{- fail "set database.url or database.existingSecret (PostgreSQL connection URL)" -}}
 {{- end -}}
-{{- range $path := list "database.url" "storage.s3.access_key_id" "storage.s3.secret_access_key" "storage.s3.session_token" "http.proxy_password" "docker.token_key" "bootstrap.admin_password" "security.secret_key" "security.previous_secret_keys" "metrics.bearer_token" "metrics.password" "scanner.adapter_token" "scanner.trivy_token" -}}
+{{- range $path := list "database.url" "storage.s3.access_key_id" "storage.s3.secret_access_key" "storage.s3.session_token" "http.proxy_password" "docker.token_key" "bootstrap.admin_password" "security.secret_key" "security.previous_secret_keys" "metrics.bearer_token" "metrics.password" "scanner.adapter_token" "scanner.trivy_token" "auth.oidc.client_secret" "auth.ldap.bind_password" -}}
 {{- $parts := splitList "." $path -}}
 {{- $v := $.Values.config -}}
 {{- range $parts -}}{{- if kindIs "map" $v -}}{{- $v = get $v . -}}{{- else -}}{{- $v = "" -}}{{- end -}}{{- end -}}
 {{- if $v -}}
-{{- fail (printf "config.%s is a secret: set it through the chart's secret values (database, storage.s3, httpProxyPassword, dockerTokenKey, bootstrapAdmin, secretKey, metrics.auth) so it never lands in the ConfigMap" $path) -}}
+{{- fail (printf "config.%s is a secret: set it through the chart's secret values (database, storage.s3, httpProxyPassword, dockerTokenKey, bootstrapAdmin, secretKey, metrics.auth), or for auth.oidc.client_secret and auth.ldap.bind_password through extraEnv with a secretKeyRef (HANGAR_AUTH_OIDC_CLIENT_SECRET, HANGAR_AUTH_LDAP_BIND_PASSWORD), so it never lands in the ConfigMap" $path) -}}
 {{- end -}}
 {{- end -}}
 {{- if not (has .Values.storage.kind (list "s3" "fs")) -}}

@@ -24,6 +24,8 @@ setup() {
 	: >"$T/log/docker.log"
 	: >"$T/log/chown.log"
 	: >"$T/log/curl.log"
+	: >"$T/log/curl-args.log"
+	: >"$T/log/curl-config.log"
 
 	cat >"$T/bin/docker" <<'EOF'
 #!/usr/bin/env bash
@@ -41,12 +43,13 @@ compose)
 	exec\ -T\ postgres\ pg_dump*)
 		# Like the real exec, read stdin: under `curl | bash` that is the script.
 		cat >/dev/null
+		[[ -z "${FAKE_DUMP_FAILS:-}" ]] || exit 1
 		echo "PGDMP fake dump" ;;
 	pull*) [[ -z "${FAKE_OFFLINE:-}" ]] ;;
 	"up -d --remove-orphans")
 		# The server's first start on an empty database: it creates "admin"
 		# and writes a one-time password (bootstrap.initial_password_file).
-		pw=secrets/initial-admin-password
+		pw=bootstrap/initial-admin-password
 		[[ ! -e "$pw" ]] || echo "password file existed before the first start" >>"$FAKE_LOG/docker.log"
 		if [[ -z "$(ls -A postgres 2>/dev/null)" && -z "${FAKE_NO_PASSWORD:-}" ]]; then
 			mkdir -p postgres/base && : >postgres/PG_VERSION
@@ -67,10 +70,13 @@ EOF
 
 	cat >"$T/bin/curl" <<'EOF'
 #!/usr/bin/env bash
-out="" url=""
+echo "$*" >>"$FAKE_LOG/curl-args.log"
+out="" url="" write=""
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	-o) out=$2; shift 2 ;;
+	-w) write=$2; shift 2 ;;
+	--config) [[ "$2" != - ]] || cat >>"$FAKE_LOG/curl-config.log"; shift 2 ;;
 	--retry | --connect-timeout | --max-time) shift 2 ;;
 	http*) url=$1; shift ;;
 	*) shift ;;
@@ -82,7 +88,13 @@ case "$url" in
 */readyz) [[ -z "${FAKE_NOT_READY:-}" ]] ;;
 */api/v1/system/status) echo '{"version":"9.9.9","nodes":[]}' ;;
 https://api.github.com/repos/ismoilovdevml/hangar/releases/latest)
+	# Rate limited: 403, which -f turns into exit 22.
+	[[ -z "${FAKE_API_LIMITED:-}" ]] || exit 22
 	printf '{\n  "tag_name": "%s",\n  "name": "x"\n}\n' "${FAKE_LATEST:-v9.9.9}" ;;
+https://github.com/ismoilovdevml/hangar/releases/latest)
+	# The redirect to the latest release's tag page (curl -L -w url_effective).
+	[[ "$write" == '%{url_effective}' ]] || exit 2
+	printf 'https://github.com/ismoilovdevml/hangar/releases/tag/%s' "${FAKE_LATEST:-v9.9.9}" ;;
 https://github.com/ismoilovdevml/hangar/releases/download/*)
 	f=$FAKE_RELEASES/${url#https://github.com/ismoilovdevml/hangar/releases/download/}
 	[[ -f "$f" ]] || exit 22
@@ -109,6 +121,7 @@ EOF
 	export FAKE_MIRROR=http://mirror.example.com/hangar
 	export HANGAR_INSTALL_TTY=$T/no-terminal HANGAR_INSTALL_READY_TIMEOUT=2
 	unset FAKE_RUNNING_DIR FAKE_PG_RUNNING FAKE_OFFLINE FAKE_NOT_READY FAKE_NO_LOCAL_IMAGES FAKE_LATEST FAKE_NO_PASSWORD
+	unset FAKE_DUMP_FAILS FAKE_API_LIMITED GITHUB_TOKEN
 }
 
 teardown() { rm -rf "$T"; }
@@ -231,8 +244,11 @@ test_fresh_install_unattended() {
 	local D=$T/srv/hangar
 	run_install --data-dir "$D" --version v9.9.9 --yes
 	check "exit 0" ok
-	for d in config secrets blobs nats postgres backups; do check "$d/ exists" test -d "$D/$d"; done
+	for d in config secrets bootstrap blobs nats postgres backups; do check "$d/ exists" test -d "$D/$d"; done
 	check "secrets/ is 700" mode_is "$D/secrets" 700
+	check "bootstrap/ is 700" mode_is "$D/bootstrap" 700
+	check "bootstrap/ owned by the hangar user" contains "$T/log/chown.log" "65532:65532 $D/bootstrap"
+	check "no password file in secrets/" test ! -e "$D/secrets/initial-admin-password"
 	check "postgres/ is 700" mode_is "$D/postgres" 700
 	check "blobs/ is 750" mode_is "$D/blobs" 750
 	check "no caddy/ without TLS" test ! -e "$D/caddy"
@@ -251,7 +267,7 @@ test_fresh_install_unattended() {
 	check "token key is 48 bytes" test "$(base64 -d <"$D/secrets/docker.token_key" | wc -c | tr -d ' ')" = 48
 	local pg pw
 	pg=$(<"$D/secrets/postgres-password")
-	pw=$(<"$D/secrets/initial-admin-password")
+	pw=$(<"$D/bootstrap/initial-admin-password")
 	check "database.url carries the postgres password" test "$(<"$D/secrets/database.url")" = "postgres://hangar:$pg@postgres:5432/hangar?sslmode=disable"
 	check "password file left to the server" absent "$T/log/docker.log" "password file existed"
 	check "server-generated password read" test "$pw" = Srv0Generated0Password24
@@ -345,6 +361,76 @@ test_latest_version_lookup() {
 	check "exit 0" ok
 	check "latest asked from the API" contains "$T/log/curl.log" "api.github.com/repos/ismoilovdevml/hangar/releases/latest"
 	check "latest image" env_is "$T/d" HANGAR_IMAGE ghcr.io/ismoilovdevml/hangar:9.9.11
+	check "no token, no auth header" test ! -s "$T/log/curl-config.log"
+}
+
+# Up to v0.1.8 the one-time password lived in secrets/, which the server now
+# mounts read-only: an upgrade before the first sign-in moves it.
+test_upgrade_moves_initial_password() {
+	local D=$T/srv/hangar
+	run_install --data-dir "$D" --version v9.9.9 --yes
+	check "first run" ok
+	local pw
+	pw=$(<"$D/bootstrap/initial-admin-password")
+	mv "$D/bootstrap/initial-admin-password" "$D/secrets/initial-admin-password"
+	rmdir "$D/bootstrap"
+	make_release v9.9.10
+	run_install --data-dir "$D" --version v9.9.10 --yes
+	check "upgrade" ok
+	check "password moved" test "$(<"$D/bootstrap/initial-admin-password")" = "$pw"
+	check "nothing left in secrets/" test ! -e "$D/secrets/initial-admin-password"
+	check "still private" mode_is "$D/bootstrap/initial-admin-password" 600
+}
+
+# The API's unauthenticated limit (60 an hour) is used up: the redirect of
+# the release page names the latest tag instead.
+test_latest_version_rate_limited() {
+	make_release v9.9.11
+	export FAKE_LATEST=v9.9.11 FAKE_API_LIMITED=1
+	run_install --data-dir "$T/d" --yes
+	check "exit 0" ok
+	check "release page asked" contains "$T/log/curl.log" "https://github.com/ismoilovdevml/hangar/releases/latest"
+	check "latest image" env_is "$T/d" HANGAR_IMAGE ghcr.io/ismoilovdevml/hangar:9.9.11
+}
+
+test_latest_version_with_token() {
+	make_release v9.9.11
+	export FAKE_LATEST=v9.9.11 GITHUB_TOKEN=ghp_0123456789secret
+	run_install --data-dir "$T/d" --yes
+	check "exit 0" ok
+	check "API asked with the token" contains "$T/log/curl-config.log" 'header = "Authorization: Bearer ghp_0123456789secret"'
+	check "token not on a command line" absent "$T/log/curl-args.log" "ghp_0123456789secret"
+	check "latest image" env_is "$T/d" HANGAR_IMAGE ghcr.io/ismoilovdevml/hangar:9.9.11
+}
+
+# A failed pre-upgrade backup, then a re-run: .env already names the new
+# version, but the database is still at the old one and is backed up now.
+test_backup_retried_after_failed_upgrade() {
+	local D=$T/srv/hangar
+	run_install --data-dir "$D" --version v9.9.9 --yes
+	check "first run" ok
+	make_release v9.9.10
+	export FAKE_PG_RUNNING=1 FAKE_DUMP_FAILS=1
+	: >"$T/log/docker.log"
+	run_install --data-dir "$D" --version v9.9.10 --yes
+	check "backup failure stops the upgrade" failed_with "database backup failed"
+	check "not started" absent "$T/log/docker.log" "compose up"
+	check "upgrade start recorded" env_is "$D" HANGAR_UPGRADE_FROM v9.9.9
+	unset FAKE_DUMP_FAILS
+	rm -f "$D"/backups/pre-upgrade-*.dump
+	: >"$T/log/docker.log"
+	run_install --data-dir "$D" --version v9.9.10 --yes
+	check "re-run" ok
+	check "database dumped on the re-run" contains "$T/log/docker.log" "pg_dump"
+	check "dump named after the old version" test -n "$(find "$D/backups" -name 'pre-upgrade-v9.9.9-*.dump')"
+	check "marker removed" absent "$D/.env" "HANGAR_UPGRADE_FROM"
+	check "version updated" env_is "$D" HANGAR_VERSION v9.9.10
+	check "upgrade message" contains "$OUT" "(was v9.9.9)"
+	# Once backed up, the next run of the same version does not dump again.
+	: >"$T/log/docker.log"
+	run_install --data-dir "$D" --version v9.9.10 --yes
+	check "third run" ok
+	check "no second dump" absent "$T/log/docker.log" "pg_dump"
 }
 
 test_interactive_domain_with_caddy() {
@@ -506,7 +592,7 @@ test_migration_from_old_layout() {
 	check "oidc secret (quotes removed)" test "$(<"$D/secrets/auth.oidc.client_secret")" = "legacy-oidc-secret"
 	check "postgres password" test "$(<"$D/secrets/postgres-password")" = "legacy0pg0password0hex000"
 	check "database url" test "$(<"$D/secrets/database.url")" = "postgres://hangar:legacy0pg0password0hex000@postgres:5432/hangar?sslmode=disable"
-	check "no initial password: the admin exists" test ! -e "$D/secrets/initial-admin-password"
+	check "no initial password: the admin exists" test ! -e "$D/bootstrap/initial-admin-password"
 	check "existing administrator kept" contains "$OUT" "existing administrator kept"
 	check "no password printed" absent "$OUT" "Password:"
 	for f in "$D"/secrets/*; do check "${f##*/} is 600" mode_is "$f" 600; done
@@ -640,7 +726,7 @@ test_password_after_failed_first_run() {
 	unset FAKE_NOT_READY
 	run_install --data-dir "$D" --version v9.9.9 --yes
 	check "second run" ok
-	check "password printed now" contains "$OUT" "Password:   $(<"$D/secrets/initial-admin-password")"
+	check "password printed now" contains "$OUT" "Password:   $(<"$D/bootstrap/initial-admin-password")"
 	run_install --data-dir "$D" --version v9.9.9 --yes
 	check "third run" ok
 	check "not again" absent "$OUT" "Password:"

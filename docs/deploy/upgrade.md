@@ -50,7 +50,14 @@ It dumps the database to `<data>/backups/` (the three newest are kept), pulls
 the new images, restarts the stack (migrations run on start) and waits for
 `/readyz`. Data, secrets, `config/hangar.yaml` and the installer settings are
 kept. Downtime is the restart (a few seconds, plus migrations). Uploads in
-flight get `server.shutdown_timeout` to finish.
+flight get `server.shutdown_timeout` to finish. If the dump fails, nothing
+is restarted; fix the cause and re-run the same command, which takes the
+dump again before it upgrades.
+
+Without `--version` the installer asks the GitHub API for the latest release
+(60 requests an hour per address without a token; set `GITHUB_TOKEN` in the
+environment to lift that) and otherwise follows the redirect of the
+`releases/latest` page.
 
 To go back, restore the dump taken before the upgrade and re-run the
 installer with the previous `--version`. Installations in `/opt/hangar` from

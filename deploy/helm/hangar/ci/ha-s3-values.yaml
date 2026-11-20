@@ -60,3 +60,15 @@ networkPolicy:
             protocol: TCP
           - port: 443
             protocol: TCP
+# An existing ServiceAccount, extra pod settings and image scanning: the
+# migration Job and the Trivy and scan adapter NetworkPolicies render too.
+serviceAccount:
+  create: false
+  name: hangar
+podAnnotations:
+  example.com/owner: registry-team
+extraEnv:
+  - name: TZ
+    value: UTC
+imageScanning:
+  enabled: true

@@ -535,7 +535,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "process_resident_memory_bytes{instance=~\"$instance\"}",
+          "expr": "process_resident_memory_bytes{instance=~\"$instance\"} and on (job, instance) hangar_build_info",
           "legendFormat": "{{instance}} rss",
           "refId": "A"
         }
@@ -960,7 +960,7 @@
     {
       "type": "timeseries",
       "title": "Statements (p95, errors)",
-      "description": "Statement latency by operation and failed statements per second.",
+      "description": "Statement latency by operation (left axis) and failed statements per second (right axis).",
       "id": 19,
       "datasource": {
         "type": "prometheus",
@@ -1006,7 +1006,24 @@
             }
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ops"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {

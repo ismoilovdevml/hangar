@@ -3,8 +3,12 @@
 Runs `hangar migrate up` before install and before every upgrade, so new pods
 only ever start on a current schema and only one process migrates. Hooks run
 before the release's regular resources exist, so the Job reads the database
-URL from the user's existing Secret or from a hook Secret of its own, and runs
-under the namespace's default ServiceAccount without a token.
+URL from the user's existing Secret or from a hook Secret of its own. It gets
+the server's extraEnv, extraEnvFrom, extraVolumes, extraVolumeMounts,
+podLabels and podAnnotations (a database CA, a proxy, a mesh annotation), and
+runs under an existing ServiceAccount (serviceAccount.create=false with a
+name) or else the namespace's default one, without a token: the chart's own
+ServiceAccount does not exist yet on the first install.
 */ -}}
 {{- $hookSecret := printf "%s-migrate" (include "hangar.fullname" .) -}}
 {{- if not .Values.database.existingSecret }}
@@ -46,8 +50,18 @@ spec:
       labels:
         {{- include "hangar.labels" . | nindent 8 }}
         app.kubernetes.io/component: migrate
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
       restartPolicy: Never
+      {{- if and (not .Values.serviceAccount.create) .Values.serviceAccount.name }}
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      {{- end }}
       automountServiceAccountToken: false
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -74,6 +88,13 @@ spec:
                   {{- end }}
             - name: HANGAR_LOG_FORMAT
               value: {{ dig "log" "format" "json" .Values.config | quote }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           resources:
             {{- toYaml .Values.migrations.job.resources | nindent 12 }}
           securityContext:
@@ -81,10 +102,16 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 64Mi
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

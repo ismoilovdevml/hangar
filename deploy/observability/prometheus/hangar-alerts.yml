@@ -4,12 +4,19 @@
 # the traffic of your installation.
 #
 # Validate: promtool check rules deploy/observability/prometheus/hangar-alerts.yml
+#           promtool test rules deploy/observability/prometheus/hangar-alerts.test.yml
+#           (both: make alerts-check)
+#
+# HangarDown selects every scrape job whose name contains "hangar": "hangar"
+# in prometheus.example.yml, the release's Service name (<release>-hangar, or
+# the release name when it contains "hangar") with the chart's ServiceMonitor.
+# Give other jobs names without "hangar", or narrow the matcher.
 
 groups:
   - name: hangar.availability
     rules:
       - alert: HangarDown
-        expr: up{job="hangar"} == 0
+        expr: up{job=~".*hangar.*"} == 0
         for: 2m
         labels:
           severity: critical
@@ -57,14 +64,24 @@ groups:
 
   - name: hangar.dependencies
     rules:
+      # hangar_upstream_state stays "offline" after the last request failed
+      # until the next request succeeds, so a remote nobody uses would stay
+      # offline (and firing) for good. The alert also needs failed remote
+      # fetches on that node in the last 15 minutes: it resolves once clients
+      # stop asking. (Fetch results are counted by format, not repository.)
       - alert: HangarUpstreamCircuitOpen
-        expr: max by (repository) (hangar_upstream_state{state="offline"}) == 1
+        expr: |
+          max by (repository) (
+            hangar_upstream_state{state="offline"} == 1
+            and on (instance)
+            sum by (instance) (increase(hangar_upstream_fetches_total{result=~"error|server_error|circuit_open"}[15m])) > 0
+          )
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "Proxy remote of {{ $labels.repository }} is offline (circuit breaker open)"
-          description: "Requests for content not yet cached in {{ $labels.repository }} fail fast; cached content is still served."
+          description: "Requests for content not yet cached in {{ $labels.repository }} fail fast; cached content is still served. Remote fetches have been failing in the last 15 minutes."
           runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangarupstreamcircuitopen"
 
       - alert: HangarBlobStoreErrors

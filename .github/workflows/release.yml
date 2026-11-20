@@ -2,12 +2,15 @@ name: Release
 
 # Publishes a release from a version tag, after the full test suite passes on
 # the tagged commit (the jobs test-go, lint-go, test-web and deploy-check;
-# nothing is built or pushed until all four are green):
+# nothing is built or pushed until all four are green). Setting the repository
+# variable RELEASE_SKIP_TESTS to 'true' skips them (emergency only); any
+# other value runs them. The tag must match the Helm chart's appVersion.
 #   - container image ghcr.io/<owner>/hangar (linux/amd64 + linux/arm64, built
 #     natively per architecture, web UI embedded), smoke-tested per architecture
 #     against PostgreSQL before it is tagged <version>, <major>.<minor> and latest
-#   - the image scan adapter ghcr.io/<owner>/hangar-scanner (same tags; the
-#     official Trivy image plus a cross-compiled binary)
+#   - the image scan adapter ghcr.io/<owner>/hangar-scanner (the official
+#     Trivy image plus a cross-compiled binary), smoke-tested by digest before
+#     it gets the same tags
 #   - hangar binaries for linux (amd64, arm64) with SHA256SUMS
 #   - a GitHub Release with the binaries, the compose stack (one archive) and deploy/install.sh
 #
@@ -60,6 +63,8 @@ jobs:
             exit 1
           fi
           semver=${VERSION#v}
+          # A default `helm install` of this release must pull this release.
+          deploy/scripts/check-chart-version.sh "$VERSION"
           prerelease=false
           [[ -n "${BASH_REMATCH[4]}" ]] && prerelease=true
           epoch=$(git log -1 --format=%ct)
@@ -79,7 +84,7 @@ jobs:
   test-go:
     name: Go tests (race, PostgreSQL)
     needs: meta
-    if: vars.RELEASE_TESTS == 'true'
+    if: vars.RELEASE_SKIP_TESTS != 'true'
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -106,14 +111,14 @@ jobs:
           go-version-file: go.mod
           check-latest: true
       - name: go vet
-        run: go vet ./cmd/... ./internal/... && go vet -tags e2e ./test/e2e/... && go vet -tags webui ./internal/webui/
+        run: go vet ./cmd/... ./internal/... ./deploy/... && go vet -tags e2e ./test/e2e/... && go vet -tags webui ./internal/webui/
       - name: go test -race
         run: make test-go
 
   lint-go:
     name: golangci-lint
     needs: meta
-    if: vars.RELEASE_TESTS == 'true'
+    if: vars.RELEASE_SKIP_TESTS != 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -130,7 +135,7 @@ jobs:
   test-web:
     name: Web (lint, typecheck, vitest, build)
     needs: meta
-    if: vars.RELEASE_TESTS == 'true'
+    if: vars.RELEASE_SKIP_TESTS != 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -150,7 +155,7 @@ jobs:
   deploy-check:
     name: Installer tests and helm lint
     needs: meta
-    if: vars.RELEASE_TESTS == 'true'
+    if: vars.RELEASE_SKIP_TESTS != 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -167,7 +172,12 @@ jobs:
   image:
     name: Image (${{ matrix.arch }})
     needs: [meta, test-go, lint-go, test-web, deploy-check]
-    if: ${{ !cancelled() && !failure() }}
+    # Every test job passed, or the tests were skipped on purpose.
+    if: >-
+      ${{ !cancelled() && needs.meta.result == 'success' &&
+      (vars.RELEASE_SKIP_TESTS == 'true' ||
+      (needs.test-go.result == 'success' && needs.lint-go.result == 'success' &&
+      needs.test-web.result == 'success' && needs.deploy-check.result == 'success')) }}
     strategy:
       fail-fast: true
       matrix:
@@ -272,7 +282,7 @@ jobs:
   manifest:
     name: Image manifest and tags
     needs: [meta, image]
-    if: ${{ !cancelled() && !failure() }}
+    if: ${{ !cancelled() && needs.image.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -319,7 +329,12 @@ jobs:
   scanner:
     name: Scan adapter image
     needs: [meta, test-go, lint-go, test-web, deploy-check]
-    if: ${{ !cancelled() && !failure() }}
+    # Every test job passed, or the tests were skipped on purpose.
+    if: >-
+      ${{ !cancelled() && needs.meta.result == 'success' &&
+      (vars.RELEASE_SKIP_TESTS == 'true' ||
+      (needs.test-go.result == 'success' && needs.lint-go.result == 'success' &&
+      needs.test-web.result == 'success' && needs.deploy-check.result == 'success')) }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -334,26 +349,11 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - id: tags
-        env:
-          IMAGE: ${{ needs.meta.outputs.image }}-scanner
-          SEMVER: ${{ needs.meta.outputs.semver }}
-          MINOR: ${{ needs.meta.outputs.minor }}
-          PRERELEASE: ${{ needs.meta.outputs.prerelease }}
-        run: |
-          set -euo pipefail
-          {
-            echo "tags<<EOF"
-            echo "$IMAGE:$SEMVER"
-            if [[ "$PRERELEASE" == false ]]; then
-              echo "$IMAGE:$MINOR"
-              echo "$IMAGE:latest"
-            fi
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-      # The target stage only copies files onto the Trivy image, so both
-      # architectures build on one runner without emulation.
-      - uses: docker/build-push-action@v7
+      # Pushed by digest only; the tags are added after the smoke test, like
+      # the server image. The target stage only copies files onto the Trivy
+      # image, so both architectures build on one runner without emulation.
+      - id: build
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: deploy/scanner/Dockerfile
@@ -365,23 +365,43 @@ jobs:
             org.opencontainers.image.version=${{ needs.meta.outputs.version }}
             org.opencontainers.image.revision=${{ needs.meta.outputs.commit }}
             org.opencontainers.image.created=${{ needs.meta.outputs.date }}
-          tags: ${{ steps.tags.outputs.tags }}
-          push: true
+          outputs: type=image,name=${{ needs.meta.outputs.image }}-scanner,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=release-scanner
           cache-to: type=gha,scope=release-scanner,mode=max
+      # Runs the runner's architecture (amd64) of the multi-arch image.
       - name: Smoke test
         env:
-          REF: ${{ needs.meta.outputs.image }}-scanner:${{ needs.meta.outputs.semver }}
+          REF: ${{ needs.meta.outputs.image }}-scanner@${{ steps.build.outputs.digest }}
           VERSION: ${{ needs.meta.outputs.version }}
         run: |
           set -euo pipefail
           docker run --rm "$REF" version | grep -q "hangar-scanner $VERSION "
           docker run --rm --entrypoint trivy "$REF" --version
+      - name: Tag
+        env:
+          IMAGE: ${{ needs.meta.outputs.image }}-scanner
+          DIGEST: ${{ steps.build.outputs.digest }}
+          SEMVER: ${{ needs.meta.outputs.semver }}
+          MINOR: ${{ needs.meta.outputs.minor }}
+          PRERELEASE: ${{ needs.meta.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          tags=(-t "$IMAGE:$SEMVER")
+          if [[ "$PRERELEASE" == false ]]; then
+            tags+=(-t "$IMAGE:$MINOR" -t "$IMAGE:latest")
+          fi
+          docker buildx imagetools create "${tags[@]}" "$IMAGE@$DIGEST"
+          docker buildx imagetools inspect "$IMAGE:$SEMVER"
 
   binaries:
     name: Binaries
     needs: [meta, test-go, lint-go, test-web, deploy-check]
-    if: ${{ !cancelled() && !failure() }}
+    # Every test job passed, or the tests were skipped on purpose.
+    if: >-
+      ${{ !cancelled() && needs.meta.result == 'success' &&
+      (vars.RELEASE_SKIP_TESTS == 'true' ||
+      (needs.test-go.result == 'success' && needs.lint-go.result == 'success' &&
+      needs.test-web.result == 'success' && needs.deploy-check.result == 'success')) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -429,7 +449,9 @@ jobs:
   release:
     name: GitHub Release
     needs: [meta, manifest, scanner, binaries]
-    if: ${{ !cancelled() && !failure() }}
+    if: >-
+      ${{ !cancelled() && needs.manifest.result == 'success' &&
+      needs.scanner.result == 'success' && needs.binaries.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write

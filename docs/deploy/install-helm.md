@@ -115,7 +115,7 @@ after the first sign-in ([first-admin.md](first-admin.md)).
 | Deployment | `replicaCount` or the HPA. Read-only root filesystem, non-root (65532), all capabilities dropped, seccomp `RuntimeDefault`, no service account token. Probes: startup and liveness on `/healthz`, readiness on `/readyz` (database, blob store, NATS). Soft pod anti-affinity by host (`podAntiAffinityPreset: hard` to require it), `topologySpreadConstraints` for zones. Rolling updates with `maxUnavailable: 0`. Pods restart when the config or secret values change. |
 | ConfigMap | `hangar.yaml` rendered from `config`. The chart sets `server.addr`, `database.migrate_on_start`, `storage.*` and `nats.*` itself and refuses secrets placed in `config`. |
 | Secret | Only what no `existingSecret` provides. Generated values (`secretKey`, `dockerTokenKey`, the NATS password) are created once and kept on upgrades; the Secret is kept on `helm uninstall`. |
-| Job (hook) | `hangar migrate up` before install and before every upgrade (`migrations.mode: job`), so pods never start on an old schema and only one process migrates. |
+| Job (hook) | `hangar migrate up` before install and before every upgrade (`migrations.mode: job`), so pods never start on an old schema and only one process migrates. It gets the server's `extraEnv`, `extraEnvFrom`, `extraVolumes`, `extraVolumeMounts`, `podLabels` and `podAnnotations`, and runs under `serviceAccount.name` when `serviceAccount.create` is false (otherwise the namespace's default ServiceAccount: the chart's own does not exist yet on the first install). |
 | Service | Port 80, plus `service.connectorPorts` for Docker port connectors. |
 | Ingress / HTTPRoute | The UI host, an optional registry host (`/v2` only), and the metrics path blocked publicly (`blockMetrics`). Presets for ingress-nginx and Traefik ([reverse-proxy.md](reverse-proxy.md)). |
 | PodDisruptionBudget | `minAvailable: 1` with two or more replicas. |
@@ -123,7 +123,7 @@ after the first sign-in ([first-admin.md](first-admin.md)).
 | NATS StatefulSet | `nats.mode: bundled`: JetStream cluster with password auth, persistent volumes, lame-duck shutdown, PDB, network policy (clients: Hangar pods only). Hangar pods wait for it with an init container. |
 | ServiceMonitor | Prometheus Operator scraping `/metrics` on every pod. |
 | Trivy Deployment, scan adapter Deployment | `imageScanning.enabled`: the Trivy server (database on a PersistentVolumeClaim) and the scan adapter, with their Services and the adapter token Secret ([image scanning](#image-scanning)). |
-| NetworkPolicy | Ingress to Hangar only from `networkPolicy.ingressFrom` (any source when empty), plus the scan adapter with image scanning. Optional egress restriction (`networkPolicy.egress`): DNS, NATS and the rules you list. Proxy repositories need their remotes or the corporate proxy in that list. |
+| NetworkPolicy | Ingress to Hangar only from `networkPolicy.ingressFrom` (any source when empty), plus the chart's `helm test` pod and, with image scanning, the scan adapter. With image scanning the Trivy server accepts only Hangar and the scan adapter, and the scan adapter only Hangar. Optional egress restriction (`networkPolicy.egress`): DNS, NATS and the rules you list. Proxy repositories need their remotes or the corporate proxy in that list. |
 
 ## Choosing modes
 

@@ -8,7 +8,10 @@
 #   .env                installer settings: image, port, URL (no secrets;
 #                       written by install.sh, do not edit)
 #   config/hangar.yaml  server settings (yours; kept on upgrade)
-#   secrets/            one file per secret, mode 600 (generated once)
+#   secrets/            one file per secret, mode 600 (generated once;
+#                       read-only for the server)
+#   bootstrap/          the first administrator's one-time password, written
+#                       by the server and deleted after the first sign-in
 #   postgres/           PostgreSQL data
 #   blobs/              package files
 #   nats/               job queue state
@@ -61,13 +64,19 @@ services:
         target: /etc/hangar
         read_only: true
         bind: { create_host_path: false, selinux: Z }
-      # Read-write: the server writes initial-admin-password on the first
-      # start and removes it after the first password change. Shared label:
-      # postgres reads one file here.
+      # Shared label: postgres reads one file here.
       - type: bind
         source: ./secrets
         target: /run/secrets/hangar
+        read_only: true
         bind: { create_host_path: false, selinux: z }
+      # The only place the server writes outside blobs/ and nats/: the
+      # one-time password of the first administrator (replaced atomically,
+      # so a directory rather than a single file).
+      - type: bind
+        source: ./bootstrap
+        target: /var/lib/hangar/bootstrap
+        bind: { create_host_path: false, selinux: Z }
       - type: bind
         source: ./blobs
         target: /var/lib/hangar/blobs
@@ -104,9 +113,9 @@ services:
       HANGAR_STORAGE_FS_PATH: /var/lib/hangar/blobs
       HANGAR_NATS_DATA_DIR: /var/lib/hangar/nats
       # First start of an empty database: the server creates "admin" with a
-      # one-time password, writes it here (secrets/initial-admin-password on
-      # the host) and deletes the file after the first password change.
-      HANGAR_BOOTSTRAP_INITIAL_PASSWORD_FILE: /run/secrets/hangar/initial-admin-password
+      # one-time password, writes it here (bootstrap/initial-admin-password
+      # on the host) and deletes the file after the first password change.
+      HANGAR_BOOTSTRAP_INITIAL_PASSWORD_FILE: /var/lib/hangar/bootstrap/initial-admin-password
     healthcheck:
       test: ["CMD", "/usr/local/bin/hangar-healthcheck"]
       interval: 15s

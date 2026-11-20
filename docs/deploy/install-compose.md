@@ -95,7 +95,8 @@ offline databases and troubleshooting:
 | `compose.yaml` | The stack; replaced on upgrade | root |
 | `.env` | Installer settings: image, port, URL. No secrets; managed by the installer | root |
 | `config/hangar.yaml` | Server settings; yours, never replaced | root |
-| `secrets/` | One file per secret, mode 600 | 65532 (Hangar) |
+| `secrets/` | One file per secret, mode 600; mounted read-only | 65532 (Hangar) |
+| `bootstrap/` | The first administrator's one-time password until the first sign-in | 65532 |
 | `postgres/` | PostgreSQL data | 70 (postgres) |
 | `blobs/` | Package files | 65532 |
 | `nats/` | Job queue state | 65532 |
@@ -116,9 +117,9 @@ The server reads `secrets/` through `secrets_dir`: a file named after a
 setting's path holds its value. The installer writes
 `security.secret_key`, `docker.token_key` and `database.url`, plus
 `postgres-password` for PostgreSQL (and `scanner.adapter_token` with
-`--with-trivy`, which the scan adapter reads too); the server adds
-`initial-admin-password` on its first start. To add one, for example an SSO client
-secret, create the file and restart:
+`--with-trivy`, which the scan adapter reads too). The server mounts the
+directory read-only. To add one, for example an SSO client secret, create
+the file and restart:
 
 ```bash
 cd /srv/hangar
@@ -127,16 +128,17 @@ sudo chown 65532:65532 secrets/auth.oidc.client_secret && sudo chmod 600 secrets
 sudo docker compose restart hangar
 ```
 
-Names without a dot (`postgres-password`, `initial-admin-password`) are not
-settings and are skipped; a misspelt dotted name stops the start with an error.
+Names without a dot (`postgres-password`) are not settings and are skipped;
+a misspelt dotted name stops the start with an error.
 Details: `secrets_dir` in [hangar.example.yaml](../../hangar.example.yaml).
 
 ### First administrator
 
 On its first start with an empty database the server creates `admin` with a
-one-time password and writes it to `secrets/initial-admin-password` (mode 600,
-`bootstrap.initial_password_file`). The installer prints it once; at the first
-sign-in you choose your own password, and the file is deleted. A moved
+one-time password and writes it to `bootstrap/initial-admin-password` (mode
+600, `bootstrap.initial_password_file`; `secrets/initial-admin-password` up
+to v0.1.8, moved by the installer on upgrade). The installer prints it once;
+at the first sign-in you choose your own password, and the file is deleted. A moved
 installation keeps its administrators and gets no such password. Lost it
 before signing in:
 `cd /srv/hangar && sudo docker compose exec hangar hangar admin reset-password --user admin`.

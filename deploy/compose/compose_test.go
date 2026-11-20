@@ -187,6 +187,9 @@ func TestServerConfigLoads(t *testing.T) {
 		switch m.Source {
 		case "./secrets":
 			secretsTarget = m.Target
+			if !m.ReadOnly {
+				t.Error("secrets/ should be mounted read-only: the server only writes bootstrap/")
+			}
 		case "./config":
 			configTarget = m.Target
 			if !m.ReadOnly {
@@ -204,12 +207,11 @@ func TestServerConfigLoads(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, body := range map[string]string{
-		"security.secret_key":    "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=\n",
-		"docker.token_key":       "dG9rZW4ta2V5LXRva2VuLWtleS10b2tlbi1rZXktdG9rZW4ta2V5LXRva2Vu\n",
-		"database.url":           "postgres://hangar:pw@postgres:5432/hangar?sslmode=disable\n",
-		"postgres-password":      "pw\n",
-		"initial-admin-password": "abcde-fghjk-mnpqr-stuvw\n",
-		"metrics.bearer_token":   "0123456789abcdef0123456789abcdef\n",
+		"security.secret_key":  "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=\n",
+		"docker.token_key":     "dG9rZW4ta2V5LXRva2VuLWtleS10b2tlbi1rZXktdG9rZW4ta2V5LXRva2Vu\n",
+		"database.url":         "postgres://hangar:pw@postgres:5432/hangar?sslmode=disable\n",
+		"postgres-password":    "pw\n",
+		"metrics.bearer_token": "0123456789abcdef0123456789abcdef\n",
 	} {
 		if err := os.WriteFile(filepath.Join(secrets, name), []byte(body), 0o600); err != nil {
 			t.Fatal(err)
@@ -270,7 +272,8 @@ func TestServerConfigLoads(t *testing.T) {
 
 // Every HANGAR_* variable the hangar service sets is a server setting, so a
 // renamed setting cannot silently stop working; the one-time password lands
-// in secrets/initial-admin-password, where install.sh reads it.
+// in bootstrap/initial-admin-password (a writable mount), where install.sh
+// reads it.
 func TestEnvironmentIsKnown(t *testing.T) {
 	c, _ := load(t)
 	h := c.Services["hangar"]
@@ -280,12 +283,25 @@ func TestEnvironmentIsKnown(t *testing.T) {
 			t.Errorf("compose.yaml sets %s, which is not a server setting", k)
 		}
 	}
-	const want = "/run/secrets/hangar/initial-admin-password"
+	const want = "/var/lib/hangar/bootstrap/initial-admin-password"
 	if got := h.Environment["HANGAR_BOOTSTRAP_INITIAL_PASSWORD_FILE"]; got != want {
 		t.Errorf("HANGAR_BOOTSTRAP_INITIAL_PASSWORD_FILE = %q, want %q", got, want)
 	}
-	if !strings.Contains(installer(t), "pw_file=$data/secrets/initial-admin-password") {
-		t.Error("install.sh does not read secrets/initial-admin-password")
+	writable := false
+	for _, m := range h.Volumes {
+		if m.Source == "./bootstrap" && m.Target == filepath.Dir(want) && !m.ReadOnly {
+			writable = true
+		}
+	}
+	if !writable {
+		t.Errorf("%s is not on a writable mount of ./bootstrap: the server writes and deletes the file there", want)
+	}
+	sh := installer(t)
+	if !strings.Contains(sh, "pw_file=$data/bootstrap/initial-admin-password") {
+		t.Error("install.sh does not read bootstrap/initial-admin-password")
+	}
+	if !strings.Contains(sh, `make_dir "$data/bootstrap" 700 "$HANGAR_UID"`) {
+		t.Error("install.sh does not create bootstrap/ for the hangar user")
 	}
 }
 

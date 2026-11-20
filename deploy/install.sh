@@ -193,6 +193,15 @@ env_set() {
 	mv "$tmp" "$1"
 }
 
+# env_unset FILE KEY: removes KEY's line, keeping every other line.
+env_unset() {
+	local tmp
+	tmp=$(mktemp "$1.XXXXXX")
+	KEY=$2 awk 'index($0, ENVIRON["KEY"] "=") != 1' "$1" >"$tmp"
+	chmod 644 "$tmp"
+	mv "$tmp" "$1"
+}
+
 rand_hex() { od -An -N"$1" -tx1 /dev/urandom | tr -d ' \n'; }
 rand_b64() { head -c "$1" /dev/urandom | base64 | tr -d '\n'; }
 
@@ -218,6 +227,28 @@ sha256_of() {
 }
 
 download() { curl -fsSL --retry 3 --connect-timeout 15 -o "$2" "$1"; }
+
+# latest_release: prints the tag of the latest release, or nothing. The API
+# allows 60 unauthenticated requests an hour per address; GITHUB_TOKEN, when
+# set, lifts that (passed in a curl config on stdin, never on the command
+# line). Without an answer the release page's redirect to its tag is used.
+latest_release() {
+	local tag url
+	tag=$(
+		if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+			printf 'header = "Authorization: Bearer %s"\n' "$GITHUB_TOKEN"
+		fi |
+			curl -fsSL --retry 3 --connect-timeout 15 --config - "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null |
+			sed -n 's/^[[:space:]]*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
+	) || true
+	if [[ -z "$tag" ]]; then
+		url=$(curl -fsSIL --retry 3 --connect-timeout 15 -o /dev/null -w '%{url_effective}' \
+			"https://github.com/$REPO/releases/latest" </dev/null 2>/dev/null) || true
+		[[ "$url" == */releases/tag/* ]] && tag=${url##*/releases/tag/}
+	fi
+	[[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] && printf '%s' "$tag"
+	return 0
+}
 
 host_ip() {
 	local ip=""
@@ -434,7 +465,13 @@ pg_user=${pg_user:-hangar}
 pg_db=$(stored POSTGRES_DB || true)
 pg_db=${pg_db:-hangar}
 previous_version=""
-((installed)) && previous_version=$(stored HANGAR_VERSION || true)
+if ((installed)); then
+	# HANGAR_UPGRADE_FROM is set while an upgrade has not yet backed up the
+	# database: a re-run after a failed backup still knows the version the
+	# database is at, and backs it up.
+	previous_version=$(stored HANGAR_UPGRADE_FROM || true)
+	[[ -n "$previous_version" ]] || previous_version=$(stored HANGAR_VERSION || true)
+fi
 # First run: no earlier run of the installer on this directory got Hangar
 # ready (HANGAR_INSTALLED is written once it did).
 fresh=0
@@ -448,8 +485,7 @@ if [[ "$version" == latest ]]; then
 	else
 		[[ -z "$opt_mirror" ]] || die "--mirror needs --version"
 		log "looking up the latest release"
-		version=$(curl -fsSL --retry 3 "https://api.github.com/repos/$REPO/releases/latest" |
-			sed -n 's/^[[:space:]]*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1) || true
+		version=$(latest_release)
 		[[ -n "$version" ]] || die "could not find the latest release of $REPO; pass --version vX.Y.Z"
 	fi
 fi
@@ -563,6 +599,12 @@ chmod 755 "$data"
 [[ -n "$legacy" ]] && : >"$data/.migrating"
 make_dir "$data/config" 755 0
 make_dir "$data/secrets" 700 "$HANGAR_UID"
+make_dir "$data/bootstrap" 700 "$HANGAR_UID"
+# Up to v0.1.8 the server kept the one-time password in secrets/, which it
+# now mounts read-only; a password not yet replaced moves along.
+if [[ -f "$data/secrets/initial-admin-password" && ! -e "$data/bootstrap/initial-admin-password" ]]; then
+	mv "$data/secrets/initial-admin-password" "$data/bootstrap/initial-admin-password"
+fi
 make_dir "$data/blobs" 750 "$HANGAR_UID"
 make_dir "$data/nats" 750 "$HANGAR_UID"
 make_dir "$data/postgres" 700 "$POSTGRES_UID"
@@ -670,6 +712,9 @@ trusted_all=$subnet
 profiles=""
 [[ "$tls" == caddy ]] && profiles=caddy
 [[ "$trivy" == on ]] && profiles=${profiles:+$profiles,}trivy
+if ((installed)) && [[ "$previous_version" != "$version" ]]; then
+	env_set "$env_file" HANGAR_UPGRADE_FROM "${previous_version:-unknown}"
+fi
 env_set "$env_file" HANGAR_VERSION "$version"
 env_set "$env_file" HANGAR_IMAGE "$image"
 env_set "$env_file" HANGAR_DOMAIN "$domain"
@@ -711,6 +756,8 @@ if ((installed)) && [[ "$previous_version" != "$version" ]] && [[ -n "$(compose 
 	# shellcheck disable=SC2012
 	ls -1t "$data"/backups/pre-upgrade-*.dump | tail -n +4 | while IFS= read -r old; do rm -f -- "$old"; done
 fi
+# Backed up (or nothing to back up): a re-run no longer needs to.
+[[ -z "$(env_get "$env_file" HANGAR_UPGRADE_FROM)" ]] || env_unset "$env_file" HANGAR_UPGRADE_FROM
 
 # ---- Migration: stop the old stack, copy its volumes ------------------------------
 # copy_volume VOLUME SUBDIR DEST: copies VOLUME/SUBDIR into DEST, from the
@@ -776,9 +823,9 @@ fi
 [[ -n "$(env_get "$env_file" HANGAR_INSTALLED)" ]] || env_set "$env_file" HANGAR_INSTALLED "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # On the first start of an empty database the server creates "admin" with a
-# one-time password and writes it to secrets/initial-admin-password (mode
+# one-time password and writes it to bootstrap/initial-admin-password (mode
 # 600); it deletes the file after the first password change.
-pw_file=$data/secrets/initial-admin-password
+pw_file=$data/bootstrap/initial-admin-password
 if ((fresh)); then
 	for _ in 1 2 3 4 5 6 7 8 9 10; do
 		[[ -s "$pw_file" ]] && break

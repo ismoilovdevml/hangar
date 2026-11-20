@@ -90,7 +90,9 @@ release introduced the errors, roll back.
 
 **Meaning.** A proxy repository's remote failed repeatedly (connection errors
 or 5xx answers) and its circuit breaker is open: Hangar stops calling it for
-the breaker's open period and then probes again.
+the breaker's open period and then probes again. The alert also needs failed
+remote fetches on the node in the last 15 minutes, so a remote that failed
+once and has not been used since does not keep it firing.
 
 **Impact.** Content already cached in the repository is still served. Content
 not yet cached fails with 502 until the remote recovers. Groups fall through to
