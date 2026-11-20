@@ -94,6 +94,14 @@ type app struct {
 
 func (a *app) onClose(f func()) { a.closers = append(a.closers, f) }
 
+// jobTimeout bounds one run of a background job. Image scans are the
+// longest jobs: each platform of an image may take scanner.timeout plus the
+// minute the adapter client adds, and two platforms (amd64, arm64) are the
+// common case. Every other job finishes well within the queue's default.
+func jobTimeout(sc config.Scanner) time.Duration {
+	return max(events.DefaultAckWait, 2*(sc.Timeout+time.Minute))
+}
+
 func (a *app) close() {
 	for i := len(a.closers) - 1; i >= 0; i-- {
 		a.closers[i]()
@@ -216,7 +224,9 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	}
 	a.onClose(rt.Close)
 	bus := events.NewBus(rt.Conn, log)
-	queue, err := events.NewQueue(ctx, rt.JS, events.QueueOptions{MaxAttempts: jobMaxAttempts, Replicas: cfg.NATS.Replicas}, log)
+	queue, err := events.NewQueue(ctx, rt.JS, events.QueueOptions{
+		MaxAttempts: jobMaxAttempts, Replicas: cfg.NATS.Replicas, Timeout: jobTimeout(cfg.Scanner),
+	}, log)
 	if err != nil {
 		return nil, err
 	}

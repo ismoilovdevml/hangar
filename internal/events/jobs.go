@@ -26,13 +26,27 @@ const (
 // MaxReplicas is the largest JetStream replica count (a NATS limit).
 const MaxReplicas = 5
 
+// Defaults for QueueOptions.
+const (
+	DefaultAckWait      = 10 * time.Minute
+	DefaultShutdownWait = 15 * time.Second
+)
+
 // QueueOptions tune the job queue.
 type QueueOptions struct {
 	// MaxAttempts before a job is dropped (and logged). Default 5.
 	MaxAttempts int
-	// AckWait is how long a running job may go without finishing before it is
-	// redelivered to another worker. Default 10 minutes.
+	// AckWait is how long a job may go without a sign of life from the node
+	// running it before it is redelivered to another node. While a handler
+	// runs, the queue reports progress every AckWait/3, so a job outlives
+	// AckWait as long as its node does. Default DefaultAckWait.
 	AckWait time.Duration
+	// Timeout bounds one run of a handler: its context deadline. Default
+	// AckWait.
+	Timeout time.Duration
+	// ShutdownWait bounds how long Close waits for running handlers after
+	// cancelling their contexts. Default DefaultShutdownWait.
+	ShutdownWait time.Duration
 	// Replicas of the job stream in a NATS cluster, 1 to MaxReplicas
 	// (nats.replicas). Default 1. An existing stream with another count is
 	// scaled to it; its consumers follow the stream.
@@ -42,6 +56,9 @@ type QueueOptions struct {
 // Queue is a core.JobQueue on a JetStream work-queue stream. Each job type
 // has one durable consumer shared by all nodes, so every job runs on exactly
 // one node at a time; failures are retried with exponential backoff.
+//
+// A node runs one job of a type at a time and fetches the next only when it
+// is done, so the jobs queued behind a long one go to idle nodes.
 type Queue struct {
 	js     jetstream.JetStream
 	stream jetstream.Stream
@@ -50,6 +67,13 @@ type Queue struct {
 
 	mu       sync.Mutex
 	handlers map[string]jetstream.ConsumeContext
+
+	// runCtx is the parent of every handler context; Close cancels it.
+	runCtx    context.Context
+	cancelRun context.CancelFunc
+	runMu     sync.Mutex // guards closing and running.Add against Close's Wait
+	closing   bool
+	running   sync.WaitGroup
 }
 
 var _ core.JobQueue = (*Queue)(nil)
@@ -61,7 +85,13 @@ func NewQueue(ctx context.Context, js jetstream.JetStream, opts QueueOptions, lo
 		opts.MaxAttempts = 5
 	}
 	if opts.AckWait <= 0 {
-		opts.AckWait = 10 * time.Minute
+		opts.AckWait = DefaultAckWait
+	}
+	if opts.Timeout <= 0 {
+		opts.Timeout = opts.AckWait
+	}
+	if opts.ShutdownWait <= 0 {
+		opts.ShutdownWait = DefaultShutdownWait
 	}
 	if opts.Replicas <= 0 {
 		opts.Replicas = 1
@@ -76,7 +106,9 @@ func NewQueue(ctx context.Context, js jetstream.JetStream, opts QueueOptions, lo
 	if err != nil {
 		return nil, err
 	}
-	return &Queue{js: js, stream: stream, opts: opts, log: log, handlers: map[string]jetstream.ConsumeContext{}}, nil
+	runCtx, cancelRun := context.WithCancel(context.Background())
+	return &Queue{js: js, stream: stream, opts: opts, log: log, handlers: map[string]jetstream.ConsumeContext{},
+		runCtx: runCtx, cancelRun: cancelRun}, nil
 }
 
 func jobStreamConfig(replicas int) jetstream.StreamConfig {
@@ -185,7 +217,9 @@ func (q *Queue) Handle(jobType string, h core.JobHandler) error {
 	if err != nil {
 		return fmt.Errorf("create consumer for %s: %w", jobType, err)
 	}
-	cc, err := cons.Consume(func(m jetstream.Msg) { q.run(m, h) })
+	// Messages are handled one at a time; buffering more than the one being
+	// handled would hold them away from idle nodes (the default is 500).
+	cc, err := cons.Consume(func(m jetstream.Msg) { q.run(m, h) }, jetstream.PullMaxMessages(1))
 	if err != nil {
 		return fmt.Errorf("consume %s: %w", jobType, err)
 	}
@@ -194,6 +228,16 @@ func (q *Queue) Handle(jobType string, h core.JobHandler) error {
 }
 
 func (q *Queue) run(m jetstream.Msg, h core.JobHandler) {
+	q.runMu.Lock()
+	if q.closing {
+		q.runMu.Unlock()
+		_ = m.Nak() // delivered while stopping: another node takes it now
+		return
+	}
+	q.running.Add(1)
+	q.runMu.Unlock()
+	defer q.running.Done()
+
 	var j core.Job
 	if err := json.Unmarshal(m.Data(), &j); err != nil {
 		q.log.Error("dropping malformed job", "subject", m.Subject(), "error", err)
@@ -203,11 +247,19 @@ func (q *Queue) run(m jetstream.Msg, h core.JobHandler) {
 	if md, err := m.Metadata(); err == nil {
 		j.Attempt = int(min(md.NumDelivered, uint64(q.opts.MaxAttempts))) //nolint:gosec // bounded by MaxAttempts
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), q.opts.AckWait)
+	ctx, cancel := context.WithTimeout(q.runCtx, q.opts.Timeout)
 	defer cancel()
+	stopBeat := q.heartbeat(m)
 	err := safeRun(ctx, h, j)
+	stopBeat()
 	if err == nil {
 		_ = m.Ack()
+		return
+	}
+	if q.runCtx.Err() != nil {
+		// Interrupted by Close: hand it back without counting a backoff.
+		q.log.Info("job interrupted by shutdown, returned to the queue", "job_id", j.ID, "type", j.Type, "error", err)
+		_ = m.Nak()
 		return
 	}
 	if j.Attempt >= q.opts.MaxAttempts {
@@ -217,6 +269,34 @@ func (q *Queue) run(m jetstream.Msg, h core.JobHandler) {
 	}
 	q.log.Warn("job failed, will retry", "job_id", j.ID, "type", j.Type, "attempt", j.Attempt, "error", err)
 	_ = m.NakWithDelay(retryDelay(j.Attempt))
+}
+
+// heartbeat tells the server every AckWait/3 that m is still being worked
+// on, so a job that runs longer than AckWait is not redelivered to another
+// node while this one runs it. The returned function stops the heartbeat
+// and waits for it.
+func (q *Queue) heartbeat(m jetstream.Msg) func() {
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		t := time.NewTicker(q.opts.AckWait / 3)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				if err := m.InProgress(); err != nil {
+					q.log.Warn("job progress not reported; it may be redelivered", "subject", m.Subject(), "error", err)
+				}
+			}
+		}
+	}()
+	return func() {
+		close(stop)
+		<-done
+	}
 }
 
 // retryDelay is 5s, 10s, 20s, ... capped at 10 minutes.
@@ -237,12 +317,40 @@ func safeRun(ctx context.Context, h core.JobHandler, j core.Job) (err error) {
 	return h(ctx, j)
 }
 
-// Close stops all workers on this node. Queued jobs stay in the stream.
+// Close stops all workers on this node: it stops fetching jobs, cancels the
+// contexts of the running handlers and waits up to ShutdownWait for them to
+// return, so none runs on after the services it uses are closed. Jobs that
+// were interrupted go back to the queue; queued jobs stay in the stream.
 func (q *Queue) Close() {
 	q.mu.Lock()
-	defer q.mu.Unlock()
+	stopped := make([]jetstream.ConsumeContext, 0, len(q.handlers))
 	for t, cc := range q.handlers {
 		cc.Stop()
+		stopped = append(stopped, cc)
 		delete(q.handlers, t)
+	}
+	q.mu.Unlock()
+
+	q.runMu.Lock()
+	q.closing = true
+	q.runMu.Unlock()
+	q.cancelRun()
+
+	done := make(chan struct{})
+	go func() {
+		q.running.Wait()
+		for _, cc := range stopped {
+			<-cc.Closed()
+		}
+		close(done)
+	}()
+	t := time.NewTimer(q.opts.ShutdownWait)
+	defer t.Stop()
+	select {
+	case <-done:
+	case <-t.C:
+		// The waiter goroutine ends when the handlers do.
+		q.log.Warn("job handlers still running after shutdown wait; their jobs will be redelivered",
+			"shutdown_wait", q.opts.ShutdownWait.String())
 	}
 }
