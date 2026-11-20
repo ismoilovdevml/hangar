@@ -34,8 +34,11 @@ type monitorDeps struct {
 	upstreams *proxy.HealthReporter
 	// stores receives each blob store's probe; the blob store and
 	// repository screens read it.
-	stores  *sysmon.StoreStates
-	oidc    *oidc.Provider
+	stores *sysmon.StoreStates
+	// oidc returns the OIDC provider in effect (nil when OIDC is off), and
+	// auth the LDAP directory in effect: both change when an administrator
+	// saves sign-in settings, so they are read on every check run.
+	oidc    func() *oidc.Provider
 	auth    *auth.Service
 	started time.Time
 	log     *slog.Logger
@@ -72,7 +75,7 @@ func newMonitor(d monitorDeps) *sysmon.Monitor {
 		sysmon.EventBusCheck(d.nats.Conn, d.nats.JS, d.cfg.NATS.Embedded, ready),
 		sysmon.SchedulerCheck(d.pool, func() (bool, time.Time) { return m.Leader() }),
 		sysmon.SearchCheck(d.pool),
-		sysmon.AuthCheck(authProviders(d)),
+		sysmon.LiveAuthCheck(func() []sysmon.AuthProvider { return authProviders(d.oidc, directoryOf(d.auth)) }),
 		sysmon.UpstreamsCheck(d.upstreams.List),
 	}
 	m = sysmon.New(d.pool, sysmon.Options{NodeID: id, Hostname: hostname, URL: url, Started: d.started, Checks: checks, Logger: d.log})
@@ -99,23 +102,35 @@ func listBlobStores(ctx context.Context, pool *pgxpool.Pool) ([]sysmon.BlobStore
 	return out, rows.Err()
 }
 
-// authProviders lists the enabled external sign-in providers.
-func authProviders(d monitorDeps) []sysmon.AuthProvider {
-	var out []sysmon.AuthProvider
-	if d.oidc != nil {
-		p := d.oidc
-		out = append(out, sysmon.AuthProvider{Name: "OIDC", Status: func() (bool, time.Time, error) {
-			ok, err := p.Status()
-			return ok, time.Time{}, err
-		}})
+// directoryOf returns svc's LDAP directory lookup; nil svc has none.
+func directoryOf(svc *auth.Service) func() auth.Directory {
+	return func() auth.Directory {
+		if svc == nil {
+			return nil
+		}
+		return svc.Directory()
 	}
-	if d.cfg.Auth.LDAP.Enabled && d.auth != nil {
-		if dir, ok := d.auth.Directory().(interface{ Status() (time.Time, error) }); ok {
-			out = append(out, sysmon.AuthProvider{Name: "LDAP", Status: func() (bool, time.Time, error) {
-				at, err := dir.Status()
-				return !at.IsZero() && err == nil, at, err
+}
+
+// authProviders lists the external sign-in providers in effect now: the
+// configuration file's, or the settings saved from the UI since, which
+// replace them on every node without a restart.
+func authProviders(oidcProvider func() *oidc.Provider, directory func() auth.Directory) []sysmon.AuthProvider {
+	var out []sysmon.AuthProvider
+	if oidcProvider != nil {
+		if p := oidcProvider(); p != nil {
+			out = append(out, sysmon.AuthProvider{Name: "OIDC", Status: func() (bool, time.Time, error) {
+				ok, err := p.Status()
+				return ok, time.Time{}, err
 			}})
 		}
+	}
+	// Directory is nil while LDAP is off.
+	if dir, ok := directory().(interface{ Status() (time.Time, error) }); ok {
+		out = append(out, sysmon.AuthProvider{Name: "LDAP", Status: func() (bool, time.Time, error) {
+			at, err := dir.Status()
+			return !at.IsZero() && err == nil, at, err
+		}})
 	}
 	return out
 }

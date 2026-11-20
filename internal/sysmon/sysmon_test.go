@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -346,6 +347,51 @@ func TestAuthCheck(t *testing.T) {
 	}
 	if strings.Contains(r.Facts[1].Value, "pw123") || !strings.Contains(r.Facts[1].Value, "2026-03-01") {
 		t.Fatalf("ldap fact = %q", r.Facts[1].Value)
+	}
+}
+
+// A check built at start follows sign-in providers turned on and off later
+// (settings saved from the UI): label and result come from the providers
+// in effect at each run.
+func TestLiveAuthCheckFollowsProviders(t *testing.T) {
+	var (
+		mu      sync.Mutex
+		current []AuthProvider
+	)
+	set := func(ps ...AuthProvider) {
+		mu.Lock()
+		defer mu.Unlock()
+		current = ps
+	}
+	check := LiveAuthCheck(func() []AuthProvider {
+		mu.Lock()
+		defer mu.Unlock()
+		return current
+	})
+	working := func(name string) AuthProvider {
+		return AuthProvider{Name: name, Status: func() (bool, time.Time, error) { return true, time.Time{}, nil }}
+	}
+	tests := []struct {
+		name       string
+		providers  []AuthProvider
+		wantLabel  string
+		wantMetric string
+	}{
+		{"file config: local only", nil, "Sign-in", "local"},
+		{"OIDC enabled from the UI", []AuthProvider{working("OIDC")}, "Sign-in (OIDC)", "ok"},
+		{"LDAP added", []AuthProvider{working("OIDC"), working("LDAP")}, "Sign-in (OIDC, LDAP)", "ok"},
+		{"both disabled again", nil, "Sign-in", "local"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			set(tc.providers...)
+			// A fresh monitor per step: Check caches a run for a few seconds.
+			m := New(nil, Options{NodeID: "n1", Checks: []Check{check}})
+			s := m.Check(context.Background()).Subsystems[0]
+			if s.Label != tc.wantLabel || s.Metric != tc.wantMetric || len(s.Facts) != len(tc.providers) {
+				t.Fatalf("subsystem = %q %s facts %v; want %q %s", s.Label, s.Metric, s.Facts, tc.wantLabel, tc.wantMetric)
+			}
+		})
 	}
 }
 
