@@ -190,7 +190,7 @@ func (s *Service) publish(ctx context.Context, repo *core.Repository, req core.P
 	if req.Replace && policy == core.WriteAllowOnce {
 		policy = core.WriteAllow // the format marked these paths mutable
 	}
-	if !isUUID(repo.ID) {
+	if !core.IsUUID(repo.ID) {
 		return nil, nil, fmt.Errorf("repository %q: %w", repo.Name, core.ErrNotFound)
 	}
 	assets, order, err := normaliseAssets(req.Assets)
@@ -455,7 +455,7 @@ func publishedAt(ctx context.Context) *time.Time {
 
 func checkComponent(ctx context.Context, tx pgx.Tx, repoID, id string) error {
 	var ok bool
-	if isUUID(id) {
+	if core.IsUUID(id) {
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM components WHERE id = $1 AND repo_id = $2)`, id, repoID).Scan(&ok); err != nil {
 			return err
 		}
@@ -615,7 +615,7 @@ func scanComponentRepo(row pgx.Row) (*core.Component, error) {
 
 // GetComponent implements core.ComponentService.
 func (s *Service) GetComponent(ctx context.Context, repoID, namespace, name, version string) (*core.Component, error) {
-	if !isUUID(repoID) {
+	if !core.IsUUID(repoID) {
 		return nil, fmt.Errorf("component %s/%s@%s: %w", namespace, name, version, core.ErrNotFound)
 	}
 	c, err := scanComponentRepo(s.pool.QueryRow(ctx, selectComponent+`
@@ -631,7 +631,7 @@ func (s *Service) GetComponent(ctx context.Context, repoID, namespace, name, ver
 
 // GetComponentByID implements core.ComponentService.
 func (s *Service) GetComponentByID(ctx context.Context, id string) (*core.Component, error) {
-	if !isUUID(id) {
+	if !core.IsUUID(id) {
 		return nil, fmt.Errorf("component %q: %w", id, core.ErrNotFound)
 	}
 	c, err := scanComponentRepo(s.pool.QueryRow(ctx, selectComponent+` WHERE c.id = $1`, id))
@@ -658,7 +658,7 @@ func (s *Service) ListComponents(ctx context.Context, q core.ComponentQuery) (co
 	if q.RepositoryID == "" {
 		return page, fmt.Errorf("list components: repository id required: %w", core.ErrInvalid)
 	}
-	if !isUUID(q.RepositoryID) {
+	if !core.IsUUID(q.RepositoryID) {
 		return core.Page[*core.Component]{Items: []*core.Component{}}, nil
 	}
 	var after *componentCursor
@@ -715,7 +715,7 @@ func (s *Service) ListComponents(ctx context.Context, q core.ComponentQuery) (co
 // GetAsset implements core.ComponentService.
 func (s *Service) GetAsset(ctx context.Context, repoID, path string) (*core.Asset, error) {
 	p := core.CleanPath(path)
-	if !isUUID(repoID) || p == "" {
+	if !core.IsUUID(repoID) || p == "" {
 		return nil, fmt.Errorf("asset %q: %w", p, core.ErrNotFound)
 	}
 	a, err := scanAsset(s.pool.QueryRow(ctx, `SELECT `+assetCols+` FROM assets WHERE repo_id = $1 AND path = $2`, repoID, p))
@@ -734,7 +734,7 @@ func (s *Service) ListAssets(ctx context.Context, q core.AssetQuery) (core.Page[
 	if q.RepositoryID == "" {
 		return page, fmt.Errorf("list assets: repository id required: %w", core.ErrInvalid)
 	}
-	if !isUUID(q.RepositoryID) || (q.ComponentID != "" && !isUUID(q.ComponentID)) {
+	if !core.IsUUID(q.RepositoryID) || (q.ComponentID != "" && !core.IsUUID(q.ComponentID)) {
 		return core.Page[*core.Asset]{Items: []*core.Asset{}}, nil
 	}
 	after := ""
@@ -833,7 +833,7 @@ func (s *Service) DeleteComponent(ctx context.Context, repo *core.Repository, id
 	if err := s.authorize(ctx, core.ActionDelete, repo, "component.delete", "component:"+repo.Name+"/"+id); err != nil {
 		return err
 	}
-	if !isUUID(id) || !isUUID(repo.ID) {
+	if !core.IsUUID(id) || !core.IsUUID(repo.ID) {
 		return fmt.Errorf("component %q: %w", id, core.ErrNotFound)
 	}
 	var comp *core.Component
@@ -901,7 +901,7 @@ func (s *Service) DeleteAsset(ctx context.Context, repo *core.Repository, path s
 	if err := s.authorize(ctx, core.ActionDelete, repo, "asset.delete", target); err != nil {
 		return err
 	}
-	if !isUUID(repo.ID) || p == "" {
+	if !core.IsUUID(repo.ID) || p == "" {
 		return fmt.Errorf("asset %q: %w", p, core.ErrNotFound)
 	}
 	var orphan *core.Component
@@ -973,7 +973,7 @@ RETURNING `+componentCols, compID))
 // background loop adds the counts to assets and components every
 // FlushInterval (or sooner when MaxPending assets are buffered).
 func (s *Service) RecordDownload(_ context.Context, asset *core.Asset) {
-	if asset == nil || !isUUID(asset.ID) {
+	if asset == nil || !core.IsUUID(asset.ID) {
 		return
 	}
 	now := time.Now().UTC()
@@ -1053,7 +1053,7 @@ func (s *Service) FlushDownloads(ctx context.Context) error {
 		d := batch[id]
 		counts = append(counts, d.n)
 		lasts = append(lasts, d.last)
-		if isUUID(d.componentID) {
+		if core.IsUUID(d.componentID) {
 			c := comps[d.componentID]
 			if c == nil {
 				c = &download{}
@@ -1200,24 +1200,4 @@ func mapErr(what string, err error) error {
 		}
 	}
 	return fmt.Errorf("%s: %w", what, err)
-}
-
-func isUUID(s string) bool {
-	if len(s) != 36 {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch i {
-		case 8, 13, 18, 23:
-			if c != '-' {
-				return false
-			}
-		default:
-			if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
-				return false
-			}
-		}
-	}
-	return true
 }

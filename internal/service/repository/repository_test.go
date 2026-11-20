@@ -133,7 +133,7 @@ func TestCreateGetRoundTrip(t *testing.T) {
 	}
 	for _, in := range cases {
 		out := f.mustCreate(t, in)
-		if !repository.IsUUID(out.ID) || out.CreatedAt.IsZero() || out.UpdatedAt.IsZero() {
+		if !core.IsUUID(out.ID) || out.CreatedAt.IsZero() || out.UpdatedAt.IsZero() {
 			t.Errorf("%s: id/timestamps not set: %+v", in.Name, out)
 		}
 		got, err := f.svc.Get(f.ctx, in.Name)
@@ -577,20 +577,6 @@ func TestGetMissing(t *testing.T) {
 	for _, id := range []string{"", "not-a-uuid", "00000000-0000-0000-0000-000000000000"} {
 		if _, err := f.svc.GetByID(f.ctx, id); !errors.Is(err, core.ErrNotFound) {
 			t.Errorf("GetByID(%q) = %v", id, err)
-		}
-	}
-}
-
-func TestIsUUID(t *testing.T) {
-	for s, want := range map[string]bool{
-		"0b6f6b4e-9d1a-4c4b-8f5e-2a8d6b1f0c3a": true,
-		"0B6F6B4E-9D1A-4C4B-8F5E-2A8D6B1F0C3A": true,
-		"0b6f6b4e9d1a4c4b8f5e2a8d6b1f0c3a":     false,
-		"0b6f6b4e-9d1a-4c4b-8f5e-2a8d6b1f0c3g": false,
-		"":                                     false,
-	} {
-		if got := repository.IsUUID(s); got != want {
-			t.Errorf("IsUUID(%q) = %v", s, got)
 		}
 	}
 }

@@ -45,7 +45,7 @@ func (executor) Validate(cfg json.RawMessage) error {
 	var c struct {
 		PolicyID string `json:"policy_id"`
 	}
-	if err := json.Unmarshal(cfg, &c); err != nil || !isUUID(c.PolicyID) {
+	if err := json.Unmarshal(cfg, &c); err != nil || !core.IsUUID(c.PolicyID) {
 		return fmt.Errorf("cleanup task config needs policy_id: %w", core.ErrInvalid)
 	}
 	return nil

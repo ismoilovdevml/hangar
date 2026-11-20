@@ -51,7 +51,7 @@ func (s stores) ForRepository(ctx context.Context, repo *core.Repository) (core.
 		return nil, err
 	}
 	var repoID *string
-	if isUUID(repo.ID) {
+	if core.IsUUID(repo.ID) {
 		id := repo.ID
 		repoID = &id
 	}
@@ -101,23 +101,4 @@ DO UPDATE SET soft_deleted_at = now() WHERE b.ref_count = 0`, repoID, storeName,
 		return fmt.Errorf("record blob %s: %w", d, err)
 	}
 	return nil
-}
-
-func isUUID(s string) bool {
-	if len(s) != 36 {
-		return false
-	}
-	for i, c := range s {
-		switch i {
-		case 8, 13, 18, 23:
-			if c != '-' {
-				return false
-			}
-		default:
-			if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
-				return false
-			}
-		}
-	}
-	return true
 }

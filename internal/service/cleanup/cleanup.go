@@ -174,7 +174,7 @@ type querier interface {
 
 func (s *Service) get(ctx context.Context, q querier, ref string, lock bool) (*Policy, error) {
 	where := ` WHERE p.name = $1`
-	if isUUID(ref) {
+	if core.IsUUID(ref) {
 		where = ` WHERE p.id = $1::uuid`
 	}
 	sql := policySelect + where
@@ -558,24 +558,4 @@ func mapErr(what string, err error) error {
 		return fmt.Errorf("%s: %s: %w", what, pg.Message, core.ErrInvalid)
 	}
 	return fmt.Errorf("%s: %w", what, err)
-}
-
-func isUUID(s string) bool {
-	if len(s) != 36 {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch i {
-		case 8, 13, 18, 23:
-			if c != '-' {
-				return false
-			}
-		default:
-			if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
-				return false
-			}
-		}
-	}
-	return true
 }

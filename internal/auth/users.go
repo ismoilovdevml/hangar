@@ -411,7 +411,7 @@ func (s *Service) UnlockUser(ctx context.Context, id string) (*User, error) {
 }
 
 func (s *Service) lockUser(ctx context.Context, tx pgx.Tx, id string) (*User, error) {
-	if !validUUID(id) {
+	if !core.IsUUID(id) {
 		return nil, fmt.Errorf("user %q: %w", id, core.ErrNotFound)
 	}
 	if _, err := tx.Exec(ctx, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, id); err != nil {

@@ -93,7 +93,7 @@ func (s *Service) checkPasswordCurrent(ctx context.Context, p *core.Principal) e
 	if p.PasswordChangeRequired {
 		return ErrPasswordChangeRequired
 	}
-	if !validUUID(p.ID) {
+	if !core.IsUUID(p.ID) {
 		return nil
 	}
 	var must bool

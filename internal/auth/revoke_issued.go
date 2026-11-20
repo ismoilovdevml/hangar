@@ -15,10 +15,10 @@ var _ core.TokenRevoker = (*Service)(nil)
 // here; tokens minted from the revoked one stop working with it.
 func (s *Service) RevokeIssued(ctx context.Context, id string) error {
 	p := core.PrincipalFrom(ctx)
-	if p.IsAnonymous() || !validUUID(p.ID) {
+	if p.IsAnonymous() || !core.IsUUID(p.ID) {
 		return fmt.Errorf("revoke token: %w", core.ErrUnauthenticated)
 	}
-	if !validUUID(id) {
+	if !core.IsUUID(id) {
 		return fmt.Errorf("token %q: %w", id, core.ErrNotFound)
 	}
 	var name string

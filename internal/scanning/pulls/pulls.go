@@ -135,7 +135,7 @@ func (r *Recorder) Retention() time.Duration { return r.opts.Retention }
 // Record notes one download of asset by the client of ctx. It never blocks
 // on the database.
 func (r *Recorder) Record(ctx context.Context, asset *core.Asset) {
-	if asset == nil || !isUUID(asset.ComponentID) {
+	if asset == nil || !core.IsUUID(asset.ComponentID) {
 		return
 	}
 	c := ClientOf(core.PrincipalFrom(ctx), core.RequestInfoFrom(ctx))
@@ -333,24 +333,4 @@ func (c *searchable) SearchComponents(ctx context.Context, q core.ComponentTextQ
 func (c *components) RecordDownload(ctx context.Context, asset *core.Asset) {
 	c.ComponentService.RecordDownload(ctx, asset)
 	c.rec.Record(ctx, asset)
-}
-
-func isUUID(s string) bool {
-	if len(s) != 36 {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch i {
-		case 8, 13, 18, 23:
-			if c != '-' {
-				return false
-			}
-		default:
-			if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
-				return false
-			}
-		}
-	}
-	return true
 }

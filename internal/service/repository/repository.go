@@ -163,7 +163,7 @@ func (s *Service) get(ctx context.Context, name string) (*core.Repository, error
 
 // GetByID implements core.RepositoryService.
 func (s *Service) GetByID(ctx context.Context, id string) (*core.Repository, error) {
-	if !IsUUID(id) {
+	if !core.IsUUID(id) {
 		return nil, fmt.Errorf("repository id %q: %w", id, core.ErrNotFound)
 	}
 	if r, ok := s.cache.getByID(id); ok {
@@ -238,7 +238,7 @@ func (s *Service) Members(ctx context.Context, group *core.Repository) ([]*core.
 		return nil, fmt.Errorf("repository %q is not a group: %w", name, core.ErrInvalid)
 	}
 	id := group.ID
-	if !IsUUID(id) {
+	if !core.IsUUID(id) {
 		g, err := s.Get(ctx, group.Name)
 		if err != nil {
 			return nil, err
@@ -841,25 +841,4 @@ func mapErr(what string, err error) error {
 		}
 	}
 	return fmt.Errorf("%s: %w", what, err)
-}
-
-// IsUUID reports whether s is a canonical, hyphenated UUID string.
-func IsUUID(s string) bool {
-	if len(s) != 36 {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch i {
-		case 8, 13, 18, 23:
-			if c != '-' {
-				return false
-			}
-		default:
-			if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
-				return false
-			}
-		}
-	}
-	return true
 }
