@@ -184,6 +184,8 @@ func start() (*harness, func(), error) {
 		// The sweep sends thousands of requests and many denied ones.
 		"HANGAR_SECURITY_RATE_LIMIT_API_PER_MINUTE=0",
 		"HANGAR_SECURITY_RATE_LIMIT_FAILED_AUTH_PER_MINUTE=0",
+		// The CI OIDC issuer of cioidc_test.go is a plain-http test server.
+		"HANGAR_AUTH_CI_OIDC_ALLOW_HTTP_ISSUERS=true",
 	)
 	logf, err := os.Create(h.logPath)
 	if err != nil {

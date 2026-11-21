@@ -316,15 +316,19 @@ func split(m map[string]time.Time) ([]string, []time.Time) {
 	return ids, ats
 }
 
-// PurgeExpired deletes expired sessions and session tokens. Personal tokens
-// are kept so the UI can show them as expired. Safe to run on every node.
+// PurgeExpired deletes expired sessions, session and federated tokens and
+// the jti records of expired ID tokens. Personal tokens are kept so the UI
+// can show them as expired. Safe to run on every node.
 func (s *Service) PurgeExpired(ctx context.Context) error {
 	now := s.now()
 	if _, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE expires_at < $1`, now); err != nil {
 		return fmt.Errorf("purge sessions: %w", err)
 	}
-	if _, err := s.pool.Exec(ctx, `DELETE FROM tokens WHERE kind = 'session' AND expires_at < $1`, now.Add(-time.Hour)); err != nil {
+	if _, err := s.pool.Exec(ctx, `DELETE FROM tokens WHERE kind IN ('session', 'federated') AND expires_at < $1`, now.Add(-time.Hour)); err != nil {
 		return fmt.Errorf("purge session tokens: %w", err)
+	}
+	if _, err := s.pool.Exec(ctx, `DELETE FROM oidc_exchanged_ids WHERE expires_at < $1`, now); err != nil {
+		return fmt.Errorf("purge exchanged ID tokens: %w", err)
 	}
 	return s.purgeSignInFailures(ctx)
 }

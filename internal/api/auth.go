@@ -56,6 +56,7 @@ var PublicRoutes = map[string]bool{
 	"POST /auth/login":         true,
 	"GET /auth/oidc/start":     true,
 	"GET /auth/oidc/callback":  true,
+	"POST /auth/oidc/exchange": true,
 	"GET /openapi.yaml":        true,
 	"GET /openapi.json":        true,
 	"GET /automation-guide.md": true,

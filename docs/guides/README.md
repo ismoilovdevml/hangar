@@ -18,6 +18,7 @@ Practical, copy-paste guides for running Hangar and connecting package clients t
 | [RPM](rpm.md) | RHEL, Rocky, AlmaLinux, Fedora: `.repo` files with `repo_gpgcheck`, `.rpm` upload, per-directory repodata, Rocky/EPEL mirror proxy |
 | [Raw](raw.md) | Arbitrary files with curl and wget, directory listings |
 | [CI integration](ci.md) | GitLab CI, GitHub Actions, Jenkins and Gitea Actions with tokens |
+| [CI OIDC token exchange](ci-oidc.md) | Trusted publishing: GitHub Actions and GitLab CI ID tokens traded for short-lived tokens, trust policies |
 | [REST API](api.md) | Authentication, common calls, pagination, errors |
 | [Access management](access.md) | Members, service accounts, roles, privileges and token scopes |
 | [Routing rules](routing-rules.md) | Dependency confusion: block internal names on public proxies, reserve them for hosted group members |

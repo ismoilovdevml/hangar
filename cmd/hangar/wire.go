@@ -21,6 +21,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/api/readmeimg"
 	"github.com/ismoilovdevml/hangar/internal/audit"
 	"github.com/ismoilovdevml/hangar/internal/auth"
+	"github.com/ismoilovdevml/hangar/internal/auth/federation"
 	"github.com/ismoilovdevml/hangar/internal/auth/httpapi"
 	"github.com/ismoilovdevml/hangar/internal/auth/ldap"
 	"github.com/ismoilovdevml/hangar/internal/auth/oidc"
@@ -527,6 +528,15 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	catDone := make(chan struct{})
 	go func() { cat.RunStats(catCtx); close(catDone) }()
 	a.onClose(func() { stopCat(); <-catDone })
+	// CI OIDC token exchange: issuer requests pass the dial policy of
+	// administrator-configured services, exchanges count against a bucket
+	// sized like auth.login_rate.
+	trust, err := federation.New(federation.Options{Pool: pool, Tokens: authSvc, AuthZ: authz, Audit: auditLog,
+		DefaultAudience: cfg.Server.BaseURL, AllowHTTPIssuers: cfg.Auth.CIOIDC.AllowHTTPIssuers,
+		DialGuard: guard.CheckServiceAddr, RateLimit: authSvc.Config().LoginRate, Logger: log})
+	if err != nil {
+		return nil, err
+	}
 	restAPI := &api.API{
 		Deps:           deps,
 		InstanceName:   cfg.Server.InstanceName,
@@ -546,7 +556,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Monitor:        mon,
 		Logs:           sysLogs,
 		AuthRoutes:     api.RouteFunc(func(r chi.Router) { httpapi.Register(r, authSvc, authOpts) }),
-		ExtraRoutes:    []api.RouteRegistrar{settingsSvc, signer},
+		ExtraRoutes:    []api.RouteRegistrar{settingsSvc, signer, trust},
 	}
 	restAPI.BlobStoreTester = blobStoreTester{keyring: keyring, dialGuard: guard.CheckServiceAddr}
 	// Open event streams end when their session or token stops working.

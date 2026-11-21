@@ -71,7 +71,7 @@ tags:
   - name: access
     description: Users, service accounts, roles and access tokens.
   - name: settings
-    description: Sign-in providers and outbound proxies.
+    description: Sign-in providers, outbound proxies and CI OIDC trust policies.
   - name: audit
     description: The audit log.
   - name: cluster
@@ -192,6 +192,73 @@ paths:
             Set-Cookie:
               schema: { type: string }
         "404": { $ref: "#/components/responses/NotFound" }
+  /auth/oidc/exchange:
+    post:
+      tags: [auth]
+      operationId: exchangeOidcToken
+      summary: Exchange a CI platform's ID token for a short-lived token (trusted publishing)
+      description: |
+        A CI job (GitHub Actions with `permissions: id-token: write`, GitLab CI
+        `id_tokens`, any OpenID Connect issuer) sends the ID token its platform
+        signed and gets a Hangar token of the service account a trust policy
+        names, narrowed to the policy's scopes, valid for the policy's
+        `max_ttl_seconds` (15 minutes by default, at most an hour). See
+        `/trust-policies` and docs/guides/ci-oidc.md.
+
+        The token must be a compact JWS signed with RS256 or ES256 by a key
+        the issuer publishes (OpenID discovery and JWKS, fetched over https).
+        `iss` must be the issuer of an enabled trust policy (other issuers are
+        refused without contacting them), `exp` is required, `exp`, `nbf` and
+        `iat` are checked with one minute of leeway, `sub` and `jti` are
+        required, and the policy's audience must be in `aud`. Every condition
+        of the policy must match. Each ID token can be exchanged once.
+
+        The minted token is kind `federated`: it is not listed under
+        `/tokens`, cannot be rotated and cannot create tokens; registry logins
+        made with it end when it does. Changing or deleting the policy
+        revokes the tokens it minted. Exchanges count against a per-address
+        limit sized like `auth.login_rate`. Every attempt is audited as
+        `auth.oidc.exchange` with the issuer, subject, policy and scopes
+        (never the tokens).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OIDCExchangeRequest" }
+      responses:
+        "200":
+          description: Minted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OIDCExchangeResult" }
+        "400":
+          description: |
+            No token, or (`details.reason: ambiguous_policy`) several trust policies
+            match: name one in `policy`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: |
+            The ID token was refused; `details.reason` is one of `malformed`,
+            `unknown_issuer`, `unknown_key`, `bad_signature`, `expired`,
+            `not_yet_valid`, `missing_claims`, `no_matching_policy` or `replayed`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: The policy's service account is disabled or gone (`details.reason`
+            `service_account_refused`).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "502":
+          description: The issuer's discovery document or keys could not be fetched (code `upstream_unavailable`).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /auth/logout:
     post:
       tags: [auth]
@@ -2836,6 +2903,107 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /trust-policies:
+    get:
+      tags: [settings]
+      operationId: listTrustPolicies
+      summary: CI OIDC trust policies
+      description: "`system:settings:read`. Sorted by name."
+      responses:
+        "200":
+          description: Trust policies
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TrustPolicy" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [settings]
+      operationId: createTrustPolicy
+      summary: Create a CI OIDC trust policy
+      description: |
+        `system:settings:admin`, and the caller must hold every privilege of
+        `scopes` (a policy hands them to whoever presents a matching ID token).
+        `service_account` must be an enabled service account; the minted token
+        can do what that account can, narrowed to `scopes`. At least one
+        condition is required; for `https://token.actions.githubusercontent.com`
+        and `https://gitlab.com` one condition must pin the owner (`repository`,
+        `repository_owner`, `repository_id`, `repository_owner_id` or `sub`;
+        `project_path`, `namespace_path`, `project_id`, `namespace_id` or `sub`)
+        with exact values or globs like `acme/*`. Audited as `trust_policy.create`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TrustPolicyInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrustPolicy" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /trust-policies/{name}:
+    parameters:
+      - $ref: "#/components/parameters/TrustPolicyName"
+    get:
+      tags: [settings]
+      operationId: getTrustPolicy
+      summary: One CI OIDC trust policy
+      description: "`system:settings:read`."
+      responses:
+        "200":
+          description: The policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrustPolicy" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [settings]
+      operationId: updateTrustPolicy
+      summary: Replace a CI OIDC trust policy
+      description: |
+        `system:settings:admin`, and the caller must hold every privilege of the
+        old and the new `scopes`. The name cannot change. Tokens the policy
+        minted before are revoked. Audited as `trust_policy.update`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TrustPolicyInput" }
+      responses:
+        "200":
+          description: Replaced
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrustPolicy" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [settings]
+      operationId: deleteTrustPolicy
+      summary: Delete a CI OIDC trust policy
+      description: |
+        `system:settings:admin` and the policy's scopes. The tokens it minted are
+        deleted with it. Audited as `trust_policy.delete`.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /tokens:
     get:
       tags: [access]
@@ -3157,6 +3325,11 @@ components:
       in: path
       required: true
       schema: { type: string, pattern: "^[a-z0-9][a-z0-9._-]{0,62}$" }
+    TrustPolicyName:
+      name: name
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" }
 
   responses:
     BadRequest:
@@ -3395,8 +3568,8 @@ components:
         id: { type: string }
         kind:
           type: string
-          description: "`personal` (personal access and service-account tokens) or `session` (short-lived registry logins)"
-          enum: [personal, session]
+          description: "`personal` (personal access and service-account tokens), `session` (short-lived registry logins) or `federated` (minted by `POST /auth/oidc/exchange`)"
+          enum: [personal, session, federated]
         name: { type: string }
         prefix: { type: string }
         scopes:
@@ -6066,6 +6239,107 @@ components:
             created_at: { type: [string, "null"], format: date-time }
             updated_at: { type: [string, "null"], format: date-time }
             updated_by: { type: string }
+    OIDCExchangeRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          maxLength: 16384
+          description: The CI platform's ID token (compact JWS)
+        policy:
+          type: string
+          description: Trust policy to use; only needed when several match
+    OIDCExchangeResult:
+      type: object
+      required: [token, token_type, expires_at, expires_in, scopes, service_account, policy]
+      properties:
+        token: { type: string, description: "The minted token (`hgr_...`); use it as a Bearer token or as the password" }
+        token_type: { type: string, const: Bearer }
+        expires_at: { type: string, format: date-time }
+        expires_in: { type: integer, description: Seconds until it expires }
+        scopes:
+          type: array
+          items: { $ref: "#/components/schemas/Privilege" }
+        service_account: { type: string, description: The account the token acts as }
+        policy: { type: string, description: The trust policy that matched }
+    TrustPolicyCondition:
+      type: object
+      required: [claim, values]
+      properties:
+        claim:
+          type: string
+          description: |
+            A claim of the ID token (`repository`, `ref`, `ref_type`, `environment`,
+            `workflow_ref` on GitHub; `project_path`, `ref`, `ref_protected` on
+            GitLab), or a dotted path into nested objects. Booleans compare as
+            `true`/`false`, numbers as written; arrays and objects never match.
+          examples: [repository, ref]
+        match:
+          type: string
+          enum: [exact, glob]
+          default: exact
+          description: "`glob`: `*` is any run of characters (`/` included), `?` one character"
+        values:
+          type: array
+          minItems: 1
+          maxItems: 32
+          description: The claim must match one of these
+          items: { type: string, minLength: 1, maxLength: 512 }
+    TrustPolicyInput:
+      type: object
+      required: [name, issuer, conditions, service_account, scopes]
+      properties:
+        name: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" }
+        description: { type: string, maxLength: 500 }
+        enabled: { type: boolean, default: true }
+        issuer:
+          type: string
+          format: uri
+          description: Exact `iss` of the ID tokens, an https URL
+          examples: ["https://token.actions.githubusercontent.com", "https://gitlab.com"]
+        audience:
+          type: string
+          description: Must be in the token's `aud`; defaults to the server's base URL
+        conditions:
+          type: array
+          minItems: 1
+          maxItems: 32
+          description: Every condition must match
+          items: { $ref: "#/components/schemas/TrustPolicyCondition" }
+        service_account: { type: string, description: Enabled service account the minted token acts as }
+        scopes:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: The minted token's scopes; the caller must hold each
+          items: { $ref: "#/components/schemas/Privilege" }
+        max_ttl_seconds:
+          type: integer
+          minimum: 60
+          maximum: 3600
+          default: 900
+          description: Lifetime of minted tokens
+    TrustPolicy:
+      type: object
+      required: [id, name, description, enabled, issuer, audience, conditions, service_account, scopes, max_ttl_seconds, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        enabled: { type: boolean }
+        issuer: { type: string }
+        audience: { type: string }
+        conditions:
+          type: array
+          items: { $ref: "#/components/schemas/TrustPolicyCondition" }
+        service_account: { type: string }
+        scopes:
+          type: array
+          items: { $ref: "#/components/schemas/Privilege" }
+        max_ttl_seconds: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
     OutboundProxyList:
       type: object
       required: [items, default, limited]
