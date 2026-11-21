@@ -104,7 +104,11 @@ describe('overview', () => {
     renderApp('/');
     const top = await screen.findByRole('region', { name: 'Most downloaded' });
     const chips = await within(top).findAllByRole('link');
-    expect(chips[0]).toHaveTextContent('log4j-core84K downloads');
+    // The Maven group and the npm scope stay in the name and the link.
+    expect(chips[0]).toHaveTextContent('org.apache.logging.log4j:log4j-core84K downloads');
+    expect(chips[0]).toHaveAttribute('href', '/browse?repo=maven-central&ns=org.apache.logging.log4j&name=log4j-core&version=2.24.1');
+    const uiKit = chips.find((a) => a.textContent?.startsWith('@acme/ui-kit'));
+    expect(uiKit).toHaveAttribute('href', '/browse?repo=npm-internal&ns=%40acme&name=ui-kit&version=5.3.1');
     expect(chips.length).toBeLessThanOrEqual(6);
 
     // Recent publications are on the Packages page; the overview stays one screen.
