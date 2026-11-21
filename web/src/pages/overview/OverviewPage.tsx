@@ -5,6 +5,7 @@ import { useNow } from '../../lib/useNow';
 import { OutcomeCard, SecurityCard, StorageCard, UpstreamCard } from './Cards';
 import { Hero } from './Hero';
 import { MostDownloaded } from './MostDownloaded';
+import { OnboardingCard } from './OnboardingCard';
 import { TodayCard } from './TodayCard';
 import { TodoCard } from './TodoCard';
 import { useTodo } from './useTodo';
@@ -28,6 +29,7 @@ export function OverviewPage() {
       <Hero topFormat={m?.storage_by_format.find((f) => f.bytes > 0)?.format} />
 
       <div className="ov-grid">
+        <OnboardingCard />
         <TodayCard
           m={m}
           range={range}

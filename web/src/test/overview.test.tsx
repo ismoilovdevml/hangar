@@ -2,11 +2,44 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { afterEach, describe, expect, it } from 'vitest';
+import { session } from '../mocks/data';
 import { opsMockState } from '../mocks/ops';
 import { server } from '../mocks/node';
 import { renderApp } from './render';
 
 const card = (name: RegExp) => screen.getByRole('link', { name });
+
+const noRepositories = () =>
+  server.use(http.get('*/api/v1/repositories', () => HttpResponse.json({ items: [], next_cursor: null, counts: { all: 0, hosted: 0, proxy: 0, group: 0 } })));
+
+describe('first run', () => {
+  it('leads an empty server with creating the first repository, above the To do reminders', async () => {
+    noRepositories();
+    renderApp('/');
+    const onboard = await screen.findByRole('region', { name: 'Create your first repository' });
+    expect(within(onboard).getByRole('link', { name: 'Create a hosted repository' })).toHaveAttribute('href', '/repositories/new?type=hosted');
+    expect(within(onboard).getByRole('link', { name: 'Create a proxy repository' })).toHaveAttribute('href', '/repositories/new?type=proxy');
+    expect(within(onboard).getByRole('link', { name: /Client setup guides/ })).toHaveAttribute('href', expect.stringMatching(/\/docs\/guides$/));
+    const todo = screen.getByRole('region', { name: 'To do' });
+    expect(onboard.compareDocumentPosition(todo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('points a reader without repositories at an administrator, without create links', async () => {
+    noRepositories();
+    server.use(http.get('*/api/v1/auth/session', () => HttpResponse.json({ ...session, privileges: ['repo:*:read'] }, { headers: { 'X-CSRF-Token': 'mock-csrf-0' } })));
+    renderApp('/');
+    const onboard = await screen.findByRole('region', { name: 'No repositories yet' });
+    expect(within(onboard).queryByRole('link', { name: /Create a/ })).not.toBeInTheDocument();
+    expect(within(onboard).getByRole('link', { name: /Client setup guides/ })).toBeInTheDocument();
+  });
+
+  it('is gone once there is a repository', async () => {
+    renderApp('/');
+    await screen.findByRole('region', { name: 'To do' });
+    await screen.findByRole('region', { name: 'Most downloaded' });
+    expect(screen.queryByRole('region', { name: 'Create your first repository' })).not.toBeInTheDocument();
+  });
+});
 
 describe('overview', () => {
   afterEach(() => window.localStorage.clear());

@@ -257,6 +257,12 @@
 .ov-card { min-width: 0; border-radius: var(--r-card); padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; color: var(--ink); }
 .ov-card__label { font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .ov-card__loading { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
+
+/* first run: no repository yet, so the first step leads the page */
+.onboard { grid-column: 1 / -1; padding: 20px 22px; gap: 8px; }
+.onboard__title { font-size: 18px; font-weight: 700; color: var(--ink-strong); }
+.onboard__text { max-width: 72ch; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+.onboard__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 6px; }
 .ov-link { transition: background-color var(--t-fast); }
 .ov-link.glass:hover { background: var(--wash-strong); color: var(--ink); }
 
