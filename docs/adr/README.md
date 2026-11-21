@@ -15,5 +15,6 @@ Changing a decided part of the stack requires a new record.
 | [0007](0007-format-contract-and-routing.md) | Format contract and request routing | Accepted |
 | [0008](0008-outbound-http-and-reverse-proxies.md) | Outbound HTTP proxies and running behind reverse proxies | Accepted |
 | [0009](0009-rest-api-conventions.md) | REST API conventions | Accepted |
+| [0010](0010-context-bound-sealed-secrets.md) | Sealed secrets bound to their row and field (hgs2) | Accepted |
 
 Template: copy the newest record, bump the number, keep it short.

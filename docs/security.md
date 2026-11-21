@@ -105,18 +105,36 @@ not changed; review group members after upgrading (see the changelog).
 | Local passwords | argon2id hash (parameters in `auth.argon2`), re-hashed on login when parameters change |
 | Personal, service-account and session tokens | SHA-256 of the token; the token (`hgr_…`) is shown once |
 | Proxy upstream password, bearer token, header value | Sealed (envelope encryption) in `repositories.config` |
-| Password in a proxy `remote_url` or `http.proxy` URL | Sealed in place of the password: `http://user:hgs1.…@host` |
+| Password in a proxy `remote_url` or `http.proxy` URL | Sealed in place of the password: `http://user:hgs2.…@host` |
 | S3 secret key and session token of blob stores | Sealed in `blob_stores.config` (`secret_access_key_sealed`) |
+| OIDC client secret, LDAP bind password, outbound proxy passwords | Sealed in `settings` / `outbound_proxies` |
+| Repository signing keys, import task source credentials | Sealed in `signing_keys.private_key` / `tasks.config` |
 | Server-level secrets (`storage.s3.secret_access_key`, `http.proxy_password`, `docker.token_key`, `security.secret_key`) | Not stored; read from the environment |
 
 **Envelope encryption** (`internal/secrets`). Each value gets a fresh
 256-bit data key; the value is encrypted with AES-256-GCM under the data
 key, and the data key with AES-256-GCM under the key encryption key
 (`security.secret_key`). The stored form is
-`hgs1.<key id>.<wrapped data key>.<ciphertext>`; the key id is derived from
+`hgs2.<key id>.<wrapped data key>.<ciphertext>`; the key id is derived from
 the key, so ids never need to be assigned. Values are sealed when a
 repository or blob store is saved and opened only by the proxy engine and
-the S3 driver. The API answers with the password removed and URL passwords
+the S3 driver.
+
+**Bound to their place.** Each ciphertext is authenticated together with
+where it is stored: table, row identity and field (the id of a repository,
+blob store or task; the key of a setting; the name of an outbound proxy or
+signing key; the JSON path or column of the secret). The binding is not
+stored in the value. A sealed value copied into another row, field or table
+(through database access, a restored backup or another installation with the
+same key) does not open there: the request that would use it fails, and
+`hangar serve` and `hangar admin rotate-secrets` report it as unreadable.
+Format details: [ADR 0010](adr/0010-context-bound-sealed-secrets.md) and the
+`internal/secrets` package documentation.
+
+**Values from before v0.2.0** (`hgs1.…`) were not bound to a place. They
+still open, and the first start of v0.2.0 with a key re-seals every one of
+them as `hgs2` (logged as "upgraded stored secrets"). After that the
+database cannot be read by v0.1.x; see *Downgrading* below. The API answers with the password removed and URL passwords
 as `REDACTED`; saving the redacted form back keeps the stored secret.
 
 A database check constraint (migration `00050`) rejects plaintext secrets
@@ -139,6 +157,26 @@ store that carries a credential answers `501` with an explanation.
 4. Remove the old key from `previous_secret_keys`; restart.
 
 A lost key cannot be recovered: re-enter the affected credentials.
+
+### Downgrading to v0.1.x
+
+Hangar before v0.2.0 reads only `hgs1` values, and its start-up sweep would
+take `hgs2` values for plaintext and seal them again, after which those
+credentials no longer work and must be re-entered. Before starting an older
+version:
+
+1. Stop every v0.2+ node (a running one writes `hgs2` on the next save, and
+   upgrades everything again when it starts).
+2. With the v0.2+ binary and the same keys, run
+   `hangar admin rotate-secrets --downgrade` (`--dry-run` shows the counts).
+   It writes every secret as `hgs1` under the primary key, giving up the
+   binding to its row and field, and exits non-zero if a value cannot be
+   opened.
+3. Roll the schema back as the release notes describe (migration 00330
+   restores the `hgs1`-only guards), then start the older version.
+
+Restoring a database backup taken before the upgrade also works, but loses
+every change made since.
 
 ## Hardening checklist for operators
 
