@@ -3,11 +3,13 @@ package repository_test
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/core/coretest"
 	"github.com/ismoilovdevml/hangar/internal/events"
 	"github.com/ismoilovdevml/hangar/internal/service/repository"
@@ -41,6 +43,22 @@ func startAPINode(t *testing.T, f *fixture) *apiNode {
 	return &apiNode{svc: svc, rt: rt}
 }
 
+// settled waits until the counter has not moved for 300 ms.
+func settled(t *testing.T, n *atomic.Int64) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	last, since := n.Load(), time.Now()
+	for time.Since(since) < 300*time.Millisecond {
+		if time.Now().After(deadline) {
+			t.Fatal("repository events kept coming")
+		}
+		time.Sleep(20 * time.Millisecond)
+		if v := n.Load(); v != last {
+			last, since = v, time.Now()
+		}
+	}
+}
+
 func waitUntil(t *testing.T, what string, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)
@@ -60,6 +78,14 @@ func TestCacheInvalidatedAcrossNodes(t *testing.T) {
 	f := newFixture(t)
 	a, b := startAPINode(t, f), startAPINode(t, f)
 	ctx := coretest.AsUser(context.Background(), "admin")
+	// Counts the repository events node b has received, to know when the
+	// events of a's changes have all arrived (each one drops b's cache).
+	var seen atomic.Int64
+	probe, err := b.rt.Bus.Subscribe(context.Background(), "repository.*", func(context.Context, core.Event) { seen.Add(1) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = probe.Unsubscribe() })
 	if _, err := a.svc.Create(ctx, hosted("raw-a", "raw")); err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +104,13 @@ func TestCacheInvalidatedAcrossNodes(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitUntil(t, "node b's cache to drop the old repository", func() bool { return description(b) == "changed on a" })
+	// b may have reloaded on the create's event before the update's arrived:
+	// wait until no more events come, then let b cache the current state.
+	settled(t, &seen)
+	time.Sleep(100 * time.Millisecond) // the cache handler runs on its own subscription
+	if got := description(b); got != "changed on a" {
+		t.Fatalf("b after the events settled: %q", got)
+	}
 
 	// A change no event announces (another node's notification lost while
 	// b was disconnected) shows once b's listener is back.
