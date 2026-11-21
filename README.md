@@ -59,7 +59,7 @@ reproduce every number. The other products were not measured here.
 | | |
 |---|---|
 | ![Package page](docs/screenshots/package.jpg) | ![Search](docs/screenshots/search.jpg) |
-| Package page with the install command, digest and checksums | Search across all repositories with filters |
+| Package page with its versions, scan state and README, next to the repository tree | Search across all repositories with filters |
 | ![Repositories](docs/screenshots/repositories.jpg) | ![New proxy repository](docs/screenshots/new-proxy-repository.jpg) |
 | Hosted, proxy and group repositories | Creating an npm proxy, with the same settings as YAML |
 | ![Access tokens](docs/screenshots/access-tokens.jpg) | ![Cleanup policies](docs/screenshots/cleanup-policies.jpg) |

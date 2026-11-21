@@ -11,7 +11,7 @@ export type QualifierKey = 'format' | 'repo' | 'sha256' | 'cve' | 'license' | 's
 
 export const QUALIFIERS: { key: QualifierKey; hint: string; example: string }[] = [
   { key: 'format', hint: 'Package format', example: 'format:npm' },
-  { key: 'repo', hint: 'Repository name', example: 'repo:npm-hosted' },
+  { key: 'repo', hint: 'Repository name', example: 'repo:<name>' },
   { key: 'sha256', hint: 'Digest prefix, 4–64 hex digits', example: 'sha256:9f2c' },
   { key: 'cve', hint: 'Advisory id', example: 'cve:CVE-2021-44228' },
   { key: 'license', hint: 'Licence (* wildcard)', example: 'license:MIT' },
@@ -21,6 +21,36 @@ export const QUALIFIERS: { key: QualifierKey; hint: string; example: string }[] 
 ];
 
 const KEYS = new Set<string>(QUALIFIERS.map((q) => q.key));
+
+/** What the examples need to know about a repository the user can read. */
+export interface ExampleRepository {
+  name: string;
+  format: string;
+  /** Groups hold no packages of their own, so search finds none under their name. */
+  type?: string;
+  component_count?: number;
+}
+
+/** The qualifiers the Search page offers as one-click examples, in order. */
+const TRY: QualifierKey[] = ['format', 'repo', 'sha256', 'unused', 'security'];
+
+/**
+ * An example of one qualifier. `format:` and `repo:` name the user's own
+ * repositories (the fullest hosted or proxy one), so the example finds something; `repo:` has
+ * no example without a repository to name.
+ */
+export function qualifierExample(key: QualifierKey, repos: readonly ExampleRepository[]): string | null {
+  const fallback = QUALIFIERS.find((q) => q.key === key)?.example ?? null;
+  if (key !== 'format' && key !== 'repo') return fallback;
+  const fullest = repos.filter((r) => r.type !== 'group').sort((a, b) => (b.component_count ?? 0) - (a.component_count ?? 0) || a.name.localeCompare(b.name))[0];
+  if (!fullest) return key === 'repo' ? null : fallback;
+  return key === 'repo' ? `repo:${fullest.name}` : `format:${fullest.format}`;
+}
+
+/** The Search page's "Try:" examples for these repositories. */
+export function searchExamples(repos: readonly ExampleRepository[]): string[] {
+  return TRY.map((k) => qualifierExample(k, repos)).filter((x): x is string => x !== null);
+}
 
 export const SECURITY_STATES = ['pending', 'clean', 'findings', 'quarantined', 'failed', 'unsupported'] as const;
 export type SecurityState = (typeof SECURITY_STATES)[number];

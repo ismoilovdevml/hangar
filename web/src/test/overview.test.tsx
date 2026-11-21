@@ -2,11 +2,44 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { afterEach, describe, expect, it } from 'vitest';
+import { session } from '../mocks/data';
 import { opsMockState } from '../mocks/ops';
 import { server } from '../mocks/node';
 import { renderApp } from './render';
 
 const card = (name: RegExp) => screen.getByRole('link', { name });
+
+const noRepositories = () =>
+  server.use(http.get('*/api/v1/repositories', () => HttpResponse.json({ items: [], next_cursor: null, counts: { all: 0, hosted: 0, proxy: 0, group: 0 } })));
+
+describe('first run', () => {
+  it('leads an empty server with creating the first repository, above the To do reminders', async () => {
+    noRepositories();
+    renderApp('/');
+    const onboard = await screen.findByRole('region', { name: 'Create your first repository' });
+    expect(within(onboard).getByRole('link', { name: 'Create a hosted repository' })).toHaveAttribute('href', '/repositories/new?type=hosted');
+    expect(within(onboard).getByRole('link', { name: 'Create a proxy repository' })).toHaveAttribute('href', '/repositories/new?type=proxy');
+    expect(within(onboard).getByRole('link', { name: /Client setup guides/ })).toHaveAttribute('href', expect.stringMatching(/\/docs\/guides$/));
+    const todo = screen.getByRole('region', { name: 'To do' });
+    expect(onboard.compareDocumentPosition(todo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('points a reader without repositories at an administrator, without create links', async () => {
+    noRepositories();
+    server.use(http.get('*/api/v1/auth/session', () => HttpResponse.json({ ...session, privileges: ['repo:*:read'] }, { headers: { 'X-CSRF-Token': 'mock-csrf-0' } })));
+    renderApp('/');
+    const onboard = await screen.findByRole('region', { name: 'No repositories yet' });
+    expect(within(onboard).queryByRole('link', { name: /Create a/ })).not.toBeInTheDocument();
+    expect(within(onboard).getByRole('link', { name: /Client setup guides/ })).toBeInTheDocument();
+  });
+
+  it('is gone once there is a repository', async () => {
+    renderApp('/');
+    await screen.findByRole('region', { name: 'To do' });
+    await screen.findByRole('region', { name: 'Most downloaded' });
+    expect(screen.queryByRole('region', { name: 'Create your first repository' })).not.toBeInTheDocument();
+  });
+});
 
 describe('overview', () => {
   afterEach(() => window.localStorage.clear());
@@ -29,13 +62,15 @@ describe('overview', () => {
 
     const storage = card(/^Storage/);
     expect(storage).toHaveAttribute('href', '/blob-stores');
-    expect(within(storage).getByText('4.82 TiB')).toBeInTheDocument();
-    expect(within(storage).getByText('Docker 61% · 7 formats · 40% of quota')).toBeInTheDocument();
+    // The blob stores' total (see mocks/consistency.test.ts); fs-local has no quota, so there is no share of one.
+    expect(within(storage).getByText('5.31 TiB')).toBeInTheDocument();
+    expect(within(storage).getByText('Docker 62% · 9 formats · no quota on fs-local')).toBeInTheDocument();
 
     const security = card(/^Security/);
     expect(security).toHaveAttribute('href', '/vulnerabilities');
-    expect(within(security).getByText('7 critical')).toBeInTheDocument();
-    expect(within(security).getByText('In 3 packages · 2 quarantined')).toBeInTheDocument();
+    // The one open critical finding the Vulnerabilities page lists, in the package it quarantined.
+    expect(within(security).getByText('1 critical')).toBeInTheDocument();
+    expect(within(security).getByText('In 1 package · 1 quarantined')).toBeInTheDocument();
 
     // The worst upstream comes first.
     const upstream = await waitFor(() => card(/^Upstream/));
@@ -51,10 +86,12 @@ describe('overview', () => {
     expect(items.map((a) => a.querySelector('.todo__item-title')?.textContent)).toEqual([
       'ghcr-proxy: authentication failed (401)',
       '4 pushes rejected',
-      'Review 7 critical vulnerabilities',
+      'Review 1 critical vulnerability',
       // From the system health: the mock cluster has a silent node.
       'Node hangar-3 is not responding',
       'Renew the laptop CLI token',
+      // fs-local has no quota, as the Blob stores page shows.
+      'Set a storage quota',
     ]);
     expect(items.map((a) => a.getAttribute('href'))).toEqual([
       '/repositories/ghcr-proxy/settings',
@@ -62,10 +99,12 @@ describe('overview', () => {
       '/vulnerabilities',
       '/system/status',
       '/account#my-tokens-title',
+      '/blob-stores/fs-local',
     ]);
-    expect(todo.querySelector('.todo__count')).toHaveTextContent('5 items');
-    // The backup task is scheduled and the blob stores have quotas: no reminders for those.
-    expect(todo).not.toHaveTextContent(/backup|quota/i);
+    expect(todo.querySelector('.todo__count')).toHaveTextContent('6 items');
+    expect(todo).toHaveTextContent('Blob store fs-local has no quota');
+    // The backup task is scheduled: no reminder for that.
+    expect(todo).not.toHaveTextContent(/backup/i);
   });
 
   it('points at the backup guide when the server has no backup task, until dismissed', async () => {
@@ -104,7 +143,11 @@ describe('overview', () => {
     renderApp('/');
     const top = await screen.findByRole('region', { name: 'Most downloaded' });
     const chips = await within(top).findAllByRole('link');
-    expect(chips[0]).toHaveTextContent('log4j-core84K downloads');
+    // The Maven group and the npm scope stay in the name and the link.
+    expect(chips[0]).toHaveTextContent('org.apache.logging.log4j:log4j-core84K downloads');
+    expect(chips[0]).toHaveAttribute('href', '/browse?repo=maven-central&ns=org.apache.logging.log4j&name=log4j-core&version=2.24.1');
+    const uiKit = chips.find((a) => a.textContent?.startsWith('@acme/ui-kit'));
+    expect(uiKit).toHaveAttribute('href', '/browse?repo=npm-internal&ns=%40acme&name=ui-kit&version=5.3.1');
     expect(chips.length).toBeLessThanOrEqual(6);
 
     // Recent publications are on the Packages page; the overview stays one screen.

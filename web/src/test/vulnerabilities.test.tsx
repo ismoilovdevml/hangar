@@ -22,6 +22,8 @@ describe('vulnerabilities', () => {
     // The quarantine policy of the repositories and the 30-day trend.
     const policy = screen.getByRole('region', { name: 'Policy · quarantine critical' });
     await waitFor(() => expect(policy).toHaveTextContent(/On in \d+ of \d+ repositories|Off in every repository/));
+    // The quarantined count is a line of its own, so a narrow card cannot cut it mid-word.
+    expect(await within(policy).findByText(/^\d+ packages? quarantined$/)).toHaveClass('vsum__note--wrap');
     const trend = screen.getByRole('region', { name: 'Last 30 days · critical + high' });
     expect(await within(trend).findByRole('img', { name: /^Open critical and high findings: / })).toBeInTheDocument();
     // 18 packages: the 9 not counted as scanned are said why.
@@ -35,6 +37,10 @@ describe('vulnerabilities', () => {
     const table = await plan();
     const names = within(table).getAllByText(/./, { selector: '.vplan__name' }).map((n) => n.textContent);
     expect(names.slice(0, 4)).toEqual(['com.acme:ledger-core', 'System.Security.Cryptography.Xml', 'Newtonsoft.Json', '@acme/ui-kit']);
+    // Row actions are quiet and on one line: a secondary copy, a ghost waive.
+    const ledger = row('com.acme:ledger-core');
+    expect(within(ledger).getByRole('button', { name: 'Copy the upgrade command for com.acme:ledger-core' })).toHaveClass('button--secondary');
+    expect(within(ledger).getByRole('button', { name: 'Waive com.acme:ledger-core' })).toHaveClass('button--ghost');
     const xml = row('System.Security.Cryptography.Xml');
     expect(within(xml).getByText('8.0.2, 10.0.8')).toBeInTheDocument();
     expect(within(xml).getByText('2 high · CVSS 8.1')).toBeInTheDocument();

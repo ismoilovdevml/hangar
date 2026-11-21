@@ -67,8 +67,9 @@ function PolicyCard() {
             ) : (
               'Turn it on in a repository’s settings'
             )}
-            {quarantined.data !== undefined && ` · ${plural(quarantined.data, 'package')} quarantined`}
           </span>
+          {/* Its own line: appended to the repository names it was cut mid-word in a narrow card. */}
+          {quarantined.data !== undefined && <span className="vsum__note vsum__note--wrap">{plural(quarantined.data, 'package')} quarantined</span>}
         </>
       )}
     </section>

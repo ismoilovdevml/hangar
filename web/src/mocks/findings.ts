@@ -176,8 +176,14 @@ function toFinding(s: Seed, now: number): Finding {
   };
 }
 
+/** The findings the mock starts with (package findings; image findings come with image scanning). */
+export const seedFindings = (now = Date.now()): Finding[] => SEEDS.map((s) => toFinding(s, now));
+
+/** Packages with a successful scan: the scanner status and the Overview say the same. */
+export const SCANNED_COMPONENTS = 9;
+
 const initialState = () => ({
-  findings: SEEDS.map((s) => toFinding(s, Date.now())),
+  findings: seedFindings(),
   enabled: true,
   rescan: null as Rescan | null,
   /** Repeated pulls of the fix plan are failed (error state tests). */
@@ -660,7 +666,7 @@ export function findingsHandlers(guard: Guard, readableRepos: () => string[], re
           source_url: 'https://api.osv.dev',
           rescan_interval: '24h0m0s',
           supported_formats: state.images ? [...SCANNED_FORMATS, 'docker'] : SCANNED_FORMATS,
-          coverage: { scanned: 9, failed: 1, never: 2, unsupported: 6, last_scan_at: new Date(Date.now() - 40 * 60_000).toISOString() },
+          coverage: { scanned: SCANNED_COMPONENTS, failed: 1, never: 2, unsupported: 6, last_scan_at: new Date(Date.now() - 40 * 60_000).toISOString() },
           images: state.images
             ? { enabled: true, scanner: 'trivy', server_url: 'http://trivy:4954', platforms: 'all', version: '0.76.1', db_updated_at: new Date(Date.now() - 5 * 3_600_000).toISOString() }
             : { enabled: false, scanner: 'trivy' },

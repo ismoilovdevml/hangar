@@ -47,7 +47,7 @@
   font: inherit; font-size: 12px; font-weight: 700; color: var(--ink-2); cursor: pointer;
 }
 .vtabs__tab:hover { color: var(--ink); background: var(--glass-bg-strong); }
-.vtabs__tab.is-active { background: var(--surface-solid); color: var(--lake-ink); border-color: rgba(31, 86, 115, 0.3); }
+.vtabs__tab.is-active { background: var(--surface-solid); color: var(--lake-ink); border-color: color-mix(in srgb, var(--lake-ink) 30%, transparent); }
 
 /* ---------- fix plan table ---------- */
 .vplan { min-width: 940px; }
@@ -58,12 +58,12 @@
 .vplan td.col-first { padding-left: 14px; }
 .vplan td.col-last { padding-right: 18px; }
 .vplan__row { cursor: pointer; transition: background var(--t-fast), opacity var(--t-fast); }
-.vplan__row:hover { background: rgba(255, 255, 255, 0.7); }
+.vplan__row:hover { background: var(--wash-strong); }
 /* Unused packages read quieter without losing contrast: muted text and no tinted badges (opacity failed WCAG AA). */
-.vplan__row.is-unused { background: rgba(255, 255, 255, 0.25); }
+.vplan__row.is-unused { background: var(--wash-faint); }
 .vplan__row.is-unused td, .vplan__row.is-unused .vplan__name, .vplan__row.is-unused .vplan__upgrade { color: var(--ink-3); }
 .vplan__row.is-unused .pill, .vplan__row.is-unused .vplan__versions { background: var(--surface-muted); color: var(--ink-2); }
-.vplan__row.is-unused:hover, .vplan__row.is-unused:focus-within { background: rgba(255, 255, 255, 0.7); }
+.vplan__row.is-unused:hover, .vplan__row.is-unused:focus-within { background: var(--wash-strong); }
 .vplan__row.is-open { background: var(--glass-bg-strong); }
 .vplan__pkg { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .vplan__toggle {
@@ -95,11 +95,9 @@
 }
 .vplan__assign { color: var(--lake-ink); font-weight: 700; }
 .vplan__owner--btn:hover, .vplan__assign:hover { background: var(--surface-muted); }
-/* the two buttons stack when the column is narrow, so the table fits instead of scrolling */
-.vplan__actions { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
-.vplan__actions .button--sm { min-height: 32px; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 700; }
-.vplan__copy { background: var(--lake); color: var(--ink-inverse); border: 0; }
-.vplan__copy:hover { background: #285D79; color: var(--ink-inverse); }
+/* Row actions sit on one line: a quiet secondary copy and a ghost waive, so the rows read before their buttons. */
+.vplan__actions { display: inline-flex; align-items: center; gap: 4px; flex-wrap: nowrap; justify-content: flex-end; }
+.vplan__actions .button--sm { min-height: 32px; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 600; }
 .vplan__detail > td { padding: 0 18px 12px 50px; border-top: 0; background: var(--glass-bg-strong); }
 .vplan__findings { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border-radius: 12px; overflow: hidden; border: 1px solid var(--hairline); }
 .vplan__findings > li + li { border-top: 1px solid var(--hairline); }
@@ -158,10 +156,10 @@
 .vfix__cmd { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px; border-radius: 10px; background: var(--code-bg); }
 .vfix__cmd code { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 11.5px; color: var(--code-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vfix__copy {
-  flex: none; min-height: 30px; padding: 0 10px; border: 0; border-radius: 7px; background: #34485C;
-  color: var(--ink-inverse); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  flex: none; min-height: 30px; padding: 0 10px; border: 0; border-radius: 7px; background: var(--code-control-hover);
+  color: var(--code-ink); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
 }
-.vfix__copy:hover { background: #41586E; }
+.vfix__copy:hover { background: color-mix(in srgb, var(--code-ink) 24%, var(--code-bg)); }
 
 .vpullers { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
 .vpullers li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--hairline); }
@@ -194,7 +192,6 @@
   .vdrawer__foot { padding: 12px 16px 16px; }
 }
 
-:root[data-theme='dusk'] .vplan__row:hover { background: var(--glass-bg-strong); }
 .advisory { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .advisory .markdown { font-size: 13.5px; }
 .advisory .markdown > * + * { margin-top: 8px; }
@@ -219,6 +216,7 @@
 .vsum__value { font-size: 14px; font-weight: 700; line-height: 1.6; color: var(--ink-strong); }
 .vsum__note { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vsum__note a { color: var(--lake-ink); font-weight: 600; }
+.vsum__note--wrap { white-space: normal; }
 .vsum__chart { display: block; width: 100%; height: 34px; margin: 3px 0 1px; }
 .vsum__bar { fill: var(--chart-3); }
 .vsum__axis { stroke: var(--hairline-strong); stroke-width: 1; }

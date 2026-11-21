@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { PickerLoadError } from '../../components/States';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { useCanSystem, useCreateTask, useParseLockfile } from '../../api/ops';
@@ -12,6 +12,7 @@ import { Segmented } from '../../components/Segmented';
 import { Select } from '../../components/Select';
 import { cronToSchedule, scheduleToCron, type ScheduleDraft } from '../../lib/cron';
 import { importHints, splitList, TASK_NAME_RE, type ImportKind, type MaintenanceType, type NewTaskKind } from '../../lib/imports';
+import { useDetailsOpen } from '../../lib/useDetailsOpen';
 import { ScheduleField } from '../cleanup/ScheduleField';
 
 const route = getRouteApi('/app/tasks/new');
@@ -108,6 +109,9 @@ function maintenanceDescription(d: Draft): string {
 }
 
 const num = (s: string) => (s.trim() === '' ? undefined : Number(s));
+
+/** Fields inside "More options": an error in one of them opens the section. */
+const MORE_OPTIONS = ['schedule', 'rps', 'concurrency'];
 
 function sourceOf(d: Draft) {
   return {
@@ -217,6 +221,31 @@ export function NewTaskPage() {
   const errors = validate(kind, draft);
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const err = (k: string) => (shown ? errors[k] : undefined);
+  /** Props tying a control to its error message. */
+  const invalid = (k: string, hintId?: string) => ({
+    'aria-invalid': err(k) ? true : undefined,
+    'aria-describedby': [err(k) ? f(`${k}-err`) : '', hintId ?? ''].filter(Boolean).join(' ') || undefined,
+  });
+  const fieldError = (k: string) =>
+    err(k) ? (
+      <span id={f(`${k}-err`)} className="field__error">
+        {err(k)}
+      </span>
+    ) : null;
+  const errorCount = Object.keys(errors).length;
+  // An error in a closed "More options" would be invisible: open it.
+  const more = useDetailsOpen(shown && MORE_OPTIONS.some((k) => errors[k]));
+  const formRef = useRef<HTMLFormElement>(null);
+  // Each refused submit moves the focus to the first field with a problem, once the section holding it is open.
+  const [attempts, setAttempts] = useState(0);
+  useEffect(() => {
+    if (!attempts) return;
+    const form = formRef.current;
+    const first =
+      form?.querySelector<HTMLElement>('[aria-invalid="true"]') ??
+      form?.querySelector('.field__error')?.closest('.field, fieldset')?.querySelector<HTMLElement>('input, textarea, button, [tabindex]');
+    first?.focus();
+  }, [attempts]);
 
   const switchKind = (k: NewTaskKind) => {
     void navigate({ search: { kind: k, repository: undefined }, replace: true });
@@ -243,7 +272,10 @@ export function NewTaskPage() {
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     setShown(true);
-    if (Object.keys(errors).length) return;
+    if (errorCount) {
+      setAttempts((n) => n + 1);
+      return;
+    }
     const schedule = scheduleToCron(draft.schedule) ?? null;
     create.mutate(
       {
@@ -281,7 +313,7 @@ export function NewTaskPage() {
           <p className="meta">Creating tasks needs the tasks write privilege.</p>
         </Panel>
       ) : (
-        <form className="new-task" onSubmit={onSubmit} noValidate aria-label="New task">
+        <form ref={formRef} className="new-task" onSubmit={onSubmit} noValidate aria-label="New task">
           <Panel>
             <Segmented<NewTaskKind>
               className="new-task__kind"
@@ -304,17 +336,12 @@ export function NewTaskPage() {
                   className="input input--mono"
                   value={draft.name}
                   placeholder={kind === 'import' ? 'import-npm' : kind === 'prewarm' ? 'prewarm-npm' : draft.maintenance === 'docker_gc' ? 'docker-gc-weekly' : 'compaction-weekly'}
-                  aria-invalid={!!err('name') || undefined}
-                  aria-describedby={err('name') ? f('name-err') : undefined}
+                  {...invalid('name')}
                   onChange={(e) => set({ name: e.target.value.trim() })}
                   autoComplete="off"
                   spellCheck={false}
                 />
-                {err('name') && (
-                  <span id={f('name-err')} className="field__error">
-                    {err('name')}
-                  </span>
-                )}
+                {fieldError('name')}
               </div>
               {kind === 'maintenance' && (
                 <>
@@ -362,10 +389,10 @@ export function NewTaskPage() {
                           inputMode="numeric"
                           placeholder="7"
                           value={draft.olderThanDays}
-                          aria-invalid={!!err('olderThanDays') || undefined}
+                          {...invalid('olderThanDays')}
                           onChange={(e) => set({ olderThanDays: e.target.value })}
                         />
-                        {err('olderThanDays') && <span className="field__error">{err('olderThanDays')}</span>}
+                        {fieldError('olderThanDays')}
                       </div>
                       <label className="checkbox">
                         <input type="checkbox" checked={draft.dryRun} onChange={(e) => set({ dryRun: e.target.checked })} /> Dry run: only report what
@@ -388,16 +415,13 @@ export function NewTaskPage() {
                     searchable
                     placeholder={repos.isPending ? 'Loading…' : repos.isError ? 'Repositories could not be loaded' : candidates.length ? 'Choose a repository' : 'No repositories of this kind'}
                     options={candidates.map((r) => ({ value: r.name, label: r.name, hint: `${r.format} · ${r.type}` }))}
+                    {...invalid('repository')}
                     onChange={(v) => {
                       set({ repository: v });
                       setChips([]);
                     }}
                   />
-                  {repos.isError ? (
-                    <PickerLoadError what="repositories" onRetry={() => void repos.refetch()} />
-                  ) : (
-                    err('repository') && <span className="field__error">{err('repository')}</span>
-                  )}
+                  {repos.isError ? <PickerLoadError what="repositories" onRetry={() => void repos.refetch()} /> : fieldError('repository')}
                 </div>
               )}
 
@@ -411,7 +435,7 @@ export function NewTaskPage() {
                     className="input input--mono textarea new-task__coords"
                     value={draft.coordinates}
                     placeholder={hints.coordinates}
-                    aria-invalid={!!err('coordinates') || undefined}
+                    {...invalid('coordinates')}
                     onChange={(e) => set({ coordinates: e.target.value })}
                     spellCheck={false}
                   />
@@ -440,7 +464,7 @@ export function NewTaskPage() {
                       {lockError}
                     </span>
                   )}
-                  {err('coordinates') && <span className="field__error">{err('coordinates')}</span>}
+                  {fieldError('coordinates')}
                   <label className="checkbox">
                     <input type="checkbox" checked={draft.inventory} onChange={(e) => set({ inventory: e.target.checked })} /> Also fetch
                     everything a source registry holds
@@ -459,7 +483,7 @@ export function NewTaskPage() {
                       className="input input--mono"
                       value={draft.url}
                       placeholder={hints.url}
-                      aria-invalid={!!err('url') || undefined}
+                      aria-invalid={err('url') ? true : undefined}
                       aria-describedby={f('url-note')}
                       onChange={(e) => set({ url: e.target.value })}
                       autoComplete="off"
@@ -524,10 +548,10 @@ export function NewTaskPage() {
                         spellCheck={false}
                       />
                     </label>
-                    <label className="field" htmlFor={f('latest')}>
-                      <span>
+                    <div className="field">
+                      <label className="field__label" htmlFor={f('latest')}>
                         Newest <span className="field__optional">per package</span>
-                      </span>
+                      </label>
                       <input
                         id={f('latest')}
                         className="input"
@@ -536,10 +560,11 @@ export function NewTaskPage() {
                         inputMode="numeric"
                         value={draft.latest}
                         placeholder="All"
-                        aria-invalid={!!err('latest') || undefined}
+                        {...invalid('latest')}
                         onChange={(e) => set({ latest: e.target.value })}
                       />
-                    </label>
+                      {fieldError('latest')}
+                    </div>
                     <label className="checkbox">
                       <input type="checkbox" checked={draft.prereleases} onChange={(e) => set({ prereleases: e.target.checked })} /> Pre-releases
                     </label>
@@ -549,7 +574,7 @@ export function NewTaskPage() {
             </div>
 
             {kind !== 'maintenance' && (
-              <details className="new-task__more">
+              <details className="new-task__more" open={more.open} onToggle={more.onToggle}>
                 <summary>More options</summary>
                 <div className="new-task__schedule">{scheduleField}</div>
                 <div className="form-grid form-grid--3">
@@ -594,8 +619,10 @@ export function NewTaskPage() {
                       />
                     </label>
                   )}
-                  <label className="field" htmlFor={f('rps')}>
-                    Requests per second
+                  <div className="field">
+                    <label className="field__label" htmlFor={f('rps')}>
+                      Requests per second
+                    </label>
                     <input
                       id={f('rps')}
                       className="input"
@@ -603,12 +630,15 @@ export function NewTaskPage() {
                       min={0}
                       value={draft.rps}
                       placeholder="10"
-                      aria-invalid={!!err('rps') || undefined}
+                      {...invalid('rps')}
                       onChange={(e) => set({ rps: e.target.value })}
                     />
-                  </label>
-                  <label className="field" htmlFor={f('conc')}>
-                    At once
+                    {fieldError('rps')}
+                  </div>
+                  <div className="field">
+                    <label className="field__label" htmlFor={f('conc')}>
+                      At once
+                    </label>
                     <input
                       id={f('conc')}
                       className="input"
@@ -617,14 +647,20 @@ export function NewTaskPage() {
                       max={16}
                       value={draft.concurrency}
                       placeholder="4"
-                      aria-invalid={!!err('concurrency') || undefined}
+                      {...invalid('concurrency')}
                       onChange={(e) => set({ concurrency: e.target.value })}
                     />
-                  </label>
+                    {fieldError('concurrency')}
+                  </div>
                 </div>
               </details>
             )}
 
+            {shown && errorCount > 0 && (
+              <p className="form-error" role="alert">
+                {errorCount === 1 ? 'One field needs attention; it is marked above.' : `${errorCount} fields need attention; they are marked above.`}
+              </p>
+            )}
             {create.isError && (
               <p className="form-error" role="alert">
                 {errorText(create.error, { action: 'create the task' })}

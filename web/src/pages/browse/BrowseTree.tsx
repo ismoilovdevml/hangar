@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { browseFolderQuery, browseKeys } from '../../api/browse';
 import { catalogKeys, componentLookupQuery, useAllRepositories } from '../../api/catalog';
-import type { BrowseEntry, BrowsePage, PublishedComponent, Repository } from '../../api/types';
+import type { BrowseEntry, BrowsePage, PublishedComponent, PublishedComponentPage, Repository } from '../../api/types';
 import { ErrorNote } from '../../components/ErrorNote';
 import { formatBytes } from '../../lib/format';
 import { TYPE_META } from '../../lib/repositories';
@@ -46,6 +46,23 @@ interface BrowseTreeProps {
   onSelect: (s: TreeSelection) => void;
 }
 
+/** What the tree reads of a query. */
+interface Slice<T> {
+  data: T | undefined;
+  pending: boolean;
+  error: boolean;
+}
+
+/**
+ * `combine` for useQueries: React Query re-runs it only when a result changed
+ * and keeps the previous array when the slices are equal, so the memoised tree
+ * below is rebuilt when data arrives, not on every render (a scroll, say).
+ */
+const folderSlices = (rs: UseQueryResult<BrowsePage>[]): Slice<BrowsePage>[] =>
+  rs.map((r) => ({ data: r.data, pending: r.isPending && !r.isError, error: r.isError }));
+const lookupSlices = (rs: UseQueryResult<PublishedComponentPage>[]): Slice<PublishedComponentPage>[] =>
+  rs.map((r) => ({ data: r.data, pending: r.isPending && !r.isError, error: r.isError }));
+
 /** Versions of one package, merged over the members that hold it (first member wins), newest first. */
 function mergeVersions(lists: (PublishedComponent[] | undefined)[], ns: string): PublishedComponent[] {
   const seen = new Map<string, PublishedComponent>();
@@ -75,7 +92,9 @@ export function BrowseTree({ repo, path, ns, name, version, onSelect }: BrowseTr
   const [more, setMore] = useState<Record<string, string[]>>({});
   const [active, setActive] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [scrollTop, setScrollTop] = useState(0);
+  /** The exact scroll offset; only the first row in view is state, so scrolling within a row renders nothing. */
+  const scrollTop = useRef(0);
+  const [topRow, setTopRow] = useState(0);
   const [viewport, setViewport] = useState(FALLBACK_VIEWPORT);
 
   const pkgKey = repo ? nodeKey(repo, treePath) : null;
@@ -103,16 +122,16 @@ export function BrowseTree({ repo, path, ns, name, version, onSelect }: BrowseTr
       }),
     [expanded, more],
   );
-  const results = useQueries({ queries: requests.map((q) => browseFolderQuery(q.repo, q.path, q.cursor, 'packages')) });
+  const results = useQueries({ queries: requests.map((q) => browseFolderQuery(q.repo, q.path, q.cursor, 'packages')), combine: folderSlices });
 
   const folders = useMemo(() => {
     const map = new Map<string, FolderState>();
     requests.forEach((q, i) => {
-      const res = results[i]!;
+      const res = results[i];
       const st = map.get(q.key) ?? { pages: [], loading: false, error: false, hasMore: false };
-      if (res.data) st.pages.push(res.data as BrowsePage);
-      st.loading ||= res.isPending && !res.isError;
-      st.error ||= res.isError;
+      if (res?.data) st.pages.push(res.data);
+      st.loading ||= !!res?.pending;
+      st.error ||= !!res?.error;
       map.set(q.key, st);
     });
     for (const st of map.values()) st.hasMore = !!st.pages[st.pages.length - 1]?.next_cursor;
@@ -131,25 +150,26 @@ export function BrowseTree({ repo, path, ns, name, version, onSelect }: BrowseTr
     }
     return out;
   }, [folders, expanded]);
-  const lookups = packages.flatMap((p) => p.holders.map((h) => ({ key: p.key, q: componentLookupQuery(h, p.entry.component!.name) })));
-  const lookupResults = useQueries({ queries: lookups.map((l) => l.q) });
+  const lookups = useMemo(
+    () => packages.flatMap((p) => p.holders.map((h) => ({ key: p.key, q: componentLookupQuery(h, p.entry.component!.name) }))),
+    [packages],
+  );
+  const lookupResults = useQueries({ queries: lookups.map((l) => l.q), combine: lookupSlices });
   const versions = useMemo(() => {
     const map = new Map<string, VersionState>();
     for (const p of packages) {
-      const mine = lookups.map((l, i) => (l.key === p.key ? lookupResults[i]! : null)).filter((x) => x !== null);
+      const mine = lookups.flatMap((l, i) => (l.key === p.key && lookupResults[i] ? [lookupResults[i]] : []));
       map.set(p.key, {
         items: mergeVersions(
           mine.map((x) => x.data?.items),
           p.entry.component?.namespace ?? '',
         ),
-        loading: mine.some((x) => x.isPending && !x.isError),
-        error: mine.some((x) => x.isError),
+        loading: mine.some((x) => x.pending),
+        error: mine.some((x) => x.error),
       });
     }
     return map;
-    // lookups is derived from packages; the results array identity changes with every fetch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [packages, lookupResults]);
+  }, [packages, lookups, lookupResults]);
 
   const rows = useMemo(
     () =>
@@ -162,7 +182,8 @@ export function BrowseTree({ repo, path, ns, name, version, onSelect }: BrowseTr
       }),
     [sorted, expanded, folders, versions, filter],
   );
-  const indexOf = useCallback((key: string | null) => (key ? rows.findIndex((r) => r.key === key) : -1), [rows]);
+  const positions = useMemo(() => new Map(rows.map((r, i) => [r.key, i])), [rows]);
+  const indexOf = useCallback((key: string | null) => (key ? (positions.get(key) ?? -1) : -1), [positions]);
 
   const measure = useCallback(() => {
     const el = scrollRef.current;
@@ -174,19 +195,25 @@ export function BrowseTree({ repo, path, ns, name, version, onSelect }: BrowseTr
     return () => window.removeEventListener('resize', measure);
   }, [measure]);
 
+  const onScrollTo = useCallback((top: number) => {
+    scrollTop.current = top;
+    setTopRow(Math.floor(top / ROW_HEIGHT));
+  }, []);
+
   const reveal = useCallback(
     (index: number) => {
       const el = scrollRef.current;
       const top = index * ROW_HEIGHT;
-      let next = scrollTop;
-      if (top < scrollTop) next = top;
-      else if (top + ROW_HEIGHT > scrollTop + viewport) next = top + ROW_HEIGHT - viewport;
-      if (next !== scrollTop) {
+      const current = scrollTop.current;
+      let next = current;
+      if (top < current) next = top;
+      else if (top + ROW_HEIGHT > current + viewport) next = top + ROW_HEIGHT - viewport;
+      if (next !== current) {
         if (el) el.scrollTop = next;
-        setScrollTop(next);
+        onScrollTo(next);
       }
     },
-    [scrollTop, viewport],
+    [viewport, onScrollTo],
   );
 
   // Bring the selection into view once its row is loaded (deep links).
@@ -203,47 +230,60 @@ export function BrowseTree({ repo, path, ns, name, version, onSelect }: BrowseTr
     }
   }, [selectedKey, indexOf]);
 
-  const toggle = (key: string, open?: boolean) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (open ?? !prev.has(key)) next.add(key);
-      else next.delete(key);
-      return next;
-    });
+  const toggle = useCallback(
+    (key: string, open?: boolean) =>
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        if (open ?? !prev.has(key)) next.add(key);
+        else next.delete(key);
+        return next;
+      }),
+    [],
+  );
 
-  const loadMore = (r: string, p: string) => {
-    const key = nodeKey(r, p);
-    const st = folders.get(key);
-    const cursor = st?.pages[st.pages.length - 1]?.next_cursor;
-    if (cursor) setMore((m) => ({ ...m, [key]: [...(m[key] ?? []), cursor] }));
-  };
-  const retry = (r: string, p: string) => {
-    void qc.invalidateQueries({ queryKey: [...browseKeys.all, 'folder', r, p] });
-    void qc.invalidateQueries({ queryKey: [...catalogKeys.components, 'lookup'] });
-  };
+  const loadMore = useCallback(
+    (r: string, p: string) => {
+      const key = nodeKey(r, p);
+      const st = folders.get(key);
+      const cursor = st?.pages[st.pages.length - 1]?.next_cursor;
+      if (cursor) setMore((m) => ({ ...m, [key]: [...(m[key] ?? []), cursor] }));
+    },
+    [folders],
+  );
+  const retry = useCallback(
+    (r: string, p: string) => {
+      void qc.invalidateQueries({ queryKey: [...browseKeys.all, 'folder', r, p] });
+      void qc.invalidateQueries({ queryKey: [...catalogKeys.components, 'lookup'] });
+    },
+    [qc],
+  );
 
-  const activate = (row: Row) => {
-    setActive(row.key);
-    switch (row.type) {
-      case 'repo':
-        if (!row.expanded) toggle(row.key, true);
-        onSelect({ kind: 'repo', repo: row.repo });
-        break;
-      case 'entry':
-        if (row.container && !row.expanded) toggle(row.key, true);
-        onSelect({ kind: 'entry', repo: row.repo, entry: row.entry });
-        break;
-      case 'version':
-        onSelect({ kind: 'version', repo: row.repo, entry: row.entry, version: row.version });
-        break;
-      case 'more':
-        loadMore(row.repo, row.path);
-        break;
-      case 'retry':
-        retry(row.repo, row.path);
-        break;
-    }
-  };
+  // Stable while only the scroll position changes, so the memoised rows keep their render.
+  const activate = useCallback(
+    (row: Row) => {
+      setActive(row.key);
+      switch (row.type) {
+        case 'repo':
+          if (!row.expanded) toggle(row.key, true);
+          onSelect({ kind: 'repo', repo: row.repo });
+          break;
+        case 'entry':
+          if (row.container && !row.expanded) toggle(row.key, true);
+          onSelect({ kind: 'entry', repo: row.repo, entry: row.entry });
+          break;
+        case 'version':
+          onSelect({ kind: 'version', repo: row.repo, entry: row.entry, version: row.version });
+          break;
+        case 'more':
+          loadMore(row.repo, row.path);
+          break;
+        case 'retry':
+          retry(row.repo, row.path);
+          break;
+      }
+    },
+    [toggle, onSelect, loadMore, retry],
+  );
 
   const activeIndex = (() => {
     const i = indexOf(active);
@@ -297,8 +337,8 @@ export function BrowseTree({ repo, path, ns, name, version, onSelect }: BrowseTr
     e.preventDefault();
   };
 
-  const first = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
-  const last = Math.min(rows.length, Math.ceil((scrollTop + viewport) / ROW_HEIGHT) + OVERSCAN);
+  const first = Math.max(0, topRow - OVERSCAN);
+  const last = Math.min(rows.length, topRow + Math.ceil(viewport / ROW_HEIGHT) + 1 + OVERSCAN);
 
   return (
     <nav className="browse-tree glass" aria-label="Repositories and packages">
@@ -345,7 +385,7 @@ export function BrowseTree({ repo, path, ns, name, version, onSelect }: BrowseTr
           tabIndex={0}
           aria-activedescendant={activeRow ? rowId(treeId, activeRow.key) : undefined}
           onKeyDown={onKeyDown}
-          onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+          onScroll={(e) => onScrollTo(e.currentTarget.scrollTop)}
           onFocus={measure}
         >
           <div role="none" className="browse-tree__canvas" style={{ height: rows.length * ROW_HEIGHT }}>
@@ -357,8 +397,8 @@ export function BrowseTree({ repo, path, ns, name, version, onSelect }: BrowseTr
                 top={(first + i) * ROW_HEIGHT}
                 active={row.key === activeRow?.key}
                 selected={row.key === selectedKey}
-                onActivate={() => activate(row)}
-                onToggle={() => toggle(row.key)}
+                onActivate={activate}
+                onToggle={toggle}
               />
             ))}
           </div>
@@ -374,11 +414,12 @@ interface TreeRowProps {
   top: number;
   active: boolean;
   selected: boolean;
-  onActivate: () => void;
-  onToggle: () => void;
+  onActivate: (row: Row) => void;
+  onToggle: (key: string) => void;
 }
 
-function TreeRow({ row, id, top, active, selected, onActivate, onToggle }: TreeRowProps) {
+/** One row; memoised, as the tree re-renders while it scrolls and only the rows entering the window are new. */
+const TreeRow = memo(function TreeRow({ row, id, top, active, selected, onActivate, onToggle }: TreeRowProps) {
   const indent = { paddingLeft: 6 + (row.level - 1) * 16 };
   const className = ['tree-row', active ? 'is-active' : '', selected ? 'is-selected' : ''].filter(Boolean).join(' ');
   const style = { top, height: ROW_HEIGHT, ...indent };
@@ -395,7 +436,7 @@ function TreeRow({ row, id, top, active, selected, onActivate, onToggle }: TreeR
         aria-selected={selected}
         className={className}
         style={style}
-        onClick={onActivate}
+        onClick={() => onActivate(row)}
       >
         <span className="tree-row__chevron" aria-hidden="true" />
         <EntryIcon kind="version" />
@@ -422,7 +463,7 @@ function TreeRow({ row, id, top, active, selected, onActivate, onToggle }: TreeR
         aria-disabled={actionable ? undefined : true}
         className={`${className} tree-row--status tree-row--${row.type}`}
         style={{ ...style, paddingLeft: style.paddingLeft + 22 }}
-        onClick={actionable ? onActivate : undefined}
+        onClick={actionable ? () => onActivate(row) : undefined}
       >
         {label[row.type]}
       </div>
@@ -442,7 +483,7 @@ function TreeRow({ row, id, top, active, selected, onActivate, onToggle }: TreeR
       aria-selected={selected}
       className={className}
       style={style}
-      onClick={onActivate}
+      onClick={() => onActivate(row)}
     >
       {container ? (
         <span
@@ -450,7 +491,7 @@ function TreeRow({ row, id, top, active, selected, onActivate, onToggle }: TreeR
           aria-hidden="true"
           onClick={(e) => {
             e.stopPropagation();
-            onToggle();
+            onToggle(row.key);
           }}
         >
           <Chevron />
@@ -471,7 +512,7 @@ function TreeRow({ row, id, top, active, selected, onActivate, onToggle }: TreeR
       )}
     </div>
   );
-}
+});
 
 /** Characters kept at the end of a cut name: versions and extensions tell siblings apart. */
 const TAIL = 12;

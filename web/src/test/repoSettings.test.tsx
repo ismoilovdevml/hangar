@@ -78,7 +78,7 @@ describe('repository settings', () => {
     expect(await screen.findByRole('button', { name: 'Saved' })).toBeDisabled();
     // The request listener reads the body asynchronously.
     await waitFor(() => expect(puts).toHaveLength(1));
-    expect(puts[0]).toMatchObject({ name: 'npmjs-proxy', format: 'npm', type: 'proxy', blob_store: 'fs-local', description: 'Cached npmjs.org', online: true });
+    expect(puts[0]).toMatchObject({ name: 'npmjs-proxy', format: 'npm', type: 'proxy', blob_store: 's3-eu-primary', description: 'Cached npmjs.org', online: true });
     expect(puts[0]!.config.proxy).toMatchObject({ remote_url: 'https://registry.npmjs.org', metadata_ttl: '45m', negative_cache_ttl: '10m' });
     expect(repo('npmjs-proxy').config.proxy?.metadata_ttl).toBe('45m');
   });

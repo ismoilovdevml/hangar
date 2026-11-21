@@ -33,6 +33,8 @@
   font-family: var(--font-mono); font-size: 12px; color: var(--ink); cursor: pointer;
 }
 .search-try__chip:hover { background: var(--surface-solid); color: var(--lake-ink); }
+/* A qualifier's syntax, shown when there is nothing real to search for yet: not a link. */
+.search-try__chip--syntax, .search-try__chip--syntax:hover { border-style: dashed; background: transparent; color: var(--ink-2); cursor: default; }
 
 .search-body { display: grid; grid-template-columns: minmax(220px, 260px) minmax(0, 1fr); gap: var(--gap); align-items: start; }
 .facets { position: sticky; top: var(--page-pad); padding: 18px; border-radius: var(--r-panel); display: flex; flex-direction: column; gap: 18px; }
@@ -51,7 +53,7 @@
 .result-list[aria-busy='true'] { opacity: .6; }
 .result { border-radius: var(--r-panel); }
 .result__link { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: inherit; color: var(--ink); }
-.result__link:hover { color: var(--ink); background: rgba(255, 255, 255, .35); }
+.result__link:hover { color: var(--ink); background: var(--wash-faint); }
 .result__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .result__name { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
 .result__name mark { background: var(--warn-bg); color: inherit; border-radius: 3px; padding: 0 1px; }

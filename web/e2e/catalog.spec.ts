@@ -120,7 +120,7 @@ test('blob stores: totals, cards, create and detail', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1, name: /nvme-two/ })).toBeVisible();
 
   await page.goto('/blob-stores/fs-local');
-  await expect(page.getByRole('table', { name: 'Repositories using fs-local' }).getByRole('link', { name: 'maven-releases' })).toBeVisible();
+  await expect(page.getByRole('table', { name: 'Repositories using fs-local' }).getByRole('link', { name: 'maven-snapshots' })).toBeVisible();
   await page.screenshot({ path: shot('blobstore-detail-1440'), fullPage: true });
   expect(errors).toEqual([]);
 });

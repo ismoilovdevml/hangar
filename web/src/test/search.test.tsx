@@ -1,7 +1,9 @@
 import { choose } from './choose';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
+import { server } from '../mocks/node';
 import { renderApp } from './render';
 
 const q = (h: { location: { search: string } }) => new URLSearchParams(h.location.search).get('q');
@@ -13,6 +15,23 @@ describe('search', () => {
     const help = screen.getByRole('region', { name: 'What you can search for' });
     expect(within(help).getByRole('link', { name: 'sha256:9f2c' })).toBeInTheDocument();
     expect(within(help).getByRole('link', { name: 'unused:>90d' })).toBeInTheDocument();
+    // Examples name a repository the user has, never one that does not exist.
+    expect(await within(help).findByRole('link', { name: 'repo:docker-prod' })).toBeInTheDocument();
+    expect(screen.queryByText('repo:npm-hosted')).not.toBeInTheDocument();
+    const tryRow = screen.getByText('Try:').parentElement!;
+    expect(within(tryRow).getByRole('link', { name: 'repo:docker-prod' })).toBeInTheDocument();
+    // One search box on this page: the top bar leaves its search out.
+    expect(screen.getAllByRole('combobox', { name: 'Search query' })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /Search packages, digests, CVEs/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the repository qualifier as syntax when there are no repositories', async () => {
+    server.use(http.get('*/api/v1/repositories', () => HttpResponse.json({ items: [], next_cursor: null, counts: { all: 0, hosted: 0, proxy: 0, group: 0 } })));
+    renderApp('/search');
+    const help = await screen.findByRole('region', { name: 'What you can search for' });
+    await waitFor(() => expect(within(help).getByText('repo:<name>')).toBeInTheDocument());
+    expect(within(help).queryByRole('link', { name: /^repo:/ })).not.toBeInTheDocument();
+    expect(within(screen.getByText('Try:').parentElement!).queryByRole('link', { name: /^repo:/ })).not.toBeInTheDocument();
   });
 
   it('runs the query from the URL, highlights matches and shows facets', async () => {

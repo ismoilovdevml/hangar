@@ -5,6 +5,7 @@ import { catalogKeys } from '../../api/catalog';
 import type { SearchResult } from '../../api/types';
 import { ErrorNote } from '../../components/ErrorNote';
 import { formatCompact } from '../../lib/format';
+import { hitName } from '../../lib/packages';
 
 const TOP = 6;
 
@@ -16,9 +17,10 @@ export function MostDownloaded() {
     staleTime: 5 * 60_000,
   });
   const items = q.data?.items.filter((h) => h.downloads > 0) ?? [];
+  // Names in the format's idiom, with the npm scope or Maven group: "@acme/ui-kit", "org.apache:commons-io".
   // The same package can sit in several repositories (a proxy and a group, say): name the repository then.
   const seen = new Map<string, number>();
-  for (const h of items) seen.set(h.name ?? h.coordinates, (seen.get(h.name ?? h.coordinates) ?? 0) + 1);
+  for (const h of items) seen.set(hitName(h), (seen.get(hitName(h)) ?? 0) + 1);
 
   return (
     <section className="ov-card top glass" aria-labelledby="top-title">
@@ -41,12 +43,12 @@ export function MostDownloaded() {
             <li key={h.component_id}>
               <Link
                 to="/browse"
-                search={{ repo: h.repository, name: h.name, version: h.version }}
+                search={{ repo: h.repository, ns: h.namespace || undefined, name: h.name, version: h.version || undefined }}
                 className="top__chip"
                 title={`${h.coordinates} in ${h.repository}`}
               >
-                <span className="top__name">{h.name ?? h.coordinates}</span>
-                {(seen.get(h.name ?? h.coordinates) ?? 0) > 1 && (
+                <span className="top__name">{hitName(h)}</span>
+                {(seen.get(hitName(h)) ?? 0) > 1 && (
                   <span className="top__repo">
                     <span className="visually-hidden"> in </span>
                     {h.repository}

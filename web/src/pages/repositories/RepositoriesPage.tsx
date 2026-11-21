@@ -58,6 +58,16 @@ function CountCards({ counts, failed }: { counts: RepositoryCounts | undefined; 
   );
 }
 
+/** Opens the repository in Packages: a labelled action rather than a bare cube icon. */
+function BrowseLink({ name }: { name: string }) {
+  return (
+    <Link to="/browse" search={{ repo: name }} className="button button--ghost button--sm repo-browse" aria-label={`Browse packages in ${name}`}>
+      <IconPackage size={15} />
+      Browse
+    </Link>
+  );
+}
+
 /**
  * The list on a phone: one card per repository with what tells them apart
  * (name, format, type, status, size), so nothing needs horizontal scrolling.
@@ -80,9 +90,7 @@ function RepoCards({ rows, empty, busy }: { rows: Repository[]; empty: ReactNode
                 {repoSubtitle(r) && <span className="repo-name__sub">{repoSubtitle(r)}</span>}
               </div>
               <span className="row-actions">
-                <Link to="/browse" search={{ repo: r.name }} className="copy-button" aria-label={`Browse packages in ${r.name}`} title="Browse packages">
-                  <IconPackage size={16} />
-                </Link>
+                <BrowseLink name={r.name} />
                 <CopyButton text={r.url} label={`Copy URL of ${r.name}`} />
               </span>
             </div>
@@ -268,9 +276,7 @@ export function RepositoriesPage() {
       className: 'col-last',
       cell: (r) => (
         <span className="row-actions">
-          <Link to="/browse" search={{ repo: r.name }} className="copy-button" aria-label={`Browse packages in ${r.name}`} title="Browse packages">
-            <IconPackage size={16} />
-          </Link>
+          <BrowseLink name={r.name} />
           <CopyButton text={r.url} label={`Copy URL of ${r.name}`} />
         </span>
       ),

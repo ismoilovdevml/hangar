@@ -1,12 +1,20 @@
 /**
- * Sample data for mock mode (VITE_API_MOCKS=true) and unit tests.
- * Never imported by production code paths.
+ * Sample data for mock mode (VITE_API_MOCKS=true), the public demo and unit
+ * tests. Never imported by production code paths.
+ *
+ * Totals are derived, never typed in twice: blob store usage and repository
+ * counts come from the repositories on each store, the Overview's storage from
+ * the stores, its storage by format from the repositories and its security
+ * numbers from the findings, so every page of the demo tells the same story.
+ * Tests that need other numbers override a response (server.use), they do not
+ * change these fixtures.
  */
 import type {
   AuthProviders,
   BlobStore,
   BlobStoreList,
   CleanupPolicy,
+  Finding,
   ClientEndpoint,
   Format,
   OverviewMetrics,
@@ -19,6 +27,7 @@ import type {
   UpstreamHealth,
 } from '../api/types';
 import type { SystemStatusDetail } from '../api/opsTypes';
+import { SCANNED_COMPONENTS, seedFindings } from './findings';
 import { HANGAR_VERSION } from './version';
 
 const TB = 1024 ** 4;
@@ -141,15 +150,53 @@ const ACTIVITY: Record<OverviewRange, OverviewMetrics['activity']> = {
   '30d': { published: 5_420, cached: 29_800, pushes_rejected: 31 },
 };
 
-export function overview(range: OverviewRange, now = Date.now()): OverviewMetrics {
+/** Bytes added per day: the Overview's last 24 hours and the blob stores' growth rate. */
+const GROWTH_PER_DAY = 38 * GB;
+
+/** What the Overview's aggregates are computed from; the mock server passes its live state. */
+export interface OverviewFacts {
+  stores: readonly BlobStore[];
+  findings: readonly Finding[];
+}
+
+const isOpen = (f: Finding) => f.status === 'open' || f.status === 'assigned';
+
+/** The security numbers as the server counts them (internal/api/catalog/overview.go). */
+function issueNumbers(findings: readonly Finding[]): Omit<OverviewMetrics['issues'], 'scanning'> {
+  const open = findings.filter(isOpen);
+  const critical = open.filter((f) => f.severity === 'critical');
+  const components = (list: Finding[]) => new Set(list.map((f) => f.component?.id)).size;
+  return {
+    critical: critical.length,
+    packages_affected: components(critical),
+    quarantined: components(open.filter((f) => f.quarantined)),
+    open_findings: open.length,
+  };
+}
+
+/** Bytes per format over the repositories that store them (groups store nothing), largest first. */
+function storageByFormat(): OverviewMetrics['storage_by_format'] {
+  const by = new Map<Format, number>();
+  for (const [, format, type, , bytes] of REPO_SEEDS) if (type !== 'group') by.set(format, (by.get(format) ?? 0) + bytes);
+  return [...by].map(([format, bytes]) => ({ format, bytes: Math.round(bytes) })).sort((a, b) => b.bytes - a.bytes);
+}
+
+export function overview(
+  range: OverviewRange,
+  now = Date.now(),
+  facts: OverviewFacts = { stores: blobStores, findings: seedFindings(now) },
+): OverviewMetrics {
   const r = REQUESTS[range];
+  // As the server: a capacity only when every store has a quota.
+  const quotas = facts.stores.map((b) => b.soft_quota_bytes ?? null);
+  const capacity = quotas.length > 0 && quotas.every((q) => q !== null) ? quotas.reduce<number>((n, q) => n + (q ?? 0), 0) : null;
   return {
     range,
     generated_at: new Date(now).toISOString(),
     scope: 'instance',
     summary: { published_since_yesterday: 214, failed_pushes: 4 },
     activity: ACTIVITY[range],
-    storage: { used_bytes: 4.82 * TB, capacity_bytes: 12 * TB, added_bytes_24h: 38 * GB },
+    storage: { used_bytes: facts.stores.reduce((n, b) => n + b.used_bytes, 0), capacity_bytes: capacity, added_bytes_24h: GROWTH_PER_DAY },
     requests: {
       total: r.total,
       trend_pct: r.trend,
@@ -162,22 +209,11 @@ export function overview(range: OverviewRange, now = Date.now()): OverviewMetric
     },
     cache: cacheNumbers(range),
     issues: {
-      critical: 7,
-      packages_affected: 3,
-      quarantined: 2,
-      open_findings: 39,
-      scanning: { enabled: true, scanned_components: 1840, last_scan_at: new Date(now - 40 * 60_000).toISOString() },
+      ...issueNumbers(facts.findings),
+      scanning: { enabled: true, scanned_components: SCANNED_COMPONENTS, last_scan_at: new Date(now - 40 * 60_000).toISOString() },
     },
     traffic: traffic(range, now),
-    storage_by_format: [
-      { format: 'docker', bytes: 2.91 * TB },
-      { format: 'maven', bytes: 812 * GB },
-      { format: 'npm', bytes: 476 * GB },
-      { format: 'pypi', bytes: 301 * GB },
-      { format: 'helm', bytes: 88 * GB },
-      { format: 'go', bytes: 64 * GB },
-      { format: 'raw', bytes: 172 * GB },
-    ],
+    storage_by_format: storageByFormat(),
   };
 }
 
@@ -287,6 +323,11 @@ const REPO_SEEDS: RepoSeed[] = [
   ['go-proxy', 'go', 'proxy', '', 14 * GB, 'online', { proxy: { remote_url: 'https://proxy.golang.org', metadata_ttl: '30m0s', content_ttl: '0s', negative_cache_ttl: '10m0s' } }],
 ];
 
+/** The blob store of each hosted or proxy repository: the large ones on S3, the archive on its own store, the rest on disk. */
+const PRIMARY_STORE = new Set(['docker-prod', 'dockerhub-proxy', 'npmjs-proxy', 'maven-releases', 'maven-central', 'docker-dev', 'docker-staging', 'pypi-ml', 'pypi-proxy']);
+const storeOf = (name: string, type: RepositoryType): string | undefined =>
+  type === 'group' ? undefined : PRIMARY_STORE.has(name) ? 's3-eu-primary' : name === 'raw-legacy' ? 's3-archive' : 'fs-local';
+
 /** Minutes since the last upload or download per repository; absent = no activity yet. */
 const ACTIVITY_MINUTES: Record<string, number> = {
   'docker-prod': 3, 'dockerhub-proxy': 1, 'npm-internal': 12, 'npmjs-proxy': 2, 'maven-releases': 95, 'maven-snapshots': 240,
@@ -310,7 +351,7 @@ export function repositories(): Repository[] {
     format,
     type,
     description,
-    blob_store: type === 'group' ? undefined : bytes > 1 * TB ? 's3-eu-primary' : 'fs-local',
+    blob_store: storeOf(name, type),
     online: status !== 'offline',
     config: {
       anonymous_read: false,
@@ -358,22 +399,30 @@ export function sortRepositories(list: Repository[], sort: string | null): Repos
   });
 }
 
+/** Bytes and repositories on a store, from the repositories that use it. */
+function storeUsage(store: string): Pick<BlobStore, 'used_bytes' | 'repository_count' | 'blob_count'> {
+  const on = REPO_SEEDS.filter(([name, , type]) => storeOf(name, type) === store);
+  const used = Math.round(on.reduce((n, [, , , , bytes]) => n + bytes, 0));
+  // About 4 MiB per blob: layers and archives, many small metadata files.
+  return { used_bytes: used, repository_count: on.length, blob_count: Math.round(used / (4 * 1024 ** 2)) };
+}
+
 export const blobStores: BlobStore[] = [
   {
     id: 'b_01', name: 's3-eu-primary', kind: 's3', state: 'ok', location: 's3://acme-artifacts/hangar', soft_quota_bytes: 12 * TB,
-    used_bytes: 4.62 * TB, capacity_bytes: 12 * TB, repository_count: 9, blob_count: 1_204_331, reclaimable_bytes: 48 * GB,
+    ...storeUsage('s3-eu-primary'), capacity_bytes: 12 * TB, reclaimable_bytes: 48 * GB,
     dedup_saved_bytes: 1.3 * TB, created_at: '2026-01-10T08:00:00Z', write_latency_ms: 24, encryption: 'SSE-S3', from_config: true,
     s3: { endpoint: 'https://s3.eu-central-1.amazonaws.com', region: 'eu-central-1', bucket: 'acme-artifacts', prefix: 'hangar', use_path_style: false },
   },
   {
     id: 'b_02', name: 'fs-local', kind: 'fs', state: 'unknown', location: '/var/lib/hangar/blobs', fs: { path: '/var/lib/hangar/blobs' },
-    used_bytes: 200 * GB, capacity_bytes: null, repository_count: 14, blob_count: 88_120, reclaimable_bytes: 0,
+    ...storeUsage('fs-local'), capacity_bytes: null, reclaimable_bytes: 0,
     dedup_saved_bytes: 12 * GB, created_at: '2026-01-10T08:00:00Z', write_latency_ms: null, encryption: 'none',
   },
   {
     id: 'b_03', name: 's3-archive', kind: 's3', state: 'read_only', location: 's3://acme-archive/hangar', soft_quota_bytes: 40 * TB,
-    used_bytes: 18 * TB, capacity_bytes: 40 * TB, repository_count: 1, blob_count: 3_002_118, reclaimable_bytes: 0,
-    dedup_saved_bytes: 2.2 * TB, created_at: '2025-03-02T08:00:00Z', write_latency_ms: 61, encryption: 'SSE-KMS',
+    ...storeUsage('s3-archive'), capacity_bytes: 40 * TB, reclaimable_bytes: 0,
+    dedup_saved_bytes: 35 * GB, created_at: '2025-03-02T08:00:00Z', write_latency_ms: 61, encryption: 'SSE-KMS',
     s3: { endpoint: 'https://minio.acme.example:9000', bucket: 'acme-archive', prefix: 'hangar', access_key_id: 'ARCHIVE01', use_path_style: false },
   },
 ];
@@ -385,10 +434,10 @@ export function blobStoreList(): BlobStoreList {
       used_bytes: blobStores.reduce((n, b) => n + b.used_bytes, 0),
       capacity_bytes: null,
       dedup_saved_bytes: blobStores.reduce((n, b) => n + (b.dedup_saved_bytes ?? 0), 0),
-      growth_bytes_per_day: 38 * GB,
+      growth_bytes_per_day: GROWTH_PER_DAY,
       growth_window_days: 7,
       days_to_full: null,
-      reclaimable_bytes: 48 * GB,
+      reclaimable_bytes: blobStores.reduce((n, b) => n + (b.reclaimable_bytes ?? 0), 0),
     },
   };
 }
