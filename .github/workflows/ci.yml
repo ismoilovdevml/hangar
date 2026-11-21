@@ -160,7 +160,7 @@ jobs:
       # adapter image is built on (deploy/scanner/Dockerfile).
       - name: Trivy (CRITICAL with a fix fails)
         env:
-          TRIVY_IMAGE: aquasec/trivy:0.76.1
+          TRIVY_IMAGE: aquasec/trivy:0.76.2
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/trivy-cache"

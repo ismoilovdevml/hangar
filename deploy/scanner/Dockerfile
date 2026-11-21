@@ -12,7 +12,7 @@
 # Trivy server (deploy/compose/compose.yaml, the Helm chart).
 
 ARG GO_IMAGE=golang:1.27-alpine
-ARG TRIVY_IMAGE=aquasec/trivy:0.76.1
+ARG TRIVY_IMAGE=aquasec/trivy:0.76.2
 
 FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS build
 ARG TARGETOS

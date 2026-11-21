@@ -73,7 +73,7 @@ services:
 
   # Vulnerability scanner in client/server mode.
   trivy:
-    image: aquasec/trivy:0.76.1
+    image: aquasec/trivy:0.76.2
     command: ["server", "--listen", "0.0.0.0:4954", "--cache-dir", "/cache"]
     ports:
       - "${TRIVY_PORT:-4954}:4954"

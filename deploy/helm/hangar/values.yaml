@@ -251,7 +251,7 @@ imageScanning:
     image:
       repository: aquasec/trivy
       # Keep it on the Trivy version of the scanner image.
-      tag: 0.76.1
+      tag: 0.76.2
       pullPolicy: IfNotPresent
     # E.g. TRIVY_DB_REPOSITORY (a mirror of the database) or
     # TRIVY_SKIP_DB_UPDATE=true with a database copied into the volume.

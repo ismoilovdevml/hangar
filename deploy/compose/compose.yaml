@@ -203,7 +203,7 @@ services:
     container_name: hangar-trivy
     <<: *hardening
     profiles: [trivy]
-    image: ${TRIVY_IMAGE:-aquasec/trivy:0.76.1}
+    image: ${TRIVY_IMAGE:-aquasec/trivy:0.76.2}
     restart: unless-stopped
     networks: [hangar]
     user: "65532:65532"

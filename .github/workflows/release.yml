@@ -51,7 +51,7 @@ concurrency:
 env:
   # The Trivy release the scan adapter image is built on
   # (deploy/scanner/Dockerfile); the release gate scans with the same one.
-  TRIVY_IMAGE: aquasec/trivy:0.76.1
+  TRIVY_IMAGE: aquasec/trivy:0.76.2
 
 jobs:
   meta:

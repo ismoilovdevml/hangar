@@ -18,7 +18,7 @@ services:
       retries: 30
 
   trivy:
-    image: ${TRIVY_IMAGE:-aquasec/trivy:0.76.1}
+    image: ${TRIVY_IMAGE:-aquasec/trivy:0.76.2}
     command: ["server", "--listen", "0.0.0.0:4954", "--cache-dir", "/var/lib/trivy"]
     environment:
       TRIVY_DISABLE_TELEMETRY: "true"
