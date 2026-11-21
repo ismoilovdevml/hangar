@@ -29,6 +29,8 @@ function calmMetrics(): OverviewMetrics {
   return {
     ...m,
     activity: { ...m.activity, pushes_rejected: 0 },
+    // Every store has a quota.
+    storage: { ...m.storage, capacity_bytes: m.storage.used_bytes * 2 },
     issues: { ...m.issues, critical: 0, packages_affected: 0, quarantined: 0 },
   };
 }

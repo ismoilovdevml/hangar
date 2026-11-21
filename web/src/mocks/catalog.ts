@@ -69,9 +69,12 @@ const SEEDS: Seed[] = [
   { id: 'c_311', repo: 'npm-internal', format: 'npm', ns: '@acme', name: 'ui-kit', version: '5.3.1', daysAgo: 0, size: 412_000, downloads: 8100, by: ci(311), extra: { license: 'MIT', attributes: { description: 'Acme UI components', license: 'MIT' } } },
   { id: 'c_309', repo: 'npm-internal', format: 'npm', ns: '@acme', name: 'ui-kit', version: '5.3.0', daysAgo: 9, size: 409_000, downloads: 2400, by: ci(309), scan: { state: 'findings', critical: 0, high: 1, medium: 0, low: 0 } },
   { id: 'c_312', repo: 'npm-internal', format: 'npm', ns: '@acme', name: 'eslint-config', version: '3.0.1', daysAgo: 2, size: 12_000, downloads: 640, by: ci(312), scan: pending },
-  { id: 'c_ledger', repo: 'maven-releases', format: 'maven', ns: 'com.acme', name: 'ledger-core', version: '7.0.0', daysAgo: 3, size: 2.4e6, downloads: 9000, by: { kind: 'user', display_name: 'Jasur Karimov' } },
-  { id: 'c_log4j', repo: 'maven-central', format: 'maven', ns: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.24.1', daysAgo: 30, size: 1.9e6, downloads: 84_000, by: { kind: 'service_account', display_name: 'proxy' } },
-  { id: 'c_1207', repo: 'pypi-internal', format: 'pypi', name: 'acme-ml-utils', version: '0.9.4', daysAgo: 1, size: 88_000, downloads: 310, by: ci(1207) },
+  // The scan states below match the findings mock: ledger-core's critical finding quarantined it.
+  { id: 'c_ledger', repo: 'maven-releases', format: 'maven', ns: 'com.acme', name: 'ledger-core', version: '7.0.0', daysAgo: 3, size: 2.4e6, downloads: 9000, by: { kind: 'user', display_name: 'Jasur Karimov' },
+    scan: { state: 'quarantined', critical: 1, high: 0, medium: 0, low: 0 }, extra: { quarantined: true } },
+  { id: 'c_log4j', repo: 'maven-central', format: 'maven', ns: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.24.1', daysAgo: 30, size: 1.9e6, downloads: 84_000, by: { kind: 'service_account', display_name: 'proxy' },
+    scan: { state: 'findings', critical: 0, high: 0, medium: 1, low: 0 } },
+  { id: 'c_1207', repo: 'pypi-internal', format: 'pypi', name: 'acme-ml-utils', version: '0.9.4', daysAgo: 1, size: 88_000, downloads: 310, by: ci(1207), scan: { state: 'findings', critical: 0, high: 0, medium: 0, low: 1 } },
   { id: 'c_nuget', repo: 'nuget-internal', format: 'nuget', name: 'acme.core', version: '1.2.0', daysAgo: 6, size: 240_000, downloads: 75, by: ci(1501), scan: pending },
   { id: 'c_raw', repo: 'raw-artifacts', format: 'raw', ns: 'releases/1.4.0', name: 'app-linux-amd64.tar.gz', version: '', daysAgo: 4, size: 48e6, downloads: 52, by: ci(1400) },
 ];

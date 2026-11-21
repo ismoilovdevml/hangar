@@ -6,8 +6,8 @@
 import { delay, http, HttpResponse } from 'msw';
 import type { ApiError, LoginRequest, OverviewRange, Repository, RepositoryInput, RepositoryType } from '../api/types';
 import { accessHandlers, resetAccessState, setMockPassword } from './access';
-import { catalogHandlers, resetCatalogState } from './catalog';
-import { findingsHandlers, resetFindingsState } from './findings';
+import { catalogHandlers, catalogState, resetCatalogState } from './catalog';
+import { findingsHandlers, findingsState, resetFindingsState } from './findings';
 import * as data from './data';
 import { onMockLiveEvent, opsHandlers, resetOpsMockState } from './ops';
 import { mockSystemStatus, resetSystemMockState, systemHandlers } from './system';
@@ -264,7 +264,8 @@ export const handlers = [
     if (!range || !RANGES.includes(range)) {
       return error(400, { code: 'invalid_argument', message: 'range must be one of 1h, today, 7d, 30d' });
     }
-    return HttpResponse.json(data.overview(range));
+    // From the same state the Blob stores and Vulnerabilities pages read, so the numbers agree.
+    return HttpResponse.json(data.overview(range, Date.now(), { stores: catalogState.blobStores, findings: findingsState.findings }));
   }),
 
   http.get(api('/components'), ({ request }) => {

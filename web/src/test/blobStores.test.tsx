@@ -16,14 +16,14 @@ describe('blob stores', () => {
     renderApp('/blob-stores');
     await screen.findByRole('article', { name: 's3-eu-primary' });
     const totals = screen.getByRole('region', { name: 'Storage totals' });
-    expect(within(totals).getByRole('article', { name: 'Saved by deduplication' })).toHaveTextContent('3.51TiB');
+    expect(within(totals).getByRole('article', { name: 'Saved by deduplication' })).toHaveTextContent('1.35TiB');
     expect(within(totals).getByRole('article', { name: 'Growth' })).toHaveTextContent('+38GiB / day7-day average');
     expect(within(totals).getByRole('article', { name: 'Reclaimable now' })).toHaveTextContent('Freed by the next blob compaction');
 
     const stores = screen.getByRole('region', { name: 'Blob stores' });
     const primary = within(stores).getByRole('article', { name: 's3-eu-primary' });
     expect(within(primary).getByText('Healthy')).toBeInTheDocument();
-    expect(within(primary).getByRole('meter', { name: 's3-eu-primary usage' })).toHaveAttribute('aria-valuetext', '4.62 TiB of 12 TiB');
+    expect(within(primary).getByRole('meter', { name: 's3-eu-primary usage' })).toHaveAttribute('aria-valuetext', '4.77 TiB of 12 TiB');
     expect(within(primary).getByText('SSE-S3')).toBeInTheDocument();
     const local = within(stores).getByRole('article', { name: 'fs-local' });
     expect(within(local).getByText('Not checked yet')).toBeInTheDocument();
@@ -96,7 +96,7 @@ describe('blob stores', () => {
     expect(await screen.findByRole('heading', { level: 1, name: /fs-local/ })).toBeInTheDocument();
     expect(await screen.findByText('/var/lib/hangar/blobs', { selector: 'dd' })).toBeInTheDocument();
     const table = await screen.findByRole('table', { name: 'Repositories using fs-local' });
-    await waitFor(() => expect(within(table).getByRole('link', { name: 'maven-releases' })).toHaveAttribute('href', '/repositories/maven-releases/settings'));
+    await waitFor(() => expect(within(table).getByRole('link', { name: 'maven-snapshots' })).toHaveAttribute('href', '/repositories/maven-snapshots/settings'));
     expect(within(table).queryByRole('link', { name: 'docker-prod' })).not.toBeInTheDocument();
   });
 

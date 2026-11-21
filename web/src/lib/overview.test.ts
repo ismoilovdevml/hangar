@@ -93,7 +93,9 @@ describe('storageNote', () => {
     expect(storageNote(bare, () => '', [{ name: 'a' }, { name: 'b' }])).toBe('Nothing stored yet · no quotas');
   });
   it('gives the biggest format share and the quota use', () => {
-    expect(storageNote(overview('today'), (f) => f.toUpperCase())).toBe('DOCKER 61% · 7 formats · 40% of quota');
+    expect(storageNote(overview('today'), (f) => f.toUpperCase())).toBe('DOCKER 62% · 9 formats');
+    const quota = overview('today');
+    expect(storageNote({ ...quota, storage: { ...quota.storage, capacity_bytes: quota.storage.used_bytes * 2 } }, (f) => f)).toBe('docker 62% · 9 formats · 50% of quota');
   });
   it('leaves the quota out for a viewer scoped to their repositories', () => {
     const m = { ...overview('today'), scope: 'repositories' as const };

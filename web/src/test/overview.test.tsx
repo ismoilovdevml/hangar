@@ -62,13 +62,15 @@ describe('overview', () => {
 
     const storage = card(/^Storage/);
     expect(storage).toHaveAttribute('href', '/blob-stores');
-    expect(within(storage).getByText('4.82 TiB')).toBeInTheDocument();
-    expect(within(storage).getByText('Docker 61% · 7 formats · 40% of quota')).toBeInTheDocument();
+    // The blob stores' total (see mocks/consistency.test.ts); fs-local has no quota, so there is no share of one.
+    expect(within(storage).getByText('5.31 TiB')).toBeInTheDocument();
+    expect(within(storage).getByText('Docker 62% · 9 formats · no quota on fs-local')).toBeInTheDocument();
 
     const security = card(/^Security/);
     expect(security).toHaveAttribute('href', '/vulnerabilities');
-    expect(within(security).getByText('7 critical')).toBeInTheDocument();
-    expect(within(security).getByText('In 3 packages · 2 quarantined')).toBeInTheDocument();
+    // The one open critical finding the Vulnerabilities page lists, in the package it quarantined.
+    expect(within(security).getByText('1 critical')).toBeInTheDocument();
+    expect(within(security).getByText('In 1 package · 1 quarantined')).toBeInTheDocument();
 
     // The worst upstream comes first.
     const upstream = await waitFor(() => card(/^Upstream/));
@@ -84,10 +86,12 @@ describe('overview', () => {
     expect(items.map((a) => a.querySelector('.todo__item-title')?.textContent)).toEqual([
       'ghcr-proxy: authentication failed (401)',
       '4 pushes rejected',
-      'Review 7 critical vulnerabilities',
+      'Review 1 critical vulnerability',
       // From the system health: the mock cluster has a silent node.
       'Node hangar-3 is not responding',
       'Renew the laptop CLI token',
+      // fs-local has no quota, as the Blob stores page shows.
+      'Set a storage quota',
     ]);
     expect(items.map((a) => a.getAttribute('href'))).toEqual([
       '/repositories/ghcr-proxy/settings',
@@ -95,10 +99,12 @@ describe('overview', () => {
       '/vulnerabilities',
       '/system/status',
       '/account#my-tokens-title',
+      '/blob-stores/fs-local',
     ]);
-    expect(todo.querySelector('.todo__count')).toHaveTextContent('5 items');
-    // The backup task is scheduled and the blob stores have quotas: no reminders for those.
-    expect(todo).not.toHaveTextContent(/backup|quota/i);
+    expect(todo.querySelector('.todo__count')).toHaveTextContent('6 items');
+    expect(todo).toHaveTextContent('Blob store fs-local has no quota');
+    // The backup task is scheduled: no reminder for that.
+    expect(todo).not.toHaveTextContent(/backup/i);
   });
 
   it('points at the backup guide when the server has no backup task, until dismissed', async () => {
