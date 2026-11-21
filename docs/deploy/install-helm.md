@@ -19,6 +19,21 @@ explanation.
 - An ingress controller (ingress-nginx, Traefik, ...) or a Gateway API
   implementation, and certificates (for example cert-manager).
 
+## The chart
+
+Each release publishes the chart as an OCI artifact, signed like the images
+([verify a release](verify-release.md#helm-chart)). Its version and
+`appVersion` are the release version, so by default it installs the images of
+that release:
+
+```bash
+helm show values oci://ghcr.io/ismoilovdevml/charts/hangar --version <version>
+```
+
+The OCI chart exists from v0.2.0 on. For an earlier release, or to install
+from a checkout, use the path `deploy/helm/hangar` of that tag wherever this
+page says `oci://ghcr.io/ismoilovdevml/charts/hangar --version <version>`.
+
 ## Minimal production install
 
 Create the secrets out of band (or with your secret manager / External
@@ -46,8 +61,8 @@ kubectl -n hangar create secret generic hangar-admin \
 `values-prod.yaml`:
 
 ```yaml
-image:
-  tag: "<version>"          # pin a release
+# image.tag defaults to the chart's appVersion: `--version` picks the release.
+# Pin the verified digest with image.digest (verify-release.md).
 replicaCount: 3
 
 config:
@@ -99,7 +114,8 @@ networkPolicy:
 ```
 
 ```bash
-helm upgrade --install hangar deploy/helm/hangar -n hangar -f values-prod.yaml --wait
+helm upgrade --install hangar oci://ghcr.io/ismoilovdevml/charts/hangar --version <version> \
+  -n hangar -f values-prod.yaml --wait
 kubectl -n hangar rollout status deploy/hangar
 helm test hangar -n hangar        # the Service answers /readyz
 ```

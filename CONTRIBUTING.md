@@ -8,6 +8,10 @@ make dev     # postgres, minio, nats and trivy in docker, then the server and th
 make help    # every target
 ```
 
+Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
+Questions go to Discussions, bugs and feature requests to the issue forms,
+and vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
 Changes come in small pull requests with tests. Before you open one, run the
 checks below. The release workflow runs the same ones on the tagged
 commit and publishes nothing unless all of them pass (setting the
@@ -120,7 +124,28 @@ The live event stream keeps a connection open, so Playwright's
 
 ```bash
 make deploy-check   # helm lint and template, compose config, shellcheck, installer tests
+make helm-package   # the chart archive the release pushes to oci://ghcr.io/<owner>/charts
 ```
+
+`make helm-template` validates the rendered manifests with
+[kubeconform](https://github.com/yannh/kubeconform) when it is installed; CI
+and the release set `KUBECONFORM_REQUIRED=1`, which fails without it.
+
+## Security checks
+
+The release gate also runs these; run them before a pull request that
+changes dependencies or the Dockerfiles:
+
+```bash
+make vuln                                           # govulncheck
+npm --prefix web audit --omit=dev --audit-level=high
+make docker docker-scanner
+trivy image --severity CRITICAL --ignore-unfixed --exit-code 1 hangar:dev
+trivy image --severity CRITICAL --ignore-unfixed --exit-code 1 hangar-scanner:dev
+```
+
+Dependency updates arrive weekly from Dependabot (`.github/dependabot.yml`),
+grouped per ecosystem.
 
 ## Changelog
 

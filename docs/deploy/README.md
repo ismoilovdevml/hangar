@@ -14,6 +14,7 @@ how to operate it afterwards.
 | [First administrator](first-admin.md) | Creating the first account and the first token |
 | [Backup and restore](backup-restore.md) | `deploy/scripts/backup.sh` and `restore.sh`, what must be kept |
 | [Upgrades](upgrade.md) | Migrations and the upgrade procedure for each install method |
+| [Verify a release](verify-release.md) | cosign signatures, SBOMs and build provenance of the images, the chart and the release files |
 | [High availability](high-availability.md) | Several nodes: what is shared, what fails over, known limits |
 | [Troubleshooting](troubleshooting.md) | Symptoms, causes and fixes |
 
@@ -35,10 +36,14 @@ and the user guides in [docs/guides](../guides/README.md).
 
 ## Container image
 
-The examples use `ghcr.io/ismoilovdevml/hangar:<version>`. Until release
-images are published there, build the image from a release tag and push it
-to a registry your hosts can pull from, then set `HANGAR_IMAGE` (compose) or
-`image.repository`/`image.tag` (Helm):
+Releases publish `ghcr.io/ismoilovdevml/hangar:<version>` and
+`ghcr.io/ismoilovdevml/hangar-scanner:<version>` (linux/amd64 and
+linux/arm64) and, from v0.2.0, the Helm chart
+`oci://ghcr.io/ismoilovdevml/charts/hangar`, all signed by the release
+workflow ([verify a release](verify-release.md)). To mirror them into a
+registry your hosts can reach, `cosign copy` keeps the signatures. To build
+the image yourself from a release tag, push it to such a registry and set
+`HANGAR_IMAGE` (compose) or `image.repository`/`image.tag` (Helm):
 
 ```bash
 git checkout <version>

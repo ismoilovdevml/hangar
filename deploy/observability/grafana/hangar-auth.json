@@ -1,7 +1,7 @@
 {
   "uid": "hangar-auth",
   "title": "Hangar / Auth & audit",
-  "description": "Authentication failures, lockouts and the audit writer.",
+  "description": "Authentication failures, lockouts, the audit writer and routing rule exclusions.",
   "tags": [
     "hangar"
   ],
@@ -665,6 +665,123 @@
           "sort": "desc"
         }
       }
+    },
+    {
+      "type": "row",
+      "title": "Routing rules",
+      "id": 13,
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Routing rule exclusions",
+      "description": "Package names per minute that routing rules kept from a proxy remote or a group member. Answers: is a rule turning away requests right now, from builds missing the internal repository or from someone probing internal names on a public remote? The audit log (routing.blocked) names the packages.",
+      "id": 14,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (format, repository, member, rule) (rate(hangar_routing_blocked_total{instance=~\"$instance\"}[$__rate_interval])) * 60",
+          "legendFormat": "{{repository}} {{member}} {{rule}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Rules that fired (24h)",
+      "description": "Exclusions in the last 24 hours by repository, excluded member and rule. Answers: which routing rules are in use, and is one firing far more than expected (a rule that is too broad)?",
+      "id": 15,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 23,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (format, repository, member, rule) (increase(hangar_routing_blocked_total{instance=~\"$instance\"}[24h])) > 0",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            }
+          }
+        }
+      ]
     }
   ]
 }

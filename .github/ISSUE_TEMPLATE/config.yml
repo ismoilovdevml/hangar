@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/ismoilovdevml/hangar/security/advisories/new
+    about: Privately, never in a public issue. See SECURITY.md for what to include and what to expect.
+  - name: Questions and ideas
+    url: https://github.com/ismoilovdevml/hangar/discussions
+    about: Usage questions, setup help and ideas that are not yet a concrete feature request.
+  - name: Documentation
+    url: https://github.com/ismoilovdevml/hangar/tree/main/docs
+    about: Client guides, deployment, operations and the REST API reference.

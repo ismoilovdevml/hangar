@@ -184,7 +184,9 @@ curl -X POST http://localhost:8080/api/v1/repositories \
       }'
 ```
 
-The answer is `201 Created` with the repository, including the URL clients use:
+The example sets `write_policy: allow` so the file in step 5 can be replaced;
+without it a hosted `raw` repository gets the default `allow_once`. The answer
+is `201 Created` with the repository, including the URL clients use:
 
 ```json
 {"id":"...","name":"raw-hosted","format":"raw","type":"hosted","blob_store":"default",
@@ -197,11 +199,11 @@ Repository fields:
 | Field | Notes |
 |---|---|
 | `name` | `^[a-z0-9][a-z0-9-]{1,62}$`, immutable |
-| `format` | `docker`, `maven`, `npm`, `nuget`, `pypi` or `raw`, immutable |
+| `format` | `docker` (Docker/OCI), `npm`, `maven`, `pypi`, `nuget`, `go`, `cargo`, `helm`, `apt`, `rpm` or `raw`, immutable |
 | `type` | `hosted`, `proxy` or `group`, immutable |
 | `blob_store` | required for hosted and proxy (the store created on first start is `default`); ignored for groups, which store nothing |
 | `online` | default `true`; offline repositories answer 503 |
-| `config.hosted.write_policy` | `allow` (default), `allow_once` (a path can be written once; identical re-uploads are accepted) or `deny` |
+| `config.hosted.write_policy` | `allow_once` (the default, except for `docker`: a path can be written once; identical re-uploads are accepted, so a published release cannot be replaced by different bytes), `allow` (the default for `docker`, whose tags are meant to move: publish and overwrite freely) or `deny` (read-only) |
 | `config.proxy` | `remote_url` (required), `metadata_ttl`, `content_ttl`, `negative_cache_ttl`, `auth` |
 | `config.group` | `members` (ordered, required), `write_member` (formats that support group writes) |
 | `config.anonymous_read` | `true` lets unauthenticated clients read |
@@ -226,8 +228,11 @@ With a token as the password, the username is not checked; any value works.
 
 ## Next steps
 
-- Connect a package client: [Docker](docker.md), [npm](npm.md), [Maven](maven.md),
-  [PyPI](pypi.md), [NuGet](nuget.md), [raw files](raw.md).
+- Connect a package client: [Docker/OCI](docker.md), [npm](npm.md),
+  [Maven/Gradle](maven.md), [PyPI](pypi.md), [NuGet](nuget.md),
+  [Go modules](go.md), [Cargo](cargo.md), [Helm](helm.md), [APT](apt.md),
+  [RPM](rpm.md), [raw files](raw.md).
+- Keep internal package names off public remotes: [routing rules](routing-rules.md).
 - Publish from pipelines with a service account: [CI integration](ci.md).
 - Automate with the [REST API](api.md).
 - Users, roles and scopes: [access.md](access.md).

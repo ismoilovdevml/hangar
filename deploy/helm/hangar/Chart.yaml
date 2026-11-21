@@ -1,8 +1,9 @@
 apiVersion: v2
 name: hangar
 description: >-
-  Hangar, a self-hosted package registry: Docker/OCI, npm, Maven, PyPI, NuGet
-  and raw repositories behind one stateless, horizontally scalable server.
+  Hangar, a self-hosted package registry: Docker/OCI, npm, Maven, PyPI, NuGet,
+  Go modules, Helm, Cargo, APT, RPM and raw repositories behind one stateless,
+  horizontally scalable server.
 type: application
 version: 0.1.9
 appVersion: "0.1.9"
@@ -18,6 +19,11 @@ keywords:
   - maven
   - pypi
   - nuget
+  - go
+  - helm
+  - cargo
+  - apt
+  - rpm
   - artifacts
 annotations:
   category: DeveloperTools

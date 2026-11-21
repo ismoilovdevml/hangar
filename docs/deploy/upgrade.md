@@ -67,11 +67,16 @@ earlier installers move to a data directory first:
 ## Helm
 
 ```bash
-helm upgrade hangar deploy/helm/hangar -n hangar -f values-prod.yaml \
-  --set image.tag=<new version> --wait
+helm upgrade hangar oci://ghcr.io/ismoilovdevml/charts/hangar --version <new version> \
+  -n hangar -f values-prod.yaml --wait
 kubectl -n hangar rollout status deploy/hangar
 helm test hangar -n hangar
 ```
+
+The chart's version is the release version and it installs that release's
+images. If your values pin `image.tag` or `image.digest`, change them in the
+same upgrade. Releases before v0.2.0 have no OCI chart: upgrade to them from
+a checkout of the tag (`helm upgrade hangar deploy/helm/hangar ...`).
 
 The pre-upgrade hook Job runs `hangar migrate up` with the new image before
 any pod is replaced; if it fails, the upgrade stops and the old pods keep
