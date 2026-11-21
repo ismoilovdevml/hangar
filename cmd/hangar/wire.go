@@ -583,7 +583,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Health:               hc, TrustedProxies: trusted,
 		API: restAPI, Formats: reg, Deps: formatDeps,
 		FormatMiddleware: []func(http.Handler) http.Handler{httpapi.DownloadSessions(authSvc)},
-		Security:         securityOptions(cfg),
+		Security:         sharedSecurityOptions(cfg, pool, log),
 	})
 
 	// First administrator: from the environment, or generated.

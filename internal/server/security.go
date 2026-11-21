@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"math"
@@ -61,6 +62,11 @@ type Security struct {
 	// FailedAuthRate limits failed authentications per client IP on the API
 	// and package endpoints.
 	FailedAuthRate Rate
+	// FailedAuthShared, when set, keeps the FailedAuthRate buckets where every
+	// node of a cluster sees them (auth.SharedLimiter in PostgreSQL), so the
+	// limit holds for the cluster instead of per node. Only failures touch it;
+	// the check on each request is answered from this node's memory.
+	FailedAuthShared SharedBuckets
 	// APIBodyBytes bounds /api/v1 request bodies (0 = no limit).
 	APIBodyBytes int64
 	// UploadBodyBytes bounds package endpoint request bodies (0 = no limit).
@@ -81,6 +87,9 @@ type hardening struct {
 	allowed    map[string]bool
 	apiLimit   *ipLimiter
 	authFails  *ipLimiter
+	// authShared and authBlocked implement Security.FailedAuthShared.
+	authShared  SharedBuckets
+	authBlocked *blockedSet
 }
 
 func newHardening(s Security) *hardening {
@@ -93,6 +102,9 @@ func newHardening(s Security) *hardening {
 	}
 	h.apiLimit = newIPLimiter(s.APIRate, s.Now)
 	h.authFails = newIPLimiter(s.FailedAuthRate, s.Now)
+	if h.authFails != nil && s.FailedAuthShared != nil {
+		h.authShared, h.authBlocked = s.FailedAuthShared, newBlockedSet(h.authFails.now)
+	}
 	return h
 }
 
@@ -305,16 +317,106 @@ func (h *hardening) failedAuthLimit(next http.Handler) http.Handler {
 			return
 		}
 		key := clientKey(r)
-		if blocked, wait := h.authFails.blocked(key); blocked {
+		if blocked, wait := h.failedAuthBlocked(key); blocked {
 			writeRateLimited(w, wait, "too many failed authentication attempts")
 			return
 		}
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		next.ServeHTTP(ww, r)
 		if st := ww.Status(); st == http.StatusUnauthorized || st == http.StatusLocked {
-			h.authFails.charge(key)
+			h.chargeFailedAuth(r.Context(), key)
 		}
 	})
+}
+
+// SharedBuckets are token buckets every node of a cluster shares
+// (implemented by auth.SharedLimiter). Take takes one token for key and
+// reports whether there was one, the tokens left and, without one, the wait.
+type SharedBuckets interface {
+	Take(ctx context.Context, key string) (ok bool, left float64, wait time.Duration)
+}
+
+// chargeTimeout bounds the shared bucket update after a failed
+// authentication. It runs after the answer was written and even when the
+// client is gone, because the attempt has been made.
+const chargeTimeout = 5 * time.Second
+
+// failedAuthBlocked reports whether key has no failed authentication left.
+// With shared buckets this node answers from what it learnt when it last
+// charged key: a client spreading guesses over N nodes gets at most one
+// more failure per node than the cluster-wide budget before each node
+// blocks it, never N budgets.
+func (h *hardening) failedAuthBlocked(key string) (bool, time.Duration) {
+	if h.authShared == nil {
+		return h.authFails.blocked(key)
+	}
+	if blocked, wait := h.authBlocked.blocked(key); blocked {
+		return true, wait
+	}
+	// The local buckets are charged only while the shared store fails.
+	return h.authFails.blocked(key)
+}
+
+// chargeFailedAuth counts a failed authentication for key.
+func (h *hardening) chargeFailedAuth(ctx context.Context, key string) {
+	if h.authShared == nil {
+		h.authFails.charge(key)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), chargeTimeout)
+	defer cancel()
+	ok, left, wait := h.authShared.Take(ctx, key)
+	switch {
+	case !ok:
+		h.authBlocked.block(key, wait)
+	case left < 1:
+		h.authBlocked.block(key, h.authFails.waitFor(left))
+	}
+}
+
+// blockedSet remembers until when keys are blocked, bounded like ipLimiter.
+type blockedSet struct {
+	mu    sync.Mutex
+	until map[string]time.Time
+	now   func() time.Time
+}
+
+func newBlockedSet(now func() time.Time) *blockedSet {
+	return &blockedSet{until: map[string]time.Time{}, now: now}
+}
+
+func (b *blockedSet) block(key string, d time.Duration) {
+	if d <= 0 {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	now := b.now()
+	if len(b.until) >= maxLimiterKeys {
+		for k, t := range b.until {
+			if !now.Before(t) {
+				delete(b.until, k)
+			}
+		}
+		if len(b.until) >= maxLimiterKeys {
+			clear(b.until)
+		}
+	}
+	b.until[key] = now.Add(d)
+}
+
+func (b *blockedSet) blocked(key string) (bool, time.Duration) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	t, ok := b.until[key]
+	if !ok {
+		return false, 0
+	}
+	if wait := t.Sub(b.now()); wait > 0 {
+		return true, wait
+	}
+	delete(b.until, key)
+	return false, 0
 }
 
 // carriesCredentials reports whether r may be an authentication attempt:
@@ -410,7 +512,12 @@ func (l *ipLimiter) refill(key string) *tokens {
 }
 
 func (l *ipLimiter) wait(b *tokens) time.Duration {
-	return time.Duration((1 - b.n) / l.perSec * float64(time.Second))
+	return l.waitFor(b.n)
+}
+
+// waitFor is how long a bucket holding n tokens takes to hold one.
+func (l *ipLimiter) waitFor(n float64) time.Duration {
+	return time.Duration((1 - n) / l.perSec * float64(time.Second))
 }
 
 // take consumes one token; without one it reports how long to wait.

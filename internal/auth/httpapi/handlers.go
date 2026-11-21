@@ -55,7 +55,7 @@ type loginRequest struct {
 
 func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	if ok, wait := h.svc.LoginLimiter().Allow(auth.AddressKey(clientIP(r))); !ok {
+	if ok, wait := h.svc.AllowLoginAddress(r.Context(), clientIP(r)); !ok {
 		h.writeError(w, r, &rateLimitedError{wait: wait})
 		return
 	}
