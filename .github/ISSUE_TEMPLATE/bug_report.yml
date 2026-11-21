@@ -1,0 +1,96 @@
+name: Bug report
+description: Something does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Security vulnerabilities do not belong here**:
+        report them privately as described in SECURITY.md (the repository's
+        Security tab, "Report a vulnerability").
+
+        Remove tokens, passwords and internal host names from everything you
+        paste. Hangar redacts secrets in its own logs, but not in client output.
+  - type: input
+    id: version
+    attributes:
+      label: Hangar version
+      description: Output of `hangar version`, or the image tag.
+      placeholder: hangar v0.1.9 (commit 9ca4207...)
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installation
+      options:
+        - Docker Compose (install.sh)
+        - Helm chart
+        - Binary with systemd
+        - From source (make dev / go run)
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Docker / OCI
+        - npm
+        - Maven / Gradle
+        - PyPI
+        - NuGet
+        - Go modules
+        - Helm repository
+        - Cargo
+        - APT
+        - RPM
+        - Raw
+        - Web UI
+        - REST API
+        - Authentication, tokens, SSO
+        - Vulnerability scanning
+        - Storage (filesystem, S3)
+        - Deployment (compose, Helm chart, installer)
+        - Metrics, logs, alerts
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Commands or clicks, starting from a fresh repository if you can.
+      placeholder: |
+        1. Create an npm proxy of https://registry.npmjs.org
+        2. npm install left-pad --registry https://hangar.example.com/repository/npm-proxy/
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: client
+    attributes:
+      label: Client and its output
+      description: Client name and version (docker, npm, mvn, pip, dotnet, ...) and the full error it printed.
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server log
+      description: The matching lines from the server log (Operations > System logs, or stderr). Search by the `request_id` of the failing request.
+      render: text
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant configuration
+      description: The repository settings (as YAML from the UI) or hangar.yaml keys involved, without secrets.
+      render: yaml

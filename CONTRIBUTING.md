@@ -8,6 +8,10 @@ make dev     # postgres, minio, nats and trivy in docker, then the server and th
 make help    # every target
 ```
 
+Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
+Questions go to Discussions, bugs and feature requests to the issue forms,
+and vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
 Changes come in small pull requests with tests. Before you open one, run the
 checks below. The release workflow runs the same ones on the tagged
 commit and publishes nothing unless all of them pass (setting the
