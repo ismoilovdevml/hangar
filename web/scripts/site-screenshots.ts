@@ -1,7 +1,11 @@
 /**
- * Screenshots of the demo build for the project website's UI guides.
+ * Screenshots of the demo build for the project website's UI guides and the README.
  *
  *   npm run site:screenshots -- <site-dir> [shot-name ...]
+ *   npm run site:screenshots -- --readme
+ *
+ * --readme writes the README's screenshots to docs/screenshots/ under the
+ * names README.md uses (see README_SHOTS).
  *
  * Builds the demo (`vite build --mode demo`), serves dist-demo/ on a local
  * port, walks through the pages below in Chromium and writes JPEGs (1440x900
@@ -206,6 +210,19 @@ const SHOTS: Shot[] = [
   { name: 'sign-in', path: '/login' },
 ];
 
+/** README image (docs/screenshots/<name>.jpg) → the shot it is taken from. */
+const README_SHOTS: Record<string, string> = {
+  overview: 'overview',
+  package: 'browse-package',
+  search: 'search',
+  repositories: 'repositories',
+  'new-proxy-repository': 'repo-new-proxy',
+  'access-tokens': 'access-new-token',
+  'cleanup-policies': 'cleanup-new',
+  'blob-stores': 'blob-stores',
+  vulnerabilities: 'vulnerabilities',
+};
+
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript',
@@ -254,13 +271,17 @@ async function settle(page: Page) {
 async function main() {
   const [siteDir, ...only] = process.argv.slice(2);
   if (!siteDir) {
-    console.error('usage: npm run site:screenshots -- <site-dir> [shot-name ...]');
+    console.error('usage: npm run site:screenshots -- <site-dir> [shot-name ...]\n       npm run site:screenshots -- --readme');
     process.exit(2);
   }
-  const out = join(resolve(siteDir), 'assets/img/ui');
+  const readme = siteDir === '--readme';
+  const out = readme ? join(WEB, '..', 'docs', 'screenshots') : join(resolve(siteDir), 'assets/img/ui');
   mkdirSync(out, { recursive: true });
-  const shots = only.length ? SHOTS.filter((s) => only.includes(s.name)) : SHOTS;
-  const unknown = only.filter((n) => !SHOTS.some((s) => s.name === n));
+  // The README takes a few of the shots, under its own file names.
+  const fileOf = (shot: Shot) => (readme ? Object.keys(README_SHOTS).find((f) => README_SHOTS[f] === shot.name)! : shot.name);
+  const wanted = readme ? Object.values(README_SHOTS) : only;
+  const shots = wanted.length ? SHOTS.filter((s) => wanted.includes(s.name)) : SHOTS;
+  const unknown = wanted.filter((n) => !SHOTS.some((s) => s.name === n));
   if (unknown.length) throw new Error(`unknown shots: ${unknown.join(', ')}`);
 
   const server = await serveDemo();
@@ -283,7 +304,7 @@ async function main() {
         await shot.act?.(page);
         await settle(page);
         await retouch(page);
-        await page.screenshot({ path: join(out, `${shot.name}.jpg`), type: 'jpeg', quality: QUALITY });
+        await page.screenshot({ path: join(out, `${fileOf(shot)}.jpg`), type: 'jpeg', quality: QUALITY });
         if (problems.length) throw new Error(problems.join('; '));
         console.log(`ok   ${shot.name}`);
       } catch (err) {
