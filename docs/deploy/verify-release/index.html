@@ -109,7 +109,7 @@ fails on a release that should be signed, report it as described in
 <h2 id="the-identity-to-trust">The identity to trust<a class="anchor" href="#the-identity-to-trust" aria-label="Link to this section">#</a></h2>
 <p>A signature is only worth the identity you require. Release signatures come
 from this workflow file, run for a version tag:</p>
-<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>VERSION=0.2.0   <span class="hljs-comment"># the release, without the &quot;v&quot;</span>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>VERSION=0.2.1   <span class="hljs-comment"># the release, without the &quot;v&quot;</span>
 ISSUER=https://token.actions.githubusercontent.com
 IDENTITY=<span class="hljs-string">&quot;https://github.com/ismoilovdevml/hangar/.github/workflows/release.yml@refs/tags/v<span class="hljs-variable">$VERSION</span>&quot;</span></code></pre></div>
 <p>Use <code>--certificate-identity &quot;$IDENTITY&quot;</code> to accept exactly that release. To
@@ -197,7 +197,7 @@ so what runs is what was checked. The scan adapter image
 (without reaching Rekor) needs the bundle and a trusted root: see
 <code>cosign verify --help</code> (<code>--offline</code>, <code>--trusted-root</code>).</p>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/verify-release.md"><code>docs/deploy/verify-release.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/verify-release.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/verify-release.md"><code>docs/deploy/verify-release.md</code></a> on main at <code>70ce6d3</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/verify-release.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
       <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../upgrade/" rel="prev"><small>Previous</small><b>Upgrades</b></a><a class="next" href="../high-availability/" rel="next"><small>Next</small><b>High availability</b></a></nav>
     </article>
   </main>

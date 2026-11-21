@@ -1,1 +1,0 @@
-import{Co as e,Eo as t,To as n}from"./index-B4yp8Cbr.js";var r=t(n(),1),i=e();function a({name:e}){let t=[],n=0;for(let r=0;r<e.length;r++)`./:`.includes(e[r])&&r>n&&(t.push(e.slice(n,r+1)),n=r+1);return(n<e.length||t.length===0)&&t.push(e.slice(n)),(0,i.jsx)(i.Fragment,{children:t.map((e,t)=>(0,i.jsxs)(r.Fragment,{children:[t>0&&(0,i.jsx)(`wbr`,{}),e]},t))})}export{a as t};

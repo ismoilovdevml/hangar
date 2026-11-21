@@ -1,0 +1,1 @@
+import{Aa as e,Co as t}from"./index-B2gemu7u.js";import{t as n}from"./FormatIcon-CuhqojRH.js";var r=t();function i(t,i){let a=t.map(t=>({value:t,label:e[t].label,icon:(0,r.jsx)(n,{format:t,size:16,label:null})}));return i===void 0?a:[{value:``,label:i},...a]}export{i as t};

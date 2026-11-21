@@ -1,0 +1,1 @@
+import{Co as e}from"./index-B2gemu7u.js";var t=e();function n({reason:e=`not available`}){return(0,t.jsxs)(t.Fragment,{children:[(0,t.jsx)(`span`,{"aria-hidden":`true`,children:`—`}),(0,t.jsx)(`span`,{className:`visually-hidden`,children:e})]})}export{n as t};

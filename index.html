@@ -33,7 +33,7 @@
   "applicationCategory": "DeveloperApplication",
   "applicationSubCategory": "Package registry",
   "operatingSystem": "Linux",
-  "softwareVersion": "0.2.0",
+  "softwareVersion": "0.2.1",
   "url": "https://ismoilovdevml.github.io/hangar/",
   "downloadUrl": "https://github.com/ismoilovdevml/hangar/releases/latest",
   "softwareHelp": { "@type": "CreativeWork", "url": "https://ismoilovdevml.github.io/hangar/docs/" },
@@ -210,7 +210,7 @@ services:
       interval: 5s
       retries: 20
   hangar:
-    image: ghcr.io/ismoilovdevml/hangar:0.2.0
+    image: ghcr.io/ismoilovdevml/hangar:0.2.1
     depends_on:
       postgres: { condition: service_healthy }
     environment:
@@ -230,11 +230,11 @@ docker compose logs hangar | grep -A4 'first administrator'</pre><button class="
   -v hangar-data:/var/lib/hangar \
   -e HANGAR_DATABASE_URL='postgres://hangar:secret@db.example.com:5432/hangar' \
   -e HANGAR_DATABASE_MIGRATE_ON_START=true \
-  ghcr.io/ismoilovdevml/hangar:0.2.0</pre><button class="copy" type="button">Copy</button></div>
+  ghcr.io/ismoilovdevml/hangar:0.2.1</pre><button class="copy" type="button">Copy</button></div>
         <p class="after">Needs a PostgreSQL 16+ database. <code>docker logs hangar</code> shows the first administrator's one-time password. Settings and secrets: <a href="docs/deploy/#configuration-in-one-paragraph">Configuration</a>.</p>
       </div>
       <div role="tabpanel" id="panel-helm" aria-labelledby="tab-helm" data-panel="helm" hidden>
-        <div class="code"><pre tabindex="0">helm install hangar oci://ghcr.io/ismoilovdevml/charts/hangar --version 0.2.0 \
+        <div class="code"><pre tabindex="0">helm install hangar oci://ghcr.io/ismoilovdevml/charts/hangar --version 0.2.1 \
   --namespace hangar --create-namespace -f values.yaml</pre><button class="copy" type="button">Copy</button></div>
         <p class="after">Two or more replicas against your PostgreSQL 16+ and S3 bucket. <code>values.yaml</code> holds the public URL, the database and storage secrets and the ingress; the <a href="docs/deploy/install-helm/">Helm guide</a> has a complete example and every option.</p>
       </div>

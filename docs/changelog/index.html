@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Changelog · Hangar docs</title>
-<meta name="description" content="Changelog: NATS is gone: events and jobs run on the PostgreSQL every node already shares. Also new: webhooks, CI OIDC trusted publishing, hangar apply…">
+<meta name="description" content="Changelog: Fixes found by running v0.2.0 as a three-node cluster. No upgrade steps beyond replacing the image or chart; no migrations. NATS is gone: events…">
 <link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/changelog/">
 <meta name="theme-color" content="#ffffff">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Hangar — self-hosted package registry">
 <meta property="og:title" content="Changelog">
-<meta property="og:description" content="Changelog: NATS is gone: events and jobs run on the PostgreSQL every node already shares. Also new: webhooks, CI OIDC trusted publishing, hangar apply…">
+<meta property="og:description" content="Changelog: Fixes found by running v0.2.0 as a three-node cluster. No upgrade steps beyond replacing the image or chart; no migrations. NATS is gone: events…">
 <meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/changelog/">
 <meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
 <meta property="og:image:width" content="1200">
@@ -18,7 +18,7 @@
 <meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Changelog">
-<meta name="twitter:description" content="Changelog: NATS is gone: events and jobs run on the PostgreSQL every node already shares. Also new: webhooks, CI OIDC trusted publishing, hangar apply…">
+<meta name="twitter:description" content="Changelog: Fixes found by running v0.2.0 as a three-node cluster. No upgrade steps beyond replacing the image or chart; no migrations. NATS is gone: events…">
 <meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preload" href="../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -58,6 +58,25 @@
       <p class="crumb">Project</p>
       <h1>Changelog</h1>
 <h2 id="unreleased">Unreleased<a class="anchor" href="#unreleased" aria-label="Link to this section">#</a></h2>
+<h2 id="v021-2026-11-22">v0.2.1 (2026-11-22)<a class="anchor" href="#v021-2026-11-22" aria-label="Link to this section">#</a></h2>
+<p>Fixes found by running v0.2.0 as a three-node cluster. No upgrade steps
+beyond replacing the image or chart; no migrations.</p>
+<ul>
+<li><strong>Repository pages and the repository API are fast again</strong>: Hangar turns
+PostgreSQL's JIT off on its own connections. The repository list and every
+repository read paid about half a second of JIT compilation on servers
+with JIT enabled (the default of the official images and most packages):
+465 ms per call before, 5 ms after, measured on the test cluster. The
+same delay made a change on one node take over a second to show on
+another; it now shows within about 60 ms. Add <code>jit=on</code> to the database
+URL to keep JIT. This affected earlier releases too.</li>
+<li><strong>Task runs name the node by <code>server.node_id</code></strong> (as System status does),
+not by the container's host name.</li>
+<li><strong>High availability guide</strong>: what the cluster test showed, scenario by
+scenario, including that <code>server.drain_delay</code> should cover the load
+balancer's health check (with HAProxy checking every 2 s, 6 s gave no
+failed requests while a node stopped; 0 s lost 2 of 36).</li>
+</ul>
 <h2 id="v020-2026-11-21">v0.2.0 (2026-11-21)<a class="anchor" href="#v020-2026-11-21" aria-label="Link to this section">#</a></h2>
 <p>NATS is gone: events and jobs run on the PostgreSQL every node already
 shares. Also new: webhooks, CI OIDC trusted publishing, <code>hangar apply</code>,
@@ -175,6 +194,12 @@ v0.1.9 blocked at the API. Key rotation and the startup sweep upgrade
 decompression and memory; an oversized index fails the import instead of
 being read truncated.</li>
 <li>PyPI proxies hide quarantined cached files past the first 1,000 versions.</li>
+<li>Built with Go 1.27.4 (GO-2026-6859 in <code>net/http</code>); go-jose 4.1.6 (a denial
+of service when parsing tokens, reachable through the new CI OIDC
+exchange); the scanner image is based on Trivy 0.76.2 (a critical brotli
+fix in its base).</li>
+<li>Task run logs keep their order: a step could appear before &quot;Started&quot; when a
+heartbeat and a checkpoint wrote at the same time.</li>
 </ul>
 <h3 id="performance-and-reliability">Performance and reliability<a class="anchor" href="#performance-and-reliability" aria-label="Link to this section">#</a></h3>
 <ul>
@@ -2048,11 +2073,11 @@ fallback page is served.</li>
 <li><strong>Decisions</strong>: ADRs 0001–0009 in <code>docs/adr/</code>.</li>
 </ul>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/changelog.md"><code>docs/changelog.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/changelog.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/changelog.md"><code>docs/changelog.md</code></a> on main at <code>70ce6d3</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/changelog.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
       <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../roadmap/" rel="prev"><small>Previous</small><b>Roadmap</b></a></nav>
     </article>
   </main>
-  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#unreleased">Unreleased</a></li><li class="l2"><a href="#v020-2026-11-21">v0.2.0 (2026-11-21)</a></li><li class="l3"><a href="#upgrade-notes">Upgrade notes</a></li><li class="l3"><a href="#events-and-jobs-on-postgresql">Events and jobs on PostgreSQL</a></li><li class="l3"><a href="#new-features">New features</a></li><li class="l3"><a href="#security">Security</a></li><li class="l3"><a href="#performance-and-reliability">Performance and reliability</a></li><li class="l3"><a href="#web-ui">Web UI</a></li><li class="l3"><a href="#releases-deployment-and-docs">Releases, deployment and docs</a></li><li class="l2"><a href="#v019-2026-11-20">v0.1.9 (2026-11-20)</a></li><li class="l3"><a href="#upgrade-notes-1">Upgrade notes</a></li><li class="l3"><a href="#security-1">Security</a></li><li class="l3"><a href="#reliability">Reliability</a></li><li class="l3"><a href="#web-ui-1">Web UI</a></li><li class="l3"><a href="#deployment-ci-and-observability">Deployment, CI and observability</a></li><li class="l2"><a href="#v018-2026-11-15">v0.1.8 (2026-11-15)</a></li><li class="l2"><a href="#v017-2026-11-09">v0.1.7 (2026-11-09)</a></li><li class="l2"><a href="#v016-2026-11-09">v0.1.6 (2026-11-09)</a></li><li class="l2"><a href="#v015-2026-11-05">v0.1.5 (2026-11-05)</a></li><li class="l2"><a href="#v014-2026-11-05">v0.1.4 (2026-11-05)</a></li><li class="l2"><a href="#v013-2026-11-04">v0.1.3 (2026-11-04)</a></li><li class="l2"><a href="#v012-2026-11-04">v0.1.2 (2026-11-04)</a></li><li class="l2"><a href="#v011-2026-11-04">v0.1.1 (2026-11-04)</a></li><li class="l2"><a href="#v010-2026-11-04">v0.1.0 (2026-11-04)</a></li><li class="l2"><a href="#m0--skeleton-2026-11-03">M0 — Skeleton (2026-11-03)</a></li></ul></aside>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#unreleased">Unreleased</a></li><li class="l2"><a href="#v021-2026-11-22">v0.2.1 (2026-11-22)</a></li><li class="l2"><a href="#v020-2026-11-21">v0.2.0 (2026-11-21)</a></li><li class="l3"><a href="#upgrade-notes">Upgrade notes</a></li><li class="l3"><a href="#events-and-jobs-on-postgresql">Events and jobs on PostgreSQL</a></li><li class="l3"><a href="#new-features">New features</a></li><li class="l3"><a href="#security">Security</a></li><li class="l3"><a href="#performance-and-reliability">Performance and reliability</a></li><li class="l3"><a href="#web-ui">Web UI</a></li><li class="l3"><a href="#releases-deployment-and-docs">Releases, deployment and docs</a></li><li class="l2"><a href="#v019-2026-11-20">v0.1.9 (2026-11-20)</a></li><li class="l3"><a href="#upgrade-notes-1">Upgrade notes</a></li><li class="l3"><a href="#security-1">Security</a></li><li class="l3"><a href="#reliability">Reliability</a></li><li class="l3"><a href="#web-ui-1">Web UI</a></li><li class="l3"><a href="#deployment-ci-and-observability">Deployment, CI and observability</a></li><li class="l2"><a href="#v018-2026-11-15">v0.1.8 (2026-11-15)</a></li><li class="l2"><a href="#v017-2026-11-09">v0.1.7 (2026-11-09)</a></li><li class="l2"><a href="#v016-2026-11-09">v0.1.6 (2026-11-09)</a></li><li class="l2"><a href="#v015-2026-11-05">v0.1.5 (2026-11-05)</a></li><li class="l2"><a href="#v014-2026-11-05">v0.1.4 (2026-11-05)</a></li><li class="l2"><a href="#v013-2026-11-04">v0.1.3 (2026-11-04)</a></li><li class="l2"><a href="#v012-2026-11-04">v0.1.2 (2026-11-04)</a></li><li class="l2"><a href="#v011-2026-11-04">v0.1.1 (2026-11-04)</a></li><li class="l2"><a href="#v010-2026-11-04">v0.1.0 (2026-11-04)</a></li><li class="l2"><a href="#m0--skeleton-2026-11-03">M0 — Skeleton (2026-11-03)</a></li></ul></aside>
 </div>
 <div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
   <div class="search-box">

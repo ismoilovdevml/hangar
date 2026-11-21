@@ -15,8 +15,8 @@
   <url><loc>https://ismoilovdevml.github.io/hangar/docs/deploy/first-admin/</loc><lastmod>2026-11-21</lastmod></url>
   <url><loc>https://ismoilovdevml.github.io/hangar/docs/deploy/backup-restore/</loc><lastmod>2026-11-21</lastmod></url>
   <url><loc>https://ismoilovdevml.github.io/hangar/docs/deploy/upgrade/</loc><lastmod>2026-11-21</lastmod></url>
-  <url><loc>https://ismoilovdevml.github.io/hangar/docs/deploy/verify-release/</loc><lastmod>2026-11-21</lastmod></url>
-  <url><loc>https://ismoilovdevml.github.io/hangar/docs/deploy/high-availability/</loc><lastmod>2026-11-21</lastmod></url>
+  <url><loc>https://ismoilovdevml.github.io/hangar/docs/deploy/verify-release/</loc><lastmod>2026-11-22</lastmod></url>
+  <url><loc>https://ismoilovdevml.github.io/hangar/docs/deploy/high-availability/</loc><lastmod>2026-11-22</lastmod></url>
   <url><loc>https://ismoilovdevml.github.io/hangar/docs/deploy/troubleshooting/</loc><lastmod>2026-11-21</lastmod></url>
   <url><loc>https://ismoilovdevml.github.io/hangar/docs/ui/</loc></url>
   <url><loc>https://ismoilovdevml.github.io/hangar/docs/ui/repositories/</loc></url>
@@ -42,7 +42,7 @@
   <url><loc>https://ismoilovdevml.github.io/hangar/docs/guides/migrate/</loc><lastmod>2026-11-09</lastmod></url>
   <url><loc>https://ismoilovdevml.github.io/hangar/docs/guides/ci/</loc><lastmod>2026-11-21</lastmod></url>
   <url><loc>https://ismoilovdevml.github.io/hangar/docs/guides/ci-oidc/</loc><lastmod>2026-11-21</lastmod></url>
-  <url><loc>https://ismoilovdevml.github.io/hangar/docs/guides/config-as-code/</loc><lastmod>2026-11-21</lastmod></url>
+  <url><loc>https://ismoilovdevml.github.io/hangar/docs/guides/config-as-code/</loc><lastmod>2026-11-22</lastmod></url>
   <url><loc>https://ismoilovdevml.github.io/hangar/docs/guides/webhooks/</loc><lastmod>2026-11-21</lastmod></url>
   <url><loc>https://ismoilovdevml.github.io/hangar/docs/guides/access/</loc><lastmod>2026-11-21</lastmod></url>
   <url><loc>https://ismoilovdevml.github.io/hangar/docs/guides/sso/</loc><lastmod>2026-11-21</lastmod></url>
@@ -70,5 +70,5 @@
   <url><loc>https://ismoilovdevml.github.io/hangar/docs/product-spec/</loc><lastmod>2026-11-21</lastmod></url>
   <url><loc>https://ismoilovdevml.github.io/hangar/docs/design-system/</loc><lastmod>2026-11-21</lastmod></url>
   <url><loc>https://ismoilovdevml.github.io/hangar/docs/roadmap/</loc><lastmod>2026-11-21</lastmod></url>
-  <url><loc>https://ismoilovdevml.github.io/hangar/docs/changelog/</loc><lastmod>2026-11-21</lastmod></url>
+  <url><loc>https://ismoilovdevml.github.io/hangar/docs/changelog/</loc><lastmod>2026-11-22</lastmod></url>
 </urlset>

@@ -339,7 +339,7 @@ entrypoint, so run it as a command rather than as a job image (or put the
           [ &quot;${{ github.event_name }}&quot; = push ] &amp;&amp; cmd=apply
           docker run --rm -v &quot;$PWD/hangar:/hangar:ro&quot; \
             -e HANGAR_URL -e HANGAR_TOKEN -e NPM_TOKEN -e HANGAR_S3_SECRET \
-            ghcr.io/ismoilovdevml/hangar:0.2.0 \
+            ghcr.io/ismoilovdevml/hangar:0.2.1 \
             $cmd -f /hangar -R --apply-set platform --prune || test $? -eq 2 -a $cmd = diff</span></code></pre></div>
 <p>In GitLab CI the same <code>docker run</code> works in a job with Docker access. Pass
 every variable a <code>valueFrom: {env: ...}</code> names into the container (<code>-e</code>), and
@@ -448,7 +448,7 @@ before doing anything. Redirects are refused, so the token never follows one
 to another host. A warning is printed when the token would travel over plain
 <code>http://</code> to a host other than localhost.</p>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/config-as-code.md"><code>docs/guides/config-as-code.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/config-as-code.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/config-as-code.md"><code>docs/guides/config-as-code.md</code></a> on main at <code>70ce6d3</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/config-as-code.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
       <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../ci-oidc/" rel="prev"><small>Previous</small><b>CI trusted publishing (OIDC)</b></a><a class="next" href="../webhooks/" rel="next"><small>Next</small><b>Webhooks</b></a></nav>
     </article>
   </main>

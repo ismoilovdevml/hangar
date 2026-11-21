@@ -213,6 +213,55 @@ PostgreSQL; v0.1.x, before the move from NATS to PostgreSQL):</p>
 whose node died is reclaimed once its lease expires; a job that runs for
 longer than the lease keeps it through heartbeats; a node whose listener
 connection is terminated reconnects and drops its caches.</p>
+<p>Observed on a v0.2.0 test cluster (3 nodes in containers on one host, one
+PostgreSQL 16, a shared blob directory, HAProxy polling <code>/readyz</code> every 2 s
+with a threshold of 2):</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Raw file uploaded through one node, read through the other two</td>
+<td>Same bytes from every node.</td>
+</tr>
+<tr>
+<td>Image pushed through one node and through the load balancer (each request of the upload to a different node), pulled through another</td>
+<td>Accepted and pulled.</td>
+</tr>
+<tr>
+<td>Repository changed on one node</td>
+<td>The next read on another node returns the change (cache dropped by the event).</td>
+</tr>
+<tr>
+<td>Package published on one node, browser connected to another</td>
+<td>The live event reaches the browser.</td>
+</tr>
+<tr>
+<td>System logs of a node read through another</td>
+<td>Served over the signed node-to-node request.</td>
+</tr>
+<tr>
+<td>Task runs started through the load balancer</td>
+<td>Spread over the nodes, all succeeded.</td>
+</tr>
+<tr>
+<td>Scheduler leader stopped</td>
+<td>Another node took the lead within 16 to 22 s. With <code>drain_delay: 6s</code>, no request through the load balancer failed; with <code>0s</code>, 2 of 36 did.</td>
+</tr>
+<tr>
+<td>Every node's event listener connection terminated</td>
+<td>All reconnected; invalidation kept working; <code>/readyz</code> stayed 200.</td>
+</tr>
+<tr>
+<td>All nodes restarted one after the other under traffic (<code>drain_delay: 6s</code>)</td>
+<td>138 of 138 requests succeeded.</td>
+</tr>
+</tbody>
+</table></div>
 <h2 id="known-limits">Known limits<a class="anchor" href="#known-limits" aria-label="Link to this section">#</a></h2>
 <ul>
 <li><strong>Event delivery</strong> between nodes is best effort: an event published while
@@ -293,7 +342,7 @@ database's and the object store's own replication for disaster recovery, and
 keep <code>HANGAR_SECRET_KEY</code> and <code>HANGAR_DOCKER_TOKEN_KEY</code> identical at the DR
 site.</p>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/high-availability.md"><code>docs/deploy/high-availability.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/high-availability.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/high-availability.md"><code>docs/deploy/high-availability.md</code></a> on main at <code>70ce6d3</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/high-availability.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
       <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../verify-release/" rel="prev"><small>Previous</small><b>Verify a release</b></a><a class="next" href="../troubleshooting/" rel="next"><small>Next</small><b>Troubleshooting</b></a></nav>
     </article>
   </main>
