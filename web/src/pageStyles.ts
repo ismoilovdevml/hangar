@@ -14,8 +14,6 @@ import './pages/repositories/settings/settings.css';
 import './pages/browse/browse.css';
 import './pages/search/search.css';
 import './pages/blobstores/blobstores.css';
-import './pages/cluster/cluster.css';
 import './pages/vulnerabilities/vulnerabilities.css';
-import './pages/settings/hub.css';
 import './pages/settings/settings.css';
 import './pages/system/system.css';

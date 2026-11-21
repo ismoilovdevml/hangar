@@ -133,60 +133,56 @@ test('audit log filters through the URL at desktop and phone width', async ({ pa
   expect(errors).toEqual([]);
 });
 
-test('system page at desktop and phone width', async ({ page }) => {
+test('system about tab at desktop and phone width', async ({ page }) => {
   const errors = collectErrors(page);
   for (const [w, size] of SIZES) {
     await page.setViewportSize(size);
-    await page.goto('/settings/system');
-    // The mock cluster has a degraded and a silent node; the page says what System status says.
+    await page.goto('/system/about');
+    // The mock cluster has a degraded and a silent node; the page says what System → Status says.
     await expect(page.getByText('Degraded', { exact: true }).first()).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'hangar-1' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'System sections' }).getByRole('link', { name: 'About' })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('region', { name: 'Configuration' })).toContainText('hangar.yaml');
-    await checkFrame(page, `system-${w}`);
+    await checkFrame(page, `system-about-${w}`);
   }
   expect(errors).toEqual([]);
 });
 
-test('settings hub at desktop and phone width, from the keyboard', async ({ page }) => {
-  const errors = collectErrors(page);
-  for (const [w, size] of SIZES) {
-    await page.setViewportSize(size);
-    await page.goto('/settings');
-    await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
-    const hub = page.getByRole('main');
-    await expect(hub.getByRole('link', { name: /^Internet access/ })).toContainText('corp-proxy');
-    await expect(hub.getByRole('link', { name: /^Storage/ })).toContainText('blob stores');
-    await expect(hub.getByRole('link', { name: /^System status/ })).toContainText('passing');
-    await expect(page.getByRole('link', { name: '1 check needs attention' }).last()).toBeVisible();
-    await checkFrame(page, `settings-hub-${w}`);
-  }
-  // Tab through the rows; Enter opens one.
+test('old addresses lead into the System area and Settings', async ({ page }) => {
   await page.setViewportSize(DESKTOP);
-  await page.getByRole('main').getByRole('link', { name: /^Instance name/ }).focus();
-  await page.keyboard.press('Tab');
-  await expect(page.getByRole('main').getByRole('link', { name: /^Sign-in/ })).toBeFocused();
-  await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/settings\/authentication$/);
-  expect(errors).toEqual([]);
+  for (const [from, to] of [
+    ['/cluster', /\/system\/nodes$/],
+    ['/system', /\/system\/status$/],
+    ['/settings/system#endpoints-title', /\/system\/about#endpoints-title$/],
+    ['/settings', /\/settings\/authentication$/],
+    ['/access?tab=audit&events=signins', /\/audit\?action=auth\.\*$/],
+  ] as const) {
+    await page.goto(from);
+    await expect(page).toHaveURL(to);
+  }
 });
 
-test('pages under Settings keep their address, show the Settings crumb and light up their entry', async ({ page }) => {
+test('the System tabs share one header, crumb and sidebar entry', async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   const nav = page.getByRole('navigation', { name: 'Primary' });
   const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
-  for (const [path, title, entry, current] of [
-    ['/audit', 'Audit log', 'Audit log', 'page'],
-    ['/account', 'My account', 'Settings', 'true'],
-    ['/settings/system', 'System', 'Settings', 'page'],
-    ['/system/logs', 'System logs', 'System logs', 'page'],
+  const tabs = page.getByRole('navigation', { name: 'System sections' });
+  for (const [path, tab] of [
+    ['/system/status', 'Status'],
+    ['/system/nodes', 'Nodes'],
+    ['/system/logs', 'Logs'],
+    ['/system/about', 'About'],
   ] as const) {
     await page.goto(path);
-    await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
-    await expect(crumbs.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
-    await expect(nav.getByRole('link', { name: entry, exact: true })).toHaveAttribute('aria-current', current);
+    await expect(page.getByRole('heading', { level: 1, name: 'System' })).toBeVisible();
+    await expect(tabs.getByRole('link', { name: tab })).toHaveAttribute('aria-current', 'page');
+    await expect(crumbs.getByRole('link', { name: 'System' })).toHaveAttribute('href', '/system');
+    await expect(nav.getByRole('link', { name: 'System', exact: true })).toHaveAttribute('aria-current', 'page');
   }
-  await page.goto('/tasks/t_backup');
-  await expect(page.getByRole('heading', { level: 1, name: 'Backup database' })).toBeVisible();
-  await expect(nav.getByRole('link', { name: 'Scheduled tasks', exact: true })).toHaveAttribute('aria-current', 'page');
-  await crumbs.getByRole('link', { name: 'Settings' }).waitFor({ state: 'detached' });
+  // Keyboard: the tabs are links in reading order.
+  await tabs.getByRole('link', { name: 'Status' }).focus();
+  await page.keyboard.press('Tab');
+  await expect(tabs.getByRole('link', { name: 'Nodes' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/system\/nodes$/);
 });
+

@@ -32,7 +32,7 @@ describe('system status', () => {
     const user = userEvent.setup();
     systemMockState.singleNode();
     renderApp('/system/status');
-    expect(await screen.findByRole('heading', { level: 1, name: 'All systems normal' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 2, name: 'All systems normal' })).toBeInTheDocument();
     const summary = screen.getByRole('region', { name: 'Summary' });
     expect(within(summary).getByText('7 of 7 checks passing · hangar-1 · v1.0.0')).toBeInTheDocument();
 
@@ -67,7 +67,7 @@ describe('system status', () => {
 
   it('groups several nodes and opens the checks that need attention', async () => {
     renderApp('/system/status');
-    expect(await screen.findByRole('heading', { level: 1, name: '1 check needs attention' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 2, name: '1 check needs attention' })).toBeInTheDocument();
     const summary = screen.getByRole('region', { name: 'Summary' });
     // The silent node's older version and checks do not count.
     expect(within(summary).getByText('13 of 14 checks passing · 2 of 3 nodes up · v1.0.0')).toBeInTheDocument();
@@ -131,7 +131,7 @@ describe('system status', () => {
   it('shows a skeleton while the first answer loads', async () => {
     server.use(http.get('*/api/v1/system/nodes', () => new Promise<Response>(() => {})));
     renderApp('/system/status');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Checking every node…' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 2, name: 'Checking every node…' })).toBeInTheDocument();
   });
 
   it('explains the missing privilege instead of loading', async () => {
@@ -315,9 +315,9 @@ describe('system model', () => {
   });
 });
 
-describe('cluster & replication', () => {
+describe('system nodes', () => {
   it('lists the nodes from the server, with no promise of replication', async () => {
-    renderApp('/cluster');
+    renderApp('/system/nodes');
     const nodes = await screen.findByRole('list', { name: 'Cluster nodes' });
     const cards = await within(nodes).findAllByRole('listitem');
     expect(cards).toHaveLength(3);
@@ -332,7 +332,51 @@ describe('cluster & replication', () => {
 
   it('says plainly when the server does not list nodes', async () => {
     server.use(http.get('*/api/v1/nodes', () => HttpResponse.json({ code: 'not_implemented', message: 'nodes' }, { status: 501 })));
-    renderApp('/cluster');
+    renderApp('/system/nodes');
     expect(await screen.findByText(/does not list its nodes yet/)).toBeInTheDocument();
+  });
+});
+
+describe('system area', () => {
+  it('shows the tabs an operator may open, under one header', async () => {
+    renderApp('/system/status');
+    expect(await screen.findByRole('heading', { level: 1, name: 'System' })).toBeInTheDocument();
+    const tabs = screen.getByRole('navigation', { name: 'System sections' });
+    expect(within(tabs).getAllByRole('link').map((a) => a.textContent)).toEqual(['Status', 'Nodes', 'Logs', 'About']);
+    expect(within(tabs).getByRole('link', { name: 'Status' })).toHaveAttribute('aria-current', 'page');
+    const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(crumbs).getByRole('link', { name: 'System' })).toHaveAttribute('href', '/system');
+    await waitFor(() => expect(document.title).toBe('Status · System · Hangar'));
+  });
+
+  it.each([
+    [['system:*'], '/system', '/system/status'],
+    [['system:cluster:read'], '/cluster', '/system/nodes'],
+    [['repo:*:read'], '/system', '/system/about'],
+    [['repo:*:read'], '/cluster', '/system/about'],
+    [['repo:*:read'], '/settings/system', '/system/about'],
+  ])('with %j, %s opens %s', async (privileges, from, to) => {
+    withPrivileges(privileges);
+    const { history } = renderApp(from);
+    await waitFor(() => expect(history.location.pathname).toBe(to));
+  });
+
+  it('keeps the anchors of the old Settings → System page', async () => {
+    const { history } = renderApp('/settings/system#endpoints-title');
+    await waitFor(() => expect(history.location.pathname).toBe('/system/about'));
+    expect(history.location.hash).toBe('#endpoints-title');
+  });
+
+  it('gives a plain user About without a tab bar or a refusal', async () => {
+    withPrivileges(['repo:*:read']);
+    const asked: string[] = [];
+    server.events.on('request:start', ({ request }) => void asked.push(new URL(request.url).pathname));
+    renderApp('/system');
+    expect(await screen.findByRole('region', { name: 'Endpoints' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'System sections' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/You don’t have access/)).not.toBeInTheDocument();
+    expect(asked).not.toContain('/api/v1/nodes');
+    expect(asked).not.toContain('/api/v1/system/nodes');
+    server.events.removeAllListeners();
   });
 });

@@ -14,7 +14,7 @@ import {
   IconUser,
   IconUsers,
 } from './components/icons';
-import { IconAudit, IconSettings } from './components/opsIcons';
+import { IconAudit } from './components/opsIcons';
 import { allows } from './lib/privileges';
 import { GATES, passes, type Gate } from './lib/gates';
 import { IconLogs, IconPulse } from './pages/system/icons';
@@ -33,11 +33,11 @@ export type AppPath =
   | '/audit'
   | '/account'
   | '/tasks'
-  | '/cluster'
+  | '/system'
   | '/system/status'
+  | '/system/nodes'
   | '/system/logs'
-  | '/settings'
-  | '/settings/system'
+  | '/system/about'
   | '/settings/authentication'
   | '/settings/proxies'
   | '/api-docs';
@@ -53,6 +53,8 @@ export interface NavItem {
   /** Element id on the target page to scroll to. */
   hash?: string;
   label: string;
+  /** The name outside its tab bar (command palette), when `label` is a tab's short name. */
+  title?: string;
   icon: ComponentType<SVGProps<SVGSVGElement> & { size?: number }>;
   keywords?: string;
   requires?: Requirement | Gate;
@@ -78,7 +80,7 @@ export function visibleNav(privileges: readonly string[] | undefined): NavSectio
     .filter((s) => s.items.length > 0);
 }
 
-/** The sidebar. Personal pages (My account, tokens) live in Settings. */
+/** The sidebar. Personal pages (My account, tokens) are in the account menu. */
 export const NAV: NavSection[] = [
   {
     title: 'Registry',
@@ -102,7 +104,7 @@ export const NAV: NavSection[] = [
       { to: '/vulnerabilities', label: 'Vulnerabilities', icon: IconShield, keywords: 'cve scanning findings quarantine' },
       {
         to: '/access',
-        label: 'Access & audit',
+        label: 'Access',
         icon: IconUsers,
         keywords: 'users members service accounts roles permissions tokens',
         requires: GATES.access,
@@ -112,7 +114,7 @@ export const NAV: NavSection[] = [
         label: 'Audit log',
         icon: IconAudit,
         keywords: 'events history who did export compliance',
-        requires: { area: 'audit', action: 'read' },
+        requires: GATES.audit,
       },
     ],
   },
@@ -120,161 +122,83 @@ export const NAV: NavSection[] = [
     title: 'Operations',
     items: [
       { to: '/tasks', label: 'Scheduled tasks', icon: IconClock, keywords: 'jobs cron', requires: GATES.tasks },
-      { to: '/cluster', label: 'Cluster', icon: IconCluster, keywords: 'nodes edge ha', requires: GATES.cluster },
-      {
-        to: '/system/status',
-        label: 'System status',
-        icon: IconPulse,
-        keywords: 'health nodes heartbeat database nats subsystems uptime checks',
-        requires: { area: 'cluster', action: 'read' },
-      },
-      {
-        to: '/system/logs',
-        label: 'System logs',
-        icon: IconLogs,
-        keywords: 'log records errors warnings debug server output',
-        requires: { area: 'cluster', action: 'admin' },
-      },
+      { to: '/system', label: 'System', icon: IconPulse, keywords: 'status health cluster nodes logs version about installation' },
     ],
   },
   {
     title: 'Settings',
     items: [
-      { to: '/settings', label: 'Settings', icon: IconSettings, keywords: 'preferences configuration administration my account profile' },
       {
         to: '/settings/authentication',
         label: 'Authentication',
         icon: IconLock,
         keywords: 'sign-in sso oidc ldap active directory keycloak login groups roles',
-        requires: { area: 'settings', action: 'read' },
+        requires: GATES.settings,
       },
       {
         to: '/settings/proxies',
         label: 'Proxies',
         icon: IconRoute,
         keywords: 'internet access http proxy outbound corporate no_proxy ca certificate',
-        requires: { area: 'settings', action: 'read' },
+        requires: GATES.settings,
       },
     ],
   },
 ];
 
 /**
- * Pages reached from the Settings hub but not the sidebar. The command
- * palette lists them next to the sidebar pages so every page stays one search away.
+ * The tabs of the System area (/system), in order. /system opens the first
+ * one the user may see; About needs no privilege, so everyone has a tab.
  */
-export const SETTINGS_PAGES: NavSection = {
-  title: 'Settings',
+export const SYSTEM_TABS: NavItem[] = [
+  {
+    to: '/system/status',
+    label: 'Status',
+    title: 'System status',
+    icon: IconPulse,
+    keywords: 'health heartbeat database nats subsystems uptime checks',
+    requires: GATES.cluster,
+  },
+  { to: '/system/nodes', label: 'Nodes', title: 'Cluster nodes', icon: IconCluster, keywords: 'cluster edge ha leader quorum', requires: GATES.cluster },
+  {
+    to: '/system/logs',
+    label: 'Logs',
+    title: 'System logs',
+    icon: IconLogs,
+    keywords: 'log records errors warnings debug server output',
+    requires: GATES.logs,
+  },
+  {
+    to: '/system/about',
+    label: 'About',
+    title: 'About this installation',
+    icon: IconTerminal,
+    keywords: 'version build addresses base url registry host endpoints configuration hangar.yaml instance name',
+  },
+];
+
+/**
+ * Personal pages, reached from the account menu rather than the sidebar. The
+ * command palette lists them next to the sidebar pages so every page stays one search away.
+ */
+export const ACCOUNT_PAGES: NavSection = {
+  title: 'Account',
   items: [
     { to: '/account', label: 'My account', icon: IconUser, keywords: 'profile password sessions devices personal' },
     { to: '/account', hash: 'my-tokens-title', label: 'Access tokens', icon: IconKey, keywords: 'personal access tokens api ci cli' },
-    { to: '/settings/system', label: 'System', icon: IconTerminal, keywords: 'version build addresses base url endpoints configuration hangar.yaml' },
     { to: '/api-docs', label: 'API reference', icon: IconTerminal, keywords: 'rest api openapi endpoints curl automation integration scripts token' },
   ],
 };
 
-/** Where an entry in the Settings hub leads, and what its status line shows. */
-export type HubEntryId =
-  | 'addresses'
-  | 'instance'
-  | 'sign-in'
-  | 'internet'
-  | 'storage'
-  | 'nodes'
-  | 'configuration'
-  | 'status'
-  | 'logs'
-  | 'audit'
-  | 'account'
-  | 'tokens'
-  | 'api-docs';
-
-export interface HubEntry {
-  id: HubEntryId;
-  label: string;
-  /** `/api-docs` is served by a route that older builds do not have; the hub hides it there. */
-  to: AppPath | '/api-docs';
-  hash?: string;
-  requires?: Requirement;
-}
-
-export interface HubGroup {
-  /** Read by screen readers; the groups carry no visible heading. */
-  label: string;
-  entries: HubEntry[];
-}
-
-const SETTINGS_READ: Requirement = { area: 'settings', action: 'read' };
-
-/** The Settings page: one row per setting, grouped into cards. */
-export const SETTINGS_HUB: HubGroup[] = [
-  {
-    label: 'This installation',
-    entries: [
-      { id: 'addresses', label: 'Addresses', to: '/settings/system', hash: 'endpoints-title', requires: SETTINGS_READ },
-      { id: 'instance', label: 'Instance name', to: '/settings/system', requires: SETTINGS_READ },
-    ],
-  },
-  {
-    label: 'Sign-in, network and storage',
-    entries: [
-      { id: 'sign-in', label: 'Sign-in', to: '/settings/authentication', requires: SETTINGS_READ },
-      { id: 'internet', label: 'Internet access', to: '/settings/proxies', requires: SETTINGS_READ },
-      { id: 'storage', label: 'Storage', to: '/blob-stores', requires: { area: 'blobstores', action: 'read' } },
-    ],
-  },
-  {
-    label: 'Operations',
-    entries: [
-      { id: 'nodes', label: 'Nodes', to: '/cluster', requires: { area: 'cluster', action: 'read' } },
-      { id: 'configuration', label: 'Configuration', to: '/settings/system', hash: 'config-title', requires: SETTINGS_READ },
-      { id: 'status', label: 'System status', to: '/system/status', requires: { area: 'cluster', action: 'read' } },
-      { id: 'logs', label: 'System logs', to: '/system/logs', requires: { area: 'cluster', action: 'admin' } },
-      { id: 'audit', label: 'Audit log', to: '/audit', requires: { area: 'audit', action: 'read' } },
-    ],
-  },
-  {
-    label: 'Your account',
-    entries: [
-      { id: 'account', label: 'My account', to: '/account' },
-      { id: 'tokens', label: 'Access tokens', to: '/account', hash: 'my-tokens-title' },
-      { id: 'api-docs', label: 'API reference', to: '/api-docs' },
-    ],
-  },
-];
-
-/** The hub groups and entries `privileges` may see; groups left empty are dropped. */
-export function visibleHub(privileges: readonly string[] | undefined): HubGroup[] {
-  return SETTINGS_HUB.map((g) => ({ ...g, entries: g.entries.filter((e) => canSee(privileges, e.requires)) })).filter((g) => g.entries.length > 0);
-}
-
-/**
- * Pages without a sidebar entry light up the entry of the area they belong to:
- * My account, the API reference and System sit inside Settings.
- */
-const AREA_OF: [prefix: string, item: AppPath][] = [
-  ['/account', '/settings'],
-  ['/api-docs', '/settings'],
-  ['/settings/system', '/settings'],
-]
-
 const under = (pathname: string, prefix: string) => pathname === prefix || pathname.startsWith(`${prefix}/`);
 
-/**
- * The sidebar entry for `pathname`, and whether it is that page (or a page
- * inside it) or only the area the page belongs to.
- */
-export function activeNav(pathname: string): { to: AppPath; own: boolean } | undefined {
+/** The sidebar entry of `pathname`: its own entry, or that of the page it sits inside. */
+export function activeNav(pathname: string): AppPath | undefined {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
   let best: AppPath | undefined;
   for (const item of NAV.flatMap((s) => s.items)) {
     const hit = item.to === '/' ? path === '/' : under(path, item.to);
     if (hit && (!best || item.to.length > best.length)) best = item.to;
   }
-  if (best) return { to: best, own: true };
-  let area: [string, AppPath] | undefined;
-  for (const entry of AREA_OF) {
-    if (under(path, entry[0]) && (!area || entry[0].length > area[0].length)) area = entry;
-  }
-  return area && { to: area[1], own: false };
+  return best;
 }

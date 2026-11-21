@@ -1,7 +1,7 @@
 /**
  * The one health model of the app. Every indicator (the sidebar card, the
- * Overview pill, the bell and To do, System status, Settings › System and the
- * Settings hub) reads `useSystemHealth()`, which is GET /system/status: the
+ * Overview pill, the bell and To do, System → Status and System → About)
+ * reads `useSystemHealth()`, which is GET /system/status: the
  * server's rollup of the same checks the System status screen lists. So they
  * cannot disagree, and none of them is green before the answer arrived.
  */

@@ -6,7 +6,6 @@ import { errorText } from '../../lib/apiError';
 import { ErrorNote } from '../../components/ErrorNote';
 import { FilterSearch } from '../../components/FilterSearch';
 import { IconDownload } from '../../components/opsIcons';
-import { PageHeader } from '../../components/PageHeader';
 import { Select, type SelectOption } from '../../components/Select';
 import { Panel } from '../../components/Panel';
 import { fetchWholeBuffer, isOlderServer, LOGS_REFRESH_MS, useLogStream, useSystemNodes, type LogFilters } from './api';
@@ -184,10 +183,9 @@ export function SystemLogsPage() {
 
   return (
     <div className="screen">
-      <PageHeader
-        title="System logs"
-        description={`Recent log records each node keeps in memory, newest at the bottom, in your local time (${zoneLabel()}). Open a line to see all of its fields.`}
-      />
+      <p className="meta">
+        Recent log records each node keeps in memory, newest at the bottom, in your local time ({zoneLabel()}). Open a line to see all of its fields.
+      </p>
       {!canAdmin ? (
         <Forbidden />
       ) : !ready ? (

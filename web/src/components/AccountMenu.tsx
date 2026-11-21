@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboard
 import { Link } from '@tanstack/react-router';
 import { useSession } from '../api/hooks';
 import { initials } from '../lib/format';
+import { GATES, passes } from '../lib/gates';
 import { IconKey, IconLogout, IconShield, IconTerminal, IconUser } from './icons';
 import { IconSettings } from './opsIcons';
 
@@ -9,7 +10,8 @@ const ITEM = '[role="menuitem"]';
 
 /**
  * The avatar in the top bar and the account menu it opens: who is signed in,
- * links to their account, tokens and sign-in security, Settings, and signing out.
+ * links to their account, tokens and sign-in security, Settings (for those who
+ * may read it), the API reference, and signing out.
  * Menu-button pattern: arrows move between items, Escape closes and returns
  * focus to the avatar, Tab closes and moves on.
  */
@@ -90,6 +92,8 @@ export function AccountMenu({ onSignOut, compact }: { onSignOut: () => void; com
   const local = (user?.source ?? 'local') === 'local' && user?.kind !== 'service_account';
   const viaToken = s?.auth_method === 'token';
   const role = user?.roles?.[0];
+  // Settings opens the first settings page; without system:settings:read there is none, only this account.
+  const canSettings = passes(GATES.settings, s?.privileges);
   const label = user ? `Account: ${user.display_name}` : 'Account';
 
   return (
@@ -140,9 +144,11 @@ export function AccountMenu({ onSignOut, compact }: { onSignOut: () => void; com
             )}
           </div>
           <div className="account-menu__group" role="group" aria-label="Settings">
-            <MenuLink icon={<IconSettings size={16} />} to="/settings" onPick={() => close(false)}>
-              Settings
-            </MenuLink>
+            {canSettings && (
+              <MenuLink icon={<IconSettings size={16} />} to="/settings" onPick={() => close(false)}>
+                Settings
+              </MenuLink>
+            )}
             <MenuLink icon={<IconTerminal size={16} />} to="/api-docs" onPick={() => close(false)}>
               API reference
             </MenuLink>

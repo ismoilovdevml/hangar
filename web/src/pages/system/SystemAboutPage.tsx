@@ -1,15 +1,15 @@
+import { Link } from '@tanstack/react-router';
 import { versionText } from '../../lib/format';
 import { LEVEL_TONE, useSystemHealth } from '../../api/health';
 import { useSystemStatus } from '../../api/hooks';
-import { isMissingEndpoint, useCanSystem, useClusterStatus } from '../../api/ops';
-import type { ClusterNode, DependencyStatus, SystemStatusDetail } from '../../api/opsTypes';
+import { useCanSystem } from '../../api/ops';
+import type { DependencyStatus, SystemStatusDetail } from '../../api/opsTypes';
 import { CopyButton } from '../../components/CopyButton';
 import { DataTable, type Column } from '../../components/DataTable';
 import { ErrorNote } from '../../components/ErrorNote';
 import { NotAvailable } from '../../components/NotAvailable';
-import { PageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
-import { Pill, StatusDot } from '../../components/Pill';
+import { StatusDot } from '../../components/Pill';
 import { DOCS } from '../../lib/docs';
 import { dependencyLabel, formatUptime, hostOf } from '../../lib/system';
 import { Time } from '../../components/Time';
@@ -52,11 +52,16 @@ function ConfigPanel() {
   );
 }
 
-export function SystemPage() {
+/**
+ * System → About: version, addresses, dependency health and where the
+ * configuration lives. Everything here comes from GET /system/status, which
+ * every signed-in user may read; node details are on the Nodes tab.
+ */
+export function SystemAboutPage() {
   const status = useSystemStatus();
   const health = useSystemHealth();
-  const cluster = useClusterStatus();
   const canReadSettings = useCanSystem('settings', 'read');
+  const canReadNodes = useCanSystem('cluster', 'read');
   const sys = status.data as SystemStatusDetail | undefined;
 
   const baseUrl = sys?.base_url || undefined;
@@ -78,35 +83,9 @@ export function SystemPage() {
     { key: 'error', header: 'Error', className: 'muted col-last', cell: (d) => d.error ?? '' },
   ];
 
-  const nodeColumns: Column<ClusterNode>[] = [
-    {
-      key: 'name',
-      header: 'Node',
-      className: 'col-first',
-      cell: (n) => (
-        <div className="task-name">
-          <strong>{n.name}</strong>
-          <span className="task-name__sub">{n.address}</span>
-        </div>
-      ),
-    },
-    { key: 'role', priority: 2, header: 'Role', cell: (n) => <Pill tone={n.role === 'leader' ? 'info' : 'neutral'}>{n.role}</Pill> },
-    { key: 'zone', priority: 3, header: 'Zone', className: 'muted', cell: (n) => n.zone ?? <NotAvailable /> },
-    { key: 'version', priority: 3, header: 'Version', className: 'muted', cell: (n) => (n.version ? versionText(n.version) : <NotAvailable />) },
-    {
-      key: 'health',
-      header: 'Health',
-      className: 'nowrap',
-      cell: (n) => <StatusDot tone={n.healthy ? 'ok' : 'bad'} label={n.healthy ? 'Healthy' : 'Unhealthy'} />,
-    },
-    { key: 'uptime', priority: 3, header: 'Uptime', className: 'muted nowrap', cell: (n) => (n.uptime_seconds !== undefined ? formatUptime(n.uptime_seconds) : <NotAvailable />) },
-    { key: 'beat', priority: 2, header: 'Last heartbeat', className: 'muted nowrap col-last', cell: (n) => <Time value={n.last_heartbeat} seconds /> },
-  ];
 
   return (
-    <div className="screen">
-      <PageHeader title="System" description="Health, version and configuration of this Hangar installation." />
-
+    <>
       {status.isError ? (
         <ErrorNote what="system status" error={status.error} onRetry={() => void status.refetch()} />
       ) : (
@@ -144,6 +123,12 @@ export function SystemPage() {
                   <dt>Nodes</dt>
                   <dd>
                     {sys.nodes_up} of {sys.nodes_total} up
+                    {canReadNodes && (
+                      <>
+                        {' · '}
+                        <Link to="/system/nodes">Nodes</Link>
+                      </>
+                    )}
                   </dd>
                 </div>
                 <div>
@@ -180,28 +165,8 @@ export function SystemPage() {
         </Panel>
       </div>
 
-      <Panel flush title="Nodes" titleId="nodes-title" action={cluster.data && <Pill tone={cluster.data.quorum ? 'ok' : 'bad'}>{cluster.data.quorum ? 'Quorum' : 'No quorum'}</Pill>}>
-        {cluster.isError ? (
-          isMissingEndpoint(cluster.error) ? (
-            <p className="meta panel-note">
-              This server does not list cluster nodes yet{sys ? `; it reports ${sys.nodes_up} of ${sys.nodes_total} up` : ''}.
-            </p>
-          ) : (
-            <ErrorNote what="cluster nodes" error={cluster.error} privilege="system:cluster:read" onRetry={() => void cluster.refetch()} />
-          )
-        ) : (
-          <DataTable
-            caption="Cluster nodes"
-            columns={nodeColumns}
-            rows={cluster.data?.nodes ?? []}
-            rowKey={(n) => n.id}
-            minWidth={860}
-            loading={cluster.isPending} empty={'No nodes reported.'}
-          />
-        )}
-      </Panel>
 
       {canReadSettings && <ConfigPanel />}
-    </div>
+    </>
   );
 }

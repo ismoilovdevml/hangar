@@ -116,7 +116,7 @@ test('a reader sees only what it can use, and who to ask for the rest', async ({
   }
   await page.setViewportSize(DESKTOP);
   const nav = page.getByRole('navigation', { name: 'Primary' });
-  for (const hidden of ['Blob stores', 'Cleanup policies', 'Access & audit', 'Scheduled tasks', 'Cluster']) {
+  for (const hidden of ['Blob stores', 'Cleanup policies', 'Access', 'Scheduled tasks', 'Authentication']) {
     await expect(nav.getByRole('link', { name: hidden, exact: true })).toHaveCount(0);
   }
   await go(page, '/repositories');
@@ -202,10 +202,10 @@ test('the sign-in card does not move when an error appears', async ({ page }) =>
   }
 });
 
-test('cluster, account and advisory pages at both widths', async ({ page }) => {
+test('system nodes, account and advisory pages at both widths', async ({ page }) => {
   for (const [w, size] of SIZES) {
     await page.setViewportSize(size);
-    await page.goto('/cluster');
+    await page.goto('/system/nodes');
     await expect(page.getByRole('list', { name: 'Cluster nodes' }).getByRole('listitem')).toHaveCount(3);
     await expect(page.getByRole('region', { name: /Replication/ })).toHaveCount(0);
     await frame(page, `cluster-${w}`);
@@ -224,7 +224,7 @@ test('cluster, account and advisory pages at both widths', async ({ page }) => {
 
 test('versions carry a single v', async ({ page }) => {
   await page.setViewportSize(DESKTOP);
-  await page.goto('/settings/system');
+  await page.goto('/system/about');
   await expect(page.getByRole('navigation', { name: 'Primary' })).toContainText(/nodes · v\d/);
   await expect(page.locator('body')).not.toContainText('vv');
 });

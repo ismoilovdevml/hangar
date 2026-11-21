@@ -456,17 +456,21 @@ describe('access & audit: roles and audit', () => {
     expect(await within(dialog).findByText('Nodira Tursunova')).toBeInTheDocument();
   });
 
-  it('filters the audit log to access events by category', async () => {
-    const user = userEvent.setup();
-    const { history } = renderApp('/access?tab=audit');
-    const table = await screen.findByRole('table', { name: 'Access audit log' });
-    expect(await within(table).findByText('No events of this type yet.')).toBeInTheDocument();
-    await user.click(screen.getByRole('radio', { name: 'Sign-ins' }));
-    await waitFor(() => expect(search(history).get('events')).toBe('signins'));
+  it('sends the old Audit tab to the one Audit log, keeping its category', async () => {
+    const { history } = renderApp('/access?tab=audit&events=signins');
+    await waitFor(() => expect(history.location.pathname).toBe('/audit'));
+    expect(search(history).get('action')).toBe('auth.*');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Audit log' })).toBeInTheDocument();
+    const table = await screen.findByRole('table');
     expect((await within(table).findAllByText('failed to sign in')).length).toBeGreaterThan(0);
-    expect(within(table).getAllByText('Denied').length).toBeGreaterThan(0);
-    expect(within(table).queryByText('created repository repo:npm-sandbox')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Export CSV' })).toHaveAttribute('href', '/api/v1/audit/export?format=csv&action=auth.*');
+  });
+
+  it('has no Audit tab; the recent-events panel leads to the Audit log', async () => {
+    renderApp('/access');
+    const tabs = await screen.findByRole('navigation', { name: 'Access sections' });
+    expect(within(tabs).queryByRole('link', { name: 'Audit log' })).not.toBeInTheDocument();
+    const recent = await screen.findByRole('region', { name: 'Audit log' });
+    expect(within(recent).getByRole('link', { name: 'Show all' })).toHaveAttribute('href', '/audit');
   });
 
   it('tells people without admin rights where their own settings are', async () => {

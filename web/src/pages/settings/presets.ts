@@ -110,7 +110,7 @@ const OIDC_PRESETS: Record<string, OidcPreset> = {
     steps: [
       'In the Google Cloud console, set the OAuth consent screen user type to Internal, so only accounts of your Workspace can sign in.',
       'Credentials → Create credentials → OAuth client ID → Web application; add the redirect URI below.',
-      'Google sends no groups: everyone gets the default roles. Grant more in Access & audit after the first sign-in.',
+      'Google sends no groups: everyone gets the default roles. Grant more in Access after the first sign-in.',
     ],
     groupPlaceholder: 'hangar-admins',
   },

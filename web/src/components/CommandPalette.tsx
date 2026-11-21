@@ -4,7 +4,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useSession } from '../api/hooks';
 import { GATES, passes } from '../lib/gates';
 import { allows } from '../lib/privileges';
-import { canSee, NAV, SETTINGS_PAGES } from '../nav';
+import { ACCOUNT_PAGES, canSee, NAV, SYSTEM_TABS } from '../nav';
 import { CommandPaletteContext } from './commandPaletteContext';
 import { IconArrowRight, IconDatabase, IconKey, IconLogout, IconPackage, IconPlus, IconSearch, IconShield, IconUser } from './icons';
 import { usePaletteEntities } from './paletteEntities';
@@ -76,8 +76,8 @@ function CommandPaletteDialog({ onClose, onSignOut }: { onClose: () => void; onS
   }, []);
 
   const commands = useMemo<Command[]>(() => {
-    // Sidebar pages first, then the pages that live under Settings.
-    const go: Command[] = [...NAV, SETTINGS_PAGES]
+    // Sidebar pages first, then the System tabs and the personal pages of the account menu.
+    const go: Command[] = [...NAV, { title: 'System', items: SYSTEM_TABS }, ACCOUNT_PAGES]
       .filter((section) => canSee(privileges, section.requires))
       .flatMap((section) =>
         section.items
@@ -85,7 +85,7 @@ function CommandPaletteDialog({ onClose, onSignOut }: { onClose: () => void; onS
           .map((item) => ({
             id: `nav:${item.to}${item.hash ? `#${item.hash}` : ''}`,
             group: 'Go to' as const,
-            label: item.label,
+            label: item.title ?? item.label,
             keywords: `${section.title} ${item.keywords ?? ''}`,
             icon: <item.icon size={16} />,
             run: () => void navigate({ to: item.to, hash: item.hash }),

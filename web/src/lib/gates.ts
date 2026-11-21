@@ -14,7 +14,7 @@ export interface Gate {
   privilege: string;
   allowed: (privileges: readonly string[]) => boolean;
   /** Where the same user can go instead: "<text> <label>." */
-  instead?: { text: string; label: string; to: '/account' | '/settings/system' };
+  instead?: { text: string; label: string; to: '/account' | '/system/about' };
 }
 
 export function systemGate(area: string, action: Action, what: string): Gate {
@@ -38,7 +38,7 @@ export const GATES = {
   audit: systemGate('audit', 'read', 'the audit log'),
   cluster: {
     ...systemGate('cluster', 'read', 'cluster nodes'),
-    instead: { text: 'The overall state is on the', label: 'System page', to: '/settings/system' },
+    instead: { text: 'The overall state and version are under', label: 'System → About', to: '/system/about' },
   } satisfies Gate,
   logs: systemGate('cluster', 'admin', 'system logs'),
   settings: systemGate('settings', 'read', 'these settings'),
@@ -47,11 +47,11 @@ export const GATES = {
     privilege: 'system:repos:admin',
     allowed: canCreateRepositories,
   } satisfies Gate,
-  /** People, service accounts, all tokens, roles or the audit log: any one opens the page. */
+  /** People, service accounts and roles, or all tokens: either opens the page. */
   access: {
     what: 'people, tokens and roles',
     privilege: 'system:users:read',
-    allowed: (p) => ['users', 'tokens', 'audit'].some((area) => allows(p, 'system', area, 'read')),
+    allowed: (p) => ['users', 'tokens'].some((area) => allows(p, 'system', area, 'read')),
     instead: { text: 'Your own profile, password, tokens and sessions are in', label: 'My account', to: '/account' },
   } satisfies Gate,
 };

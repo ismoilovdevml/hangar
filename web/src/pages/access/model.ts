@@ -250,72 +250,6 @@ export function groupSessions<S extends SessionWithDevice>(sessions: S[]): Sessi
   return out.sort((a, b) => Number(b.current) - Number(a.current) || latest(b) - latest(a));
 }
 
-/* ---------------------------------------------------------------- audit */
-
-export interface AuditCategory {
-  id: string;
-  label: string;
-  action: string;
-}
-
-/** Access-related audit events, one action prefix each (the API filters by one prefix). */
-export const AUDIT_CATEGORIES: AuditCategory[] = [
-  { id: 'users', label: 'Users', action: 'user.*' },
-  { id: 'signins', label: 'Sign-ins', action: 'auth.*' },
-  { id: 'tokens', label: 'Tokens', action: 'token.*' },
-  { id: 'roles', label: 'Roles', action: 'role.*' },
-  { id: 'sessions', label: 'Sessions', action: 'session.*' },
-];
-
-const AUDIT_VERBS: Record<string, string> = {
-  'auth.login': 'signed in',
-  'auth.login.failed': 'failed to sign in',
-  'auth.logout': 'signed out',
-  'auth.token.failed': 'used an invalid token',
-  'user.create': 'created',
-  'user.update': 'updated',
-  'user.delete': 'deleted',
-  'user.password': 'changed the password of',
-  'user.unlock': 'unlocked',
-  'user.disable': 'disabled',
-  'user.enable': 'enabled',
-  'user.bootstrap': 'bootstrapped',
-  'user.list': 'listed users',
-  'user.read': 'viewed',
-  'user.permissions': 'viewed the permissions of',
-  'token.create': 'created',
-  'token.revoke': 'revoked',
-  'token.issue': 'issued',
-  'token.list': 'listed tokens of',
-  'role.create': 'created',
-  'role.update': 'updated',
-  'role.delete': 'deleted',
-  'role.bind': 'granted',
-  'role.unbind': 'took away',
-  'role.list': 'listed roles',
-  'role.read': 'viewed',
-  'session.revoke': 'ended a session of',
-  'session.revoke_all': 'ended the sessions of',
-  'session.list': 'listed the sessions of',
-};
-
-/** "created token:…", "granted role:Reader", in plain words. */
-export function describeAudit(action: string, target: string, details?: Record<string, unknown>): string {
-  const verb = AUDIT_VERBS[action] ?? action;
-  const [kind, ...rest] = target.split(':');
-  const name = rest.join(':');
-  let what = target;
-  if (kind === 'user') what = name;
-  else if (kind === 'role') what = `role ${name}`;
-  else if (kind === 'token') what = typeof details?.name === 'string' ? `token “${details.name}”` : 'a token';
-  else if (kind === 'system') what = `${name} settings`;
-  if (action === 'role.bind' || action === 'role.unbind') {
-    const user = typeof details?.user === 'string' ? details.user : 'a user';
-    return action === 'role.bind' ? `granted ${what} to ${user}` : `took ${what} away from ${user}`;
-  }
-  if (action.startsWith('auth.login') || action === 'auth.logout') return verb;
-  return `${verb} ${what}`.trim();
-}
 
 /* ---------------------------------------------------------------- page state */
 
@@ -325,19 +259,20 @@ export interface MemberFilters {
   status?: UserStatus;
 }
 
-export type AccessTab = 'members' | 'service-accounts' | 'tokens' | 'roles' | 'audit';
+export type AccessTab = 'members' | 'service-accounts' | 'tokens' | 'roles';
 
-export const ACCESS_TABS: AccessTab[] = ['members', 'service-accounts', 'tokens', 'roles', 'audit'];
+export const ACCESS_TABS: AccessTab[] = ['members', 'service-accounts', 'tokens', 'roles'];
 
 export function isAccessTab(v: unknown): v is AccessTab {
   return typeof v === 'string' && (ACCESS_TABS as string[]).includes(v);
 }
 
 export interface AccessSearch extends MemberFilters {
-  tab?: AccessTab;
+  /** `audit` is the Audit tab of v0.1.x: the router sends it on to /audit. */
+  tab?: AccessTab | 'audit';
   /** Member or service account whose drawer is open. */
   user?: string;
-  /** Audit category id. */
+  /** With tab=audit: the old tab's event category, kept as the Audit log's action filter. */
   events?: string;
   /** Tokens tab filters. */
   owner_kind?: 'user' | 'service_account';

@@ -38,10 +38,10 @@ describe('reader (repo:*:read)', () => {
   it('sees only the pages it can open in the sidebar, with no empty sections', async () => {
     signInWith(READER);
     renderApp('/repositories');
-    expect(await sidebarLinks()).toEqual(['Overview', 'Packages', 'Search', 'Repositories', 'Vulnerabilities', 'Settings']);
+    expect(await sidebarLinks()).toEqual(['Overview', 'Packages', 'Search', 'Repositories', 'Vulnerabilities', 'System']);
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     expect(within(nav).queryByRole('heading', { name: 'Storage' })).not.toBeInTheDocument();
-    expect(within(nav).queryByRole('heading', { name: 'Operations' })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument();
   });
 
   it.each([
@@ -51,8 +51,8 @@ describe('reader (repo:*:read)', () => {
     ['/blob-stores/fs-local', 'Blob store', 'blob stores', 'system:blobstores:read', '/blob-stores'],
     ['/cleanup', 'Cleanup policies', 'cleanup policies', 'system:cleanup:read', '/cleanup-policies'],
     ['/audit', 'Audit log', 'the audit log', 'system:audit:read', '/audit'],
-    ['/access', 'Access & audit', 'people, tokens and roles', 'system:users:read', '/users'],
-    ['/cluster', 'Cluster', 'cluster nodes', 'system:cluster:read', '/nodes'],
+    ['/access', 'Access', 'people, tokens and roles', 'system:users:read', '/users'],
+    ['/system/nodes', 'Cluster nodes', 'cluster nodes', 'system:cluster:read', '/nodes'],
     ['/system/status', 'System status', 'cluster nodes', 'system:cluster:read', '/system/nodes'],
     ['/system/logs', 'System logs', 'system logs', 'system:cluster:admin', '/system/logs'],
     ['/repositories/new', 'New repository', 'creating repositories', 'system:repos:admin', '/blob-stores'],
@@ -99,13 +99,15 @@ describe('reader (repo:*:read)', () => {
     expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument();
   });
 
-  it('sees only the Settings rows it can open', async () => {
+  it('is taken from /settings to its own account, and has no Settings in the account menu', async () => {
     signInWith(READER);
-    renderApp('/settings');
-    const main = await screen.findByRole('main');
-    expect(await within(main).findByRole('link', { name: /My account/ })).toBeInTheDocument();
-    expect(within(main).queryByRole('link', { name: /Sign-in/ })).not.toBeInTheDocument();
-    expect(within(main).queryByRole('link', { name: /Storage/ })).not.toBeInTheDocument();
+    const user = userEvent.setup();
+    const { history } = renderApp('/settings');
+    await waitFor(() => expect(history.location.pathname).toBe('/account'));
+    await user.click(await screen.findByRole('button', { name: /^Account/ }));
+    const menu = screen.getByRole('menu');
+    expect(within(menu).getByRole('menuitem', { name: 'My account' })).toBeInTheDocument();
+    expect(within(menu).queryByRole('menuitem', { name: 'Settings' })).not.toBeInTheDocument();
   });
 });
 
@@ -136,7 +138,7 @@ describe('operator (tasks and blob stores, read only)', () => {
       'Blob stores',
       'Vulnerabilities',
       'Scheduled tasks',
-      'Settings',
+      'System',
     ]);
     const table = await screen.findByRole('table', { name: 'Scheduled tasks' });
     await waitFor(() => expect(within(table).getAllByRole('row').length).toBeGreaterThan(1));
@@ -172,13 +174,10 @@ describe('administrator', () => {
       'Blob stores',
       'Cleanup policies',
       'Vulnerabilities',
-      'Access & audit',
+      'Access',
       'Audit log',
       'Scheduled tasks',
-      'Cluster',
-      'System status',
-      'System logs',
-      'Settings',
+      'System',
       'Authentication',
       'Proxies',
     ]);

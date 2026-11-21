@@ -44,7 +44,7 @@ function Hero({ tone, title, sub, controls }: { tone: MarkTone; title: string; s
         <StateMark tone={tone} />
       </span>
       <div className="status-hero__text" aria-live="polite">
-        <h1 className="status-hero__title">{title}</h1>
+        <h2 className="status-hero__title">{title}</h2>
         {sub && <p className="status-hero__sub">{sub}</p>}
       </div>
       {controls}
@@ -377,7 +377,7 @@ export function SystemStatusPage() {
         <div className="checklist checklist--empty glass">
           <p className="meta">
             The system status needs the <code className="inline-code">system:cluster:read</code> privilege. Ask an administrator for it, or see
-            the overall state on the <Link to="/settings/system">System</Link> page.
+            the overall state under <Link to="/system/about">About</Link>.
           </p>
         </div>
       </div>
