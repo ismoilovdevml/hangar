@@ -23,7 +23,9 @@ character, `[ab]` a set. `npm-*` matches `npm-internal` and `npm-public`.
 
 **System areas**: `users` (members, service accounts, roles, sessions),
 `tokens` (other principals' tokens), `repos`, `blobstores`, `tasks`,
-`cleanup`, `security`, `audit`, `cluster`, `settings`.
+`cleanup`, `security`, `audit`, `cluster`, `settings`, `webhooks` (outgoing
+webhooks; creating one also needs read access to the repositories it names,
+see [webhooks.md](webhooks.md)).
 
 A request is allowed when one of the principal's role privileges allows it
 **and**, for a token, one of the token's scopes allows it too. A token can

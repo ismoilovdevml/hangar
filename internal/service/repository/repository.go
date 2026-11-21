@@ -40,6 +40,8 @@ type Options struct {
 	Audit core.AuditLog
 	// Events receives repository.created/updated/deleted.
 	Events core.EventBus
+	// Notifier, when set, also receives those events (outgoing webhooks).
+	Notifier Notifier
 	// Secrets seals the write-only secrets of a configuration (proxy upstream
 	// password and token, passwords in remote and outbound proxy URLs) before
 	// it is stored; reads return them sealed. Nil refuses configurations that
@@ -63,6 +65,13 @@ type Options struct {
 	// the TTL only limits staleness after a lost event. Zero means
 	// DefaultCacheTTL; negative disables the cache.
 	CacheTTL time.Duration
+}
+
+// Notifier receives the domain events of the service after they happened
+// (implemented by *webhooks.Outbox). Notify must not block for long and
+// never fails the caller.
+type Notifier interface {
+	Notify(ctx context.Context, e core.Event)
 }
 
 // DefaultCacheTTL is the default Options.CacheTTL.
@@ -813,7 +822,7 @@ func (s *Service) record(ctx context.Context, action, name, outcome string, deta
 }
 
 func (s *Service) publish(ctx context.Context, typ string, r *core.Repository) {
-	if s.opts.Events == nil || r == nil {
+	if (s.opts.Events == nil && s.opts.Notifier == nil) || r == nil {
 		return
 	}
 	data, _ := json.Marshal(struct {
@@ -824,8 +833,13 @@ func (s *Service) publish(ctx context.Context, typ string, r *core.Repository) {
 		Online bool          `json:"online"`
 	}{r.ID, r.Name, r.Format, r.Type, r.Online})
 	e := core.Event{Type: typ, At: time.Now().UTC(), Actor: core.PrincipalFrom(ctx).Name, Repository: r.Name, Subject: r.Name, Data: data}
-	if err := s.opts.Events.Publish(ctx, e); err != nil {
-		s.log.WarnContext(ctx, "publish event failed", "type", typ, "repository", r.Name, "error", err)
+	if s.opts.Events != nil {
+		if err := s.opts.Events.Publish(ctx, e); err != nil {
+			s.log.WarnContext(ctx, "publish event failed", "type", typ, "repository", r.Name, "error", err)
+		}
+	}
+	if s.opts.Notifier != nil {
+		s.opts.Notifier.Notify(ctx, e)
 	}
 }
 

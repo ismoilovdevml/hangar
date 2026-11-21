@@ -90,6 +90,7 @@ const (
 	SystemAudit      = "audit"      // read audit log
 	SystemCluster    = "cluster"    // nodes, replication
 	SystemSettings   = "settings"   // global settings
+	SystemWebhooks   = "webhooks"   // outgoing webhooks and their deliveries
 )
 
 // Resource is the target of an authorization check.

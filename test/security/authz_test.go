@@ -184,6 +184,18 @@ var apiPolicy = map[string]policy{
 	"GET /replication/targets":                     privileged,
 	"POST /replication/targets":                    privileged,
 	"DELETE /replication/targets/{name}":           privileged,
+
+	// Webhooks: system:webhooks, plus read access to the repositories a
+	// webhook names (webhooks_test.go).
+	"GET /webhooks":                                          privileged,
+	"POST /webhooks":                                         privileged,
+	"GET /webhooks/{id}":                                     privileged,
+	"PUT /webhooks/{id}":                                     privileged,
+	"DELETE /webhooks/{id}":                                  privileged,
+	"POST /webhooks/{id}:test":                               privileged,
+	"GET /webhooks/{id}/deliveries":                          privileged,
+	"GET /webhooks/{id}/deliveries/{delivery_id}":            privileged,
+	"POST /webhooks/{id}/deliveries/{delivery_id}:redeliver": privileged,
 }
 
 // denied are the answers that refuse a caller.
@@ -283,7 +295,7 @@ func fillAPIPath(p string, ids map[string]string) string {
 			}
 		}
 	}
-	for _, param := range []string{"{id}", "{run_id}", "{sid}"} {
+	for _, param := range []string{"{id}", "{run_id}", "{sid}", "{delivery_id}"} {
 		p = strings.ReplaceAll(p, param, ids["{id}"])
 	}
 	return strings.ReplaceAll(p, "{name}", "x")

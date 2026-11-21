@@ -62,6 +62,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/tasks/importer"
 	"github.com/ismoilovdevml/hangar/internal/tasks/scheduler"
 	"github.com/ismoilovdevml/hangar/internal/version"
+	"github.com/ismoilovdevml/hangar/internal/webhooks"
 )
 
 // DefaultBlobStore is the name of the blob store built from the storage
@@ -310,6 +311,10 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	}
 	a.onClose(func() { _ = signWatch.Unsubscribe() })
 
+	// Outgoing webhooks: the services below hand their events to the outbox,
+	// whose deliveries the webhook service sends (built further down).
+	outbox := webhooks.NewOutbox(pool, webhooks.OutboxOptions{Instance: cfg.Server.BaseURL, Logger: log})
+
 	// Formats (repositories validate against them).
 	reg, err := builtin.RegistryWith(builtin.Options{Docker: docker.Options{TokenKey: []byte(cfg.Docker.TokenKey), Reload: authSvc.ReloadPrincipal}, Signing: signer})
 	if err != nil {
@@ -327,7 +332,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	// anonymous read, and the repository service needs the authorizer. The
 	// settings service (named proxies) is built further down.
 	var settingsSvc *settings.Service
-	repos := repository.New(pool, repository.Options{Formats: reg.Get, AuthZ: authz, Audit: auditLog, Events: bus, Logger: log,
+	repos := repository.New(pool, repository.Options{Formats: reg.Get, AuthZ: authz, Audit: auditLog, Events: bus, Notifier: outbox, Logger: log,
 		Secrets: repoSealer(keyring),
 		RemoteCheck: func(ctx context.Context, remoteURL string) error {
 			return guard.ValidateRemote(ctx, remoteURL, false)
@@ -348,7 +353,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	if err := authz.Subscribe(ctx, bus); err != nil {
 		return nil, err
 	}
-	comps := component.New(pool, component.Options{AuthZ: authz, Audit: auditLog, Events: bus, Blobs: observedBlobs, Logger: log})
+	comps := component.New(pool, component.Options{AuthZ: authz, Audit: auditLog, Events: bus, Notifier: outbox, Blobs: observedBlobs, Logger: log})
 	a.onClose(func() { _ = comps.Close() })
 	// Who pulls which package version (the fix plan of the Vulnerabilities
 	// screen): buffered like the download counters, written every few seconds.
@@ -494,6 +499,16 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	}
 	a.onClose(settingsSvc.Close)
 
+	// Webhook deliveries go through the outbound clients and the SSRF guard
+	// of proxy remotes; every node runs a delivery worker.
+	hooks, err := webhooks.New(pool, webhooks.Options{Outbox: outbox, Keyring: keyring, AuthZ: authz, Audit: auditLog,
+		Coverage: authSvc, Guard: guard, Clients: clients, UserAgent: userAgent, Logger: log})
+	if err != nil {
+		return nil, err
+	}
+	hooks.Start(ctx)
+	a.onClose(hooks.Close)
+
 	// System status and System logs: this node's checks, its heartbeat and
 	// its log buffer, served to the other nodes over NATS.
 	storeStates := sysmon.NewStoreStates()
@@ -546,7 +561,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Monitor:        mon,
 		Logs:           sysLogs,
 		AuthRoutes:     api.RouteFunc(func(r chi.Router) { httpapi.Register(r, authSvc, authOpts) }),
-		ExtraRoutes:    []api.RouteRegistrar{settingsSvc, signer},
+		ExtraRoutes:    []api.RouteRegistrar{settingsSvc, signer, hooks},
 	}
 	restAPI.BlobStoreTester = blobStoreTester{keyring: keyring, dialGuard: guard.CheckServiceAddr}
 	// Open event streams end when their session or token stops working.
@@ -620,7 +635,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	}
 	// Vulnerability scanning: arrival scans and repository scans run as jobs,
 	// the periodic rescan as a task.
-	scanner, err := buildScanner(cfg, pool, clients, deps, dockerFormat)
+	scanner, err := buildScanner(cfg, pool, clients, deps, dockerFormat, outbox)
 	if err != nil {
 		return nil, err
 	}
@@ -760,7 +775,8 @@ func buildTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, queu
 // buildScanner builds the vulnerability scanner. The OSV client goes
 // through the shared outbound HTTP client factory, so http.proxy,
 // http.ca_file and the address policy apply to it as to proxy remotes.
-func buildScanner(cfg config.Config, pool *pgxpool.Pool, clients *httpclient.Factory, deps core.Deps, df *docker.Format) (*scanning.Service, error) {
+func buildScanner(cfg config.Config, pool *pgxpool.Pool, clients *httpclient.Factory, deps core.Deps, df *docker.Format,
+	notifier scanning.Notifier) (*scanning.Service, error) {
 	sc := cfg.Scanning
 	if sc.OSV.URL == "" {
 		sc.OSV.URL = osv.DefaultURL
@@ -788,6 +804,7 @@ func buildScanner(cfg config.Config, pool *pgxpool.Pool, clients *httpclient.Fac
 	opts.Pool, opts.Advisories, opts.SourceURL, opts.Enabled = pool, advisories, advisories.BaseURL(), sc.Enabled
 	opts.RescanInterval, opts.InUseWindow = sc.RescanInterval, sc.InUseWindow
 	opts.Events, opts.Jobs, opts.Audit, opts.Logger = deps.Events, deps.Jobs, deps.Audit, deps.Logger
+	opts.Notifier = notifier
 	return scanning.New(opts)
 }
 

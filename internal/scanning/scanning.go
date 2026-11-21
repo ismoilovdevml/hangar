@@ -107,6 +107,17 @@ type Options struct {
 	ImagePlatforms string
 	// ImageWorkers is how many images are scanned at once (DefaultImageWorkers).
 	ImageWorkers int
+
+	// Notifier, when set, receives quarantine changes and new findings
+	// (scan.finding) for outgoing webhooks.
+	Notifier Notifier
+}
+
+// Notifier receives domain events after they happened (implemented by
+// *webhooks.Outbox). Notify must not block for long and never fails the
+// caller.
+type Notifier interface {
+	Notify(ctx context.Context, e core.Event)
 }
 
 // Service scans components and manages findings. It is safe for concurrent use.
@@ -263,9 +274,10 @@ func (s *Service) scanPackages(ctx context.Context, targets []*Target) (Summary,
 		if err != nil {
 			return sum, err
 		}
+		s.notifyFindings(ctx, t, added, SourceOSV)
 		sum.Scanned++
 		sum.Findings += len(found)
-		sum.New += added
+		sum.New += len(added)
 		if t.QuarantineCritical || t.hasScannerQuarantine() {
 			ids = append(ids, t.ComponentID)
 		}
@@ -427,17 +439,55 @@ func (s *Service) enforce(ctx context.Context, scope string, arg any) (quarantin
 		target := "component:" + c.Repository + "/" + core.Coordinates{Namespace: c.Namespace, Name: c.Name, Version: c.Version}.String()
 		s.record(ctx, core.AuditEvent{Actor: "system", Action: action, Target: target,
 			Details: map[string]any{"reason": c.Reason, "source": QuarantineSource}})
-		if s.opts.Events != nil {
+		if s.opts.Events != nil || s.opts.Notifier != nil {
 			data, _ := json.Marshal(map[string]any{"id": c.ComponentID, "namespace": c.Namespace, "name": c.Name,
 				"version": c.Version, "repository": c.Repository, "quarantined": c.Quarantined, "reason": c.Reason})
 			e := core.Event{Type: typ, Actor: "system", Repository: c.Repository, Subject: target, Data: data}
-			if err := s.opts.Events.Publish(ctx, e); err != nil {
-				s.log.WarnContext(ctx, "scanning: publish quarantine event failed", "component", c.ComponentID, "error", err)
+			if s.opts.Events != nil {
+				if err := s.opts.Events.Publish(ctx, e); err != nil {
+					s.log.WarnContext(ctx, "scanning: publish quarantine event failed", "component", c.ComponentID, "error", err)
+				}
+			}
+			if s.opts.Notifier != nil {
+				s.opts.Notifier.Notify(ctx, e)
 			}
 		}
 		s.log.InfoContext(ctx, "scanning: quarantine policy applied", "component", target, "quarantined", c.Quarantined, "reason", c.Reason)
 	}
 	return quarantined, released, nil
+}
+
+// notifyFindings raises core.EventScanFinding for the findings of a scan
+// that are new to the component t.
+func (s *Service) notifyFindings(ctx context.Context, t *Target, added []detected, source string) {
+	if s.opts.Notifier == nil || len(added) == 0 {
+		return
+	}
+	type finding struct {
+		AdvisoryID string   `json:"advisory_id"`
+		Severity   string   `json:"severity"`
+		CVSS       *float64 `json:"cvss,omitempty"`
+		Title      string   `json:"title,omitempty"`
+		Package    string   `json:"package"`
+		Installed  string   `json:"installed,omitempty"`
+		FixedIn    string   `json:"fixed_in,omitempty"`
+		Location   string   `json:"location,omitempty"`
+	}
+	maxSev := "unknown"
+	list := make([]finding, 0, len(added))
+	for _, f := range added {
+		list = append(list, finding{AdvisoryID: f.AdvisoryID, Severity: f.Severity, CVSS: f.CVSS, Title: f.Title,
+			Package: f.Package, Installed: f.Installed, FixedIn: f.FixedIn, Location: f.Location})
+		if severityOrder(f.Severity) < severityOrder(maxSev) {
+			maxSev = f.Severity
+		}
+	}
+	coords := core.Coordinates{Namespace: t.Namespace, Name: t.Name, Version: t.Version}.String()
+	data, _ := json.Marshal(map[string]any{"component_id": t.ComponentID, "repository": t.Repository, "format": t.Format,
+		"namespace": t.Namespace, "name": t.Name, "version": t.Version, "scanner": source, "count": len(added),
+		"max_severity": maxSev, "findings": list})
+	s.opts.Notifier.Notify(ctx, core.Event{Type: core.EventScanFinding, At: s.now().UTC(), Actor: "system",
+		Repository: t.Repository, Subject: "component:" + t.Repository + "/" + coords, Data: data})
 }
 
 func (s *Service) record(ctx context.Context, e core.AuditEvent) {

@@ -22,6 +22,7 @@ Practical, copy-paste guides for running Hangar and connecting package clients t
 | [Access management](access.md) | Members, service accounts, roles, privileges and token scopes |
 | [Routing rules](routing-rules.md) | Dependency confusion: block internal names on public proxies, reserve them for hosted group members |
 | [Vulnerability scanning](vulnerabilities.md) | OSV scanning of npm, Maven, PyPI, NuGet, Go and Cargo packages, waivers, quarantine, mirrors |
+| [Webhooks](webhooks.md) | Generic JSON, Slack and Teams notifications for publishes, deletes, quarantine, scan findings and repositories; payload, signature verification, retries |
 | [Single sign-on](sso.md) | OIDC (Keycloak example) and LDAP / Active Directory sign-in, group to role mapping, troubleshooting |
 
 Operators also need [docs/security.md](../security.md) (secret key, hardening,

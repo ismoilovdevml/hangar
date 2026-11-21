@@ -212,10 +212,10 @@ type Reference struct {
 }
 
 // saveResult records a successful scan of t: upserts what was found,
-// marks what is no longer reported as fixed. It returns how many findings
+// marks what is no longer reported as fixed. It returns the findings that
 // are new to the component.
-func (s *store) saveResult(ctx context.Context, t *Target, found []detected, source string) (int, error) {
-	added := 0
+func (s *store) saveResult(ctx context.Context, t *Target, found []detected, source string) ([]detected, error) {
+	var added []detected
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		b := &pgx.Batch{}
 		ids := make([]string, 0, len(found))
@@ -267,14 +267,14 @@ RETURNING (xmax = 0)`,
 			ON CONFLICT (component_id) DO UPDATE SET status = 'ok', error = '', scanner = $2, scanned_at = now(), ok_at = now()`,
 			t.ComponentID, source)
 		br := tx.SendBatch(ctx, b)
-		for range found {
+		for _, f := range found {
 			var inserted bool
 			if err := br.QueryRow().Scan(&inserted); err != nil {
 				_ = br.Close()
 				return fmt.Errorf("save finding: %w", err)
 			}
 			if inserted {
-				added++
+				added = append(added, f)
 			}
 		}
 		for range 2 {
@@ -286,7 +286,7 @@ RETURNING (xmax = 0)`,
 		return br.Close()
 	})
 	if err != nil {
-		return 0, fmt.Errorf("save scan of %s: %w", t.ComponentID, err)
+		return nil, fmt.Errorf("save scan of %s: %w", t.ComponentID, err)
 	}
 	return added, nil
 }
