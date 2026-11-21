@@ -432,7 +432,7 @@ export interface paths {
         };
         /**
          * Subsystem health of the node that answers, checked now
-         * @description Database, blob stores, NATS / JetStream, task scheduler, search index,
+         * @description Database, blob stores, event bus and job queue, task scheduler, search index,
          *     external sign-in and proxy upstreams, each `healthy`, `degraded` or
          *     `down` with a detail sentence and the time it was checked. Always
          *     200; read `status`. Requires `system:cluster:read`.
@@ -461,7 +461,7 @@ export interface paths {
          *     returned (oldest first); pass the returned `cursor` to get only newer
          *     records, and `wait` to hold the request until one arrives (long poll).
          *     `cursor=0` reads the buffer from its oldest record (downloads). Other
-         *     nodes are asked over NATS. Full logs stay in the container or journal
+         *     nodes are asked over HTTP. Full logs stay in the container or journal
          *     output. Requires `system:cluster:admin`.
          */
         get: operations["listSystemLogs"];
@@ -1069,6 +1069,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Packages matching `q`, with the total and facets. Paging stops at the first 10 000 results: the page that reaches them has no `next_cursor`; narrow the query to see more. */
         get: operations["search"];
         put?: never;
         post?: never;
@@ -1415,6 +1416,64 @@ export interface paths {
         /** Run history, newest first (`result` holds a CleanupRunResult) */
         get: operations["listCleanupPolicyRuns"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/resource-labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Labels of every resource of one kind that carries any, by name. Only
+         *     resources the caller may read are listed: repositories with
+         *     `repo:<name>:read`, the other kinds with the read privilege of their
+         *     area (`system:blobstores`, `system:cleanup`, `system:users`,
+         *     `system:settings`).
+         *
+         *     `hangar apply` marks what it creates or adopts with
+         *     `hangar/managed-by: hangar-apply` and `hangar/apply-set: <set>`;
+         *     `hangar apply --prune` deletes only resources of its own set that
+         *     the configuration no longer declares (docs/guides/config-as-code.md).
+         */
+        get: operations["listResourceLabels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/resource-labels/{kind}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["LabeledKind"];
+                /** @description Name of the repository, blob store, cleanup policy, role or proxy */
+                name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description Replaces the labels of one resource; `{"labels": {}}` removes them.
+         *     Requires the right to change the resource itself
+         *     (`repo:<name>:admin` or `system:repos:admin`, `system:blobstores:admin`,
+         *     `system:cleanup:write`, `system:users:write`, `system:settings:admin`).
+         *     Labels belong to the resource they were set on: deleting it removes
+         *     them, and a resource created again under the same name starts
+         *     without labels. Audited as `resource.labels.update` with the labels
+         *     before and after.
+         */
+        put: operations["putResourceLabels"];
         post?: never;
         delete?: never;
         options?: never;
@@ -5140,6 +5199,27 @@ export interface components {
             builtin: boolean;
             privileges: components["schemas"]["Privilege"][];
         };
+        /**
+         * @description Kind of resource that carries labels
+         * @enum {string}
+         */
+        LabeledKind: "repository" | "blob_store" | "cleanup_policy" | "role" | "proxy";
+        /**
+         * @description Up to 64 labels. Keys are `[prefix/]name`: an optional DNS-style prefix, then 1-63 letters, digits, `-`, `_` or `.` starting and ending with a letter or digit. Values are at most 256 characters without control characters. The `hangar/` prefix is used by `hangar apply`.
+         * @example {
+         *       "hangar/managed-by": "hangar-apply",
+         *       "hangar/apply-set": "platform",
+         *       "team": "web"
+         *     }
+         */
+        Labels: {
+            [key: string]: string;
+        };
+        ResourceLabels: {
+            kind: components["schemas"]["LabeledKind"];
+            name: string;
+            labels: components["schemas"]["Labels"];
+        };
         EffectivePermissions: {
             user_id: string;
             username: string;
@@ -6174,7 +6254,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Repository"];
-                    /** @description Config-as-code form (with `Accept: application/yaml`): the RepositoryInput, ready to send back to POST /repositories or PUT /repositories/{name} as JSON. A `hangar apply -f` CLI is planned. */
+                    /** @description Config-as-code form (with `Accept: application/yaml`): the RepositoryInput, ready to send back to POST /repositories or PUT /repositories/{name} as JSON. `hangar apply -f` manages repositories declaratively (docs/guides/config-as-code.md). */
                     "application/yaml": components["schemas"]["RepositoryInput"];
                 };
             };
@@ -7861,6 +7941,67 @@ export interface operations {
                     "application/json": components["schemas"]["TaskRunPage"];
                 };
             };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listResourceLabels: {
+        parameters: {
+            query: {
+                kind: components["schemas"]["LabeledKind"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Labelled resources by name (not paginated; one entry per resource) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ResourceLabels"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putResourceLabels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["LabeledKind"];
+                /** @description Name of the repository, blob store, cleanup policy, role or proxy */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    labels: components["schemas"]["Labels"];
+                };
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceLabels"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };

@@ -24,7 +24,8 @@ repositories means every repository.
 
 ## Create a webhook
 
-Webhooks are managed with the REST API. You
+Webhooks are managed in the web UI (Settings › Webhooks) or with the REST API
+below. You
 need the `system:webhooks:admin` privilege (`system:webhooks:read` to look),
 and read access to every repository the webhook names: a webhook sends those
 repositories' events to a URL you choose, so it cannot reach further than you

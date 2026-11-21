@@ -7,7 +7,7 @@ export const TASK_TYPES: Record<TaskType, { label: string; hint: string }> = {
   docker_gc: { label: 'Docker GC', hint: 'Removes unreferenced layers' },
   docker_upload_cleanup: { label: 'Docker upload cleanup', hint: 'Ends abandoned docker uploads and frees their chunks' },
   auth_purge: { label: 'Expired sessions purge', hint: 'Deletes expired sessions and session tokens' },
-  audit_partitions: { label: 'Audit partitions', hint: 'Creates the next monthly audit log partitions' },
+  audit_partitions: { label: 'Audit partitions', hint: 'Creates the next monthly audit log partitions and drops months older than audit.retention' },
   rescan: { label: 'Rescan', hint: 'Scans packages against the latest advisories' },
   reindex: { label: 'Reindex search', hint: 'Rebuilds the search index' },
   directory_sync: { label: 'Directory sync', hint: 'Syncs users and groups from the directory' },
