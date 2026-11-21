@@ -156,7 +156,7 @@ export const SYSTEM_TABS: NavItem[] = [
     label: 'Status',
     title: 'System status',
     icon: IconPulse,
-    keywords: 'health heartbeat database nats subsystems uptime checks',
+    keywords: 'health heartbeat database events jobs queue subsystems uptime checks',
     requires: GATES.cluster,
   },
   { to: '/system/nodes', label: 'Nodes', title: 'Cluster nodes', icon: IconCluster, keywords: 'cluster edge ha leader quorum', requires: GATES.cluster },

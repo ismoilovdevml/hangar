@@ -2,7 +2,7 @@ export const DEPENDENCY_LABELS: Record<string, string> = {
   database: 'PostgreSQL',
   blobstore: 'Blob storage',
   blobstores: 'Blob storage',
-  eventbus: 'Event bus (NATS)',
+  eventbus: 'Event listener (PostgreSQL)',
   scheduler: 'Task scheduler',
   search: 'Search index',
   auth: 'Sign-in',
