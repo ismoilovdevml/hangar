@@ -1,10 +1,11 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { revokeWaivers, useAssignees, useAssignFinding, useAssignPackage, useWaivePackage } from '../../api/findings';
 import { useSession } from '../../api/hooks';
+import { Dialog } from '../../components/Dialog';
+import { errorText } from '../../lib/apiError';
 import { toast } from '../../lib/toast';
-import { dateInputValue, errorText, MAX_WAIVER_DAYS, shortDate, validateWaiver, waiverUntil } from '../../lib/vulnerabilities';
+import { dateInputValue, MAX_WAIVER_DAYS, shortDate, validateWaiver, waiverUntil } from '../../lib/vulnerabilities';
 
 interface FormDialogProps {
   title: string;
@@ -18,57 +19,22 @@ interface FormDialogProps {
   extra?: ReactNode;
 }
 
-/** A modal form: focus moves to the first field, Tab stays inside, Escape cancels. */
+/** A form in the shared Dialog: it cannot be dismissed while it saves, and its buttons stay at the bottom edge. */
 function FormDialog({ title, children, submitLabel, busy, error, onSubmit, onCancel, extra }: FormDialogProps) {
-  const titleId = useId();
-  const ref = useRef<HTMLFormElement>(null);
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    ref.current?.querySelector<HTMLElement>('input, textarea, button')?.focus();
-    return () => previous?.focus?.();
-  }, []);
-  const onKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
-    if (e.key === 'Escape' && !busy) {
-      e.stopPropagation();
-      e.nativeEvent.stopImmediatePropagation();
-      onCancel();
-      return;
-    }
-    if (e.key !== 'Tab') return;
-    const items = ref.current?.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), textarea');
-    if (!items?.length) return;
-    const first = items[0]!;
-    const last = items[items.length - 1]!;
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  };
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!busy) onSubmit();
   };
-  return createPortal(
-    <div
-      className="dialog-scrim vdialog-scrim"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !busy) onCancel();
-      }}
-    >
-      <form ref={ref} className="dialog dialog--plain vdialog" role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={onKeyDown} onSubmit={submit} noValidate>
-        <h2 className="dialog__title" id={titleId}>
-          {title}
-        </h2>
-        <div className="dialog__body vdialog__body">{children}</div>
+  return (
+    <Dialog title={title} onClose={onCancel} dismissible={!busy} className="vdialog">
+      <form className="dialog-form" onSubmit={submit} noValidate>
+        {children}
         {error && (
           <p className="form-error" role="alert">
             {error}
           </p>
         )}
-        <div className="dialog__actions">
+        <div className="dialog-actions">
           {extra}
           <button type="button" className="button button--secondary" onClick={onCancel} disabled={busy}>
             Cancel
@@ -78,8 +44,7 @@ function FormDialog({ title, children, submitLabel, busy, error, onSubmit, onCan
           </button>
         </div>
       </form>
-    </div>,
-    document.body,
+    </Dialog>
   );
 }
 
@@ -137,7 +102,7 @@ export function WaiveDialog({ packageKey, packageName, findings, initial, onClos
   };
 
   return (
-    <FormDialog title={`Waive ${packageName}`} submitLabel="Waive" busy={waive.isPending} error={waive.isError ? errorText(waive.error) : null} onSubmit={submit} onCancel={onClose}>
+    <FormDialog title={`Waive ${packageName}`} submitLabel="Waive" busy={waive.isPending} error={waive.isError ? errorText(waive.error, { action: 'waive these findings' }) : null} onSubmit={submit} onCancel={onClose}>
       {findings.length > 1 ? (
         <fieldset className="vchoice">
           <legend className="field__label">Findings</legend>
@@ -169,6 +134,7 @@ export function WaiveDialog({ packageKey, packageName, findings, initial, onClos
           aria-invalid={touched && errors.reason ? true : undefined}
           aria-describedby={`${reasonId}-msg`}
           placeholder="Why this does not affect us, or what mitigates it"
+          data-autofocus
         />
         <span id={`${reasonId}-msg`} className={touched && errors.reason ? 'field__error' : 'field__hint'}>
           {touched && errors.reason ? errors.reason : 'Recorded in the audit log with your name.'}
@@ -236,7 +202,7 @@ export function AssignDialog({ target, current, onClose }: { target: AssignTarge
       title={`Assign ${target.label}`}
       submitLabel="Assign"
       busy={busy}
-      error={err ? errorText(err) : missing ? 'Pick a user.' : null}
+      error={err ? errorText(err, { action: 'assign it' }) : missing ? 'Pick a user.' : null}
       onSubmit={submit}
       onCancel={onClose}
       extra={
@@ -257,7 +223,7 @@ export function AssignDialog({ target, current, onClose }: { target: AssignTarge
         <label htmlFor={searchId} className="field__label">
           Find a user
         </label>
-        <input id={searchId} className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or email" autoComplete="off" />
+        <input id={searchId} className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or email" autoComplete="off" data-autofocus />
       </div>
       {me && (
         <button
@@ -275,7 +241,7 @@ export function AssignDialog({ target, current, onClose }: { target: AssignTarge
       <fieldset className="vchoice vchoice--scroll" aria-busy={users.isFetching || undefined}>
         <legend className="visually-hidden">Users</legend>
         {users.isError ? (
-          <p className="meta">{errorText(users.error)}</p>
+          <p className="meta">{errorText(users.error, { action: 'list users' })}</p>
         ) : users.isPending ? (
           <p className="meta">Loading users…</p>
         ) : items.length === 0 ? (

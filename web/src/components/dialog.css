@@ -19,6 +19,7 @@
 .dialog--drawer { width: min(640px, 100%); max-height: none; height: 100%; border-radius: var(--r-panel) 0 0 var(--r-panel); }
 .dialog__head { flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px var(--dialog-pad) 8px; }
 .dialog__titles { min-width: 0; }
+.dialog__eyebrow { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .dialog__title { font-size: 20px; font-weight: 700; color: var(--ink-strong); letter-spacing: -.01em; overflow-wrap: anywhere; }
 .dialog__desc { margin-top: 4px; color: var(--ink-2); font-size: 14px; }
 /* Only the body scrolls: the title stays on top and a form's buttons stick to the bottom edge. */
@@ -29,6 +30,7 @@
   padding: 14px var(--dialog-pad) var(--dialog-pad);
   border-top: 1px solid var(--hairline); background: var(--surface-solid);
 }
+.dialog__foot { flex: none; padding: 14px var(--dialog-pad) 18px; border-top: 1px solid var(--hairline-strong); }
 .dialog__text { color: var(--ink-2); font-size: 14px; line-height: 1.5; }
 .dialog__actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 /* One pane: title, text and buttons padded as one. */

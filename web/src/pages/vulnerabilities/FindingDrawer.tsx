@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { ApiRequestError } from '../../api/client';
 import { useFinding, usePullers, useRevokeWaiver } from '../../api/findings';
 import type { Finding, PackagePlan } from '../../api/types';
+import { Dialog } from '../../components/Dialog';
 import { ErrorNote } from '../../components/ErrorNote';
 import { MarkdownInline } from '../../components/Markdown';
 import { Pill } from '../../components/Pill';
@@ -10,7 +11,6 @@ import { plural } from '../../lib/overview';
 import {
   advisoryLink,
   dockerfileUpgrade,
-  errorText,
   findingStatus,
   fixStatusText,
   imageRef,
@@ -23,10 +23,10 @@ import {
   shortDate,
   sortedAliases,
 } from '../../lib/vulnerabilities';
+import { errorText } from '../../lib/apiError';
 import { toast } from '../../lib/toast';
 import { AdvisoryText } from './AdvisoryText';
 import { CopyTextButton } from './CopyTextButton';
-import { Drawer } from './Drawer';
 import { AssignDialog, WaiveDialog } from './PlanDialogs';
 
 interface FindingDrawerProps {
@@ -51,7 +51,11 @@ export function FindingDrawer({ id, plan, onClose, canWrite, canSeePullers }: Fi
 
   return (
     <>
-      <Drawer
+      <Dialog
+        variant="drawer"
+        className="vdrawer"
+        // Opened to read: the panel takes focus, so a screen reader starts at its title rather than its first link.
+        initialFocus="container"
         title={f ? f.title ? <MarkdownInline source={f.title} /> : f.advisory_id : 'Finding'}
         eyebrow={
           f &&
@@ -67,7 +71,7 @@ export function FindingDrawer({ id, plan, onClose, canWrite, canSeePullers }: Fi
             </>
           )
         }
-        subtitle={f && <span className="vdrawer__ids">{ids.join(' · ')}</span>}
+        description={f && <span className="vdrawer__ids">{ids.join(' · ')}</span>}
         onClose={onClose}
         footer={
           f &&
@@ -101,7 +105,7 @@ export function FindingDrawer({ id, plan, onClose, canWrite, canSeePullers }: Fi
         ) : (
           <FindingBody f={f} plan={plan} canWrite={canWrite} canSeePullers={canSeePullers} />
         )}
-      </Drawer>
+      </Dialog>
       {f && dialog === 'assign' && (
         <AssignDialog target={{ kind: 'finding', id: f.id, label: f.advisory_id }} current={f.assignee ?? null} onClose={() => setDialog(null)} />
       )}
@@ -375,7 +379,7 @@ function WaiverSection({ f, canWrite }: { f: Finding; canWrite: boolean }) {
           )}
           {revoke.isError && (
             <p className="form-error" role="alert">
-              {errorText(revoke.error)}
+              {errorText(revoke.error, { action: 'revoke the waiver' })}
             </p>
           )}
         </>
