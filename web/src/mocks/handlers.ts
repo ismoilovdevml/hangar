@@ -14,6 +14,8 @@ import { mockSystemStatus, resetSystemMockState, systemHandlers } from './system
 import { resetSettingsState, settingsHandlers } from './settings';
 import { routingHandlers } from './routing';
 import { resetSigningState, signingHandlers } from './signing';
+import { resetTrustPoliciesState, trustPoliciesHandlers } from './trustPolicies';
+import { resetWebhooksState, webhooksHandlers } from './webhooks';
 import { openAPIHandlers } from './openapi';
 import { allows } from '../lib/privileges';
 
@@ -50,6 +52,8 @@ export function resetMockState(): void {
   resetSettingsState();
   resetFindingsState();
   resetSigningState();
+  resetWebhooksState();
+  resetTrustPoliciesState();
 }
 
 /** Test helpers: inspect or change the mock server's state. */
@@ -187,6 +191,8 @@ export const handlers = [
   ),
   ...settingsHandlers(guard, () => state.repositories, () => allows(data.session.privileges, 'system', 'settings', 'admin')),
   ...signingHandlers(guard, () => state.repositories),
+  ...webhooksHandlers(guard, () => sessionBody().privileges ?? []),
+  ...trustPoliciesHandlers(guard, () => sessionBody().privileges ?? []),
   ...routingHandlers(guard, () => state.repositories),
   ...findingsHandlers(
     guard,

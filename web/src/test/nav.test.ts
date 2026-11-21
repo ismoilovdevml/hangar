@@ -8,8 +8,12 @@ describe('sidebar', () => {
       ['Storage', ['Blob stores', 'Cleanup policies']],
       ['Security', ['Vulnerabilities', 'Access', 'Audit log']],
       ['Operations', ['Scheduled tasks', 'System']],
-      ['Settings', ['Authentication', 'Proxies']],
+      ['Settings', ['Authentication', 'Proxies', 'Webhooks', 'CI trust']],
     ]);
+  });
+
+  it('shows webhooks to who may read them, without the other settings', () => {
+    expect(visibleNav(['repo:*:read', 'system:webhooks:read']).find((s) => s.title === 'Settings')?.items.map((i) => i.label)).toEqual(['Webhooks']);
   });
 
   it('shows a plain user System, but no Settings section', () => {
@@ -31,6 +35,8 @@ describe('sidebar', () => {
     ['/system/logs/', '/system'],
     ['/settings/proxies', '/settings/proxies'],
     ['/settings/authentication', '/settings/authentication'],
+    ['/settings/webhooks', '/settings/webhooks'],
+    ['/settings/trust-policies', '/settings/trust-policies'],
     ['/audit', '/audit'],
   ])('lights up the right entry on %s', (path, to) => {
     expect(activeNav(path)).toBe(to);

@@ -54,6 +54,8 @@ const AuditPage = lazyRouteComponent(() => import('./pages/audit/AuditPage'), 'A
 const CleanupPage = lazyRouteComponent(() => import('./pages/cleanup/CleanupPage'), 'CleanupPage');
 const AuthenticationPage = lazyRouteComponent(() => import('./pages/settings/AuthenticationPage'), 'AuthenticationPage');
 const ProxiesPage = lazyRouteComponent(() => import('./pages/settings/ProxiesPage'), 'ProxiesPage');
+const WebhooksPage = lazyRouteComponent(() => import('./pages/settings/WebhooksPage'), 'WebhooksPage');
+const TrustPoliciesPage = lazyRouteComponent(() => import('./pages/settings/TrustPoliciesPage'), 'TrustPoliciesPage');
 const TaskDetailPage = lazyRouteComponent(() => import('./pages/tasks/TaskDetailPage'), 'TaskDetailPage');
 const TasksPage = lazyRouteComponent(() => import('./pages/tasks/TasksPage'), 'TasksPage');
 const NewTaskPage = lazyRouteComponent(() => import('./pages/tasks/NewTaskPage'), 'NewTaskPage');
@@ -450,13 +452,14 @@ const systemAboutRoute = createRoute({
 /**
  * Settings has no page of its own: every setting has a sidebar entry or sits
  * in the account menu. Its address opens the first settings page the user may
- * see, or their account.
+ * see (webhooks have a privilege of their own), or their account.
  */
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/settings',
   beforeLoad: async ({ context }) => {
-    const to = passes(GATES.settings, await privilegesOf(context)) ? '/settings/authentication' : '/account';
+    const privileges = await privilegesOf(context);
+    const to = passes(GATES.settings, privileges) ? '/settings/authentication' : passes(GATES.webhooks, privileges) ? '/settings/webhooks' : '/account';
     throw redirect({ to, replace: true });
   },
 });
@@ -509,6 +512,8 @@ const routeTree = rootRoute.addChildren([
     settingsRoute,
     page('/settings/authentication', 'Authentication', AuthenticationPage, true, GATES.settings),
     page('/settings/proxies', 'Proxies', ProxiesPage, true, GATES.settings),
+    page('/settings/webhooks', 'Webhooks', WebhooksPage, true, GATES.webhooks),
+    page('/settings/trust-policies', 'CI trust policies', TrustPoliciesPage, true, GATES.settings),
     notFoundRoute,
   ]),
 ]);

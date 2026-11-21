@@ -41,6 +41,9 @@ export const ACTION_SUGGESTIONS = [
   'token.*',
   'user.*',
   'role.*',
+  'webhook.*',
+  'trust_policy.*',
+  'auth.oidc.exchange',
   'audit.export',
 ];
 

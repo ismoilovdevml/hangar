@@ -42,6 +42,7 @@ export const GATES = {
   } satisfies Gate,
   logs: systemGate('cluster', 'admin', 'system logs'),
   settings: systemGate('settings', 'read', 'these settings'),
+  webhooks: systemGate('webhooks', 'read', 'webhooks'),
   createRepository: {
     what: 'creating repositories',
     privilege: 'system:repos:admin',

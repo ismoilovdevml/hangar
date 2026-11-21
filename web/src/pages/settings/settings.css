@@ -236,3 +236,59 @@
   .auth-editor { padding: 18px; }
   .auth-editor__footer > .button, .auth-editor__probe { flex: 1 1 100%; max-width: none; }
 }
+
+/* ---------------------------------------------------------------- webhooks */
+
+.webhook-name, .webhook-url, .webhook-events, .webhook-last { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.webhook-name strong { color: var(--ink-strong); overflow-wrap: anywhere; }
+.webhook-name__reason { font-size: 12px; color: var(--bad-ink); overflow-wrap: anywhere; }
+.webhook-url code { font-size: 12.5px; overflow-wrap: anywhere; color: var(--ink-2); }
+.webhook-events { font-size: 13px; color: var(--ink-2); }
+.webhook-test { padding: 12px 16px 0; }
+.webhook-test p { margin: 0; }
+.webhook-form { gap: 16px; }
+.webhook-stored { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.webhook-stored code { flex: 1 1 220px; min-width: 0; padding: 10px 12px; border-radius: var(--r-small); background: var(--surface-muted); font-size: 13px; overflow-wrap: anywhere; }
+.field__hint--warn { color: var(--warn-ink); }
+
+.deliveries-view { display: flex; flex-direction: column; gap: 14px; }
+.deliveries-view__filter { display: flex; align-items: center; gap: 10px; }
+.deliveries-view__filter .select { width: 200px; }
+.deliveries-view__pager { display: flex; justify-content: flex-end; gap: 8px; }
+.deliveries { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--hairline); }
+.delivery { border-bottom: 1px solid var(--hairline); }
+.delivery__row {
+  display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; align-items: baseline; gap: 4px 12px; width: 100%;
+  padding: 10px 4px; border: 0; background: transparent; font: inherit; font-size: 13px; color: var(--ink); text-align: left; cursor: pointer;
+}
+.delivery__row:hover { background: var(--wash-hover); }
+.delivery__row:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--r-small); }
+.delivery__row .pill { justify-self: start; }
+.delivery__what { min-width: 0; overflow-wrap: anywhere; }
+.delivery__outcome { grid-column: 2; overflow-wrap: anywhere; }
+.delivery__time { grid-column: 3; grid-row: 1; white-space: nowrap; }
+.delivery__details { display: flex; flex-direction: column; gap: 12px; padding: 4px 4px 16px; }
+.delivery__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.delivery__actions .form-success, .delivery__actions .form-error { margin: 0; }
+
+/* ---------------------------------------------------------------- CI trust policies */
+
+.trust-name, .trust-issuer { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.trust-name strong { color: var(--ink-strong); overflow-wrap: anywhere; }
+.trust-issuer code, .trust-conditions code { font-size: 12px; overflow-wrap: anywhere; }
+.trust-conditions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--ink-2); }
+.trust-form { gap: 16px; }
+.trust-presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.conditions { display: flex; flex-direction: column; gap: 10px; }
+.condition {
+  display: grid; grid-template-columns: minmax(0, 1fr) 120px minmax(0, 1.6fr) 44px; align-items: start; gap: 8px;
+  padding: 10px; border-radius: var(--r-control); border: 1px solid var(--hairline-strong); background: var(--wash);
+}
+.condition .field__error { grid-column: 1 / -1; }
+.conditions__add { align-self: flex-start; gap: 6px; }
+.trust-usage { display: flex; flex-direction: column; gap: 12px; }
+@media (max-width: 640px) {
+  .condition { grid-template-columns: minmax(0, 1fr) 44px; }
+  .condition > :nth-child(2), .condition > :nth-child(3) { grid-column: 1; }
+  .condition > :nth-child(4) { grid-column: 2; grid-row: 1; }
+}
