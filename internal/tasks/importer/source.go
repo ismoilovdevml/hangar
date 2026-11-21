@@ -76,8 +76,8 @@ type source struct {
 	requests int64
 }
 
-func (s *Service) newSource(src Source, rps float64) (*source, error) {
-	open, err := s.openSource(src)
+func (s *Service) newSource(src Source, at sourceAt, rps float64) (*source, error) {
+	open, err := s.openSource(src, at)
 	if err != nil {
 		return nil, err
 	}

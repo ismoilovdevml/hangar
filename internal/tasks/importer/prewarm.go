@@ -188,7 +188,7 @@ type prewarmState struct {
 	Result PrewarmResult `json:"result"`
 }
 
-func (s *Service) runPrewarm(ctx context.Context, x reporter, cfg *PrewarmConfig) error {
+func (s *Service) runPrewarm(ctx context.Context, x reporter, taskID string, cfg *PrewarmConfig) error {
 	repo, err := s.opts.Repos.Get(ctx, cfg.Repository)
 	if err != nil {
 		return err // names the repository
@@ -207,7 +207,7 @@ func (s *Service) runPrewarm(ctx context.Context, x reporter, cfg *PrewarmConfig
 	}
 	if inv := cfg.Inventory; inv != nil {
 		x.Progress(0, "Listing packages at "+core.RedactURL(inv.Source.URL))
-		listed, err := s.inventory(ctx, x, repo, inv, cfg.rps())
+		listed, err := s.inventory(ctx, x, repo, inv, taskID, cfg.rps())
 		if err != nil {
 			return err
 		}
@@ -317,12 +317,12 @@ func (s *Service) runPrewarm(ctx context.Context, x reporter, cfg *PrewarmConfig
 
 // inventory lists the coordinates a source holds, with the importer's
 // enumeration and filters.
-func (s *Service) inventory(ctx context.Context, x reporter, repo *core.Repository, inv *Inventory, rps float64) ([]string, error) {
+func (s *Service) inventory(ctx context.Context, x reporter, repo *core.Repository, inv *Inventory, taskID string, rps float64) ([]string, error) {
 	newAdapter, ok := adapters[repo.Format]
 	if !ok {
 		return nil, fmt.Errorf("format %q has no inventory: %w", repo.Format, core.ErrNotImplemented)
 	}
-	src, err := s.newSource(inv.Source, rps)
+	src, err := s.newSource(inv.Source, sourceAt{taskID, inventorySourcePath}, rps)
 	if err != nil {
 		return nil, err
 	}

@@ -69,9 +69,10 @@ type Options struct {
 const DefaultCacheTTL = 30 * time.Second
 
 // ConfigSealer seals the secrets of a repository configuration in place
-// (implemented by *secrets.Keyring).
+// (implemented by *secrets.Keyring), bound to the repository's id: a sealed
+// value only opens in the repository and field it was sealed for.
 type ConfigSealer interface {
-	SealRepoConfig(cfg *core.RepoConfig) error
+	SealRepoConfig(cfg *core.RepoConfig, repoID string) error
 }
 
 // errNoSealer is returned for a secret when no ConfigSealer is configured.
@@ -297,15 +298,23 @@ func (s *Service) Create(ctx context.Context, in *core.Repository) (*core.Reposi
 		if err := s.authorizeListener(ctx, "repository.create", r, nil); err != nil {
 			return err
 		}
+		// The id is allocated before the row is written: secrets are sealed
+		// for it (internal/secrets, RepositoryContext).
+		var id string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text`).Scan(&id); err != nil {
+			return fmt.Errorf("create repository %q: %w", r.Name, err)
+		}
+		if err := s.seal(r, id); err != nil {
+			return err
+		}
 		cfg, err := encodeConfig(r.Config)
 		if err != nil {
 			return err
 		}
-		var id string
 		err = tx.QueryRow(ctx, `
-INSERT INTO repositories (name, format, type, description, blob_store_id, config, online)
-VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id::text`,
-			r.Name, r.Format, string(r.Type), r.Description, storeID, cfg, r.Online).Scan(&id)
+INSERT INTO repositories (id, name, format, type, description, blob_store_id, config, online)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id::text`,
+			id, r.Name, r.Format, string(r.Type), r.Description, storeID, cfg, r.Online).Scan(&id)
 		if err != nil {
 			return mapErr(fmt.Sprintf("repository %q", r.Name), err)
 		}
@@ -381,6 +390,9 @@ SELECT r.id::text, r.format, r.type, coalesce(bs.name, ''), r.config
 			return err
 		}
 		if err := s.authorizeListener(ctx, "repository.update", r, oldCfg); err != nil {
+			return err
+		}
+		if err := s.seal(r, id); err != nil {
 			return err
 		}
 		cfg, err := encodeConfig(r.Config)
@@ -562,21 +574,22 @@ func (s *Service) prepare(ctx context.Context, in *core.Repository) (*core.Repos
 			return nil, fmt.Errorf("repository %q: %w", r.Name, err)
 		}
 	}
-	if err := s.seal(r); err != nil {
-		return nil, err
+	if s.opts.Secrets == nil && hasSecrets(r.Config) {
+		return nil, fmt.Errorf("repository %q: %w", r.Name, errNoSealer)
 	}
 	return r, nil
 }
 
-// seal encrypts the configuration's secrets before it is stored.
-func (s *Service) seal(r *core.Repository) error {
+// seal encrypts the configuration's secrets for the repository with id id,
+// before it is stored.
+func (s *Service) seal(r *core.Repository, id string) error {
 	if s.opts.Secrets == nil {
 		if hasSecrets(r.Config) {
 			return fmt.Errorf("repository %q: %w", r.Name, errNoSealer)
 		}
 		return nil
 	}
-	if err := s.opts.Secrets.SealRepoConfig(&r.Config); err != nil {
+	if err := s.opts.Secrets.SealRepoConfig(&r.Config, id); err != nil {
 		return fmt.Errorf("repository %q: %w", r.Name, err)
 	}
 	return nil

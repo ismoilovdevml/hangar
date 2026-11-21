@@ -180,14 +180,14 @@ func TestSourceCredentialsSealed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(task.Config), "pa55word") || strings.Contains(string(task.Config), "hgs1.") {
+	if strings.Contains(string(task.Config), "pa55word") || strings.Contains(string(task.Config), secrets.Prefix) || strings.Contains(string(task.Config), secrets.LegacyPrefix) {
 		t.Fatalf("config returned with the secret: %s", task.Config)
 	}
 	var stored string
 	if err := pool.QueryRow(context.Background(), `SELECT config->'source'->>'password' FROM tasks WHERE name = 'imp'`).Scan(&stored); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(stored, "hgs1.") || strings.Contains(stored, "pa55word") {
+	if !strings.HasPrefix(stored, secrets.Prefix) || strings.Contains(stored, "pa55word") {
 		t.Fatalf("stored password %q is not sealed", stored)
 	}
 	// Saving the redacted config back keeps the sealed password.

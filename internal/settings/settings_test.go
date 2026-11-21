@@ -183,7 +183,7 @@ func TestOIDCSecretIsWriteOnly(t *testing.T) {
 		t.Fatalf("GET leaks the secret: %s", body)
 	}
 	raw := rawSetting(t, e.Pool, "auth.oidc")
-	if strings.Contains(raw, oidctest.ClientSecret) || !strings.Contains(raw, `"client_secret": "hgs1.`) {
+	if strings.Contains(raw, oidctest.ClientSecret) || !strings.Contains(raw, `"client_secret": "hgs2.`) {
 		t.Fatalf("stored document is not sealed: %s", raw)
 	}
 	applied, _, _ := e.rec.last()
@@ -213,7 +213,7 @@ func TestOIDCSecretIsWriteOnly(t *testing.T) {
 	}
 	for _, ev := range events {
 		b, _ := json.Marshal(ev)
-		if bytes.Contains(b, []byte(oidctest.ClientSecret)) || bytes.Contains(b, []byte("hgs1.")) {
+		if bytes.Contains(b, []byte(oidctest.ClientSecret)) || bytes.Contains(b, []byte(secrets.Prefix)) || bytes.Contains(b, []byte(secrets.LegacyPrefix)) {
 			t.Fatalf("audit leaks the secret: %s", b)
 		}
 	}
@@ -479,7 +479,7 @@ func TestProxies(t *testing.T) {
 	}
 	var stored string
 	if err := e.Pool.QueryRow(context.Background(), `SELECT password FROM outbound_proxies WHERE name = 'corp'`).Scan(&stored); err != nil ||
-		!strings.HasPrefix(stored, "hgs1.") {
+		!strings.HasPrefix(stored, "hgs2.") {
 		t.Fatalf("stored password = %q, %v", stored, err)
 	}
 
@@ -587,7 +587,7 @@ func TestSecretsStayWithTheirEndpoint(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	t.Cleanup(attacker.Close)
-	sealed, err := e.key.SealString("victim-secret")
+	sealed, err := e.key.SealString(secrets.SettingContext("auth.oidc", "client_secret"), "victim-secret")
 	if err != nil {
 		t.Fatal(err)
 	}

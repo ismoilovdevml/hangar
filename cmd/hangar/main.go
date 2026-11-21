@@ -28,7 +28,9 @@ Usage:
   hangar admin   reset-password --user NAME        print a one-time password for a local user
   hangar admin   token create --user NAME --name LABEL --scopes LIST [--expires 90d]
                                                     create a personal access token
-  hangar admin   rotate-secrets [--dry-run]        re-encrypt stored secrets with security.secret_key
+  hangar admin   rotate-secrets [--dry-run] [--downgrade]
+                                                    re-encrypt stored secrets with security.secret_key
+                                                    (--downgrade: hgs1 format, before going back to v0.1.x)
   hangar version [--json]                           print build information
 
 Configuration is read from --config (or $HANGAR_CONFIG) and HANGAR_* environment

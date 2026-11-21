@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/secrets"
 )
 
 // Task types.
@@ -54,11 +55,14 @@ const (
 )
 
 // Sealer seals and opens source credentials (implemented by
-// *secrets.Keyring). A nil Sealer refuses credentials.
+// *secrets.Keyring), each bound to its task and field
+// (secrets.TaskContext). A nil Sealer refuses credentials.
 type Sealer interface {
-	SealString(plaintext string) (string, error)
-	Reveal(stored string) (string, error)
-	Check(sealed string) error
+	SealString(at secrets.Context, plaintext string) (string, error)
+	Reveal(at secrets.Context, stored string) (string, error)
+	// Upgrade checks that a stored value opens at its place and returns it
+	// in the current format.
+	Upgrade(at secrets.Context, sealed string) (string, error)
 }
 
 // Options configure a Service.

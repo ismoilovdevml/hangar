@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/secrets"
 )
 
 // Source is a registry to read from. Password and Token are write-only: they
@@ -261,17 +262,45 @@ func (s Source) rejectSealed() error {
 	// source URL, so it is refused; a stored credential is kept by leaving
 	// it empty.
 	for _, f := range []struct{ name, v string }{{"source.password", s.Password}, {"source.token", s.Token}} {
-		if strings.HasPrefix(strings.TrimSpace(f.v), sealedPrefix) {
-			return fmt.Errorf("%s: a sealed value (%s...) cannot be submitted as a credential; enter the credential itself, "+
-				"or leave it empty to keep the stored one: %w", f.name, sealedPrefix, core.ErrInvalid)
+		if secrets.IsSealed(strings.TrimSpace(f.v)) {
+			return fmt.Errorf("%s: a sealed value (%s... or %s...) cannot be submitted as a credential; enter the credential itself, "+
+				"or leave it empty to keep the stored one: %w", f.name, secrets.Prefix, secrets.LegacyPrefix, core.ErrInvalid)
 		}
 	}
 	return nil
 }
 
-// sealSource seals the source's password and token, keeping prev's when the
-// client sent them back empty for the same URL and user.
-func (s *Service) sealSource(src *Source, prev *Source) error {
+// sourceAt is where the credentials of a source are stored: the task's row
+// (its id) and the source's JSON path in the config.
+type sourceAt struct {
+	taskID string
+	path   string // "source." or "inventory.source."
+}
+
+// Paths of the sources in task configs.
+const (
+	importSourcePath    = "source."
+	inventorySourcePath = "inventory.source."
+)
+
+func (a sourceAt) context(field string) secrets.Context {
+	return secrets.TaskContext(a.taskID, a.path+field)
+}
+
+// fields pairs the source's credentials with their JSON field names.
+func (s *Source) fields() []struct {
+	name string
+	v    *string
+} {
+	return []struct {
+		name string
+		v    *string
+	}{{"password", &s.Password}, {"token", &s.Token}}
+}
+
+// sealSource seals the source's password and token for at, keeping prev's
+// when the client sent them back empty for the same URL and user.
+func (s *Service) sealSource(src *Source, prev *Source, at sourceAt) error {
 	if err := src.rejectSealed(); err != nil {
 		return err
 	}
@@ -280,49 +309,49 @@ func (s *Service) sealSource(src *Source, prev *Source) error {
 			src.Password, src.Token = prev.Password, prev.Token
 		}
 	}
-	for _, f := range []*string{&src.Password, &src.Token} {
-		if *f == "" {
+	for _, f := range src.fields() {
+		if *f.v == "" {
 			continue
 		}
 		if s.opts.Secrets == nil {
 			return fmt.Errorf("storing source credentials requires security.secret_key (HANGAR_SECRET_KEY): %w", core.ErrNotImplemented)
 		}
-		if strings.HasPrefix(*f, sealedPrefix) {
-			// Only a value this server sealed (carried over from prev) is kept.
-			if err := s.opts.Secrets.Check(*f); err != nil {
+		if secrets.IsSealed(*f.v) {
+			// Only a value this server sealed for this task and field
+			// (carried over from prev) is kept, in the current format.
+			v, err := s.opts.Secrets.Upgrade(at.context(f.name), *f.v)
+			if err != nil {
 				return fmt.Errorf("source credentials: %w: %w", err, core.ErrInvalid)
 			}
+			*f.v = v
 			continue
 		}
-		v, err := s.opts.Secrets.SealString(*f)
+		v, err := s.opts.Secrets.SealString(at.context(f.name), *f.v)
 		if err != nil {
 			return fmt.Errorf("seal source credentials: %w", err)
 		}
-		*f = v
+		*f.v = v
 	}
 	return nil
 }
 
-// sealedPrefix marks sealed values (secrets.Prefix).
-const sealedPrefix = "hgs1."
-
-// openSource returns src with its credentials in plaintext.
-func (s *Service) openSource(src Source) (Source, error) {
-	for _, f := range []*string{&src.Password, &src.Token} {
-		if *f == "" {
+// openSource returns src, stored at at, with its credentials in plaintext.
+func (s *Service) openSource(src Source, at sourceAt) (Source, error) {
+	for _, f := range src.fields() {
+		if *f.v == "" {
 			continue
 		}
 		if s.opts.Secrets == nil {
-			if strings.HasPrefix(*f, sealedPrefix) {
+			if secrets.IsSealed(*f.v) {
 				return src, fmt.Errorf("source credentials are sealed but no security.secret_key is configured: %w", core.ErrNotImplemented)
 			}
 			continue
 		}
-		v, err := s.opts.Secrets.Reveal(*f)
+		v, err := s.opts.Secrets.Reveal(at.context(f.name), *f.v)
 		if err != nil {
 			return src, fmt.Errorf("open source credentials: %w", err)
 		}
-		*f = v
+		*f.v = v
 	}
 	return src, nil
 }

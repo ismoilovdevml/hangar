@@ -127,13 +127,16 @@ func (r *memReporter) log() string {
 	return strings.Join(r.lines, "\n")
 }
 
+// testTaskID stands for the task row of runs started directly in tests.
+const testTaskID = "00000000-0000-4000-8000-000000000001"
+
 func (h *hangar) runImport(t *testing.T, cfg ImportConfig) (*memReporter, ImportResult, error) {
 	t.Helper()
 	rep := &memReporter{}
 	if cfg.RequestsPerSecond == 0 {
 		cfg.RequestsPerSecond = MaxRequestsPerSecond
 	}
-	err := h.svc.runImport(systemCtx(t), rep, &cfg)
+	err := h.svc.runImport(systemCtx(t), rep, testTaskID, &cfg)
 	res, _ := rep.result.(ImportResult)
 	if testing.Verbose() {
 		t.Log(rep.log())
@@ -147,7 +150,7 @@ func (h *hangar) runPrewarm(t *testing.T, cfg PrewarmConfig) (*memReporter, Prew
 	if cfg.RequestsPerSecond == 0 {
 		cfg.RequestsPerSecond = MaxRequestsPerSecond
 	}
-	err := h.svc.runPrewarm(systemCtx(t), rep, &cfg)
+	err := h.svc.runPrewarm(systemCtx(t), rep, testTaskID, &cfg)
 	res, _ := rep.result.(PrewarmResult)
 	if testing.Verbose() {
 		t.Log(rep.log())

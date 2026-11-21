@@ -35,10 +35,10 @@ func (e importExecutor) Execute(ctx context.Context, x *tasks.Exec) error {
 	if err != nil {
 		return err
 	}
-	return e.s.runImport(ctx, x, cfg)
+	return e.s.runImport(ctx, x, x.Task.ID, cfg)
 }
 
-func (e importExecutor) PrepareConfig(ctx context.Context, raw, prev json.RawMessage) (json.RawMessage, error) {
+func (e importExecutor) PrepareConfig(ctx context.Context, taskID string, raw, prev json.RawMessage) (json.RawMessage, error) {
 	cfg, err := validateImport(raw)
 	if err != nil {
 		return nil, err
@@ -56,7 +56,7 @@ func (e importExecutor) PrepareConfig(ctx context.Context, raw, prev json.RawMes
 			old = &p.Source
 		}
 	}
-	if err := e.s.sealSource(&cfg.Source, old); err != nil {
+	if err := e.s.sealSource(&cfg.Source, old, sourceAt{taskID, importSourcePath}); err != nil {
 		return nil, err
 	}
 	return json.Marshal(cfg)
@@ -96,10 +96,10 @@ func (e prewarmExecutor) Execute(ctx context.Context, x *tasks.Exec) error {
 	if err != nil {
 		return err
 	}
-	return e.s.runPrewarm(ctx, x, cfg)
+	return e.s.runPrewarm(ctx, x, x.Task.ID, cfg)
 }
 
-func (e prewarmExecutor) PrepareConfig(ctx context.Context, raw, prev json.RawMessage) (json.RawMessage, error) {
+func (e prewarmExecutor) PrepareConfig(ctx context.Context, taskID string, raw, prev json.RawMessage) (json.RawMessage, error) {
 	cfg, err := validatePrewarm(raw)
 	if err != nil {
 		return nil, err
@@ -140,7 +140,7 @@ func (e prewarmExecutor) PrepareConfig(ctx context.Context, raw, prev json.RawMe
 				old = &p.Inventory.Source
 			}
 		}
-		if err := e.s.sealSource(&inv.Source, old); err != nil {
+		if err := e.s.sealSource(&inv.Source, old, sourceAt{taskID, inventorySourcePath}); err != nil {
 			return nil, err
 		}
 	}

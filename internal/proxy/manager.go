@@ -210,7 +210,7 @@ func (m *Manager) forRepository(repo *core.Repository) (*upstream, error) {
 	if repo == nil || repo.Type != core.RepoProxy || repo.Config.Proxy == nil {
 		return nil, fmt.Errorf("repository is not a proxy: %w", core.ErrInvalid)
 	}
-	fp, err := fingerprint(repo.Config.Proxy)
+	fp, err := fingerprint(repo.ID, repo.Config.Proxy)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +219,7 @@ func (m *Manager) forRepository(repo *core.Repository) (*upstream, error) {
 	if u, ok := m.entries[repo.Name]; ok && u.fingerprint == fp {
 		return u, nil
 	}
-	u, err := m.build(repo.Name, repo.Config.Proxy, fp)
+	u, err := m.build(repo.Name, repo.ID, repo.Config.Proxy, fp)
 	if err != nil {
 		return nil, err
 	}
@@ -305,7 +305,7 @@ func (m *Manager) Health(repo *core.Repository) HealthItem {
 		it.State = StateOffline
 		return it
 	}
-	fp, err := fingerprint(repo.Config.Proxy)
+	fp, err := fingerprint(repo.ID, repo.Config.Proxy)
 	if err != nil {
 		return it
 	}
@@ -318,13 +318,20 @@ func (m *Manager) Health(repo *core.Repository) HealthItem {
 	return u.health()
 }
 
-func fingerprint(cfg *core.ProxyConfig) (string, error) {
+// fingerprint identifies the upstream built for a repository's proxy
+// configuration. It covers the repository id: sealed secrets are opened for
+// that repository, so a repository re-created under the same name never
+// reuses the upstream (and the credentials) of its predecessor.
+func fingerprint(repoID string, cfg *core.ProxyConfig) (string, error) {
 	b, err := json.Marshal(cfg)
 	if err != nil {
 		return "", fmt.Errorf("proxy config: %w", err)
 	}
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:]), nil
+	h := sha256.New()
+	_, _ = h.Write([]byte(repoID + "\x00"))
+	_, _ = h.Write(b)
+	sum := h.Sum(nil)
+	return hex.EncodeToString(sum), nil
 }
 
 // proxySelector is implemented by httpclient.Factory: it tells whether a
@@ -333,15 +340,17 @@ type proxySelector interface {
 	ProxyFor(target string, cfg core.UpstreamHTTP) (*url.URL, error)
 }
 
-// SecretOpener reveals the sealed secrets of a proxy configuration
-// (implemented by *secrets.Keyring). It returns a copy; cfg is not modified.
+// SecretOpener reveals the sealed secrets of the proxy configuration of the
+// repository with id repoID (implemented by *secrets.Keyring); they only
+// open for the repository they were sealed for. It returns a copy; cfg is
+// not modified.
 type SecretOpener interface {
-	OpenProxyConfig(cfg *core.ProxyConfig) (*core.ProxyConfig, error)
+	OpenProxyConfig(cfg *core.ProxyConfig, repoID string) (*core.ProxyConfig, error)
 }
 
-func (m *Manager) build(name string, cfg *core.ProxyConfig, fp string) (*upstream, error) {
+func (m *Manager) build(name, repoID string, cfg *core.ProxyConfig, fp string) (*upstream, error) {
 	if m.opts.Secrets != nil {
-		opened, err := m.opts.Secrets.OpenProxyConfig(cfg)
+		opened, err := m.opts.Secrets.OpenProxyConfig(cfg, repoID)
 		if err != nil {
 			return nil, fmt.Errorf("repository %q: upstream credentials: %w", name, err)
 		}

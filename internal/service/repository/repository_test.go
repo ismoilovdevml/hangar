@@ -153,7 +153,7 @@ func TestCreateGetRoundTrip(t *testing.T) {
 			if a := got.Config.Proxy.Auth; a != nil && !secrets.IsSealed(a.Token) {
 				t.Errorf("%s: token not sealed: %q", in.Name, a.Token)
 			}
-			opened, err := f.keys.OpenProxyConfig(got.Config.Proxy)
+			opened, err := f.keys.OpenProxyConfig(got.Config.Proxy, got.ID)
 			if err != nil {
 				t.Fatal(err)
 			}

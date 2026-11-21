@@ -210,14 +210,17 @@ func TestUpstreamAuthFailureStatus(t *testing.T) {
 // secret works by leaving it out.
 func TestSealedSecretsRefused(t *testing.T) {
 	f := newFixture(t)
-	const sealed = "hgs1.0123456789ab.d3JhcHBlZA.Y2lwaGVydGV4dA"
 	const remote = "https://attacker.example.com/nuget/index.json"
-	bodies := []map[string]any{
-		{"remote_url": remote, "auth": map[string]any{"kind": "basic", "username": "x", "password": sealed}},
-		{"remote_url": remote, "auth": map[string]any{"kind": "bearer", "token": sealed}},
-		{"remote_url": remote, "auth": map[string]any{"kind": "header", "header_name": "Private-Token", "token": " " + sealed}},
-		{"remote_url": "https://x:" + sealed + "@attacker.example.com/nuget/index.json"},
-		{"remote_url": remote, "http": map[string]any{"proxy": "http://x:" + sealed + "@proxy.attacker.example.com:3128"}},
+	var bodies []map[string]any
+	// Both formats: hgs2 (current) and hgs1 (sealed before v0.2.0).
+	for _, sealed := range []string{"hgs2.0123456789ab.d3JhcHBlZA.Y2lwaGVydGV4dA", "hgs1.0123456789ab.d3JhcHBlZA.Y2lwaGVydGV4dA"} {
+		bodies = append(bodies,
+			map[string]any{"remote_url": remote, "auth": map[string]any{"kind": "basic", "username": "x", "password": sealed}},
+			map[string]any{"remote_url": remote, "auth": map[string]any{"kind": "bearer", "token": sealed}},
+			map[string]any{"remote_url": remote, "auth": map[string]any{"kind": "header", "header_name": "Private-Token", "token": " " + sealed}},
+			map[string]any{"remote_url": "https://x:" + sealed + "@attacker.example.com/nuget/index.json"},
+			map[string]any{"remote_url": remote, "http": map[string]any{"proxy": "http://x:" + sealed + "@proxy.attacker.example.com:3128"}},
+		)
 	}
 	for i, proxyCfg := range bodies {
 		b := f.expect("admin", "POST", "/api/v1/repositories", map[string]any{"name": "nuget-sealed", "format": "nuget",

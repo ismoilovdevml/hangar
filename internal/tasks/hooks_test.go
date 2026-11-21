@@ -14,7 +14,7 @@ import (
 // empty, redacts it on output and refuses runs by "mallory".
 type hookExec struct{ fakeExec }
 
-func (hookExec) PrepareConfig(ctx context.Context, cfg, prev json.RawMessage) (json.RawMessage, error) {
+func (hookExec) PrepareConfig(ctx context.Context, _ string, cfg, prev json.RawMessage) (json.RawMessage, error) {
 	if core.PrincipalFrom(ctx).Name == "mallory" {
 		return nil, core.ErrForbidden
 	}

@@ -28,10 +28,10 @@ func TestSecretsSealedAtRest(t *testing.T) {
 			t.Errorf("stored config contains %q: %s", plain, raw)
 		}
 	}
-	if !strings.Contains(raw, `"username": "svc"`) || !strings.Contains(raw, "proxyuser:hgs1.") {
+	if !strings.Contains(raw, `"username": "svc"`) || !strings.Contains(raw, "proxyuser:hgs2.") {
 		t.Errorf("stored config = %s", raw)
 	}
-	opened, err := f.keys.OpenProxyConfig(out.Config.Proxy)
+	opened, err := f.keys.OpenProxyConfig(out.Config.Proxy, out.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestUpdateAuditsCredentialChangesWithoutSecrets(t *testing.T) {
 		}
 	}
 	raw, _ := json.Marshal(events)
-	for _, s := range []string{"gl-first", "gl-second", "gl-third", "hgs1."} {
+	for _, s := range []string{"gl-first", "gl-second", "gl-third", "hgs1.", "hgs2."} {
 		if strings.Contains(string(raw), s) {
 			t.Errorf("audit trail contains %q: %s", s, raw)
 		}

@@ -12,7 +12,8 @@ import (
 )
 
 // blobStoreTester runs the connection test of POST /blob-stores:test with
-// the S3 driver, opening sealed secrets with the keyring. The settings come
+// the S3 driver, opening sealed secrets with the keyring as those of the
+// stored blob store storeID (they open nowhere else). The settings come
 // from the request, so every connection goes through dialGuard; whether the
 // ambient credentials may be used was decided by the catalog
 // (BlobStoreTestConfig, storage.allow_ambient_credentials).
@@ -21,12 +22,12 @@ type blobStoreTester struct {
 	dialGuard func(netip.Addr) error
 }
 
-func (t blobStoreTester) TestBlobStore(ctx context.Context, kind string, cfg map[string]any) ([]api.BlobStoreCheck, error) {
+func (t blobStoreTester) TestBlobStore(ctx context.Context, kind, storeID string, cfg map[string]any) ([]api.BlobStoreCheck, error) {
 	if kind != s3.Kind {
 		return nil, fmt.Errorf("only s3 blob stores can be tested: %w", core.ErrInvalid)
 	}
 	if t.keyring != nil {
-		opened, err := t.keyring.OpenStoreConfig(cfg)
+		opened, err := t.keyring.OpenStoreConfig(cfg, storeID)
 		if err != nil {
 			return nil, fmt.Errorf("blob store credentials: %w", err)
 		}

@@ -24,11 +24,13 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/scanning"
 	"github.com/ismoilovdevml/hangar/internal/search"
+	"github.com/ismoilovdevml/hangar/internal/secrets"
 )
 
-// SecretSealer encrypts secrets before they are stored in the database.
+// SecretSealer encrypts secrets before they are stored in the database, each
+// bound to the row and field it is stored in (*secrets.Keyring).
 type SecretSealer interface {
-	Seal(plaintext []byte) (string, error)
+	Seal(at secrets.Context, plaintext []byte) (string, error)
 }
 
 // Options configure the catalog.

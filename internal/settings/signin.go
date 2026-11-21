@@ -367,7 +367,7 @@ func (s *Service) PutOIDC(ctx context.Context, in OIDCInput) (*OIDC, error) {
 		if _, _, err := s.loadDoc(ctx, tx, keyOIDC, &old, true); err != nil {
 			return err
 		}
-		secret, sealed, fe, err := s.mergeSecret(old.ClientSecret, in.ClientSecret, in.ClearClientSecret, "client_secret",
+		secret, sealed, fe, err := s.mergeSecret(secrets.SettingContext(keyOIDC, "client_secret"), old.ClientSecret, in.ClientSecret, in.ClearClientSecret, "client_secret",
 			movedTo("issuer_url", old.IssuerURL, in.IssuerURL))
 		if err != nil {
 			return err
@@ -436,7 +436,7 @@ func (s *Service) PutLDAP(ctx context.Context, in LDAPInput) (*LDAP, error) {
 		if _, _, err := s.loadDoc(ctx, tx, keyLDAP, &old, true); err != nil {
 			return err
 		}
-		password, sealed, fe, err := s.mergeSecret(old.BindPassword, in.BindPassword, in.ClearBindPassword, "bind_password",
+		password, sealed, fe, err := s.mergeSecret(secrets.SettingContext(keyLDAP, "bind_password"), old.BindPassword, in.BindPassword, in.ClearBindPassword, "bind_password",
 			movedTo("url", old.URL, in.URL))
 		if err != nil {
 			return err
@@ -478,11 +478,17 @@ func (s *Service) PutLDAP(ctx context.Context, in LDAPInput) (*LDAP, error) {
 // entered for, so the input must enter it again (or clear it). That, and a
 // secret submitted in sealed form (secrets.ErrSealedInput), are returned as
 // err (FieldErrors, 400), which the test endpoints do not ignore.
-func (s *Service) mergeSecret(stored, given string, clear bool, field, moved string) (plain, sealed string, fe FieldErrors, err error) {
+//
+// at is where the secret is stored (its secrets.Context): a new secret is
+// sealed for it, and the stored one must open there and is returned in the
+// current format (re-sealed when it is a legacy value). An input that names no
+// row yet (a new proxy without a name, which fails validation) gets no
+// sealed form.
+func (s *Service) mergeSecret(at secrets.Context, stored, given string, clear bool, field, moved string) (plain, sealed string, fe FieldErrors, err error) {
 	fe = FieldErrors{}
 	if secrets.IsSealed(strings.TrimSpace(given)) {
-		return "", "", fe, FieldErrors{field: "is a sealed value (" + secrets.Prefix + "...), which cannot be submitted; " +
-			"enter the secret itself, or leave it empty to keep the stored one"}
+		return "", "", fe, FieldErrors{field: "is a sealed value (" + secrets.Prefix + ".. or " + secrets.LegacyPrefix +
+			"..), which cannot be submitted; enter the secret itself, or leave it empty to keep the stored one"}
 	}
 	switch {
 	case clear:
@@ -495,10 +501,16 @@ func (s *Service) mergeSecret(stored, given string, clear bool, field, moved str
 			fe.add(field, errNoKeyring)
 			return given, "", fe, nil
 		}
-		sealed, err := s.seal(given)
+		if at.Row == "" {
+			return given, "", fe, nil
+		}
+		sealed, err := s.seal(at, given)
 		return given, sealed, fe, err
 	case stored != "":
-		plain, err := s.open(stored)
+		plain, err := s.open(at, stored)
+		if err == nil && secrets.IsSealed(stored) {
+			stored, err = s.opts.Keyring.Upgrade(at, stored)
+		}
 		if err != nil {
 			fe.add(field, "the stored value cannot be opened ("+err.Error()+"); enter it again")
 			return "", "", fe, nil
@@ -671,7 +683,7 @@ func (s *Service) effectiveSignIn(ctx context.Context) (auth.OIDCConfig, auth.LD
 		if _, found, err := s.loadDoc(ctx, s.pool, keyOIDC, &doc, false); err != nil {
 			return oidcCfg, ldapCfg, err
 		} else if found {
-			secret, err := s.open(doc.ClientSecret)
+			secret, err := s.open(secrets.SettingContext(keyOIDC, "client_secret"), doc.ClientSecret)
 			if err != nil {
 				s.log.ErrorContext(ctx, "settings: the stored OIDC client secret cannot be opened", "error", err)
 			}
@@ -683,7 +695,7 @@ func (s *Service) effectiveSignIn(ctx context.Context) (auth.OIDCConfig, auth.LD
 		if _, found, err := s.loadDoc(ctx, s.pool, keyLDAP, &doc, false); err != nil {
 			return oidcCfg, ldapCfg, err
 		} else if found {
-			password, err := s.open(doc.BindPassword)
+			password, err := s.open(secrets.SettingContext(keyLDAP, "bind_password"), doc.BindPassword)
 			if err != nil {
 				s.log.ErrorContext(ctx, "settings: the stored LDAP bind password cannot be opened", "error", err)
 			}
