@@ -126,6 +126,22 @@ whose node died is reclaimed once its lease expires; a job that runs for
 longer than the lease keeps it through heartbeats; a node whose listener
 connection is terminated reconnects and drops its caches.
 
+Observed on a v0.2.0 test cluster (3 nodes in containers on one host, one
+PostgreSQL 16, a shared blob directory, HAProxy polling `/readyz` every 2 s
+with a threshold of 2):
+
+| Scenario | Effect |
+|---|---|
+| Raw file uploaded through one node, read through the other two | Same bytes from every node. |
+| Image pushed through one node and through the load balancer (each request of the upload to a different node), pulled through another | Accepted and pulled. |
+| Repository changed on one node | The next read on another node returns the change (cache dropped by the event). |
+| Package published on one node, browser connected to another | The live event reaches the browser. |
+| System logs of a node read through another | Served over the signed node-to-node request. |
+| Task runs started through the load balancer | Spread over the nodes, all succeeded. |
+| Scheduler leader stopped | Another node took the lead within 16 to 22 s. With `drain_delay: 6s`, no request through the load balancer failed; with `0s`, 2 of 36 did. |
+| Every node's event listener connection terminated | All reconnected; invalidation kept working; `/readyz` stayed 200. |
+| All nodes restarted one after the other under traffic (`drain_delay: 6s`) | 138 of 138 requests succeeded. |
+
 ## Known limits
 
 - **Event delivery** between nodes is best effort: an event published while

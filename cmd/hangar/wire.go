@@ -737,7 +737,10 @@ func buildTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, queu
 		log.Warn("storage.gc.grace_period should exceed the docker upload session lifetime, or blobs of uploads "+
 			"still in progress can be collected", "grace_period", g, "docker_upload_ttl", docker.DefaultUploadTTL)
 	}
-	taskSvc := tasks.New(pool, tasks.Options{Jobs: queue, Events: deps.Events, Audit: deps.Audit, Logger: log})
+	// Runs record the node id other screens show (server.node_id), not the
+	// container host name.
+	nodeID, _ := nodeIdentity(cfg)
+	taskSvc := tasks.New(pool, tasks.Options{Jobs: queue, Events: deps.Events, Audit: deps.Audit, Logger: log, Node: nodeID})
 	cleanupSvc := cleanup.New(pool, cleanup.Options{Repos: deps.Repos, Components: deps.Components, Tasks: taskSvc,
 		Audit: deps.Audit, Logger: log})
 	dockerGC := dockergc.New(deps.Repos, deps.Components, deps.Blobs, log)

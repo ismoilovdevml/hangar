@@ -53,14 +53,22 @@ const DefaultIdleInTransactionTimeout = 5 * time.Minute
 
 const idleInTxParam = "idle_in_transaction_session_timeout"
 
+// jitParam is turned off on every connection unless the database URL sets
+// it. Hangar runs short OLTP statements; PostgreSQL's JIT compiles any plan
+// whose estimated cost passes jit_above_cost, and some of Hangar's
+// statements (recursive group closures) are estimated far above it while
+// touching a handful of rows: the repository list paid ~500 ms of LLVM
+// compilation for a 4 ms query.
+const jitParam = "jit"
+
 // Open connects a pool and verifies the connection with a ping.
 //
 // Every connection gets idle_in_transaction_session_timeout =
 // DefaultIdleInTransactionTimeout unless the server already sets one
 // (postgresql.conf, or a per-role or per-database setting), or the database
-// URL does (?idle_in_transaction_session_timeout=10min; 0 disables it). No
-// statement_timeout is set: migrations and garbage collection run long
-// statements legitimately.
+// URL does (?idle_in_transaction_session_timeout=10min; 0 disables it), and
+// jit = off unless the URL sets it (?jit=on). No statement_timeout is set:
+// migrations and garbage collection run long statements legitimately.
 func Open(ctx context.Context, url string, opts PoolOptions) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
@@ -81,16 +89,26 @@ func Open(ctx context.Context, url string, opts PoolOptions) (*pgxpool.Pool, err
 	if cfg.ConnConfig.RuntimeParams["application_name"] == "" {
 		cfg.ConnConfig.RuntimeParams["application_name"] = "hangar"
 	}
-	if _, set := cfg.ConnConfig.RuntimeParams[idleInTxParam]; !set {
-		// Set after connecting rather than as a startup parameter, which
-		// connection poolers such as PgBouncer refuse by default; and only
-		// where the server leaves it disabled, so its own setting wins.
+	// Session settings are applied after connecting rather than as startup
+	// parameters, which connection poolers such as PgBouncer refuse by
+	// default. A parameter in the database URL always wins.
+	_, idleSet := cfg.ConnConfig.RuntimeParams[idleInTxParam]
+	_, jitSet := cfg.ConnConfig.RuntimeParams[jitParam]
+	if !idleSet || !jitSet {
 		ms := strconv.FormatInt(DefaultIdleInTransactionTimeout.Milliseconds(), 10)
 		cfg.AfterConnect = func(ctx context.Context, c *pgx.Conn) error {
-			_, err := c.Exec(ctx, `SELECT set_config('`+idleInTxParam+`', $1, false)
+			if !idleSet {
+				// Only where the server leaves it disabled, so its own setting wins.
+				_, err := c.Exec(ctx, `SELECT set_config('`+idleInTxParam+`', $1, false)
 WHERE current_setting('`+idleInTxParam+`') = '0'`, ms)
-			if err != nil {
-				return fmt.Errorf("set %s: %w", idleInTxParam, err)
+				if err != nil {
+					return fmt.Errorf("set %s: %w", idleInTxParam, err)
+				}
+			}
+			if !jitSet {
+				if _, err := c.Exec(ctx, `SELECT set_config('`+jitParam+`', 'off', false)`); err != nil {
+					return fmt.Errorf("set %s: %w", jitParam, err)
+				}
 			}
 			return nil
 		}
