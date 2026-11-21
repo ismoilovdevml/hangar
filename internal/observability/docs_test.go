@@ -69,7 +69,9 @@ var reMetricLiteral = regexp.MustCompile(`"(hangar_[a-z0-9_]*[a-z0-9])"`)
 
 // notMetrics are hangar_* string literals in the code that are not metric
 // names (cookie names).
-var notMetrics = []string{"hangar_csrf", "hangar_session", "hangar_oidc_state"}
+var notMetrics = []string{"hangar_csrf", "hangar_session", "hangar_oidc_state",
+	"hangar_events", "hangar_jobs", // PostgreSQL LISTEN/NOTIFY channels (internal/events)
+}
 
 // TestEveryMetricInTheCodeIsKnown keeps knownMetrics complete: every metric
 // name written in cmd/ or internal/ must be one of the collectors above, so a
