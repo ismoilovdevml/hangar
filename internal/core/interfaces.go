@@ -324,13 +324,17 @@ type Subscription interface {
 	Unsubscribe() error
 }
 
-// EventBus distributes events between components and nodes.
+// EventBus distributes events between components and nodes. Delivery is
+// best effort: subscribers on the publishing node always receive an event;
+// other nodes receive it unless their connection to the bus is down, and
+// then receive EventResync once it is back.
 type EventBus interface {
 	// Publish sends e. ID and At are filled if empty.
 	Publish(ctx context.Context, e Event) error
-	// Subscribe calls h for every event whose type matches pattern
-	// (NATS-style tokens separated by '.', '*' = one token, '>' = rest),
-	// e.g. "component.*" or ">". h runs on a bus goroutine; keep it short.
+	// Subscribe calls h for every event whose type matches pattern (tokens
+	// separated by '.', '*' = one token, '>' = the rest), e.g.
+	// "component.*" or ">", and for every EventResync. h runs on a
+	// goroutine of the subscription, one event at a time; keep it short.
 	Subscribe(ctx context.Context, pattern string, h func(context.Context, Event)) (Subscription, error)
 }
 
@@ -338,7 +342,9 @@ type EventBus interface {
 // backoff up to the queue's max attempts. Handlers must be idempotent.
 type JobHandler func(ctx context.Context, job Job) error
 
-// JobQueue is the durable background work queue (NATS JetStream).
+// JobQueue is the durable background work queue shared by every node (a
+// PostgreSQL table). A job runs on one node at a time; the job of a node
+// that dies runs again on another.
 type JobQueue interface {
 	// Enqueue stores j durably and returns its ID. Type is required.
 	Enqueue(ctx context.Context, j Job) (string, error)

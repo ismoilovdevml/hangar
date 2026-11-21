@@ -23,10 +23,8 @@ Alert-specific runbooks are in [operations/runbooks.md](../operations/runbooks.m
 | `storage.gc.grace_period ... must be longer than 24h` | Grace period too short for Docker upload sessions. | Use more than `24h` (default `48h`). |
 | `bootstrap.admin_user and bootstrap.admin_password must be set together` | Only one of the two set. | Set both or neither. |
 | A `security.secret_key` error | Key not 32 bytes in base64 or hex. | `openssl rand -base64 32`. |
-| `connect nats: ... i/o timeout` | External NATS unreachable or not ready yet. | Check `nats.url`, network policy, NATS pods. The Helm chart waits for its bundled NATS in an init container. |
-| `create job stream: ... stream is offline` | The NATS server holding the job stream is down or restarting (single-replica stream). | Bring the NATS server back; Hangar restarts until the stream is available. Set `nats.replicas: 3` on a 3-node cluster ([high-availability.md](high-availability.md#job-queue-replicas)). |
-| `update job stream HANGAR_JOBS (replicas 1 to 5): ... no suitable peers for placement` | `nats.replicas` is higher than the number of NATS servers. | Lower `nats.replicas` to at most the cluster size. |
-| `nats.replicas 3: embedded NATS is a single server` | Replicas above 1 with `nats.embedded: true`. | Use 1, or an external NATS cluster. |
+| `event listener: ... context deadline exceeded` at start | The node cannot open its event listener connection to PostgreSQL within 10 s. | Check `max_connections` and that the connection is session-mode (LISTEN does not work through PgBouncer in transaction pooling mode). |
+| `deprecated configuration: nats.* (HANGAR_NATS_*) is ignored` | A v0.1 configuration still sets `nats.*`. | Harmless; remove the `nats` settings and the NATS server. |
 | Start hangs after `waiting for the migration lock: another process is applying migrations` | Another node or `hangar migrate up` is migrating the same database. | Wait; it continues when that migration finishes. If nothing should be migrating, find the session holding the lock (connected to Hangar's database and schema): `SELECT a.pid, a.application_name, a.client_addr, a.backend_start FROM pg_locks l JOIN pg_stat_activity a USING (pid) WHERE l.locktype = 'advisory' AND l.granted AND l.objsubid = 1 AND ((l.classid::bigint << 32) \| l.objid::bigint) = hashtextextended('hangar.migrations:' \|\| current_schema(), 0)`. |
 | `metrics.auth=bearer needs metrics.bearer_token ...` | `metrics.auth` set without its credentials (or shorter than 16 characters). | Set `HANGAR_METRICS_BEARER_TOKEN` (or `metrics.bearer_token_file`); for `basic`, the username and password. |
 | Helm: `execution error ... config.server.base_url is required` (or another chart message) | The chart validates values before rendering. | Follow the message; [install-helm.md](install-helm.md). |
@@ -38,9 +36,9 @@ The body names the failing check:
 
 | Check | Typical causes |
 |---|---|
-| `database` | PostgreSQL down, `max_connections` exhausted (`nodes x (max_conns + 16)`), credentials changed. |
+| `database` | PostgreSQL down, `max_connections` exhausted (`nodes x (max_conns + 17)`), credentials changed. |
 | `blobstore` | S3 endpoint unreachable, wrong credentials or bucket, bucket policy missing an action; filesystem full or read-only. |
-| `eventbus` | NATS connection lost, JetStream disabled or lost quorum. |
+| `eventbus` | The event listener connection to PostgreSQL is down (it reconnects on its own); PostgreSQL unreachable or out of connections. |
 
 During shutdown a node answers 503 on purpose (draining).
 
@@ -80,4 +78,4 @@ During shutdown a node answers 503 on purpose (draining).
 - Tracing: `observability.tracing.enabled: true` with an OTLP collector, then
   follow the `trace_id` from the log line ([monitoring.md](../operations/monitoring.md)).
 - Configuration as loaded: Hangar logs `starting hangar` with the address,
-  base URL, storage kind and NATS mode; secrets are never logged.
+  base URL and storage kind; secrets are never logged.

@@ -5,7 +5,7 @@ how to operate it afterwards.
 
 | Page | Read it for |
 |---|---|
-| [Requirements and sizing](requirements.md) | PostgreSQL, blob storage, NATS, CPU, memory, disk, network |
+| [Requirements and sizing](requirements.md) | PostgreSQL, blob storage, CPU, memory, disk, network |
 | [Install with Docker Compose](install-compose.md) | One host: Hangar, PostgreSQL, MinIO and Caddy with automatic TLS |
 | [Install with Helm](install-helm.md) | Kubernetes, two or more replicas, external PostgreSQL and S3 |
 | [Install the binary with systemd](install-binary.md) | VMs and bare metal without containers |

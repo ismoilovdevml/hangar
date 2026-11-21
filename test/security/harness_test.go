@@ -168,7 +168,6 @@ func start() (*harness, func(), error) {
 		"HANGAR_SERVER_ADDR="+addr,
 		"HANGAR_SERVER_BASE_URL="+h.base,
 		"HANGAR_STORAGE_FS_PATH="+filepath.Join(tmp, "blobs"),
-		"HANGAR_NATS_DATA_DIR="+filepath.Join(tmp, "nats"),
 		"HANGAR_LOG_FORMAT=text",
 		"HANGAR_LOG_LEVEL=warn",
 		"HANGAR_BOOTSTRAP_ADMIN_USER="+adminUser,

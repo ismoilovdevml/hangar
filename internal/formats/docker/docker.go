@@ -136,19 +136,23 @@ func (f *Format) newHandler(deps core.Deps) *handler {
 	if deps.Events != nil {
 		// A changed remote URL or credentials may serve names the old one did not.
 		_, err := deps.Events.Subscribe(context.Background(), "repository.*", func(_ context.Context, e core.Event) {
-			if e.Repository != "" {
+			switch {
+			case e.Type == core.EventResync: // events may have been missed
+				h.unknown.forgetAll()
+			case e.Repository != "":
 				h.unknown.forget(e.Repository)
 			}
-			{
-				h.conns.invalidate()
-			}
+			h.conns.invalidate()
 		})
 		if err != nil {
 			log.Warn("docker: cannot watch repository changes", "err", err)
 		}
 		// Publishes, deletes, quarantines and releases change what is blocked.
 		_, err = deps.Events.Subscribe(context.Background(), "component.*", func(_ context.Context, e core.Event) {
-			if e.Repository != "" {
+			switch {
+			case e.Type == core.EventResync:
+				h.quarantine.forgetAll()
+			case e.Repository != "":
 				h.quarantine.forget(e.Repository)
 			}
 		})

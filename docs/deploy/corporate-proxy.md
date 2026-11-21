@@ -9,7 +9,7 @@ define one or more named proxies, make one the platform default, and let
 each proxy repository inherit the default, pick another proxy or connect
 directly.
 
-Nothing else in Hangar makes outbound requests (PostgreSQL, S3 and NATS
+Nothing else in Hangar makes outbound requests (PostgreSQL and S3
 connections do not use the HTTP proxy settings).
 
 With image scanning, the Trivy server and the scan adapter download

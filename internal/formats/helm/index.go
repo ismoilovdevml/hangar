@@ -402,6 +402,7 @@ type viewCache struct {
 
 	mu    sync.Mutex
 	gens  map[string]uint64
+	epoch uint64                 // added to every generation; invalidateAll bumps it
 	views map[string]*cachedView // by repository name
 }
 
@@ -433,13 +434,13 @@ func (c *viewCache) get(repo *core.Repository, key string) (*view, bool) {
 func (c *viewCache) generation(repo string) uint64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.gens[repo]
+	return c.gens[repo] + c.epoch
 }
 
 func (c *viewCache) put(gen uint64, repo *core.Repository, key string, v *view) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.ttl <= 0 || c.gens[repo.Name] != gen {
+	if c.ttl <= 0 || c.gens[repo.Name]+c.epoch != gen {
 		return
 	}
 	c.views[repo.Name] = &cachedView{repoID: repo.ID, typ: repo.Type, key: key, v: v, at: c.now()}
@@ -465,14 +466,26 @@ func (c *viewCache) disable() {
 	c.views = map[string]*cachedView{}
 }
 
-// watch subscribes the cache to the events that change what a repository lists.
+// invalidateAll drops every view, also those being built.
+func (c *viewCache) invalidateAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.epoch++
+	c.views = map[string]*cachedView{}
+}
+
+// watch subscribes the cache to the events that change what a repository
+// lists. An event may have been missed (core.EventResync): everything goes.
 func (c *viewCache) watch(bus core.EventBus) error {
 	if bus == nil {
 		return nil
 	}
 	for _, pattern := range []string{"component.*", "repository.*"} {
 		if _, err := bus.Subscribe(context.Background(), pattern, func(_ context.Context, e core.Event) {
-			if e.Repository != "" {
+			switch {
+			case e.Type == core.EventResync:
+				c.invalidateAll()
+			case e.Repository != "":
 				c.invalidate(e.Repository, e.Type)
 			}
 		}); err != nil {

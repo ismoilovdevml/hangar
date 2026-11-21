@@ -17,8 +17,8 @@ You need PostgreSQL 16 or newer. Hangar applies its schema migrations itself.
 
 ### Option A: from source
 
-Requires Go (see `go.mod`). Hangar embeds NATS and stores blobs on disk under
-`./data` by default.
+Requires Go (see `go.mod`). Hangar needs only PostgreSQL and stores blobs on disk
+under `./data` by default.
 
 ```bash
 export HANGAR_DATABASE_URL='postgres://hangar:hangar@localhost:5432/hangar?sslmode=disable'
@@ -58,7 +58,6 @@ file. Settings you will want early:
 | `server.base_url` | `HANGAR_SERVER_BASE_URL` | `http://localhost:8080` |
 | `database.url` | `HANGAR_DATABASE_URL` | (required) |
 | `storage.fs.path` | `HANGAR_STORAGE_FS_PATH` | `./data/blobs` |
-| `nats.data_dir` | `HANGAR_NATS_DATA_DIR` | `./data/nats` |
 | `security.secret_key` | `HANGAR_SECRET_KEY` | (none) |
 | `docker.token_key` | `HANGAR_DOCKER_TOKEN_KEY` | random per process |
 | `bootstrap.admin_user` | `HANGAR_BOOTSTRAP_ADMIN_USER` | (none) |

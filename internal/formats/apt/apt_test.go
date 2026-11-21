@@ -63,6 +63,8 @@ func newFixture(t *testing.T) *fixture {
 	env.AuthZ.Grant("bob", "repo:*:read")
 	env.AuthZ.Grant("system", "repo:*:admin")
 	f.signer = newSigner(t)
+	// Index regeneration after deletes elsewhere is a job: run it.
+	env.Jobs.RunInline = true
 	f.h = formats.NewHandler(env.Deps(), apt.New(f.signer))
 	return f
 }

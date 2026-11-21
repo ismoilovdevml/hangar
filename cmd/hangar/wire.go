@@ -71,13 +71,7 @@ import (
 // section of the configuration. Repositories reference it by this name.
 const DefaultBlobStore = core.DefaultBlobStore
 
-// Background job types besides blobgc.JobType.
-const (
-	jobAuthPurge       = "auth.purge_expired"
-	jobAuditPartitions = "audit.ensure_partitions"
-)
-
-// jobMaxAttempts is how often a failing job runs before it is dropped.
+// jobMaxAttempts is how often a failing job runs before it is dead.
 const jobMaxAttempts = 5
 
 // app is a fully wired server. close releases everything in reverse order of
@@ -102,7 +96,7 @@ func (a *app) onClose(f func()) { a.closers = append(a.closers, f) }
 // minute the adapter client adds, and two platforms (amd64, arm64) are the
 // common case. Every other job finishes well within the queue's default.
 func jobTimeout(sc config.Scanner) time.Duration {
-	return max(events.DefaultAckWait, 2*(sc.Timeout+time.Minute))
+	return max(events.DefaultVisibility, 2*(sc.Timeout+time.Minute))
 }
 
 func (a *app) close() {
@@ -218,22 +212,28 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		}
 	}()
 
-	// Event bus and job queue.
-	rt, err := events.Open(ctx, events.Options{
-		Embedded: cfg.NATS.Embedded, DataDir: cfg.NATS.DataDir, Listen: cfg.NATS.Listen, URL: cfg.NATS.URL,
-	}, log)
+	// Event bus and job queue, both on PostgreSQL. Every job handler is
+	// instrumented by the queue.
+	nodeID, hostname := nodeIdentity(cfg)
+	rt, err := events.Open(ctx, pool, events.Options{Queue: events.QueueOptions{
+		Node: nodeID, MaxAttempts: jobMaxAttempts, Timeout: jobTimeout(cfg.Scanner),
+		Instrument: func(typ string, h core.JobHandler) core.JobHandler {
+			return observability.InstrumentJob(metrics, typ, jobMaxAttempts, h)
+		},
+	}}, log)
 	if err != nil {
 		return nil, err
 	}
 	a.onClose(rt.Close)
-	bus := events.NewBus(rt.Conn, log)
-	queue, err := events.NewQueue(ctx, rt.JS, events.QueueOptions{
-		MaxAttempts: jobMaxAttempts, Replicas: cfg.NATS.Replicas, Timeout: jobTimeout(cfg.Scanner),
-	}, log)
-	if err != nil {
-		return nil, err
-	}
-	if err := metrics.RegisterJobQueue(rt.JS, rt.Conn, log); err != nil {
+	bus, queue := rt.Bus, rt.Queue
+	if err := metrics.RegisterJobQueue(func(ctx context.Context) (map[string]observability.JobCounts, error) {
+		counts, err := queue.Counts(ctx)
+		out := make(map[string]observability.JobCounts, len(counts))
+		for t, c := range counts {
+			out[t] = observability.JobCounts(c)
+		}
+		return out, err
+	}, rt.Listener, log); err != nil {
 		return nil, err
 	}
 
@@ -511,16 +511,22 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	hooks.Start(ctx)
 	a.onClose(hooks.Close)
 
-	// System status and System logs: this node's checks, its heartbeat and
-	// its log buffer, served to the other nodes over NATS.
+	// System status and System logs: this node's checks, its heartbeat with
+	// its URL, and its log buffer, served to the other nodes over HTTP
+	// (requests signed with the cluster node key).
 	storeStates := sysmon.NewStoreStates()
-	mon := newMonitor(monitorDeps{cfg: cfg, pool: pool, health: hc, nats: rt, blobStore: blobs.ByName,
+	dbCfg := pool.Config().ConnConfig
+	selfURL := nodeURL(ctx, cfg, hostname, dbCfg.Host, dbCfg.Port)
+	mon := newMonitor(monitorDeps{cfg: cfg, pool: pool, health: hc, bus: rt, url: selfURL, blobStore: blobs.ByName,
 		upstreams: healthReporter, stores: storeStates, oidc: signIn.Provider, auth: authSvc, started: started, log: log})
-	sysLogs := sysmon.NewLogs(mon.NodeID(), logRing, rt.Conn, log)
-	if err := sysLogs.Serve(); err != nil {
+	nodeKey, err := sysmon.LoadNodeKey(ctx, pool)
+	if err != nil {
 		return nil, err
 	}
+	sysLogs := sysmon.NewLogs(mon.NodeID(), logRing, &sysmon.Peers{NodeURL: sysmon.NodeURLs(pool), Key: nodeKey}, log)
 	a.onClose(sysLogs.Close)
+	internal := http.NewServeMux()
+	internal.Handle(sysmon.NodeLogsPath, sysLogs.Handler())
 	monCtx, stopMon := context.WithCancel(context.WithoutCancel(ctx))
 	monDone := make(chan struct{})
 	go func() { mon.Run(monCtx); close(monDone) }()
@@ -611,6 +617,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		API: restAPI, Formats: reg, Deps: formatDeps,
 		FormatMiddleware: []func(http.Handler) http.Handler{httpapi.DownloadSessions(authSvc)},
 		Security:         sharedSecurityOptions(cfg, pool, log),
+		Internal:         internal,
 	})
 
 	// First administrator: from the environment, or generated.
@@ -632,28 +639,13 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		GracePeriod: cfg.Storage.GC.GracePeriod, BatchSize: cfg.Storage.GC.BatchSize,
 		TempMaxAge: cfg.Storage.GC.TempMaxAge, Logger: log,
 	})
-	handlers := map[string]core.JobHandler{
-		blobgc.JobType: collector.Handler(),
-		jobAuthPurge:   func(ctx context.Context, _ core.Job) error { return authSvc.PurgeExpired(ctx) },
-		jobAuditPartitions: func(ctx context.Context, _ core.Job) error {
-			_, err := audit.EnsurePartitions(ctx, pool, 2)
-			return err
-		},
-	}
-	for typ, h := range handlers {
-		if err := queue.Handle(typ, observability.InstrumentJob(metrics, typ, jobMaxAttempts, h)); err != nil {
-			return nil, err
-		}
-	}
 	// Vulnerability scanning: arrival scans and repository scans run as jobs,
 	// the periodic rescan as a task.
 	scanner, err := buildScanner(cfg, pool, clients, deps, dockerFormat, outbox)
 	if err != nil {
 		return nil, err
 	}
-	if err := scanner.HandleJobs(queue, func(typ string, h core.JobHandler) core.JobHandler {
-		return observability.InstrumentJob(metrics, typ, jobMaxAttempts, h)
-	}); err != nil {
+	if err := scanner.HandleJobs(queue, nil); err != nil {
 		return nil, err
 	}
 	// Stop executing jobs before the services they use are closed.
@@ -706,10 +698,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	})
 	restAPI.Tasks, restAPI.Cleanup = taskSvc, cleanupSvc
 
-	sched, err := scheduler.New(pool, queue, scheduler.Options{Logger: log, Tickers: []scheduler.Ticker{taskSvc}, OnLeader: mon.SetLeader})
-	if err != nil {
-		return nil, err
-	}
+	sched := scheduler.New(pool, scheduler.Options{Logger: log, Tickers: []scheduler.Ticker{taskSvc}, OnLeader: mon.SetLeader})
 	schedCtx, stopSched := context.WithCancel(context.WithoutCancel(ctx))
 	schedDone := make(chan struct{})
 	go func() { sched.Run(schedCtx); close(schedDone) }()

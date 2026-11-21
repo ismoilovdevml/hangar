@@ -261,10 +261,11 @@ features).
 | `hangar_jobs_total` | counter | `type`, `result` | Executions on this node: `success`, `retry` (failed, will run again), `failed` (failed on its last attempt and was dropped). |
 | `hangar_job_duration_seconds` | histogram | `type` | Execution time. |
 | `hangar_job_queue_wait_seconds` | histogram | `type` | Time from enqueue to the first attempt. |
-| `hangar_job_queue_depth` | gauge | `type` | Jobs waiting or running in the cluster-wide JetStream work queue (same value on every node). |
-| `hangar_job_queue_up` | gauge | | 1 if the job stream could be read on this scrape. |
-| `hangar_nats_connected` | gauge | | 1 while connected to NATS. |
-| `hangar_nats_reconnects_total` | counter | | Reconnections to NATS. |
+| `hangar_job_queue_depth` | gauge | `type` | Jobs waiting or running in the cluster-wide job queue (the `jobs` table; same value on every node). |
+| `hangar_job_queue_dead` | gauge | `type` | Jobs that failed their last attempt, kept 7 days for inspection. |
+| `hangar_job_queue_up` | gauge | | 1 if the job queue could be read on this scrape. |
+| `hangar_event_listener_connected` | gauge | | 1 while this node listens for events (its dedicated PostgreSQL connection is up). |
+| `hangar_event_listener_reconnects_total` | counter | | Reconnections of the event listener; each one drops the node's caches. |
 
 ### Authentication and audit
 
@@ -337,7 +338,7 @@ The API is `GET /api/v1/system/logs` (privilege `system:cluster:admin`):
 
 | Parameter | Meaning |
 |---|---|
-| `node` | Node id from `/system/nodes`; default the node that answers. Other nodes are asked over NATS. |
+| `node` | Node id from `/system/nodes`; default the node that answers. Other nodes are asked over HTTP at their `server.node_url`, signed with the cluster node key. |
 | `level` | Minimum level: `debug`, `info`, `warn`, `error`. |
 | `q` | Case-insensitive text in the message or attributes. |
 | `since` | RFC 3339 time or a duration back from now (`15m`). |
@@ -381,7 +382,7 @@ node, each checklist has the node's name, role and state above it.
 |---|---|---|---|---|
 | Database | Ping time | The readiness ping answers | Every pooled connection is in use, or the ping takes over 500 ms | The ping fails |
 | Blob storage | Least free space of the filesystem stores, else the slowest ping | Every store answers its ping | A filesystem store has under 10 % and under 5 GiB free | A store cannot be opened or reached |
-| Event bus | Readiness ping time | Connected and JetStream answers | | Disconnected or JetStream unavailable |
+| Event bus | Readiness ping time | Listening; job counts readable | Job counts unreadable | Listener disconnected |
 | Task scheduler | `leader` or `follower` | Task runs can be read | A scheduled task is more than an hour late, or runs cannot be read | |
 | Search index | Probe search time | The full-text index is valid and a probe search is fast | The index is missing or invalid, or the probe takes over 500 ms | The probe fails |
 | Sign-in | `ok`, `failing` or `local` | OIDC and LDAP worked at their last use (or are not configured) | A provider failed; local accounts still sign in | |
@@ -432,7 +433,7 @@ Hangar does not send trace headers to proxy remotes. Jobs start new traces.
 | `hangar-formats.json` | Which formats carry the traffic, fail or are slow? How many bytes go in and out? How well do proxy caches work? |
 | `hangar-storage.json` | How full are the blob stores and their filesystems? Are blob store operations failing or slow? |
 | `hangar-upstreams.json` | Which proxy remotes are offline, blocked or slow? How often do fetches fail and how long do they take? Which repository, and which host behind it, fails, retries or keeps clients waiting? |
-| `hangar-jobs.json` | Is the job queue draining? Which jobs fail or take long? Is NATS connected? |
+| `hangar-jobs.json` | Is the job queue draining? Which jobs fail or take long? Is every node listening for events? |
 | `hangar-auth.json` | Is someone guessing passwords? Are accounts being locked? Is the audit trail complete? Are routing rules turning away internal package names, and which rules fire? |
 
 The dashboards use `$__rate_interval`, so set the data source's scrape interval

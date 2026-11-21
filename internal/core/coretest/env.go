@@ -50,6 +50,8 @@ func NewEnv(t testing.TB) *Env {
 		w = io.Discard
 	}
 	e.Logger = slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	// Debounced jobs started with Jobs.RunInline end before the test does.
+	t.Cleanup(e.Jobs.Wait)
 	e.AuthZ.Repos = e.Repos
 	e.Repos.AuthZ, e.Repos.Audit, e.Repos.Events = e.AuthZ, e.Audit, e.Events
 	e.Components.AuthZ, e.Components.Audit, e.Components.Events = e.AuthZ, e.Audit, e.Events

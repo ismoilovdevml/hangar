@@ -47,9 +47,6 @@ storage:
   kind: fs
   fs:
     path: /var/lib/hangar/blobs     # or kind: s3 with storage.s3.*
-nats:
-  embedded: true
-  data_dir: /var/lib/hangar/nats
 database:
   migrate_on_start: true            # safe on several nodes too (advisory lock)
 ```
@@ -107,8 +104,9 @@ sign in, and remove the bootstrap lines from `hangar.env`
 Run the same binary and configuration on each node with:
 
 - `storage.kind: s3` (or a shared filesystem mounted at the same path),
-- `nats.embedded: false`, `nats.url` pointing at a 3-node NATS cluster
-  with JetStream, and `nats.replicas: 3`,
+- the same PostgreSQL database (it also carries events and the job queue),
+- nodes reachable from each other on `server.addr` (`server.node_url` when
+  the default address is not the right one),
 - the same `HANGAR_SECRET_KEY` and `HANGAR_DOCKER_TOKEN_KEY` everywhere,
 - migrations once per upgrade with `hangar migrate up`, or
   `database.migrate_on_start: true` on every node (an advisory lock lets one

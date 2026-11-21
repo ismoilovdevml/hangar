@@ -6,7 +6,7 @@
 //	hangar-healthcheck                     # GET http://127.0.0.1:<port>/readyz
 //	hangar-healthcheck -path /healthz      # liveness only
 //	hangar-healthcheck -url http://127.0.0.1:9000/readyz
-//	hangar-healthcheck -url http://nats:8222/healthz -wait 5m   # wait for a dependency
+//	hangar-healthcheck -url http://minio:9000/minio/health/live -wait 5m   # wait for a dependency
 //
 // The port comes from HANGAR_SERVER_ADDR (default ":8080"), so the probe
 // follows the listen address the server itself uses.

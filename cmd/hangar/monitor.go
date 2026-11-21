@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,10 +27,12 @@ import (
 
 // monitorDeps are the services the System status checks look at.
 type monitorDeps struct {
-	cfg       config.Config
-	pool      *pgxpool.Pool
-	health    *health.Checker
-	nats      *events.Runtime
+	cfg    config.Config
+	pool   *pgxpool.Pool
+	health *health.Checker
+	bus    *events.Runtime
+	// url is where the other nodes reach this one (nodeURL).
+	url       string
 	blobStore func(ctx context.Context, name string) (core.BlobStore, error)
 	upstreams *proxy.HealthReporter
 	// stores receives each blob store's probe; the blob store and
@@ -44,8 +47,8 @@ type monitorDeps struct {
 	log     *slog.Logger
 }
 
-// nodeIdentity returns this node's id, host name and own URL.
-func nodeIdentity(cfg config.Config) (id, hostname, url string) {
+// nodeIdentity returns this node's id and host name.
+func nodeIdentity(cfg config.Config) (id, hostname string) {
 	hostname, err := os.Hostname()
 	if err != nil || hostname == "" {
 		hostname = "localhost"
@@ -54,17 +57,56 @@ func nodeIdentity(cfg config.Config) (id, hostname, url string) {
 	if id == "" {
 		id = hostname
 	}
+	return id, hostname
+}
+
+// localAddrTimeout bounds resolving the database host to pick this node's
+// address.
+const localAddrTimeout = 2 * time.Second
+
+// nodeURL returns where the other nodes reach this one: server.node_url,
+// else server.addr when it names a host, else the local address this node
+// reaches the database from (the address on the network the nodes share:
+// the pod IP in Kubernetes), with the port of server.addr. The host name
+// is the last resort; it often does not resolve on the other nodes.
+func nodeURL(ctx context.Context, cfg config.Config, hostname, dbHost string, dbPort uint16) string {
+	if cfg.Server.NodeURL != "" {
+		return strings.TrimSuffix(cfg.Server.NodeURL, "/")
+	}
 	host, port := server.ListenHostPort(cfg.Server.Addr)
 	if host == "" || host == "0.0.0.0" || host == "::" {
 		host = hostname
+		if ip := localAddrTowards(ctx, dbHost, dbPort); ip != "" {
+			host = ip
+		}
 	}
-	url = "http://" + net.JoinHostPort(host, strconv.Itoa(port))
-	return id, hostname, url
+	return "http://" + net.JoinHostPort(host, strconv.Itoa(port))
+}
+
+// localAddrTowards returns the local IP address of the route to host:port,
+// or "" (a Unix socket, or no route). Connecting a UDP socket sends nothing.
+func localAddrTowards(ctx context.Context, host string, port uint16) string {
+	if host == "" || strings.HasPrefix(host, "/") {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(ctx, localAddrTimeout)
+	defer cancel()
+	c, err := (&net.Dialer{}).DialContext(ctx, "udp", net.JoinHostPort(host, strconv.Itoa(int(port))))
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = c.Close() }()
+	a, ok := c.LocalAddr().(*net.UDPAddr)
+	if !ok || a.IP.IsUnspecified() {
+		return ""
+	}
+	return a.IP.String()
 }
 
 // newMonitor builds the System status monitor with every subsystem check.
 func newMonitor(d monitorDeps) *sysmon.Monitor {
-	id, hostname, url := nodeIdentity(d.cfg)
+	id, hostname := nodeIdentity(d.cfg)
+	url := d.url
 	ready := sysmon.FromChecker(d.health)
 	var m *sysmon.Monitor
 	checks := []sysmon.Check{
@@ -72,7 +114,14 @@ func newMonitor(d monitorDeps) *sysmon.Monitor {
 		sysmon.BlobStoresCheck(func(ctx context.Context) ([]sysmon.BlobStore, error) {
 			return listBlobStores(ctx, d.pool)
 		}, d.blobStore, ready, d.stores),
-		sysmon.EventBusCheck(d.nats.Conn, d.nats.JS, d.cfg.NATS.Embedded, ready),
+		sysmon.EventBusCheck(d.bus.Listener, func(ctx context.Context) (sysmon.JobTotals, error) {
+			counts, err := d.bus.Queue.Counts(ctx)
+			var t sysmon.JobTotals
+			for _, c := range counts {
+				t.Queued, t.Running, t.Dead = t.Queued+c.Queued, t.Running+c.Running, t.Dead+c.Dead
+			}
+			return t, err
+		}, ready),
 		sysmon.SchedulerCheck(d.pool, func() (bool, time.Time) { return m.Leader() }),
 		sysmon.SearchCheck(d.pool),
 		sysmon.LiveAuthCheck(func() []sysmon.AuthProvider { return authProviders(d.oidc, directoryOf(d.auth)) }),

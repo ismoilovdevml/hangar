@@ -82,8 +82,20 @@ func (b *EventBus) Published(types ...string) []core.Event {
 	return out
 }
 
-// MatchSubject reports whether a dot-separated subject matches a NATS-style
-// pattern ('*' matches one token, '>' matches one or more trailing tokens).
+// Resync delivers core.EventResync to every subscriber, as the real bus does
+// after it may have missed events.
+func (b *EventBus) Resync(ctx context.Context) {
+	b.mu.Lock()
+	subs := slices.Clone(b.subs)
+	b.mu.Unlock()
+	e := core.Event{ID: newID(), Type: core.EventResync, At: time.Now().UTC()}
+	for _, s := range subs {
+		s.h(ctx, e)
+	}
+}
+
+// MatchSubject reports whether a dot-separated subject matches a pattern
+// ('*' matches one token, '>' matches one or more trailing tokens).
 func MatchSubject(pattern, subject string) bool {
 	pt := strings.Split(pattern, ".")
 	st := strings.Split(subject, ".")
@@ -107,6 +119,7 @@ type JobQueue struct {
 	jobs     []core.Job
 	handlers map[string]core.JobHandler
 	errs     []error
+	wg       sync.WaitGroup // debounced jobs running (Wait)
 }
 
 var _ core.JobQueue = (*JobQueue)(nil)
@@ -115,14 +128,20 @@ var _ core.JobQueue = (*JobQueue)(nil)
 func NewJobQueue() *JobQueue { return &JobQueue{handlers: map[string]core.JobHandler{}} }
 
 // Enqueue implements core.JobQueue, including Key-based deduplication.
+// Debounced jobs (core.Job.Debounce) merge only into a job of the same key
+// that has not run: with RunInline and a handler, each one runs.
 func (q *JobQueue) Enqueue(ctx context.Context, j core.Job) (string, error) {
 	if j.Type == "" {
 		return "", fmt.Errorf("job without type: %w", core.ErrInvalid)
 	}
+	if j.Debounce > 0 && j.Key == "" {
+		return "", fmt.Errorf("debounced job without key: %w", core.ErrInvalid)
+	}
 	q.mu.Lock()
-	if j.Key != "" {
+	inline := q.RunInline && q.handlers[j.Type] != nil
+	if j.Key != "" && (j.Debounce == 0 || !inline) {
 		for _, old := range q.jobs {
-			if old.Type == j.Type && old.Key == j.Key {
+			if old.Type == j.Type && old.Key == j.Key && (old.Debounce > 0) == (j.Debounce > 0) {
 				q.mu.Unlock()
 				return old.ID, nil
 			}
@@ -136,15 +155,34 @@ func (q *JobQueue) Enqueue(ctx context.Context, j core.Job) (string, error) {
 	q.jobs = append(q.jobs, j)
 	h := q.handlers[j.Type]
 	q.mu.Unlock()
-	if q.RunInline && h != nil {
+	if !q.RunInline || h == nil {
+		return j.ID, nil
+	}
+	run := func(ctx context.Context) {
 		if err := h(ctx, j); err != nil {
 			q.mu.Lock()
 			q.errs = append(q.errs, err)
 			q.mu.Unlock()
 		}
 	}
+	if j.Debounce > 0 {
+		// Debounced jobs run later in the real queue, on a worker: never
+		// on the goroutine that enqueued them (it may hold a lock the job
+		// takes). Wait waits for them.
+		q.wg.Add(1)
+		go func() {
+			defer q.wg.Done()
+			run(context.WithoutCancel(ctx))
+		}()
+		return j.ID, nil
+	}
+	run(ctx)
 	return j.ID, nil
 }
+
+// Wait waits for the debounced jobs started by Enqueue. NewEnv registers it
+// as a test cleanup.
+func (q *JobQueue) Wait() { q.wg.Wait() }
 
 // Handle implements core.JobQueue.
 func (q *JobQueue) Handle(jobType string, h core.JobHandler) error {

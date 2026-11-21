@@ -9,7 +9,7 @@ number below with `test/load/run.sh <scenario>`.
 | | |
 |---|---|
 | Machine | Apple M4 Pro, 12 cores, 24 GiB RAM, internal SSD, macOS 26 (Darwin 25.6) |
-| Hangar | one node, `database.max_conns: 20`, filesystem blob store on the same SSD, embedded NATS, log level `warn` |
+| Hangar | one node, `database.max_conns: 20`, filesystem blob store on the same SSD, embedded NATS (v0.1), log level `warn` |
 | PostgreSQL | 17.11 on the same machine, default settings |
 | Load generator | k6 2.3.0 on the same machine, 32 virtual users, 30 s per scenario, keep-alive connections, bearer token auth |
 | Data | the scenario fixtures plus 12 seeded repositories with 99 996 components and 999 960 assets (`cmd/hangar-seed`) |
@@ -135,11 +135,12 @@ Other changes:
 - **Advisory locks add connections**: each node opens up to 16 lock
   connections beyond `database.max_conns`, created on demand and closed after
   one idle minute. Size PostgreSQL's `max_connections` for
-  `nodes x (max_conns + 16)` plus other clients.
+  `nodes x (max_conns + 17)` plus other clients.
 - **Cache staleness after a lost event**: a repository change can be served
   stale for up to 30 s, and generated Maven metadata for up to 1 minute, if a
-  node misses the NATS event. Events are plain NATS publish/subscribe, so a
-  node that is disconnected from NATS while the change happens misses it.
+  node misses the event. Events are PostgreSQL LISTEN/NOTIFY: a node whose
+  listener connection is down while the change happens misses it, and drops
+  all its caches when it reconnects.
 
 ## Tuning
 

@@ -34,25 +34,39 @@ func wantErr(t *testing.T, err error, parts ...string) {
 	}
 }
 
-func TestNATSReplicas(t *testing.T) {
-	cfg, err := loadWith(t, nil)
-	if err != nil || cfg.NATS.Replicas != 1 {
-		t.Fatalf("default replicas = %d, %v", cfg.NATS.Replicas, err)
+// nats.* settings of v0.1 configurations still load, are not validated
+// and produce exactly one deprecation warning.
+func TestNATSDeprecated(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		env      map[string]string
+		warnings int
+	}{
+		{"not set", nil, 0},
+		{"external cluster", map[string]string{"HANGAR_NATS_EMBEDDED": "false", "HANGAR_NATS_URL": "nats://nats:4222", "HANGAR_NATS_REPLICAS": "3"}, 1},
+		{"embedded data dir", map[string]string{"HANGAR_NATS_DATA_DIR": "/var/lib/hangar/nats"}, 1},
+		{"formerly invalid replicas", map[string]string{"HANGAR_NATS_REPLICAS": "9"}, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := loadWith(t, tc.env)
+			if err != nil {
+				t.Fatalf("load: %v", err)
+			}
+			if w := cfg.DeprecationWarnings(); len(w) != tc.warnings {
+				t.Fatalf("warnings = %q, want %d", w, tc.warnings)
+			}
+		})
 	}
-	cluster := map[string]string{"HANGAR_NATS_EMBEDDED": "false", "HANGAR_NATS_URL": "nats://nats:4222"}
-	for _, n := range []string{"1", "3", "5"} {
-		cluster["HANGAR_NATS_REPLICAS"] = n
-		if _, err := loadWith(t, cluster); err != nil {
-			t.Errorf("replicas %s on a cluster: %v", n, err)
-		}
+}
+
+func TestNodeURL(t *testing.T) {
+	if _, err := loadWith(t, map[string]string{"HANGAR_SERVER_NODE_URL": "http://10.0.0.5:8080"}); err != nil {
+		t.Fatalf("valid node_url: %v", err)
 	}
-	for _, n := range []string{"0", "6", "-1"} {
-		cluster["HANGAR_NATS_REPLICAS"] = n
-		_, err := loadWith(t, cluster)
-		wantErr(t, err, "nats.replicas "+n, "want 1 to 5")
+	for _, bad := range []string{"10.0.0.5:8080", "ftp://host", "http://user:pass@host:8080"} {
+		_, err := loadWith(t, map[string]string{"HANGAR_SERVER_NODE_URL": bad})
+		wantErr(t, err, "server.node_url")
 	}
-	_, err = loadWith(t, map[string]string{"HANGAR_NATS_REPLICAS": "3"})
-	wantErr(t, err, "embedded NATS is a single server")
 }
 
 func TestShutdownSettings(t *testing.T) {

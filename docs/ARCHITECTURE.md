@@ -10,9 +10,9 @@
                      │  hangar node ×N │  single Go binary: format handlers, API, UI, jobs
                      └───┬────┬────┬───┘
          PostgreSQL ◄────┘    │    └────► S3 / MinIO / FS  (blobs, content-addressed)
-         (metadata,           │
-          audit, jobs)   NATS JetStream (events, job queue)
-                              │
+         (metadata, audit,    │
+          job queue, events   │
+          via LISTEN/NOTIFY)  │
         Trivy server + scan adapter (optional) · OSV advisories · OIDC/LDAP
 ```
 
@@ -23,11 +23,14 @@
   ([vulnerabilities.md](guides/vulnerabilities.md#design-how-hangar-talks-to-trivy)).
 
 - Nodes are stateless. They keep small in-memory caches (repository lookups,
-  authorization decisions, generated metadata) that NATS events invalidate. A
-  per-node on-disk blob cache and edge replication are planned
-  ([roadmap](ROADMAP.md)).
+  authorization decisions, generated metadata) that events invalidate. Events
+  travel through PostgreSQL LISTEN/NOTIFY; a node whose listener connection
+  was lost drops its caches when it is back. Background work is a jobs table
+  claimed with `FOR UPDATE SKIP LOCKED` under a lease the running node
+  renews ([ADR 0011](adr/0011-postgresql-events-and-jobs.md)). A per-node
+  on-disk blob cache and edge replication are planned ([roadmap](ROADMAP.md)).
 - Leader (via PostgreSQL advisory lock) starts scheduled task runs (cron schedules in `tasks`); any node executes runs, heart-beating progress, and takes over runs whose node went silent (resuming from checkpoints).
-- Single-node mode: embedded NATS, filesystem blobs, one PostgreSQL — `docker compose up` works.
+- Single-node mode: filesystem blobs and one PostgreSQL, nothing else — `docker compose up` works.
 
 ## Request path (download)
 1. Router matches format mount (`/v2/` for OCI, `/repository/<repo>/...` for others, plus vanity hosts like `cr.acme.io`).
@@ -73,7 +76,7 @@ every format receives. In-memory fakes for all of them live in
 
 | Path | Served by |
 |---|---|
-| `/healthz`, `/readyz`, `/metrics` | operations (liveness; DB + blob store + NATS readiness; Prometheus) |
+| `/healthz`, `/readyz`, `/metrics` | operations (liveness; DB + blob store + event listener readiness; Prometheus) |
 | `/api/v1/...` | REST API (`api/openapi.yaml`) |
 | `/repository/{repo}/...` | format handlers; the dispatcher resolves the repository first |
 | `/v2/...` | OCI (docker format, root mount) |
@@ -131,7 +134,7 @@ replication_targets, replication_state  -- created by a migration, unused until 
   YAML over the REST API; ownership for `--prune` is kept in resource labels
   (`/resource-labels`). See [guides/config-as-code.md](guides/config-as-code.md).
   A Terraform provider does not exist yet.
-- Health: `/healthz` (liveness), `/readyz` (DB, blob store, NATS reachable), `/metrics`.
+- Health: `/healthz` (liveness), `/readyz` (DB, blob store, event listener connected), `/metrics`.
 
 ## Security
 - TLS everywhere; HSTS on UI.

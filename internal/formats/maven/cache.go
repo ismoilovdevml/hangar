@@ -36,6 +36,7 @@ type metaCache struct {
 	mu     sync.Mutex
 	size   int
 	gens   map[string]uint64                // by repository name
+	epoch  uint64                           // added to every generation; invalidateAll bumps it
 	byRepo map[string]map[string]*metaEntry // repository name -> path -> entry
 }
 
@@ -64,13 +65,13 @@ func (c *metaCache) get(repo *core.Repository, path string) (*entity, bool) {
 func (c *metaCache) generation(repo string) uint64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.gens[repo]
+	return c.gens[repo] + c.epoch
 }
 
 func (c *metaCache) put(gen uint64, repo *core.Repository, path string, e *entity) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.ttl <= 0 || c.gens[repo.Name] != gen {
+	if c.ttl <= 0 || c.gens[repo.Name]+c.epoch != gen {
 		return
 	}
 	m := c.byRepo[repo.Name]
@@ -119,14 +120,27 @@ func (c *metaCache) invalidate(repo string) {
 	delete(c.byRepo, repo)
 }
 
-// watch subscribes the cache to the events that change hosted content.
+// invalidateAll drops every document, also those being generated.
+func (c *metaCache) invalidateAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.epoch++
+	c.size = 0
+	c.byRepo = map[string]map[string]*metaEntry{}
+}
+
+// watch subscribes the cache to the events that change hosted content. An
+// event may have been missed (core.EventResync): everything goes.
 func (c *metaCache) watch(bus core.EventBus) error {
 	if bus == nil {
 		return nil
 	}
 	for _, pattern := range []string{"component.*", core.EventAssetPublished, core.EventAssetDeleted, "repository.*"} {
 		if _, err := bus.Subscribe(context.Background(), pattern, func(_ context.Context, e core.Event) {
-			if e.Repository != "" {
+			switch {
+			case e.Type == core.EventResync:
+				c.invalidateAll()
+			case e.Repository != "":
 				c.invalidate(e.Repository)
 			}
 		}); err != nil {

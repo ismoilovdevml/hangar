@@ -73,6 +73,18 @@ func newHub(ctx context.Context, bus core.EventBus, render func(context.Context,
 }
 
 func (h *hub) publish(ctx context.Context, e core.Event) {
+	if e.Type == core.EventResync {
+		// Events of other nodes may have been missed: end every stream, and
+		// forget the replay window, so clients reload instead of resuming
+		// across the gap.
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		h.ring = nil
+		for c := range h.clients {
+			c.drop()
+		}
+		return
+	}
 	ev := h.render(ctx, e)
 	h.mu.Lock()
 	defer h.mu.Unlock()

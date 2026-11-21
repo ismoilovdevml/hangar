@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"net/url"
 	"os"
@@ -329,7 +328,7 @@ func TestStoreDownStops(t *testing.T) {
 	}
 }
 
-func TestHandlerAndScanOrphans(t *testing.T) {
+func TestRunStoreAndScanOrphans(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	d := f.put("old", 3*day)
@@ -337,15 +336,11 @@ func TestHandlerAndScanOrphans(t *testing.T) {
 	orphan := f.put("orphan", 3*day)
 
 	c := New(f.pool, f.stores(f.store), Options{GracePeriod: day})
-	payload, _ := json.Marshal(Request{StoreID: f.storeID})
-	if err := c.Handler()(ctx, core.Job{ID: "j1", Type: JobType, Payload: payload}); err != nil {
-		t.Fatalf("handler: %v", err)
+	if _, err := c.Run(ctx, Request{StoreID: f.storeID}); err != nil {
+		t.Fatalf("run: %v", err)
 	}
 	if f.hasRow(d) {
-		t.Fatal("handler did not collect")
-	}
-	if err := c.Handler()(ctx, core.Job{Type: JobType, Payload: []byte("{")}); !errors.Is(err, core.ErrInvalid) {
-		t.Fatalf("bad payload = %v", err)
+		t.Fatal("run did not collect")
 	}
 	if _, err := c.Run(ctx, Request{StoreID: "00000000-0000-0000-0000-000000000000"}); !errors.Is(err, core.ErrNotFound) {
 		t.Fatalf("unknown store = %v", err)

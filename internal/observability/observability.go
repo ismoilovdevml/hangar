@@ -12,7 +12,7 @@
 //   - InstrumentBlobStores, InstrumentUpstreams, InstrumentJob: latency,
 //     outcome and spans of blob store operations, proxy fetches and jobs
 //   - QueryTracer: pgx query spans and latency
-//   - collectors for the database pool, job queue, NATS, audit queue,
+//   - collectors for the database pool, job queue, event listener, audit queue,
 //     readiness, proxy circuit breakers and blob store usage
 //
 // Every metric is documented in docs/operations/monitoring.md; a test keeps

@@ -146,6 +146,13 @@ func (c *nameCache) forget(repo string) {
 	}
 }
 
+// forgetAll drops every entry (repository events may have been missed).
+func (c *nameCache) forgetAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	clear(c.entries)
+}
+
 // errNameUnknownCached is returned while a name is in the nameCache.
 var errNameUnknownCached = fmt.Errorf("remote recently answered that it does not serve this name: %w", core.ErrNotFound)
 

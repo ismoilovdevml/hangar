@@ -15,5 +15,5 @@
 //     fmt.Errorf("...: %w", err). Callers test them with errors.Is.
 //
 // In-memory implementations of every interface live in package coretest, so
-// format packages can be unit-tested without PostgreSQL, S3 or NATS.
+// format packages can be unit-tested without PostgreSQL or S3.
 package core

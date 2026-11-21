@@ -2,136 +2,219 @@ package events
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"sync/atomic"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/service/repository/pgtest"
 )
 
-func openEmbedded(t *testing.T) *Runtime {
+// node opens a runtime on its own pool to the database (and schema) of
+// pool, as a separate hangar process would.
+func node(t *testing.T, pool *pgxpool.Pool, opts Options) *Runtime {
 	t.Helper()
-	rt, err := Open(context.Background(), Options{Embedded: true, DataDir: t.TempDir()}, nil)
+	p, err := pgxpool.NewWithConfig(context.Background(), pool.Config())
 	if err != nil {
+		t.Fatal(err)
+	}
+	rt, err := Open(context.Background(), p, opts, nil)
+	if err != nil {
+		p.Close()
 		t.Fatalf("Open: %v", err)
 	}
-	t.Cleanup(rt.Close)
+	t.Cleanup(func() { rt.Close(); p.Close() })
 	return rt
 }
 
-func TestBusPublishSubscribe(t *testing.T) {
-	rt := openEmbedded(t)
-	ctx := context.Background()
-	if err := rt.Ping(ctx); err != nil {
-		t.Fatalf("Ping: %v", err)
+// recorder collects the events a subscription receives.
+type recorder struct {
+	mu  sync.Mutex
+	got []core.Event
+}
+
+func (r *recorder) handle(_ context.Context, e core.Event) {
+	r.mu.Lock()
+	r.got = append(r.got, e)
+	r.mu.Unlock()
+}
+
+func (r *recorder) of(typ string) []core.Event {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []core.Event
+	for _, e := range r.got {
+		if e.Type == typ {
+			out = append(out, e)
+		}
 	}
-	bus := NewBus(rt.Conn, nil)
-	got := make(chan core.Event, 4)
-	sub, err := bus.Subscribe(ctx, "component.*", func(_ context.Context, e core.Event) { got <- e })
+	return out
+}
+
+func subscribe(t *testing.T, bus core.EventBus, pattern string) *recorder {
+	t.Helper()
+	r := &recorder{}
+	sub, err := bus.Subscribe(context.Background(), pattern, r.handle)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = sub.Unsubscribe() }()
+	t.Cleanup(func() { _ = sub.Unsubscribe() })
+	return r
+}
 
-	if err := bus.Publish(ctx, core.Event{Type: core.EventTaskProgress}); err != nil {
-		t.Fatal(err)
-	}
-	if err := bus.Publish(ctx, core.Event{Type: core.EventComponentPublished, Repository: "npm-hosted"}); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case e := <-got:
-		if e.Type != core.EventComponentPublished || e.Repository != "npm-hosted" || e.ID == "" || e.At.IsZero() {
-			t.Fatalf("event = %+v", e)
+func eventually(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("no event received")
+		time.Sleep(10 * time.Millisecond)
 	}
-	select {
-	case e := <-got:
-		t.Fatalf("unexpected event %s (pattern should not match)", e.Type)
-	case <-time.After(100 * time.Millisecond):
+}
+
+// An event reaches the publishing node once (in process, not again through
+// its own notification) and every other node once; patterns filter.
+func TestBusAcrossNodes(t *testing.T) {
+	pool := pgtest.Pool(t)
+	a, b := node(t, pool, Options{}), node(t, pool, Options{})
+	onA, onB := subscribe(t, a.Bus, "component.*"), subscribe(t, b.Bus, "component.*")
+	allB := subscribe(t, b.Bus, ">")
+	ctx := context.Background()
+
+	if err := a.Bus.Publish(ctx, core.Event{Type: core.EventTaskProgress}); err != nil {
+		t.Fatal(err)
 	}
-	if err := bus.Publish(ctx, core.Event{}); !errors.Is(err, core.ErrInvalid) {
+	if err := a.Bus.Publish(ctx, core.Event{Type: core.EventComponentPublished, Repository: "npm-hosted"}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the event on node b", func() bool { return len(onB.of(core.EventComponentPublished)) == 1 })
+	eventually(t, "every event on node b", func() bool { return len(allB.of(core.EventTaskProgress)) == 1 })
+	// Give a duplicate (a's own notification) time to arrive.
+	time.Sleep(200 * time.Millisecond)
+	for name, r := range map[string]*recorder{"a": onA, "b": onB} {
+		got := r.of(core.EventComponentPublished)
+		if len(got) != 1 || got[0].Repository != "npm-hosted" || got[0].ID == "" || got[0].At.IsZero() {
+			t.Errorf("node %s received %+v, want the event once", name, got)
+		}
+		if n := len(r.of(core.EventTaskProgress)); n != 0 {
+			t.Errorf("node %s: pattern component.* received %d task events", name, n)
+		}
+	}
+	if err := a.Bus.Publish(ctx, core.Event{}); !errors.Is(err, core.ErrInvalid) {
 		t.Fatalf("typeless event = %v", err)
 	}
 }
 
-func TestQueueRunsRetriesAndDedups(t *testing.T) {
-	rt := openEmbedded(t)
-	ctx := context.Background()
-	q, err := NewQueue(ctx, rt.JS, QueueOptions{MaxAttempts: 3}, nil)
-	if err != nil {
+// Events above the NOTIFY payload limit travel through event_payloads.
+func TestBusLargeEvent(t *testing.T) {
+	pool := pgtest.Pool(t)
+	a, b := node(t, pool, Options{}), node(t, pool, Options{})
+	onB := subscribe(t, b.Bus, core.EventComponentPublished)
+	big, _ := json.Marshal(map[string]string{"readme": strings.Repeat("x", 20000)})
+	if err := a.Bus.Publish(context.Background(), core.Event{Type: core.EventComponentPublished, Data: big}); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(q.Close)
-
-	var calls atomic.Int32
-	done := make(chan core.Job, 1)
-	if err := q.Handle("test.flaky", func(_ context.Context, j core.Job) error {
-		if calls.Add(1) == 1 {
-			return errors.New("transient")
-		}
-		done <- j
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := q.Handle("test.flaky", func(context.Context, core.Job) error { return nil }); !errors.Is(err, core.ErrAlreadyExists) {
-		t.Fatalf("double Handle = %v", err)
-	}
-
-	id, err := q.Enqueue(ctx, core.Job{Type: "test.flaky", Key: "k1", Payload: []byte(`{"n":1}`)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := q.Enqueue(ctx, core.Job{Type: "test.flaky", Key: "k1"}); err != nil {
-		t.Fatal(err)
-	}
-	// Deduplication happens when the job is stored: the second Enqueue with
-	// the same key adds nothing to the stream.
-	info, err := q.stream.Info(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.State.LastSeq != 1 {
-		t.Fatalf("stream holds %d jobs after two enqueues with one key, want 1", info.State.LastSeq)
-	}
-	select {
-	case j := <-done:
-		if j.ID != id || j.Attempt != 2 || string(j.Payload) != `{"n":1}` {
-			t.Fatalf("job = %+v", j)
-		}
-	case <-time.After(15 * time.Second):
-		t.Fatalf("job not retried; calls=%d", calls.Load())
-	}
-	// Once the stream is empty nothing is left to deliver, so the call count
-	// is final: one failure plus one retry.
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		info, err := q.stream.Info(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if info.State.Msgs == 0 {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("job still in the stream after it succeeded: %+v", info.State)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if n := calls.Load(); n != 2 {
-		t.Fatalf("handler calls = %d, want 2 (dedup by key)", n)
-	}
-	if _, err := q.Enqueue(ctx, core.Job{Type: "bad type"}); !errors.Is(err, core.ErrInvalid) {
-		t.Fatalf("bad type = %v", err)
+	eventually(t, "the large event", func() bool { return len(onB.of(core.EventComponentPublished)) == 1 })
+	if got := onB.of(core.EventComponentPublished)[0].Data; string(got) != string(big) {
+		t.Fatalf("payload of %d bytes arrived as %d bytes", len(big), len(got))
 	}
 }
 
-func TestRetryDelay(t *testing.T) {
-	if retryDelay(1) != 5*time.Second || retryDelay(2) != 10*time.Second || retryDelay(30) != 10*time.Minute {
-		t.Fatal("retryDelay schedule changed")
+// terminateListeners kills the listener sessions of the schema of pool, as
+// a database restart or a network cut would.
+func terminateListeners(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	ctx := context.Background()
+	var schema string
+	if err := pool.QueryRow(ctx, `SELECT current_schema()`).Scan(&schema); err != nil {
+		t.Fatal(err)
+	}
+	ch, _ := Channels(schema)
+	var n int
+	err := pool.QueryRow(ctx, `SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity
+WHERE application_name = $1 AND query LIKE '%' || $2 || '%'`, ListenerApplicationName, strings.TrimPrefix(ch, EventChannel)).Scan(&n)
+	if err != nil || n == 0 {
+		t.Fatalf("terminated %d listeners: %v", n, err)
+	}
+}
+
+// After the listener connection is lost and back, every subscription is
+// told to resync (whatever its pattern), and events flow again.
+func TestBusResyncAfterReconnect(t *testing.T) {
+	pool := pgtest.Pool(t)
+	a, b := node(t, pool, Options{}), node(t, pool, Options{})
+	onB := subscribe(t, b.Bus, "repository.*")
+	terminateListeners(t, pool)
+	eventually(t, "resync on node b", func() bool { return len(onB.of(core.EventResync)) >= 1 })
+	if b.Listener.Reconnects() == 0 {
+		t.Fatal("reconnect not counted")
+	}
+	if err := b.Ping(context.Background()); err != nil {
+		t.Fatalf("ping after reconnect: %v", err)
+	}
+	eventually(t, "node a listening again", a.Listener.Connected)
+	if err := a.Bus.Publish(context.Background(), core.Event{Type: core.EventRepositoryUpdated, Repository: "r"}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "events after the reconnect", func() bool { return len(onB.of(core.EventRepositoryUpdated)) == 1 })
+}
+
+// A subscriber that cannot keep up loses events and is told to resync.
+func TestBusSlowSubscriberResyncs(t *testing.T) {
+	pool := pgtest.Pool(t)
+	a := node(t, pool, Options{})
+	release := make(chan struct{})
+	var once sync.Once
+	r := &recorder{}
+	sub, err := a.Bus.Subscribe(context.Background(), "task.*", func(ctx context.Context, e core.Event) {
+		once.Do(func() { <-release })
+		r.handle(ctx, e)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sub.Unsubscribe() }()
+	for range subBuffer + 10 {
+		a.Bus.dispatch(core.Event{Type: core.EventTaskProgress})
+	}
+	close(release)
+	eventually(t, "a resync", func() bool { return len(r.of(core.EventResync)) == 1 })
+	eventually(t, "the queued events", func() bool { return len(r.of(core.EventTaskProgress)) >= subBuffer })
+}
+
+func TestMatchSubject(t *testing.T) {
+	for _, tc := range []struct {
+		pattern, subject string
+		want             bool
+	}{
+		{"component.*", "component.published", true},
+		{"component.*", "component", false},
+		{"component.*", "component.a.b", false},
+		{">", "task.progress", true},
+		{"repository.>", "repository.cache_invalidated", true},
+		{"repository.>", "repository", false},
+		{"task.progress", "task.progress", true},
+		{"task.progress", "task.finished", false},
+	} {
+		if got := matchSubject(tc.pattern, tc.subject); got != tc.want {
+			t.Errorf("matchSubject(%q, %q) = %v", tc.pattern, tc.subject, got)
+		}
+	}
+}
+
+func TestChannelNames(t *testing.T) {
+	if e, j := Channels("public"); e != EventChannel || j != JobChannel {
+		t.Fatalf("public = %s, %s", e, j)
+	}
+	e1, _ := Channels("tenant_a")
+	e2, _ := Channels("tenant_b")
+	if e1 == e2 || !strings.HasPrefix(e1, EventChannel+"_") || len(e1) > 63 {
+		t.Fatalf("schema channels %q, %q", e1, e2)
 	}
 }

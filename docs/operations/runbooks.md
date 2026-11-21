@@ -60,10 +60,11 @@ ready.
 - `blobstore`: for `fs`, the directory must exist and be writable by the hangar
   user (a full or read-only filesystem fails the check). For `s3`, check
   credentials, bucket policy, endpoint reachability and certificate.
-- `eventbus`: with external NATS check the cluster through its monitoring
-  port (`curl http://<nats>:8222/healthz?js-enabled-only=true`);
-  `hangar_nats_connected` shows the node's connection. With embedded NATS check that `nats.data_dir` is
-  writable and not full.
+- `eventbus`: the node's event listener (one long-lived PostgreSQL
+  session, `application_name = hangar-listener`) is down; it reconnects on
+  its own with backoff. `hangar_event_listener_connected` shows it; a
+  database that refuses new connections (`max_connections`) or a
+  transaction-pooling PgBouncer in front of it keeps it down.
 
 ## HangarHigh5xxRate
 
@@ -172,13 +173,13 @@ boundary, restart the leader node to schedule it promptly.
 **Impact.** Background work (scans, cleanup) runs late.
 
 **Diagnose.** Jobs dashboard: is anything executing (*Executions by result*)?
-`hangar_job_queue_up` and `hangar_nats_connected` show whether nodes can reach
-the queue. Repeated `retry` results mean jobs keep failing; long durations mean
+`hangar_job_queue_up` shows whether nodes can read the queue; `SELECT type,
+state, count(*) FROM jobs GROUP BY 1, 2` shows what waits, runs and died. Repeated `retry` results mean jobs keep failing; long durations mean
 workers are slow.
 
-**Fix.** Restore NATS connectivity or the failing dependency. Make sure at
-least one node runs (every node executes jobs). If a bug enqueues duplicates,
-fix it before purging the stream.
+**Fix.** Restore the failing dependency. Make sure at least one node runs
+(every node executes jobs). If a bug enqueues duplicates, fix it before
+deleting the queued rows of that type.
 
 ## HangarBlobStoreQuotaNearLimit
 
@@ -201,8 +202,7 @@ soft quota or move repositories to another store.
 **Meaning.** The filesystem holding an `fs` blob store has had less than 10%
 free space for 15 minutes.
 
-**Impact.** When it fills, every upload and proxy cache fill fails, and the
-embedded NATS store may fail too if it shares the disk.
+**Impact.** When it fills, every upload and proxy cache fill fails.
 
 **Diagnose.** `df -h <storage.fs.path>`; the Storage dashboard → *Filesystem
 free*. Check whether other data (logs, temporary files under the store's

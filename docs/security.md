@@ -232,8 +232,9 @@ every change made since.
 - [ ] Keep `http.allow_private_networks` as short as possible: list the
       internal mirrors by host name or exact CIDR, never whole private ranges.
       Avoid `insecure_skip_verify` on remotes; use `ca_bundle` instead.
-- [ ] Expose only the HTTP port. Do not expose the embedded NATS listener
-      (`nats.listen`) or PostgreSQL to clients; restrict `/metrics` at the
+- [ ] Expose only the HTTP port. Do not expose PostgreSQL to clients;
+      `/internal/` serves only signed requests from other nodes and may be
+      blocked at the reverse proxy; restrict `/metrics` at the
       reverse proxy if it should not be public.
 - [ ] Use TLS to PostgreSQL (`sslmode=verify-full`) and to S3 when they are
       on another host; encrypt database backups — they contain password

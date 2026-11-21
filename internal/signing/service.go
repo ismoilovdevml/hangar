@@ -98,9 +98,16 @@ func New(opts Options) *Service {
 	return &Service{opts: opts, log: log, cache: map[string]cachedKey{}}
 }
 
-// Watch drops cached keys when another node changes them.
+// Watch drops cached keys when another node changes them, and every cached
+// key when such a change may have been missed (core.EventResync).
 func (s *Service) Watch(ctx context.Context, bus core.EventBus) (core.Subscription, error) {
 	return bus.Subscribe(ctx, EventKeyChanged, func(_ context.Context, e core.Event) {
+		if e.Type == core.EventResync {
+			s.mu.Lock()
+			clear(s.cache)
+			s.mu.Unlock()
+			return
+		}
 		s.forget(e.Subject)
 	})
 }

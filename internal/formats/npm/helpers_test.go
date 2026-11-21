@@ -44,6 +44,8 @@ func newServer(t *testing.T) *testServer {
 	ts := &testServer{env: env, srv: srv, url: "http://" + srv.Listener.Addr().String(), repos: map[string]*core.Repository{}}
 	env.BaseURL = ts.url
 	ts.format = npm.New()
+	// Package state cleanup after deletes elsewhere is a job: run it.
+	env.Jobs.RunInline = true
 	srv.Config.Handler = formats.NewHandler(env.Deps(), ts.format)
 	srv.Start()
 	t.Cleanup(srv.Close)

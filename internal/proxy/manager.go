@@ -240,6 +240,12 @@ func (m *Manager) Invalidate(name string) {
 func (m *Manager) Watch(ctx context.Context, bus core.EventBus) (core.Subscription, error) {
 	return bus.Subscribe(ctx, "repository.*", func(_ context.Context, e core.Event) {
 		switch e.Type {
+		case core.EventResync:
+			// An update, delete or purge may have been missed: every
+			// upstream is rebuilt from the stored configuration on next use.
+			m.mu.Lock()
+			clear(m.entries)
+			m.mu.Unlock()
 		case core.EventRepositoryUpdated, core.EventRepositoryDeleted:
 			m.Invalidate(e.Repository)
 		case core.EventRepositoryCacheInvalidated:

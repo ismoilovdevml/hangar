@@ -1,7 +1,7 @@
 {
   "uid": "hangar-jobs",
   "title": "Hangar / Jobs",
-  "description": "Background jobs, the JetStream job queue and the event bus.",
+  "description": "Background jobs, the job queue and the event bus (PostgreSQL).",
   "tags": [
     "hangar"
   ],
@@ -192,8 +192,8 @@
     },
     {
       "type": "stat",
-      "title": "NATS connected",
-      "description": "Nodes connected to NATS.",
+      "title": "Listening for events",
+      "description": "Nodes whose event listener connection to PostgreSQL is up.",
       "id": 4,
       "datasource": {
         "type": "prometheus",
@@ -211,7 +211,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(hangar_nats_connected{instance=~\"$instance\"})",
+          "expr": "sum(hangar_event_listener_connected{instance=~\"$instance\"})",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -243,7 +243,7 @@
     {
       "type": "stat",
       "title": "Queue readable",
-      "description": "Nodes that could read the job stream on the last scrape.",
+      "description": "Nodes that could read the job queue on the last scrape.",
       "id": 5,
       "datasource": {
         "type": "prometheus",
@@ -292,8 +292,8 @@
     },
     {
       "type": "stat",
-      "title": "NATS reconnects (1h)",
-      "description": "Reconnections to NATS in the last hour.",
+      "title": "Event listener reconnects (1h)",
+      "description": "Event listener reconnections in the last hour; each drops the node caches.",
       "id": 6,
       "datasource": {
         "type": "prometheus",
@@ -311,7 +311,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(hangar_nats_reconnects_total{instance=~\"$instance\"}[1h]))",
+          "expr": "sum(increase(hangar_event_listener_reconnects_total{instance=~\"$instance\"}[1h]))",
           "legendFormat": "",
           "refId": "A",
           "instant": true,

@@ -24,10 +24,10 @@ func TestReadiness(t *testing.T) {
 		t.Fatalf("healthy: %d %+v", code, rep)
 	}
 
-	c.Add("nats", func(context.Context) error { return errors.New("not connected") })
+	c.Add("eventbus", func(context.Context) error { return errors.New("not connected") })
 	c.Add("slow", func(ctx context.Context) error { <-ctx.Done(); time.Sleep(time.Second); return nil })
 	code, rep := serve()
-	if code != 503 || rep.Checks["nats"].Error != "not connected" || rep.Checks["slow"].Status != StatusFail {
+	if code != 503 || rep.Checks["eventbus"].Error != "not connected" || rep.Checks["slow"].Status != StatusFail {
 		t.Fatalf("failing: %d %+v", code, rep)
 	}
 
@@ -48,13 +48,13 @@ func TestReadiness(t *testing.T) {
 func TestRunOne(t *testing.T) {
 	c := New(20 * time.Millisecond)
 	c.Add("db", func(context.Context) error { return nil })
-	c.Add("nats", func(context.Context) error { return errors.New("not connected") })
+	c.Add("eventbus", func(context.Context) error { return errors.New("not connected") })
 	c.Add("slow", func(ctx context.Context) error { <-ctx.Done(); return nil })
 	if r, ok := c.RunOne(context.Background(), "db"); !ok || r.Status != StatusOK {
 		t.Fatalf("db = %+v %v", r, ok)
 	}
-	if r, _ := c.RunOne(context.Background(), "nats"); r.Status != StatusFail || r.Error != "not connected" {
-		t.Fatalf("nats = %+v", r)
+	if r, _ := c.RunOne(context.Background(), "eventbus"); r.Status != StatusFail || r.Error != "not connected" {
+		t.Fatalf("eventbus = %+v", r)
 	}
 	if r, _ := c.RunOne(context.Background(), "slow"); r.Status != StatusFail || r.LatencyMS < 20 {
 		t.Fatalf("slow = %+v", r)
