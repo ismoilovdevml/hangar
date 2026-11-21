@@ -23,11 +23,16 @@ Wallpaper file: `web/public/lake-dawn.jpg` (2400×1500).
   --hairline: rgba(30,43,58,0.07);
   --track: rgba(30,43,58,0.08);
 
+  /* washes: a lighter layer on glass (hover tints, chips, inputs, menus); never a raw rgba in a page */
+  --wash-faint: rgba(255,255,255,0.35); --wash-hover: rgba(255,255,255,0.5);
+  --wash: rgba(255,255,255,0.6); --wash-strong: rgba(255,255,255,0.8);
+  --field-bg: rgba(255,255,255,0.9); --popover-bg: rgba(255,255,255,0.94);
+
   /* text */
   --ink-strong: #172433;  /* page titles */
   --ink: #1E2B3A;         /* body */
   --ink-2: #3E4C5C;       /* secondary */
-  --ink-3: #5A6878;       /* labels, meta — min 4.5:1 on glass */
+  --ink-3: #556373;       /* labels, meta — min 4.5:1 on glass and on the bare wall */
 
   /* brand */
   --lake: #2F6A8A;        /* primary buttons, active marks */
@@ -82,6 +87,8 @@ JetBrains Mono (`@fontsource`), no external font requests in production.
 - **Panel**: `background: var(--glass-bg); backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-border); box-shadow: var(--shadow-panel); border-radius: var(--r-panel)`.
 - **Primary button**: lake bg, white text, `--shadow-primary`, 44–48 px tall.
 - **Secondary button**: `--glass-bg-strong`, 1px hairline border, ink text.
+- **Ghost button**: transparent, ink-2 text, `--surface-muted` on hover; for row and toolbar actions that should not compete with the content (Waive, Browse).
+- **Dark button** (sign-in): `--button-dark-bg` / `--button-dark-ink`, darkest ink at dawn, lightest at dusk.
 - **Segmented control**: glass track; active segment white + `--shadow-raised` + lake-ink text.
 - **Nav item**: icon (18 px, 1.7 stroke, `currentColor`) + label; active = white bg, raised shadow, lake-ink, 700.
 - **Pill**: 12/600, `--r-pill`, tinted bg + matching ink (status, type, severity).
@@ -99,4 +106,4 @@ JetBrains Mono (`@fontsource`), no external font requests in production.
 - Icon-only buttons have `aria-label`.
 - Respect `prefers-reduced-motion`; transitions ≤ 150 ms, opacity/transform only.
 - Fallback when `backdrop-filter` is unsupported: `--glass-bg` at 0.9 opacity.
-- Dark mode (later milestone): "dusk" wallpaper variant, same structure.
+- Dark mode: "dusk" (`<html data-theme="dusk">`, no toggle yet) redefines the same tokens. Stylesheets take surface colours from tokens, never `rgba(255,255,255,…)` or hex; `web/src/styles/tokens.test.ts` checks WCAG AA for every text/surface pair in both themes and that no stylesheet adds a literal colour.

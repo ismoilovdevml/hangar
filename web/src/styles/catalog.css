@@ -12,7 +12,7 @@
 
 
 /* Secondary-weight destructive button (the red filled one is for confirming). */
-.button--danger-outline { background: var(--glass-bg-strong); color: var(--bad-ink); border: 1px solid rgba(178, 59, 59, .35); }
+.button--danger-outline { background: var(--glass-bg-strong); color: var(--bad-ink); border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent); }
 .button--danger-outline:hover { background: var(--bad-bg); color: var(--bad-ink); }
 .button--danger-outline:disabled { opacity: .5; cursor: not-allowed; }
 .button--danger-outline:disabled:hover { background: var(--glass-bg-strong); }

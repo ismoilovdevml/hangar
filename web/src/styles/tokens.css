@@ -27,18 +27,32 @@
   --bad-hover: #FBEDED;      /* hovered or focused destructive menu item */
   --shadow-menu: 0 2px 4px rgba(23, 36, 51, .08), 0 24px 48px -12px rgba(23, 36, 51, .35);
   --scrim: rgba(23, 36, 51, 0.32);
+  /* washes: a lighter layer on glass, from a hover tint to an input's fill */
+  --wash-faint: rgba(255, 255, 255, 0.35);   /* quiet rows, hovered result */
+  --wash-hover: rgba(255, 255, 255, 0.5);    /* hovered nav item, tab, sortable header */
+  --wash: rgba(255, 255, 255, 0.6);          /* chips, choices, small cards on glass */
+  --wash-strong: rgba(255, 255, 255, 0.8);   /* hovered cards, the sign-in card */
+  --field-bg: rgba(255, 255, 255, 0.9);      /* inputs and select buttons */
+  --popover-bg: rgba(255, 255, 255, 0.94);   /* listboxes and menus */
+  --control-border-hover: rgba(30, 43, 58, 0.22);
+  --scroll-shadow: rgba(30, 43, 58, 0.14);   /* edge shade of a horizontally scrolled table */
 
   /* text */
   --ink-strong: #172433;
   --ink: #1E2B3A;
   --ink-2: #3E4C5C;
-  --ink-3: #5A6878;
-  --ink-inverse: #FFFFFF;
+  --ink-3: #556373;
+  --ink-inverse: #FFFFFF;    /* text on the filled lake and danger buttons */
 
   /* brand */
   --lake: #2F6A8A;
   --lake-ink: #1F5673;
   --lake-ink-hover: #163F55;
+  --lake-hover: #285D79;     /* hovered primary button */
+  /* the high-contrast button (sign-in): darkest ink at dawn, lightest at dusk */
+  --button-dark-bg: #172433;
+  --button-dark-hover: #22344A;
+  --button-dark-ink: #FFFFFF;
   --lake-soft: #DCEAF3;
   --chart-1: #8DB4CC;
   --chart-2: #D98E63;
@@ -61,7 +75,7 @@
   /* status: always paired with a text label */
   --ok: #3C9A72;   --ok-bg: #DDF0E6;   --ok-ink: #1E6B4A;  --ok-bar: #4FA27E;
   --warn: #D2A23A; --warn-bg: #F7E9CF; --warn-ink: #7A5410;
-  --bad: #B23B3B;  --bad-bg: #F6DCDC;  --bad-ink: #8E2A2A;
+  --bad: #B23B3B;  --bad-bg: #F6DCDC;  --bad-ink: #8E2A2A;  --bad-strong: #962F2F;
   --peach-bg: #F7E1D3; --peach-ink: #8A4220;
   --violet-bg: #E8E2F2; --violet-ink: #4E3A7A;
   --sage-bg: #E3EEDC; --sage-ink: #3B5E2B;
@@ -71,6 +85,10 @@
   --code-bg: #1F2B38;
   --code-ink: #DCE6EF;
   --code-comment: #8FA3B5;
+  --code-control: rgba(255, 255, 255, 0.08);        /* a button on a code block */
+  --code-control-hover: rgba(255, 255, 255, 0.16);
+  --code-warn: #F0D08E;
+  --code-error: #F2B0B0;
 
   /* type */
   --font-sans: 'Manrope', system-ui, sans-serif;
@@ -104,9 +122,11 @@
 }
 
 /*
- * "Dusk" — prepared dark variant (later milestone). Same structure, darker glass and
- * lighter ink. Enabled with <html data-theme="dusk">; not wired to a toggle yet.
- * The wallpaper variant (lake-dusk.jpg) does not exist yet, so the solid wall colour shows.
+ * "Dusk" — the dark variant. Same structure, darker glass and lighter ink.
+ * Enabled with <html data-theme="dusk">; not wired to a toggle yet. The
+ * wallpaper variant (lake-dusk.jpg) does not exist yet, so the solid wall
+ * colour shows. Every text/background pair is held to WCAG AA in both themes
+ * by src/styles/tokens.test.ts.
  */
 :root[data-theme='dusk'] {
   color-scheme: dark;
@@ -124,19 +144,32 @@
   --surface-solid: #2A3A4C;
   --surface-muted: #2A3A4C;
   --surface-soft: #243446;
-  --menu-hover: #33465B;
+  --menu-hover: #2F4155;
   --menu-tile: #33465B;
   --bad-hover: #4A2626;
   --shadow-menu: 0 2px 4px rgba(0, 0, 0, .3), 0 24px 48px -12px rgba(0, 0, 0, .6);
   --scrim: rgba(0, 0, 0, 0.5);
+  --wash-faint: rgba(220, 230, 239, 0.03);
+  --wash-hover: rgba(220, 230, 239, 0.06);
+  --wash: rgba(220, 230, 239, 0.05);
+  --wash-strong: rgba(220, 230, 239, 0.09);
+  --field-bg: rgba(16, 24, 34, 0.55);
+  --popover-bg: rgba(36, 50, 66, 0.97);
+  --control-border-hover: rgba(220, 230, 239, 0.28);
+  --scroll-shadow: rgba(0, 0, 0, 0.4);
   --ink-strong: #F1F5F9;
   --ink: #E2E8EF;
   --ink-2: #BCC7D3;
-  --ink-3: #98A6B5;
-  --lake: #4C8DB0;
+  --ink-3: #A3B1BF;
+  --lake: #3D7B9E;
   --lake-ink: #9CC8E2;
   --lake-ink-hover: #C2DEEF;
+  --lake-hover: #366F8F;
   --lake-soft: #24425A;
+  --button-dark-bg: #E2E8EF;
+  --button-dark-hover: #F1F5F9;
+  --button-dark-ink: #172433;
+  --focus-ring: 0 0 0 3px rgba(156, 200, 226, 0.55);
   --ok-bg: #1F3D31;   --ok-ink: #9ED9BC;
   --warn-bg: #43361A; --warn-ink: #F0D08E;
   --bad-bg: #4A2626;  --bad-ink: #F2B0B0;

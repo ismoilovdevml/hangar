@@ -53,7 +53,7 @@
 .result-list[aria-busy='true'] { opacity: .6; }
 .result { border-radius: var(--r-panel); }
 .result__link { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: inherit; color: var(--ink); }
-.result__link:hover { color: var(--ink); background: rgba(255, 255, 255, .35); }
+.result__link:hover { color: var(--ink); background: var(--wash-faint); }
 .result__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .result__name { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
 .result__name mark { background: var(--warn-bg); color: inherit; border-radius: 3px; padding: 0 1px; }
