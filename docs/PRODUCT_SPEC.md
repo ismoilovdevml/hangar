@@ -47,7 +47,7 @@ This is the product design. Parts marked *(planned)* are not built yet; the
 - "New repository" → screen 04. Row → repository settings (same form as 04, pre-filled, name/format read-only).
 
 ## 04 · New repository (`RepoCreate`)
-- Step 1 format grid (Docker, npm, Maven, PyPI, Go, Helm, NuGet, Cargo, APT, Raw).
+- Step 1 format grid (Docker, npm, Maven, PyPI, Go, Helm, NuGet, Cargo, APT, RPM, Raw).
 - Step 2 type cards with one-line explanations.
 - Step 3 settings: name (validated `^[a-z0-9][a-z0-9-]{1,62}$`), blob store (shows free space), remote URL for proxy (prefilled per format), re-upload policy, cleanup policy, toggles: scan on arrival, quarantine critical, anonymous read. Group type shows a member picker with drag ordering.
 - Summary panel with the final URL and the **same config as YAML**. *(planned)* Copyable `hangar` CLI / Terraform, and a round trip: `hangar apply -f repo.yaml` creates the identical repo.
