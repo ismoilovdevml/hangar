@@ -12,8 +12,8 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/ismoilovdevml/hangar/internal/archive"
 	"github.com/ismoilovdevml/hangar/internal/core"
-	"github.com/ismoilovdevml/hangar/internal/formats/internal/archive"
 )
 
 // Chart API versions (Chart.yaml apiVersion).

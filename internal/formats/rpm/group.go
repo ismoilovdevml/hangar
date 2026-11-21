@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -24,40 +25,66 @@ type groupData struct {
 	built time.Time // when this generation replaced the previous one
 }
 
-// groupRepodata returns the merged repodata of root over the group's hosted
+// groupSource is what one leaf contributes to a group's repodata of a
+// root: the hosted member's packages, or the proxy member's verified
+// repodata (nil when the remote has none there).
+type groupSource struct {
+	leaf        repokit.Leaf
+	pkgs        []pkgFile // hosted
+	remote      *remoteRepomd
+	quarantined map[string]bool // proxy: cached files of quarantined packages
+}
+
+// groupRepodata returns the merged repodata of root over the group's
 // members. A package path present in several members, or the same
 // name-epoch-version-release.arch, is taken from the first member.
-// Packages the group's routing rules keep from a member are left out.
+// Packages the routing rules keep from a member are left out.
 func (h *handler) groupRepodata(ctx context.Context, group *core.Repository, root string) (*groupData, error) {
-	leaves, err := h.HostedLeaves(ctx, group)
+	leaves, err := h.Leaves(ctx, group)
 	if err != nil {
 		return nil, err
 	}
 	depth := strings.Count(root, "/")
 	var key strings.Builder
 	key.WriteString(repokit.RoutingKey(leaves))
-	var pkgs []pkgFile
-	seen := map[string]bool{}
-	var latest int64
+	var (
+		sources []groupSource
+		latest  int64
+	)
 	for _, l := range leaves {
 		m := l.Repo
+		key.WriteString(m.ID + "\n")
+		if l.Proxy() {
+			src := groupSource{leaf: l}
+			if src.remote, err = h.remoteRoot(ctx, group, m, root); err != nil {
+				return nil, err
+			}
+			if src.remote != nil {
+				if src.quarantined, err = h.QuarantinedPaths(ctx, m.ID); err != nil {
+					return nil, err
+				}
+				key.WriteString(src.remote.key + "\n")
+				q := make([]string, 0, len(src.quarantined))
+				for p := range src.quarantined {
+					q = append(q, p)
+				}
+				slices.Sort(q)
+				key.WriteString(strings.Join(q, "\n") + "\n")
+				if t := src.remote.updated.Unix(); t > latest {
+					latest = t
+				}
+			}
+			sources = append(sources, src)
+			continue
+		}
 		ps, err := h.packagesUnder(ctx, m, root, depth)
 		if err != nil {
 			return nil, err
 		}
-		key.WriteString(m.ID + "\n")
 		for _, p := range ps {
 			key.WriteString(p.Href + " " + p.SHA256 + "\n")
-			id := p.Header.NEVRA()
-			if seen[p.Href] || seen[id] || !l.Allows(ctx, p.Header.Name) {
-				continue
-			}
-			seen[p.Href], seen[id] = true, true
-			pkgs = append(pkgs, p)
-			if p.Time > latest {
-				latest = p.Time
-			}
 		}
+		sources = append(sources, groupSource{leaf: l, pkgs: ps})
 	}
 	ck := group.ID + "/" + root
 	h.groupMu.Lock()
@@ -66,15 +93,22 @@ func (h *handler) groupRepodata(ctx context.Context, group *core.Repository, roo
 	if gd != nil && gd.key == key.String() {
 		return gd, nil
 	}
-	rd, err := buildRepodata(pkgs, h.fragmentsOf, latest)
+	// Concurrent requests for the same generation share one build, which
+	// runs to the end for them even when the first client goes away; what
+	// it waits on (proxy fills, reads) carries its own bounds.
+	bctx := context.WithoutCancel(ctx)
+	v, err, _ := h.builds.Do(ck+"\x00"+key.String(), func() (any, error) {
+		return h.buildGroup(bctx, root, sources, latest)
+	})
 	if err != nil {
 		return nil, err
 	}
-	next := &groupData{key: key.String(), rd: rd, at: time.Unix(latest, 0), built: time.Now()}
+	b := v.(groupBuild)
+	next := &groupData{key: key.String(), rd: b.rd, at: time.Unix(b.latest, 0), built: time.Now()}
 	if gd != nil {
 		next.prev = gd.rd
 	}
-	if len(pkgs) == 0 && gd == nil {
+	if b.n == 0 && gd == nil {
 		// root comes from the request path, so only roots that hold
 		// packages are kept: any client could otherwise grow the map
 		// without bound with made-up roots. An empty root is cheap to
@@ -87,8 +121,59 @@ func (h *handler) groupRepodata(ctx context.Context, group *core.Repository, roo
 	return next, nil
 }
 
+// groupBuild is one generation of a group's repodata.
+type groupBuild struct {
+	rd     *repoData
+	n      int   // packages
+	latest int64 // newest package time, or the newest remote repomd.xml
+}
+
+// buildGroup merges the sources' packages in group order and renders the
+// repodata.
+func (h *handler) buildGroup(ctx context.Context, root string, sources []groupSource, latest int64) (groupBuild, error) {
+	var pkgs []pkgFile
+	seen := map[string]bool{}
+	for _, s := range sources {
+		l := s.leaf
+		ps := s.pkgs
+		if l.Proxy() {
+			if s.remote == nil {
+				continue
+			}
+			var err error
+			// Routing and quarantine are applied while reading.
+			if ps, err = h.remotePackages(ctx, l, root, s.remote, s.quarantined); err != nil {
+				return groupBuild{}, err
+			}
+		}
+		for _, p := range ps {
+			id := p.Header.NEVRA()
+			if seen[p.Href] || seen[id] || (!l.Proxy() && !l.Allows(ctx, p.Header.Name)) {
+				continue
+			}
+			seen[p.Href], seen[id] = true, true
+			pkgs = append(pkgs, p)
+			if p.Time > latest {
+				latest = p.Time
+			}
+		}
+	}
+	rd, err := buildRepodata(pkgs, func(p pkgFile) fragments {
+		if p.Frags != nil {
+			return *p.Frags
+		}
+		return h.fragmentsOf(p)
+	}, latest)
+	if err != nil {
+		return groupBuild{}, err
+	}
+	return groupBuild{rd: rd, n: len(pkgs), latest: latest}, nil
+}
+
 func (h *handler) serveGroup(w http.ResponseWriter, r *http.Request, group *core.Repository, p string) {
-	ctx := r.Context()
+	ctx, tally := repokit.Tally(r.Context())
+	defer tally.Record(Name, r.Method)
+	r = r.WithContext(ctx)
 	root, file, isMeta := splitRepodata(p)
 	if !isMeta {
 		a, owner, err := h.findPackage(ctx, group, p)
@@ -145,17 +230,37 @@ func (h *handler) serveGroup(w http.ResponseWriter, r *http.Request, group *core
 	h.ServeBytes(w, r, f.Data, f.ContentType, gd.at)
 }
 
-// findPackage returns the first hosted member of group holding path whose
+// findPackage returns the first member of group holding path whose
 // routing rules let it serve the package (named by its component, else by
-// the file name). When every holder is excluded the error is the first
-// *core.RoutingBlock.
+// the file name): a hosted member that stores it, or a proxy member whose
+// cache or remote has it. When every holder is excluded the error is the
+// first *core.RoutingBlock; a proxy member that fails (its remote is down)
+// is passed over, and its error returned when no later member has path.
 func (h *handler) findPackage(ctx context.Context, group *core.Repository, path string) (*core.Asset, *core.Repository, error) {
-	leaves, err := h.HostedLeaves(ctx, group)
+	leaves, err := h.Leaves(ctx, group)
 	if err != nil {
 		return nil, nil, err
 	}
-	var blocked *core.RoutingBlock
+	var (
+		blocked *core.RoutingBlock
+		lastErr error
+	)
 	for _, l := range leaves {
+		if l.Proxy() {
+			a, err := h.findInProxy(ctx, group, l, path)
+			switch {
+			case err == nil:
+				return a, l.Repo, nil
+			case errors.Is(err, core.ErrRoutingBlocked):
+				if b, ok := core.AsRoutingBlock(err); ok && blocked == nil {
+					blocked = b
+				}
+			case errors.Is(err, core.ErrNotFound):
+			default:
+				lastErr = err
+			}
+			continue
+		}
 		a, err := h.Deps.Components.GetAsset(ctx, l.Repo.ID, path)
 		if errors.Is(err, core.ErrNotFound) {
 			continue
@@ -178,10 +283,33 @@ func (h *handler) findPackage(ctx context.Context, group *core.Repository, path 
 		}
 		return a, l.Repo, nil
 	}
-	if blocked != nil {
+	switch {
+	case lastErr != nil:
+		return nil, nil, lastErr
+	case blocked != nil:
 		return nil, nil, blocked
 	}
 	return nil, nil, fmt.Errorf("%s: %w", path, core.ErrNotFound)
+}
+
+// findInProxy fetches a package through a proxy member's own path, after
+// the group's rules, and only from a member the group can list.
+func (h *handler) findInProxy(ctx context.Context, group *core.Repository, l repokit.Leaf, path string) (*core.Asset, error) {
+	if !strings.HasSuffix(path, ".rpm") {
+		return nil, fmt.Errorf("%s: %w", path, core.ErrNotFound)
+	}
+	if b := l.Block(packageName(path)); b != nil {
+		routing.Record(ctx, Name, b)
+		return nil, b
+	}
+	keys, err := remoteKeysOf(l.Repo)
+	if err != nil {
+		return nil, err
+	}
+	if keys == nil {
+		return nil, repokit.MissingRemoteKeys(Name, group, l.Repo)
+	}
+	return h.proxyPackage(ctx, l.Repo, path)
 }
 
 // packageName is the package name in an RPM file name

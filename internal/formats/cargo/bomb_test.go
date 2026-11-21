@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ismoilovdevml/hangar/internal/formats/internal/archive/archivetest"
+	"github.com/ismoilovdevml/hangar/internal/archive/archivetest"
 )
 
 // TestPublishBoundsDecompression: every entry of a .crate is checked, so a

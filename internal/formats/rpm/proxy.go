@@ -28,31 +28,16 @@ func (h *handler) serveProxy(w http.ResponseWriter, r *http.Request, repo *core.
 	)
 	switch {
 	case isMeta && file == "repomd.xml":
-		a, err = h.ProxyGet(ctx, repo, repokit.Fetch{Path: p, TTL: ttl, ContentType: ctXML})
+		a, err = h.proxyRepomd(ctx, repo, root)
 	case isMeta && (file == "repomd.xml.asc" || file == "repomd.xml.key"):
 		var md *core.Asset
-		md, err = h.ProxyGet(ctx, repo, repokit.Fetch{Path: root + "repodata/repomd.xml", TTL: ttl, ContentType: ctXML})
-		if err == nil {
-			forDigest := md.BlobDigest.Hex()
-			ct := ctSig
-			if file == "repomd.xml.key" {
-				ct = "application/pgp-keys"
-			}
-			a, err = h.ProxyGet(ctx, repo, repokit.Fetch{Path: p, ContentType: ct, Attributes: map[string]any{attrSignedFor: forDigest},
-				Valid: func(c *core.Asset) bool { return repokit.AttrString(c.Attributes, attrSignedFor) == forDigest }})
+		if md, err = h.proxyRepomd(ctx, repo, root); err == nil {
+			a, err = h.proxyRepomdCompanion(ctx, repo, root, file, md)
 		}
 	case isMeta:
-		f := repokit.Fetch{Path: p, TTL: ttl}
-		if want := h.expectedChecksum(ctx, repo, root, "repodata/"+file); want != "" {
-			f.TTL = 0
-			f.Valid = func(c *core.Asset) bool { return c.BlobDigest.Hex() == want }
-		}
-		if strings.HasSuffix(file, ".gz") {
-			f.ContentType = ctGzip
-		}
-		a, err = h.ProxyGet(ctx, repo, f)
+		a, err = h.proxyRepodataFile(ctx, repo, p, h.expectedChecksum(ctx, repo, root, "repodata/"+file))
 	case strings.HasSuffix(p, ".rpm"):
-		a, err = h.ProxyGet(ctx, repo, repokit.Fetch{Path: p, Package: packageName(p), Kind: core.AssetContent, ContentType: ctRPM, Describe: describeRPM})
+		a, err = h.proxyPackage(ctx, repo, p)
 		if err == nil {
 			err = h.CheckQuarantine(ctx, a)
 		}
@@ -64,6 +49,44 @@ func (h *handler) serveProxy(w http.ResponseWriter, r *http.Request, repo *core.
 		return
 	}
 	h.ServeAsset(w, r, repo, a)
+}
+
+// proxyRepomd returns a proxy's repomd.xml under root, revalidated after
+// the metadata TTL. Groups read it the same way.
+func (h *handler) proxyRepomd(ctx context.Context, repo *core.Repository, root string) (*core.Asset, error) {
+	return h.ProxyGet(ctx, repo, repokit.Fetch{Path: root + "repodata/repomd.xml", TTL: repokit.MetadataTTL(repo, DefaultMetadataTTL), ContentType: ctXML})
+}
+
+// proxyRepomdCompanion returns repomd.xml.asc or repomd.xml.key of the
+// repomd.xml md, refetched when the cached one belongs to another.
+func (h *handler) proxyRepomdCompanion(ctx context.Context, repo *core.Repository, root, file string, md *core.Asset) (*core.Asset, error) {
+	forDigest := md.BlobDigest.Hex()
+	ct := ctSig
+	if file == "repomd.xml.key" {
+		ct = "application/pgp-keys"
+	}
+	return h.ProxyGet(ctx, repo, repokit.Fetch{Path: root + "repodata/" + file, ContentType: ct, Attributes: map[string]any{attrSignedFor: forDigest},
+		Valid: func(c *core.Asset) bool { return repokit.AttrString(c.Attributes, attrSignedFor) == forDigest }})
+}
+
+// proxyRepodataFile returns a proxy's repodata document p. want is the
+// sha256 its repomd.xml lists ("" when unknown): a cached copy is served
+// while it matches, without a TTL.
+func (h *handler) proxyRepodataFile(ctx context.Context, repo *core.Repository, p, want string) (*core.Asset, error) {
+	f := repokit.Fetch{Path: p, TTL: repokit.MetadataTTL(repo, DefaultMetadataTTL)}
+	if want != "" {
+		f.TTL = 0
+		f.Valid = func(c *core.Asset) bool { return c.BlobDigest.Hex() == want }
+	}
+	if strings.HasSuffix(p, ".gz") {
+		f.ContentType = ctGzip
+	}
+	return h.ProxyGet(ctx, repo, f)
+}
+
+// proxyPackage returns a proxy's package p, cached forever.
+func (h *handler) proxyPackage(ctx context.Context, repo *core.Repository, p string) (*core.Asset, error) {
+	return h.ProxyGet(ctx, repo, repokit.Fetch{Path: p, Package: packageName(p), Kind: core.AssetContent, ContentType: ctRPM, Describe: describeRPM})
 }
 
 var repomdCache = struct {

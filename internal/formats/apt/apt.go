@@ -29,9 +29,15 @@
 // they match the cached Release and refetched when they do not; by-hash
 // files and pool/ packages are cached forever.
 //
-// Groups combine hosted members only: their Release is regenerated from the
-// members' packages and signed with the group's key. A proxy member is
-// refused, because a remote's signed metadata cannot be merged honestly.
+// Groups regenerate their Release from the members' packages and sign it
+// with the group's key. Hosted members contribute their stored packages;
+// a proxy member contributes the packages its remote lists for the
+// requested distribution, read through the proxy's own cache. Because the
+// group signs what it lists, a proxy member's Release must verify with the
+// remote keys configured on the proxy (format.remote_keys); a proxy member
+// without them is refused. Only the group's architectures are merged from a
+// remote. Package downloads go to the first member, in group order, that
+// has the file (for a proxy: in its cache or on its remote).
 package apt
 
 import (
@@ -43,6 +49,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/formats/internal/repokit"
@@ -73,6 +80,10 @@ type Config struct {
 	Architectures []string `json:"architectures,omitempty"`
 	// SigningKey selects the key: "repository" (default) or "shared".
 	SigningKey string `json:"signing_key,omitempty"`
+	// RemoteKeys (proxy repositories) are the remote archive's
+	// ASCII-armored public keys. A group merges the proxy only when the
+	// remote's Release verifies with one of them.
+	RemoteKeys []string `json:"remote_keys,omitempty"`
 }
 
 func formatConfig(repo *core.Repository) Config {
@@ -124,6 +135,12 @@ func (f *Format) Validate(repo *core.Repository) error {
 	if err := signing.ValidateSetting(repo); err != nil {
 		return err
 	}
+	if len(c.RemoteKeys) > 0 && repo.Type != core.RepoProxy {
+		return fmt.Errorf("repository %q: remote_keys apply to proxy repositories: %w", repo.Name, core.ErrInvalid)
+	}
+	if _, err := repokit.ParseRemoteKeys(c.RemoteKeys); err != nil {
+		return fmt.Errorf("repository %q: %w", repo.Name, err)
+	}
 	if repo.Type == core.RepoProxy && repo.Config.Proxy != nil {
 		if c.SigningKey != "" || len(c.Architectures) > 0 {
 			return fmt.Errorf("repository %q: architectures and signing_key apply to hosted and group repositories; "+
@@ -167,13 +184,19 @@ type handler struct {
 	clock       func() time.Time // compared with asset times (wall clock)
 
 	groupMu sync.Mutex
-	groups  map[string]*groupIndex // by group id
+	groups  map[string]*groupIndex // by group id (+ distribution with proxy members)
+	// builds runs one regeneration of a group index at a time per key;
+	// concurrent requests share its result.
+	builds singleflight.Group
+
+	remoteMu sync.Mutex
+	remotes  map[string]*remoteRelease // verified remote Releases by digest and keys
 }
 
 // Mount implements core.Format. Routes are relative to /repository/{repo}/.
 func (f *Format) Mount(r chi.Router, deps core.Deps) {
 	h := &handler{Base: repokit.NewBase(Name, deps, f.signer), groups: map[string]*groupIndex{},
-		byHashGrace: ByHashGrace, clock: time.Now}
+		remotes: map[string]*remoteRelease{}, byHashGrace: ByHashGrace, clock: time.Now}
 	if f.now != nil {
 		h.Now = f.now
 	}

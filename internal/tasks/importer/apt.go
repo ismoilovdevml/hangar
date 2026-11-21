@@ -2,8 +2,6 @@ package importer
 
 import (
 	"bufio"
-	"bytes"
-	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
@@ -13,8 +11,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-
-	"github.com/ulikunitz/xz"
 )
 
 // apt: a Debian archive. The Packages index of each component and
@@ -60,18 +56,21 @@ func (a *aptAdapter) load(ctx context.Context) error {
 		for _, comp := range comps {
 			for _, arch := range archs {
 				dir := "dists/" + url.PathEscape(a.suite()) + "/" + url.PathEscape(comp) + "/binary-" + url.PathEscape(arch) + "/"
-				body, err := a.index(ctx, dir+"Packages")
-				if err != nil {
-					a.err = fmt.Errorf("%sPackages: %w", dir, err)
-					return
-				}
-				for _, s := range parseDebPackages(body) {
+				err := a.index(ctx, dir+"Packages", func(s aptStanza) error {
 					s.component = comp
 					if s.pkg == "" || s.filename == "" || seen[s.filename] {
-						continue
+						return nil
+					}
+					if len(seen) >= maxIndexPackages {
+						return errTooManyPackages
 					}
 					seen[s.filename] = true
 					a.byName[s.pkg] = append(a.byName[s.pkg], s)
+					return nil
+				})
+				if err != nil {
+					a.err = fmt.Errorf("%sPackages: %w", dir, err)
+					return
 				}
 			}
 		}
@@ -79,8 +78,9 @@ func (a *aptAdapter) load(ctx context.Context) error {
 	return a.err
 }
 
-// index reads a Packages file in its compressed or plain form.
-func (a *aptAdapter) index(ctx context.Context, ref string) ([]byte, error) {
+// index reads a Packages file in its compressed or plain form and calls fn
+// for each stanza.
+func (a *aptAdapter) index(ctx context.Context, ref string, fn func(aptStanza) error) error {
 	var lastErr error
 	for _, ext := range []string{".xz", ".gz", ""} {
 		b, _, err := a.j.src.bytes(ctx, ref+ext, nil)
@@ -89,36 +89,32 @@ func (a *aptAdapter) index(ctx context.Context, ref string) ([]byte, error) {
 			if errors.Is(err, errNotFound) {
 				continue
 			}
-			return nil, err
+			return err
 		}
-		var r io.Reader
-		switch ext {
-		case ".xz":
-			if r, err = xz.NewReader(bytes.NewReader(b)); err != nil {
-				return nil, err
-			}
-		case ".gz":
-			if r, err = gzip.NewReader(bytes.NewReader(b)); err != nil {
-				return nil, err
-			}
-		default:
-			return b, nil
+		r, done, err := openIndex(ref+ext, b, maxIndexUnpacked)
+		if err != nil {
+			return err
 		}
-		return io.ReadAll(io.LimitReader(r, 1<<30))
+		defer done()
+		return parseDebPackages(r, fn)
 	}
-	return nil, lastErr
+	return lastErr
 }
 
-func parseDebPackages(b []byte) []aptStanza {
-	var out []aptStanza
+// parseDebPackages streams the stanzas of a Packages file from r to fn,
+// keeping only the fields the importer needs: the index is never held
+// uncompressed in memory.
+func parseDebPackages(r io.Reader, fn func(aptStanza) error) error {
 	var cur aptStanza
-	sc := bufio.NewScanner(bytes.NewReader(b))
+	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64<<10), 4<<20)
 	for sc.Scan() {
 		line := sc.Text()
 		if strings.TrimSpace(line) == "" {
 			if cur.pkg != "" {
-				out = append(out, cur)
+				if err := fn(cur); err != nil {
+					return err
+				}
 			}
 			cur = aptStanza{}
 			continue
@@ -144,10 +140,13 @@ func parseDebPackages(b []byte) []aptStanza {
 			cur.sha256 = strings.ToLower(v)
 		}
 	}
-	if cur.pkg != "" {
-		out = append(out, cur)
+	if err := sc.Err(); err != nil {
+		return err
 	}
-	return out
+	if cur.pkg != "" {
+		return fn(cur)
+	}
+	return nil
 }
 
 func (a *aptAdapter) list(ctx context.Context) ([]string, error) {

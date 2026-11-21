@@ -356,9 +356,10 @@ func TestGroup(t *testing.T) {
 	g := *group
 	g.Config.Group = &core.GroupConfig{Members: []string{"rpm-hosted", "rpm-px"}}
 	f.env.Repos.Put(&g)
+	// A proxy member without remote keys cannot be verified, so it is not merged.
 	if rec := f.do(t, http.MethodGet, "/repository/rpm-group/repodata/repomd.xml", nil); rec.Code != http.StatusBadRequest ||
-		!strings.Contains(rec.Body.String(), "hosted repositories only") {
-		t.Fatalf("group with proxy = %d %s", rec.Code, rec.Body)
+		!strings.Contains(rec.Body.String(), "remote_keys") {
+		t.Fatalf("group with a proxy member without remote_keys = %d %s", rec.Code, rec.Body)
 	}
 }
 

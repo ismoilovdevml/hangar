@@ -13,37 +13,13 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/repokit"
 )
-
-// writeTarget resolves the repository a write to repo is stored in: repo
-// itself when hosted, a group's write member, or nil (read-only).
-func (h *handler) writeTarget(ctx context.Context, repo *core.Repository) (*core.Repository, error) {
-	switch repo.Type {
-	case core.RepoHosted:
-		return repo, nil
-	case core.RepoGroup:
-		if repo.Config.Group == nil || repo.Config.Group.WriteMember == "" {
-			return nil, nil
-		}
-		m, err := h.deps.Repos.Get(ctx, repo.Config.Group.WriteMember)
-		if err != nil {
-			return nil, err
-		}
-		if m.Type != core.RepoHosted || m.Format != Name {
-			return nil, fmt.Errorf("group %q write member %q is not a hosted %s repository: %w", repo.Name, m.Name, Name, core.ErrInvalid)
-		}
-		if !m.Online {
-			return nil, fmt.Errorf("write member %q of %q: %w", m.Name, repo.Name, core.ErrOffline)
-		}
-		return m, nil
-	}
-	return nil, nil
-}
 
 // prepareWrite resolves and authorizes the target of a write request.
 func (h *handler) prepareWrite(w http.ResponseWriter, r *http.Request, action core.Action) (context.Context, *core.Repository, bool) {
 	repo := core.RepositoryFrom(r.Context())
-	target, err := h.writeTarget(r.Context(), repo)
+	target, err := repokit.WriteTarget(r.Context(), h.deps.Repos, Name, repo)
 	if err != nil {
 		h.writeError(w, r, err)
 		return nil, nil, false

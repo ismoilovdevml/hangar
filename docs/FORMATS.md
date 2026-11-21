@@ -71,7 +71,8 @@ proxy and group repositories.
   distribution, component and architecture (`Architecture: all` in every architecture), Release with
   MD5Sum/SHA1/SHA256/SHA512, InRelease and Release.gpg signed with the repository key (`public.key`,
   `public.gpg`). Proxy: Release files passed through unchanged, metadata TTL, by-hash and pool cached forever.
-  Groups combine hosted members only (re-signed with the group key).
+  Groups merge hosted and proxy members (a proxy only with `remote_keys`, after verifying the remote's
+  signature) and are re-signed with the group key.
 - Acceptance: `apt-get update && apt-get install` from hosted + proxy of deb.debian.org.
 
 ## RPM (`rpm`) — M3
@@ -79,7 +80,8 @@ proxy and group repositories.
 - Must support: `.rpm` upload with the header parsed (dependencies, files, changelog, `rpm:header-range`),
   regenerated repodata, `repomd.xml.asc` for `repo_gpgcheck=1`, optional per-directory layout
   (`repodata_depth`). Proxy: `repomd.xml` (and signature) with a TTL, content-hashed repodata and packages
-  forever. Groups combine hosted members only.
+  forever. Groups merge hosted and proxy members (a proxy only with `remote_keys`, after verifying the
+  remote's `repomd.xml.asc`); repomd.xml is re-signed with the group key.
 - Acceptance: `dnf install` from hosted + proxy of a Rocky Linux mirror.
 
 ## Raw (`raw`) — M1

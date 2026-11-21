@@ -27,8 +27,16 @@
 // while they match the cached repomd.xml (their names are content-hashed)
 // and packages are cached forever.
 //
-// Groups combine hosted members only: their repodata is regenerated from
-// the members' packages and signed with the group's key.
+// Groups regenerate their repodata (primary, filelists, other) from the
+// members' packages and sign repomd.xml with the group's key. A proxy
+// member contributes the packages its remote's repodata lists, read through
+// the proxy's own cache; because the group signs what it lists, the
+// remote's repomd.xml must carry a detached signature (repomd.xml.asc)
+// that verifies with the proxy's format.remote_keys, and a proxy member
+// without them is refused. Other repodata of a remote (modules, comps,
+// updateinfo) is not merged. Package downloads go to the first member, in
+// group order, that has the file (for a proxy: in its cache or on its
+// remote).
 package rpm
 
 import (
@@ -40,6 +48,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/formats/internal/repokit"
@@ -67,6 +76,10 @@ type Config struct {
 	RepodataDepth int `json:"repodata_depth,omitempty"`
 	// SigningKey selects the key: "repository" (default) or "shared".
 	SigningKey string `json:"signing_key,omitempty"`
+	// RemoteKeys (proxy repositories) are the remote's ASCII-armored
+	// public keys. A group merges the proxy only when the remote's
+	// repomd.xml.asc verifies with one of them.
+	RemoteKeys []string `json:"remote_keys,omitempty"`
 }
 
 func formatConfig(repo *core.Repository) Config {
@@ -110,6 +123,12 @@ func (f *Format) Validate(repo *core.Repository) error {
 	if err := signing.ValidateSetting(repo); err != nil {
 		return err
 	}
+	if len(c.RemoteKeys) > 0 && repo.Type != core.RepoProxy {
+		return fmt.Errorf("repository %q: remote_keys apply to proxy repositories: %w", repo.Name, core.ErrInvalid)
+	}
+	if _, err := repokit.ParseRemoteKeys(c.RemoteKeys); err != nil {
+		return fmt.Errorf("repository %q: %w", repo.Name, err)
+	}
 	if repo.Type == core.RepoProxy && (c.SigningKey != "" || c.RepodataDepth != 0) {
 		return fmt.Errorf("repository %q: repodata_depth and signing_key apply to hosted and group repositories; "+
 			"a proxy serves the remote's metadata: %w", repo.Name, core.ErrInvalid)
@@ -148,6 +167,12 @@ type handler struct {
 
 	groupMu sync.Mutex
 	groups  map[string]*groupData // by group id + "/" + root; only roots that held packages
+	// builds runs one regeneration of a group's repodata at a time per
+	// key; concurrent requests share its result.
+	builds singleflight.Group
+
+	remoteMu sync.Mutex
+	remotes  map[string]*remoteRepomd // verified remote repomd.xml by digest and keys
 
 	pins repomdPins
 }
@@ -163,7 +188,8 @@ const maxHeaderCache = 64 << 20
 
 // Mount implements core.Format. Routes are relative to /repository/{repo}/.
 func (f *Format) Mount(r chi.Router, deps core.Deps) {
-	h := &handler{Base: repokit.NewBase(Name, deps, f.signer), headers: map[string]cachedHeader{}, groups: map[string]*groupData{}}
+	h := &handler{Base: repokit.NewBase(Name, deps, f.signer), headers: map[string]cachedHeader{}, groups: map[string]*groupData{},
+		remotes: map[string]*remoteRepomd{}}
 	if f.now != nil {
 		h.Now = f.now
 	}

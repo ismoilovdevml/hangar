@@ -18,8 +18,9 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/ismoilovdevml/hangar/internal/archive"
 	"github.com/ismoilovdevml/hangar/internal/core"
-	"github.com/ismoilovdevml/hangar/internal/formats/internal/archive"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/repokit"
 )
 
 // Publish limits.
@@ -69,37 +70,12 @@ type publishDep struct {
 	ExplicitNameInToml *string  `json:"explicit_name_in_toml"`
 }
 
-// writeTarget resolves the repository a write to repo goes to: repo itself
-// when hosted, the hosted write member of a group, nil when repo takes no writes.
-func (h *handler) writeTarget(ctx context.Context, repo *core.Repository) (*core.Repository, error) {
-	switch repo.Type {
-	case core.RepoHosted:
-		return repo, nil
-	case core.RepoGroup:
-		if repo.Config.Group == nil || repo.Config.Group.WriteMember == "" {
-			return nil, nil
-		}
-		m, err := h.deps.Repos.Get(ctx, repo.Config.Group.WriteMember)
-		if err != nil {
-			return nil, err
-		}
-		if m.Type != core.RepoHosted || m.Format != Name {
-			return nil, fmt.Errorf("group %q write member %q is not a hosted %s repository: %w", repo.Name, m.Name, Name, core.ErrInvalid)
-		}
-		if !m.Online {
-			return nil, fmt.Errorf("write member %q of %q: %w", m.Name, repo.Name, core.ErrOffline)
-		}
-		return m, nil
-	}
-	return nil, nil
-}
-
 // authorizeWrite resolves and authorizes the write target of the request.
 // A write through a group needs write access to the group and to its
 // write member. On failure it has answered.
 func (h *handler) authorizeWrite(w http.ResponseWriter, r *http.Request) (context.Context, *core.Repository, bool) {
 	repo := core.RepositoryFrom(r.Context())
-	target, err := h.writeTarget(r.Context(), repo)
+	target, err := repokit.WriteTarget(r.Context(), h.deps.Repos, Name, repo)
 	if err != nil {
 		h.writeError(w, r, err)
 		return nil, nil, false

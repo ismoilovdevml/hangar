@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/formats/internal/repokit"
 )
 
 var (
@@ -25,29 +26,19 @@ var (
 	errUnpublishDenied = errors.New("unpublish not allowed")
 )
 
-// writeTarget resolves where writes addressed to repo go: the repository
-// itself if hosted, a group's write member, never a proxy.
+// writeTarget resolves where writes addressed to repo go
+// (repokit.WriteTarget); one that takes no writes is errMethod (405).
 func (h *handler) writeTarget(ctx context.Context, repo *core.Repository) (*core.Repository, error) {
-	switch repo.Type {
-	case core.RepoHosted:
-		return repo, nil
-	case core.RepoGroup:
-		if repo.Config.Group == nil || repo.Config.Group.WriteMember == "" {
-			return nil, fmt.Errorf("group %q has no write member: %w", repo.Name, errMethod)
-		}
-		t, err := h.deps.Repos.Get(ctx, repo.Config.Group.WriteMember)
-		if err != nil {
-			return nil, fmt.Errorf("group %q write member: %w", repo.Name, err)
-		}
-		if t.Type != core.RepoHosted || t.Format != Name {
-			return nil, fmt.Errorf("group %q write member %q is not a hosted npm repository: %w", repo.Name, t.Name, core.ErrInvalid)
-		}
-		if !t.Online {
-			return nil, fmt.Errorf("repository %q: %w", t.Name, core.ErrOffline)
-		}
-		return t, nil
+	t, err := repokit.WriteTarget(ctx, h.deps.Repos, Name, repo)
+	switch {
+	case err != nil:
+		return nil, err
+	case t == nil && repo.Type == core.RepoGroup:
+		return nil, fmt.Errorf("group %q has no write member: %w", repo.Name, errMethod)
+	case t == nil:
+		return nil, fmt.Errorf("repository %q is a read-only %s repository: %w", repo.Name, repo.Type, errMethod)
 	}
-	return nil, fmt.Errorf("repository %q is a read-only %s repository: %w", repo.Name, repo.Type, errMethod)
+	return t, nil
 }
 
 // writeMetadata stores v as a metadata asset (optionally owned by comp).

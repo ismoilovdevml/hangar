@@ -113,8 +113,8 @@ Limits:
 - APT and RPM proxies pass the remote's signed `Release` / `repomd.xml` and
   indexes through unchanged (filtering them would break the signature). A
   blocked package still appears in those indexes, but its download answers 404
-  without contacting the remote. APT and RPM groups only combine hosted
-  members, and their merged indexes are filtered.
+  without contacting the remote. APT and RPM groups regenerate their indexes,
+  proxy members included, so their merged indexes are filtered.
 - Helm proxies fetch the remote's `index.yaml` as a whole (it lists every
   chart), then leave blocked charts out of what they serve.
 - Go: keep internal modules in `GOPRIVATE` / `GONOSUMDB` on clients as well; a

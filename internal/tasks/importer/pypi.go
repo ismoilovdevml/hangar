@@ -19,8 +19,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ismoilovdevml/hangar/internal/archive"
 	"github.com/ismoilovdevml/hangar/internal/core"
 )
+
+// maxSdistUnpacked bounds the uncompressed tar stream of an sdist read for
+// its PKG-INFO, the bound the cargo format puts on an unpacked .crate.
+const maxSdistUnpacked = 1 << 30
 
 // PyPI: the simple repository API (PEP 503 HTML or PEP 691 JSON) for the
 // project list and files, with sha256 from the hashes (or URL fragments),
@@ -346,7 +351,10 @@ func distMetadata(dl *download, filename string, wheel bool) ([][2]string, error
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", filename, err)
 		}
-		tr := tar.NewReader(gz)
+		// PKG-INFO may come after every other file, and tar decompresses
+		// what it skips: bound the stream (as the cargo format bounds a
+		// .crate). Past the bound the upload goes ahead without metadata.
+		tr := tar.NewReader(archive.Limit(gz, maxSdistUnpacked, filename))
 		for {
 			h, err := tr.Next()
 			if err != nil {
