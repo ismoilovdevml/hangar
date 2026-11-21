@@ -108,13 +108,20 @@ groups:
 
   - name: hangar.jobs
     rules:
+      # A job that exhausts its retries is counted here (result="failed") and
+      # kept in the jobs table as dead for 7 days, which hangar_job_queue_dead
+      # shows. There is deliberately no alert on hangar_job_queue_dead > 0: it
+      # answers the same question ("did a job die?") as this rule, but stays
+      # above 0 for 7 days after one failure, so it would keep firing long
+      # after the operator has handled it. Use the gauge on the Jobs dashboard
+      # and in the runbook to see which jobs died.
       - alert: HangarJobFailures
         expr: sum by (type) (increase(hangar_jobs_total{result="failed"}[1h])) > 0
         labels:
           severity: warning
         annotations:
           summary: "Background job {{ $labels.type }} failed permanently"
-          description: "{{ $value | humanize }} {{ $labels.type }} jobs exhausted their retries in the last hour and were dropped."
+          description: "{{ $value | humanize }} {{ $labels.type }} jobs exhausted their retries in the last hour; they are kept as dead jobs for 7 days."
           runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangarjobfailures"
 
       - alert: HangarJobBacklog
