@@ -207,7 +207,7 @@ func documentNode(kindName, name string, labels map[string]string, spec map[stri
 	}
 	// "name" first in metadata reads better than alphabetical order.
 	if m := doc.Content[5]; len(m.Content) == 4 && m.Content[0].Value == "labels" {
-		m.Content = append(m.Content[2:4], m.Content[0:2]...)
+		m.Content = []*yaml.Node{m.Content[2], m.Content[3], m.Content[0], m.Content[1]}
 	}
 	return doc, nil
 }

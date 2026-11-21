@@ -191,8 +191,11 @@ func start() (*harness, func(), error) {
 	b, status, err := h.basic(http.MethodPost, "/api/v1/tokens", map[string]any{
 		"name": "cac", "scopes": []string{"system:*", "repo:*:admin"},
 		"expires_at": time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)})
-	if err != nil || status != http.StatusCreated || json.Unmarshal(b, &tok) != nil || tok.Token == "" {
-		return nil, cleanup, fmt.Errorf("create token: %v %d %s", err, status, b)
+	if err != nil {
+		return nil, cleanup, fmt.Errorf("create token: %w", err)
+	}
+	if status != http.StatusCreated || json.Unmarshal(b, &tok) != nil || tok.Token == "" {
+		return nil, cleanup, fmt.Errorf("create token: status %d: %s", status, b)
 	}
 	h.token = tok.Token
 	return h, cleanup, nil

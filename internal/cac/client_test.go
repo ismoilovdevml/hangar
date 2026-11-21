@@ -76,7 +76,7 @@ func TestClientErrors(t *testing.T) {
 	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v1/bad":
-			w.WriteHeader(400)
+			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write([]byte(`{"code":"invalid_argument","message":"port is invalid","details":{"fields":{"port":"want 1-65535"}}}`))
 		case "/api/v1/moved":
 			http.Redirect(w, r, "https://elsewhere.example/api/v1/moved", http.StatusFound)

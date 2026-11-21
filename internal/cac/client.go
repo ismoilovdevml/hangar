@@ -108,6 +108,7 @@ type APIError struct {
 	Fields map[string]string
 }
 
+// Error renders "METHOD path: status code: message".
 func (e *APIError) Error() string {
 	msg := e.Message
 	if msg == "" {

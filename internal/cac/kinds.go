@@ -26,9 +26,6 @@ func (p Path) child(k string) Path { return append(slices.Clip(p), k) }
 
 func (p Path) equal(q Path) bool { return slices.Equal(p, q) }
 
-// hasPrefix reports whether q is p or below it.
-func (p Path) hasPrefix(q Path) bool { return len(p) >= len(q) && slices.Equal(p[:len(q)], q) }
-
 func paths(ps ...string) []Path {
 	out := make([]Path, 0, len(ps))
 	for _, p := range ps {

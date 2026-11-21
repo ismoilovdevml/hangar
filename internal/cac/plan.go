@@ -96,7 +96,7 @@ func (p *Plan) HasChanges() bool {
 
 // liveSet is the state of one kind on the server.
 type liveSet struct {
-	objects map[string]map[string]any   // GET answers by name
+	objects map[string]map[string]any    // GET answers by name
 	labels  map[string]map[string]string // labels by name
 }
 
@@ -271,11 +271,11 @@ func extraDiffs(k *kind, doc *Document, obj map[string]any) []FieldDiff {
 	}
 	configured := obj["password_configured"] == true
 	pw, _ := doc.Spec["password"].(string)
-	clear, _ := doc.Spec["clear_password"].(bool)
+	clearPw, _ := doc.Spec["clear_password"].(bool)
 	switch {
 	case pw != "" && !configured:
 		return []FieldDiff{{Path: Path{"password"}, New: secretText}}
-	case clear && configured:
+	case clearPw && configured:
 		return []FieldDiff{{Path: Path{"password"}, Old: secretText, OldSet: true, New: nil}}
 	}
 	return nil

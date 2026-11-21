@@ -56,7 +56,7 @@ func (r *remoteFlags) client(stderr io.Writer) (*cac.Client, error) {
 	}
 	token := os.Getenv("HANGAR_TOKEN")
 	if r.tokenFile != "" {
-		b, err := os.ReadFile(r.tokenFile)
+		b, err := os.ReadFile(r.tokenFile) // #nosec G304 -- the operator names the token file
 		if err != nil {
 			return nil, fmt.Errorf("--token-file: %w", err)
 		}

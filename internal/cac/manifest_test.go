@@ -130,7 +130,9 @@ func TestLoad(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	role := func(n string) string { return header + "kind: Role\nmetadata: {name: " + n + "}\nspec: {privileges: []}\n" }
+	role := func(n string) string {
+		return header + "kind: Role\nmetadata: {name: " + n + "}\nspec: {privileges: []}\n"
+	}
 	write("a.yaml", role("a")+"---\n"+role("b")+"---\n")
 	write("notes.txt", "not yaml at all: [")
 	write(".hidden/x.yaml", role("hidden"))
