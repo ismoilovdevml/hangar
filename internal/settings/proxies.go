@@ -17,6 +17,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/httpclient"
+	"github.com/ismoilovdevml/hangar/internal/secrets"
 )
 
 // ProxySettings are the editable fields of an outbound proxy.
@@ -389,7 +390,7 @@ func (s *Service) saveProxy(ctx context.Context, old *storedProxy, in ProxyInput
 	if old != nil {
 		oldSecret, moved = old.password, proxyMoved(old.ProxySettings, in.ProxySettings)
 	}
-	_, sealed, sfe, err := s.mergeSecret(oldSecret, in.Password, in.ClearPassword, "password", moved)
+	_, sealed, sfe, err := s.mergeSecret(secrets.OutboundProxyContext(in.Name), oldSecret, in.Password, in.ClearPassword, "password", moved)
 	if err != nil {
 		return err
 	}
@@ -518,7 +519,7 @@ func proxyDetails(in ProxyInput, old *storedProxy) map[string]any {
 
 // spec turns a stored proxy into the httpclient form, password opened.
 func (s *Service) spec(p *storedProxy) (httpclient.Proxy, error) {
-	password, err := s.open(p.password)
+	password, err := s.open(secrets.OutboundProxyContext(p.Name), p.password)
 	if err != nil {
 		return httpclient.Proxy{}, fmt.Errorf("proxy %q password: %w", p.Name, err)
 	}

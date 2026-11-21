@@ -37,10 +37,11 @@ type Signer interface {
 	KeyFor(ctx context.Context, repo *core.Repository) (*Key, error)
 }
 
-// Sealer encrypts private keys at rest (*secrets.Keyring).
+// Sealer encrypts private keys at rest (*secrets.Keyring), each bound to
+// the signing_keys row it is stored in (secrets.SigningKeyContext).
 type Sealer interface {
-	SealString(s string) (string, error)
-	OpenString(sealed string) (string, error)
+	SealString(at secrets.Context, s string) (string, error)
+	OpenString(at secrets.Context, sealed string) (string, error)
 }
 
 // Options configure a Service.
@@ -191,7 +192,7 @@ func (s *Service) open(name string, rec *Record) (cachedKey, error) {
 	if s.opts.Secrets == nil {
 		return cachedKey{}, fmt.Errorf("repository signing keys: %w", secrets.ErrNoKey)
 	}
-	armored, err := s.opts.Secrets.OpenString(rec.PrivateKey)
+	armored, err := s.opts.Secrets.OpenString(secrets.SigningKeyContext(name), rec.PrivateKey)
 	if err != nil {
 		return cachedKey{}, fmt.Errorf("open signing key %q: %w", name, err)
 	}
@@ -250,7 +251,7 @@ func (s *Service) record(repo *core.Repository, name string, k *Key) (*Record, e
 	if err != nil {
 		return nil, err
 	}
-	sealed, err := s.opts.Secrets.SealString(string(priv))
+	sealed, err := s.opts.Secrets.SealString(secrets.SigningKeyContext(name), string(priv))
 	if err != nil {
 		return nil, fmt.Errorf("seal signing key: %w", err)
 	}

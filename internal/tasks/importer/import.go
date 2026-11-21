@@ -333,7 +333,7 @@ type importState struct {
 	Result ImportResult `json:"result"`
 }
 
-func (s *Service) runImport(ctx context.Context, x reporter, cfg *ImportConfig) error {
+func (s *Service) runImport(ctx context.Context, x reporter, taskID string, cfg *ImportConfig) error {
 	repo, err := s.opts.Repos.Get(ctx, cfg.Repository)
 	if err != nil {
 		return err // names the repository
@@ -345,7 +345,7 @@ func (s *Service) runImport(ctx context.Context, x reporter, cfg *ImportConfig) 
 	if !ok {
 		return fmt.Errorf("format %q cannot be imported: %w", repo.Format, core.ErrNotImplemented)
 	}
-	src, err := s.newSource(cfg.Source, cfg.rps())
+	src, err := s.newSource(cfg.Source, sourceAt{taskID, importSourcePath}, cfg.rps())
 	if err != nil {
 		return err
 	}

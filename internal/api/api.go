@@ -47,7 +47,7 @@ type Catalog interface {
 	BlobStore(ctx context.Context, name string) (*catalog.BlobStore, error)
 	CreateBlobStore(ctx context.Context, n catalog.NewBlobStore) (*catalog.BlobStore, error)
 	UpdateBlobStore(ctx context.Context, name string, n catalog.NewBlobStore) (*catalog.BlobStore, error)
-	BlobStoreTestConfig(ctx context.Context, n catalog.NewBlobStore) (map[string]any, error)
+	BlobStoreTestConfig(ctx context.Context, n catalog.NewBlobStore) (cfg map[string]any, storeID string, err error)
 	DeleteBlobStore(ctx context.Context, name string) error
 	Overview(ctx context.Context, q catalog.OverviewQuery) (*catalog.Overview, error)
 	FormatDownloads(ctx context.Context) (map[string]int64, error)
@@ -107,10 +107,11 @@ type BlobStoreCheck struct {
 }
 
 // BlobStoreTester tests a blob store configuration (the blob_stores.config
-// form; it opens sealed secrets itself) without saving it: the bucket is
-// reachable and a test object can be written, read and deleted.
+// form; it opens sealed secrets itself, as those of the stored blob store
+// with id storeID) without saving it: the bucket is reachable and a test
+// object can be written, read and deleted.
 type BlobStoreTester interface {
-	TestBlobStore(ctx context.Context, kind string, config map[string]any) ([]BlobStoreCheck, error)
+	TestBlobStore(ctx context.Context, kind, storeID string, config map[string]any) ([]BlobStoreCheck, error)
 }
 
 // RouteRegistrar adds routes to the /api/v1 router. Routes registered this

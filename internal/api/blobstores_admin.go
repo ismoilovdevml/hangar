@@ -106,7 +106,7 @@ func (a *API) testBlobStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	n := in.toNew()
-	cfg, err := a.Catalog.BlobStoreTestConfig(ctx, n)
+	cfg, storeID, err := a.Catalog.BlobStoreTestConfig(ctx, n)
 	if err != nil {
 		a.writeErr(w, r, err)
 		return
@@ -114,7 +114,7 @@ func (a *API) testBlobStore(w http.ResponseWriter, r *http.Request) {
 	tctx, cancel := context.WithTimeout(ctx, blobStoreTestTimeout)
 	defer cancel()
 	started := time.Now()
-	checks, err := a.BlobStoreTester.TestBlobStore(tctx, n.Kind, cfg)
+	checks, err := a.BlobStoreTester.TestBlobStore(tctx, n.Kind, storeID, cfg)
 	if err != nil {
 		a.writeErr(w, r, err)
 		return

@@ -19,6 +19,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/auth/oidc"
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/httpclient"
+	"github.com/ismoilovdevml/hangar/internal/secrets"
 )
 
 // Step outcomes.
@@ -134,7 +135,7 @@ func (s *Service) oidcUnderTest(ctx context.Context, in *OIDCInput) (auth.OIDCCo
 	if _, _, err := s.loadDoc(ctx, s.pool, keyOIDC, &old, false); err != nil {
 		return auth.OIDCConfig{}, err
 	}
-	secret, _, fe, err := s.mergeSecret(old.ClientSecret, in.ClientSecret, in.ClearClientSecret, "client_secret",
+	secret, _, fe, err := s.mergeSecret(secrets.SettingContext(keyOIDC, "client_secret"), old.ClientSecret, in.ClientSecret, in.ClearClientSecret, "client_secret",
 		movedTo("issuer_url", old.IssuerURL, in.IssuerURL))
 	if err != nil {
 		return auth.OIDCConfig{}, err
@@ -386,7 +387,7 @@ func (s *Service) ldapUnderTest(ctx context.Context, in *LDAPInput) (auth.LDAPCo
 	if _, _, err := s.loadDoc(ctx, s.pool, keyLDAP, &old, false); err != nil {
 		return auth.LDAPConfig{}, err
 	}
-	password, _, fe, err := s.mergeSecret(old.BindPassword, in.BindPassword, in.ClearBindPassword, "bind_password",
+	password, _, fe, err := s.mergeSecret(secrets.SettingContext(keyLDAP, "bind_password"), old.BindPassword, in.BindPassword, in.ClearBindPassword, "bind_password",
 		movedTo("url", old.URL, in.URL))
 	if err != nil {
 		return auth.LDAPConfig{}, err
@@ -455,7 +456,7 @@ func (s *Service) proxyUnderTest(ctx context.Context, name string, in *ProxyInpu
 	if stored != nil {
 		old, moved = stored.password, proxyMoved(stored.ProxySettings, in.ProxySettings)
 	}
-	password, _, fe, err := s.mergeSecret(old, in.Password, in.ClearPassword, "password", moved)
+	password, _, fe, err := s.mergeSecret(secrets.OutboundProxyContext(in.Name), old, in.Password, in.ClearPassword, "password", moved)
 	if err != nil {
 		return httpclient.Proxy{}, err
 	}

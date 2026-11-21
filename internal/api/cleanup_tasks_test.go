@@ -259,6 +259,12 @@ func TestBlobStoreSecretStaysWithEndpoint(t *testing.T) {
 	if sealed, _ := tester.cfg["secret_access_key_sealed"].(string); !strings.HasPrefix(sealed, secrets.Prefix) {
 		t.Fatalf("same endpoint: tested with %v", tester.cfg)
 	}
+	// The tester opens it as the secret of that store, and only there.
+	storeID := apitest.QueryString(t, pool, `SELECT id::text FROM blob_stores WHERE name = 's3-bound'`)
+	if _, err := key.OpenString(secrets.BlobStoreContext(tester.storeID, "secret_access_key_sealed"), tester.cfg["secret_access_key_sealed"].(string)); err != nil ||
+		tester.storeID != storeID {
+		t.Fatalf("stored secret tested as store %q (want %q): %v", tester.storeID, storeID, err)
+	}
 	// Another endpoint needs the secret again, for a test and for an update.
 	tester.cfg = nil
 	for _, ep := range []string{"https://attacker.example.com", "http://s3.example.com", "https://s3.example.com:8443"} {
@@ -276,7 +282,7 @@ func TestBlobStoreSecretStaysWithEndpoint(t *testing.T) {
 	f.expect("admin", "PUT", "/api/v1/blob-stores/s3-bound", moved, 200)
 
 	// A sealed value is refused everywhere a secret is accepted.
-	victim, err := key.SealString("victim-secret")
+	victim, err := key.SealString(secrets.BlobStoreContext("00000000-0000-4000-8000-000000000001", "secret_access_key_sealed"), "victim-secret")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,12 +299,13 @@ func TestBlobStoreSecretStaysWithEndpoint(t *testing.T) {
 
 // fakeStoreTester passes every step, or fails the step named fail.
 type fakeStoreTester struct {
-	fail string
-	cfg  map[string]any
+	fail    string
+	cfg     map[string]any
+	storeID string
 }
 
-func (t *fakeStoreTester) TestBlobStore(_ context.Context, _ string, cfg map[string]any) ([]BlobStoreCheck, error) {
-	t.cfg = cfg
+func (t *fakeStoreTester) TestBlobStore(_ context.Context, _, storeID string, cfg map[string]any) ([]BlobStoreCheck, error) {
+	t.cfg, t.storeID = cfg, storeID
 	var out []BlobStoreCheck
 	for _, name := range []string{"bucket", "write", "read", "delete"} {
 		if name == t.fail {

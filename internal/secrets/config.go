@@ -9,23 +9,25 @@ import (
 
 // The secrets of a repository configuration, as JSON paths in
 // repositories.config. URL fields hold their secret in the password part of
-// the user information (https://user:secret@host/).
+// the user information (https://user:secret@host/). The dotted path is the
+// field of the value's Context.
 var (
 	repoValuePaths = [][]string{{"proxy", "auth", "password"}, {"proxy", "auth", "token"}}
 	repoURLPaths   = [][]string{{"proxy", "remote_url"}, {"proxy", "http", "proxy"}}
 )
 
 // Blob store secrets: a plaintext key (never stored) and its sealed field in
-// blob_stores.config.
+// blob_stores.config. The sealed field is the field of the value's Context.
 var storeFields = []struct{ plain, sealed string }{
 	{"secret_access_key", "secret_access_key_sealed"},
 	{"session_token", "session_token_sealed"},
 }
 
-// sealValue seals v unless it is empty or already sealed. A value that is
-// already sealed must open with k, so a client cannot plant a ciphertext it
-// made up or copied from elsewhere.
-func (k *Keyring) sealValue(v string) (string, error) {
+// sealValue seals v for c unless it is empty. A value that is already sealed
+// must open at c, so a client cannot plant a ciphertext it made up or copied
+// from another row or field; a legacy value is upgraded to hgs2 (Upgrade),
+// so every write stores the current format.
+func (k *Keyring) sealValue(c Context, v string) (string, error) {
 	if v == "" {
 		return "", nil
 	}
@@ -33,12 +35,13 @@ func (k *Keyring) sealValue(v string) (string, error) {
 		return "", ErrNoKey
 	}
 	if IsSealed(v) {
-		if err := k.Check(v); err != nil {
+		next, err := k.Upgrade(c, v)
+		if err != nil {
 			return "", fmt.Errorf("%w: %w", err, core.ErrInvalid)
 		}
-		return v, nil
+		return next, nil
 	}
-	return k.SealString(v)
+	return k.SealString(c, v)
 }
 
 // mapURLPassword applies fn to the password in raw's user information and
@@ -66,38 +69,46 @@ func mapURLPassword(raw string, fn func(string) (string, error)) (string, error)
 	return u.String(), nil
 }
 
-// SealRepoConfig seals, in place, every plaintext secret of cfg: the proxy
-// upstream password and token (bearer token or header value) and passwords in
-// the remote URL and the outbound proxy URL. Already sealed values are kept
-// after checking that they open. With a nil keyring any secret is refused
-// with ErrNoKey. Repository services call it before storing a configuration.
-func (k *Keyring) SealRepoConfig(cfg *core.RepoConfig) error {
+// at returns fn bound to the context c, for mapURLPassword.
+func at(c Context, fn func(Context, string) (string, error)) func(string) (string, error) {
+	return func(v string) (string, error) { return fn(c, v) }
+}
+
+// SealRepoConfig seals, in place, every plaintext secret of cfg for the
+// repository with id repoID: the proxy upstream password and token (bearer
+// token or header value) and passwords in the remote URL and the outbound
+// proxy URL. Already sealed values must open at their place in that
+// repository; legacy ones are upgraded to hgs2. With a nil keyring any
+// secret is refused with ErrNoKey. Repository services call it before storing
+// a configuration, once the repository's id is known.
+func (k *Keyring) SealRepoConfig(cfg *core.RepoConfig, repoID string) error {
 	p := cfg.Proxy
 	if p == nil {
 		return nil
 	}
 	var err error
 	if a := p.Auth; a != nil {
-		if a.Password, err = k.sealValue(a.Password); err != nil {
+		if a.Password, err = k.sealValue(RepositoryContext(repoID, "proxy.auth.password"), a.Password); err != nil {
 			return fmt.Errorf("proxy auth password: %w", err)
 		}
-		if a.Token, err = k.sealValue(a.Token); err != nil {
+		if a.Token, err = k.sealValue(RepositoryContext(repoID, "proxy.auth.token"), a.Token); err != nil {
 			return fmt.Errorf("proxy auth token: %w", err)
 		}
 	}
-	if p.RemoteURL, err = mapURLPassword(p.RemoteURL, k.sealValue); err != nil {
+	if p.RemoteURL, err = mapURLPassword(p.RemoteURL, at(RepositoryContext(repoID, "proxy.remote_url"), k.sealValue)); err != nil {
 		return fmt.Errorf("proxy remote_url password: %w", err)
 	}
-	if p.HTTP.Proxy, err = mapURLPassword(p.HTTP.Proxy, k.sealValue); err != nil {
+	if p.HTTP.Proxy, err = mapURLPassword(p.HTTP.Proxy, at(RepositoryContext(repoID, "proxy.http.proxy"), k.sealValue)); err != nil {
 		return fmt.Errorf("proxy http.proxy password: %w", err)
 	}
 	return nil
 }
 
-// OpenProxyConfig returns a copy of cfg with every secret in plaintext, for
-// building the outbound client. Values stored before encryption was
-// configured are returned as they are. cfg itself is not modified.
-func (k *Keyring) OpenProxyConfig(cfg *core.ProxyConfig) (*core.ProxyConfig, error) {
+// OpenProxyConfig returns a copy of cfg, the proxy configuration of the
+// repository with id repoID, with every secret in plaintext, for building the
+// outbound client. Values stored before encryption was configured are
+// returned as they are. cfg itself is not modified.
+func (k *Keyring) OpenProxyConfig(cfg *core.ProxyConfig, repoID string) (*core.ProxyConfig, error) {
 	if cfg == nil {
 		return nil, nil
 	}
@@ -105,27 +116,28 @@ func (k *Keyring) OpenProxyConfig(cfg *core.ProxyConfig) (*core.ProxyConfig, err
 	var err error
 	if cfg.Auth != nil {
 		a := *cfg.Auth
-		if a.Password, err = k.Reveal(a.Password); err != nil {
+		if a.Password, err = k.Reveal(RepositoryContext(repoID, "proxy.auth.password"), a.Password); err != nil {
 			return nil, fmt.Errorf("proxy auth password: %w", err)
 		}
-		if a.Token, err = k.Reveal(a.Token); err != nil {
+		if a.Token, err = k.Reveal(RepositoryContext(repoID, "proxy.auth.token"), a.Token); err != nil {
 			return nil, fmt.Errorf("proxy auth token: %w", err)
 		}
 		out.Auth = &a
 	}
-	if out.RemoteURL, err = mapURLPassword(cfg.RemoteURL, k.Reveal); err != nil {
+	if out.RemoteURL, err = mapURLPassword(cfg.RemoteURL, at(RepositoryContext(repoID, "proxy.remote_url"), k.Reveal)); err != nil {
 		return nil, fmt.Errorf("proxy remote_url password: %w", err)
 	}
-	if out.HTTP.Proxy, err = mapURLPassword(cfg.HTTP.Proxy, k.Reveal); err != nil {
+	if out.HTTP.Proxy, err = mapURLPassword(cfg.HTTP.Proxy, at(RepositoryContext(repoID, "proxy.http.proxy"), k.Reveal)); err != nil {
 		return nil, fmt.Errorf("proxy http.proxy password: %w", err)
 	}
 	return &out, nil
 }
 
-// OpenStoreConfig returns a copy of a blob_stores.config document with its
-// sealed fields opened into the plaintext fields the storage driver reads
-// (secret_access_key_sealed -> secret_access_key). cfg is not modified.
-func (k *Keyring) OpenStoreConfig(cfg map[string]any) (map[string]any, error) {
+// OpenStoreConfig returns a copy of cfg, the blob_stores.config document of
+// the store with id storeID, with its sealed fields opened into the plaintext
+// fields the storage driver reads (secret_access_key_sealed ->
+// secret_access_key). cfg is not modified.
+func (k *Keyring) OpenStoreConfig(cfg map[string]any, storeID string) (map[string]any, error) {
 	out := make(map[string]any, len(cfg))
 	for key, v := range cfg {
 		out[key] = v
@@ -140,7 +152,7 @@ func (k *Keyring) OpenStoreConfig(cfg map[string]any) (map[string]any, error) {
 		if s == "" {
 			continue
 		}
-		pt, err := k.Reveal(s)
+		pt, err := k.Reveal(BlobStoreContext(storeID, f.sealed), s)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", f.sealed, err)
 		}
@@ -177,7 +189,8 @@ func store(doc map[string]any, path []string, v string) {
 	cur[path[len(path)-1]] = v
 }
 
-// valueFunc transforms one secret value; field names it for reports.
+// valueFunc transforms one secret value; field names it within its row (the
+// field of its Context).
 type valueFunc func(field, v string) (string, error)
 
 // mapRepoDoc applies fn to every secret of a repositories.config document and
@@ -217,14 +230,15 @@ func mapRepoDoc(doc map[string]any, fn valueFunc) (bool, error) {
 }
 
 // mapStoreDoc moves plaintext blob store secrets into their sealed fields
-// (sealing them with seal) and applies fn to sealed fields.
-func mapStoreDoc(doc map[string]any, seal func(string) (string, error), fn valueFunc) (bool, error) {
+// (sealing them with seal, which gets the sealed field's name) and applies fn
+// to sealed fields.
+func mapStoreDoc(doc map[string]any, seal valueFunc, fn valueFunc) (bool, error) {
 	changed := false
 	for _, f := range storeFields {
 		if raw, ok := doc[f.plain]; ok {
 			s, _ := raw.(string)
 			if s != "" {
-				sealed, err := seal(s)
+				sealed, err := seal(f.sealed, s)
 				if err != nil {
 					return false, fmt.Errorf("%s: %w", f.plain, err)
 				}

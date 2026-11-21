@@ -44,6 +44,10 @@ type S3Config struct {
 	SecretSealed string `json:"secret_access_key_sealed,omitempty"`
 }
 
+// secretSealedField is the field of S3Config.SecretSealed in
+// blob_stores.config, the Field of its secrets.Context.
+const secretSealedField = "secret_access_key_sealed"
+
 // BlobStore is one store with its statistics.
 type BlobStore struct {
 	ID             string
@@ -306,6 +310,12 @@ func (c *Catalog) CreateBlobStore(ctx context.Context, n NewBlobStore) (*BlobSto
 	if n.Kind == KindS3 && n.S3.AccessKeyID == "" && !c.opts.AllowAmbientCredentials {
 		return nil, errAmbientCredentials
 	}
+	// The id is allocated before the row is written: the secret is sealed
+	// for it (internal/secrets, BlobStoreContext).
+	var id string
+	if err := c.pool.QueryRow(ctx, `SELECT gen_random_uuid()::text`).Scan(&id); err != nil {
+		return nil, fmt.Errorf("create blob store: %w", err)
+	}
 	var cfg any
 	switch n.Kind {
 	case KindFS:
@@ -317,7 +327,7 @@ func (c *Catalog) CreateBlobStore(ctx context.Context, n NewBlobStore) (*BlobSto
 				return nil, fmt.Errorf("storing s3 credentials needs secret encryption, which is not configured; "+
 					"omit them and use environment or instance credentials: %w", core.ErrNotImplemented)
 			}
-			sealed, err := c.opts.Sealer.Seal([]byte(s3.SecretAccessKey))
+			sealed, err := c.opts.Sealer.Seal(secrets.BlobStoreContext(id, secretSealedField), []byte(s3.SecretAccessKey))
 			if err != nil {
 				return nil, fmt.Errorf("seal s3 secret: %w", err)
 			}
@@ -329,8 +339,8 @@ func (c *Catalog) CreateBlobStore(ctx context.Context, n NewBlobStore) (*BlobSto
 	if err != nil {
 		return nil, fmt.Errorf("encode blob store config: %w", err)
 	}
-	_, err = c.pool.Exec(ctx, `INSERT INTO blob_stores (name, kind, config, soft_quota_bytes) VALUES ($1, $2, $3, $4)`,
-		n.Name, n.Kind, b, n.SoftQuotaBytes)
+	_, err = c.pool.Exec(ctx, `INSERT INTO blob_stores (id, name, kind, config, soft_quota_bytes) VALUES ($1, $2, $3, $4, $5)`,
+		id, n.Name, n.Kind, b, n.SoftQuotaBytes)
 	if isUniqueViolation(err) {
 		return nil, fmt.Errorf("blob store %q: %w", n.Name, core.ErrAlreadyExists)
 	}

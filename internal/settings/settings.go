@@ -339,24 +339,24 @@ func (e *InUseError) Error() string {
 // errNoKeyring explains a secret that cannot be stored.
 const errNoKeyring = "storing secrets needs security.secret_key (HANGAR_SECRET_KEY) on the server"
 
-// seal seals a secret for storage ("" stays "").
-func (s *Service) seal(v string) (string, error) {
+// seal seals a secret for storage at c ("" stays "").
+func (s *Service) seal(c secrets.Context, v string) (string, error) {
 	if v == "" {
 		return "", nil
 	}
 	if s.opts.Keyring == nil {
 		return "", secrets.ErrNoKey
 	}
-	return s.opts.Keyring.SealString(v)
+	return s.opts.Keyring.SealString(c, v)
 }
 
-// open opens a stored secret ("" stays "").
-func (s *Service) open(v string) (string, error) {
+// open opens the secret stored at c ("" stays "").
+func (s *Service) open(c secrets.Context, v string) (string, error) {
 	if v == "" {
 		return "", nil
 	}
 	if s.opts.Keyring == nil {
 		return "", secrets.ErrNoKey
 	}
-	return s.opts.Keyring.Reveal(v)
+	return s.opts.Keyring.Reveal(c, v)
 }

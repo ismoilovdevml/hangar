@@ -43,7 +43,8 @@ func TestSealedSourceCredentialsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &Service{opts: Options{Secrets: k}}
-	victim, err := k.SealString("victim-password")
+	at := sourceAt{testTaskID, importSourcePath}
+	victim, err := k.SealString(at.context("password"), "victim-password")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,14 +56,14 @@ func TestSealedSourceCredentialsRefused(t *testing.T) {
 	} {
 		// Even with the same value stored for the same URL and user.
 		prev := in
-		if err := s.sealSource(&in, &prev); !errors.Is(err, core.ErrInvalid) || !strings.Contains(err.Error(), "sealed value") {
+		if err := s.sealSource(&in, &prev, at); !errors.Is(err, core.ErrInvalid) || !strings.Contains(err.Error(), "sealed value") {
 			t.Errorf("%+v: err = %v, want ErrInvalid", in, err)
 		}
 	}
 	// Keeping the stored credential still works.
 	prev := Source{URL: src, Username: "x", Password: victim}
 	in := Source{URL: src, Username: "x"}
-	if err := s.sealSource(&in, &prev); err != nil || in.Password != victim {
+	if err := s.sealSource(&in, &prev, at); err != nil || in.Password != victim {
 		t.Fatalf("keep stored: err = %v, password kept = %v", err, in.Password == victim)
 	}
 }

@@ -13,74 +13,106 @@ import (
 // SweepOptions select what Sweep changes.
 type SweepOptions struct {
 	// Rewrap re-encrypts values sealed with a previous key under the primary
-	// key (key rotation). Without it only plaintext values are sealed.
+	// key (key rotation). Without it plaintext values are sealed and legacy
+	// values upgraded, and hgs2 values under a previous key are only counted.
 	Rewrap bool
+	// Downgrade writes every value in the legacy hgs1 format under the
+	// primary key, which Hangar before v0.2.0 reads, giving up the binding of
+	// each value to its row and field. For downgrading a database only: a
+	// v0.2.0 server upgrades the values again on its next start.
+	Downgrade bool
 	// DryRun counts without writing anything.
 	DryRun bool
 }
 
-// Report is what Sweep found, counted per secret value.
+// Report is what Sweep found, counted per secret value. Counts of changes
+// are what was (or, on a dry run, would be) changed.
 type Report struct {
 	// Plaintext values found (and sealed, unless DryRun or no keyring).
 	Plaintext int `json:"plaintext"`
-	// Rewrapped values moved from a previous key to the primary key.
+	// Upgraded legacy hgs1 values sealed again as hgs2 for their row and
+	// field under the primary key.
+	Upgraded int `json:"upgraded"`
+	// Rewrapped hgs2 values moved from a previous key to the primary key.
 	Rewrapped int `json:"rewrapped"`
-	// Current values already sealed with the primary key.
+	// Downgraded values written in the legacy hgs1 format (Downgrade).
+	Downgraded int `json:"downgraded,omitempty"`
+	// Current values already in the target form: hgs2 under the primary key
+	// (hgs1 under the primary key with Downgrade).
 	Current int `json:"current"`
-	// Previous values still sealed with a previous key (Rewrap not requested).
+	// Previous hgs2 values still sealed with a previous key (Rewrap not
+	// requested).
 	Previous int `json:"previous"`
-	// Unreadable values that are sealed but cannot be opened, as
-	// "repositories/<name> proxy.auth.token: <reason>". They are left as is.
+	// Unreadable values that are sealed but cannot be opened where they are
+	// stored, as "repositories/<name> proxy.auth.token: <reason>": sealed
+	// with a key that is not configured, altered, or copied from another
+	// row or field. They are left as is.
 	Unreadable []string `json:"unreadable,omitempty"`
 	// Rows written (0 on a dry run).
 	Rows int `json:"rows"`
 }
 
 // Sweep walks every stored secret (repositories.config, blob_stores.config,
-// the source credentials of import tasks,
-// the sign-in settings, the outbound proxy passwords and the repository
-// signing keys) in one transaction, sealing plaintext values with the
-// primary key and, with Rewrap, re-wrapping values sealed with previous keys.
-// It is idempotent and safe to run on several nodes at once (rows are locked).
-// Updated rows keep their updated_at: the secrets themselves do not change.
+// the source credentials of import tasks, the sign-in settings, the outbound
+// proxy passwords and the repository signing keys) in one transaction,
+// sealing plaintext values with the primary key, upgrading legacy hgs1 values
+// to hgs2 bound to their row and field, and, with Rewrap, re-wrapping values
+// sealed with previous keys. It is idempotent and safe to run on several
+// nodes at once (rows are locked). Updated rows keep their updated_at: the
+// secrets themselves do not change.
 //
 // With a nil keyring nothing is written; the report shows how many plaintext
 // values are waiting to be sealed and how many sealed values cannot be read.
 func Sweep(ctx context.Context, pool *pgxpool.Pool, k *Keyring, opts SweepOptions) (Report, error) {
 	var rep Report
 	write := k != nil && !opts.DryRun
-	visit := func(where string) valueFunc {
+	seal := func(c Context, v string) (string, error) {
+		rep.Plaintext++
+		switch {
+		case k == nil:
+			return v, nil
+		case opts.Downgrade:
+			return k.sealLegacy([]byte(v))
+		}
+		return k.SealString(c, v)
+	}
+	// visit returns the valueFunc for one row: where names it in reports,
+	// place gives the Context of each of its fields.
+	visit := func(where string, place func(field string) Context) valueFunc {
 		return func(field, v string) (string, error) {
+			c := place(field)
 			if !IsSealed(v) {
-				rep.Plaintext++
-				if k == nil {
-					return v, nil
-				}
-				return k.SealString(v)
+				return seal(c, v)
 			}
-			if err := k.Check(v); err != nil {
+			if err := k.Check(c, v); err != nil {
 				// Reported, left as it is, and the sweep goes on.
 				rep.Unreadable = append(rep.Unreadable, where+" "+field+": "+err.Error())
 				return v, nil //nolint:nilerr // an unreadable value is a finding, not a failure of the sweep
 			}
+			id, _ := KeyIDOf(v)
+			primary := id == k.PrimaryID()
 			switch {
-			case !k.NeedsRewrap(v):
+			case opts.Downgrade && IsLegacy(v) && primary:
+				rep.Current++
+			case opts.Downgrade:
+				rep.Downgraded++
+				return k.Downgrade(c, v)
+			case IsLegacy(v):
+				rep.Upgraded++
+				return k.Rewrap(c, v)
+			case primary:
 				rep.Current++
 			case opts.Rewrap:
 				rep.Rewrapped++
-				return k.Rewrap(v)
+				return k.Rewrap(c, v)
 			default:
 				rep.Previous++
 			}
 			return v, nil
 		}
 	}
-	seal := func(v string) (string, error) {
-		rep.Plaintext++
-		if k == nil {
-			return v, nil
-		}
-		return k.SealString(v)
+	plain := func(place func(string) Context) valueFunc {
+		return func(field, v string) (string, error) { return seal(place(field), v) }
 	}
 
 	tx, err := pool.Begin(ctx)
@@ -89,33 +121,44 @@ func Sweep(ctx context.Context, pool *pgxpool.Pool, k *Keyring, opts SweepOption
 	}
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 
+	// Every query returns (row key, name for reports, document). The row key
+	// is the Row of the values' Context and the key the update matches.
 	tables := []struct {
 		table, query, update string
-		apply                func(doc map[string]any, where string) (bool, error)
+		apply                func(doc map[string]any, where, key string) (bool, error)
 	}{
 		{"repositories", `SELECT id::text, name, config FROM repositories WHERE config ? 'proxy' ORDER BY name FOR UPDATE`,
 			`UPDATE repositories SET config = $2 WHERE id = $1`,
-			func(doc map[string]any, where string) (bool, error) { return mapRepoDoc(doc, visit(where)) }},
+			func(doc map[string]any, where, key string) (bool, error) {
+				return mapRepoDoc(doc, visit(where, func(f string) Context { return RepositoryContext(key, f) }))
+			}},
 		{"blob_stores", `SELECT id::text, name, config FROM blob_stores ORDER BY name FOR UPDATE`,
 			`UPDATE blob_stores SET config = $2 WHERE id = $1`,
-			func(doc map[string]any, where string) (bool, error) { return mapStoreDoc(doc, seal, visit(where)) }},
+			func(doc map[string]any, where, key string) (bool, error) {
+				place := func(f string) Context { return BlobStoreContext(key, f) }
+				return mapStoreDoc(doc, plain(place), visit(where, place))
+			}},
 		{"settings", `SELECT key, key, value FROM settings ORDER BY key FOR UPDATE`,
 			`UPDATE settings SET value = $2 WHERE key = $1`,
-			func(doc map[string]any, where string) (bool, error) {
-				return mapFields(doc, visit(where), "client_secret", "bind_password")
+			func(doc map[string]any, where, key string) (bool, error) {
+				return mapFields(doc, visit(where, func(f string) Context { return SettingContext(key, f) }), "", "client_secret", "bind_password")
 			}},
 		{"outbound_proxies", `SELECT name, name, jsonb_build_object('password', password) FROM outbound_proxies
 			WHERE password <> '' ORDER BY name FOR UPDATE`,
 			`UPDATE outbound_proxies SET password = $2::jsonb ->> 'password' WHERE name = $1`,
-			func(doc map[string]any, where string) (bool, error) { return mapFields(doc, visit(where), "password") }},
+			func(doc map[string]any, where, key string) (bool, error) {
+				return mapFields(doc, visit(where, func(string) Context { return OutboundProxyContext(key) }), "", "password")
+			}},
 		{"signing_keys", `SELECT name, name, jsonb_build_object('private_key', private_key) FROM signing_keys ORDER BY name FOR UPDATE`,
 			`UPDATE signing_keys SET private_key = $2::jsonb ->> 'private_key' WHERE name = $1`,
-			func(doc map[string]any, where string) (bool, error) {
-				return mapFields(doc, visit(where), "private_key")
+			func(doc map[string]any, where, key string) (bool, error) {
+				return mapFields(doc, visit(where, func(string) Context { return SigningKeyContext(key) }), "", "private_key")
 			}},
 		{"tasks", `SELECT id::text, name, config FROM tasks WHERE config ? 'source' OR config ? 'inventory' ORDER BY name FOR UPDATE`,
 			`UPDATE tasks SET config = $2 WHERE id = $1`,
-			func(doc map[string]any, where string) (bool, error) { return mapTaskDoc(doc, visit(where)) }},
+			func(doc map[string]any, where, key string) (bool, error) {
+				return mapTaskDoc(doc, visit(where, func(f string) Context { return TaskContext(key, f) }))
+			}},
 	}
 	// Tables of later migrations are skipped when absent (schemas migrated in part).
 	optional := map[string]bool{"signing_keys": true}
@@ -152,10 +195,10 @@ func Sweep(ctx context.Context, pool *pgxpool.Pool, k *Keyring, opts SweepOption
 	return rep, nil
 }
 
-// sweepTable reads every row of query (id, name, config) and returns the
-// changed config documents by id.
+// sweepTable reads every row of query (key, name, document) and returns the
+// changed documents by key.
 func sweepTable(ctx context.Context, tx pgx.Tx, table, query string,
-	apply func(doc map[string]any, where string) (bool, error),
+	apply func(doc map[string]any, where, key string) (bool, error),
 ) (map[string][]byte, error) {
 	rows, err := tx.Query(ctx, query)
 	if err != nil {
@@ -164,16 +207,16 @@ func sweepTable(ctx context.Context, tx pgx.Tx, table, query string,
 	defer rows.Close()
 	out := map[string][]byte{}
 	for rows.Next() {
-		var id, name string
+		var key, name string
 		var raw []byte
-		if err := rows.Scan(&id, &name, &raw); err != nil {
+		if err := rows.Scan(&key, &name, &raw); err != nil {
 			return nil, fmt.Errorf("secrets sweep: read %s: %w", table, err)
 		}
 		var doc map[string]any
 		if err := json.Unmarshal(raw, &doc); err != nil || doc == nil {
 			continue // not an object: nothing to seal
 		}
-		changed, err := apply(doc, table+"/"+name)
+		changed, err := apply(doc, table+"/"+name, key)
 		if err != nil {
 			return nil, fmt.Errorf("secrets sweep: %s %q: %w", table, name, err)
 		}
@@ -184,7 +227,7 @@ func sweepTable(ctx context.Context, tx pgx.Tx, table, query string,
 		if err != nil {
 			return nil, fmt.Errorf("secrets sweep: encode %s %q: %w", table, name, err)
 		}
-		out[id] = b
+		out[key] = b
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("secrets sweep: read %s: %w", table, err)
@@ -193,19 +236,24 @@ func sweepTable(ctx context.Context, tx pgx.Tx, table, query string,
 }
 
 // mapTaskDoc applies fn to the source credentials of an import or pre-warm
-// task config (source, inventory.source).
+// task config (source, inventory.source); fn gets their JSON paths
+// ("source.password", "inventory.source.token").
 func mapTaskDoc(doc map[string]any, fn valueFunc) (bool, error) {
-	changed := false
-	srcs := []any{doc["source"]}
-	if inv, ok := doc["inventory"].(map[string]any); ok {
-		srcs = append(srcs, inv["source"])
+	type src struct {
+		path string
+		doc  any
 	}
+	srcs := []src{{"source.", doc["source"]}}
+	if inv, ok := doc["inventory"].(map[string]any); ok {
+		srcs = append(srcs, src{"inventory.source.", inv["source"]})
+	}
+	changed := false
 	for _, s := range srcs {
-		m, ok := s.(map[string]any)
+		m, ok := s.doc.(map[string]any)
 		if !ok {
 			continue
 		}
-		c, err := mapFields(m, fn, "password", "token")
+		c, err := mapFields(m, fn, s.path, "password", "token")
 		if err != nil {
 			return false, err
 		}
@@ -215,15 +263,15 @@ func mapTaskDoc(doc map[string]any, fn valueFunc) (bool, error) {
 }
 
 // mapFields applies fn to the non-empty string fields of doc named by
-// fields, reporting whether any changed.
-func mapFields(doc map[string]any, fn valueFunc, fields ...string) (bool, error) {
+// fields, reporting whether any changed. fn gets prefix + the field name.
+func mapFields(doc map[string]any, fn valueFunc, prefix string, fields ...string) (bool, error) {
 	changed := false
 	for _, f := range fields {
 		v, ok := doc[f].(string)
 		if !ok || v == "" {
 			continue
 		}
-		nv, err := fn(f, v)
+		nv, err := fn(prefix+f, v)
 		if err != nil {
 			return false, err
 		}
@@ -239,7 +287,8 @@ func (r Report) Err() error {
 	if len(r.Unreadable) == 0 {
 		return nil
 	}
-	return fmt.Errorf("%d stored secret(s) cannot be opened with the configured keys: %w", len(r.Unreadable), errUnreadable)
+	return fmt.Errorf("%d stored secret(s) cannot be opened with the configured keys where they are stored: %w",
+		len(r.Unreadable), errUnreadable)
 }
 
 var errUnreadable = errors.New("unreadable secrets")

@@ -185,11 +185,13 @@ type Executor interface {
 // name resources beyond system:tasks, such as the repository an import
 // writes to. The service calls the hooks with the caller's context.
 type ConfigHooks interface {
-	// PrepareConfig runs on Create and Update after Validate. prev is the
-	// stored config on Update (nil on Create). It authorizes the caller for
-	// what the task will do, keeps write-only secrets of prev the client left
-	// empty, seals secrets, and returns the config to store.
-	PrepareConfig(ctx context.Context, config, prev json.RawMessage) (json.RawMessage, error)
+	// PrepareConfig runs on Create and Update after Validate. taskID is the
+	// id of the task's row (allocated before the row is written on Create),
+	// which sealed secrets are bound to. prev is the stored config on Update
+	// (nil on Create). It authorizes the caller for what the task will do,
+	// keeps write-only secrets of prev the client left empty, seals secrets,
+	// and returns the config to store.
+	PrepareConfig(ctx context.Context, taskID string, config, prev json.RawMessage) (json.RawMessage, error)
 	// AuthorizeRun checks that the caller may start a run by hand.
 	AuthorizeRun(ctx context.Context, config json.RawMessage) error
 	// RedactConfig removes write-only secrets before a config leaves the server.
@@ -592,7 +594,7 @@ WHERE r.id = $1 AND r.task_id = $2`, runID, t.ID), &log)
 
 var taskNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,62}$`)
 
-func (s *Service) validateInput(ctx context.Context, in *Input, prev json.RawMessage) (registration, error) {
+func (s *Service) validateInput(ctx context.Context, in *Input, taskID string, prev json.RawMessage) (registration, error) {
 	if !taskNameRE.MatchString(in.Name) {
 		return registration{}, fmt.Errorf("task name %q must match %s: %w", in.Name, taskNameRE, core.ErrInvalid)
 	}
@@ -616,7 +618,7 @@ func (s *Service) validateInput(ctx context.Context, in *Input, prev json.RawMes
 		return registration{}, err
 	}
 	if h, ok := reg.exec.(ConfigHooks); ok {
-		cfg, err := h.PrepareConfig(ctx, in.Config, prev)
+		cfg, err := h.PrepareConfig(ctx, taskID, in.Config, prev)
 		if err != nil {
 			return registration{}, err
 		}
@@ -645,7 +647,13 @@ func enabled(p *bool) bool { return p == nil || *p }
 
 // Create adds a task of a creatable type. The caller authorizes; Create audits.
 func (s *Service) Create(ctx context.Context, in Input) (*Task, error) {
-	reg, err := s.validateInput(ctx, &in, nil)
+	// The id is allocated before the config is prepared: secrets in it are
+	// sealed for this row (internal/secrets, TaskContext).
+	var id string
+	if err := s.pool.QueryRow(ctx, `SELECT gen_random_uuid()::text`).Scan(&id); err != nil {
+		return nil, fmt.Errorf("create task: %w", err)
+	}
+	reg, err := s.validateInput(ctx, &in, id, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -653,11 +661,10 @@ func (s *Service) Create(ctx context.Context, in Input) (*Task, error) {
 		return nil, fmt.Errorf("tasks of type %q are managed by the server (cleanup tasks belong to cleanup policies): %w",
 			in.Type, core.ErrInvalid)
 	}
-	var id string
 	err = s.pool.QueryRow(ctx, `
-INSERT INTO tasks (name, type, description, schedule, config, enabled, next_run_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id::text`,
-		in.Name, in.Type, in.Description, in.Schedule, []byte(in.Config), enabled(in.Enabled), NextRun(in.Schedule, s.opts.Now())).Scan(&id)
+INSERT INTO tasks (id, name, type, description, schedule, config, enabled, next_run_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id::text`,
+		id, in.Name, in.Type, in.Description, in.Schedule, []byte(in.Config), enabled(in.Enabled), NextRun(in.Schedule, s.opts.Now())).Scan(&id)
 	if isUniqueViolation(err) {
 		return nil, fmt.Errorf("task %q: %w", in.Name, core.ErrAlreadyExists)
 	}
@@ -688,7 +695,7 @@ func (s *Service) Update(ctx context.Context, ref string, in Input) (*Task, erro
 	if in.Name != cur.Name || in.Type != cur.Type {
 		return nil, fmt.Errorf("task name and type cannot be changed: %w", core.ErrInvalid)
 	}
-	if _, err := s.validateInput(ctx, &in, cur.Config); err != nil {
+	if _, err := s.validateInput(ctx, &in, cur.ID, cur.Config); err != nil {
 		return nil, err
 	}
 	_, err = s.pool.Exec(ctx, `

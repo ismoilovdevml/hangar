@@ -276,7 +276,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		if err := json.Unmarshal(sc.Config, &m); err != nil {
 			return nil, fmt.Errorf("blob store %s config: %w", sc.Name, core.ErrInvalid)
 		}
-		m, err := keyring.OpenStoreConfig(m)
+		m, err := keyring.OpenStoreConfig(m, sc.ID)
 		if err != nil {
 			return nil, fmt.Errorf("blob store %s credentials: %w", sc.Name, err)
 		}

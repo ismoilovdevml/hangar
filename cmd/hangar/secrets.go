@@ -24,10 +24,11 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/signing"
 )
 
-// openSecrets builds the keyring from security.secret_key and seals stored
-// plaintext secrets left from before encryption was configured. Without a
-// key it returns a nil keyring (secrets are then refused) and warns about
-// anything stored that needs one.
+// openSecrets builds the keyring from security.secret_key, seals stored
+// plaintext secrets left from before encryption was configured, and upgrades
+// values sealed by Hangar before v0.2.0 (hgs1) to hgs2, bound to their row
+// and field. Without a key it returns a nil keyring (secrets are then
+// refused) and warns about anything stored that needs one.
 func openSecrets(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log *slog.Logger) (*secrets.Keyring, error) {
 	keyring, err := cfg.Security.Keyring()
 	if err != nil {
@@ -45,6 +46,11 @@ func openSecrets(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, log
 		log.Warn("security.secret_key is not set: proxy upstream credentials and blob store keys cannot be stored")
 	case rep.Plaintext > 0:
 		log.Info("sealed stored plaintext secrets", "count", rep.Plaintext, "key_id", keyring.PrimaryID())
+	}
+	if rep.Upgraded > 0 {
+		log.Info("upgraded stored secrets to the hgs2 format (bound to their row and field); "+
+			"Hangar before v0.2.0 cannot read them: see `hangar admin rotate-secrets --downgrade` before a downgrade",
+			"count", rep.Upgraded, "key_id", keyring.PrimaryID())
 	}
 	if rep.Previous > 0 {
 		log.Warn("secrets are sealed with a previous key: run `hangar admin rotate-secrets`", "count", rep.Previous)
@@ -117,13 +123,17 @@ func readmeImageSources(ui config.UI) []string {
 }
 
 // adminRotateSecrets re-encrypts every stored secret with the primary key:
-// plaintext values are sealed and values sealed with a previous key are
-// re-wrapped. It exits non-zero when a value cannot be opened.
+// plaintext values are sealed, legacy hgs1 values are upgraded to hgs2 and
+// values sealed with a previous key are re-wrapped. With --downgrade it
+// writes every value in the hgs1 format instead, for going back to Hangar
+// before v0.2.0. It exits non-zero when a value cannot be opened.
 func adminRotateSecrets(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("admin rotate-secrets", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	dryRun := fs.Bool("dry-run", false, "report what would change without writing")
 	asJSON := fs.Bool("json", false, "print the report as JSON")
+	downgrade := fs.Bool("downgrade", false, "write every secret in the hgs1 format of Hangar before v0.2.0 "+
+		"(unbound to its row and field); only with every v0.2+ node stopped, right before starting the older version")
 	cfg, _, err := loadConfig(fs, args, stderr)
 	if err != nil {
 		return err
@@ -145,7 +155,7 @@ func adminRotateSecrets(args []string, stdout, stderr io.Writer) error {
 	if err := ensureSchema(ctx, pool, false, slog.New(slog.DiscardHandler)); err != nil {
 		return err
 	}
-	rep, err := secrets.Sweep(ctx, pool, keyring, secrets.SweepOptions{Rewrap: true, DryRun: *dryRun})
+	rep, err := secrets.Sweep(ctx, pool, keyring, secrets.SweepOptions{Rewrap: true, Downgrade: *downgrade, DryRun: *dryRun})
 	if err != nil {
 		return err
 	}
@@ -158,8 +168,13 @@ func adminRotateSecrets(args []string, stdout, stderr io.Writer) error {
 		if *dryRun {
 			summary = "dry run, nothing written"
 		}
-		_, _ = fmt.Fprintf(stdout, "primary key %s: %d plaintext sealed, %d re-wrapped, %d already current; %s\n",
-			keyring.PrimaryID(), rep.Plaintext, rep.Rewrapped, rep.Current, summary)
+		if *downgrade {
+			_, _ = fmt.Fprintf(stdout, "primary key %s: %d plaintext sealed, %d downgraded to hgs1, %d already hgs1; %s\n",
+				keyring.PrimaryID(), rep.Plaintext, rep.Downgraded, rep.Current, summary)
+		} else {
+			_, _ = fmt.Fprintf(stdout, "primary key %s: %d plaintext sealed, %d upgraded to hgs2, %d re-wrapped, %d already current; %s\n",
+				keyring.PrimaryID(), rep.Plaintext, rep.Upgraded, rep.Rewrapped, rep.Current, summary)
+		}
 		for _, u := range rep.Unreadable {
 			_, _ = fmt.Fprintln(stdout, "cannot open:", u)
 		}

@@ -9,11 +9,16 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/api/apitest"
 	"github.com/ismoilovdevml/hangar/internal/core"
+	"github.com/ismoilovdevml/hangar/internal/secrets"
 )
 
 type fakeSealer struct{}
 
-func (fakeSealer) Seal(p []byte) (string, error) { return "hgs1.fake." + strconv.Itoa(len(p)), nil }
+// fakeSealer records the context in the sealed value, so tests see where a
+// secret was sealed for.
+func (fakeSealer) Seal(at secrets.Context, p []byte) (string, error) {
+	return "hgs2.fake." + at.Table + "." + at.Field + "." + strconv.Itoa(len(p)), nil
+}
 
 func TestNewBlobStoreValidate(t *testing.T) {
 	neg := int64(-1)
@@ -209,23 +214,27 @@ func TestCatalogIntegration(t *testing.T) {
 	if bs.S3 == nil || bs.S3.SecretSealed != "" || bs.S3.SecretAccessKey != "" || bs.Location() != "s3://hangar/blobs" {
 		t.Errorf("created = %+v", bs.S3)
 	}
-	if raw := apitest.QueryString(t, pool, `SELECT config->>'secret_access_key_sealed' FROM blob_stores WHERE name = 's3-main'`); raw != "hgs1.fake.2" {
+	if raw := apitest.QueryString(t, pool, `SELECT config->>'secret_access_key_sealed' FROM blob_stores WHERE name = 's3-main'`); raw != "hgs2.fake.blob_stores.secret_access_key_sealed.2" {
 		t.Errorf("stored secret = %q", raw)
 	}
 	// A connection test of an existing store uses the stored secret when the
 	// key is unchanged; a new key needs its secret.
-	cfg, err := sealed.BlobStoreTestConfig(ctx, NewBlobStore{Name: "s3-main", Kind: KindS3, S3: &S3Config{Bucket: "hangar", AccessKeyID: "AK", UsePathStyle: true}})
-	if err != nil || cfg["secret_access_key_sealed"] != "hgs1.fake.2" || cfg["secret_access_key"] != nil || cfg["use_path_style"] != true {
+	cfg, storeID, err := sealed.BlobStoreTestConfig(ctx, NewBlobStore{Name: "s3-main", Kind: KindS3, S3: &S3Config{Bucket: "hangar", AccessKeyID: "AK", UsePathStyle: true}})
+	if err != nil || cfg["secret_access_key_sealed"] != "hgs2.fake.blob_stores.secret_access_key_sealed.2" || cfg["secret_access_key"] != nil ||
+		cfg["use_path_style"] != true {
 		t.Errorf("test config = %v, %v", cfg, err)
 	}
-	if _, err := sealed.BlobStoreTestConfig(ctx, NewBlobStore{Name: "s3-main", Kind: KindS3, S3: &S3Config{Bucket: "hangar", AccessKeyID: "OTHER"}}); !errors.Is(err, core.ErrInvalid) {
+	if want := apitest.QueryString(t, pool, `SELECT id::text FROM blob_stores WHERE name = 's3-main'`); storeID != want {
+		t.Errorf("test config store id = %q, want %q (the store the sealed secret belongs to)", storeID, want)
+	}
+	if _, _, err := sealed.BlobStoreTestConfig(ctx, NewBlobStore{Name: "s3-main", Kind: KindS3, S3: &S3Config{Bucket: "hangar", AccessKeyID: "OTHER"}}); !errors.Is(err, core.ErrInvalid) {
 		t.Errorf("new key without secret err = %v", err)
 	}
-	cfg, err = sealed.BlobStoreTestConfig(ctx, NewBlobStore{Name: "new-one", Kind: KindS3, S3: &S3Config{Bucket: "b", Endpoint: "http://minio:9000", AccessKeyID: "K", SecretAccessKey: "S"}})
-	if err != nil || cfg["secret_access_key"] != "S" || cfg["endpoint"] != "http://minio:9000" {
+	cfg, storeID, err = sealed.BlobStoreTestConfig(ctx, NewBlobStore{Name: "new-one", Kind: KindS3, S3: &S3Config{Bucket: "b", Endpoint: "http://minio:9000", AccessKeyID: "K", SecretAccessKey: "S"}})
+	if err != nil || cfg["secret_access_key"] != "S" || cfg["endpoint"] != "http://minio:9000" || storeID != "" {
 		t.Errorf("new store test config = %v, %v", cfg, err)
 	}
-	if _, err := sealed.BlobStoreTestConfig(ctx, NewBlobStore{Name: "x", Kind: KindFS, FS: &FSConfig{Path: "/x"}}); !errors.Is(err, core.ErrInvalid) {
+	if _, _, err := sealed.BlobStoreTestConfig(ctx, NewBlobStore{Name: "x", Kind: KindFS, FS: &FSConfig{Path: "/x"}}); !errors.Is(err, core.ErrInvalid) {
 		t.Errorf("fs test err = %v", err)
 	}
 	if _, totals, _ = c.BlobStores(ctx); totals.CapacityBytes != nil {
