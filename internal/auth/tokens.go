@@ -643,8 +643,9 @@ func truncate(s string, n int) string {
 // GET /auth/session: what the token is and how far it reaches.
 type CurrentToken struct {
 	ID string `json:"id"`
-	// Kind is "personal" (personal access and service-account tokens) or
-	// "session" (short-lived tokens minted for registry logins).
+	// Kind is "personal" (personal access and service-account tokens),
+	// "session" (short-lived tokens minted for registry logins) or
+	// "federated" (minted by a CI OIDC token exchange).
 	Kind   string `json:"kind"`
 	Name   string `json:"name"`
 	Prefix string `json:"prefix"`

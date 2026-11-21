@@ -247,6 +247,13 @@ auth:
   # How often token and user last-used times are written back.
   usage_flush_interval: 30s
 
+  # CI OIDC token exchange (trusted publishing): CI jobs trade their
+  # platform's ID token for a short-lived token. Trust policies are managed
+  # in the web UI or with /api/v1/trust-policies; see docs/guides/ci-oidc.md.
+  ci_oidc:
+    # Accept plain-http issuers. Development and tests only.
+    allow_http_issuers: false
+
   # Single sign-on with an OpenID Connect provider (Keycloak, Entra ID,
   # Okta, Authentik, Dex ...): authorization code flow with PKCE (S256).
   # Register the redirect URI <server.base_url>/api/v1/auth/oidc/callback.

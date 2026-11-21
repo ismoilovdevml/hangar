@@ -15,6 +15,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/api"
 	"github.com/ismoilovdevml/hangar/internal/auth"
+	"github.com/ismoilovdevml/hangar/internal/auth/federation"
 	"github.com/ismoilovdevml/hangar/internal/auth/httpapi"
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/settings"
@@ -61,13 +62,13 @@ func specOperations(t *testing.T) []specOperation {
 
 // fullRouter mounts the API with every route registrar the server wires in
 // (cmd/hangar/wire.go): the core routes, the authentication routes and the
-// settings and signing-key routes. Handlers are only registered, never
+// settings, signing-key and trust policy routes. Handlers are only registered, never
 // called, so the services can be empty.
 func fullRouter() chi.Router {
 	r := chi.NewRouter()
 	(&api.API{
 		AuthRoutes:  api.RouteFunc(func(r chi.Router) { httpapi.Register(r, &auth.Service{}, httpapi.Options{}) }),
-		ExtraRoutes: []api.RouteRegistrar{&settings.Service{}, &signing.Service{}},
+		ExtraRoutes: []api.RouteRegistrar{&settings.Service{}, &signing.Service{}, &federation.Service{}},
 	}).Mount(r)
 	return r
 }

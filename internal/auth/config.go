@@ -53,6 +53,18 @@ type Config struct {
 	OIDC OIDCConfig `yaml:"oidc"`
 	// LDAP is sign-in with an LDAP directory or Active Directory.
 	LDAP LDAPConfig `yaml:"ldap"`
+
+	// CIOIDC tunes the CI OIDC token exchange (trust policies are managed
+	// through the API).
+	CIOIDC CIOIDCConfig `yaml:"ci_oidc"`
+}
+
+// CIOIDCConfig tunes the CI OIDC token exchange.
+type CIOIDCConfig struct {
+	// AllowHTTPIssuers accepts trust policies whose issuer (and its key set)
+	// is plain http. Only for development and tests: anyone on the network
+	// path could then sign ID tokens.
+	AllowHTTPIssuers bool `yaml:"allow_http_issuers"`
 }
 
 // Argon2Params are argon2id cost parameters.

@@ -74,11 +74,15 @@ func addressAllowed(cidrs []string, ip string) bool {
 // calling token's (none requested means the calling token's). Scopes and
 // the read-only flag are checked by planToken. It returns the networks to
 // store. Callers signed in with a browser session (no token) are not
-// limited: that is how tokens are made in the web UI.
+// limited: that is how tokens are made in the web UI. A federated token
+// (CI OIDC exchange) may not create tokens at all.
 func (s *Service) inheritTokenLimits(ctx context.Context, expires time.Time, cidrs []string) ([]string, error) {
 	cur, err := s.CurrentToken(ctx)
 	if err != nil || cur == nil {
 		return cidrs, err
+	}
+	if cur.Kind == TokenKindFederated {
+		return nil, errFederatedCaller
 	}
 	if expires.After(cur.ExpiresAt) {
 		return nil, fmt.Errorf("token expires_at must not be later than the calling token's (%s): %w",

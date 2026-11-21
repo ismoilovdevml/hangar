@@ -266,6 +266,7 @@ var passwordChangeRoutes = map[string]routeKind{
 	"POST /auth/login":         routePublic,
 	"GET /auth/oidc/start":     routePublic,
 	"GET /auth/oidc/callback":  routePublic,
+	"POST /auth/oidc/exchange": routePublic,
 	"GET /system/status":       routePublic,
 	"GET /system/version":      routePublic,
 	"GET /openapi.yaml":        routePublic,
