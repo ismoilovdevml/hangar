@@ -23,10 +23,9 @@ import type {
   TaskInput,
   LockfileResult,
 } from './opsTypes';
-import { allows, type PrivilegeAction } from '../lib/can';
+import { allows, type Action } from '../lib/privileges';
 import { applyTaskFinished, applyTaskProgress } from '../lib/tasks';
 import type { Page } from './types';
-import { errorSentence } from '../lib/apiError';
 
 export const opsKeys = {
   cleanupAll: [...queryKeys.cleanupPolicies, 'all'] as const,
@@ -46,7 +45,7 @@ export function isMissingEndpoint(err: unknown): boolean {
 }
 
 /** Whether the signed-in user holds `system:<area>:<action>` (UI hints only; the server decides). */
-export function useCanSystem(area: string, action: PrivilegeAction): boolean {
+export function useCanSystem(area: string, action: Action): boolean {
   const session = useSession();
   return allows(session.data?.privileges, 'system', area, action);
 }
@@ -360,11 +359,3 @@ export function useClusterStatus() {
   });
 }
 
-/** A sentence for an API failure: the server's message, or `fallback` for network errors. */
-export function errorText(err: unknown, fallback = 'Something went wrong. Try again.'): string {
-  if (err instanceof ApiRequestError) {
-    if (err.status === 403) return 'You do not have permission to do this.';
-    return err.body?.message ? errorSentence(err) : fallback;
-  }
-  return fallback;
-}

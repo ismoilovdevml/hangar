@@ -24,7 +24,7 @@ function useRange() {
 function StatusPill() {
   const health = useSystemHealth();
   return (
-    <Link to="/system/status" className={`status-pill glass status-pill--${health.tone}`} aria-busy={health.loading || undefined}>
+    <Link to="/system" className={`status-pill glass status-pill--${health.tone}`} aria-busy={health.loading || undefined}>
       <span className={`status__dot dot-${health.tone}`} aria-hidden="true" />
       <span className="status-pill__text">{health.text}</span>
     </Link>
@@ -83,8 +83,11 @@ export function TopBar({ onSignOut }: { onSignOut: () => void }) {
   const session = useSession();
   const matches = useMatches();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const meta = [...matches].reverse().find((m) => m.staticData?.title)?.staticData;
+  // Every titled route of the address is a crumb: an area's layout ("System") links to it, the page is last.
+  const titled = matches.filter((m) => m.staticData?.title);
+  const meta = titled[titled.length - 1]?.staticData;
   const title = meta?.title;
+  const areas = titled.slice(0, -1);
   const org = session.data?.organization;
   const shortcut = isMac() ? '⌘K' : 'Ctrl K';
   // The Overview carries its own search box, so its header is bare and shows the system state instead.
@@ -102,6 +105,13 @@ export function TopBar({ onSignOut }: { onSignOut: () => void }) {
               </Link>
             </li>
           )}
+          {areas.map((m) => (
+            <li key={m.id}>
+              <Link to={m.pathname} className="breadcrumb__link">
+                {m.staticData.title}
+              </Link>
+            </li>
+          ))}
           {title && (
             <li aria-current="page" className="breadcrumb__current">
               {title}

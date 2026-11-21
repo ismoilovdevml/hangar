@@ -186,9 +186,9 @@ const SCREENS: [path: string, title: string, nav: string][] = [
   ['/blob-stores', 'Blob stores', 'Blob stores'],
   ['/cleanup', 'Cleanup policies', 'Cleanup policies'],
   ['/vulnerabilities', 'Vulnerabilities', 'Vulnerabilities'],
-  ['/access', 'Access & audit', 'Access & audit'],
+  ['/access', 'Access', 'Access'],
   ['/tasks', 'Scheduled tasks', 'Scheduled tasks'],
-  ['/cluster', 'Cluster', 'Cluster'],
+  ['/system/nodes', 'System', 'System'],
 ];
 
 test('every screen has a page frame and an active nav item', async ({ page }) => {

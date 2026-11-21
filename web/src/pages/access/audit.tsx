@@ -1,112 +1,17 @@
-import { useInfiniteQuery, useQueries } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { buildUrl, apiFetch } from '../../api/client';
-import { DataTable, type Column } from '../../components/DataTable';
-import { ErrorNote } from '../../components/ErrorNote';
+import { apiFetch } from '../../api/client';
 import { Panel } from '../../components/Panel';
-import { Pill, StatusDot } from '../../components/Pill';
-import { Segmented } from '../../components/Segmented';
+import { StatusDot } from '../../components/Pill';
 import { Time } from '../../components/Time';
+import { AUDIT_CATEGORIES, describeAudit } from '../../lib/audit';
 import { useNow } from '../../lib/useNow';
-import { accessKeys, type AuditEvent, type AuditEventPage } from './api';
-import { AUDIT_CATEGORIES, describeAudit } from './model';
-
-const OUTCOME_TONE: Record<string, 'ok' | 'warn' | 'bad'> = { success: 'ok', denied: 'warn', error: 'bad' };
-
-export function AuditTab({ category, onCategory }: { category: string; onCategory: (c: string) => void }) {
-  const cat = AUDIT_CATEGORIES.find((c) => c.id === category) ?? AUDIT_CATEGORIES[0]!;
-  const now = useNow();
-  const pages = useInfiniteQuery({
-    queryKey: [...accessKeys.audit(cat.action, ''), 'pages'],
-    queryFn: ({ pageParam, signal }) =>
-      apiFetch<AuditEventPage>('/audit', { query: { action: cat.action, limit: 50, cursor: pageParam || undefined }, signal }),
-    initialPageParam: '',
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
-  });
-  const rows = pages.data?.pages.flatMap((p) => p.items) ?? [];
-
-  const columns: Column<AuditEvent>[] = [
-    {
-      key: 'at',
-      header: 'When',
-      className: 'col-first nowrap',
-      cell: (e) => (
-        <span className="cell-stack">
-          <Time value={e.at} mode="relative" now={now} />
-          <Time value={e.at} className="meta" />
-        </span>
-      ),
-    },
-    { key: 'actor', header: 'Who', cell: (e) => <span className="cell-strong">{e.actor}</span> },
-    {
-      key: 'what',
-      header: 'What',
-      cell: (e) => (
-        <span className="cell-stack">
-          <span>{describeAudit(e.action, e.target, e.details)}</span>
-          <code className="meta mono">{e.action}</code>
-        </span>
-      ),
-    },
-    {
-      key: 'outcome',
-      header: 'Outcome',
-      className: 'nowrap',
-      cell: (e) => <Pill tone={OUTCOME_TONE[e.outcome] ?? 'neutral'}>{e.outcome === 'success' ? 'Success' : e.outcome === 'denied' ? 'Denied' : 'Error'}</Pill>,
-    },
-    { key: 'ip', priority: 3, header: 'Address', className: 'col-last meta mono', cell: (e) => e.ip ?? '—' },
-  ];
-
-  return (
-    <Panel flush aria-label="Access audit log">
-      <div className="repo-toolbar">
-        <Segmented
-          label="Event type"
-          options={AUDIT_CATEGORIES.map((c) => ({ value: c.id, label: c.label }))}
-          value={cat.id}
-          onChange={onCategory}
-        />
-        <div className="repo-toolbar__filters">
-          <Link to="/audit" className="button button--secondary button--sm">
-            Full audit log
-          </Link>
-          <a className="button button--secondary button--sm" href={buildUrl('/audit/export', { format: 'csv', action: cat.action })} download>
-            Export CSV
-          </a>
-          <a className="button button--secondary button--sm" href={buildUrl('/audit/export', { format: 'json', action: cat.action })} download>
-            Export JSON
-          </a>
-        </div>
-      </div>
-      {pages.isError ? (
-        <ErrorNote what="the audit log" error={pages.error} privilege="system:audit:read" onRetry={() => void pages.refetch()} />
-      ) : (
-        <DataTable
-          caption="Access audit log"
-          columns={columns}
-          rows={rows}
-          rowKey={(e) => String(e.id)}
-          busy={pages.isFetching}
-          minWidth={820}
-          loading={pages.isPending} empty={'No events of this type yet.'}
-        />
-      )}
-      <div className="repo-footer">
-        <p className="meta" aria-live="polite">
-          {pages.data ? `${rows.length} events` : ' '}
-        </p>
-        <button type="button" className="button button--secondary button--sm" disabled={!pages.hasNextPage || pages.isFetchingNextPage} onClick={() => void pages.fetchNextPage()}>
-          {pages.isFetchingNextPage ? 'Loading…' : 'Load more'}
-        </button>
-      </div>
-    </Panel>
-  );
-}
+import { accessKeys, type AuditEventPage } from './api';
 
 const DOT_TONE: Record<string, 'ok' | 'warn' | 'bad'> = { success: 'ok', denied: 'warn', error: 'bad' };
 
-/** The latest access events across categories, newest first (side panel). */
-export function RecentAccessActivity({ onShowAll }: { onShowAll: () => void }) {
+/** The latest access events across categories, newest first (side panel); the whole log is /audit. */
+export function RecentAccessActivity() {
   const now = useNow();
   const results = useQueries({
     queries: AUDIT_CATEGORIES.map((c) => ({
@@ -125,9 +30,9 @@ export function RecentAccessActivity({ onShowAll }: { onShowAll: () => void }) {
       title="Audit log"
       titleId="recent-access-title"
       action={
-        <button type="button" className="link-button panel__link" onClick={onShowAll}>
+        <Link to="/audit" className="panel__link">
           Show all
-        </button>
+        </Link>
       }
     >
       {failed ? (

@@ -17,10 +17,12 @@ import {
   auditExportUrl,
   auditQuery,
   DEFAULT_AUDIT_RANGE,
+  describeAudit,
   flattenDetails,
   hasFilters,
   isAuditOutcome,
   isAuditRange,
+  isDescribedAction,
   isoToLocalInput,
   outcomeMeta,
   localInputToIso,
@@ -77,7 +79,14 @@ function EventRow({ e, now }: { e: AuditEvent; now: Date }) {
           {e.actor}
         </td>
         <td data-label="Action">
-          <code className="audit-action">{e.action}</code>
+          {isDescribedAction(e.action) ? (
+            <span className="cell-stack">
+              <span>{describeAudit(e.action, e.target, e.details)}</span>
+              <code className="audit-action">{e.action}</code>
+            </span>
+          ) : (
+            <code className="audit-action">{e.action}</code>
+          )}
         </td>
         <td className="audit-target" data-priority={2} data-label="Target">
           {e.target}

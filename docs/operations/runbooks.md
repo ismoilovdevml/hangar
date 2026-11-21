@@ -233,7 +233,7 @@ sustained for 5 minutes.
 1. Auth dashboard → *Failures by reason*: `unknown_user` across many names is
    guessing; `bad_password` on one user is often a CI job with a stale password;
    `unknown_expired_or_revoked` is a client with an old token.
-2. Audit log (`GET /api/v1/audit?action=auth.login.failed`, or the Audit screen)
+2. Audit log (`GET /api/v1/audit?action=auth.login.failed`, or the Audit log screen)
    shows actor and source IP of each attempt.
 
 **Fix.** Block abusive source addresses at the firewall or reverse proxy.

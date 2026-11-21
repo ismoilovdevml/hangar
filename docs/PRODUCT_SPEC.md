@@ -28,7 +28,7 @@ This is the product design. Parts marked *(planned)* are not built yet; the
 - Lockout after N failed attempts (configurable), audit event on every attempt.
 
 ## 02 · Overview (`Main`)
-- Header without a bar: breadcrumb, system state pill (links to System status), notifications, account menu.
+- Header without a bar: breadcrumb, system state pill (links to System), notifications, account menu.
 - Hero: "What do you need today?" search box (submits to Search), qualifier examples, quick actions
   (connect a client — set-up snippets in a dialog —, create a token, new repository, browse packages).
 - Range switch: 1h / Today / 7 days / 30 days — drives the activity card, request outcomes, the upstream card and rejected pushes.
@@ -83,10 +83,11 @@ This is the product design. Parts marked *(planned)* are not built yet; the
 - 30-day trend chart.
 - Rescan on new advisory DB; waivers need reason + expiry, are audited.
 
-## 10 · Access & audit (`Access`)
-- Tabs: Members, Roles, Access tokens, Service accounts.
+## 10 · Access (`Access`) and Audit log (`Audit log`)
+- Access tabs: Members, Service accounts, Access tokens, Roles.
 - Members table: avatar, name/email, role, source (OIDC/AD/local/token), tokens, last active.
-- Sign-in providers status; audit log stream with export (CSV/JSON, also streamed to syslog/webhook).
+- Sign-in providers status; the latest access events, linking to the Audit log.
+- Audit log (one page, `/audit`): filters by actor, action, target, outcome and time range; access events in plain words; export (CSV/NDJSON, also streamed to syslog/webhook).
 - Roles = sets of privileges (`repo:<pattern>:read|write|delete|admin`, `system:*`); built-ins Admin, Publisher, Reader, CI deployer. Group→role mapping for OIDC/LDAP.
 - Tokens: scoped to repos + actions, expiry required, shown once.
 
@@ -95,9 +96,11 @@ This is the product design. Parts marked *(planned)* are not built yet; the
 - Table: task, description, schedule (human + cron), last run result with status dot, next run, Run now.
 - Built-in task types: cleanup, blob compaction, docker GC, docker upload cleanup, rescan, auth purge, audit partitions. *(planned)* reindex search, directory sync, DB backup, replication, proxy metadata refresh.
 
-## 12 · Cluster & replication (`Cluster`) *(planned)*
+## 12 · System (`System`): Status, Nodes, Logs, About
 
-Today the screen is a placeholder; node health is on Settings → System.
+Today Status (every check of every node), Nodes (node cards, quorum, leader),
+Logs (each node's in-memory log buffer) and About (version, addresses,
+dependency health, configuration) are built. Replication below is *planned*.
 
 - Overall health + quorum.
 - Node cards: role (leader/follower), zone, CPU/memory/cache-disk meters (warn colour > 75%), req/s, uptime.

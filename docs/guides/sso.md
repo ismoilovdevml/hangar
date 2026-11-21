@@ -147,7 +147,7 @@ A `400` answer lists problems by field in `details.fields`
   `default_roles` applies to everyone from the provider. Mapped roles are
   re-synced on every sign-in: leaving a group removes its roles at the next
   sign-in. Roles an administrator binds by hand are kept; binding a mapped
-  role by hand turns it into a manual one. Roles in *Access & audit → Roles*
+  role by hand turns it into a manual one. Roles in *Access → Roles*
   can also map groups with provider `oidc` or `ldap`. Every role named in
   the configuration file must exist, or Hangar refuses to start; the UI
   refuses to save a mapping with unknown roles.

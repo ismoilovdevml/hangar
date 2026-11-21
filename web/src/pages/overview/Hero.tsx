@@ -9,7 +9,7 @@ import { isMac } from '../../components/commandPaletteContext';
 import { useGate } from '../../api/permissions';
 import { GATES } from '../../lib/gates';
 import { PHONE_QUERY, useMediaQuery } from '../../lib/useMediaQuery';
-import { Dialog } from '../access/ui';
+import { Dialog } from '../../components/Dialog';
 
 /** The client set-up snippets for the repositories the user can read, in a dialog. */
 function ConnectClientDialog({ onClose }: { onClose: () => void }) {

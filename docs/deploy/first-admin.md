@@ -41,7 +41,7 @@ WARN ========================================================================
 
 The block is written straight to standard error, never through the
 structured logger: it is not kept in the in-memory buffer behind
-**System logs**, and the structured log only notes that the administrator was
+**System → Logs**, and the structured log only notes that the administrator was
 created and where the password went. Read it with `docker compose logs
 hangar`, `kubectl logs` or `journalctl -u hangar`, or from the file.
 

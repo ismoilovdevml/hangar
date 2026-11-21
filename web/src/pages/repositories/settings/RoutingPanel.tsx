@@ -5,7 +5,7 @@
  * (PUT /repositories/{name}/routing), with a "test a name" check.
  */
 import { useState, type KeyboardEvent } from 'react';
-import { ApiRequestError } from '../../../api/client';
+import { errorText } from '../../../lib/apiError';
 import { useSaveRouting, useSuggestRouting, useTestRouting } from '../../../api/catalog';
 import { usePermissions } from '../../../api/permissions';
 import type { Repository } from '../../../api/types';
@@ -13,14 +13,6 @@ import { Panel } from '../../../components/Panel';
 import { Pill } from '../../../components/Pill';
 import { TYPE_META } from '../../../lib/repositories';
 import { blockReason, EXAMPLES, parsePatterns, showPatterns, toDraft, toRules, type Draft } from '../../../lib/routing';
-
-function apiMessage(err: unknown, action: string): string {
-  if (err instanceof ApiRequestError) {
-    if (err.status === 403) return `You do not have permission to ${action}.`;
-    return err.body?.message ?? `The server could not ${action}.`;
-  }
-  return 'Cannot reach the server. Check your connection and try again.';
-}
 
 /** Enter inside the panel acts on the panel, never on the settings form around it. */
 const onEnter = (fn: () => void) => (e: KeyboardEvent<HTMLInputElement>) => {
@@ -137,7 +129,7 @@ export function RoutingPanel({ repo, memberTypes }: { repo: Repository; memberTy
           {suggested && <span className="field__hint" role="status">{suggested}</span>}
           {suggest.isError && (
             <span className="form-error" role="alert">
-              {apiMessage(suggest.error, 'suggest patterns')}
+              {errorText(suggest.error, { action: 'suggest patterns' })}
             </span>
           )}
         </div>
@@ -194,7 +186,7 @@ export function RoutingPanel({ repo, memberTypes }: { repo: Repository; memberTy
 
       {save.isError && (
         <p className="form-error" role="alert">
-          {apiMessage(save.error, 'save the routing rules')}
+          {errorText(save.error, { action: 'save the routing rules' })}
         </p>
       )}
       <p className="visually-hidden" aria-live="polite">
@@ -245,7 +237,7 @@ export function RoutingPanel({ repo, memberTypes }: { repo: Repository; memberTy
         {dirty && <span className="field__hint">Tests use the saved rules.</span>}
         {test.isError && (
           <p className="form-error" role="alert">
-            {apiMessage(test.error, 'test the name')}
+            {errorText(test.error, { action: 'test the name' })}
           </p>
         )}
         {test.data && (

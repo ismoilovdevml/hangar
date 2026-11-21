@@ -39,7 +39,7 @@ import { RepoSettingsFields } from '../RepoFormFields';
 import { focusFirstError, serverFieldErrors } from '../repoFormHelpers';
 import { RepoActions } from './RepoActions';
 import { ErrorMessage } from '../../../components/States';
-import { errorSentence } from '../../../lib/apiError';
+import { errorText } from '../../../lib/apiError';
 import { RoutingPanel } from './RoutingPanel';
 import { SigningKeyPanel } from './SigningKeyPanel';
 import '../../../styles/catalog.css';
@@ -47,13 +47,10 @@ import './settings.css';
 
 const route = getRouteApi('/app/repositories/$name/settings');
 
+/** A failed change; a refused field is shown at the field, so the sentence points there. */
 function apiMessage(err: unknown, action: string): string {
-  if (err instanceof ApiRequestError) {
-    if (err.status === 403) return `You do not have permission to ${action} this repository.`;
-    if (Object.keys(serverFieldErrors(err)).length > 0) return 'The server refused a setting: see the highlighted field.';
-    return err.body?.message ? errorSentence(err) : `The server could not ${action} the repository.`;
-  }
-  return 'Cannot reach the server. Check your connection and try again.';
+  const onFields = Object.keys(serverFieldErrors(err)).length > 0;
+  return errorText(err, { action: `${action} this repository`, status: onFields ? { 400: 'The server refused a setting: see the highlighted field.' } : undefined });
 }
 
 export function RepoSettingsPage() {
@@ -381,7 +378,7 @@ function SettingsForm({ repo }: { repo: Repository }) {
           tone="danger"
           busy={remove.isPending}
           error={remove.isError ? apiMessage(remove.error, 'delete') : null}
-          onCancel={() => setConfirmDelete(false)}
+          onClose={() => setConfirmDelete(false)}
           onConfirm={() =>
             remove.mutate(undefined, {
               onSuccess: () => {

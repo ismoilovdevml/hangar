@@ -34,7 +34,7 @@ test('hash links open a page and the router keeps the base path', async ({ page 
   const problems = collectProblems(page);
   await page.goto(`${DEMO}#/access?tab=tokens`);
   await expect(page).toHaveURL(`${DEMO}access?tab=tokens`);
-  await expect(page.getByRole('heading', { level: 1, name: 'Access & audit' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Access' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Access sections' }).getByRole('link', { name: 'Access tokens' })).toHaveAttribute(
     'aria-current',
     'page',

@@ -2,15 +2,11 @@
  * Access model for the UI: privileges, token scopes and expiry, user state.
  * Pure functions only, so they are unit-tested without rendering.
  */
-import { ApiRequestError } from '../../api/client';
 import type { Tone } from '../../lib/format';
 import type { Member, Token } from './api';
-import { errorSentence } from '../../lib/apiError';
+import { globMatch, parsePrivilege, type Action, type Privilege } from '../../lib/privileges';
 
 /* ---------------------------------------------------------------- privileges */
-
-export type Action = 'read' | 'write' | 'delete' | 'admin';
-export type Domain = 'repo' | 'system';
 
 export const ACTIONS: { id: Action; label: string; verb: string; hint: string }[] = [
   { id: 'read', label: 'Read', verb: 'read', hint: 'Download and browse packages' },
@@ -31,24 +27,6 @@ export const SYSTEM_AREAS: { id: string; label: string; hint: string }[] = [
   { id: 'cluster', label: 'Cluster', hint: 'Nodes and replication' },
   { id: 'settings', label: 'Settings', hint: 'Global settings' },
 ];
-
-export interface Privilege {
-  domain: Domain;
-  pattern: string;
-  action: Action | '*';
-}
-
-const ACTION_IDS = new Set<string>(['read', 'write', 'delete', 'admin', '*']);
-
-/** Parses "repo:npm-*:write", "system:users:admin" or "system:*"; null if malformed. */
-export function parsePrivilege(s: string): Privilege | null {
-  const parts = s.split(':');
-  if (parts.length === 2 && parts[0] === 'system' && parts[1] === '*') return { domain: 'system', pattern: '*', action: '*' };
-  if (parts.length !== 3) return null;
-  const [domain, pattern, action] = parts as [string, string, string];
-  if ((domain !== 'repo' && domain !== 'system') || !pattern || !ACTION_IDS.has(action)) return null;
-  return { domain, pattern, action: action as Action | '*' };
-}
 
 export function formatPrivilege(p: Privilege): string {
   if (p.domain === 'system' && p.pattern === '*' && p.action === '*') return 'system:*';
@@ -85,38 +63,6 @@ function actionLabel(a: Action | '*'): string {
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-/** Glob match with *, ? and [...] like Go's path.Match for names without "/". */
-export function globMatch(pattern: string, name: string): boolean {
-  let re = '^';
-  for (let i = 0; i < pattern.length; i++) {
-    const c = pattern[i]!;
-    if (c === '*') re += '[^/]*';
-    else if (c === '?') re += '[^/]';
-    else if (c === '[') {
-      const end = pattern.indexOf(']', i + 1);
-      if (end < 0) return false;
-      let cls = pattern.slice(i + 1, end);
-      if (cls.startsWith('^') || cls.startsWith('!')) cls = `^${cls.slice(1)}`;
-      re += `[${cls.replace(/\\/g, '\\\\')}]`;
-      i = end;
-    } else re += c.replace(/[.+^${}()|\\]/g, '\\$&');
-  }
-  try {
-    return new RegExp(`${re}$`).test(name);
-  } catch {
-    return false;
-  }
-}
-
-/** Whether privilege strings grant action on a resource (admin and * imply everything). */
-export function allows(privileges: readonly string[] | undefined, domain: Domain, name: string, action: Action): boolean {
-  return (privileges ?? []).some((s) => {
-    const p = parsePrivilege(s);
-    if (!p || p.domain !== domain || !globMatch(p.pattern, name)) return false;
-    return p.action === action || p.action === 'admin' || p.action === '*';
-  });
 }
 
 /* ---------------------------------------------------------------- token scopes */
@@ -304,72 +250,6 @@ export function groupSessions<S extends SessionWithDevice>(sessions: S[]): Sessi
   return out.sort((a, b) => Number(b.current) - Number(a.current) || latest(b) - latest(a));
 }
 
-/* ---------------------------------------------------------------- audit */
-
-export interface AuditCategory {
-  id: string;
-  label: string;
-  action: string;
-}
-
-/** Access-related audit events, one action prefix each (the API filters by one prefix). */
-export const AUDIT_CATEGORIES: AuditCategory[] = [
-  { id: 'users', label: 'Users', action: 'user.*' },
-  { id: 'signins', label: 'Sign-ins', action: 'auth.*' },
-  { id: 'tokens', label: 'Tokens', action: 'token.*' },
-  { id: 'roles', label: 'Roles', action: 'role.*' },
-  { id: 'sessions', label: 'Sessions', action: 'session.*' },
-];
-
-const AUDIT_VERBS: Record<string, string> = {
-  'auth.login': 'signed in',
-  'auth.login.failed': 'failed to sign in',
-  'auth.logout': 'signed out',
-  'auth.token.failed': 'used an invalid token',
-  'user.create': 'created',
-  'user.update': 'updated',
-  'user.delete': 'deleted',
-  'user.password': 'changed the password of',
-  'user.unlock': 'unlocked',
-  'user.disable': 'disabled',
-  'user.enable': 'enabled',
-  'user.bootstrap': 'bootstrapped',
-  'user.list': 'listed users',
-  'user.read': 'viewed',
-  'user.permissions': 'viewed the permissions of',
-  'token.create': 'created',
-  'token.revoke': 'revoked',
-  'token.issue': 'issued',
-  'token.list': 'listed tokens of',
-  'role.create': 'created',
-  'role.update': 'updated',
-  'role.delete': 'deleted',
-  'role.bind': 'granted',
-  'role.unbind': 'took away',
-  'role.list': 'listed roles',
-  'role.read': 'viewed',
-  'session.revoke': 'ended a session of',
-  'session.revoke_all': 'ended the sessions of',
-  'session.list': 'listed the sessions of',
-};
-
-/** "created token:…", "granted role:Reader", in plain words. */
-export function describeAudit(action: string, target: string, details?: Record<string, unknown>): string {
-  const verb = AUDIT_VERBS[action] ?? action;
-  const [kind, ...rest] = target.split(':');
-  const name = rest.join(':');
-  let what = target;
-  if (kind === 'user') what = name;
-  else if (kind === 'role') what = `role ${name}`;
-  else if (kind === 'token') what = typeof details?.name === 'string' ? `token “${details.name}”` : 'a token';
-  else if (kind === 'system') what = `${name} settings`;
-  if (action === 'role.bind' || action === 'role.unbind') {
-    const user = typeof details?.user === 'string' ? details.user : 'a user';
-    return action === 'role.bind' ? `granted ${what} to ${user}` : `took ${what} away from ${user}`;
-  }
-  if (action.startsWith('auth.login') || action === 'auth.logout') return verb;
-  return `${verb} ${what}`.trim();
-}
 
 /* ---------------------------------------------------------------- page state */
 
@@ -379,19 +259,20 @@ export interface MemberFilters {
   status?: UserStatus;
 }
 
-export type AccessTab = 'members' | 'service-accounts' | 'tokens' | 'roles' | 'audit';
+export type AccessTab = 'members' | 'service-accounts' | 'tokens' | 'roles';
 
-export const ACCESS_TABS: AccessTab[] = ['members', 'service-accounts', 'tokens', 'roles', 'audit'];
+export const ACCESS_TABS: AccessTab[] = ['members', 'service-accounts', 'tokens', 'roles'];
 
 export function isAccessTab(v: unknown): v is AccessTab {
   return typeof v === 'string' && (ACCESS_TABS as string[]).includes(v);
 }
 
 export interface AccessSearch extends MemberFilters {
-  tab?: AccessTab;
+  /** `audit` is the Audit tab of v0.1.x: the router sends it on to /audit. */
+  tab?: AccessTab | 'audit';
   /** Member or service account whose drawer is open. */
   user?: string;
-  /** Audit category id. */
+  /** With tab=audit: the old tab's event category, kept as the Audit log's action filter. */
   events?: string;
   /** Tokens tab filters. */
   owner_kind?: 'user' | 'service_account';
@@ -400,18 +281,6 @@ export interface AccessSearch extends MemberFilters {
 
 
 /* ---------------------------------------------------------------- misc */
-
-/** The message to show for a failed request. */
-export function errorText(err: unknown): string {
-  if (err instanceof ApiRequestError) {
-    if (err.code === 'password_change_required')
-      return 'Set a new password first: tokens and other changes are blocked until this account’s password is changed (My account → Password).';
-    if (err.code === 'read_only_token') return 'You signed in with a read-only token, which cannot change anything.';
-    if (err.status === 403) return 'You do not have permission to do this.';
-    if (err.status === 423 && err.retryAfter) return `Locked after repeated wrong passwords. Try again in ${Math.ceil(err.retryAfter / 60)} min.`;
-  }
-  return errorSentence(err);
-}
 
 /** Generates a random passphrase-like password (for "Generate" in the password fields). */
 export function generatePassword(): string {

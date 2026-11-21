@@ -12,8 +12,13 @@ import { createAppRouter } from './router';
 const DemoNote = import.meta.env.VITE_DEMO === 'true' ? lazy(() => import('./demo/DemoNote')) : null;
 
 function DocumentTitle() {
+  // The page first, then the area it sits in: "Logs · System · Hangar".
   const title = useRouterState({
-    select: (s) => [...s.matches].reverse().find((m) => m.staticData?.title)?.staticData?.title,
+    select: (s) =>
+      [...s.matches]
+        .reverse()
+        .flatMap((m) => (m.staticData?.title ? [m.staticData.title] : []))
+        .join(' · '),
   });
   useEffect(() => {
     document.title = title ? `${title} · Hangar` : 'Hangar';

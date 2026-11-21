@@ -61,7 +61,7 @@ describe('access & audit: members', () => {
     await waitFor(() => expect(within(drawer).queryByRole('button', { name: 'Unlock' })).not.toBeInTheDocument());
 
     await user.click(within(drawer).getByRole('button', { name: 'Disable' }));
-    const confirm = await screen.findByRole('dialog', { name: 'Disable Bekzod Yusupov?' });
+    const confirm = await screen.findByRole('alertdialog', { name: 'Disable Bekzod Yusupov?' });
     await user.click(within(confirm).getByRole('button', { name: 'Disable account' }));
     expect(await within(drawer).findByText('Account disabled.')).toBeInTheDocument();
     expect(accessState.users.find((u) => u.id === 'u_09')?.disabled).toBe(true);
@@ -340,7 +340,7 @@ describe('access & audit: tokens', () => {
     renderApp('/access?tab=tokens');
     const table = await screen.findByRole('table', { name: 'All access tokens' });
     await user.click(await within(table).findByRole('button', { name: 'Revoke token image updater' }));
-    const confirm = await screen.findByRole('dialog', { name: 'Revoke “image updater”?' });
+    const confirm = await screen.findByRole('alertdialog', { name: 'Revoke “image updater”?' });
     expect(within(confirm).getByText(/service account argo-cd/)).toBeInTheDocument();
     await user.click(within(confirm).getByRole('button', { name: 'Revoke token' }));
     await waitFor(() => expect(within(table).queryByText('image updater')).not.toBeInTheDocument());
@@ -456,17 +456,21 @@ describe('access & audit: roles and audit', () => {
     expect(await within(dialog).findByText('Nodira Tursunova')).toBeInTheDocument();
   });
 
-  it('filters the audit log to access events by category', async () => {
-    const user = userEvent.setup();
-    const { history } = renderApp('/access?tab=audit');
-    const table = await screen.findByRole('table', { name: 'Access audit log' });
-    expect(await within(table).findByText('No events of this type yet.')).toBeInTheDocument();
-    await user.click(screen.getByRole('radio', { name: 'Sign-ins' }));
-    await waitFor(() => expect(search(history).get('events')).toBe('signins'));
+  it('sends the old Audit tab to the one Audit log, keeping its category', async () => {
+    const { history } = renderApp('/access?tab=audit&events=signins');
+    await waitFor(() => expect(history.location.pathname).toBe('/audit'));
+    expect(search(history).get('action')).toBe('auth.*');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Audit log' })).toBeInTheDocument();
+    const table = await screen.findByRole('table');
     expect((await within(table).findAllByText('failed to sign in')).length).toBeGreaterThan(0);
-    expect(within(table).getAllByText('Denied').length).toBeGreaterThan(0);
-    expect(within(table).queryByText('created repository repo:npm-sandbox')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Export CSV' })).toHaveAttribute('href', '/api/v1/audit/export?format=csv&action=auth.*');
+  });
+
+  it('has no Audit tab; the recent-events panel leads to the Audit log', async () => {
+    renderApp('/access');
+    const tabs = await screen.findByRole('navigation', { name: 'Access sections' });
+    expect(within(tabs).queryByRole('link', { name: 'Audit log' })).not.toBeInTheDocument();
+    const recent = await screen.findByRole('region', { name: 'Audit log' });
+    expect(within(recent).getByRole('link', { name: 'Show all' })).toHaveAttribute('href', '/audit');
   });
 
   it('tells people without admin rights where their own settings are', async () => {
@@ -520,7 +524,7 @@ describe('my account', () => {
     renderApp('/account');
     const devices = await screen.findByRole('region', { name: 'Signed-in devices' });
     await user.click(await within(devices).findByRole('button', { name: 'End session from 192.0.2.44' }));
-    const confirm = await screen.findByRole('dialog', { name: 'End this session?' });
+    const confirm = await screen.findByRole('alertdialog', { name: 'End this session?' });
     await user.click(within(confirm).getByRole('button', { name: 'End session' }));
     expect(await within(devices).findByText('Session ended.')).toBeInTheDocument();
     expect(within(devices).getByRole('button', { name: 'Sign out everywhere else' })).toBeDisabled();

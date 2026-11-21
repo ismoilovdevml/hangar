@@ -2,7 +2,8 @@
  * Token permissions for the create-token form: presets, the custom editor,
  * the owner's limits and a plain-language summary. Pure functions only.
  */
-import { allows, globMatch, parsePrivilege, repoPatternError, SYSTEM_AREAS, uncoveredScopes, type Action } from './model';
+import { allows, globMatch, parsePrivilege, type Action } from '../../lib/privileges';
+import { repoPatternError, SYSTEM_AREAS, uncoveredScopes } from './model';
 
 export type PresetId = 'read' | 'publish' | 'repo-admin' | 'security' | 'admin' | 'custom';
 export type SystemLevel = '' | 'read' | 'write' | 'admin';

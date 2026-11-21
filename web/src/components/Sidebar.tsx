@@ -58,7 +58,7 @@ export function Sidebar() {
   const sys = health.status;
   const active = activeNav(pathname);
   const sections = visibleNav(session.data?.privileges);
-  const activeSection = sections.find((sec) => sec.items.some((i) => i.to === active?.to))?.title;
+  const activeSection = sections.find((sec) => sec.items.some((i) => i.to === active))?.title;
 
   // Folded sections still show the current page, unless its section was folded on this page.
   const [collapsed, setCollapsed] = useState<string[]>(readCollapsed);
@@ -101,7 +101,7 @@ export function Sidebar() {
   // The current page's entry is always in view, clear of the fades.
   useEffect(() => {
     if (navRef.current) revealActive(navRef.current);
-  }, [active?.to, listKey]);
+  }, [active, listKey]);
 
   const scrollMore = () => {
     const nav = navRef.current;
@@ -152,7 +152,7 @@ export function Sidebar() {
               </h2>
               <ul className="nav-section__list" id={`${bodyId}-${section.title}`} hidden={!isOpen(section.title)}>
                 {section.items.map((item) => {
-                  const on = active?.to === item.to;
+                  const on = active === item.to;
                   return (
                     <li key={item.to}>
                       {/* The current page is marked "page"; a page that only belongs to this area (Settings, System) is marked "true". */}
@@ -161,7 +161,7 @@ export function Sidebar() {
                         className={on ? 'nav-item is-active' : 'nav-item'}
                         activeOptions={{ exact: true, includeSearch: false, includeHash: false }}
                         activeProps={{}}
-                        aria-current={on ? (active.own ? 'page' : 'true') : undefined}
+                        aria-current={on ? 'page' : undefined}
                       >
                         <item.icon size={18} />
                         {item.label}
@@ -181,7 +181,7 @@ export function Sidebar() {
 
         {/* The Overview's top bar shows the same state (TopBar's StatusPill): one place at a time. */}
         {pathname !== '/' && (
-          <Link to="/system/status" className={`system-card system-card--${health.tone}`}>
+          <Link to="/system" className={`system-card system-card--${health.tone}`}>
             <span className="system-card__body" role="status" aria-live="polite">
               <span className="system-card__state">
                 <span className={`status__dot dot-${health.tone}${health.tone === 'neutral' ? '' : ' status__dot--halo'}`} aria-hidden="true" />

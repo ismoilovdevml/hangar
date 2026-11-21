@@ -5,6 +5,7 @@
 import { http, HttpResponse } from 'msw';
 import type { ApiError } from '../api/types';
 import { recordMockAudit } from './ops';
+import { parsePrivilege, privilegeAllows } from '../lib/privileges';
 import type { AuditEvent, EffectivePermissions, Member, MemberInput, Role, RoleInput, SessionInfo, Token, TokenCreated, TokenInput, TokenRotateInput } from '../pages/access/api';
 
 const api = (path: string) => `*/api/v1${path}`;
@@ -498,7 +499,6 @@ const ACTIONS = ['read', 'write', 'delete', 'admin'] as const;
 
 function permissionsOf(u: Member): EffectivePermissions {
   const roles = st.roles.filter((r) => u.roles.includes(r.name));
-  const match = (pattern: string, name: string) => pattern === '*' || pattern === name || (pattern.endsWith('*') && name.startsWith(pattern.slice(0, -1)));
   const evaluate = (domain: 'repo' | 'system', name: string, anon: boolean) => {
     const grants: EffectivePermissions['repositories'][number]['grants'] = [];
     const actions: (typeof ACTIONS)[number][] = [];
@@ -506,8 +506,8 @@ function permissionsOf(u: Member): EffectivePermissions {
       let ok = false;
       for (const r of roles)
         for (const p of r.privileges) {
-          const [d, pattern, act] = p === 'system:*' ? ['system', '*', '*'] : p.split(':');
-          if (d === domain && match(pattern!, name) && (act === a || act === 'admin' || act === '*')) {
+          const parsed = parsePrivilege(p);
+          if (parsed && privilegeAllows(parsed, domain, name, a)) {
             ok = true;
             grants.push({ action: a, source: 'role', role: r.name, privilege: p });
           }

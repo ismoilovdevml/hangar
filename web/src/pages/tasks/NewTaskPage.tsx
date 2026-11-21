@@ -1,7 +1,8 @@
 import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { PickerLoadError } from '../../components/States';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { errorText, useCanSystem, useCreateTask, useParseLockfile } from '../../api/ops';
+import { useCanSystem, useCreateTask, useParseLockfile } from '../../api/ops';
+import { errorText } from '../../lib/apiError';
 import type { ImportTaskConfig, PrewarmTaskConfig } from '../../api/opsTypes';
 import { useBlobStores, useRepositories } from '../../api/hooks';
 import type { Repository } from '../../api/types';
@@ -233,7 +234,7 @@ export function NewTaskPage() {
         setDraft((d) => ({ ...d, coordinates: [...new Set([...splitList(d.coordinates), ...res.coordinates])].join('\n') }));
         setChips((c) => [...c.filter((x) => x.name !== file.name), { name: file.name, entries: res.coordinates.length, skipped: res.skipped }]);
       } catch (e) {
-        setLockError(`${file.name}: ${errorText(e, 'could not be read')}`);
+        setLockError(`${file.name}: ${errorText(e, { action: 'read the file' })}`);
       }
     }
     if (fileRef.current) fileRef.current.value = '';
@@ -626,7 +627,7 @@ export function NewTaskPage() {
 
             {create.isError && (
               <p className="form-error" role="alert">
-                {errorText(create.error, 'The task could not be created.')}
+                {errorText(create.error, { action: 'create the task' })}
               </p>
             )}
             <div className="new-task__actions">

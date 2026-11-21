@@ -3,6 +3,7 @@
 // one style sheet loaded upfront, in this order and before the global styles
 // (styles/index.css), so rules of equal specificity resolve as before and no
 // page restyles another once it has been opened.
+import './components/dialog.css';
 import './pages/access/access.css';
 import './pages/changePassword.css';
 import './components/passwordChecklist.css';
@@ -13,8 +14,6 @@ import './pages/repositories/settings/settings.css';
 import './pages/browse/browse.css';
 import './pages/search/search.css';
 import './pages/blobstores/blobstores.css';
-import './pages/cluster/cluster.css';
 import './pages/vulnerabilities/vulnerabilities.css';
-import './pages/settings/hub.css';
 import './pages/settings/settings.css';
 import './pages/system/system.css';

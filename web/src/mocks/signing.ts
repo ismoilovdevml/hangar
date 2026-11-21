@@ -6,7 +6,7 @@
  */
 import { http, HttpResponse } from 'msw';
 import type { ApiError, Repository, SigningKey } from '../api/types';
-import { allows } from '../lib/can';
+import { allows } from '../lib/privileges';
 import { session } from './data';
 
 const api = (path: string) => `*/api/v1${path}`;

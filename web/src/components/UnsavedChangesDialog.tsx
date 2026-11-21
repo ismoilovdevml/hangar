@@ -5,7 +5,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 export function UnsavedChangesDialog({ blocker, what = 'your unsaved changes' }: { blocker: UnsavedChangesBlocker; what?: string }) {
   if (blocker.status !== 'blocked') return null;
   return (
-    <ConfirmDialog title="Leave without saving?" confirmLabel="Leave" cancelLabel="Stay" tone="danger" onConfirm={blocker.proceed} onCancel={blocker.reset}>
+    <ConfirmDialog title="Leave without saving?" confirmLabel="Leave" cancelLabel="Stay" tone="danger" onConfirm={blocker.proceed} onClose={blocker.reset}>
       <p>Leaving now discards {what}.</p>
     </ConfirmDialog>
   );

@@ -25,7 +25,8 @@ test('system status checklist at desktop and phone width', async ({ page }) => {
   for (const [w, size] of SIZES) {
     await page.setViewportSize(size);
     await page.goto('/system/status');
-    await expect(page.getByRole('heading', { level: 1, name: '1 check needs attention' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'System' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: '1 check needs attention' })).toBeVisible();
     await expect(page.getByText('13 of 14 checks passing · 2 of 3 nodes up · v1.0.0')).toBeVisible();
 
     // The degraded check on hangar-2 starts open; a healthy one opens on click.
@@ -42,7 +43,7 @@ test('system status checklist at desktop and phone width', async ({ page }) => {
   await live.getByRole('button', { name: 'Live · every 15 s – pause' }).click();
   await expect(live.getByRole('button', { name: 'Paused – resume' })).toBeVisible();
   await live.getByRole('button', { name: 'Refresh now' }).click();
-  await expect(page.getByRole('heading', { level: 1, name: '1 check needs attention' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: '1 check needs attention' })).toBeVisible();
   expect(errors).toEqual([]);
 });
 

@@ -1,11 +1,11 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useState } from 'react';
 import { getRouteApi } from '@tanstack/react-router';
 import { ApiRequestError } from '../../api/client';
-import { errorText, saveBlob, useCanSystem } from '../../api/ops';
+import { saveBlob, useCanSystem } from '../../api/ops';
+import { errorText } from '../../lib/apiError';
 import { ErrorNote } from '../../components/ErrorNote';
-import { IconSearch } from '../../components/icons';
+import { FilterSearch } from '../../components/FilterSearch';
 import { IconDownload } from '../../components/opsIcons';
-import { PageHeader } from '../../components/PageHeader';
 import { Select, type SelectOption } from '../../components/Select';
 import { Panel } from '../../components/Panel';
 import { fetchWholeBuffer, isOlderServer, LOGS_REFRESH_MS, useLogStream, useSystemNodes, type LogFilters } from './api';
@@ -16,45 +16,6 @@ import { formatCount, zoneLabel } from '../../lib/format';
 import './system.css';
 
 const route = getRouteApi('/app/system/logs');
-
-/** Text filter: typed locally, written to the URL after a short pause. */
-function TextFilter({ value, onChange }: { value: string; onChange: (q: string | undefined) => void }) {
-  const [draft, setDraft] = useState(value);
-  const [synced, setSynced] = useState(value);
-  if (value !== synced) {
-    setSynced(value);
-    setDraft(value);
-  }
-  const commit = useRef(onChange);
-  useEffect(() => {
-    commit.current = onChange;
-  }, [onChange]);
-  useEffect(() => {
-    if (draft.trim() === value) return;
-    const t = setTimeout(() => commit.current(draft.trim() || undefined), 350);
-    return () => clearTimeout(t);
-  }, [draft, value]);
-  const id = useId();
-  return (
-    <div className="filter-search log-filter">
-      <label htmlFor={id} className="visually-hidden">
-        Filter log records
-      </label>
-      <IconSearch size={16} />
-      <input
-        id={id}
-        className="filter-search__input"
-        type="search"
-        placeholder="Filter text, e.g. nuget-proxy"
-        value={draft}
-        maxLength={200}
-        onChange={(e) => setDraft(e.target.value)}
-        autoComplete="off"
-        spellCheck={false}
-      />
-    </div>
-  );
-}
 
 function Forbidden() {
   return (
@@ -93,7 +54,7 @@ function LogsView({ filters, nodeOptions, onNode, onFilter }: LogsViewProps) {
       saveBlob(new Blob([toJsonLines(records)], { type: 'application/x-ndjson' }), `hangar-logs-${node || 'node'}-${stamp}.jsonl`);
       setDownload({ busy: false });
     } catch (err) {
-      setDownload({ busy: false, error: `Download failed: ${errorText(err)}` });
+      setDownload({ busy: false, error: `Download failed: ${errorText(err, { action: 'download the logs' })}` });
     }
   };
 
@@ -134,7 +95,14 @@ function LogsView({ filters, nodeOptions, onNode, onFilter }: LogsViewProps) {
                 onChange={(v) => onFilter({ level: isLogLevel(v) ? v : undefined })}
               />
             </div>
-            <TextFilter value={filters.q ?? ''} onChange={(q) => onFilter({ q })} />
+            <FilterSearch
+              className="log-filter"
+              value={filters.q ?? ''}
+              label="Filter log records"
+              placeholder="Filter text, e.g. nuget-proxy"
+              maxLength={200}
+              onChange={(q) => onFilter({ q })}
+            />
           </div>
           <button type="button" className="button button--secondary" onClick={() => void onDownload()} disabled={download.busy || stream.status !== 'ready'}>
             <IconDownload size={16} />
@@ -152,7 +120,7 @@ function LogsView({ filters, nodeOptions, onNode, onFilter }: LogsViewProps) {
             <p className="meta panel-note">This server does not keep logs in memory yet. Upgrade Hangar to read them here.</p>
           ) : (
             <div className="panel-note">
-              <p className="meta">{errorText(stream.error, 'The logs could not be loaded.')}</p>
+              <p className="meta">{errorText(stream.error, { action: 'load the logs' })}</p>
               <ErrorNote what="the log records" onRetry={stream.refresh} />
             </div>
           )
@@ -215,10 +183,9 @@ export function SystemLogsPage() {
 
   return (
     <div className="screen">
-      <PageHeader
-        title="System logs"
-        description={`Recent log records each node keeps in memory, newest at the bottom, in your local time (${zoneLabel()}). Open a line to see all of its fields.`}
-      />
+      <p className="meta">
+        Recent log records each node keeps in memory, newest at the bottom, in your local time ({zoneLabel()}). Open a line to see all of its fields.
+      </p>
       {!canAdmin ? (
         <Forbidden />
       ) : !ready ? (

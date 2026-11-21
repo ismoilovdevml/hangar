@@ -24,7 +24,7 @@ Placeholders:
 ## Connect an integration
 
 1. **Create a token.** In the web UI: My account → Personal access tokens →
-   New token for yourself, or Access & audit → Service accounts → (account) →
+   New token for yourself, or Access → Service accounts → (account) →
    Tokens → New token for a shared integration. Prefer a service account per
    integration: its actions are audited under its own name and it does not
    stop working when a person leaves.

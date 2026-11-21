@@ -10,7 +10,7 @@ describe('app shell', () => {
   it('renders sidebar, top bar and system status', async () => {
     renderApp('/');
     const nav = await screen.findByRole('navigation', { name: 'Primary' });
-    for (const label of ['Overview', 'Packages', 'Search', 'Repositories', 'Blob stores', 'Cleanup policies', 'Vulnerabilities', 'Access & audit', 'Scheduled tasks', 'Cluster']) {
+    for (const label of ['Overview', 'Packages', 'Search', 'Repositories', 'Blob stores', 'Cleanup policies', 'Vulnerabilities', 'Access', 'Scheduled tasks', 'System']) {
       expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument();
     }
     const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' });
@@ -20,7 +20,7 @@ describe('app shell', () => {
     // says what System status says, instead of the search button and once:
     // the sidebar leaves its status card out here.
     const pill = await screen.findByRole('link', { name: '1 check needs attention' });
-    expect(pill).toHaveAttribute('href', '/system/status');
+    expect(pill).toHaveAttribute('href', '/system');
     expect(pill).toHaveClass('status-pill--warn');
     expect(screen.getAllByText('1 check needs attention')).toHaveLength(1);
     expect(nav.querySelector('.system-card')).toBeNull();
@@ -57,7 +57,7 @@ describe('app shell', () => {
     expect(await screen.findByRole('button', { name: /Search packages, digests, CVEs/ })).toBeInTheDocument();
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     const card = (await within(nav).findByText('Upstream proxies degraded')).closest('a')!;
-    expect(card).toHaveAttribute('href', '/system/status');
+    expect(card).toHaveAttribute('href', '/system');
     expect(card).toHaveClass('system-card--warn');
     expect(within(card).getByText('2 of 3 nodes · v1.0.0')).toBeInTheDocument();
   });
@@ -66,7 +66,7 @@ describe('app shell', () => {
     server.use(http.get('*/api/v1/system/status', () => HttpResponse.json({ code: 'internal', message: 'boom' }, { status: 500 })));
     renderApp('/');
     const header = await screen.findByRole('banner');
-    expect(await within(header).findByRole('link', { name: 'Status unavailable' }, { timeout: 4000 })).toHaveAttribute('href', '/system/status');
+    expect(await within(header).findByRole('link', { name: 'Status unavailable' }, { timeout: 4000 })).toHaveAttribute('href', '/system');
   });
 
   it('keeps the sidebar free of an instance badge; the breadcrumb names the instance', async () => {
@@ -97,30 +97,22 @@ describe('app shell', () => {
     expect(overview).not.toHaveAttribute('aria-current');
   });
 
-  it('keeps the working pages in the sidebar; My account lives in Settings', async () => {
+  it('keeps the working pages in the sidebar; My account is in the account menu', async () => {
     renderApp('/');
     const nav = await screen.findByRole('navigation', { name: 'Primary' });
-    for (const label of ['System status', 'System logs', 'Audit log', 'Settings', 'Authentication', 'Proxies']) {
+    for (const label of ['System', 'Audit log', 'Authentication', 'Proxies']) {
       expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument();
     }
     expect(within(nav).getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
-    expect(within(nav).queryByRole('link', { name: 'My account' })).not.toBeInTheDocument();
+    for (const gone of ['My account', 'Settings', 'Cluster', 'System status', 'System logs']) {
+      expect(within(nav).queryByRole('link', { name: gone })).not.toBeInTheDocument();
+    }
   });
 
-  it.each([
-    ['/account', 'Settings'],
-    ['/api-docs', 'Settings'],
-  ])('lights up the area of %s without calling it the current page', async (path, label) => {
-    renderApp(path);
+  it('lights up System on every System tab', async () => {
+    renderApp('/system/logs');
     const nav = await screen.findByRole('navigation', { name: 'Primary' });
-    const item = within(nav).getByRole('link', { name: label });
-    await waitFor(() => expect(item).toHaveAttribute('aria-current', 'true'));
-    expect(item).toHaveClass('is-active');
-    const marked = within(nav)
-      .getAllByRole('listitem')
-      .map((li) => within(li).getByRole('link'))
-      .filter((a) => a.hasAttribute('aria-current'));
-    expect(marked).toEqual([item]);
+    await waitFor(() => expect(within(nav).getByRole('link', { name: 'System' })).toHaveAttribute('aria-current', 'page'));
   });
 
   it('keeps Repositories active on the create-repository page', async () => {
@@ -140,7 +132,7 @@ describe('app shell', () => {
 describe('versions', () => {
   it('shows a server version that already starts with v once, everywhere', async () => {
     server.use(http.get('*/api/v1/system/status', () => HttpResponse.json({ ...data.systemStatus, version: 'v0.1.6' })));
-    renderApp('/settings/system');
+    renderApp('/system/about');
     const nav = await screen.findByRole('navigation', { name: 'Primary' });
     expect(await within(nav).findByText(/nodes · v0\.1\.6$/)).toBeInTheDocument();
     const status = await screen.findByRole('region', { name: 'System status' });

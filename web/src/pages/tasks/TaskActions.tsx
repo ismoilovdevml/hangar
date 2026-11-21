@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { errorText, useRunTask, useStopTask } from '../../api/ops';
+import { useRunTask, useStopTask } from '../../api/ops';
+import { errorText } from '../../lib/apiError';
 import type { Task, TaskRun } from '../../api/opsTypes';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { IconPlay, IconStop } from '../../components/opsIcons';
@@ -30,7 +31,7 @@ export function TaskActions({ task, active, size = 'sm', onMessage }: TaskAction
         onMessage?.(`${task.name} started.`);
       },
       onError: (e) => {
-        if (!confirm) onMessage?.(errorText(e, `${task.name} could not be started.`));
+        if (!confirm) onMessage?.(errorText(e, { action: `start ${task.name}` }));
       },
     });
   const doStop = () =>
@@ -64,8 +65,8 @@ export function TaskActions({ task, active, size = 'sm', onMessage }: TaskAction
           confirmLabel="Run now"
           tone="danger"
           busy={run.isPending}
-          error={run.isError ? errorText(run.error, 'The task could not be started.') : null}
-          onCancel={() => {
+          error={run.isError ? errorText(run.error, { action: 'start the task' }) : null}
+          onClose={() => {
             setConfirm(null);
             run.reset();
           }}
@@ -83,8 +84,8 @@ export function TaskActions({ task, active, size = 'sm', onMessage }: TaskAction
           confirmLabel="Stop task"
           tone="danger"
           busy={stop.isPending}
-          error={stop.isError ? errorText(stop.error, 'The task could not be stopped.') : null}
-          onCancel={() => {
+          error={stop.isError ? errorText(stop.error, { action: 'stop the task' }) : null}
+          onClose={() => {
             setConfirm(null);
             stop.reset();
           }}

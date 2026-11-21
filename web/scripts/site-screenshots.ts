@@ -194,11 +194,11 @@ const SHOTS: Shot[] = [
   // System
   { name: 'system-status', path: '/system/status' },
   { name: 'system-logs', path: '/system/logs' },
-  { name: 'cluster', path: '/cluster' },
+  { name: 'cluster', path: '/system/nodes' },
+  { name: 'system-about', path: '/system/about' },
   { name: 'audit', path: '/audit' },
 
   // Settings
-  { name: 'settings', path: '/settings' },
   { name: 'authentication', path: '/settings/authentication' },
   { name: 'proxies', path: '/settings/proxies' },
   { name: 'proxies-add', path: '/settings/proxies', act: (p) => button(p, 'Add another proxy') },

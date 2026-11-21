@@ -4,7 +4,7 @@
  */
 import type { Repository } from '../../api/types';
 import { clientLines, type CodeLine } from '../../lib/clientSnippets';
-import { allows } from './model';
+import { allows } from '../../lib/privileges';
 import { effectiveScopes } from './tokenScopes';
 
 const c = (text: string): CodeLine => ({ text, comment: true });

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { ApiRequestError } from '../../api/client';
+import { errorText } from '../../lib/apiError';
 import { useDeleteBlobStore, useUpdateBlobStore } from '../../api/catalog';
 import { usePermissions } from '../../api/permissions';
 import type { BlobStore } from '../../api/types';
@@ -11,14 +11,6 @@ import { QUOTA_UNITS, quotaBytes, quotaToForm, type QuotaUnit } from '../../lib/
 import { formatBytes, formatCompact } from '../../lib/format';
 import { toast } from '../../lib/toast';
 import { BlobStoreConnection } from './BlobStoreConnection';
-
-function message(err: unknown, action: string): string {
-  if (err instanceof ApiRequestError) {
-    if (err.status === 403) return `You do not have permission to ${action} blob stores.`;
-    return err.body?.message ?? `The server could not ${action} the blob store.`;
-  }
-  return 'Cannot reach the server. Check your connection and try again.';
-}
 
 /**
  * Soft quota, the connection of S3 stores added here, and deletion. Stores
@@ -104,7 +96,7 @@ export function BlobStoreManage({ s }: { s: BlobStore }) {
         </button>
         {update.isError && (
           <p className="form-error" role="alert">
-            {message(update.error, 'change')}
+            {errorText(update.error, { action: 'change the blob store' })}
           </p>
         )}
       </form>
@@ -142,8 +134,8 @@ export function BlobStoreManage({ s }: { s: BlobStore }) {
           tone="danger"
           typeToConfirm={s.name}
           busy={remove.isPending}
-          error={remove.isError ? message(remove.error, 'delete') : null}
-          onCancel={() => setConfirm(false)}
+          error={remove.isError ? errorText(remove.error, { action: 'delete the blob store' }) : null}
+          onClose={() => setConfirm(false)}
           onConfirm={() => remove.mutate(undefined, { onSuccess: () => void navigate({ to: '/blob-stores' }) })}
         >
           <p>New repositories can no longer choose it. This cannot be undone.</p>

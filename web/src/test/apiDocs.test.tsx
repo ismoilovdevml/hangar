@@ -9,10 +9,9 @@ describe('API reference', () => {
     renderApp('/api-docs');
     expect(await screen.findByRole('heading', { level: 2, name: 'repositories' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Hangar API' })).toBeInTheDocument();
-    // Signed in, it is a page of the app under Settings.
+    // Signed in, it is a page of the app, opened from the account menu.
     const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' });
-    expect(within(crumbs).getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
-    expect(within(crumbs).getByText('API reference')).toBeInTheDocument();
+    expect(within(crumbs).getByText('API reference')).toHaveAttribute('aria-current', 'page');
     expect(screen.getByText('https://pkg.acme.io/api/v1')).toBeInTheDocument();
     expect(screen.getByText('7 endpoints')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '/llms.txt' })).toHaveAttribute('href', '/llms.txt');

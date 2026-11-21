@@ -31,11 +31,12 @@ const customize = (user: User, form: HTMLElement) => user.click(within(form).get
 const openRoles = (user: User, form: HTMLElement) => user.click(within(form).getByRole('button', { name: /^Groups and roles/ }));
 
 describe('settings navigation', () => {
-  it('reaches sign-in and proxies from both the Settings page and the sidebar', async () => {
-    renderApp('/settings');
+  it('opens the first settings page at /settings, and reaches both from the sidebar', async () => {
+    const { history } = renderApp('/settings');
+    await waitFor(() => expect(history.location.pathname).toBe('/settings/authentication'));
     const nav = await screen.findByRole('navigation', { name: 'Primary' });
-    expect(await screen.findByRole('link', { name: /^Sign-in/ })).toHaveAttribute('href', '/settings/authentication');
-    expect(screen.getByRole('link', { name: /^Internet access/ })).toHaveAttribute('href', '/settings/proxies');
+    const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(crumbs).getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
     expect(within(nav).getByRole('link', { name: 'Authentication' })).toHaveAttribute('href', '/settings/authentication');
     expect(within(nav).getByRole('link', { name: 'Proxies' })).toHaveAttribute('href', '/settings/proxies');
   });

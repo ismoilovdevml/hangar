@@ -4,7 +4,7 @@
  */
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { ApiRequestError } from '../../../api/client';
+import { errorText } from '../../../lib/apiError';
 import { useInvalidateCache } from '../../../api/catalog';
 import { useScanningStatus, useScanRepository } from '../../../api/findings';
 import { usePermissions } from '../../../api/permissions';
@@ -12,14 +12,6 @@ import type { Repository } from '../../../api/types';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { Toast } from '../../../components/Toast';
 import { scannable } from '../../../lib/vulnerabilities';
-
-function apiMessage(err: unknown, action: string): string {
-  if (err instanceof ApiRequestError) {
-    if (err.status === 403) return `You do not have permission to ${action}.`;
-    return err.body?.message ?? `The server could not ${action}.`;
-  }
-  return 'Cannot reach the server. Check your connection and try again.';
-}
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -71,7 +63,7 @@ export function RepoActions({ repo }: { repo: Repository }) {
       )}
       {scan.isError && (
         <span className="form-error" role="alert">
-          {apiMessage(scan.error, 'scan this repository')}
+          {errorText(scan.error, { action: 'scan this repository' })}
         </span>
       )}
 
@@ -80,8 +72,8 @@ export function RepoActions({ repo }: { repo: Repository }) {
           title={`Invalidate the cache of ${repo.name}?`}
           confirmLabel="Invalidate cache"
           busy={invalidate.isPending}
-          error={invalidate.isError ? apiMessage(invalidate.error, 'invalidate the cache') : null}
-          onCancel={() => setConfirm(false)}
+          error={invalidate.isError ? errorText(invalidate.error, { action: 'invalidate the cache' }) : null}
+          onClose={() => setConfirm(false)}
           onConfirm={() =>
             invalidate.mutate(undefined, {
               onSuccess: (r) => {

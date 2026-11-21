@@ -35,7 +35,7 @@ export function AppShell() {
           <div className="app__main">
             <TopBar onSignOut={signOut} />
             <main id="main" tabIndex={-1} className="app__content">
-              {refused?.gate ? <NoAccessPage title={refused.title ?? 'No access'} gate={refused.gate} /> : <Outlet />}
+              {refused?.gate ? <NoAccessPage title={refused.heading ?? refused.title ?? 'No access'} gate={refused.gate} /> : <Outlet />}
             </main>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { errorText, useCanSystem, useRunTask, useTasks } from '../../api/ops';
+import { useCanSystem, useRunTask, useTasks } from '../../api/ops';
+import { errorText } from '../../lib/apiError';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 
 /** "Run compaction" for the Reclaimable card: starts the built-in blob compaction task, after a confirmation. */
@@ -39,8 +40,8 @@ export function RunCompaction() {
           confirmLabel="Run compaction"
           tone="danger"
           busy={run.isPending}
-          error={run.isError ? errorText(run.error, 'The compaction could not be started.') : null}
-          onCancel={() => setConfirm(false)}
+          error={run.isError ? errorText(run.error, { action: 'start the compaction' }) : null}
+          onClose={() => setConfirm(false)}
           onConfirm={() =>
             run.mutate(task.id, {
               onSuccess: (r) => {

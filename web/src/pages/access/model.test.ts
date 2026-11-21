@@ -1,18 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
-  allows,
   groupSessions,
   customExpiry,
-  describeAudit,
   describePrivilege,
   describeUserAgent,
   expiryPresets,
   groupRepoAccess,
   nameList,
   expiryText,
-  globMatch,
   parseGoDuration,
-  parsePrivilege,
   repoPatternError,
   tokenState,
   uncoveredScopes,
@@ -23,28 +19,13 @@ const NOW = new Date('2026-11-04T10:00:00Z');
 const DAY = 86_400_000;
 
 describe('privileges', () => {
-  it('parses and describes the privilege forms', () => {
-    expect(parsePrivilege('repo:npm-*:write')).toEqual({ domain: 'repo', pattern: 'npm-*', action: 'write' });
-    expect(parsePrivilege('system:*')).toEqual({ domain: 'system', pattern: '*', action: '*' });
-    expect(parsePrivilege('repo:*:fly')).toBeNull();
-    expect(parsePrivilege('team:x:read')).toBeNull();
+  // Parsing and matching are lib/privileges (privileges.test.ts).
+  it('describes the privilege forms', () => {
     expect(describePrivilege('repo:npm-*:write')).toBe('Publish to repositories matching npm-*');
     expect(describePrivilege('repo:*:read')).toBe('Read every repository');
     expect(describePrivilege('repo:docker-prod:admin')).toBe('Administer repository docker-prod');
     expect(describePrivilege('system:audit:read')).toBe('Read access to Audit log');
     expect(describePrivilege('system:*')).toBe('Full control of every system area');
-  });
-
-  it('matches globs like the server and checks rights', () => {
-    expect(globMatch('npm-*', 'npm-internal')).toBe(true);
-    expect(globMatch('npm-*', 'docker-npm')).toBe(false);
-    expect(globMatch('npm-[ab]?', 'npm-a1')).toBe(true);
-    expect(globMatch('npm-[!a]*', 'npm-a1')).toBe(false);
-    expect(globMatch('a.b', 'axb')).toBe(false);
-    expect(allows(['repo:*:admin', 'system:*'], 'system', 'users', 'delete')).toBe(true);
-    expect(allows(['repo:*:read'], 'system', 'users', 'read')).toBe(false);
-    expect(allows(['system:users:read'], 'system', 'users', 'write')).toBe(false);
-    expect(allows(undefined, 'repo', 'x', 'read')).toBe(false);
   });
 
   it('validates repository patterns', () => {
@@ -103,14 +84,10 @@ describe('users and audit', () => {
     expect(userStatus({ disabled: false, locked_until: '2026-11-04T09:55:00Z' }, NOW)).toBe('active');
   });
 
-  it('describes browsers and audit events in plain words', () => {
+  it('describes browsers in plain words', () => {
     expect(describeUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 Chrome/131.0 Safari/537.36')).toBe('Chrome on macOS');
     expect(describeUserAgent('Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0')).toBe('Firefox on Linux');
     expect(describeUserAgent('')).toBe('Unknown device');
-    expect(describeAudit('role.bind', 'role:Publisher', { user: 'malika' })).toBe('granted role Publisher to malika');
-    expect(describeAudit('token.create', 'token:t1', { name: 'laptop' })).toBe('created token “laptop”');
-    expect(describeAudit('user.disable', 'user:bob')).toBe('disabled bob');
-    expect(describeAudit('auth.login.failed', 'user:admin')).toBe('failed to sign in');
   });
 });
 

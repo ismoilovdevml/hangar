@@ -88,15 +88,16 @@ describe('audit log', () => {
 });
 
 describe('system', () => {
-  it('shows status, endpoints, dependencies, nodes and where configuration lives', async () => {
+  it('shows status, endpoints, dependencies and where configuration lives', async () => {
     // A calm installation: the mock nodes include a silent one.
     server.use(http.get('*/api/v1/system/status', () => HttpResponse.json(systemStatus)));
-    renderApp('/settings/system');
+    renderApp('/system/about');
     expect(await screen.findByText('Operational')).toBeInTheDocument();
     expect(screen.getByText('All systems normal', { selector: '.meta' })).toBeInTheDocument();
     const statusPanel = screen.getByRole('region', { name: 'System status' });
     expect(within(statusPanel).getByText('14 d')).toBeInTheDocument();
-    expect(within(statusPanel).getByText('3 of 3 up')).toBeInTheDocument();
+    expect(within(statusPanel).getByText(/^3 of 3 up/)).toBeInTheDocument();
+    expect(within(statusPanel).getByRole('link', { name: 'Nodes' })).toHaveAttribute('href', '/system/nodes');
     expect(within(statusPanel).getByText('Embedded in the binary')).toBeInTheDocument();
     const endpoints = screen.getByRole('region', { name: 'Endpoints' });
     expect(within(endpoints).getByText('https://pkg.acme.io')).toBeInTheDocument();
@@ -108,23 +109,18 @@ describe('system', () => {
     expect(within(deps).getByText('PostgreSQL')).toBeInTheDocument();
     expect(within(deps).getAllByText('Healthy')).toHaveLength(3);
 
-    const nodes = await screen.findByRole('table', { name: 'Cluster nodes' });
-    expect(await within(nodes).findByText('hangar-1')).toBeInTheDocument();
-    expect(within(nodes).getByText('leader')).toBeInTheDocument();
-
     const config = screen.getByRole('region', { name: 'Configuration' });
     expect(within(config).getByRole('link', { name: 'Configuration reference' })).toHaveAttribute('href', expect.stringContaining('docs/deploy'));
   });
 
-  it('copes with a server that does not list nodes, and never asks for a configuration endpoint', async () => {
+  it('never asks for a configuration endpoint or the node list', async () => {
     const asked: string[] = [];
     server.events.on('request:start', ({ request }) => void asked.push(new URL(request.url).pathname));
-    server.use(http.get('*/api/v1/nodes', () => HttpResponse.json({ code: 'not_implemented', message: 'cluster' }, { status: 501 })));
-    // A calm installation: the mock nodes include a silent one.
     server.use(http.get('*/api/v1/system/status', () => HttpResponse.json(systemStatus)));
-    renderApp('/settings/system');
-    expect(await screen.findByText(/does not list cluster nodes yet; it reports 3 of 3 up/)).toBeInTheDocument();
+    renderApp('/system/about');
+    expect(await screen.findByRole('region', { name: 'Endpoints' })).toBeInTheDocument();
     expect(asked).not.toContain('/api/v1/system/config');
+    expect(asked).not.toContain('/api/v1/nodes');
     server.events.removeAllListeners();
   });
 });

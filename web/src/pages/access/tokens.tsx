@@ -9,7 +9,6 @@ import { useNow } from '../../lib/useNow';
 import { useCreateToken, usePermissions, useRepositoryNames, useRevokeToken, useRotateToken, type Token, type TokenCreated } from './api';
 import {
   ACTIONS,
-  allows,
   customExpiry,
   describePrivilege,
   expiresInDays,
@@ -22,8 +21,8 @@ import {
   TOKEN_STATE_META,
   tokenState,
   uncoveredScopes,
-  type Action,
 } from './model';
+import { allows, type Action } from '../../lib/privileges';
 import {
   DEFAULT_DRAFT,
   draftScopes,
@@ -45,7 +44,9 @@ import {
 } from './tokenScopes';
 import { useSecretCloseGuard } from './secretGuard';
 import { SecretPanel } from './TokenReveal';
-import { ConfirmDialog, Dialog, Field, FormError } from './ui';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Dialog } from '../../components/Dialog';
+import { Field, FormError } from './ui';
 
 /* ---------------------------------------------------------------- list */
 
@@ -195,7 +196,7 @@ export function TokenTable({ caption, tokens, showOwner, busy, loading, empty }:
         <ConfirmDialog
           title={`Revoke “${revoking.name}”?`}
           confirmLabel="Revoke token"
-          danger
+          tone="danger"
           onConfirm={() => revoke.mutateAsync(revoking.id)}
           onClose={() => setRevoking(null)}
         >

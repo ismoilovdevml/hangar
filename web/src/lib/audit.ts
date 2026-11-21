@@ -140,3 +140,73 @@ export function flattenDetails(details: Record<string, unknown> | undefined, pre
 export function hasFilters(s: AuditSearch): boolean {
   return !!(s.actor || s.action || s.target || s.outcome || (s.range && s.range !== DEFAULT_AUDIT_RANGE));
 }
+
+/* ---------------------------------------------------------------- reading events */
+
+export interface AuditCategory {
+  id: string;
+  label: string;
+  action: string;
+}
+
+/** Access-related audit events, one action prefix each (the API filters by one prefix). */
+export const AUDIT_CATEGORIES: AuditCategory[] = [
+  { id: 'users', label: 'Users', action: 'user.*' },
+  { id: 'signins', label: 'Sign-ins', action: 'auth.*' },
+  { id: 'tokens', label: 'Tokens', action: 'token.*' },
+  { id: 'roles', label: 'Roles', action: 'role.*' },
+  { id: 'sessions', label: 'Sessions', action: 'session.*' },
+];
+
+const AUDIT_VERBS: Record<string, string> = {
+  'auth.login': 'signed in',
+  'auth.login.failed': 'failed to sign in',
+  'auth.logout': 'signed out',
+  'auth.token.failed': 'used an invalid token',
+  'user.create': 'created',
+  'user.update': 'updated',
+  'user.delete': 'deleted',
+  'user.password': 'changed the password of',
+  'user.unlock': 'unlocked',
+  'user.disable': 'disabled',
+  'user.enable': 'enabled',
+  'user.bootstrap': 'bootstrapped',
+  'user.list': 'listed users',
+  'user.read': 'viewed',
+  'user.permissions': 'viewed the permissions of',
+  'token.create': 'created',
+  'token.revoke': 'revoked',
+  'token.issue': 'issued',
+  'token.list': 'listed tokens of',
+  'role.create': 'created',
+  'role.update': 'updated',
+  'role.delete': 'deleted',
+  'role.bind': 'granted',
+  'role.unbind': 'took away',
+  'role.list': 'listed roles',
+  'role.read': 'viewed',
+  'session.revoke': 'ended a session of',
+  'session.revoke_all': 'ended the sessions of',
+  'session.list': 'listed the sessions of',
+};
+
+/** Whether describeAudit has words for `action` (access events); other actions read best as they are. */
+export const isDescribedAction = (action: string) => Object.hasOwn(AUDIT_VERBS, action);
+
+/** "created token:…", "granted role:Reader", in plain words. */
+export function describeAudit(action: string, target: string, details?: Record<string, unknown>): string {
+  const verb = AUDIT_VERBS[action] ?? action;
+  const [kind, ...rest] = target.split(':');
+  const name = rest.join(':');
+  let what = target;
+  if (kind === 'user') what = name;
+  else if (kind === 'role') what = `role ${name}`;
+  else if (kind === 'token') what = typeof details?.name === 'string' ? `token “${details.name}”` : 'a token';
+  else if (kind === 'system') what = `${name} settings`;
+  if (action === 'role.bind' || action === 'role.unbind') {
+    const user = typeof details?.user === 'string' ? details.user : 'a user';
+    return action === 'role.bind' ? `granted ${what} to ${user}` : `took ${what} away from ${user}`;
+  }
+  if (action.startsWith('auth.login') || action === 'auth.logout') return verb;
+  return `${verb} ${what}`.trim();
+}

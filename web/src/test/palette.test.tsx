@@ -20,14 +20,14 @@ describe('command palette', () => {
     await user.type(input, 'cluster');
     const options = within(dialog).getAllByRole('option');
     // A matching page ranks first; the package search is the fallback at the end.
-    expect(options[0]).toHaveTextContent('Cluster');
+    expect(options[0]).toHaveTextContent('Cluster nodes');
     expect(options.at(-1)).toHaveTextContent('Search packages for “cluster”');
     // ArrowUp at the top stays there instead of wrapping to the last option.
     await user.keyboard('{ArrowUp}');
-    expect(within(dialog).getByRole('option', { name: 'Cluster' })).toHaveAttribute('aria-selected', 'true');
+    expect(within(dialog).getByRole('option', { name: 'Cluster nodes' })).toHaveAttribute('aria-selected', 'true');
     await user.keyboard('{Enter}');
 
-    await waitFor(() => expect(history.location.pathname).toBe('/cluster'));
+    await waitFor(() => expect(history.location.pathname).toBe('/system/nodes'));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
@@ -68,8 +68,8 @@ describe('command palette', () => {
     ['health', 'System status', '/system/status', ''],
     ['errors', 'System logs', '/system/logs', ''],
     ['compliance', 'Audit log', '/audit', ''],
-    ['hangar.yaml', 'System', '/settings/system', ''],
-    ['preferences', 'Settings', '/settings', ''],
+    ['hangar.yaml', 'About this installation', '/system/about', ''],
+    ['nodes', 'Cluster nodes', '/system/nodes', ''],
   ])('finds pages that left the sidebar: "%s" opens %s', async (query, label, path, hash) => {
     const user = userEvent.setup();
     const { history } = renderApp('/repositories');
@@ -92,8 +92,8 @@ describe('command palette', () => {
     const labels = within(dialog)
       .getAllByRole('option')
       .map((o) => o.textContent);
-    expect(labels).toEqual(expect.arrayContaining(['Settings', 'My account', 'Access tokens', 'System']));
-    for (const hidden of ['Authentication', 'Proxies', 'System status', 'System logs', 'Audit log']) {
+    expect(labels).toEqual(expect.arrayContaining(['My account', 'Access tokens', 'System', 'About this installation']));
+    for (const hidden of ['Authentication', 'Proxies', 'System status', 'Cluster nodes', 'System logs', 'Audit log']) {
       expect(labels).not.toContain(hidden);
     }
   });

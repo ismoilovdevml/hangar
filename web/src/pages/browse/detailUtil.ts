@@ -1,4 +1,4 @@
-import { ApiRequestError } from '../../api/client';
+import { errorText } from '../../lib/apiError';
 import { formatTime, formatUtc } from '../../lib/format';
 
 /** A timestamp spelled out, for titles next to relative times: local with its zone, then UTC. */
@@ -13,10 +13,5 @@ export const shortDigest = (d: string) => {
 
 /** The message a failed delete shows in its dialog. */
 export function deleteMessage(err: unknown, what: 'versions' | 'files'): string {
-  if (err instanceof ApiRequestError) {
-    if (err.status === 403) return `You do not have permission to delete ${what} in this repository.`;
-    if (err.status === 404) return 'It was already deleted.';
-    return err.body?.message ?? `The server could not delete it.`;
-  }
-  return 'Cannot reach the server. Check your connection and try again.';
+  return errorText(err, { action: `delete ${what} in this repository`, status: { 404: 'It was already deleted.' } });
 }

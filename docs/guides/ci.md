@@ -51,7 +51,7 @@ Recommendations:
   request from that runner address that carries credentials gets `429` until the
   budget refills, including jobs with valid tokens (see
   [api.md](api.md#rate-limits)). Runners behind one NAT address share that budget.
-- The same steps are available in the web UI (Access & audit, Service accounts),
+- The same steps are available in the web UI (Access, Service accounts),
   which also warns about tokens close to expiry. See [access.md](access.md) for
   roles and privileges.
 

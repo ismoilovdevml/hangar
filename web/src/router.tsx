@@ -17,7 +17,7 @@ import { isRange } from './lib/format';
 import { LoginPage } from './pages/LoginPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { safeRedirect } from './lib/redirect';
-import { GATES, type Gate } from './lib/gates';
+import { GATES, passes, type Gate } from './lib/gates';
 import { DocsShell } from './pages/apidocs/DocsShell';
 import { OverviewPage } from './pages/overview/OverviewPage';
 import { isBrowseTab, type BrowseTab } from './lib/packages';
@@ -33,7 +33,7 @@ import type { TaskDetailSearch } from './pages/tasks/TaskDetailPage';
 import type { TasksSearch } from './pages/tasks/TasksPage';
 import type { NewTaskSearch } from './pages/tasks/NewTaskPage';
 import { isNewTaskKind } from './lib/imports';
-import { validateAuditSearch, type AuditSearch } from './lib/audit';
+import { AUDIT_CATEGORIES, validateAuditSearch, type AuditSearch } from './lib/audit';
 import { isTaskStatusFilter, isTaskType } from './lib/tasks';
 import { validateLogsSearch, type SystemLogsSearch } from './pages/system/model';
 
@@ -49,24 +49,26 @@ const BlobStoresPage = lazyRouteComponent(() => import('./pages/blobstores/BlobS
 const BlobStoreDetailPage = lazyRouteComponent(() => import('./pages/blobstores/BlobStoreDetailPage'), 'BlobStoreDetailPage');
 const AccessPage = lazyRouteComponent(() => import('./pages/access/AccessPage'), 'AccessPage');
 const AccountPage = lazyRouteComponent(() => import('./pages/access/AccountPage'), 'AccountPage');
-const ClusterPage = lazyRouteComponent(() => import('./pages/cluster/ClusterPage'), 'ClusterPage');
 const VulnerabilitiesPage = lazyRouteComponent(() => import('./pages/vulnerabilities/VulnerabilitiesPage'), 'VulnerabilitiesPage');
 const AuditPage = lazyRouteComponent(() => import('./pages/audit/AuditPage'), 'AuditPage');
 const CleanupPage = lazyRouteComponent(() => import('./pages/cleanup/CleanupPage'), 'CleanupPage');
-const SettingsHubPage = lazyRouteComponent(() => import('./pages/settings/SettingsHubPage'), 'SettingsHubPage');
-const SystemPage = lazyRouteComponent(() => import('./pages/settings/SystemPage'), 'SystemPage');
 const AuthenticationPage = lazyRouteComponent(() => import('./pages/settings/AuthenticationPage'), 'AuthenticationPage');
 const ProxiesPage = lazyRouteComponent(() => import('./pages/settings/ProxiesPage'), 'ProxiesPage');
 const TaskDetailPage = lazyRouteComponent(() => import('./pages/tasks/TaskDetailPage'), 'TaskDetailPage');
 const TasksPage = lazyRouteComponent(() => import('./pages/tasks/TasksPage'), 'TasksPage');
 const NewTaskPage = lazyRouteComponent(() => import('./pages/tasks/NewTaskPage'), 'NewTaskPage');
+const SystemLayout = lazyRouteComponent(() => import('./pages/system/SystemLayout'), 'SystemLayout');
 const SystemStatusPage = lazyRouteComponent(() => import('./pages/system/SystemStatusPage'), 'SystemStatusPage');
+const SystemNodesPage = lazyRouteComponent(() => import('./pages/system/SystemNodesPage'), 'SystemNodesPage');
 const SystemLogsPage = lazyRouteComponent(() => import('./pages/system/SystemLogsPage'), 'SystemLogsPage');
+const SystemAboutPage = lazyRouteComponent(() => import('./pages/system/SystemAboutPage'), 'SystemAboutPage');
 
 declare module '@tanstack/react-router' {
   interface StaticDataRouteOption {
     /** Shown as the last breadcrumb segment and in the document title. */
     title?: string;
+    /** The page's name where it stands alone (the no-access page), when `title` is a tab's short name. */
+    heading?: string;
     /** The page sits under Settings: the breadcrumb reads "Settings / <title>". */
     inSettings?: boolean;
     /** Users the gate turns away see who to ask for access instead of the page. */
@@ -137,7 +139,7 @@ const docsRoute = createRoute({
 const apiDocsRoute = createRoute({
   getParentRoute: () => docsRoute,
   path: '/api-docs',
-  staticData: { title: 'API reference', inSettings: true },
+  staticData: { title: 'API reference' },
   component: ApiDocsPage,
 });
 
@@ -307,7 +309,7 @@ const vulnerabilitiesRoute = createRoute({
 const auditRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/audit',
-  staticData: { title: 'Audit log', inSettings: true, gate: GATES.audit },
+  staticData: { title: 'Audit log', gate: GATES.audit },
   validateSearch: (s: Record<string, unknown>): AuditSearch => validateAuditSearch(s),
   component: AuditPage,
 });
@@ -319,9 +321,9 @@ const pick = <T extends string>(v: unknown, allowed: readonly T[]): T | undefine
 const accessRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/access',
-  staticData: { title: 'Access & audit', gate: GATES.access },
+  staticData: { title: 'Access', gate: GATES.access },
   validateSearch: (s: Record<string, unknown>): AccessSearch => ({
-    tab: isAccessTab(s.tab) ? s.tab : undefined,
+    tab: isAccessTab(s.tab) || s.tab === 'audit' ? s.tab : undefined,
     q: str(s.q),
     role: str(s.role),
     status: pick(s.status, userStatuses),
@@ -330,13 +332,19 @@ const accessRoute = createRoute({
     owner_kind: pick(s.owner_kind, ['user', 'service_account'] as const),
     token_status: pick(s.token_status, ['active', 'expired'] as const),
   }),
+  // v0.1.x had a second audit log as a tab here; its address opens the Audit log with the tab's category.
+  beforeLoad: ({ search }) => {
+    if (search.tab !== 'audit') return;
+    const action = (AUDIT_CATEGORIES.find((c) => c.id === search.events) ?? AUDIT_CATEGORIES[0]!).action;
+    throw redirect({ to: '/audit', search: { action }, replace: true });
+  },
   component: AccessPage,
 });
 
 const accountRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/account',
-  staticData: { title: 'My account', inSettings: true },
+  staticData: { title: 'My account' },
   component: AccountPage,
 });
 
@@ -389,19 +397,87 @@ const blobStoreRoute = createRoute({
   component: BlobStoreDetailPage,
 });
 
-const systemStatusRoute = createRoute({
+/** The privileges of the signed-in user; the app route has already loaded the session. */
+const privilegesOf = async (context: RouterContext) => (await context.queryClient.ensureQueryData(sessionQuery)).privileges;
+
+/** System: Status, Nodes and Logs for operators, About for everyone. */
+const systemRoute = createRoute({
   getParentRoute: () => appRoute,
-  path: '/system/status',
-  staticData: { title: 'System status', inSettings: true, gate: GATES.cluster },
+  path: '/system',
+  staticData: { title: 'System' },
+  component: SystemLayout,
+});
+
+/** "/system" opens the first tab the user may see: Status for operators, About for everyone else. */
+const systemIndexRoute = createRoute({
+  getParentRoute: () => systemRoute,
+  path: '/',
+  beforeLoad: async ({ context }) => {
+    const to = passes(GATES.cluster, await privilegesOf(context)) ? '/system/status' : '/system/about';
+    throw redirect({ to, replace: true });
+  },
+});
+
+const systemStatusRoute = createRoute({
+  getParentRoute: () => systemRoute,
+  path: 'status',
+  staticData: { title: 'Status', heading: 'System status', gate: GATES.cluster },
   component: SystemStatusPage,
 });
 
+const systemNodesRoute = createRoute({
+  getParentRoute: () => systemRoute,
+  path: 'nodes',
+  staticData: { title: 'Nodes', heading: 'Cluster nodes', gate: GATES.cluster },
+  component: SystemNodesPage,
+});
+
 const systemLogsRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/system/logs',
-  staticData: { title: 'System logs', inSettings: true, gate: GATES.logs },
+  getParentRoute: () => systemRoute,
+  path: 'logs',
+  staticData: { title: 'Logs', heading: 'System logs', gate: GATES.logs },
   validateSearch: (s: Record<string, unknown>): SystemLogsSearch => validateLogsSearch(s),
   component: SystemLogsPage,
+});
+
+const systemAboutRoute = createRoute({
+  getParentRoute: () => systemRoute,
+  path: 'about',
+  staticData: { title: 'About' },
+  component: SystemAboutPage,
+});
+
+/**
+ * Settings has no page of its own: every setting has a sidebar entry or sits
+ * in the account menu. Its address opens the first settings page the user may
+ * see, or their account.
+ */
+const settingsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/settings',
+  beforeLoad: async ({ context }) => {
+    const to = passes(GATES.settings, await privilegesOf(context)) ? '/settings/authentication' : '/account';
+    throw redirect({ to, replace: true });
+  },
+});
+
+/** Before v0.2.0 the nodes had their own page: operators land on Nodes, everyone else on About. */
+const clusterAliasRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/cluster',
+  beforeLoad: async ({ context }) => {
+    const to = passes(GATES.cluster, await privilegesOf(context)) ? '/system/nodes' : '/system/about';
+    throw redirect({ to, replace: true });
+  },
+});
+
+/** Before v0.2.0 version, addresses and configuration were Settings → System; its anchors still work. */
+const settingsSystemAliasRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/settings/system',
+  beforeLoad: ({ location }) => {
+    throw redirect({ to: '/system/about', hash: location.hash || undefined, replace: true });
+  },
 });
 
 const routeTree = rootRoute.addChildren([
@@ -426,13 +502,11 @@ const routeTree = rootRoute.addChildren([
     tasksRoute,
     newTaskRoute,
     taskDetailRoute,
-    page('/cluster', 'Cluster', ClusterPage, false, GATES.cluster),
-    systemStatusRoute,
-    systemLogsRoute,
+    systemRoute.addChildren([systemIndexRoute, systemStatusRoute, systemNodesRoute, systemLogsRoute, systemAboutRoute]),
+    clusterAliasRoute,
+    settingsSystemAliasRoute,
     auditRoute,
-    // Settings gathers configuration and personal pages; their old addresses stay as they were.
-    page('/settings', 'Settings', SettingsHubPage),
-    page('/settings/system', 'System', SystemPage, true),
+    settingsRoute,
     page('/settings/authentication', 'Authentication', AuthenticationPage, true, GATES.settings),
     page('/settings/proxies', 'Proxies', ProxiesPage, true, GATES.settings),
     notFoundRoute,

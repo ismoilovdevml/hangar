@@ -8,9 +8,10 @@ import { Panel } from '../../components/Panel';
 import { StatusDot } from '../../components/Pill';
 import { Segmented } from '../../components/Segmented';
 import { useRoles, useTokens } from './api';
-import { AuditTab, RecentAccessActivity } from './audit';
+import { RecentAccessActivity } from './audit';
 import { MemberDialog, MembersTab, UserDrawer } from './members';
-import { allows, type AccessSearch, type AccessTab, type MemberFilters } from './model';
+import { allows } from '../../lib/privileges';
+import { type AccessSearch, type AccessTab, type MemberFilters } from './model';
 import { RolesTab } from './roles';
 import { CreateTokenDialog, TokenTable } from './tokens';
 import './access.css';
@@ -38,7 +39,6 @@ export function AccessPage() {
     { id: 'service-accounts', label: 'Service accounts', visible: can.readUsers },
     { id: 'tokens', label: 'Access tokens', visible: can.readTokens },
     { id: 'roles', label: 'Roles', count: roles.data?.items.length, visible: can.readUsers },
-    { id: 'audit', label: 'Audit log', visible: can.readAudit },
   ];
   const visible = tabs.filter((t) => t.visible);
   const tab: AccessTab | undefined = visible.find((t) => t.id === search.tab)?.id ?? visible[0]?.id;
@@ -50,7 +50,7 @@ export function AccessPage() {
   if (!tab) {
     return (
       <div className="screen">
-        <PageHeader title="Access & audit" description="Who can read, publish and administer — and a record of everything they did." />
+        <PageHeader title="Access" description="Who can read, publish and administer." />
         <Panel>
           <p>
             Managing people and roles needs an administrator role. Your own profile, password, tokens and sessions are under{' '}
@@ -78,7 +78,7 @@ export function AccessPage() {
 
   return (
     <div className="screen">
-      <PageHeader title="Access & audit" description="Who can read, publish and administer — and a record of everything they did." actions={action} />
+      <PageHeader title="Access" description="Who can read, publish and administer. What they did is in the audit log." actions={action} />
 
       <nav aria-label="Access sections" className="tabs tabs--glass glass">
         {visible.map((t) => {
@@ -104,7 +104,7 @@ export function AccessPage() {
           <MembersTab kind="user" filters={filters} onFilters={(f) => set(f, true)} onOpen={(user) => set({ user })} />
           <div className="access-layout__side">
             <ProvidersPanel />
-            {can.readAudit && <RecentAccessActivity onShowAll={() => set({ tab: 'audit' })} />}
+            {can.readAudit && <RecentAccessActivity />}
           </div>
         </div>
       ) : tab === 'service-accounts' ? (
@@ -117,10 +117,8 @@ export function AccessPage() {
         </>
       ) : tab === 'tokens' ? (
         <AllTokens ownerKind={search.owner_kind} status={search.token_status} q={search.q} onChange={(p) => set(p, true)} />
-      ) : tab === 'roles' ? (
-        <RolesTab canWrite={can.writeUsers} />
       ) : (
-        <AuditTab category={search.events ?? 'users'} onCategory={(events) => set({ events }, true)} />
+        <RolesTab canWrite={can.writeUsers} />
       )}
 
       {search.user && can.readUsers && (

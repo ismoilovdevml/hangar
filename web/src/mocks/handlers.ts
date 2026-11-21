@@ -15,7 +15,7 @@ import { resetSettingsState, settingsHandlers } from './settings';
 import { routingHandlers } from './routing';
 import { resetSigningState, signingHandlers } from './signing';
 import { openAPIHandlers } from './openapi';
-import { allows } from '../lib/can';
+import { allows } from '../lib/privileges';
 
 const api = (path: string) => `*/api/v1${path}`;
 

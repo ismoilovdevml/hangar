@@ -1,17 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { ApiRequestError } from '../../api/client';
+import { errorText } from '../../lib/apiError';
 import { useUpdateBlobStore } from '../../api/catalog';
 import type { BlobStore, BlobStoreInput } from '../../api/types';
 import { TestOutcome } from './TestOutcome';
 import { useConnectionTest } from './useConnectionTest';
-
-function message(err: unknown): string {
-  if (err instanceof ApiRequestError) {
-    if (err.status === 403) return 'You do not have permission to change blob stores.';
-    return err.body?.message ?? 'The server could not save the connection.';
-  }
-  return 'Cannot reach the server. Check your connection and try again.';
-}
 
 interface Draft {
   endpoint: string;
@@ -158,7 +150,7 @@ export function BlobStoreConnection({ s }: { s: BlobStore }) {
       <TestOutcome result={tested} pending={check.pending} error={check.error} />
       {update.isError && (
         <p className="form-error" role="alert">
-          {message(update.error)}
+          {errorText(update.error, { action: 'save the connection' })}
         </p>
       )}
       <div className="store-connection__actions">

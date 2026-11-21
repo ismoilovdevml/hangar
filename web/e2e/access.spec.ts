@@ -16,12 +16,12 @@ async function noOverflow(page: Page, width: number) {
   expect(overflow, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(0);
 }
 
-test('access & audit renders members, roles, tokens and audit at desktop and phone width', async ({ page }) => {
+test('access renders members, roles and tokens, and the old audit tab opens the audit log, at desktop and phone width', async ({ page }) => {
   const errors = await collectErrors(page);
   for (const [name, size] of [['access-1440', DESKTOP], ['access-390', PHONE]] as const) {
     await page.setViewportSize(size);
     await page.goto('/access');
-    await expect(page.getByRole('heading', { level: 1, name: 'Access & audit' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Access' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Open Jasur Karimov' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Sign-in providers' })).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
