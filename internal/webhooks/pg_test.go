@@ -38,7 +38,8 @@ import (
 const envDatabaseURL = "HANGAR_TEST_DATABASE_URL"
 
 // testPool connects to a fresh schema with the base and webhook migrations
-// (00001-00006, 00340-00349), dropped at cleanup.
+// (00001-00006, the settings tables 00090-00099 and the sealed-secret
+// guards 00330-00339 that 00340 uses, 00340-00349), dropped at cleanup.
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	base := os.Getenv(envDatabaseURL)
@@ -82,7 +83,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	mfs := fstest.MapFS{}
 	for _, e := range entries {
 		n, err := strconv.Atoi(strings.SplitN(e.Name(), "_", 2)[0])
-		if err != nil || !(n <= 6 || (n >= 340 && n <= 349)) {
+		if err != nil || !(n <= 6 || (n >= 90 && n <= 99) || (n >= 330 && n <= 349)) {
 			continue
 		}
 		data, err := fs.ReadFile(src, e.Name())
