@@ -66,7 +66,12 @@ func TestSealedSecretsAreNotOpenedForCallers(t *testing.T) {
 		t.Fatal(err)
 	}
 	const plaintext = "victim-upstream-password"
-	sealed, err := key.SealString(plaintext)
+	// Sealed for a real place: the password of an existing repository.
+	var victimID string
+	if err := h.pool.QueryRow(context.Background(), `SELECT id::text FROM repositories ORDER BY name LIMIT 1`).Scan(&victimID); err != nil {
+		t.Fatal(err)
+	}
+	sealed, err := key.SealString(secrets.RepositoryContext(victimID, "proxy.auth.password"), plaintext)
 	if err != nil {
 		t.Fatal(err)
 	}

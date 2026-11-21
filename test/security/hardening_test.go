@@ -57,7 +57,7 @@ func TestSecretsAtRest(t *testing.T) {
 		`SELECT string_agg(config::text, ' ') FROM repositories WHERE name IN ('sec-auth', 'sec-urlauth')`).Scan(&stored); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(stored, pass) || strings.Contains(stored, urlPass) || strings.Count(stored, "hgs1.") != 2 {
+	if strings.Contains(stored, pass) || strings.Contains(stored, urlPass) || strings.Count(stored, "hgs2.") != 2 {
 		t.Errorf("stored config: %s", stored)
 	}
 
@@ -73,7 +73,7 @@ func TestSecretsAtRest(t *testing.T) {
 		if err != nil || r.status != http.StatusOK {
 			t.Fatalf("GET %s: %v %d", c.path, err, r.status)
 		}
-		for _, secret := range []string{pass, urlPass, "hgs1."} {
+		for _, secret := range []string{pass, urlPass, "hgs1.", "hgs2."} {
 			if strings.Contains(string(r.body), secret) {
 				t.Errorf("GET %s (%s) returns %q: %s", c.path, c.accept, secret, r.body)
 			}
@@ -114,7 +114,7 @@ func TestSecretsAtRest(t *testing.T) {
 	if err := h.pool.QueryRow(context.Background(), `SELECT config::text FROM blob_stores WHERE name = 'sec-s3'`).Scan(&stored); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(stored, "S3-Secret-Key-77") || !strings.Contains(stored, `"secret_access_key_sealed": "hgs1.`) {
+	if strings.Contains(stored, "S3-Secret-Key-77") || !strings.Contains(stored, `"secret_access_key_sealed": "hgs2.`) {
 		t.Errorf("stored blob store config: %s", stored)
 	}
 	// Replacing the credentials seals the new secret as well.
@@ -125,12 +125,12 @@ func TestSecretsAtRest(t *testing.T) {
 	if err := h.pool.QueryRow(context.Background(), `SELECT config::text FROM blob_stores WHERE name = 'sec-s3'`).Scan(&stored); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(stored, "S3-Rotated-Key-88") || !strings.Contains(stored, `"secret_access_key_sealed": "hgs1.`) || stored == sealedBefore {
+	if strings.Contains(stored, "S3-Rotated-Key-88") || !strings.Contains(stored, `"secret_access_key_sealed": "hgs2.`) || stored == sealedBefore {
 		t.Errorf("stored blob store config after update: %s", stored)
 	}
 	for _, p := range []string{"/api/v1/blob-stores", "/api/v1/blob-stores/sec-s3"} {
 		b := h.must(admin, http.MethodGet, p, nil, http.StatusOK)
-		if strings.Contains(string(b), "S3-Secret-Key-77") || strings.Contains(string(b), "hgs1.") {
+		if strings.Contains(string(b), "S3-Secret-Key-77") || strings.Contains(string(b), "hgs1.") || strings.Contains(string(b), "hgs2.") {
 			t.Errorf("GET %s returns the secret: %s", p, b)
 		}
 	}
