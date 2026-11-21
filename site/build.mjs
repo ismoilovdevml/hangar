@@ -164,6 +164,9 @@ md.renderer.rules.heading_close = (tokens, idx) => {
 
 const inlineText = (tok) => (tok.children || []).map((c) => (c.type === 'text' || c.type === 'code_inline' ? c.content : c.type === 'softbreak' ? ' ' : '')).join('');
 
+// Inline children without the empty text tokens markdown-it leaves around emphasis.
+const solid = (children) => (children || []).filter((c) => !(c.type === 'text' && c.content === ''));
+
 // Matching close token of the open token at index i.
 function closing(tokens, i) {
   const type = tokens[i].type.replace(/_open$/, '_close');
@@ -230,7 +233,7 @@ md.core.ruler.push('hangar', (state) => {
     }
     // A paragraph holding only a link into the demo is a "Try it in the demo" button.
     if (t.type === 'paragraph_open') {
-      const ch = tokens[i + 1].children || [];
+      const ch = solid(tokens[i + 1].children);
       if (ch.length === 3 && ch[0].type === 'link_open' && /(^|\/)demo\//.test(ch[0].attrGet('href'))) {
         t.attrJoin('class', 'try-row');
         ch[0].attrJoin('class', 'try');
@@ -244,7 +247,7 @@ md.core.ruler.push('hangar', (state) => {
       const items = [];
       for (let j = i + 1; j < end; j++) if (tokens[j].type === 'list_item_open' && tokens[j].level === t.level + 1) items.push(j);
       const isStep = (j) => {
-        const ch = tokens[j + 2]?.children || [];
+        const ch = solid(tokens[j + 2]?.children);
         return tokens[j + 1].type === 'paragraph_open' && ch.length === 3 && ch[0].type === 'strong_open' && ch[2].type === 'strong_close';
       };
       if (items.length && items.every(isStep)) t.attrJoin('class', 'steps');
@@ -255,7 +258,7 @@ md.core.ruler.push('hangar', (state) => {
       const cards = [];
       for (let j = i + 1; j < end; j++) {
         if (tokens[j].type !== 'inline' || tokens[j].level !== t.level + 3) continue;
-        const ch = tokens[j].children;
+        const ch = solid(tokens[j].children);
         if (ch.length < 6 || ch[0].type !== 'link_open' || ch[1].type !== 'strong_open' || ch[3].type !== 'strong_close' || ch[4].type !== 'link_close' || ch[5].type !== 'text' || !ch[5].content.startsWith(': ')) { cards.length = 0; break; }
         const rest = [Object.assign(new state.Token('text', '', 0), { content: ch[5].content.slice(2) }), ...ch.slice(6)];
         cards.push(`<a class="card" href="${esc(ch[0].attrGet('href'))}"><b>${esc(ch[2].content)}</b><span>${md.renderer.renderInline(rest, md.options, state.env)}</span></a>`);
@@ -425,6 +428,9 @@ ${body}
 rmSync(join(ROOT, 'docs'), { recursive: true, force: true });
 
 for (const page of pages) {
+  // Raw HTML only in the website's own pages (<kbd>); in docs from main, text such as
+  // "Settings / <page>" is text, as GitHub shows it, not an element.
+  md.set({ html: page.src.startsWith('content/') });
   page.body = md.render(page.markdown, { page });
 }
 for (const page of pages) {

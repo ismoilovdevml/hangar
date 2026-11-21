@@ -114,7 +114,7 @@ A public registry can publish one of your internal package names with a higher v
 
 2. **Reserve your names**
 
-    For each member, fill **Names only <member> serves** or **Names <member> never serves** with comma-separated patterns; `*` matches anything, for example `@acme/*`. **Block names your hosted repositories publish** fills the rules from what you already publish.
+    For each member, fill **Names only &lt;member&gt; serves** or **Names &lt;member&gt; never serves** with comma-separated patterns; `*` matches anything, for example `@acme/*`. **Block names your hosted repositories publish** fills the rules from what you already publish.
 
     ![Routing rules: @acme/* is served only by the hosted member, never by the public proxy.](/assets/img/ui/routing-rules.jpg)
 

@@ -64,7 +64,7 @@
 <p class="try-row"><a href="../../../demo/#/repositories" class="try" target="_blank" rel="noopener">Try it in the demo</a></p>
 <h2 id="create-a-hosted-repository">Create a hosted repository<a class="anchor" href="#create-a-hosted-repository" aria-label="Link to this section">#</a></h2>
 <p>A hosted repository stores what your team publishes.</p>
-<ol>
+<ol class="steps">
 <li>
 <p><strong>Open the form</strong></p>
 <p>Click <strong>New repository</strong> (also on the Overview).</p>
@@ -90,7 +90,7 @@
 <p class="try-row"><a href="../../../demo/#/repositories/new?format=docker&amp;type=hosted" class="try" target="_blank" rel="noopener">Try it in the demo</a></p>
 <h2 id="create-a-proxy-repository">Create a proxy repository<a class="anchor" href="#create-a-proxy-repository" aria-label="Link to this section">#</a></h2>
 <p>A proxy caches a public registry: the first request fetches a file, later ones are served from Hangar.</p>
-<ol>
+<ol class="steps">
 <li>
 <p><strong>Pick the format and Proxy</strong></p>
 <p>In <strong>New repository</strong>, pick for example <strong>npm</strong>, then <strong>Proxy</strong>. The name and <strong>Remote URL</strong> are filled in for that format (<code>npm-proxy</code>, <code>https://registry.npmjs.org</code>); change them if you like.</p>
@@ -112,7 +112,7 @@
 <p class="try-row"><a href="../../../demo/#/repositories/new?format=npm&amp;type=proxy" class="try" target="_blank" rel="noopener">Try it in the demo</a></p>
 <h2 id="create-a-group">Create a group<a class="anchor" href="#create-a-group" aria-label="Link to this section">#</a></h2>
 <p>A group gives clients one URL for several repositories of the same format, usually your hosted repository plus a proxy.</p>
-<ol>
+<ol class="steps">
 <li>
 <p><strong>Pick the format and Group</strong></p>
 <p>In <strong>New repository</strong>, pick the format, then <strong>Group</strong>, and enter a name.</p>
@@ -133,7 +133,7 @@
 </ol>
 <p class="try-row"><a href="../../../demo/#/repositories/new?format=npm&amp;type=group" class="try" target="_blank" rel="noopener">Try it in the demo</a></p>
 <h2 id="change-a-repository">Change a repository<a class="anchor" href="#change-a-repository" aria-label="Link to this section">#</a></h2>
-<ol>
+<ol class="steps">
 <li>
 <p><strong>Open its settings</strong></p>
 <p>Click the repository's name in the list.</p>
@@ -151,14 +151,14 @@
 <p class="try-row"><a href="../../../demo/#/repositories/npm-all/settings" class="try" target="_blank" rel="noopener">Try it in the demo</a></p>
 <h2 id="routing-rules">Routing rules<a class="anchor" href="#routing-rules" aria-label="Link to this section">#</a></h2>
 <p>A public registry can publish one of your internal package names with a higher version (dependency confusion). Routing rules on a group keep each name on the member that owns it.</p>
-<ol>
+<ol class="steps">
 <li>
 <p><strong>Open the group</strong></p>
 <p>Open the group's settings and scroll to <strong>Routing rules</strong>.</p>
 </li>
 <li>
 <p><strong>Reserve your names</strong></p>
-<p>For each member, fill <strong>Names only <member> serves</strong> or <strong>Names <member> never serves</strong> with comma-separated patterns; <code>*</code> matches anything, for example <code>@acme/*</code>. <strong>Block names your hosted repositories publish</strong> fills the rules from what you already publish.</p>
+<p>For each member, fill <strong>Names only &lt;member&gt; serves</strong> or <strong>Names &lt;member&gt; never serves</strong> with comma-separated patterns; <code>*</code> matches anything, for example <code>@acme/*</code>. <strong>Block names your hosted repositories publish</strong> fills the rules from what you already publish.</p>
 <figure class="fig"><button type="button" class="zoom" aria-label="Enlarge screenshot: Routing rules: @acme/* is served only by the hosted member, never by the public proxy."><img src="../../../assets/img/ui/routing-rules.jpg" alt="Routing rules: @acme/* is served only by the hosted member, never by the public proxy." loading="lazy" decoding="async" width="1440" height="900"></button><figcaption>Routing rules: @acme/* is served only by the hosted member, never by the public proxy.</figcaption></figure>
 </li>
 <li>
@@ -171,7 +171,7 @@
 <h2 id="cleanup-policies">Cleanup policies<a class="anchor" href="#cleanup-policies" aria-label="Link to this section">#</a></h2>
 <p>A cleanup policy deletes versions nobody needs, on a schedule. Open <strong>Cleanup policies</strong> in the sidebar.</p>
 <figure class="fig"><button type="button" class="zoom" aria-label="Enlarge screenshot: Cleanup policies: each one says what it deletes, where and when."><img src="../../../assets/img/ui/cleanup.jpg" alt="Cleanup policies: each one says what it deletes, where and when." loading="lazy" decoding="async" width="1440" height="900"></button><figcaption>Cleanup policies: each one says what it deletes, where and when.</figcaption></figure>
-<ol>
+<ol class="steps">
 <li>
 <p><strong>Start a policy</strong></p>
 <p>Click <strong>New policy</strong>. Enter a <strong>Name</strong>, pick a <strong>Format</strong> (or <strong>Any format</strong>) and add a description.</p>
