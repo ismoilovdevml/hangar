@@ -1,188 +1,155 @@
-// Checks the built site the way GitHub Pages serves it (under /hangar/):
-//  - every page reachable from the home page and the docs renders without console
-//    errors, page errors or failed same-site requests;
-//  - every internal link, image, stylesheet and script answers 200, and every #fragment
-//    exists on its target page;
-//  - every page has lang, a title, a description, a canonical URL, Open Graph and
-//    Twitter tags, valid JSON-LD, one h1 and no skipped heading levels;
-//  - every docs.html#old-id redirect lands on an existing page and fragment;
-//  - every sitemap.xml URL exists.
-// Serves the branch root with python3 -m http.server, like the README's preview.
-import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+// Checks the built site without a browser, reading the files the way GitHub Pages serves
+// them under /hangar/:
+//  - every internal link, image, stylesheet, script and frame resolves to a file, and every
+//    #fragment exists on its target page;
+//  - every page (demo/ aside) has lang, a title and one h1, no skipped heading levels and
+//    valid JSON-LD; indexable pages also a description, a canonical URL, og:url, og:title,
+//    og:description, og:image and a twitter:card;
+//  - docs.html, run in a sandbox with every old #id, lands on an existing page and fragment;
+//  - every sitemap.xml URL exists, and every docs page is in it;
+//  - the site's scripts parse.
+// What it cannot see: runtime errors in the browser console.
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { launch } from './browser.mjs';
+import vm from 'node:vm';
+import { parse } from 'node-html-parser';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..');
 const SITE_URL = 'https://ismoilovdevml.github.io/hangar/';
-const PORT = 8000 + Math.floor(Math.random() * 900);
-const BASE = `http://127.0.0.1:${PORT}/hangar/`;
-
 const failures = [];
 const fail = (where, msg) => failures.push(`${where}: ${msg}`);
 
-/* ---------- server ---------- */
-const serveDir = mkdtempSync(join(tmpdir(), 'hangar-site-'));
-symlinkSync(ROOT, join(serveDir, 'hangar'));
-const server = spawn('python3', ['-m', 'http.server', String(PORT), '--bind', '127.0.0.1', '--directory', serveDir], { stdio: 'ignore' });
-const stop = () => { server.kill(); rmSync(serveDir, { recursive: true, force: true }); };
-process.on('exit', stop);
-for (let i = 0; ; i++) {
-  try { if ((await fetch(BASE)).ok) break; } catch { /* not up yet */ }
-  if (i > 50) throw new Error('python3 -m http.server did not start');
-  await new Promise((r) => setTimeout(r, 100));
-}
-
-/* ---------- fetch cache ---------- */
-const cache = new Map();
-function get(url) {
-  const u = url.split('#')[0];
-  if (!cache.has(u)) {
-    cache.set(u, fetch(u, { redirect: 'follow' }).then(async (r) => ({
-      status: r.status, url: r.url, type: r.headers.get('content-type') || '',
-      body: (r.headers.get('content-type') || '').includes('html') ? await r.text() : (await r.arrayBuffer(), ''),
-    })));
-  }
-  return cache.get(u);
-}
-const isInternal = (u) => u.startsWith(BASE);
-const isPage = (u) => { const p = new URL(u).pathname; return p.endsWith('/') || p.endsWith('.html'); };
-const isDemo = (u) => new URL(u).pathname.startsWith('/hangar/demo/');
-
-/* ---------- crawl ---------- */
-const browser = await launch();
-const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-const queue = [BASE, BASE + 'docs/', BASE + '404.html', BASE + 'demo/'];
-const seen = new Set(queue);
-const links = new Map(); // target -> first page that links it
-const pagesChecked = [];
-
-while (queue.length) {
-  const url = queue.shift();
-  if (process.env.VERBOSE) console.log('render ' + url);
-  const page = await context.newPage();
-  const problems = [];
-  page.on('console', (m) => { if (m.type() === 'error') problems.push(`console error: ${m.text()}`); });
-  page.on('pageerror', (e) => problems.push(`page error: ${e.message}`));
-  page.on('requestfailed', (r) => { if (r.url().startsWith(`http://127.0.0.1:${PORT}/`)) problems.push(`request failed: ${r.url()} ${r.failure()?.errorText}`); });
-  page.on('response', (r) => { if (r.url().startsWith(BASE) && r.status() >= 400 && !url.endsWith('404.html')) problems.push(`HTTP ${r.status()}: ${r.url()}`); });
-  const res = await page.goto(url, { waitUntil: 'load' });
-  if (!res || res.status() !== 200) fail(url, `HTTP ${res && res.status()}`);
-  // Scroll through the page so lazy images and the demo frame load too.
-  await page.evaluate(async () => {
-    for (let y = 0; y < document.body.scrollHeight; y += 700) { window.scrollTo(0, y); await new Promise((r) => setTimeout(r, 30)); }
+function walk(dir, base = '') {
+  return readdirSync(join(dir, base), { withFileTypes: true }).flatMap((e) => {
+    const rel = posix.join(base, e.name);
+    if (e.isDirectory()) return ['site', 'demo', 'node_modules'].includes(rel) || e.name.startsWith('.') ? [] : walk(dir, rel);
+    return e.name.endsWith('.html') ? [rel] : [];
   });
-  await page.waitForTimeout(isDemo(url) ? 1500 : 300);
-
-  if (!isDemo(url)) {
-    const info = await page.evaluate(() => {
-      const meta = (sel) => document.querySelector(sel)?.getAttribute('content') || '';
-      const heads = [...document.querySelectorAll('main h1, main h2, main h3, main h4, main h5, main h6')].map((h) => +h.tagName[1]);
-      const ld = [...document.querySelectorAll('script[type="application/ld+json"]')].map((s) => { try { JSON.parse(s.textContent); return true; } catch { return false; } });
-      const refs = [
-        ...[...document.querySelectorAll('a[href]')].map((a) => a.href),
-        ...[...document.querySelectorAll('img[src]')].map((i) => i.src),
-        ...[...document.querySelectorAll('link[href][rel="stylesheet"], link[href][rel="preload"], script[src]')].map((l) => l.href || l.src),
-        ...[...document.querySelectorAll('iframe[data-src]')].map((f) => new URL(f.dataset.src, location.href).href),
-      ];
-      return {
-        lang: document.documentElement.lang, title: document.title, desc: meta('meta[name="description"]'),
-        canonical: document.querySelector('link[rel="canonical"]')?.href || '', robots: meta('meta[name="robots"]'),
-        ogTitle: meta('meta[property="og:title"]'), ogDesc: meta('meta[property="og:description"]'), ogImage: meta('meta[property="og:image"]'),
-        ogUrl: meta('meta[property="og:url"]'), twCard: meta('meta[name="twitter:card"]'),
-        h1: document.querySelectorAll('h1').length, heads, ld, refs, ids: [...document.querySelectorAll('[id]')].map((e) => e.id),
-      };
-    });
-    const where = url.slice(BASE.length - '/hangar/'.length);
-    if (info.lang !== 'en') fail(where, `lang="${info.lang}"`);
-    if (!info.title) fail(where, 'no <title>');
-    if (info.h1 !== 1) fail(where, `${info.h1} <h1> elements`);
-    for (let i = 1; i < info.heads.length; i++) if (info.heads[i] > info.heads[i - 1] + 1) { fail(where, `heading jumps from h${info.heads[i - 1]} to h${info.heads[i]}`); break; }
-    if (info.ld.includes(false)) fail(where, 'invalid JSON-LD');
-    const indexable = !info.robots.includes('noindex');
-    if (indexable) {
-      if (info.desc.length < 50 || info.desc.length > 200) fail(where, `description length ${info.desc.length}`);
-      const expected = SITE_URL + new URL(url).pathname.replace(/^\/hangar\//, '');
-      if (info.canonical !== expected) fail(where, `canonical ${info.canonical}, expected ${expected}`);
-      if (info.ogUrl !== expected) fail(where, `og:url ${info.ogUrl}`);
-      if (!info.ogTitle || !info.ogDesc) fail(where, 'missing og:title or og:description');
-      if (info.ogImage !== SITE_URL + 'assets/og.png') fail(where, `og:image ${info.ogImage}`);
-      if (info.twCard !== 'summary_large_image') fail(where, `twitter:card ${info.twCard}`);
-      if (!info.ld.length) fail(where, 'no JSON-LD');
-    }
-    for (const ref of info.refs) {
-      if (!isInternal(ref)) continue;
-      if (!links.has(ref)) links.set(ref, where);
-      const bare = ref.split('#')[0];
-      if (isPage(bare) && !isDemo(bare) && !seen.has(bare)) { seen.add(bare); queue.push(bare); }
-    }
-    pagesChecked.push({ url: where, title: info.title, desc: info.desc.length, problems: problems.length });
-  } else {
-    pagesChecked.push({ url: url.slice(BASE.length - '/hangar/'.length), title: await page.title(), desc: 0, problems: problems.length });
-  }
-  for (const p of problems) fail(url.slice(BASE.length - '/hangar/'.length), p);
-  await page.close();
 }
 
-/* ---------- links and fragments ---------- */
-let fragments = 0;
-for (const [ref, from] of links) {
-  const r = await get(ref);
-  if (r.status !== 200) { fail(from, `link ${ref.slice(BASE.length - 8)} answers ${r.status}`); continue; }
-  const hash = decodeURIComponent(new URL(ref).hash.slice(1));
-  if (hash && !isDemo(ref)) {
-    fragments++;
-    if (!r.body.includes(`id="${hash}"`)) fail(from, `link ${ref.slice(BASE.length - 8)}: no element with id "${hash}"`);
+// Site path ("docs/npm/") of an HTML file ("docs/npm/index.html").
+const urlPath = (file) => file.replace(/(^|\/)index\.html$/, '$1');
+// File behind a site path, or null.
+function fileFor(path) {
+  const p = join(ROOT, path);
+  if (path === '' || path.endsWith('/')) return existsSync(join(p, 'index.html')) ? join(p, 'index.html') : null;
+  if (existsSync(p) && statSync(p).isFile()) return p;
+  return null;
+}
+
+const docs = new Map(); // file -> parsed document
+const load = (file) => {
+  if (!docs.has(file)) docs.set(file, parse(readFileSync(file, 'utf8')));
+  return docs.get(file);
+};
+const hasId = (file, id) => !!load(file).querySelector(`[id="${id.replace(/"/g, '\\"')}"]`);
+
+const pages = walk(ROOT).sort();
+let refs = 0, fragments = 0;
+
+for (const file of pages) {
+  const doc = load(join(ROOT, file));
+  const path = urlPath(file);
+  const where = '/' + path;
+  const meta = (sel) => doc.querySelector(sel)?.getAttribute('content') || '';
+  const robots = meta('meta[name="robots"]');
+  const redirectOnly = !doc.querySelector('h1');
+
+  if (doc.querySelector('html')?.getAttribute('lang') !== 'en') fail(where, 'no lang="en"');
+  if (!doc.querySelector('title')?.text.trim()) fail(where, 'no <title>');
+  for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
+    try { JSON.parse(s.text); } catch { fail(where, 'invalid JSON-LD'); }
+  }
+  if (!redirectOnly) {
+    if (doc.querySelectorAll('h1').length !== 1) fail(where, `${doc.querySelectorAll('h1').length} <h1> elements`);
+    const levels = (doc.querySelector('main') || doc).querySelectorAll('h1, h2, h3, h4, h5, h6').map((h) => +h.tagName[1]);
+    for (let i = 1; i < levels.length; i++) if (levels[i] > levels[i - 1] + 1) { fail(where, `heading jumps from h${levels[i - 1]} to h${levels[i]}`); break; }
+  }
+  if (!robots.includes('noindex')) {
+    const expected = SITE_URL + path;
+    const desc = meta('meta[name="description"]');
+    if (desc.length < 50 || desc.length > 200) fail(where, `description length ${desc.length}`);
+    if (doc.querySelector('link[rel="canonical"]')?.getAttribute('href') !== expected) fail(where, 'canonical is not ' + expected);
+    if (meta('meta[property="og:url"]') !== expected) fail(where, 'og:url is not ' + expected);
+    if (!meta('meta[property="og:title"]') || !meta('meta[property="og:description"]')) fail(where, 'no og:title or og:description');
+    if (meta('meta[property="og:image"]') !== SITE_URL + 'assets/og.png') fail(where, 'og:image is not assets/og.png');
+    if (meta('meta[name="twitter:card"]') !== 'summary_large_image') fail(where, 'twitter:card is not summary_large_image');
+    if (!doc.querySelector('script[type="application/ld+json"]')) fail(where, 'no JSON-LD');
+  }
+
+  // Internal references. Absolute paths are written as /hangar/...; relative ones resolve from the page.
+  const targets = [
+    ...doc.querySelectorAll('a[href]').map((a) => a.getAttribute('href')),
+    ...doc.querySelectorAll('img[src], script[src]').map((e) => e.getAttribute('src')),
+    ...doc.querySelectorAll('link[href]').filter((l) => /stylesheet|preload|icon/.test(l.getAttribute('rel'))).map((l) => l.getAttribute('href')),
+    ...doc.querySelectorAll('iframe[data-src]').map((f) => f.getAttribute('data-src')),
+  ];
+  for (const ref of targets) {
+    if (/^(https?:|mailto:|data:)/.test(ref)) continue;
+    refs++;
+    const [rawPath, hash = ''] = ref.split('#');
+    let target;
+    if (rawPath.startsWith('/')) {
+      if (!rawPath.startsWith('/hangar/')) { fail(where, `link ${ref} is outside /hangar/`); continue; }
+      target = rawPath.slice('/hangar/'.length);
+    } else {
+      target = rawPath === '' ? path : posix.normalize(posix.join(posix.dirname(path + 'x'), rawPath));
+      if (rawPath.endsWith('/') && !target.endsWith('/')) target += '/';
+      if (target === '.' || target === './') target = '';
+    }
+    if (target.startsWith('..')) { fail(where, `link ${ref} leaves the site`); continue; }
+    const tfile = fileFor(decodeURIComponent(target.split('?')[0]));
+    if (!tfile) { fail(where, `link ${ref} -> /${target} does not exist`); continue; }
+    if (hash && !hash.startsWith('/') && tfile.endsWith('.html')) {
+      fragments++;
+      if (!hasId(tfile, decodeURIComponent(hash))) fail(where, `link ${ref}: no element with id "${decodeURIComponent(hash)}"`);
+    }
   }
 }
 
-/* ---------- docs.html redirects ---------- */
+/* docs.html: run its redirect script for every old id. */
 const redirects = JSON.parse(readFileSync(join(here, 'redirects.json'), 'utf8'));
-const rpage = await context.newPage();
-for (const [id, target] of Object.entries(redirects)) {
-  await rpage.goto(`${BASE}docs.html#${id}`);
-  await rpage.waitForURL((u) => !u.pathname.endsWith('/docs.html'), { timeout: 5000 }).catch(() => {});
-  const landed = rpage.url();
-  if (landed !== BASE + target) { fail('docs.html', `#${id} lands on ${landed}, expected ${BASE + target}`); continue; }
-  const r = await get(landed);
-  const hash = new URL(landed).hash.slice(1);
-  if (r.status !== 200 || (hash && !r.body.includes(`id="${hash}"`))) fail('docs.html', `#${id} -> ${target} does not exist`);
+const script = load(join(ROOT, 'docs.html')).querySelectorAll('script').map((s) => s.text).join('\n');
+function landing(hash) {
+  let to = null;
+  vm.runInNewContext(script, { location: { hash, replace: (u) => { to = u; } }, decodeURIComponent });
+  return to;
 }
-// Section links of the old router: docs.html#npm:publish opens the npm page.
-await rpage.goto(`${BASE}docs.html#npm:publish`);
-await rpage.waitForURL((u) => !u.pathname.endsWith('/docs.html'), { timeout: 5000 }).catch(() => {});
-if (rpage.url() !== BASE + 'docs/guides/npm/') fail('docs.html', `#npm:publish lands on ${rpage.url()}`);
-await rpage.goto(`${BASE}docs.html`);
-await rpage.waitForURL((u) => !u.pathname.endsWith('/docs.html'), { timeout: 5000 }).catch(() => {});
-if (rpage.url() !== BASE + 'docs/') fail('docs.html', `no hash lands on ${rpage.url()}`);
+const cases = [...Object.keys(redirects).map((id) => ['#' + id, redirects[id]]), ['#npm:publish', 'docs/guides/npm/'], ['', 'docs/'], ['#no-such-page', 'docs/']];
+for (const [hash, expected] of cases) {
+  const to = landing(hash);
+  if (to !== expected) { fail('docs.html', `${hash || '(no hash)'} lands on ${to}, expected ${expected}`); continue; }
+  const [p, frag] = to.split('#');
+  const tfile = fileFor(p);
+  if (!tfile) fail('docs.html', `${hash} -> ${to} does not exist`);
+  else if (frag && !hasId(tfile, frag)) fail('docs.html', `${hash} -> ${to}: no element with id "${frag}"`);
+}
 
-/* ---------- sitemap and robots ---------- */
-const sitemap = readFileSync(join(ROOT, 'sitemap.xml'), 'utf8');
-const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+/* Sitemap and robots.txt. */
+const locs = [...readFileSync(join(ROOT, 'sitemap.xml'), 'utf8').matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
 for (const loc of locs) {
-  if (!loc.startsWith(SITE_URL)) { fail('sitemap.xml', `foreign URL ${loc}`); continue; }
-  const r = await get(BASE + loc.slice(SITE_URL.length));
-  if (r.status !== 200) fail('sitemap.xml', `${loc} answers ${r.status}`);
+  if (!loc.startsWith(SITE_URL) || !fileFor(loc.slice(SITE_URL.length))) fail('sitemap.xml', `${loc} does not exist`);
 }
-const docsPages = pagesChecked.filter((p) => p.url.startsWith('/hangar/docs/')).length;
-if (locs.length !== docsPages + 1) fail('sitemap.xml', `${locs.length} URLs, but ${docsPages} docs pages + the home page were crawled`);
+const docsPages = pages.filter((f) => f.startsWith('docs/')).map((f) => SITE_URL + urlPath(f));
+for (const u of docsPages) if (!locs.includes(u)) fail('sitemap.xml', `${u} is missing`);
 if (!readFileSync(join(ROOT, 'robots.txt'), 'utf8').includes(`Sitemap: ${SITE_URL}sitemap.xml`)) fail('robots.txt', 'no Sitemap line');
 
-await browser.close();
+/* Scripts parse. */
+for (const js of ['assets/site.js', 'assets/docs-ui.js']) {
+  try { new vm.Script(readFileSync(join(ROOT, js), 'utf8'), { filename: js }); } catch (e) { fail(js, e.message); }
+}
+const search = JSON.parse(readFileSync(join(ROOT, 'assets', 'search-index.json'), 'utf8'));
+for (const p of search.pages) if (!fileFor(p.u)) fail('search-index.json', `${p.u} does not exist`);
 
-/* ---------- report ---------- */
-console.log(`pages rendered:      ${pagesChecked.length} (${docsPages} under /docs/)`);
-console.log(`internal references: ${links.size} checked, ${fragments} with a #fragment`);
-console.log(`docs.html redirects: ${Object.keys(redirects).length + 2} checked`);
-console.log(`sitemap URLs:        ${locs.length} checked`);
+console.log(`pages checked:       ${pages.length} (${docsPages.length} under docs/)`);
+console.log(`internal references: ${refs} (${fragments} with a #fragment)`);
+console.log(`docs.html redirects: ${cases.length}`);
+console.log(`sitemap URLs:        ${locs.length}`);
 if (failures.length) {
-  console.log(`\nFAILED: ${failures.length} problem(s)`);
-  for (const f of failures) console.log('  - ' + f);
+  console.log(`FAILED: ${failures.length} problem(s)`);
+  for (const f of failures.slice(0, 40)) console.log('  - ' + f);
   process.exit(1);
 }
-console.log('\nOK: no console errors, broken links, missing fragments or missing meta tags');
-// The http.server child keeps the event loop alive; exit explicitly (the exit hook stops it).
-process.exit(0);
+console.log('OK');

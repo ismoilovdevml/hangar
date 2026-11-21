@@ -6,7 +6,7 @@ The GitHub Pages site of [Hangar](https://github.com/ismoilovdevml/hangar), the 
 - `docs/`: the documentation, one page per markdown file, **generated** by `site/` from `docs/` on `main`; do not edit it by hand
 - `docs.html`: generated; sends the old one-page links (`docs.html#quick-start`) to the new pages (map in `site/redirects.json`)
 - `sitemap.xml`, `robots.txt`, `assets/search-index.json`, `assets/fonts/`: generated with the docs
-- `assets/og.png`: the link preview image, rendered from `site/og/template.html`
+- `assets/og.png`: the link preview image, drawn as SVG and rasterised by `site/og/render.mjs` (resvg, no browser)
 - `demo/`: the live demo, the web UI built with sample data (`npm run build:demo` in `web/` on `main`)
 - `404.html`: sends reloaded demo pages (`/hangar/demo/repositories`) to the demo's hash form
 - `assets/`: styles and scripts (`site.css`/`site.js` for the landing page, `docs.css`/`docs-ui.js` for the docs) and images; `assets/img/ui/` holds the screenshots of the UI guides
@@ -21,12 +21,12 @@ git fetch origin main
 cd site
 npm ci
 npm run build      # copies docs/ of origin/main into site/.cache, writes docs/, docs.html, sitemap.xml, ...
-npm run check      # serves the site, renders every page, checks links, redirects and meta tags
+npm run check      # checks every page's links, #fragments, meta tags and headings, the redirects and the sitemap
 ```
 
 `make` in `site/` does the same (`make`, `make check`, `make og`). Build from a tag with `DOCS_REF=v0.2.0 npm run build`, or from a working tree with `DOCS_DIR=/path/to/hangar/docs npm run build`. The build lists every warning (a link to a missing page, a markdown file that is not in `site/nav.mjs`); `STRICT=1` makes them fail it.
 
-A new markdown file on `main` is built automatically and listed under "More" until it gets a place in `site/nav.mjs`. Re-render the preview image after changing `site/og/template.html`: `npm run og`. The checks and the image use Playwright's Chromium (`npx playwright install chromium`) or, if that is missing, the local Google Chrome.
+A new markdown file on `main` is built automatically and listed under "More" until it gets a place in `site/nav.mjs`. Re-render the preview image after changing `site/og/render.mjs`: `npm run og`. Neither the checks nor the image need a browser; the checks read the files, so runtime errors in the browser console are outside what they see.
 
 ## Preview
 
