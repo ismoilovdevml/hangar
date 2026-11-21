@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vulnerabilities · Hangar docs</title>
+<meta name="description" content="See what to upgrade first, hand it to someone, or waive a finding that does not affect you.">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/ui/vulnerabilities/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Vulnerabilities">
+<meta property="og:description" content="See what to upgrade first, hand it to someone, or waive a finding that does not affect you.">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/ui/vulnerabilities/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Vulnerabilities">
+<meta name="twitter:description" content="See what to upgrade first, hand it to someone, or waive a finding that does not affect you.">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Vulnerabilities","item":"https://ismoilovdevml.github.io/hangar/docs/ui/vulnerabilities/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../../guides/getting-started/">Getting started</a></li><li><a href="../../guides/">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../">The web UI</a></li><li><a href="../repositories/">Repositories</a></li><li><a href="../packages/">Packages &amp; search</a></li><li><a href="../connect/">Connect a client</a></li><li><a href="./" aria-current="page">Vulnerabilities</a></li><li><a href="../access/">Access &amp; tokens</a></li><li><a href="../tasks/">Scheduled tasks</a></li><li><a href="../blob-stores/">Blob stores</a></li><li><a href="../system/">Status, logs &amp; audit</a></li><li><a href="../settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../../guides/docker/">Docker &amp; OCI</a></li><li><a href="../../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../../guides/pypi/">PyPI</a></li><li><a href="../../guides/nuget/">NuGet</a></li><li><a href="../../guides/go/">Go modules</a></li><li><a href="../../guides/helm/">Helm charts</a></li><li><a href="../../guides/cargo/">Cargo</a></li><li><a href="../../guides/apt/">APT</a></li><li><a href="../../guides/rpm/">RPM</a></li><li><a href="../../guides/raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Using the UI</p>
+      <h1>Vulnerabilities</h1>
+<p class="lead">See what to upgrade first, hand it to someone, or waive a finding that does not affect you.</p>
+<h2 id="read-the-page">Read the page<a class="anchor" href="#read-the-page" aria-label="Link to this section">#</a></h2>
+<p>The header says how many packages were scanned and when the advisories were last checked; <strong>Rescan</strong> checks every package again now. The cards count open findings by severity (with how many have a fix), chart the critical and high findings of the last 30 days, and show the quarantine policy of your repositories with the number of quarantined packages. The bar below answers the first question: how many packages to upgrade to fix the findings that builds actually use.</p>
+<figure class="fig"><button type="button" class="zoom" aria-label="Enlarge screenshot: The fix plan: one row per package, the ones your builds pull first."><img src="../../../assets/img/ui/vulnerabilities.jpg" alt="The fix plan: one row per package, the ones your builds pull first." loading="lazy" decoding="async" width="1440" height="900"></button><figcaption>The fix plan: one row per package, the ones your builds pull first.</figcaption></figure>
+<p class="try-row"><a href="../../../demo/#/vulnerabilities" class="try" target="_blank" rel="noopener">Try it in the demo</a></p>
+<h2 id="fix-a-package">Fix a package<a class="anchor" href="#fix-a-package" aria-label="Link to this section">#</a></h2>
+<ol>
+<li>
+<p><strong>Start at the top</strong></p>
+<p><strong>In use first</strong> sorts packages that were downloaded recently to the top. <strong>All … packages</strong> shows the rest. Search by package or advisory, filter by <strong>Repository</strong>, or show <strong>Assigned to me</strong>.</p>
+</li>
+<li>
+<p><strong>Look at the findings</strong></p>
+<p>Click the arrow at the start of a row. Each advisory shows its versions, severity and the version that fixes it.</p>
+<figure class="fig"><button type="button" class="zoom" aria-label="Enlarge screenshot: A package with two advisories; each is fixed in a different version line."><img src="../../../assets/img/ui/vulnerability-details.jpg" alt="A package with two advisories; each is fixed in a different version line." loading="lazy" decoding="async" width="1440" height="900"></button><figcaption>A package with two advisories; each is fixed in a different version line.</figcaption></figure>
+</li>
+<li>
+<p><strong>Hand it to someone</strong></p>
+<p>Click <strong>Assign</strong> and pick a user, or <strong>Assign to me</strong>. Every open finding of the package, and new ones found later, go to that person.</p>
+</li>
+<li>
+<p><strong>Upgrade</strong></p>
+<p><strong>Copy upgrade</strong> copies the upgrade command for the package's client. <strong>Export CSV</strong> shares the whole plan.</p>
+</li>
+</ol>
+<h2 id="waive-a-finding">Waive a finding<a class="anchor" href="#waive-a-finding" aria-label="Link to this section">#</a></h2>
+<p>Waive a finding that does not affect you, for example when the vulnerable code path is never used.</p>
+<ol>
+<li>
+<p><strong>Click Waive</strong></p>
+<p>In the package's row, click <strong>Waive</strong>.</p>
+</li>
+<li>
+<p><strong>Give a reason</strong></p>
+<p>Write why it does not affect you, or what mitigates it. The reason is recorded in the audit log with your name.</p>
+</li>
+<li>
+<p><strong>Pick an end date</strong></p>
+<p><strong>Waived until</strong> ends at the end of that day (UTC), at most a year ahead. The finding re-opens on its own when the waiver ends.</p>
+<figure class="fig"><button type="button" class="zoom" aria-label="Enlarge screenshot: Waiving a finding: a reason and an end date."><img src="../../../assets/img/ui/vulnerability-waive.jpg" alt="Waiving a finding: a reason and an end date." loading="lazy" decoding="async" width="1440" height="900"></button><figcaption>Waiving a finding: a reason and an end date.</figcaption></figure>
+</li>
+<li>
+<p><strong>Confirm</strong></p>
+<p>Click <strong>Waive</strong>. A message confirms it, with <strong>Undo</strong>. The <strong>Waived</strong> tab lists waivers; <strong>Revoke waiver</strong> ends one early.</p>
+</li>
+</ol>
+<p class="try-row"><a href="../../../demo/#/vulnerabilities" class="try" target="_blank" rel="noopener">Try it in the demo</a></p>
+<p>Repositories with <strong>Quarantine packages with critical issues</strong> on refuse downloads of versions with a critical finding. How scanning works: <a href="../../guides/vulnerabilities/">Vulnerability scanning</a>.</p>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/gh-pages/site/content/ui/vulnerabilities.md"><code>site/content/ui/vulnerabilities.md</code></a> on gh-pages · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../connect/" rel="prev"><small>Previous</small><b>Connect a client</b></a><a class="next" href="../access/" rel="next"><small>Next</small><b>Access &amp; tokens</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#read-the-page">Read the page</a></li><li class="l2"><a href="#fix-a-package">Fix a package</a></li><li class="l2"><a href="#waive-a-finding">Waive a finding</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Maven and Gradle · Hangar docs</title>
+<meta name="description" content="Hangar serves the Maven 2 repository layout. Maven and Gradle resolve from it and deploy to it (mvn deploy, Gradle maven-publish).">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/guides/maven/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Maven and Gradle">
+<meta property="og:description" content="Hangar serves the Maven 2 repository layout. Maven and Gradle resolve from it and deploy to it (mvn deploy, Gradle maven-publish).">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/guides/maven/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Maven and Gradle">
+<meta name="twitter:description" content="Hangar serves the Maven 2 repository layout. Maven and Gradle resolve from it and deploy to it (mvn deploy, Gradle maven-publish).">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Maven & Gradle","item":"https://ismoilovdevml.github.io/hangar/docs/guides/maven/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../getting-started/">Getting started</a></li><li><a href="../">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../docker/">Docker &amp; OCI</a></li><li><a href="../npm/">npm, pnpm, yarn</a></li><li><a href="./" aria-current="page">Maven &amp; Gradle</a></li><li><a href="../pypi/">PyPI</a></li><li><a href="../nuget/">NuGet</a></li><li><a href="../go/">Go modules</a></li><li><a href="../helm/">Helm charts</a></li><li><a href="../cargo/">Cargo</a></li><li><a href="../apt/">APT</a></li><li><a href="../rpm/">RPM</a></li><li><a href="../raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../migrate/">Move to Hangar</a></li><li><a href="../ci/">CI integration</a></li><li><a href="../access/">Access management</a></li><li><a href="../sso/">Single sign-on</a></li><li><a href="../routing-rules/">Routing rules</a></li><li><a href="../vulnerabilities/">Vulnerability scanning</a></li><li><a href="../api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Package formats</p>
+      <h1>Maven and Gradle</h1>
+<p class="lead">Hangar serves the Maven 2 repository layout. Maven and Gradle resolve from it and
+deploy to it (<code>mvn deploy</code>, Gradle <code>maven-publish</code>).</p>
+<p>Placeholders:</p>
+<ul>
+<li><code>hangar.example.com</code>: the host of <code>server.base_url</code>.</li>
+<li><code>&lt;user&gt;</code>: your username or a service account name.</li>
+<li><code>&lt;token&gt;</code>: a personal access token (<code>hgr_...</code>), used as the password.</li>
+<li><code>$HANGAR_TOKEN</code>: the token in an environment variable.</li>
+</ul>
+<p>Repository URL: <code>https://hangar.example.com/repository/&lt;repo&gt;/</code>.</p>
+<h2 id="repositories">Repositories<a class="anchor" href="#repositories" aria-label="Link to this section">#</a></h2>
+<p>A typical setup: a release repository, a snapshot repository, a Maven Central
+proxy, and a group that combines them for resolution.</p>
+<h3 id="hosted">Hosted<a class="anchor" href="#hosted" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;maven-releases&quot;,
+        &quot;format&quot;: &quot;maven&quot;,
+        &quot;type&quot;: &quot;hosted&quot;,
+        &quot;blob_store&quot;: &quot;default&quot;,
+        &quot;config&quot;: {
+          &quot;hosted&quot;: { &quot;write_policy&quot;: &quot;allow_once&quot; },
+          &quot;format&quot;: { &quot;version_policy&quot;: &quot;release&quot; }
+        }
+      }&#x27;</span>
+
+curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;maven-snapshots&quot;,
+        &quot;format&quot;: &quot;maven&quot;,
+        &quot;type&quot;: &quot;hosted&quot;,
+        &quot;blob_store&quot;: &quot;default&quot;,
+        &quot;config&quot;: {
+          &quot;hosted&quot;: { &quot;write_policy&quot;: &quot;allow&quot; },
+          &quot;format&quot;: { &quot;version_policy&quot;: &quot;snapshot&quot; }
+        }
+      }&#x27;</span></code></pre></div>
+<p><code>config.format</code>:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Key</th>
+<th>Values</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>version_policy</code></td>
+<td><code>release</code>, <code>snapshot</code>, <code>mixed</code></td>
+<td><code>mixed</code></td>
+</tr>
+<tr>
+<td><code>layout_policy</code></td>
+<td><code>strict</code> (only Maven-layout paths), <code>permissive</code> (also store other files)</td>
+<td><code>strict</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>A <code>release</code> repository rejects SNAPSHOT uploads (400) and answers 404 for SNAPSHOT
+paths; a <code>snapshot</code> repository does the opposite. With <code>allow_once</code>, redeploying a
+release fails with <code>409</code> (identical bytes are accepted again); SNAPSHOT builds
+stay deployable, and a non-unique SNAPSHOT file is replaced in one step.
+<code>allow_once</code> is the default for repositories created without a policy.
+<code>maven-metadata.xml</code> and checksum files are generated by Hangar.</p>
+<p>Versions quarantined by a security policy are left out of <code>maven-metadata.xml</code>
+(hosted and proxy repositories, and the groups merging them), with <code>latest</code> and
+<code>release</code> recomputed, so version ranges and <code>LATEST</code> resolve to a version that
+can be downloaded. The build list of a quarantined SNAPSHOT answers <code>403</code>.</p>
+<h3 id="proxy-maven-central">Proxy (Maven Central)<a class="anchor" href="#proxy-maven-central" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;maven-central&quot;,
+        &quot;format&quot;: &quot;maven&quot;,
+        &quot;type&quot;: &quot;proxy&quot;,
+        &quot;blob_store&quot;: &quot;default&quot;,
+        &quot;config&quot;: {
+          &quot;proxy&quot;: { &quot;remote_url&quot;: &quot;https://repo1.maven.org/maven2/&quot;, &quot;metadata_ttl&quot;: &quot;1h&quot; },
+          &quot;format&quot;: { &quot;version_policy&quot;: &quot;release&quot; }
+        }
+      }&#x27;</span></code></pre></div>
+<p>Artifacts are verified against the remote checksum and cached; metadata is
+revalidated after <code>metadata_ttl</code>.</p>
+<h3 id="group">Group<a class="anchor" href="#group" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;maven-public&quot;,
+        &quot;format&quot;: &quot;maven&quot;,
+        &quot;type&quot;: &quot;group&quot;,
+        &quot;config&quot;: { &quot;group&quot;: { &quot;members&quot;: [&quot;maven-releases&quot;, &quot;maven-snapshots&quot;, &quot;maven-central&quot;] } }
+      }&#x27;</span></code></pre></div>
+<p>Maven groups are read-only: <code>write_member</code> is rejected. Deploy to the hosted
+repositories directly; resolve through the group (<code>maven-metadata.xml</code> is merged
+across members).</p>
+<h2 id="maven">Maven<a class="anchor" href="#maven" aria-label="Link to this section">#</a></h2>
+<p>Maven sends credentials only after a <code>401</code> challenge, which Hangar answers with
+<code>WWW-Authenticate: Basic</code>. Credentials live in <code>~/.m2/settings.xml</code>, keyed by a
+server <code>id</code>.</p>
+<h3 id="m2settingsxml"><code>~/.m2/settings.xml</code><a class="anchor" href="#m2settingsxml" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>xml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="xml"><code><span class="hljs-tag">&lt;<span class="hljs-name">settings</span>&gt;</span>
+  <span class="hljs-tag">&lt;<span class="hljs-name">servers</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">server</span>&gt;</span>
+      <span class="hljs-tag">&lt;<span class="hljs-name">id</span>&gt;</span>hangar<span class="hljs-tag">&lt;/<span class="hljs-name">id</span>&gt;</span>
+      <span class="hljs-tag">&lt;<span class="hljs-name">username</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">user</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">username</span>&gt;</span>
+      <span class="hljs-tag">&lt;<span class="hljs-name">password</span>&gt;</span>${env.HANGAR_TOKEN}<span class="hljs-tag">&lt;/<span class="hljs-name">password</span>&gt;</span>
+    <span class="hljs-tag">&lt;/<span class="hljs-name">server</span>&gt;</span>
+  <span class="hljs-tag">&lt;/<span class="hljs-name">servers</span>&gt;</span>
+
+  <span class="hljs-comment">&lt;!-- Resolve everything, including Maven Central, through the group. --&gt;</span>
+  <span class="hljs-tag">&lt;<span class="hljs-name">mirrors</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">mirror</span>&gt;</span>
+      <span class="hljs-tag">&lt;<span class="hljs-name">id</span>&gt;</span>hangar<span class="hljs-tag">&lt;/<span class="hljs-name">id</span>&gt;</span>
+      <span class="hljs-tag">&lt;<span class="hljs-name">mirrorOf</span>&gt;</span>*<span class="hljs-tag">&lt;/<span class="hljs-name">mirrorOf</span>&gt;</span>
+      <span class="hljs-tag">&lt;<span class="hljs-name">url</span>&gt;</span>https://hangar.example.com/repository/maven-public/<span class="hljs-tag">&lt;/<span class="hljs-name">url</span>&gt;</span>
+    <span class="hljs-tag">&lt;/<span class="hljs-name">mirror</span>&gt;</span>
+  <span class="hljs-tag">&lt;/<span class="hljs-name">mirrors</span>&gt;</span>
+
+  <span class="hljs-comment">&lt;!-- Needed only if you depend on SNAPSHOT versions: the mirrored &quot;central&quot;
+       repository has snapshots disabled by default. --&gt;</span>
+  <span class="hljs-tag">&lt;<span class="hljs-name">profiles</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">profile</span>&gt;</span>
+      <span class="hljs-tag">&lt;<span class="hljs-name">id</span>&gt;</span>hangar-snapshots<span class="hljs-tag">&lt;/<span class="hljs-name">id</span>&gt;</span>
+      <span class="hljs-tag">&lt;<span class="hljs-name">repositories</span>&gt;</span>
+        <span class="hljs-tag">&lt;<span class="hljs-name">repository</span>&gt;</span>
+          <span class="hljs-tag">&lt;<span class="hljs-name">id</span>&gt;</span>central<span class="hljs-tag">&lt;/<span class="hljs-name">id</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">url</span>&gt;</span>http://central<span class="hljs-tag">&lt;/<span class="hljs-name">url</span>&gt;</span>
+          <span class="hljs-tag">&lt;<span class="hljs-name">releases</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">enabled</span>&gt;</span>true<span class="hljs-tag">&lt;/<span class="hljs-name">enabled</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">releases</span>&gt;</span>
+          <span class="hljs-tag">&lt;<span class="hljs-name">snapshots</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">enabled</span>&gt;</span>true<span class="hljs-tag">&lt;/<span class="hljs-name">enabled</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">snapshots</span>&gt;</span>
+        <span class="hljs-tag">&lt;/<span class="hljs-name">repository</span>&gt;</span>
+      <span class="hljs-tag">&lt;/<span class="hljs-name">repositories</span>&gt;</span>
+      <span class="hljs-tag">&lt;<span class="hljs-name">pluginRepositories</span>&gt;</span>
+        <span class="hljs-tag">&lt;<span class="hljs-name">pluginRepository</span>&gt;</span>
+          <span class="hljs-tag">&lt;<span class="hljs-name">id</span>&gt;</span>central<span class="hljs-tag">&lt;/<span class="hljs-name">id</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">url</span>&gt;</span>http://central<span class="hljs-tag">&lt;/<span class="hljs-name">url</span>&gt;</span>
+          <span class="hljs-tag">&lt;<span class="hljs-name">releases</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">enabled</span>&gt;</span>true<span class="hljs-tag">&lt;/<span class="hljs-name">enabled</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">releases</span>&gt;</span>
+          <span class="hljs-tag">&lt;<span class="hljs-name">snapshots</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">enabled</span>&gt;</span>true<span class="hljs-tag">&lt;/<span class="hljs-name">enabled</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">snapshots</span>&gt;</span>
+        <span class="hljs-tag">&lt;/<span class="hljs-name">pluginRepository</span>&gt;</span>
+      <span class="hljs-tag">&lt;/<span class="hljs-name">pluginRepositories</span>&gt;</span>
+    <span class="hljs-tag">&lt;/<span class="hljs-name">profile</span>&gt;</span>
+  <span class="hljs-tag">&lt;/<span class="hljs-name">profiles</span>&gt;</span>
+  <span class="hljs-tag">&lt;<span class="hljs-name">activeProfiles</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">activeProfile</span>&gt;</span>hangar-snapshots<span class="hljs-tag">&lt;/<span class="hljs-name">activeProfile</span>&gt;</span>
+  <span class="hljs-tag">&lt;/<span class="hljs-name">activeProfiles</span>&gt;</span>
+<span class="hljs-tag">&lt;/<span class="hljs-name">settings</span>&gt;</span></code></pre></div>
+<p>The mirror <code>id</code> and the deployment repository ids below are all <code>hangar</code>, so one
+<code>&lt;server&gt;</code> entry covers resolution and deployment.</p>
+<h3 id="pomxml-deploy"><code>pom.xml</code>: deploy<a class="anchor" href="#pomxml-deploy" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>xml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="xml"><code><span class="hljs-tag">&lt;<span class="hljs-name">distributionManagement</span>&gt;</span>
+  <span class="hljs-tag">&lt;<span class="hljs-name">repository</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">id</span>&gt;</span>hangar<span class="hljs-tag">&lt;/<span class="hljs-name">id</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">url</span>&gt;</span>https://hangar.example.com/repository/maven-releases/<span class="hljs-tag">&lt;/<span class="hljs-name">url</span>&gt;</span>
+  <span class="hljs-tag">&lt;/<span class="hljs-name">repository</span>&gt;</span>
+  <span class="hljs-tag">&lt;<span class="hljs-name">snapshotRepository</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">id</span>&gt;</span>hangar<span class="hljs-tag">&lt;/<span class="hljs-name">id</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">url</span>&gt;</span>https://hangar.example.com/repository/maven-snapshots/<span class="hljs-tag">&lt;/<span class="hljs-name">url</span>&gt;</span>
+  <span class="hljs-tag">&lt;/<span class="hljs-name">snapshotRepository</span>&gt;</span>
+<span class="hljs-tag">&lt;/<span class="hljs-name">distributionManagement</span>&gt;</span></code></pre></div>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-built_in">export</span> HANGAR_TOKEN=<span class="hljs-string">&#x27;&lt;token&gt;&#x27;</span>
+mvn -B deploy
+mvn -B dependency:get -Dartifact=com.acme:greeter:1.0.0</code></pre></div>
+<p>Signatures (<code>.asc</code>) are stored with the artifact. Maven 3.8.1 and later block
+plain-HTTP repositories other than <code>localhost</code>; serve Hangar over HTTPS for Maven.</p>
+<h2 id="gradle">Gradle<a class="anchor" href="#gradle" aria-label="Link to this section">#</a></h2>
+<p>Gradle needs <code>isAllowInsecureProtocol = true</code> (Kotlin) or
+<code>allowInsecureProtocol = true</code> (Groovy) only for <code>http://</code> URLs; drop it with HTTPS.</p>
+<h3 id="credentials">Credentials<a class="anchor" href="#credentials" aria-label="Link to this section">#</a></h3>
+<p>Either <code>~/.gradle/gradle.properties</code> (outside the project, never committed):</p>
+<div class="code"><div class="code-head"><span>properties</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="properties"><code><span class="hljs-attr">hangarUsername</span>=<span class="hljs-string">&lt;user&gt;</span>
+<span class="hljs-attr">hangarPassword</span>=<span class="hljs-string">&lt;token&gt;</span></code></pre></div>
+<p>or the environment, e.g. <code>ORG_GRADLE_PROJECT_hangarUsername</code> and
+<code>ORG_GRADLE_PROJECT_hangarPassword</code> (Gradle maps these to the same properties), or
+read your own variables with <code>System.getenv(...)</code>.</p>
+<h3 id="kotlin-dsl-buildgradlekts">Kotlin DSL (<code>build.gradle.kts</code>)<a class="anchor" href="#kotlin-dsl-buildgradlekts" aria-label="Link to this section">#</a></h3>
+<p>Resolve through the group:</p>
+<div class="code"><div class="code-head"><span>kotlin</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="kotlin"><code>repositories {
+    maven {
+        name = <span class="hljs-string">&quot;hangar&quot;</span>
+        url = uri(<span class="hljs-string">&quot;https://hangar.example.com/repository/maven-public/&quot;</span>)
+        credentials(PasswordCredentials::<span class="hljs-keyword">class</span>)   <span class="hljs-comment">// reads hangarUsername / hangarPassword</span>
+    }
+}</code></pre></div>
+<p>Publish with <code>maven-publish</code>:</p>
+<div class="code"><div class="code-head"><span>kotlin</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="kotlin"><code>plugins {
+    `java-library`
+    `maven-publish`
+}
+
+group = <span class="hljs-string">&quot;com.acme&quot;</span>
+version = <span class="hljs-string">&quot;1.0.0&quot;</span>
+
+publishing {
+    publications {
+        create&lt;MavenPublication&gt;(<span class="hljs-string">&quot;maven&quot;</span>) {
+            from(components[<span class="hljs-string">&quot;java&quot;</span>])
+        }
+    }
+    repositories {
+        maven {
+            name = <span class="hljs-string">&quot;hangar&quot;</span>
+            <span class="hljs-keyword">val</span> releases = uri(<span class="hljs-string">&quot;https://hangar.example.com/repository/maven-releases/&quot;</span>)
+            <span class="hljs-keyword">val</span> snapshots = uri(<span class="hljs-string">&quot;https://hangar.example.com/repository/maven-snapshots/&quot;</span>)
+            url = <span class="hljs-keyword">if</span> (version.toString().endsWith(<span class="hljs-string">&quot;SNAPSHOT&quot;</span>)) snapshots <span class="hljs-keyword">else</span> releases
+            credentials(PasswordCredentials::<span class="hljs-keyword">class</span>)
+        }
+    }
+}</code></pre></div>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>gradle publish</code></pre></div>
+<p><code>credentials(PasswordCredentials::class)</code> with <code>name = &quot;hangar&quot;</code> reads the Gradle
+properties <code>hangarUsername</code> and <code>hangarPassword</code>.</p>
+<h3 id="groovy-dsl-buildgradle">Groovy DSL (<code>build.gradle</code>)<a class="anchor" href="#groovy-dsl-buildgradle" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>groovy</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="groovy"><code>plugins {
+    id <span class="hljs-string">&#x27;java-library&#x27;</span>
+    id <span class="hljs-string">&#x27;maven-publish&#x27;</span>
+}
+
+group = <span class="hljs-string">&#x27;com.acme&#x27;</span>
+version = <span class="hljs-string">&#x27;1.0.0&#x27;</span>
+
+repositories {
+    maven {
+        url = <span class="hljs-string">&#x27;https://hangar.example.com/repository/maven-public/&#x27;</span>
+        credentials {
+            username = System.getenv(<span class="hljs-string">&#x27;HANGAR_USER&#x27;</span>)
+            password = System.getenv(<span class="hljs-string">&#x27;HANGAR_TOKEN&#x27;</span>)
+        }
+    }
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) { from components.java }
+    }
+    repositories {
+        maven {
+            name = <span class="hljs-string">&#x27;hangar&#x27;</span>
+            url = version.endsWith(<span class="hljs-string">&#x27;SNAPSHOT&#x27;</span>)
+                ? <span class="hljs-string">&#x27;https://hangar.example.com/repository/maven-snapshots/&#x27;</span>
+                : <span class="hljs-string">&#x27;https://hangar.example.com/repository/maven-releases/&#x27;</span>
+            credentials(PasswordCredentials)   <span class="hljs-comment">// or credentials { username = ...; password = ... }</span>
+        }
+    }
+}</code></pre></div>
+<p>Gradle module metadata (<code>.module</code>) is stored and served like any other artifact
+file.</p>
+<p>A proxy answers a <code>.sha1</code> or <code>.md5</code> request from the cached file when it has
+one, otherwise from the remote's side file, without downloading the artifact.</p>
+<h2 id="browsing-and-deleting">Browsing and deleting<a class="anchor" href="#browsing-and-deleting" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><code>GET https://hangar.example.com/repository/maven-releases/com/acme/</code> lists a
+directory (HTML; JSON with <code>Accept: application/json</code> or <code>?format=json</code>).</li>
+<li><code>DELETE</code> on a file, a version directory or an artifact directory of a hosted
+repository removes it (needs <code>repo:&lt;name&gt;:delete</code>); metadata is regenerated.</li>
+</ul>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -u &lt;user&gt;:<span class="hljs-string">&#x27;&lt;token&gt;&#x27;</span> -X DELETE \
+  https://hangar.example.com/repository/maven-releases/com/acme/greeter/1.0.0</code></pre></div>
+<h2 id="routing-rules">Routing rules<a class="anchor" href="#routing-rules" aria-label="Link to this section">#</a></h2>
+<p>A group that combines a hosted repository with a public proxy can serve a
+public package published under one of your internal names. Block internal
+names on the proxy and reserve them for the hosted member (for example <code>com.edcom</code>);
+see <a href="../routing-rules/">routing-rules.md</a>.</p>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/maven.md"><code>docs/guides/maven.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/maven.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../npm/" rel="prev"><small>Previous</small><b>npm, pnpm, yarn</b></a><a class="next" href="../pypi/" rel="next"><small>Next</small><b>PyPI</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#repositories">Repositories</a></li><li class="l3"><a href="#hosted">Hosted</a></li><li class="l3"><a href="#proxy-maven-central">Proxy (Maven Central)</a></li><li class="l3"><a href="#group">Group</a></li><li class="l2"><a href="#maven">Maven</a></li><li class="l3"><a href="#m2settingsxml">~/.m2/settings.xml</a></li><li class="l3"><a href="#pomxml-deploy">pom.xml: deploy</a></li><li class="l2"><a href="#gradle">Gradle</a></li><li class="l3"><a href="#credentials">Credentials</a></li><li class="l3"><a href="#kotlin-dsl-buildgradlekts">Kotlin DSL (build.gradle.kts)</a></li><li class="l3"><a href="#groovy-dsl-buildgradle">Groovy DSL (build.gradle)</a></li><li class="l2"><a href="#browsing-and-deleting">Browsing and deleting</a></li><li class="l2"><a href="#routing-rules">Routing rules</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

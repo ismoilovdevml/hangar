@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Performance · Hangar docs</title>
+<meta name="description" content="What one Hangar node handles, how it was measured, and what limits it. The load scenarios are in test/load; reproduce any number below with test/load/run.sh…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/operations/performance/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Performance">
+<meta property="og:description" content="What one Hangar node handles, how it was measured, and what limits it. The load scenarios are in test/load; reproduce any number below with test/load/run.sh…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/operations/performance/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Performance">
+<meta name="twitter:description" content="What one Hangar node handles, how it was measured, and what limits it. The load scenarios are in test/load; reproduce any number below with test/load/run.sh…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Performance","item":"https://ismoilovdevml.github.io/hangar/docs/operations/performance/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../../guides/getting-started/">Getting started</a></li><li><a href="../../guides/">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../../guides/docker/">Docker &amp; OCI</a></li><li><a href="../../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../../guides/pypi/">PyPI</a></li><li><a href="../../guides/nuget/">NuGet</a></li><li><a href="../../guides/go/">Go modules</a></li><li><a href="../../guides/helm/">Helm charts</a></li><li><a href="../../guides/cargo/">Cargo</a></li><li><a href="../../guides/apt/">APT</a></li><li><a href="../../guides/rpm/">RPM</a></li><li><a href="../../guides/raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../monitoring/">Monitoring</a></li><li><a href="../runbooks/">Alert runbooks</a></li><li><a href="./" aria-current="page">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Operations</p>
+      <h1>Performance</h1>
+<p class="lead">What one Hangar node handles, how it was measured, and what limits it. The
+load scenarios are in <a href="https://github.com/ismoilovdevml/hangar/blob/main/test/load/README.md">test/load</a>; reproduce any
+number below with <code>test/load/run.sh &lt;scenario&gt;</code>.</p>
+<h2 id="test-setup">Test setup<a class="anchor" href="#test-setup" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Machine</td>
+<td>Apple M4 Pro, 12 cores, 24 GiB RAM, internal SSD, macOS 26 (Darwin 25.6)</td>
+</tr>
+<tr>
+<td>Hangar</td>
+<td>one node, <code>database.max_conns: 20</code>, filesystem blob store on the same SSD, embedded NATS, log level <code>warn</code></td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>17.11 on the same machine, default settings</td>
+</tr>
+<tr>
+<td>Load generator</td>
+<td>k6 2.3.0 on the same machine, 32 virtual users, 30 s per scenario, keep-alive connections, bearer token auth</td>
+</tr>
+<tr>
+<td>Data</td>
+<td>the scenario fixtures plus 12 seeded repositories with 99 996 components and 999 960 assets (<code>cmd/hangar-seed</code>)</td>
+</tr>
+</tbody>
+</table></div>
+<p>The machine was not isolated: other workloads ran during the measurements,
+and client, server and database share 12 cores. Expect about 10-20 % variance
+between runs. Production numbers depend mainly on the database and on the
+disk's flush latency (see writes).</p>
+<h2 id="results">Results<a class="anchor" href="#results" aria-label="Link to this section">#</a></h2>
+<p>32 virtual users, 30 s, measured traffic only (fixtures published by each
+scenario's setup are excluded), on the build of this branch rebased onto
+<code>main</code> (with sign-in, rate limiting and the other security changes active).
+No request failed and every threshold passed.</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Scenario</th>
+<th style="text-align:right">Requests/s</th>
+<th style="text-align:right">p95</th>
+<th style="text-align:right">p99</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>raw downloads (1 KiB to 1 MiB)</td>
+<td style="text-align:right">19 112</td>
+<td style="text-align:right">2.5 ms</td>
+<td style="text-align:right">3.6 ms</td>
+<td>1 MiB files: p95 3.3 ms</td>
+</tr>
+<tr>
+<td>docker blob GETs (4 KiB to 1 MiB)</td>
+<td style="text-align:right">22 279</td>
+<td style="text-align:right">2.5 ms</td>
+<td style="text-align:right">3.9 ms</td>
+<td>registry bearer token</td>
+</tr>
+<tr>
+<td>npm metadata and tarballs</td>
+<td style="text-align:right">14 144</td>
+<td style="text-align:right">3.0 ms</td>
+<td style="text-align:right">3.8 ms</td>
+<td>100-version full packument: p95 3.7 ms</td>
+</tr>
+<tr>
+<td>maven metadata, checksums, POMs, jars</td>
+<td style="text-align:right">28 302</td>
+<td style="text-align:right">1.7 ms</td>
+<td style="text-align:right">2.3 ms</td>
+<td><code>maven-metadata.xml</code>: p95 1.0 ms</td>
+</tr>
+<tr>
+<td>mixed, reads (90 %)</td>
+<td style="text-align:right">1 135 in total</td>
+<td style="text-align:right">6.1 ms</td>
+<td style="text-align:right">19.5 ms</td>
+<td></td>
+</tr>
+<tr>
+<td>mixed, writes (10 %)</td>
+<td style="text-align:right"></td>
+<td style="text-align:right">474 ms</td>
+<td style="text-align:right">590 ms</td>
+<td>npm publish p95 553 ms, Maven deploy 202 ms, raw upload 224 ms, dist-tag 481 ms</td>
+</tr>
+<tr>
+<td>seeded metadata reads</td>
+<td style="text-align:right">764</td>
+<td style="text-align:right">158 ms</td>
+<td style="text-align:right">197 ms</td>
+<td>dominated by NuGet search, see below</td>
+</tr>
+</tbody>
+</table></div>
+<p>Single endpoints on the seeded data, 32 concurrent connections (<code>oha</code>, 8 s;
+measured before the rebase onto <code>main</code>):</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Request</th>
+<th style="text-align:right">Requests/s</th>
+<th style="text-align:right">p95</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>maven-metadata.xml</code> of an artifact in a repository with 8 333 components</td>
+<td style="text-align:right">52 585</td>
+<td style="text-align:right">0.9 ms</td>
+</tr>
+<tr>
+<td>raw directory listing (JSON) in a repository with 83 330 assets</td>
+<td style="text-align:right">19 258</td>
+<td style="text-align:right">2.6 ms</td>
+</tr>
+<tr>
+<td>npm packument lookup in a repository with 83 330 assets (answers 404: seeded rows have no manifests, so this measures the lookups)</td>
+<td style="text-align:right">17 245</td>
+<td style="text-align:right">3.9 ms</td>
+</tr>
+<tr>
+<td>NuGet search whose first word matches every package (<code>q=pkg-505</code>)</td>
+<td style="text-align:right">165</td>
+<td style="text-align:right">252 ms</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="compared-with-the-previous-build">Compared with the previous build<a class="anchor" href="#compared-with-the-previous-build" aria-label="Link to this section">#</a></h3>
+<p>The same scenarios against the build this work started from (<code>237ab95</code>,
+same data, same machine). The single-endpoint rows compare <code>oha</code> runs.</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Before: req/s, p95</th>
+<th>After: req/s, p95</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>raw</td>
+<td>14 482, 3.2 ms</td>
+<td>19 112, 2.5 ms</td>
+</tr>
+<tr>
+<td>docker</td>
+<td>17 908, 3.1 ms</td>
+<td>22 279, 2.5 ms</td>
+</tr>
+<tr>
+<td>npm</td>
+<td>2 344, 57.8 ms (100-version packument: 99 ms)</td>
+<td>14 144, 3.0 ms (3.7 ms)</td>
+</tr>
+<tr>
+<td>maven</td>
+<td>9 164, 7.4 ms</td>
+<td>28 302, 1.7 ms</td>
+</tr>
+<tr>
+<td>seeded npm packument lookup</td>
+<td>7 602, 4.8 ms</td>
+<td>17 245, 3.9 ms</td>
+</tr>
+<tr>
+<td>seeded raw listing</td>
+<td>15 742, 2.9 ms</td>
+<td>19 258, 2.6 ms</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="what-was-changed">What was changed<a class="anchor" href="#what-was-changed" aria-label="Link to this section">#</a></h2>
+<p>The worst bottleneck was the npm packument. A package with N versions was
+rendered from N version manifests on every request: N asset lookups, N blob
+reads and a full JSON render. In the npm scenario the 100-version packument
+had a p95 of 99 ms, and its CPU cost slowed every other request on the node.
+Three changes fixed it:</p>
+<ul>
+<li>Version manifests are listed with one query and cached in memory by blob
+digest. Blobs are immutable, so the cache needs no invalidation.</li>
+<li>A rendered hosted packument is reused while its inputs are unchanged. The
+inputs are the versions, their creation times and quarantine flags, the
+manifest digests and the package-state digest. Any publish, dist-tag change,
+deprecation, unpublish or quarantine changes the fingerprint, so a stale
+document cannot be served.</li>
+<li>A packument read now costs three indexed queries and no blob read once
+warm.</li>
+</ul>
+<p>Other changes:</p>
+<ul>
+<li>
+<p><strong>Repository lookups</strong>: every format request resolves its repository, and
+groups also resolve their members. <code>Get</code>, <code>GetByID</code> and <code>Members</code> are now
+cached for at most 30 s. Writes on this node invalidate the cache at once;
+writes on other nodes invalidate it through <code>repository.*</code> events.</p>
+</li>
+<li>
+<p><strong>Maven metadata</strong>: generated <code>maven-metadata.xml</code> is cached per hosted
+repository. Entries are dropped on component and asset events from any node,
+and synchronously by this node's deploys and deletes. The document and its
+checksums come from the same bytes.</p>
+</li>
+<li>
+<p><strong>Query plans</strong>: the component and asset listings used <code>$1 IS NULL OR ...</code>
+filters and <code>path LIKE $3</code>. Under a generic plan, which PostgreSQL may choose
+for a prepared statement after five executions, these cannot use the
+indexes. <code>EXPLAIN ANALYZE</code> with <code>plan_cache_mode = force_generic_plan</code> on the
+seeded data showed:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Query</th>
+<th>Before</th>
+<th>After</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>assets under a path prefix (one npm package, one Maven directory) in a repository of 83 330 assets</td>
+<td>149 ms, bitmap scan of the whole repository</td>
+<td>0.6 ms, range scan on <code>(repo_id, path COLLATE &quot;C&quot;)</code></td>
+</tr>
+<tr>
+<td>components by namespace and name</td>
+<td>5.0 ms, filter over 8 333 rows</td>
+<td>0.6 ms, unique index</td>
+</tr>
+<tr>
+<td>NuGet text search</td>
+<td>scan of every component, computing the document</td>
+<td>GIN index <code>components_document_idx</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Statements now contain only the filters in use. Path prefixes are turned
+into a range: <code>&gt;= prefix</code> and <code>&lt;</code> the prefix with its last code point
+incremented.</p>
+</li>
+<li>
+<p><strong>NuGet search</strong> on hosted repositories uses a full-text index (migration
+<code>00070</code>) instead of loading every component of the repository.</p>
+</li>
+<li>
+<p><strong>npm dist-tags and package state</strong> use a PostgreSQL advisory lock per
+package, which is correct across nodes. The locks first shared four
+connections of the main pool. In the mixed scenario that made every npm
+write wait for a slot: dist-tag updates averaged 830 ms. The locks now use
+a dedicated pool of up to 16 connections, and dist-tag updates average
+246 ms at a higher overall request rate.</p>
+</li>
+</ul>
+<h2 id="known-limits">Known limits<a class="anchor" href="#known-limits" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><strong>Writes are bound by flushes to disk.</strong> A publish writes its blobs with a
+file and directory fsync and commits one or two PostgreSQL transactions.
+An npm publish takes about 30 ms on its own. Eight publishes in parallel
+take about 140 ms each, so this machine sustains about 55 npm publishes per
+second; the previous build measured the same. On macOS, Go's <code>fsync</code> is a
+full device flush (<code>F_FULLFSYNC</code>). That is probably most of this cost, but
+it was not profiled. Linux servers with SSDs flush much faster.</li>
+<li><strong>Updates to one npm package are serialised</strong> by its lock, cluster-wide.
+Each update takes 25-40 ms on this machine, so one package accepts at most
+about 30 dist-tag or publish operations per second. Different packages do
+not wait for each other.</li>
+<li><strong>NuGet search for a very common word is expensive.</strong> In the seeded data
+every package is called <code>pkg-&lt;n&gt;</code>, so <code>pkg</code> matches all 100 000 components
+and each query costs about 15 ms of database time. Clients do not search
+during <code>dotnet restore</code>; only interactive search is affected.</li>
+<li><strong>Packument rendering for proxy and group repositories</strong> is not cached
+(upstream documents are cached as assets). The group merge renders on every
+request.</li>
+<li><strong>Advisory locks add connections</strong>: each node opens up to 16 lock
+connections beyond <code>database.max_conns</code>, created on demand and closed after
+one idle minute. Size PostgreSQL's <code>max_connections</code> for
+<code>nodes x (max_conns + 16)</code> plus other clients.</li>
+<li><strong>Cache staleness after a lost event</strong>: a repository change can be served
+stale for up to 30 s, and generated Maven metadata for up to 1 minute, if a
+node misses the NATS event. Events are plain NATS publish/subscribe, so a
+node that is disconnected from NATS while the change happens misses it.</li>
+</ul>
+<h2 id="tuning">Tuning<a class="anchor" href="#tuning" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><code>database.max_conns</code> (default 20): raise it when requests wait for
+connections, which shows up as rising p95 at low CPU. Keep the PostgreSQL
+connection budget above in mind.</li>
+<li>Put the blob store on fast storage. S3/MinIO adds network round trips to
+every download, but it does not use local fsync.</li>
+<li>Run several nodes behind a load balancer; sticky sessions are not needed.
+Give every node the same <code>HANGAR_DOCKER_TOKEN_KEY</code>.</li>
+</ul>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/performance.md"><code>docs/operations/performance.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/operations/performance.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../runbooks/" rel="prev"><small>Previous</small><b>Alert runbooks</b></a><a class="next" href="../../architecture/" rel="next"><small>Next</small><b>Architecture</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#test-setup">Test setup</a></li><li class="l2"><a href="#results">Results</a></li><li class="l3"><a href="#compared-with-the-previous-build">Compared with the previous build</a></li><li class="l2"><a href="#what-was-changed">What was changed</a></li><li class="l2"><a href="#known-limits">Known limits</a></li><li class="l2"><a href="#tuning">Tuning</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PyPI: pip, uv, poetry and twine · Hangar docs</title>
+<meta name="description" content="Hangar serves the Simple Repository API (read by pip, uv and poetry) and the legacy upload API (used by twine, uv publish and poetry publish).">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/guides/pypi/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="PyPI: pip, uv, poetry and twine">
+<meta property="og:description" content="Hangar serves the Simple Repository API (read by pip, uv and poetry) and the legacy upload API (used by twine, uv publish and poetry publish).">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/guides/pypi/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="PyPI: pip, uv, poetry and twine">
+<meta name="twitter:description" content="Hangar serves the Simple Repository API (read by pip, uv and poetry) and the legacy upload API (used by twine, uv publish and poetry publish).">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"PyPI","item":"https://ismoilovdevml.github.io/hangar/docs/guides/pypi/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../getting-started/">Getting started</a></li><li><a href="../">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../docker/">Docker &amp; OCI</a></li><li><a href="../npm/">npm, pnpm, yarn</a></li><li><a href="../maven/">Maven &amp; Gradle</a></li><li><a href="./" aria-current="page">PyPI</a></li><li><a href="../nuget/">NuGet</a></li><li><a href="../go/">Go modules</a></li><li><a href="../helm/">Helm charts</a></li><li><a href="../cargo/">Cargo</a></li><li><a href="../apt/">APT</a></li><li><a href="../rpm/">RPM</a></li><li><a href="../raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../migrate/">Move to Hangar</a></li><li><a href="../ci/">CI integration</a></li><li><a href="../access/">Access management</a></li><li><a href="../sso/">Single sign-on</a></li><li><a href="../routing-rules/">Routing rules</a></li><li><a href="../vulnerabilities/">Vulnerability scanning</a></li><li><a href="../api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Package formats</p>
+      <h1>PyPI: pip, uv, poetry and twine</h1>
+<p class="lead">Hangar serves the Simple Repository API (read by pip, uv and poetry) and the
+legacy upload API (used by twine, <code>uv publish</code> and <code>poetry publish</code>).</p>
+<p>Placeholders:</p>
+<ul>
+<li><code>hangar.example.com</code>: the host of <code>server.base_url</code>.</li>
+<li><code>&lt;token&gt;</code>: a personal access token (<code>hgr_...</code>).</li>
+<li><code>$HANGAR_TOKEN</code>: the token in an environment variable.</li>
+</ul>
+<p>URLs of a repository <code>&lt;repo&gt;</code>:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Purpose</th>
+<th>URL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Index (pip <code>--index-url</code>, uv, poetry)</td>
+<td><code>https://hangar.example.com/repository/&lt;repo&gt;/simple/</code></td>
+</tr>
+<tr>
+<td>Upload (twine, uv, poetry)</td>
+<td><code>https://hangar.example.com/repository/&lt;repo&gt;/</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Credentials are HTTP Basic: username <code>__token__</code> (any value works) and the token
+as the password. Your account username and password also work.</p>
+<h2 id="repositories">Repositories<a class="anchor" href="#repositories" aria-label="Link to this section">#</a></h2>
+<h3 id="hosted">Hosted<a class="anchor" href="#hosted" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;pypi-hosted&quot;,
+        &quot;format&quot;: &quot;pypi&quot;,
+        &quot;type&quot;: &quot;hosted&quot;,
+        &quot;blob_store&quot;: &quot;default&quot;,
+        &quot;config&quot;: { &quot;hosted&quot;: { &quot;write_policy&quot;: &quot;allow_once&quot; } }
+      }&#x27;</span></code></pre></div>
+<p>With <code>allow_once</code>, uploading the same file again succeeds and different bytes
+under an existing filename get <code>409</code>.</p>
+<h3 id="proxy-pypiorg">Proxy (pypi.org)<a class="anchor" href="#proxy-pypiorg" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;pypi-proxy&quot;,
+        &quot;format&quot;: &quot;pypi&quot;,
+        &quot;type&quot;: &quot;proxy&quot;,
+        &quot;blob_store&quot;: &quot;default&quot;,
+        &quot;config&quot;: {
+          &quot;proxy&quot;: { &quot;remote_url&quot;: &quot;https://pypi.org&quot;, &quot;metadata_ttl&quot;: &quot;30m&quot; },
+          &quot;format&quot;: { &quot;file_hosts&quot;: [&quot;files.pythonhosted.org&quot;] }
+        }
+      }&#x27;</span></code></pre></div>
+<ul>
+<li><code>remote_url</code> may be <code>https://pypi.org</code> or <code>https://pypi.org/simple</code>.</li>
+<li>Project pages are cached for <code>metadata_ttl</code> (default <code>30m</code>); remote 404s for
+<code>negative_cache_ttl</code> (default <code>5m</code>).</li>
+<li>Files are verified against the page's sha256 and cached forever.</li>
+<li><code>config.format.file_hosts</code> lists other hosts files may be downloaded from
+(default <code>[&quot;files.pythonhosted.org&quot;]</code>; <code>.domain</code> suffixes allowed). Change it,
+or use <code>proxy.related_hosts</code>, for mirrors that serve files from another host.
+The remote's credentials are never sent to those hosts.</li>
+<li>A remote answering <code>429</code> for an uncached page or file is passed on as <code>429</code>
+with its <code>Retry-After</code>. With <code>&quot;offline&quot;: true</code> in <code>config.proxy</code>, only cached
+pages and files are served.</li>
+</ul>
+<h3 id="group">Group<a class="anchor" href="#group" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;pypi-group&quot;,
+        &quot;format&quot;: &quot;pypi&quot;,
+        &quot;type&quot;: &quot;group&quot;,
+        &quot;config&quot;: { &quot;group&quot;: { &quot;members&quot;: [&quot;pypi-hosted&quot;, &quot;pypi-proxy&quot;], &quot;write_member&quot;: &quot;pypi-hosted&quot; } }
+      }&#x27;</span></code></pre></div>
+<p>Project pages merge the members in order (first member wins per filename).
+Every Simple API page carries an <code>ETag</code>; pip and uv revalidate their cached
+copy and get <code>304 Not Modified</code> while the project is unchanged.
+Uploads to the group go to <code>write_member</code>; without one they get <code>405</code>.</p>
+<p>Name your internal projects so they cannot collide with pypi.org projects: the
+merged page lists every version from every member, and pip picks the highest one
+that matches.</p>
+<h2 id="pip">pip<a class="anchor" href="#pip" aria-label="Link to this section">#</a></h2>
+<p>One-off:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>pip install --index-url https://__token__:&lt;token&gt;@hangar.example.com/repository/pypi-group/simple/ requests</code></pre></div>
+<p><code>pip.conf</code> (Linux <code>~/.config/pip/pip.conf</code>, macOS
+<code>~/Library/Application Support/pip/pip.conf</code>, Windows <code>%APPDATA%\pip\pip.ini</code>, or
+any file named by <code>PIP_CONFIG_FILE</code>):</p>
+<div class="code"><div class="code-head"><span>ini</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="ini"><code><span class="hljs-section">[global]</span>
+<span class="hljs-attr">index-url</span> = https://__token__:&lt;token&gt;@hangar.example.com/repository/pypi-group/simple/</code></pre></div>
+<p>To keep the token out of the file, leave the credentials out of the URL and put them
+in <code>~/.netrc</code>:</p>
+<div class="code"><div class="code-head"><span>text</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0"><code>machine hangar.example.com
+login __token__
+password &lt;token&gt;</code></pre></div>
+<p>Or set <code>PIP_INDEX_URL</code> in the environment (handy in CI).</p>
+<h2 id="uv">uv<a class="anchor" href="#uv" aria-label="Link to this section">#</a></h2>
+<p><code>pyproject.toml</code>:</p>
+<div class="code"><div class="code-head"><span>toml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="toml"><code><span class="hljs-section">[[tool.uv.index]]</span>
+<span class="hljs-attr">name</span> = <span class="hljs-string">&quot;hangar&quot;</span>
+<span class="hljs-attr">url</span> = <span class="hljs-string">&quot;https://hangar.example.com/repository/pypi-group/simple/&quot;</span>
+<span class="hljs-attr">publish-url</span> = <span class="hljs-string">&quot;https://hangar.example.com/repository/pypi-hosted/&quot;</span>
+<span class="hljs-attr">default</span> = <span class="hljs-literal">true</span>    <span class="hljs-comment"># replaces pypi.org; use explicit = true to only pin selected packages</span></code></pre></div>
+<p>Credentials come from the environment, named after the index:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-built_in">export</span> UV_INDEX_HANGAR_USERNAME=__token__
+<span class="hljs-built_in">export</span> UV_INDEX_HANGAR_PASSWORD=<span class="hljs-string">&#x27;&lt;token&gt;&#x27;</span>
+uv lock
+uv <span class="hljs-built_in">sync</span>
+uv pip install --index-url https://hangar.example.com/repository/pypi-group/simple/ requests</code></pre></div>
+<p>The same <code>[[index]]</code> table works in <code>uv.toml</code> (without the <code>tool.uv.</code> prefix).</p>
+<p>Publish:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>uv build
+<span class="hljs-built_in">export</span> UV_PUBLISH_USERNAME=__token__
+<span class="hljs-built_in">export</span> UV_PUBLISH_PASSWORD=<span class="hljs-string">&#x27;&lt;token&gt;&#x27;</span>
+uv publish --index hangar
+<span class="hljs-comment"># or without an index entry:</span>
+uv publish --publish-url https://hangar.example.com/repository/pypi-hosted/</code></pre></div>
+<h2 id="twine">twine<a class="anchor" href="#twine" aria-label="Link to this section">#</a></h2>
+<p><code>~/.pypirc</code>:</p>
+<div class="code"><div class="code-head"><span>ini</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="ini"><code><span class="hljs-section">[distutils]</span>
+<span class="hljs-attr">index-servers</span> =
+    hangar
+
+<span class="hljs-section">[hangar]</span>
+<span class="hljs-attr">repository</span> = https://hangar.example.com/repository/pypi-hosted/
+<span class="hljs-attr">username</span> = __token__
+<span class="hljs-attr">password</span> = &lt;token&gt;</code></pre></div>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>python -m build
+twine upload -r hangar dist/*
+<span class="hljs-comment"># or without .pypirc:</span>
+twine upload --repository-url https://hangar.example.com/repository/pypi-hosted/ \
+  -u __token__ -p <span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> dist/*</code></pre></div>
+<p>twine only honours <code>--skip-existing</code> for some public indexes. With <code>allow_once</code>,
+re-uploading identical files succeeds anyway.</p>
+<p>The version in the file name must be the declared version under PEP 440
+normalisation: <code>1.0</code> matches <code>1.0.0</code> and <code>1.0-1</code> matches <code>1.0.post1</code>, while
+<code>1.0</code> and <code>10</code> are different versions and the upload answers <code>400</code>.</p>
+<h2 id="poetry">poetry<a class="anchor" href="#poetry" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>poetry <span class="hljs-built_in">source</span> add --priority=primary hangar https://hangar.example.com/repository/pypi-group/simple/
+poetry config http-basic.hangar __token__ <span class="hljs-string">&#x27;&lt;token&gt;&#x27;</span>
+
+poetry config repositories.hangar-upload https://hangar.example.com/repository/pypi-hosted/
+poetry config http-basic.hangar-upload __token__ <span class="hljs-string">&#x27;&lt;token&gt;&#x27;</span>
+poetry publish --build -r hangar-upload</code></pre></div>
+<p>In CI, use environment variables instead of <code>poetry config</code>:
+<code>POETRY_HTTP_BASIC_HANGAR_USERNAME=__token__</code> and
+<code>POETRY_HTTP_BASIC_HANGAR_PASSWORD=&lt;token&gt;</code>.</p>
+<h2 id="yank-a-release">Yank a release<a class="anchor" href="#yank-a-release" aria-label="Link to this section">#</a></h2>
+<p>Yanked releases stay downloadable for exact pins, but installers skip them
+otherwise.</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-comment"># yank, with an optional reason</span>
+curl -u __token__:<span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -X POST \
+  https://hangar.example.com/repository/pypi-hosted/yank/acme-tiny/0.1.0 \
+  -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> -d <span class="hljs-string">&#x27;{&quot;reason&quot;: &quot;broken build&quot;}&#x27;</span>
+
+<span class="hljs-comment"># un-yank</span>
+curl -u __token__:<span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -X DELETE \
+  https://hangar.example.com/repository/pypi-hosted/yank/acme-tiny/0.1.0</code></pre></div>
+<p>To delete a release, delete its component through the <a href="../api/">REST API</a>.</p>
+<h2 id="notes">Notes<a class="anchor" href="#notes" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Simple pages are served as HTML or PEP 691 JSON
+(<code>Accept: application/vnd.pypi.simple.v1+json</code>), with sha256 hashes,
+<code>requires-python</code>, yank markers and PEP 658 wheel metadata.</li>
+<li>Requests without credentials to a repository without anonymous read get <code>401</code>
+with <code>WWW-Authenticate: Basic</code>, so pip falls back to netrc or keyring.</li>
+<li>Plain HTTP: pip ignores an <code>http://</code> index on any host other than localhost
+unless the host is listed in <code>--trusted-host</code> (or <code>trusted-host</code> in <code>pip.conf</code>).</li>
+</ul>
+<h2 id="routing-rules">Routing rules<a class="anchor" href="#routing-rules" aria-label="Link to this section">#</a></h2>
+<p>A group that combines a hosted repository with a public proxy can serve a
+public package published under one of your internal names. Block internal
+names on the proxy and reserve them for the hosted member (for example <code>edcom-*</code>);
+see <a href="../routing-rules/">routing-rules.md</a>.</p>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/pypi.md"><code>docs/guides/pypi.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/pypi.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../maven/" rel="prev"><small>Previous</small><b>Maven &amp; Gradle</b></a><a class="next" href="../nuget/" rel="next"><small>Next</small><b>NuGet</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#repositories">Repositories</a></li><li class="l3"><a href="#hosted">Hosted</a></li><li class="l3"><a href="#proxy-pypiorg">Proxy (pypi.org)</a></li><li class="l3"><a href="#group">Group</a></li><li class="l2"><a href="#pip">pip</a></li><li class="l2"><a href="#uv">uv</a></li><li class="l2"><a href="#twine">twine</a></li><li class="l2"><a href="#poetry">poetry</a></li><li class="l2"><a href="#yank-a-release">Yank a release</a></li><li class="l2"><a href="#notes">Notes</a></li><li class="l2"><a href="#routing-rules">Routing rules</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hangar user guides · Hangar docs</title>
+<meta name="description" content="Practical, copy-paste guides for running Hangar and connecting package clients to it.">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/guides/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Hangar user guides">
+<meta property="og:description" content="Practical, copy-paste guides for running Hangar and connecting package clients to it.">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/guides/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Hangar user guides">
+<meta name="twitter:description" content="Practical, copy-paste guides for running Hangar and connecting package clients to it.">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Concepts and guides","item":"https://ismoilovdevml.github.io/hangar/docs/guides/"}]}</script>
+<script src="../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../">Home</a>
+    <a class="hide-sm" href="../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../">Introduction</a></li><li><a href="getting-started/">Getting started</a></li><li><a href="./" aria-current="page">Concepts and guides</a></li><li><a href="../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../deploy/">Deploying Hangar</a></li><li><a href="../deploy/requirements/">Requirements and sizing</a></li><li><a href="../deploy/install-compose/">Docker Compose</a></li><li><a href="../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../deploy/install-binary/">Binary and systemd</a></li><li><a href="../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../deploy/first-admin/">First administrator</a></li><li><a href="../deploy/backup-restore/">Backup and restore</a></li><li><a href="../deploy/upgrade/">Upgrades</a></li><li><a href="../deploy/high-availability/">High availability</a></li><li><a href="../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../ui/">The web UI</a></li><li><a href="../ui/repositories/">Repositories</a></li><li><a href="../ui/packages/">Packages &amp; search</a></li><li><a href="../ui/connect/">Connect a client</a></li><li><a href="../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../ui/access/">Access &amp; tokens</a></li><li><a href="../ui/tasks/">Scheduled tasks</a></li><li><a href="../ui/blob-stores/">Blob stores</a></li><li><a href="../ui/system/">Status, logs &amp; audit</a></li><li><a href="../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="docker/">Docker &amp; OCI</a></li><li><a href="npm/">npm, pnpm, yarn</a></li><li><a href="maven/">Maven &amp; Gradle</a></li><li><a href="pypi/">PyPI</a></li><li><a href="nuget/">NuGet</a></li><li><a href="go/">Go modules</a></li><li><a href="helm/">Helm charts</a></li><li><a href="cargo/">Cargo</a></li><li><a href="apt/">APT</a></li><li><a href="rpm/">RPM</a></li><li><a href="raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="migrate/">Move to Hangar</a></li><li><a href="ci/">CI integration</a></li><li><a href="access/">Access management</a></li><li><a href="sso/">Single sign-on</a></li><li><a href="routing-rules/">Routing rules</a></li><li><a href="vulnerabilities/">Vulnerability scanning</a></li><li><a href="api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../security/">Security</a></li><li><a href="../operations/monitoring/">Monitoring</a></li><li><a href="../operations/runbooks/">Alert runbooks</a></li><li><a href="../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../architecture/">Architecture</a></li><li><a href="../formats/">Format protocols</a></li><li><a href="../adr/">Decision records</a></li><li><a href="../product-spec/">Product specification</a></li><li><a href="../design-system/">Design system</a></li><li><a href="../roadmap/">Roadmap</a></li><li><a href="../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Start here</p>
+      <h1>Hangar user guides</h1>
+<p class="lead">Practical, copy-paste guides for running Hangar and connecting package clients to it.</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Guide</th>
+<th>What it covers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="getting-started/">Getting started</a></td>
+<td>Run the server, create the first administrator and token, create a repository, upload and download a file</td>
+</tr>
+<tr>
+<td><a href="migrate/">Move to Hangar</a></td>
+<td>Import packages from another registry, pre-warm proxies from lockfiles, switch clients, verify</td>
+</tr>
+<tr>
+<td><a href="docker/">Docker / OCI</a></td>
+<td><code>docker login/push/pull</code>, buildx multi-arch, Helm charts over OCI, cosign</td>
+</tr>
+<tr>
+<td><a href="npm/">npm</a></td>
+<td>npm, pnpm and yarn: <code>.npmrc</code>, <code>.yarnrc.yml</code>, publish, dist-tags, deprecate, unpublish</td>
+</tr>
+<tr>
+<td><a href="maven/">Maven</a></td>
+<td>Maven <code>settings.xml</code>, Gradle Kotlin and Groovy DSL, <code>maven-publish</code></td>
+</tr>
+<tr>
+<td><a href="pypi/">PyPI</a></td>
+<td>pip, uv, poetry and twine</td>
+</tr>
+<tr>
+<td><a href="go/">Go modules</a></td>
+<td><code>GOPROXY</code>, private modules with <code>GOPRIVATE</code> and <code>.netrc</code>, publishing module zips, checksum database</td>
+</tr>
+<tr>
+<td><a href="nuget/">NuGet</a></td>
+<td><code>dotnet nuget</code>, <code>nuget.config</code>, push, restore through a group</td>
+</tr>
+<tr>
+<td><a href="helm/">Helm</a></td>
+<td><code>helm repo add</code>, <code>helm install</code>, <code>helm cm-push</code> and curl uploads, chart provenance</td>
+</tr>
+<tr>
+<td><a href="cargo/">Cargo</a></td>
+<td>Sparse registry: <code>.cargo/config.toml</code>, <code>cargo login</code>, publish, yank, crates.io proxy</td>
+</tr>
+<tr>
+<td><a href="apt/">APT</a></td>
+<td>Debian and Ubuntu: signed <code>InRelease</code>, deb822 <code>.sources</code> with <code>Signed-By</code>, <code>auth.conf.d</code>, <code>.deb</code> upload, Debian/Ubuntu mirror proxy</td>
+</tr>
+<tr>
+<td><a href="rpm/">RPM</a></td>
+<td>RHEL, Rocky, AlmaLinux, Fedora: <code>.repo</code> files with <code>repo_gpgcheck</code>, <code>.rpm</code> upload, per-directory repodata, Rocky/EPEL mirror proxy</td>
+</tr>
+<tr>
+<td><a href="raw/">Raw</a></td>
+<td>Arbitrary files with curl and wget, directory listings</td>
+</tr>
+<tr>
+<td><a href="ci/">CI integration</a></td>
+<td>GitLab CI, GitHub Actions, Jenkins and Gitea Actions with tokens</td>
+</tr>
+<tr>
+<td><a href="api/">REST API</a></td>
+<td>Authentication, common calls, pagination, errors</td>
+</tr>
+<tr>
+<td><a href="access/">Access management</a></td>
+<td>Members, service accounts, roles, privileges and token scopes</td>
+</tr>
+<tr>
+<td><a href="routing-rules/">Routing rules</a></td>
+<td>Dependency confusion: block internal names on public proxies, reserve them for hosted group members</td>
+</tr>
+<tr>
+<td><a href="vulnerabilities/">Vulnerability scanning</a></td>
+<td>OSV scanning of npm, Maven, PyPI, NuGet, Go and Cargo packages, waivers, quarantine, mirrors</td>
+</tr>
+<tr>
+<td><a href="sso/">Single sign-on</a></td>
+<td>OIDC (Keycloak example) and LDAP / Active Directory sign-in, group to role mapping, troubleshooting</td>
+</tr>
+</tbody>
+</table></div>
+<p>Operators also need <a href="../security/">docs/security.md</a> (secret key, hardening,
+rate limits) and <a href="../operations/monitoring/">docs/operations/monitoring.md</a>
+(metrics, logs, tracing).</p>
+<p>Formats compiled into the server today: <code>apt</code>, <code>cargo</code>, <code>docker</code>, <code>go</code>, <code>helm</code>, <code>maven</code>, <code>npm</code>, <code>nuget</code>, <code>pypi</code>, <code>raw</code> and <code>rpm</code>
+(<code>GET /api/v1/formats</code> lists them). Other formats are not supported yet.</p>
+<h2 id="concepts-in-one-minute">Concepts in one minute<a class="anchor" href="#concepts-in-one-minute" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><strong>Repository</strong>: a named container of one format and one type. Names match
+<code>^[a-z0-9][a-z0-9-]{1,62}$</code>.</li>
+<li><strong>Types</strong>:
+<ul>
+<li><code>hosted</code>: clients publish into it.</li>
+<li><code>proxy</code>: fetches from a remote registry on demand and caches what it fetched.</li>
+<li><code>group</code>: an ordered list of repositories of the same format behind one URL.
+Reads try the members in order. Docker, npm, NuGet, PyPI, Go, Cargo, APT and RPM groups can forward
+writes to one hosted member (<code>write_member</code>). Maven and raw groups are read-only.</li>
+</ul>
+</li>
+<li><strong>URLs</strong>: every format except Docker is served at
+<code>&lt;base_url&gt;/repository/&lt;repo&gt;/...</code>. Docker/OCI is served at <code>&lt;base_url&gt;/v2/</code>,
+and the first path segment of the image name selects the repository; a Docker
+repository can also get its own host name or port (a connector, see
+<a href="docker/#connectors-own-host-or-port">docker.md</a>).</li>
+<li><strong>Credentials</strong>: every client authenticates with HTTP Basic (any username plus a
+personal access token as the password) or <code>Authorization: Bearer &lt;token&gt;</code>.
+Tokens start with <code>hgr_</code>.</li>
+<li><strong><code>server.base_url</code></strong> (<code>HANGAR_SERVER_BASE_URL</code>) must be the URL clients use.
+Every absolute link Hangar generates is built from it: npm tarball URLs, PyPI
+file links, the Docker token realm, NuGet resource URLs.</li>
+</ul>
+<h2 id="things-that-apply-to-every-proxy-repository">Things that apply to every proxy repository<a class="anchor" href="#things-that-apply-to-every-proxy-repository" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>
+<p>Proxy repositories cannot reach loopback, private, link-local or cloud metadata
+addresses by default. To proxy an internal server, list it in
+<code>http.allow_private_networks</code> (<code>HANGAR_HTTP_ALLOW_PRIVATE_NETWORKS</code>, comma-separated
+CIDRs, IPs, host names or <code>.domain</code> suffixes).</p>
+</li>
+<li>
+<p>A corporate outbound proxy is configured once in <code>http.proxy</code> (<code>HANGAR_HTTP_PROXY</code>)
+and inherited by every proxy repository; see <code>hangar.example.yaml</code>.</p>
+</li>
+<li>
+<p>Common proxy settings in <code>config.proxy</code>:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Key</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>remote_url</code></td>
+<td>upstream base URL (required)</td>
+</tr>
+<tr>
+<td><code>metadata_ttl</code>, <code>content_ttl</code>, <code>negative_cache_ttl</code></td>
+<td>cache lifetimes, Go durations such as <code>30m</code>, <code>24h</code></td>
+</tr>
+<tr>
+<td><code>auth</code></td>
+<td>upstream credentials: <code>{&quot;kind&quot;: &quot;basic&quot;, &quot;username&quot;: &quot;...&quot;, &quot;password&quot;: &quot;...&quot;}</code>, <code>{&quot;kind&quot;: &quot;bearer&quot;, &quot;token&quot;: &quot;...&quot;}</code> or <code>{&quot;kind&quot;: &quot;header&quot;, &quot;header_name&quot;: &quot;...&quot;, &quot;token&quot;: &quot;...&quot;}</code></td>
+</tr>
+<tr>
+<td><code>related_hosts</code></td>
+<td>other hosts the remote links to (file CDNs, API hosts) that may be fetched on its behalf: host names, <code>host:port</code> or <code>.domain</code> suffixes; the remote's credentials are never sent there</td>
+</tr>
+<tr>
+<td><code>offline</code></td>
+<td><code>true</code>: never contact the remote, serve only cached content (stale included), answer 404 for the rest</td>
+</tr>
+<tr>
+<td><code>max_concurrent_requests</code></td>
+<td>cap on requests in flight to the remote (<code>0</code> = unlimited)</td>
+</tr>
+<tr>
+<td><code>http</code></td>
+<td>per-remote outbound settings: <code>proxy</code>, <code>ca_bundle</code>, timeouts, connection limits</td>
+</tr>
+</tbody>
+</table></div>
+</li>
+<li>
+<p>Upstream credentials (<code>auth</code>, or a password inside <code>remote_url</code>) are encrypted
+with the server's secret key and never returned by the API. Set
+<code>HANGAR_SECRET_KEY</code> (<code>openssl rand -base64 32</code>, same value on every node) before
+adding them: without it, saving a repository that carries a credential answers
+<code>501</code>. See <a href="../security/">docs/security.md</a>.</p>
+</li>
+<li>
+<p>When a remote answers <code>429</code>, Hangar passes it on (with <code>Retry-After</code>) for content
+it has not cached and keeps serving what it has.</p>
+</li>
+<li>
+<p><code>POST /api/v1/repositories/&lt;name&gt;/cache:invalidate</code> makes a proxy forget
+remembered 404s and rate limits so the next request asks the remote again;
+cached content is kept.</p>
+</li>
+<li>
+<p>Group members are merged. If a proxy member serves a public package with the
+same name as one of your internal packages, clients may resolve the public one
+(for example a higher version). Add <a href="routing-rules/">routing rules</a>: block
+internal names on the public proxy and reserve them for the hosted member.</p>
+</li>
+</ul>
+<h2 id="browsing">Browsing<a class="anchor" href="#browsing" aria-label="Link to this section">#</a></h2>
+<p><strong>Packages</strong> in the web UI is a tree of every repository you can read. Expand a
+repository to see what clients consume: folders (npm scopes, Maven groupId
+segments, image paths, module paths) lead down to packages, and a package opens
+to its versions, newest first. apt and rpm list their packages by name. A raw
+repository's files are its content, so its tree shows directories and files.</p>
+<p>The files a repository stores (tarballs, manifests, Docker <code>manifests</code> and
+<code>blobs</code>, index documents) are on the repository's <strong>Files</strong> view, folder by
+folder in client paths:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Format</th>
+<th>Files</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>npm</td>
+<td>scope, package, then the package's files (tarballs, manifests)</td>
+</tr>
+<tr>
+<td>Maven</td>
+<td>groupId segments, artifactId, version, files</td>
+</tr>
+<tr>
+<td>NuGet</td>
+<td>package id, version, <code>.nupkg</code> / <code>.nuspec</code></td>
+</tr>
+<tr>
+<td>PyPI</td>
+<td>project, files</td>
+</tr>
+<tr>
+<td>Go</td>
+<td>module path segments, module, <code>@v</code>, version, <code>.info</code> / <code>.mod</code> / <code>.zip</code></td>
+</tr>
+<tr>
+<td>Cargo</td>
+<td>crate, version, <code>.crate</code></td>
+</tr>
+<tr>
+<td>Docker</td>
+<td>image path, then <code>manifests</code> (tags and digests) and <code>blobs</code></td>
+</tr>
+<tr>
+<td>Helm</td>
+<td>chart, version, <code>.tgz</code> / <code>.prov</code></td>
+</tr>
+<tr>
+<td>raw</td>
+<td>directories and files</td>
+</tr>
+</tbody>
+</table></div>
+<p>A group shows the merged content of the members you can read; each entry names
+the member that holds it. The tree is keyboard navigable (arrow keys, Home, End,
+Enter), loads folders on demand, and the selection is part of the URL, so a link
+opens the same node.</p>
+<p>Selecting a package or version shows its README (rendered from the package's own
+files; links and images are restricted), licences, downloads, vulnerability
+status, its versions and files, the repositories that hold it, and the client
+commands to install it. Selecting a file shows its path, size, checksums, dates,
+and, in a proxy, that it is a cached copy. A Docker version's size and its
+<strong>Layers</strong> tab come from the image manifest (a multi-platform index is sized by
+its linux/amd64 image). <strong>Delete version</strong>, <strong>Delete package</strong> (every version,
+on the Versions tab) and <strong>Delete file</strong> need <code>repo:&lt;name&gt;:delete</code>; all are
+audited and release the files' blobs for compaction. Docker layers and
+manifests are shared by tags, so they are deleted with their version, never one
+file at a time.</p>
+<p>The same data is in the REST API: <code>GET /api/v1/repositories/&lt;name&gt;/browse?path=&lt;folder&gt;</code>
+(direct children, cursor-paged; <code>view=packages</code> gives the tree, the default
+<code>view=files</code> the stored files), <code>GET|DELETE /api/v1/assets/&lt;id&gt;</code> and
+<code>GET /api/v1/components/&lt;id&gt;/info</code> (README, licences, keywords).</p>
+<h2 id="plain-http">Plain HTTP<a class="anchor" href="#plain-http" aria-label="Link to this section">#</a></h2>
+<p>Hangar's listener speaks plain HTTP; terminate TLS in a reverse proxy or load
+balancer and set <code>server.base_url</code> to the <code>https://</code> URL. List the proxy in
+<code>server.trusted_proxies</code> so <code>X-Forwarded-*</code> headers are honoured (HSTS is then
+sent on HTTPS requests). Every guide notes the extra client flag needed when you
+test against an <code>http://</code> URL.</p>
+<p>See also: <a href="../formats/">docs/FORMATS.md</a> (protocol details per format) and
+<a href="https://github.com/ismoilovdevml/hangar/blob/main/api/openapi.yaml">api/openapi.yaml</a> (full REST reference).</p>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/README.md"><code>docs/guides/README.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/README.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="getting-started/" rel="prev"><small>Previous</small><b>Getting started</b></a><a class="next" href="../faq/" rel="next"><small>Next</small><b>FAQ</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#concepts-in-one-minute">Concepts in one minute</a></li><li class="l2"><a href="#things-that-apply-to-every-proxy-repository">Things that apply to every proxy repository</a></li><li class="l2"><a href="#browsing">Browsing</a></li><li class="l2"><a href="#plain-http">Plain HTTP</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Getting started · Hangar docs</title>
+<meta name="description" content="From nothing to a working repository in about five minutes: run Hangar, create the first administrator, create a token, create a hosted repository, upload…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/guides/getting-started/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Getting started">
+<meta property="og:description" content="From nothing to a working repository in about five minutes: run Hangar, create the first administrator, create a token, create a hosted repository, upload…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/guides/getting-started/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Getting started">
+<meta name="twitter:description" content="From nothing to a working repository in about five minutes: run Hangar, create the first administrator, create a token, create a hosted repository, upload…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Getting started","item":"https://ismoilovdevml.github.io/hangar/docs/guides/getting-started/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="./" aria-current="page">Getting started</a></li><li><a href="../">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../docker/">Docker &amp; OCI</a></li><li><a href="../npm/">npm, pnpm, yarn</a></li><li><a href="../maven/">Maven &amp; Gradle</a></li><li><a href="../pypi/">PyPI</a></li><li><a href="../nuget/">NuGet</a></li><li><a href="../go/">Go modules</a></li><li><a href="../helm/">Helm charts</a></li><li><a href="../cargo/">Cargo</a></li><li><a href="../apt/">APT</a></li><li><a href="../rpm/">RPM</a></li><li><a href="../raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../migrate/">Move to Hangar</a></li><li><a href="../ci/">CI integration</a></li><li><a href="../access/">Access management</a></li><li><a href="../sso/">Single sign-on</a></li><li><a href="../routing-rules/">Routing rules</a></li><li><a href="../vulnerabilities/">Vulnerability scanning</a></li><li><a href="../api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Start here</p>
+      <h1>Getting started</h1>
+<p class="lead">From nothing to a working repository in about five minutes: run Hangar, create the
+first administrator, create a token, create a hosted repository, upload and
+download a file.</p>
+<p>Placeholders used below:</p>
+<ul>
+<li><code>http://localhost:8080</code>: the server's <code>server.base_url</code>. Replace it with your
+own URL (for example <code>https://hangar.example.com</code>) once Hangar runs elsewhere.</li>
+<li><code>&lt;token&gt;</code>: a personal access token (starts with <code>hgr_</code>), created in step 3.</li>
+<li><code>&lt;admin-password&gt;</code>: the administrator password you choose in step 2.</li>
+</ul>
+<h2 id="1-run-the-server">1. Run the server<a class="anchor" href="#1-run-the-server" aria-label="Link to this section">#</a></h2>
+<p>You need PostgreSQL 16 or newer. Hangar applies its schema migrations itself.</p>
+<h3 id="option-a-from-source">Option A: from source<a class="anchor" href="#option-a-from-source" aria-label="Link to this section">#</a></h3>
+<p>Requires Go (see <code>go.mod</code>). Hangar embeds NATS and stores blobs on disk under
+<code>./data</code> by default.</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-built_in">export</span> HANGAR_DATABASE_URL=<span class="hljs-string">&#x27;postgres://hangar:hangar@localhost:5432/hangar?sslmode=disable&#x27;</span>
+<span class="hljs-built_in">export</span> HANGAR_BOOTSTRAP_ADMIN_USER=admin
+<span class="hljs-built_in">export</span> HANGAR_BOOTSTRAP_ADMIN_PASSWORD=<span class="hljs-string">&#x27;&lt;admin-password&gt;&#x27;</span>
+go run ./cmd/hangar serve --migrate</code></pre></div>
+<p>The server listens on <code>:8080</code> and assumes <code>http://localhost:8080</code> is its public URL.
+Change either with <code>HANGAR_SERVER_ADDR</code> and <code>HANGAR_SERVER_BASE_URL</code>. A binary built
+this way has no web UI (it serves a placeholder page); the container image and
+<code>make build-embed</code> include the UI.</p>
+<h3 id="option-b-docker-compose">Option B: Docker Compose<a class="anchor" href="#option-b-docker-compose" aria-label="Link to this section">#</a></h3>
+<p>The bundled stack runs PostgreSQL, NATS, MinIO, a Trivy server and Hangar:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>docker compose -f deploy/docker-compose.yml up -d --build
+curl http://localhost:8080/readyz</code></pre></div>
+<p>The compose file does not set a bootstrap administrator. Create one in the running
+container (step 2, option B).</p>
+<h3 id="configuration">Configuration<a class="anchor" href="#configuration" aria-label="Link to this section">#</a></h3>
+<p>Every setting can come from a YAML file (<code>hangar serve --config hangar.yaml</code>, see
+<code>hangar.example.yaml</code>) or from an environment variable named <code>HANGAR_</code> plus the
+upper-cased YAML path: <code>server.base_url</code> is <code>HANGAR_SERVER_BASE_URL</code>,
+<code>storage.fs.path</code> is <code>HANGAR_STORAGE_FS_PATH</code>. Environment variables win over the
+file. Settings you will want early:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Setting</th>
+<th>Environment variable</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>server.addr</code></td>
+<td><code>HANGAR_SERVER_ADDR</code></td>
+<td><code>:8080</code></td>
+</tr>
+<tr>
+<td><code>server.base_url</code></td>
+<td><code>HANGAR_SERVER_BASE_URL</code></td>
+<td><code>http://localhost:8080</code></td>
+</tr>
+<tr>
+<td><code>database.url</code></td>
+<td><code>HANGAR_DATABASE_URL</code></td>
+<td>(required)</td>
+</tr>
+<tr>
+<td><code>storage.fs.path</code></td>
+<td><code>HANGAR_STORAGE_FS_PATH</code></td>
+<td><code>./data/blobs</code></td>
+</tr>
+<tr>
+<td><code>nats.data_dir</code></td>
+<td><code>HANGAR_NATS_DATA_DIR</code></td>
+<td><code>./data/nats</code></td>
+</tr>
+<tr>
+<td><code>security.secret_key</code></td>
+<td><code>HANGAR_SECRET_KEY</code></td>
+<td>(none)</td>
+</tr>
+<tr>
+<td><code>docker.token_key</code></td>
+<td><code>HANGAR_DOCKER_TOKEN_KEY</code></td>
+<td>random per process</td>
+</tr>
+<tr>
+<td><code>bootstrap.admin_user</code></td>
+<td><code>HANGAR_BOOTSTRAP_ADMIN_USER</code></td>
+<td>(none)</td>
+</tr>
+<tr>
+<td><code>bootstrap.admin_password</code></td>
+<td><code>HANGAR_BOOTSTRAP_ADMIN_PASSWORD</code></td>
+<td>(none)</td>
+</tr>
+</tbody>
+</table></div>
+<p>Two keys to set before real use, the same value on every node, kept in your
+secret manager:</p>
+<ul>
+<li><code>HANGAR_SECRET_KEY</code> (<code>openssl rand -base64 32</code>): encrypts proxy upstream
+credentials and S3 keys in the database. Without it, repositories that carry
+credentials are refused. A lost key cannot be recovered.</li>
+<li><code>HANGAR_DOCKER_TOKEN_KEY</code> (32+ random bytes, e.g. <code>openssl rand -base64 48</code>):
+signs registry tokens, so Docker logins and uploads survive restarts.</li>
+</ul>
+<p>Before exposing the server, go through the hardening checklist in
+<a href="../../security/">docs/security.md</a>.</p>
+<p>Check that the server is up (these two need no sign-in; every other API route
+does):</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl http://localhost:8080/readyz
+curl http://localhost:8080/api/v1/system/status</code></pre></div>
+<h2 id="2-create-the-first-administrator">2. Create the first administrator<a class="anchor" href="#2-create-the-first-administrator" aria-label="Link to this section">#</a></h2>
+<p>Option A: environment variables (used above). When <code>HANGAR_BOOTSTRAP_ADMIN_USER</code>
+and <code>HANGAR_BOOTSTRAP_ADMIN_PASSWORD</code> are both set and no enabled administrator
+exists, <code>hangar serve</code> creates that local user with the built-in <code>Admin</code> role.
+Once an administrator exists, these variables change nothing. At the first
+sign-in Hangar asks for a new password (unless
+<code>HANGAR_BOOTSTRAP_REQUIRE_PASSWORD_CHANGE=false</code>); remove
+<code>HANGAR_BOOTSTRAP_ADMIN_PASSWORD</code> after the first start.</p>
+<p>Without these variables, the first start of an empty installation creates
+<code>admin</code> with a generated one-time password, printed once to the server's
+standard error and written to <code>HANGAR_BOOTSTRAP_INITIAL_PASSWORD_FILE</code> when set;
+see <a href="../../deploy/first-admin/">first administrator</a>.</p>
+<p>Option B: the CLI, which talks to the database directly (no running server
+needed; it reads the same configuration):</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-built_in">echo</span> <span class="hljs-string">&#x27;&lt;admin-password&gt;&#x27;</span> | hangar admin bootstrap --username admin --password-stdin
+
+<span class="hljs-comment"># Docker Compose stack:</span>
+<span class="hljs-built_in">echo</span> <span class="hljs-string">&#x27;&lt;admin-password&gt;&#x27;</span> | docker compose -f deploy/docker-compose.yml <span class="hljs-built_in">exec</span> -T hangar \
+  hangar admin bootstrap --username admin --password-stdin</code></pre></div>
+<p>Password rules (defaults): 12 to 256 characters, must not contain the username.
+Five failed password checks within 15 minutes, including HTTP Basic requests with
+a wrong password, lock the account for 15 minutes (<code>423</code>). A client address with
+too many failed authentications is also throttled (<code>429</code>, see <a href="../api/#rate-limits">api.md</a>).
+<code>hangar admin bootstrap</code> restores access if every administrator is locked out or
+disabled; <code>hangar admin reset-password --user NAME</code> prints a one-time password for
+a local user who lost theirs.</p>
+<h2 id="3-sign-in-and-create-a-personal-access-token">3. Sign in and create a personal access token<a class="anchor" href="#3-sign-in-and-create-a-personal-access-token" aria-label="Link to this section">#</a></h2>
+<p>Package clients and scripts should use tokens, not your password. The REST API
+accepts your username and password over HTTP Basic, so one <code>curl</code> call creates a
+token:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -u admin:<span class="hljs-string">&#x27;&lt;admin-password&gt;&#x27;</span> -X POST http://localhost:8080/api/v1/tokens \
+  -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;laptop&quot;,
+        &quot;scopes&quot;: [&quot;repo:*:admin&quot;, &quot;system:repos:admin&quot;],
+        &quot;expires_at&quot;: &quot;2027-06-30T00:00:00Z&quot;
+      }&#x27;</span></code></pre></div>
+<p>The response contains the secret once, in <code>secret</code>:</p>
+<div class="code"><div class="code-head"><span>json</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="json"><code><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;id&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;1bf1dce4-...&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;name&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;laptop&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;owner&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;admin&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;prefix&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;hgr_1Hzo&quot;</span><span class="hljs-punctuation">,</span>
+ <span class="hljs-attr">&quot;scopes&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">[</span><span class="hljs-string">&quot;repo:*:admin&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-string">&quot;system:repos:admin&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;expires_at&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;2027-06-30T00:00:00Z&quot;</span><span class="hljs-punctuation">,</span>
+ <span class="hljs-attr">&quot;created_at&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;...&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;owner_kind&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;user&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;last_used_ip&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-literal"><span class="hljs-keyword">null</span></span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;secret&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;hgr_1HzoFiZr...&quot;</span><span class="hljs-punctuation">}</span></code></pre></div>
+<p>The web UI offers the same under My account, Personal access tokens.</p>
+<ul>
+<li><code>scopes</code> narrow what the token may do; the token never gets more than its owner's
+roles. <code>repo:*:admin</code> plus <code>system:repos:admin</code> lets this token create and manage
+repositories. A CI token should be much narrower; see <a href="../ci/">ci.md</a> and
+<a href="../access/">access.md</a>.</li>
+<li><code>expires_at</code> is required, RFC 3339, in the future and at most 366 days away
+(<code>auth.max_token_lifetime</code>).</li>
+</ul>
+<p>Alternatively, create a token from the command line on the server host:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>hangar admin token create --user admin --name laptop \
+  --scopes <span class="hljs-string">&#x27;repo:*:admin,system:repos:admin&#x27;</span> --expires 30d</code></pre></div>
+<p>Keep the token in an environment variable for the rest of this guide:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-built_in">export</span> HANGAR_TOKEN=<span class="hljs-string">&#x27;&lt;token&gt;&#x27;</span></code></pre></div>
+<p>Browser sign-in: the web UI signs in with <code>POST /api/v1/auth/login</code> and a session
+cookie. The cookie is marked <code>Secure</code>, which browsers accept on <code>https://</code> and on
+<code>http://localhost</code>. To use the UI over plain HTTP on another host name, set
+<code>HANGAR_AUTH_SESSION_INSECURE=true</code> (development only).</p>
+<h2 id="4-create-a-hosted-repository">4. Create a hosted repository<a class="anchor" href="#4-create-a-hosted-repository" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -X POST http://localhost:8080/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> \
+  -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;raw-hosted&quot;,
+        &quot;format&quot;: &quot;raw&quot;,
+        &quot;type&quot;: &quot;hosted&quot;,
+        &quot;blob_store&quot;: &quot;default&quot;,
+        &quot;config&quot;: { &quot;hosted&quot;: { &quot;write_policy&quot;: &quot;allow&quot; } }
+      }&#x27;</span></code></pre></div>
+<p>The answer is <code>201 Created</code> with the repository, including the URL clients use:</p>
+<div class="code"><div class="code-head"><span>json</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="json"><code><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;id&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;...&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;name&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;raw-hosted&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;format&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;raw&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;hosted&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;blob_store&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;default&quot;</span><span class="hljs-punctuation">,</span>
+ <span class="hljs-attr">&quot;online&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-literal"><span class="hljs-keyword">true</span></span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;config&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;hosted&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;write_policy&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;allow&quot;</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;anonymous_read&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-literal"><span class="hljs-keyword">false</span></span><span class="hljs-punctuation">,</span>...<span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+ <span class="hljs-attr">&quot;url&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;http://localhost:8080/repository/raw-hosted/&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;status&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;online&quot;</span><span class="hljs-punctuation">,</span>...<span class="hljs-punctuation">}</span></code></pre></div>
+<p>Repository fields:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Field</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>^[a-z0-9][a-z0-9-]{1,62}$</code>, immutable</td>
+</tr>
+<tr>
+<td><code>format</code></td>
+<td><code>docker</code>, <code>maven</code>, <code>npm</code>, <code>nuget</code>, <code>pypi</code> or <code>raw</code>, immutable</td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td><code>hosted</code>, <code>proxy</code> or <code>group</code>, immutable</td>
+</tr>
+<tr>
+<td><code>blob_store</code></td>
+<td>required for hosted and proxy (the store created on first start is <code>default</code>); ignored for groups, which store nothing</td>
+</tr>
+<tr>
+<td><code>online</code></td>
+<td>default <code>true</code>; offline repositories answer 503</td>
+</tr>
+<tr>
+<td><code>config.hosted.write_policy</code></td>
+<td><code>allow</code> (default), <code>allow_once</code> (a path can be written once; identical re-uploads are accepted) or <code>deny</code></td>
+</tr>
+<tr>
+<td><code>config.proxy</code></td>
+<td><code>remote_url</code> (required), <code>metadata_ttl</code>, <code>content_ttl</code>, <code>negative_cache_ttl</code>, <code>auth</code></td>
+</tr>
+<tr>
+<td><code>config.group</code></td>
+<td><code>members</code> (ordered, required), <code>write_member</code> (formats that support group writes)</td>
+</tr>
+<tr>
+<td><code>config.anonymous_read</code></td>
+<td><code>true</code> lets unauthenticated clients read</td>
+</tr>
+<tr>
+<td><code>config.format</code></td>
+<td>format-specific settings, described in each client guide</td>
+</tr>
+</tbody>
+</table></div>
+<p>The API also accepts the same document as YAML (<code>Content-Type: application/yaml</code>).</p>
+<h2 id="5-upload-and-download-a-file">5. Upload and download a file<a class="anchor" href="#5-upload-and-download-a-file" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-built_in">echo</span> <span class="hljs-string">&#x27;hello from hangar&#x27;</span> &gt; hello.txt
+
+<span class="hljs-comment"># upload (201 Created; 200 when a file is replaced)</span>
+curl -u <span class="hljs-string">&quot;admin:<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> --upload-file hello.txt \
+  http://localhost:8080/repository/raw-hosted/demo/hello.txt
+
+<span class="hljs-comment"># download</span>
+curl -u <span class="hljs-string">&quot;admin:<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -O http://localhost:8080/repository/raw-hosted/demo/hello.txt</code></pre></div>
+<p>With a token as the password, the username is not checked; any value works.</p>
+<h2 id="next-steps">Next steps<a class="anchor" href="#next-steps" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Connect a package client: <a href="../docker/">Docker</a>, <a href="../npm/">npm</a>, <a href="../maven/">Maven</a>,
+<a href="../pypi/">PyPI</a>, <a href="../nuget/">NuGet</a>, <a href="../raw/">raw files</a>.</li>
+<li>Publish from pipelines with a service account: <a href="../ci/">CI integration</a>.</li>
+<li>Automate with the <a href="../api/">REST API</a>.</li>
+<li>Users, roles and scopes: <a href="../access/">access.md</a>.</li>
+</ul>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/getting-started.md"><code>docs/guides/getting-started.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/getting-started.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../../" rel="prev"><small>Previous</small><b>Introduction</b></a><a class="next" href="../" rel="next"><small>Next</small><b>Concepts and guides</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#1-run-the-server">1. Run the server</a></li><li class="l3"><a href="#option-a-from-source">Option A: from source</a></li><li class="l3"><a href="#option-b-docker-compose">Option B: Docker Compose</a></li><li class="l3"><a href="#configuration">Configuration</a></li><li class="l2"><a href="#2-create-the-first-administrator">2. Create the first administrator</a></li><li class="l2"><a href="#3-sign-in-and-create-a-personal-access-token">3. Sign in and create a personal access token</a></li><li class="l2"><a href="#4-create-a-hosted-repository">4. Create a hosted repository</a></li><li class="l2"><a href="#5-upload-and-download-a-file">5. Upload and download a file</a></li><li class="l2"><a href="#next-steps">Next steps</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

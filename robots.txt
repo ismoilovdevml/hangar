@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ismoilovdevml.github.io/hangar/sitemap.xml

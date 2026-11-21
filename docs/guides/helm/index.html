@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Helm · Hangar docs</title>
+<meta name="description" content="Hangar serves classic Helm chart repositories (an index.yaml plus chart archives): helm repo add, helm repo update, helm search repo, helm pull, helm…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/guides/helm/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Helm">
+<meta property="og:description" content="Hangar serves classic Helm chart repositories (an index.yaml plus chart archives): helm repo add, helm repo update, helm search repo, helm pull, helm…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/guides/helm/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Helm">
+<meta name="twitter:description" content="Hangar serves classic Helm chart repositories (an index.yaml plus chart archives): helm repo add, helm repo update, helm search repo, helm pull, helm…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Helm charts","item":"https://ismoilovdevml.github.io/hangar/docs/guides/helm/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../getting-started/">Getting started</a></li><li><a href="../">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../docker/">Docker &amp; OCI</a></li><li><a href="../npm/">npm, pnpm, yarn</a></li><li><a href="../maven/">Maven &amp; Gradle</a></li><li><a href="../pypi/">PyPI</a></li><li><a href="../nuget/">NuGet</a></li><li><a href="../go/">Go modules</a></li><li><a href="./" aria-current="page">Helm charts</a></li><li><a href="../cargo/">Cargo</a></li><li><a href="../apt/">APT</a></li><li><a href="../rpm/">RPM</a></li><li><a href="../raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../migrate/">Move to Hangar</a></li><li><a href="../ci/">CI integration</a></li><li><a href="../access/">Access management</a></li><li><a href="../sso/">Single sign-on</a></li><li><a href="../routing-rules/">Routing rules</a></li><li><a href="../vulnerabilities/">Vulnerability scanning</a></li><li><a href="../api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Package formats</p>
+      <h1>Helm</h1>
+<p class="lead">Hangar serves classic Helm chart repositories (an <code>index.yaml</code> plus chart
+archives): <code>helm repo add</code>, <code>helm repo update</code>, <code>helm search repo</code>, <code>helm pull</code>,
+<code>helm install</code>, <code>helm template</code> and <code>helm pull --verify</code> work against it, and so
+does the <code>helm cm-push</code> plugin and plain <code>curl --upload-file</code>.</p>
+<p>OCI charts (<code>helm push oci://…</code>, <code>helm install oci://…</code>) are not stored here:
+push them to a Docker repository, see <a href="../docker/">docker.md</a>.</p>
+<p>Placeholders:</p>
+<ul>
+<li><code>hangar.example.com</code>: the host of <code>server.base_url</code>.</li>
+<li><code>&lt;token&gt;</code>: a personal access token (<code>hgr_...</code>).</li>
+<li><code>$HANGAR_TOKEN</code>: the token in an environment variable.</li>
+</ul>
+<p>Repository URL: <code>https://hangar.example.com/repository/&lt;repo&gt;</code>.</p>
+<h2 id="repositories">Repositories<a class="anchor" href="#repositories" aria-label="Link to this section">#</a></h2>
+<h3 id="hosted">Hosted<a class="anchor" href="#hosted" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;helm-hosted&quot;,
+        &quot;format&quot;: &quot;helm&quot;,
+        &quot;type&quot;: &quot;hosted&quot;,
+        &quot;blob_store&quot;: &quot;default&quot;,
+        &quot;config&quot;: { &quot;hosted&quot;: { &quot;write_policy&quot;: &quot;allow_once&quot; } }
+      }&#x27;</span></code></pre></div>
+<p>Write policies, per chart version:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th><code>write_policy</code></th>
+<th>Uploading an existing version with other content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>allow_once</code></td>
+<td>refused with <code>409</code>, also with <code>?force</code></td>
+</tr>
+<tr>
+<td><code>allow</code></td>
+<td>refused with <code>409</code> unless the upload asks for <code>?force</code> (<code>helm cm-push --force</code>)</td>
+</tr>
+<tr>
+<td><code>deny</code></td>
+<td>read-only</td>
+</tr>
+</tbody>
+</table></div>
+<p>Uploading the exact same archive again is always accepted. An overwrite with
+<code>?force</code> removes the version's old <code>.prov</code> file, which signed the old archive.</p>
+<h3 id="proxy">Proxy<a class="anchor" href="#proxy" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;helm-proxy&quot;,
+        &quot;format&quot;: &quot;helm&quot;,
+        &quot;type&quot;: &quot;proxy&quot;,
+        &quot;blob_store&quot;: &quot;default&quot;,
+        &quot;config&quot;: { &quot;proxy&quot;: { &quot;remote_url&quot;: &quot;https://charts.example.org/stable&quot;, &quot;metadata_ttl&quot;: &quot;30m&quot; } }
+      }&#x27;</span></code></pre></div>
+<ul>
+<li><code>remote_url</code> is the chart repository URL (what you would give <code>helm repo add</code>)
+or the full URL of its <code>index.yaml</code>.</li>
+<li>The remote's <code>index.yaml</code> is cached for <code>metadata_ttl</code> (<code>0</code> means 1h), then
+revalidated with <code>ETag</code> / <code>Last-Modified</code>. While the remote is down the cached
+index is served.</li>
+<li>Entries of the remote's <code>index.yaml</code> that do not parse (a malformed date, a
+string where the URL list belongs, an invalid version) are left out; the rest
+of the remote's charts stay available. Each parse logs one warning naming the
+first bad entry and counts the skipped entries in
+<code>hangar_proxy_index_entries_skipped_total</code>.</li>
+<li>Every chart URL in the index, relative or absolute, is rewritten to point at
+Hangar; the original URL is kept for fetching. Archives are cached forever and
+checked against the index's <code>digest</code>.</li>
+<li>Chart URLs on other hosts are fetched when the host is the remote's own,
+<code>github.com</code> (release assets of repositories published on GitHub Pages; the
+redirect to GitHub's download host is followed), or listed in the repository's
+<code>config.proxy.related_hosts</code>. Anything else answers <code>502</code> with a message naming
+the host to add. The remote's credentials are only sent to the remote's own host.</li>
+<li><code>.prov</code> files are fetched from the chart URL plus <code>.prov</code> when a client asks.</li>
+</ul>
+<h3 id="group">Group<a class="anchor" href="#group" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;helm-group&quot;,
+        &quot;format&quot;: &quot;helm&quot;,
+        &quot;type&quot;: &quot;group&quot;,
+        &quot;config&quot;: { &quot;group&quot;: { &quot;members&quot;: [&quot;helm-hosted&quot;, &quot;helm-proxy&quot;], &quot;write_member&quot;: &quot;helm-hosted&quot; } }
+      }&#x27;</span></code></pre></div>
+<p>The group's <code>index.yaml</code> merges the members' entries; when two members have the
+same chart name and version, the first member wins. Uploads to the group go to
+<code>write_member</code> (without one the group is read-only).</p>
+<h2 id="add-the-repository">Add the repository<a class="anchor" href="#add-the-repository" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>helm repo add hangar https://hangar.example.com/repository/helm-group \
+  --username token --password <span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span>
+helm repo update
+helm search repo hangar/</code></pre></div>
+<p>The username is not checked when the password is a token. Chart URLs in the
+index are relative, so Helm sends the credentials with every download (no
+<code>--pass-credentials</code> needed). For an <code>http://</code> server nothing extra is required.</p>
+<h2 id="install-pull-template">Install, pull, template<a class="anchor" href="#install-pull-template" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>helm install web hangar/web --version 1.2.0
+helm pull hangar/web --version 1.2.0
+helm template web hangar/web</code></pre></div>
+<p>Without <code>helm repo add</code>:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>helm pull web --version 1.2.0 --repo https://hangar.example.com/repository/helm-group \
+  --username token --password <span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span></code></pre></div>
+<h2 id="upload-charts">Upload charts<a class="anchor" href="#upload-charts" aria-label="Link to this section">#</a></h2>
+<p>Package first: <code>helm package ./web</code> writes <code>web-1.2.0.tgz</code>. Uploads are checked:
+the archive must contain <code>&lt;dir&gt;/Chart.yaml</code> with <code>apiVersion</code> <code>v1</code> or <code>v2</code>, a
+<code>name</code> of letters, digits, <code>.</code>, <code>_</code> and <code>-</code>, and a semantic <code>version</code>; <code>type</code> must
+be <code>application</code> or <code>library</code>.</p>
+<h3 id="helm-cm-push">helm cm-push<a class="anchor" href="#helm-cm-push" aria-label="Link to this section">#</a></h3>
+<p>The <a href="https://github.com/chartmuseum/helm-push">helm-push</a> plugin speaks the
+ChartMuseum upload API, which Hangar implements:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>helm plugin install https://github.com/chartmuseum/helm-push
+helm repo add hangar https://hangar.example.com/repository/helm-hosted \
+  --username token --password <span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span>
+helm cm-push web-1.2.0.tgz hangar           <span class="hljs-comment"># or: helm cm-push ./web hangar</span>
+helm cm-push --force web-1.2.0.tgz hangar   <span class="hljs-comment"># overwrite (write_policy allow only)</span></code></pre></div>
+<p>The plugin reads <code>serverInfo.contextPath</code> from <code>index.yaml</code> and POSTs to
+<code>&lt;repo&gt;/api/charts</code>, so no <code>--context-path</code> flag is needed. A token can also be
+passed as <code>--access-token &quot;$HANGAR_TOKEN&quot;</code> (sent as <code>Authorization: Bearer</code>).</p>
+<h3 id="curl">curl<a class="anchor" href="#curl" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -fu <span class="hljs-string">&quot;token:<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> --upload-file web-1.2.0.tgz \
+  https://hangar.example.com/repository/helm-hosted/web-1.2.0.tgz
+<span class="hljs-comment"># ChartMuseum style, raw body or multipart field &quot;chart&quot;</span>
+curl -fu <span class="hljs-string">&quot;token:<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> --data-binary @web-1.2.0.tgz \
+  https://hangar.example.com/repository/helm-hosted/api/charts</code></pre></div>
+<p>With <code>PUT</code> the file name must be <code>&lt;name&gt;-&lt;version&gt;.tgz</code> as in <code>Chart.yaml</code>.</p>
+<h3 id="provenance-files">Provenance files<a class="anchor" href="#provenance-files" aria-label="Link to this section">#</a></h3>
+<p><code>helm package --sign --key '&lt;name&gt;' --keyring ~/.gnupg/secring.gpg ./web</code> also
+writes <code>web-1.2.0.tgz.prov</code>. Upload it after (or with) the chart:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -fu <span class="hljs-string">&quot;token:<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -F chart=@web-1.2.0.tgz -F prov=@web-1.2.0.tgz.prov \
+  https://hangar.example.com/repository/helm-hosted/api/charts
+<span class="hljs-comment"># or on its own</span>
+curl -fu <span class="hljs-string">&quot;token:<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> --upload-file web-1.2.0.tgz.prov \
+  https://hangar.example.com/repository/helm-hosted/web-1.2.0.tgz.prov</code></pre></div>
+<p>Hangar refuses a <code>.prov</code> file whose <code>files:</code> section does not list the stored
+archive's sha256. The signature itself is checked by the client:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>helm pull hangar/web --version 1.2.0 --verify --keyring ~/.gnupg/pubring.gpg</code></pre></div>
+<h2 id="delete-a-version">Delete a version<a class="anchor" href="#delete-a-version" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -fu <span class="hljs-string">&quot;token:<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -X DELETE \
+  https://hangar.example.com/repository/helm-hosted/api/charts/web/1.2.0</code></pre></div>
+<h2 id="chartmuseum-read-api">ChartMuseum read API<a class="anchor" href="#chartmuseum-read-api" aria-label="Link to this section">#</a></h2>
+<p>For tools and UIs that read a ChartMuseum server, every repository (hosted, proxy
+and group) also answers, in JSON:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Request</th>
+<th>Answer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET &lt;repo&gt;/api/charts</code></td>
+<td>every chart, each with its versions (newest first)</td>
+</tr>
+<tr>
+<td><code>GET &lt;repo&gt;/api/charts/&lt;name&gt;</code></td>
+<td>the versions of one chart</td>
+</tr>
+<tr>
+<td><code>GET &lt;repo&gt;/api/charts/&lt;name&gt;/&lt;version&gt;</code></td>
+<td>one version; <code>latest</code> is the highest</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="layout-and-permissions">Layout and permissions<a class="anchor" href="#layout-and-permissions" aria-label="Link to this section">#</a></h2>
+<p>Archives are stored and served at <code>&lt;repo&gt;/&lt;name&gt;/&lt;version&gt;/&lt;name&gt;-&lt;version&gt;.tgz</code>
+(and <code>.tgz.prov</code>), the URLs <code>index.yaml</code> lists; <code>&lt;repo&gt;/&lt;name&gt;-&lt;version&gt;.tgz</code>
+answers too. The <strong>Packages</strong> tree shows chart, version, files; the version page
+shows the chart's <code>README.md</code>, description, home page, sources, keywords and the
+licence from the <code>artifacthub.io/license</code> (or <code>licenses</code>) annotation.
+Maintainers are listed in <code>index.yaml</code> and the API, not on the page.</p>
+<p>Helm charts have no vulnerability advisory source, so the scanner marks them
+&quot;No advisory source&quot;.</p>
+<p>Permissions: reading the index and charts needs <code>repo:&lt;name&gt;:read</code> (or anonymous
+read on the repository); uploads need <code>repo:&lt;name&gt;:write</code>; delete needs
+<code>repo:&lt;name&gt;:delete</code>.</p>
+<h2 id="routing-rules">Routing rules<a class="anchor" href="#routing-rules" aria-label="Link to this section">#</a></h2>
+<p>A group that combines a hosted repository with a public proxy can serve a
+public package published under one of your internal names. Block internal
+names on the proxy and reserve them for the hosted member (for example <code>edcom-*</code>);
+see <a href="../routing-rules/">routing-rules.md</a>.</p>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/helm.md"><code>docs/guides/helm.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/helm.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../go/" rel="prev"><small>Previous</small><b>Go modules</b></a><a class="next" href="../cargo/" rel="next"><small>Next</small><b>Cargo</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#repositories">Repositories</a></li><li class="l3"><a href="#hosted">Hosted</a></li><li class="l3"><a href="#proxy">Proxy</a></li><li class="l3"><a href="#group">Group</a></li><li class="l2"><a href="#add-the-repository">Add the repository</a></li><li class="l2"><a href="#install-pull-template">Install, pull, template</a></li><li class="l2"><a href="#upload-charts">Upload charts</a></li><li class="l3"><a href="#helm-cm-push">helm cm-push</a></li><li class="l3"><a href="#curl">curl</a></li><li class="l3"><a href="#provenance-files">Provenance files</a></li><li class="l2"><a href="#delete-a-version">Delete a version</a></li><li class="l2"><a href="#chartmuseum-read-api">ChartMuseum read API</a></li><li class="l2"><a href="#layout-and-permissions">Layout and permissions</a></li><li class="l2"><a href="#routing-rules">Routing rules</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

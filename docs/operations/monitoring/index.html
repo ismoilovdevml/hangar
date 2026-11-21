@@ -1,0 +1,1142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Monitoring Hangar · Hangar docs</title>
+<meta name="description" content="Hangar exposes Prometheus metrics, writes structured JSON logs and exports OpenTelemetry traces. This page is the reference for all three and for the…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/operations/monitoring/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Monitoring Hangar">
+<meta property="og:description" content="Hangar exposes Prometheus metrics, writes structured JSON logs and exports OpenTelemetry traces. This page is the reference for all three and for the…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/operations/monitoring/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Monitoring Hangar">
+<meta name="twitter:description" content="Hangar exposes Prometheus metrics, writes structured JSON logs and exports OpenTelemetry traces. This page is the reference for all three and for the…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Monitoring","item":"https://ismoilovdevml.github.io/hangar/docs/operations/monitoring/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../../guides/getting-started/">Getting started</a></li><li><a href="../../guides/">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../../guides/docker/">Docker &amp; OCI</a></li><li><a href="../../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../../guides/pypi/">PyPI</a></li><li><a href="../../guides/nuget/">NuGet</a></li><li><a href="../../guides/go/">Go modules</a></li><li><a href="../../guides/helm/">Helm charts</a></li><li><a href="../../guides/cargo/">Cargo</a></li><li><a href="../../guides/apt/">APT</a></li><li><a href="../../guides/rpm/">RPM</a></li><li><a href="../../guides/raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="./" aria-current="page">Monitoring</a></li><li><a href="../runbooks/">Alert runbooks</a></li><li><a href="../performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Operations</p>
+      <h1>Monitoring Hangar</h1>
+<p class="lead">Hangar exposes Prometheus metrics, writes structured JSON logs and exports
+OpenTelemetry traces. This page is the reference for all three and for the
+dashboards and alerts shipped in <code>deploy/observability/</code>. Alert runbooks are in
+<a href="../runbooks/">runbooks.md</a>.</p>
+<h2 id="quick-start">Quick start<a class="anchor" href="#quick-start" aria-label="Link to this section">#</a></h2>
+<ol>
+<li><strong>Metrics</strong> are served at <code>/metrics</code> on every node (<code>metrics.enabled</code>,
+<code>metrics.path</code>). Scrape each node with a job named <code>hangar</code>; see
+<code>deploy/observability/prometheus/prometheus.example.yml</code>. By default
+<code>/metrics</code> has no authentication: keep it on an internal network, block it
+at the reverse proxy, or protect it (see
+<a href="#protecting-metrics">Protecting /metrics</a>).</li>
+<li><strong>Alerts</strong>: load <code>deploy/observability/prometheus/hangar-alerts.yml</code> as a
+rule file. Check and unit-test them with
+<code>promtool check rules hangar-alerts.yml</code> and
+<code>promtool test rules hangar-alerts.test.yml</code>.</li>
+<li><strong>Dashboards</strong>: import the JSON files in <code>deploy/observability/grafana/</code>
+(Dashboards → New → Import) and pick your Prometheus data source. They share
+the <code>hangar</code> tag and link to each other; the <code>Node</code> variable filters by
+instance.</li>
+<li><strong>Traces</strong>: set <code>observability.tracing.enabled: true</code> and
+<code>observability.tracing.endpoint</code> to an OTLP/HTTP collector (see below).</li>
+<li><strong>Logs</strong>: ship the process's stderr (JSON lines) to your log system and
+index <code>request_id</code> and <code>trace_id</code>.</li>
+</ol>
+<h2 id="configuration">Configuration<a class="anchor" href="#configuration" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Setting</th>
+<th>Env</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>metrics.enabled</code></td>
+<td><code>HANGAR_METRICS_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Serve the Prometheus endpoint. Metrics are recorded either way: every node adds its request, proxy cache and remote latency counters to per-minute rows in PostgreSQL (<code>traffic_minutes</code>, <code>upstream_minutes</code>, kept 62 days), which the Overview screen reads.</td>
+</tr>
+<tr>
+<td><code>metrics.path</code></td>
+<td><code>HANGAR_METRICS_PATH</code></td>
+<td><code>/metrics</code></td>
+<td>Endpoint path.</td>
+</tr>
+<tr>
+<td><code>metrics.auth</code></td>
+<td><code>HANGAR_METRICS_AUTH</code></td>
+<td><code>none</code></td>
+<td><code>none</code>, <code>bearer</code> or <code>basic</code>; see <a href="#protecting-metrics">Protecting /metrics</a>.</td>
+</tr>
+<tr>
+<td><code>metrics.bearer_token</code></td>
+<td><code>HANGAR_METRICS_BEARER_TOKEN</code></td>
+<td></td>
+<td>Token for <code>auth: bearer</code>, at least 16 characters. Secret: environment or <code>secrets_dir</code>.</td>
+</tr>
+<tr>
+<td><code>metrics.bearer_token_file</code></td>
+<td><code>HANGAR_METRICS_BEARER_TOKEN_FILE</code></td>
+<td></td>
+<td>File holding the token instead (read on start; trailing line breaks dropped).</td>
+</tr>
+<tr>
+<td><code>metrics.username</code></td>
+<td><code>HANGAR_METRICS_USERNAME</code></td>
+<td></td>
+<td>User name for <code>auth: basic</code>.</td>
+</tr>
+<tr>
+<td><code>metrics.password</code></td>
+<td><code>HANGAR_METRICS_PASSWORD</code></td>
+<td></td>
+<td>Password for <code>auth: basic</code>, at least 16 characters. Secret.</td>
+</tr>
+<tr>
+<td><code>metrics.password_file</code></td>
+<td><code>HANGAR_METRICS_PASSWORD_FILE</code></td>
+<td></td>
+<td>File holding the password instead (read on start).</td>
+</tr>
+<tr>
+<td><code>metrics.allowed_cidrs</code></td>
+<td><code>HANGAR_METRICS_ALLOWED_CIDRS</code></td>
+<td></td>
+<td>Client networks (CIDRs or IPs, comma-separated in the variable) allowed to scrape; empty allows any. Combines with <code>metrics.auth</code>.</td>
+</tr>
+<tr>
+<td><code>log.level</code></td>
+<td><code>HANGAR_LOG_LEVEL</code></td>
+<td><code>info</code></td>
+<td><code>debug</code> also logs probe and scrape requests.</td>
+</tr>
+<tr>
+<td><code>log.format</code></td>
+<td><code>HANGAR_LOG_FORMAT</code></td>
+<td><code>json</code></td>
+<td><code>json</code> or <code>text</code>.</td>
+</tr>
+<tr>
+<td><code>log.buffer_size</code></td>
+<td><code>HANGAR_LOG_BUFFER_SIZE</code></td>
+<td><code>5000</code></td>
+<td>Recent records each node keeps in memory for the System logs screen, 100 to 100000 (about 1 KiB each).</td>
+</tr>
+<tr>
+<td><code>server.node_id</code></td>
+<td><code>HANGAR_SERVER_NODE_ID</code></td>
+<td>host name</td>
+<td>Name of the node on the System status and System logs screens. Must be unique per node; set it when host names change on every deploy (containers).</td>
+</tr>
+<tr>
+<td><code>observability.access_log.sample_ratio</code></td>
+<td><code>HANGAR_OBSERVABILITY_ACCESS_LOG_SAMPLE_RATIO</code></td>
+<td><code>1</code></td>
+<td>Share of requests written to the access log, 0 to 1. Server errors (5xx) are always logged. Metrics and traces are not sampled by it.</td>
+</tr>
+<tr>
+<td><code>observability.tracing.enabled</code></td>
+<td><code>HANGAR_OBSERVABILITY_TRACING_ENABLED</code></td>
+<td><code>false</code></td>
+<td>Export traces.</td>
+</tr>
+<tr>
+<td><code>observability.tracing.endpoint</code></td>
+<td><code>HANGAR_OBSERVABILITY_TRACING_ENDPOINT</code></td>
+<td></td>
+<td>OTLP/HTTP collector URL, e.g. <code>http://otel-collector:4318</code>. Without a path <code>/v1/traces</code> is used; <code>https://</code> uses TLS with the system roots.</td>
+</tr>
+<tr>
+<td><code>observability.tracing.sample_ratio</code></td>
+<td><code>HANGAR_OBSERVABILITY_TRACING_SAMPLE_RATIO</code></td>
+<td><code>0.1</code></td>
+<td>Share of new traces recorded, 0 to 1. Requests carrying a sampled W3C <code>traceparent</code> header are always recorded (parent-based sampling).</td>
+</tr>
+<tr>
+<td><code>observability.tracing.service_name</code></td>
+<td><code>HANGAR_OBSERVABILITY_TRACING_SERVICE_NAME</code></td>
+<td><code>hangar</code></td>
+<td><code>service.name</code> of every span.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Collector authentication headers come from the standard OpenTelemetry
+variables <code>OTEL_EXPORTER_OTLP_HEADERS</code> or <code>OTEL_EXPORTER_OTLP_TRACES_HEADERS</code>
+(e.g. <code>authorization=Bearer …</code>). If the collector is unreachable, export
+errors are logged at most once a minute and requests are not affected.</p>
+<h2 id="protecting-metrics">Protecting /metrics<a class="anchor" href="#protecting-metrics" aria-label="Link to this section">#</a></h2>
+<p>The endpoint exposes no secrets, but it does reveal repository names, request
+rates and the build. Pick one of:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th><code>metrics.auth</code></th>
+<th>Prometheus sends</th>
+<th>Wrong or missing credentials</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>none</code> (default)</td>
+<td>nothing</td>
+<td>(open)</td>
+</tr>
+<tr>
+<td><code>bearer</code></td>
+<td><code>Authorization: Bearer &lt;metrics.bearer_token&gt;</code></td>
+<td><code>401</code>, <code>WWW-Authenticate: Bearer realm=&quot;metrics&quot;</code></td>
+</tr>
+<tr>
+<td><code>basic</code></td>
+<td>HTTP basic with <code>metrics.username</code> / <code>metrics.password</code></td>
+<td><code>401</code>, <code>WWW-Authenticate: Basic realm=&quot;metrics&quot;</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><code>metrics.allowed_cidrs</code> works with any mode: requests from other client
+addresses get <code>403</code> before credentials are checked. The client address is
+the TCP peer, or the <code>X-Forwarded-For</code> client when the peer is listed in
+<code>server.trusted_proxies</code>, the same address used for rate limits and the audit
+log. Tokens and passwords are compared in constant time, and wrong ones count
+towards the per-IP failed authentication limit (<code>security.rate_limit.failed_auth</code>).
+The token and password (and their files) are read on start: restart the
+nodes after rotating them; scrapes answer <code>401</code> until Prometheus has the new
+value too.</p>
+<p>A new installation made with <code>deploy/install.sh</code> uses <code>bearer</code>: the
+installer writes the token to <code>&lt;data&gt;/secrets/metrics.bearer_token</code> (mode
+600) and <code>config/hangar.yaml</code> sets <code>metrics.auth: bearer</code>; copy the token to
+Prometheus. Installations upgraded by the installer keep their
+<code>config/hangar.yaml</code>, so an open endpoint stays open. A server that serves
+<code>/metrics</code> with <code>metrics.auth: none</code> and no <code>metrics.allowed_cidrs</code> logs a
+warning on every start. To protect an existing installation, write a token
+to <code>secrets/metrics.bearer_token</code> (owner 65532, mode 600), add
+<code>auth: bearer</code> under <code>metrics:</code> in <code>config/hangar.yaml</code> and restart.</p>
+<p>Generate a token with <code>openssl rand -hex 32</code>. Prometheus configurations for
+each mode (the job name must contain <code>hangar</code>, which the HangarDown alert
+selects; the Helm chart's ServiceMonitor names it after the release's Service):</p>
+<div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-comment"># metrics.auth: none, metrics.allowed_cidrs: [10.0.5.0/24] (the Prometheus subnet)</span>
+<span class="hljs-bullet">-</span> <span class="hljs-attr">job_name:</span> <span class="hljs-string">hangar</span>
+  <span class="hljs-attr">static_configs:</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-attr">targets:</span> [<span class="hljs-string">hangar-1.internal:8080</span>, <span class="hljs-string">hangar-2.internal:8080</span>]
+
+<span class="hljs-comment"># metrics.auth: bearer</span>
+<span class="hljs-bullet">-</span> <span class="hljs-attr">job_name:</span> <span class="hljs-string">hangar</span>
+  <span class="hljs-attr">authorization:</span>
+    <span class="hljs-attr">type:</span> <span class="hljs-string">Bearer</span>
+    <span class="hljs-attr">credentials_file:</span> <span class="hljs-string">/etc/prometheus/secrets/hangar-metrics-token</span>
+  <span class="hljs-attr">static_configs:</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-attr">targets:</span> [<span class="hljs-string">hangar-1.internal:8080</span>, <span class="hljs-string">hangar-2.internal:8080</span>]
+
+<span class="hljs-comment"># metrics.auth: basic</span>
+<span class="hljs-bullet">-</span> <span class="hljs-attr">job_name:</span> <span class="hljs-string">hangar</span>
+  <span class="hljs-attr">basic_auth:</span>
+    <span class="hljs-attr">username:</span> <span class="hljs-string">prometheus</span>
+    <span class="hljs-attr">password_file:</span> <span class="hljs-string">/etc/prometheus/secrets/hangar-metrics-password</span>
+  <span class="hljs-attr">static_configs:</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-attr">targets:</span> [<span class="hljs-string">hangar-1.internal:8080</span>, <span class="hljs-string">hangar-2.internal:8080</span>]</code></pre></div>
+<p>Behind TLS add <code>scheme: https</code>. With the Helm chart set <code>metrics.auth.mode</code>
+and <code>metrics.auth.existingSecret</code> (keys <code>metrics-token</code>, or
+<code>metrics-username</code> and <code>metrics-password</code>); the chart passes the secret to
+the pods and, with <code>metrics.serviceMonitor.enabled</code>, adds the matching
+<code>authorization</code> or <code>basicAuth</code> to the ServiceMonitor:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>kubectl -n hangar create secret generic hangar-metrics \
+  --from-literal=metrics-token=<span class="hljs-string">&quot;<span class="hljs-subst">$(openssl rand -hex 32)</span>&quot;</span>
+helm upgrade hangar deploy/helm/hangar -n hangar --reuse-values \
+  --<span class="hljs-built_in">set</span> metrics.auth.mode=bearer --<span class="hljs-built_in">set</span> metrics.auth.existingSecret=hangar-metrics</code></pre></div>
+<p>Check a node with <code>curl -H &quot;Authorization: Bearer $TOKEN&quot; http://hangar-1.internal:8080/metrics | head</code>;
+without the header it answers <code>401</code>.</p>
+<h2 id="metrics">Metrics<a class="anchor" href="#metrics" aria-label="Link to this section">#</a></h2>
+<p>All Hangar metrics start with <code>hangar_</code>. The Go runtime (<code>go_*</code>) and process
+(<code>process_*</code>) collectors are also exported. Every value is <strong>per node</strong>:
+aggregate across instances in queries.</p>
+<h3 id="cardinality">Cardinality<a class="anchor" href="#cardinality" aria-label="Link to this section">#</a></h3>
+<p>Labels never carry user-controlled values:</p>
+<ul>
+<li>HTTP metrics use the chi <strong>route pattern</strong> (<code>/repository/{repo}/*</code>,
+<code>/api/v1/components/{id}</code>), never the request path; requests no route
+matched are <code>route=&quot;unmatched&quot;</code>.</li>
+<li><code>method</code> is one of the standard HTTP methods or <code>OTHER</code>; <code>code</code> is the
+status code or <code>other</code> outside 100–599.</li>
+<li>Repository names appear only in <code>hangar_upstream_state</code> (one series per proxy
+repository and state, capped at 512 repositories) and store names only in the
+blob store usage gauges (capped at 64 stores). Both sets are created by
+administrators.</li>
+<li><code>format</code>, job <code>type</code> and similar values from code or configuration are capped
+(32 formats, 64 job types); anything beyond becomes <code>other</code>.</li>
+</ul>
+<p>Measured on a test node serving three formats, five repositories and a few hundred requests: 666 series in total, 622 of them <code>hangar_*</code>, most of them histogram buckets. Expect low thousands on a busy node with every format in use.</p>
+<h3 id="http">HTTP<a class="anchor" href="#http" aria-label="Link to this section">#</a></h3>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hangar_http_requests_total</code></td>
+<td>counter</td>
+<td><code>method</code>, <code>route</code>, <code>code</code></td>
+<td>Requests served. A server error (5xx) answered after the client had already gone away (closed the connection, cancelled the request) is recorded as <code>499</code>, like the <code>499</code> handlers answer themselves: nobody read it and the cancellation caused it.</td>
+</tr>
+<tr>
+<td><code>hangar_http_auth_challenges_total</code></td>
+<td>counter</td>
+<td><code>method</code>, <code>route</code></td>
+<td>The <code>401</code> answers of <code>hangar_http_requests_total</code> to requests that presented no credentials at all: no <code>Authorization</code> or <code>X-NuGet-ApiKey</code> header, no cookie, and nothing a handler read as credentials from the body. NuGet and .NET clients, docker, npm and pip ask without credentials first and retry with them after this challenge, so it is not a refusal. A <code>401</code> to wrong or expired credentials and every <code>403</code> are not counted here. <code>sum(rate(hangar_http_requests_total{code=&quot;401&quot;}[5m])) - sum(rate(hangar_http_auth_challenges_total[5m]))</code> is the rate of rejected credentials.</td>
+</tr>
+<tr>
+<td><code>hangar_http_request_duration_seconds</code></td>
+<td>histogram</td>
+<td><code>method</code>, <code>route</code></td>
+<td>Time until the handler returned (for downloads, until the last byte was written).</td>
+</tr>
+<tr>
+<td><code>hangar_http_requests_in_flight</code></td>
+<td>gauge</td>
+<td></td>
+<td>Requests being served now, including long uploads and the event stream.</td>
+</tr>
+<tr>
+<td><code>hangar_http_request_bytes_total</code></td>
+<td>counter</td>
+<td><code>route</code></td>
+<td>Request body bytes read by handlers.</td>
+</tr>
+<tr>
+<td><code>hangar_http_response_bytes_total</code></td>
+<td>counter</td>
+<td><code>route</code></td>
+<td>Response bytes written.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="package-formats">Package formats<a class="anchor" href="#package-formats" aria-label="Link to this section">#</a></h3>
+<p>Recorded for requests served by a format (<code>/repository/{repo}/…</code>, <code>/v2/…</code>)
+once the addressed repository is resolved. A request through a group is
+attributed to the group. <code>op</code> is <code>read</code> (GET, HEAD), <code>write</code> (PUT, POST, PATCH),
+<code>delete</code> or <code>other</code>; <code>repo_type</code> is <code>hosted</code>, <code>proxy</code> or <code>group</code>.</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hangar_format_requests_total</code></td>
+<td>counter</td>
+<td><code>format</code>, <code>repo_type</code>, <code>op</code>, <code>status_class</code></td>
+<td>Package protocol requests; <code>status_class</code> is <code>2xx</code> … <code>5xx</code>. A 401 is usually the normal login challenge of docker, npm and pip.</td>
+</tr>
+<tr>
+<td><code>hangar_format_request_duration_seconds</code></td>
+<td>histogram</td>
+<td><code>format</code>, <code>repo_type</code>, <code>op</code></td>
+<td>Package request latency.</td>
+</tr>
+<tr>
+<td><code>hangar_format_upload_bytes_total</code></td>
+<td>counter</td>
+<td><code>format</code>, <code>repo_type</code></td>
+<td>Bytes received in write requests.</td>
+</tr>
+<tr>
+<td><code>hangar_format_download_bytes_total</code></td>
+<td>counter</td>
+<td><code>format</code>, <code>repo_type</code></td>
+<td>Bytes sent in successful (2xx) reads.</td>
+</tr>
+<tr>
+<td><code>hangar_proxy_cache_requests_total</code></td>
+<td>counter</td>
+<td><code>format</code>, <code>result</code></td>
+<td>Proxy requests answered from the cache (<code>hit</code>) or with content a remote supplied (<code>miss</code>), once per client request however many group members were asked. A remote answering not found (or failing) is neither: in a group whose first proxies' remotes do not have a package and whose last proxy serves it from its cache, the request is a <code>hit</code>. Index lookups that only locate a download (a NuGet service index, a cargo, pypi or Helm index) do not count.</td>
+</tr>
+<tr>
+<td><code>hangar_proxy_cache_hit_bytes_total</code></td>
+<td>counter</td>
+<td><code>format</code></td>
+<td>Bytes served from proxy caches without contacting the remote.</td>
+</tr>
+<tr>
+<td><code>hangar_proxy_negative_cache_evictions_total</code></td>
+<td>counter</td>
+<td><code>repository</code></td>
+<td>Remembered remote 404s dropped before their <code>negative_cache_ttl</code> because the repository's negative cache (10,000 paths per remote, least recently used first) was full. A steady rate means clients probe more missing paths than the cache holds, and those probes reach the remote again.</td>
+</tr>
+<tr>
+<td><code>hangar_proxy_index_entries_skipped_total</code></td>
+<td>counter</td>
+<td><code>format</code>, <code>repository</code></td>
+<td>Malformed entries of a remote index (a Helm <code>index.yaml</code>) that a proxy left out instead of failing the whole index, counted each time the index is parsed. A steady rise means the remote publishes broken entries; the warning log line names the first one.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="blob-storage">Blob storage<a class="anchor" href="#blob-storage" aria-label="Link to this section">#</a></h3>
+<p>Operations are timed on the request path (uploads, downloads, publish
+checks), per driver (<code>fs</code>, <code>s3</code>). Garbage collection accesses stores directly
+and is measured by the <code>blob.gc</code> job metrics. <code>result</code> is <code>ok</code>, <code>not_found</code>
+(a normal answer, e.g. a cache miss) or <code>error</code>.</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hangar_blobstore_operations_total</code></td>
+<td>counter</td>
+<td><code>driver</code>, <code>op</code>, <code>result</code></td>
+<td>Operations by <code>op</code> (<code>put</code>, <code>get</code>, <code>stat</code>, <code>delete</code>).</td>
+</tr>
+<tr>
+<td><code>hangar_blobstore_operation_duration_seconds</code></td>
+<td>histogram</td>
+<td><code>driver</code>, <code>op</code></td>
+<td>Latency. <code>put</code> includes streaming the content; <code>get</code> is the time to open the blob.</td>
+</tr>
+<tr>
+<td><code>hangar_blobstore_put_bytes_total</code></td>
+<td>counter</td>
+<td><code>driver</code></td>
+<td>Bytes written before deduplication.</td>
+</tr>
+<tr>
+<td><code>hangar_blobstore_used_bytes</code></td>
+<td>gauge</td>
+<td><code>store</code>, <code>driver</code></td>
+<td>Bytes of live blobs per store (as on the Blob stores screen).</td>
+</tr>
+<tr>
+<td><code>hangar_blobstore_reclaimable_bytes</code></td>
+<td>gauge</td>
+<td><code>store</code>, <code>driver</code></td>
+<td>Bytes of unreferenced blobs that GC frees once their grace period has passed: deleted content, and content that was stored but never published (rejected uploads, digest mismatches).</td>
+</tr>
+<tr>
+<td><code>hangar_blobstore_soft_quota_bytes</code></td>
+<td>gauge</td>
+<td><code>store</code>, <code>driver</code></td>
+<td>Soft quota of stores that have one.</td>
+</tr>
+<tr>
+<td><code>hangar_blobstore_fs_size_bytes</code></td>
+<td>gauge</td>
+<td><code>store</code></td>
+<td>Size of the filesystem holding an <code>fs</code> store, as seen by this node.</td>
+</tr>
+<tr>
+<td><code>hangar_blobstore_fs_free_bytes</code></td>
+<td>gauge</td>
+<td><code>store</code></td>
+<td>Bytes available to Hangar on that filesystem.</td>
+</tr>
+<tr>
+<td><code>hangar_blobstore_usage_age_seconds</code></td>
+<td>gauge</td>
+<td></td>
+<td>Age of the usage numbers above.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Store usage is computed every 5 minutes in the background by one aggregate
+query over the <code>blobs</code> table, so scrapes never wait for it. Until the first
+run finishes after start the usage gauges are absent.</p>
+<h3 id="proxy-remotes">Proxy remotes<a class="anchor" href="#proxy-remotes" aria-label="Link to this section">#</a></h3>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hangar_upstream_fetches_total</code></td>
+<td>counter</td>
+<td><code>format</code>, <code>result</code></td>
+<td>Requests to remotes. <code>result</code>: <code>ok</code>, <code>not_modified</code>, <code>not_found</code>, <code>client_error</code>, <code>server_error</code>, <code>circuit_open</code> (refused by the open breaker without contacting the remote), <code>blocked</code> (outbound address policy), <code>canceled</code>, <code>error</code> (connection, TLS, timeout).</td>
+</tr>
+<tr>
+<td><code>hangar_upstream_fetch_duration_seconds</code></td>
+<td>histogram</td>
+<td><code>format</code></td>
+<td>Time to the remote's response headers (fast <code>circuit_open</code> and <code>canceled</code> results are not observed).</td>
+</tr>
+<tr>
+<td><code>hangar_upstream_state</code></td>
+<td>gauge</td>
+<td><code>repository</code>, <code>state</code></td>
+<td>1 for the current state of each proxy repository's remote on this node: <code>healthy</code>, <code>slow</code>, <code>blocked</code> (401/403 or address policy), <code>offline</code> (the last request failed, or the circuit breaker is open) or <code>unknown</code> (not used since this node started). Refreshed at most every 15 seconds.</td>
+</tr>
+<tr>
+<td><code>hangar_upstream_dns_cache_requests_total</code></td>
+<td>counter</td>
+<td><code>result</code></td>
+<td>Remote host name lookups by DNS cache result: <code>hit</code>, <code>miss</code> (asked the resolver), <code>stale</code> (the resolver failed; the last answer was used), <code>negative</code> (a remembered failure).</td>
+</tr>
+<tr>
+<td><code>hangar_upstream_dns_errors_total</code></td>
+<td>counter</td>
+<td><code>kind</code></td>
+<td>Failed queries to the system resolver for remote host names: <code>timeout</code>, <code>temporary</code>, <code>not_found</code>, <code>other</code>. Retries count. A rising <code>timeout</code> rate points at overloaded DNS servers.</td>
+</tr>
+<tr>
+<td><code>hangar_proxy_upstream_dns_failures_total</code></td>
+<td>counter</td>
+<td><code>repository</code></td>
+<td>Remote requests that failed on a DNS timeout or temporary error. They count towards the circuit breaker at most once per second.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="database">Database<a class="anchor" href="#database" aria-label="Link to this section">#</a></h3>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hangar_db_query_duration_seconds</code></td>
+<td>histogram</td>
+<td><code>op</code></td>
+<td>Statement latency by leading SQL keyword: <code>select</code>, <code>insert</code>, <code>update</code>, <code>delete</code>, <code>with</code>, <code>copy</code>, <code>batch</code>, <code>begin</code>, <code>commit</code>, <code>rollback</code>, <code>other</code>.</td>
+</tr>
+<tr>
+<td><code>hangar_db_query_errors_total</code></td>
+<td>counter</td>
+<td><code>op</code></td>
+<td>Failed statements (cancelled requests excluded).</td>
+</tr>
+<tr>
+<td><code>hangar_db_pool_connections</code></td>
+<td>gauge</td>
+<td><code>state</code></td>
+<td>Pool connections that are <code>acquired</code>, <code>idle</code> or <code>constructing</code>.</td>
+</tr>
+<tr>
+<td><code>hangar_db_pool_max_connections</code></td>
+<td>gauge</td>
+<td></td>
+<td><code>database.max_conns</code>.</td>
+</tr>
+<tr>
+<td><code>hangar_db_pool_acquires_total</code></td>
+<td>counter</td>
+<td></td>
+<td>Connections handed out.</td>
+</tr>
+<tr>
+<td><code>hangar_db_pool_empty_acquires_total</code></td>
+<td>counter</td>
+<td></td>
+<td>Acquisitions that had to wait because no connection was idle.</td>
+</tr>
+<tr>
+<td><code>hangar_db_pool_canceled_acquires_total</code></td>
+<td>counter</td>
+<td></td>
+<td>Acquisitions abandoned because the request ended first.</td>
+</tr>
+<tr>
+<td><code>hangar_db_pool_acquire_wait_seconds_total</code></td>
+<td>counter</td>
+<td></td>
+<td>Total time spent waiting for a connection.</td>
+</tr>
+<tr>
+<td><code>hangar_db_pool_new_connections_total</code></td>
+<td>counter</td>
+<td></td>
+<td>Connections opened.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="jobs-and-event-bus">Jobs and event bus<a class="anchor" href="#jobs-and-event-bus" aria-label="Link to this section">#</a></h3>
+<p>Job <code>type</code> is one of the registered job types (<code>blob.gc</code>,
+<code>auth.purge_expired</code>, <code>audit.ensure_partitions</code>, and those added by later
+features).</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hangar_jobs_total</code></td>
+<td>counter</td>
+<td><code>type</code>, <code>result</code></td>
+<td>Executions on this node: <code>success</code>, <code>retry</code> (failed, will run again), <code>failed</code> (failed on its last attempt and was dropped).</td>
+</tr>
+<tr>
+<td><code>hangar_job_duration_seconds</code></td>
+<td>histogram</td>
+<td><code>type</code></td>
+<td>Execution time.</td>
+</tr>
+<tr>
+<td><code>hangar_job_queue_wait_seconds</code></td>
+<td>histogram</td>
+<td><code>type</code></td>
+<td>Time from enqueue to the first attempt.</td>
+</tr>
+<tr>
+<td><code>hangar_job_queue_depth</code></td>
+<td>gauge</td>
+<td><code>type</code></td>
+<td>Jobs waiting or running in the cluster-wide JetStream work queue (same value on every node).</td>
+</tr>
+<tr>
+<td><code>hangar_job_queue_up</code></td>
+<td>gauge</td>
+<td></td>
+<td>1 if the job stream could be read on this scrape.</td>
+</tr>
+<tr>
+<td><code>hangar_nats_connected</code></td>
+<td>gauge</td>
+<td></td>
+<td>1 while connected to NATS.</td>
+</tr>
+<tr>
+<td><code>hangar_nats_reconnects_total</code></td>
+<td>counter</td>
+<td></td>
+<td>Reconnections to NATS.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="authentication-and-audit">Authentication and audit<a class="anchor" href="#authentication-and-audit" aria-label="Link to this section">#</a></h3>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hangar_auth_failures_total</code></td>
+<td>counter</td>
+<td><code>method</code>, <code>reason</code></td>
+<td>Failed authentications. <code>method</code>: <code>login</code> (web sign-in), <code>basic</code> (HTTP Basic on API or package requests), <code>token</code>. <code>reason</code>: <code>bad_password</code>, <code>unknown_user</code>, <code>locked</code>, <code>disabled</code>, <code>no_local_password</code>, <code>malformed</code>, <code>unknown_expired_or_revoked</code>.</td>
+</tr>
+<tr>
+<td><code>hangar_auth_lockouts_total</code></td>
+<td>counter</td>
+<td></td>
+<td>Accounts locked by the failed-login limit (<code>auth.lockout</code>).</td>
+</tr>
+<tr>
+<td><code>hangar_audit_queue_length</code></td>
+<td>gauge</td>
+<td></td>
+<td>Audit events waiting to be written to PostgreSQL.</td>
+</tr>
+<tr>
+<td><code>hangar_audit_queue_capacity</code></td>
+<td>gauge</td>
+<td></td>
+<td>Size of the in-memory audit queue.</td>
+</tr>
+<tr>
+<td><code>hangar_audit_events_rejected_total</code></td>
+<td>counter</td>
+<td></td>
+<td>Events refused because the queue stayed full; the mutation that produced them failed.</td>
+</tr>
+<tr>
+<td><code>hangar_audit_events_lost_total</code></td>
+<td>counter</td>
+<td></td>
+<td>Events that could not be stored after every retry; they were written to the log instead.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="health-and-build">Health and build<a class="anchor" href="#health-and-build" aria-label="Link to this section">#</a></h3>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hangar_ready</code></td>
+<td>gauge</td>
+<td></td>
+<td>1 when <code>/readyz</code> would answer 200 (all checks pass, not draining). Checks run at most every 5 seconds.</td>
+</tr>
+<tr>
+<td><code>hangar_dependency_up</code></td>
+<td>gauge</td>
+<td><code>dependency</code></td>
+<td>Result of each readiness check: <code>database</code>, <code>blobstore</code>, <code>eventbus</code>.</td>
+</tr>
+<tr>
+<td><code>hangar_build_info</code></td>
+<td>gauge</td>
+<td><code>version</code>, <code>commit</code>, <code>goversion</code></td>
+<td>Always 1.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="logs">Logs<a class="anchor" href="#logs" aria-label="Link to this section">#</a></h2>
+<p>Logs are JSON lines on stderr (<code>log.format: text</code> for development). Every
+record logged while serving a request carries:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>request_id</code></td>
+<td><code>X-Request-ID</code> of the request: the client's value when it is well-formed (letters, digits, <code>-_.</code>, at most 128 characters), otherwise generated; echoed in the response.</td>
+</tr>
+<tr>
+<td><code>trace_id</code>, <code>span_id</code></td>
+<td>Current span when tracing is enabled or the client sent a <code>traceparent</code>. Search your trace backend by <code>trace_id</code>.</td>
+</tr>
+<tr>
+<td><code>principal</code></td>
+<td>Authenticated user or service account.</td>
+</tr>
+<tr>
+<td><code>repository</code>, <code>format</code></td>
+<td>Repository the request addressed (a group, not its member) and its format.</td>
+</tr>
+</tbody>
+</table></div>
+<p>The access log line (<code>&quot;msg&quot;:&quot;http request&quot;</code>) adds <code>method</code>, <code>path</code> (without the
+query string), <code>route</code>, <code>status</code>, <code>bytes_in</code>, <code>bytes_out</code>, <code>duration_ms</code>,
+<code>remote_ip</code> and <code>user_agent</code>. It is written at <code>info</code>, <code>error</code> for 5xx (except
+501), and <code>debug</code> for <code>/healthz</code>, <code>/readyz</code>, the metrics path and the web UI's
+own successful reads: its files and the <code>GET</code> API calls of a browser session
+(each open tab polls status, events and notifications every few seconds).
+Writes, failures and requests with a token or from package clients stay at
+<code>info</code>. Set <code>log.level: debug</code> to see the UI's reads too.</p>
+<p><strong>Secrets are never logged.</strong> Before a record is written, values of attributes
+whose name denotes a secret (<code>password</code>, <code>token</code>, <code>secret</code>, <code>authorization</code>,
+<code>cookie</code>, <code>*_password</code>, <code>*_token</code>, <code>*_secret</code>, …) are replaced with
+<code>REDACTED</code>, and every message and string value is scrubbed of Hangar tokens
+(<code>hgr_…</code>), JWTs, <code>Basic</code>/<code>Bearer</code> credentials, passwords in URLs and secret
+query parameters (<code>token=</code>, <code>password=</code>, <code>X-Amz-Signature=</code>, <code>_state=</code>, …).
+HTTP headers and query values logged as maps (<code>http.Header</code>, <code>url.Values</code>)
+have <code>Authorization</code>, <code>Proxy-Authorization</code>, <code>Cookie</code>, <code>Set-Cookie</code>,
+<code>X-Api-Key</code> and similar entries replaced. A test feeds credentials through
+every logging path, including the in-memory buffer below, and fails if any of
+them reaches the output.</p>
+<h3 id="system-logs-screen">System logs screen<a class="anchor" href="#system-logs-screen" aria-label="Link to this section">#</a></h3>
+<p>Each node also keeps its newest <code>log.buffer_size</code> records in memory, after the
+same scrubbing, so administrators can read them under <strong>Operations → System
+logs</strong> without access to the host. The buffer is a fixed ring: appending is
+constant time and never waits for readers, and the oldest records are
+overwritten. Warnings and errors are kept longer: the newest of them (a fifth
+of <code>log.buffer_size</code>, at least 100) stay readable after a burst of info
+records has overwritten their place. It is lost on restart; full logs stay on stderr, so keep shipping
+them (<code>docker compose logs hangar</code>, <code>journalctl -u hangar</code>, <code>kubectl logs</code>).</p>
+<p>The screen filters by node, minimum level and text, follows new records
+(refreshing every 5 s, with Pause and Refresh now), opens any line as JSON and
+downloads the node's buffer, with the current filters, as JSON lines.</p>
+<p>The API is <code>GET /api/v1/system/logs</code> (privilege <code>system:cluster:admin</code>):</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>node</code></td>
+<td>Node id from <code>/system/nodes</code>; default the node that answers. Other nodes are asked over NATS.</td>
+</tr>
+<tr>
+<td><code>level</code></td>
+<td>Minimum level: <code>debug</code>, <code>info</code>, <code>warn</code>, <code>error</code>.</td>
+</tr>
+<tr>
+<td><code>q</code></td>
+<td>Case-insensitive text in the message or attributes.</td>
+</tr>
+<tr>
+<td><code>since</code></td>
+<td>RFC 3339 time or a duration back from now (<code>15m</code>).</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>1 to 5000, default 500.</td>
+</tr>
+<tr>
+<td><code>cursor</code></td>
+<td>The <code>cursor</code> of an earlier answer: return only newer records. <code>0</code> reads from the oldest record.</td>
+</tr>
+<tr>
+<td><code>wait</code></td>
+<td>With <code>cursor</code>, hold the request up to this many seconds until a matching record arrives (long poll, at most 30).</td>
+</tr>
+</tbody>
+</table></div>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="sh"><code><span class="hljs-comment"># Follow errors of node hangar-2 from a shell.</span>
+c=$(curl -s -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$TOKEN</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR</span>/api/v1/system/logs?node=hangar-2&amp;level=error&amp;limit=1&quot;</span> | jq -r .cursor)
+<span class="hljs-keyword">while</span> :; <span class="hljs-keyword">do</span>
+  r=$(curl -s -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$TOKEN</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR</span>/api/v1/system/logs?node=hangar-2&amp;level=error&amp;cursor=<span class="hljs-variable">$c</span>&amp;wait=25&quot;</span>)
+  <span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;<span class="hljs-variable">$r</span>&quot;</span> | jq -c <span class="hljs-string">&#x27;.items[]&#x27;</span>; c=$(<span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;<span class="hljs-variable">$r</span>&quot;</span> | jq -r .cursor)
+<span class="hljs-keyword">done</span></code></pre></div>
+<p><code>gap: true</code> in an answer means records after the cursor were overwritten
+before they were read, or the node restarted. Always pass <code>node</code> when a load
+balancer spreads requests: a cursor only means something to the node that
+issued it.</p>
+<h2 id="system-status-screen">System status screen<a class="anchor" href="#system-status-screen" aria-label="Link to this section">#</a></h2>
+<p><strong>Operations → System status</strong> (privilege <code>system:cluster:read</code>) opens with a
+headline for the whole installation (<em>Everything is working</em>, <em>1 check needs
+attention</em>, <em>2 checks are down</em>, <em>1 node is not responding</em>), the number of
+checks passing on the nodes that answer, and the version. Below it, every
+node has a checklist with one row per subsystem: its state, one sentence and
+a headline value. Rows that are degraded or down open by themselves; any row
+opens on click to show its details, what the check probes (database address,
+blob store path, event bus URL, index name), since when the status holds,
+the last incident (<em>Was degraded 08:52–10:32</em>), when it was checked and a
+link to the page that helps (logs of that node, Blob stores, Scheduled
+tasks, Authentication, Repositories). Under each checklist: host name,
+scheduler role (the leader schedules tasks; every node executes them),
+uptime, last heartbeat, the node's own URL and commit. With more than one
+node, each checklist has the node's name, role and state above it.</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Subsystem</th>
+<th>Headline value</th>
+<th>Healthy when</th>
+<th>Degraded when</th>
+<th>Down when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Database</td>
+<td>Ping time</td>
+<td>The readiness ping answers</td>
+<td>Every pooled connection is in use, or the ping takes over 500 ms</td>
+<td>The ping fails</td>
+</tr>
+<tr>
+<td>Blob storage</td>
+<td>Least free space of the filesystem stores, else the slowest ping</td>
+<td>Every store answers its ping</td>
+<td>A filesystem store has under 10 % and under 5 GiB free</td>
+<td>A store cannot be opened or reached</td>
+</tr>
+<tr>
+<td>Event bus</td>
+<td>Readiness ping time</td>
+<td>Connected and JetStream answers</td>
+<td></td>
+<td>Disconnected or JetStream unavailable</td>
+</tr>
+<tr>
+<td>Task scheduler</td>
+<td><code>leader</code> or <code>follower</code></td>
+<td>Task runs can be read</td>
+<td>A scheduled task is more than an hour late, or runs cannot be read</td>
+<td></td>
+</tr>
+<tr>
+<td>Search index</td>
+<td>Probe search time</td>
+<td>The full-text index is valid and a probe search is fast</td>
+<td>The index is missing or invalid, or the probe takes over 500 ms</td>
+<td>The probe fails</td>
+</tr>
+<tr>
+<td>Sign-in</td>
+<td><code>ok</code>, <code>failing</code> or <code>local</code></td>
+<td>OIDC and LDAP worked at their last use (or are not configured)</td>
+<td>A provider failed; local accounts still sign in</td>
+<td></td>
+</tr>
+<tr>
+<td>Upstream proxies</td>
+<td>Slowest smoothed remote latency, or <code>no traffic</code> without requests in the last 5 minutes</td>
+<td>No proxy remote is offline or blocked</td>
+<td>A remote is offline or blocked</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<p><em>Since</em> and the last incident come from the node's own observations: since
+is when the node first saw the current status (at the earliest, its first
+check after start), and an incident is a period that was not healthy, shown
+with its worst state once it has ended. Both live in memory, so a restart
+starts them over.</p>
+<p>Each node runs its checks every 15 s (each bounded to 3 s) and writes them to
+the <code>system_nodes</code> table, so any node can show all of them. A node without a
+heartbeat for 45 s is shown as <strong>not responding</strong> (<code>stale</code>, <code>down</code>) with its
+last report; one silent for an hour is no longer listed, and a node that stops
+cleanly removes itself at once. The screen refreshes every 15 s; the
+<em>Live · every 15 s</em> toggle pauses it and the round button refreshes at once. If the database cannot be read, the answering node is shown alone.</p>
+<p>The same data is available as JSON: <code>GET /api/v1/system/nodes</code> (every node),
+<code>GET /api/v1/system/health</code> (the answering node, checked now) and
+<code>GET /api/v1/nodes</code> (the cluster summary with quorum). The public
+<code>GET /api/v1/system/status</code> rolls the same checks up into <code>state</code> and
+<code>message</code>, which every status indicator of the web UI shows; signed-in
+callers also get the failing checks in <code>problems</code>, with their detail for
+<code>system:cluster:read</code>.</p>
+<h2 id="traces">Traces<a class="anchor" href="#traces" aria-label="Link to this section">#</a></h2>
+<p>With tracing enabled, Hangar exports these spans over OTLP/HTTP:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Span</th>
+<th>Kind</th>
+<th>Attributes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /repository/{repo}/*</code> (method + route)</td>
+<td>server</td>
+<td><code>http.request.method</code>, <code>http.route</code>, <code>http.response.status_code</code>, <code>url.path</code>, <code>client.address</code>, <code>user_agent.original</code>, <code>hangar.request_id</code>, <code>hangar.repository</code>, <code>hangar.format</code>, <code>hangar.repository_type</code>, <code>enduser.id</code></td>
+</tr>
+<tr>
+<td><code>db select</code>, <code>db insert</code>, … <code>db batch</code>, <code>db copy</code></td>
+<td>client</td>
+<td><code>db.system.name</code>, <code>db.operation.name</code>, <code>db.query.text</code> (parameterised SQL, at most 2 KiB; argument values are never recorded)</td>
+</tr>
+<tr>
+<td><code>blobstore.put</code> / <code>get</code> / <code>stat</code> / <code>delete</code></td>
+<td>client</td>
+<td><code>hangar.blobstore.driver</code>, <code>hangar.blob.size</code></td>
+</tr>
+<tr>
+<td><code>upstream.fetch</code></td>
+<td>client</td>
+<td><code>hangar.repository</code>, <code>hangar.format</code>, <code>http.request.method</code>, <code>hangar.upstream.path</code>, <code>hangar.upstream.result</code>, <code>http.response.status_code</code></td>
+</tr>
+<tr>
+<td><code>job &lt;type&gt;</code></td>
+<td>consumer</td>
+<td><code>hangar.job.type</code>, <code>hangar.job.id</code>, <code>hangar.job.attempt</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Incoming W3C <code>traceparent</code>/<code>tracestate</code> headers are honoured, so a CI system or
+reverse proxy that traces requests sees Hangar's spans in the same trace.
+Hangar does not send trace headers to proxy remotes. Jobs start new traces.</p>
+<h2 id="dashboards">Dashboards<a class="anchor" href="#dashboards" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>File</th>
+<th>Answers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hangar-overview.json</code></td>
+<td>Is every node ready? How much traffic, how many errors, how slow? Is the database pool saturated?</td>
+</tr>
+<tr>
+<td><code>hangar-formats.json</code></td>
+<td>Which formats carry the traffic, fail or are slow? How many bytes go in and out? How well do proxy caches work?</td>
+</tr>
+<tr>
+<td><code>hangar-storage.json</code></td>
+<td>How full are the blob stores and their filesystems? Are blob store operations failing or slow?</td>
+</tr>
+<tr>
+<td><code>hangar-upstreams.json</code></td>
+<td>Which proxy remotes are offline, blocked or slow? How often do fetches fail and how long do they take?</td>
+</tr>
+<tr>
+<td><code>hangar-jobs.json</code></td>
+<td>Is the job queue draining? Which jobs fail or take long? Is NATS connected?</td>
+</tr>
+<tr>
+<td><code>hangar-auth.json</code></td>
+<td>Is someone guessing passwords? Are accounts being locked? Is the audit trail complete?</td>
+</tr>
+</tbody>
+</table></div>
+<p>The dashboards use <code>$__rate_interval</code>, so set the data source's scrape interval
+in Grafana to match Prometheus.</p>
+<h2 id="alerts">Alerts<a class="anchor" href="#alerts" aria-label="Link to this section">#</a></h2>
+<p><code>deploy/observability/prometheus/hangar-alerts.yml</code>:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Alert</th>
+<th>Severity</th>
+<th>Fires when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../runbooks/#hangardown">HangarDown</a></td>
+<td>critical</td>
+<td>A node has not been scrapable for 2 minutes.</td>
+</tr>
+<tr>
+<td><a href="../runbooks/#hangarnotready">HangarNotReady</a></td>
+<td>critical</td>
+<td>A node has failed readiness for 5 minutes.</td>
+</tr>
+<tr>
+<td><a href="../runbooks/#hangardependencydown">HangarDependencyDown</a></td>
+<td>critical</td>
+<td>A readiness dependency has been down for 2 minutes.</td>
+</tr>
+<tr>
+<td><a href="../runbooks/#hangarhigh5xxrate">HangarHigh5xxRate</a></td>
+<td>critical</td>
+<td>More than 5% of a node's requests fail with 5xx for 10 minutes.</td>
+</tr>
+<tr>
+<td><a href="../runbooks/#hangarupstreamcircuitopen">HangarUpstreamCircuitOpen</a></td>
+<td>warning</td>
+<td>A proxy remote has been offline for 5 minutes while remote fetches on that node failed in the last 15 minutes.</td>
+</tr>
+<tr>
+<td><a href="../runbooks/#hangarblobstoreerrors">HangarBlobStoreErrors</a></td>
+<td>critical</td>
+<td>More than 5 blob store operations of one kind failed in 10 minutes.</td>
+</tr>
+<tr>
+<td><a href="../runbooks/#hangardatabasepoolsaturated">HangarDatabasePoolSaturated</a></td>
+<td>warning</td>
+<td>Over 90% of the pool has been in use for 10 minutes.</td>
+</tr>
+<tr>
+<td><a href="../runbooks/#hangarjobfailures">HangarJobFailures</a></td>
+<td>warning</td>
+<td>A job failed permanently in the last hour.</td>
+</tr>
+<tr>
+<td><a href="../runbooks/#hangarjobbacklog">HangarJobBacklog</a></td>
+<td>warning</td>
+<td>More than 100 jobs of a type have been queued for 30 minutes.</td>
+</tr>
+<tr>
+<td><a href="../runbooks/#hangarblobstorequotanearlimit">HangarBlobStoreQuotaNearLimit</a></td>
+<td>warning</td>
+<td>A store has used over 90% of its soft quota for 15 minutes.</td>
+</tr>
+<tr>
+<td><a href="../runbooks/#hangarblobstoredisknearlyfull">HangarBlobStoreDiskNearlyFull</a></td>
+<td>critical</td>
+<td>An <code>fs</code> store's filesystem has had under 10% free for 15 minutes.</td>
+</tr>
+<tr>
+<td><a href="../runbooks/#hangarstorageusagestale">HangarStorageUsageStale</a></td>
+<td>warning</td>
+<td>Store usage has not been refreshed for over an hour.</td>
+</tr>
+<tr>
+<td><a href="../runbooks/#hangarauthbruteforce">HangarAuthBruteForce</a></td>
+<td>warning</td>
+<td>More than 50 failed authentications in 5 minutes, sustained for 5 minutes.</td>
+</tr>
+<tr>
+<td><a href="../runbooks/#hangaraccountlockouts">HangarAccountLockouts</a></td>
+<td>warning</td>
+<td>More than 3 accounts locked in 15 minutes.</td>
+</tr>
+<tr>
+<td><a href="../runbooks/#hangarauditeventsdropped">HangarAuditEventsDropped</a></td>
+<td>critical</td>
+<td>Any audit event was rejected or lost.</td>
+</tr>
+</tbody>
+</table></div>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/monitoring.md"><code>docs/operations/monitoring.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/operations/monitoring.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../../security/" rel="prev"><small>Previous</small><b>Security</b></a><a class="next" href="../runbooks/" rel="next"><small>Next</small><b>Alert runbooks</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#quick-start">Quick start</a></li><li class="l2"><a href="#configuration">Configuration</a></li><li class="l2"><a href="#protecting-metrics">Protecting /metrics</a></li><li class="l2"><a href="#metrics">Metrics</a></li><li class="l3"><a href="#cardinality">Cardinality</a></li><li class="l3"><a href="#http">HTTP</a></li><li class="l3"><a href="#package-formats">Package formats</a></li><li class="l3"><a href="#blob-storage">Blob storage</a></li><li class="l3"><a href="#proxy-remotes">Proxy remotes</a></li><li class="l3"><a href="#database">Database</a></li><li class="l3"><a href="#jobs-and-event-bus">Jobs and event bus</a></li><li class="l3"><a href="#authentication-and-audit">Authentication and audit</a></li><li class="l3"><a href="#health-and-build">Health and build</a></li><li class="l2"><a href="#logs">Logs</a></li><li class="l3"><a href="#system-logs-screen">System logs screen</a></li><li class="l2"><a href="#system-status-screen">System status screen</a></li><li class="l2"><a href="#traces">Traces</a></li><li class="l2"><a href="#dashboards">Dashboards</a></li><li class="l2"><a href="#alerts">Alerts</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

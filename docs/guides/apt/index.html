@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>APT (Debian, Ubuntu) · Hangar docs</title>
+<meta name="description" content="Hangar serves APT repositories in the Debian archive layout (dists/ and pool/). apt-get update, apt-get install, apt download and unattended upgrades work…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/guides/apt/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="APT (Debian, Ubuntu)">
+<meta property="og:description" content="Hangar serves APT repositories in the Debian archive layout (dists/ and pool/). apt-get update, apt-get install, apt download and unattended upgrades work…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/guides/apt/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="APT (Debian, Ubuntu)">
+<meta name="twitter:description" content="Hangar serves APT repositories in the Debian archive layout (dists/ and pool/). apt-get update, apt-get install, apt download and unattended upgrades work…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"APT","item":"https://ismoilovdevml.github.io/hangar/docs/guides/apt/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../getting-started/">Getting started</a></li><li><a href="../">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../docker/">Docker &amp; OCI</a></li><li><a href="../npm/">npm, pnpm, yarn</a></li><li><a href="../maven/">Maven &amp; Gradle</a></li><li><a href="../pypi/">PyPI</a></li><li><a href="../nuget/">NuGet</a></li><li><a href="../go/">Go modules</a></li><li><a href="../helm/">Helm charts</a></li><li><a href="../cargo/">Cargo</a></li><li><a href="./" aria-current="page">APT</a></li><li><a href="../rpm/">RPM</a></li><li><a href="../raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../migrate/">Move to Hangar</a></li><li><a href="../ci/">CI integration</a></li><li><a href="../access/">Access management</a></li><li><a href="../sso/">Single sign-on</a></li><li><a href="../routing-rules/">Routing rules</a></li><li><a href="../vulnerabilities/">Vulnerability scanning</a></li><li><a href="../api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Package formats</p>
+      <h1>APT (Debian, Ubuntu)</h1>
+<p class="lead">Hangar serves APT repositories in the Debian archive layout
+(<code>dists/</code> and <code>pool/</code>). <code>apt-get update</code>, <code>apt-get install</code>, <code>apt download</code> and
+unattended upgrades work against hosted, proxy and group repositories.</p>
+<p>Placeholders:</p>
+<ul>
+<li><code>hangar.example.com</code>: the host of <code>server.base_url</code>.</li>
+<li><code>&lt;user&gt;</code> and <code>&lt;token&gt;</code>: your user name and a personal access token (<code>hgr_...</code>).</li>
+<li><code>$HANGAR_TOKEN</code>: the token in an environment variable.</li>
+</ul>
+<p>Repository URL: <code>https://hangar.example.com/repository/&lt;repo&gt;/</code>.</p>
+<p>Hosted and group repositories sign their metadata with an OpenPGP key. Signing
+keys are stored encrypted with <code>security.secret_key</code> (<code>HANGAR_SECRET_KEY</code>).
+Without that key, InRelease and the public key answer <code>501</code>.</p>
+<h2 id="repositories">Repositories<a class="anchor" href="#repositories" aria-label="Link to this section">#</a></h2>
+<h3 id="hosted">Hosted<a class="anchor" href="#hosted" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;apt-hosted&quot;,
+        &quot;format&quot;: &quot;apt&quot;,
+        &quot;type&quot;: &quot;hosted&quot;,
+        &quot;blob_store&quot;: &quot;default&quot;,
+        &quot;config&quot;: { &quot;hosted&quot;: { &quot;write_policy&quot;: &quot;allow_once&quot; } }
+      }&#x27;</span></code></pre></div>
+<p>Format settings (<code>config.format</code>):</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>architectures</code></td>
+<td><code>[&quot;amd64&quot;, &quot;arm64&quot;]</code></td>
+<td>Listed in every distribution besides the architectures of uploaded packages. Clients of a listed architecture get (possibly empty) indexes.</td>
+</tr>
+<tr>
+<td><code>signing_key</code></td>
+<td><code>repository</code></td>
+<td><code>repository</code>: the repository has its own key. <code>shared</code>: it signs with the server-wide shared key.</td>
+</tr>
+</tbody>
+</table></div>
+<p>In the web UI both settings are on the repository form (<strong>Architectures</strong>
+and <strong>Sign with</strong>) for hosted and group repositories; proxies have neither.</p>
+<p>Hangar stores each package once under
+<code>pool/&lt;component&gt;/&lt;letter or libX&gt;/&lt;source&gt;/&lt;package&gt;_&lt;version&gt;_&lt;arch&gt;.deb</code>. After
+every upload or delete it regenerates <code>dists/</code>:</p>
+<ul>
+<li>per distribution, component and architecture: <code>Packages</code>, <code>Packages.gz</code> and <code>Packages.xz</code>;</li>
+<li>per distribution: a <code>Release</code> file with <code>MD5Sum</code>, <code>SHA1</code>, <code>SHA256</code> and <code>SHA512</code> sections;</li>
+<li><code>InRelease</code> (clearsigned) and <code>Release.gpg</code> (detached), signed when they are requested.</li>
+</ul>
+<p>Packages with <code>Architecture: all</code> are listed under every architecture. A
+<code>Release</code> whose content did not change keeps its <code>Date</code>.</p>
+<h3 id="proxy">Proxy<a class="anchor" href="#proxy" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;debian-proxy&quot;,
+        &quot;format&quot;: &quot;apt&quot;,
+        &quot;type&quot;: &quot;proxy&quot;,
+        &quot;blob_store&quot;: &quot;default&quot;,
+        &quot;config&quot;: { &quot;proxy&quot;: { &quot;remote_url&quot;: &quot;http://deb.debian.org/debian&quot;, &quot;metadata_ttl&quot;: &quot;30m&quot; } }
+      }&#x27;</span></code></pre></div>
+<ul>
+<li><code>remote_url</code> is the archive root, the directory that holds <code>dists/</code> and
+<code>pool/</code>. Examples: <code>http://deb.debian.org/debian</code>,
+<code>http://deb.debian.org/debian-security</code>, <code>http://archive.ubuntu.com/ubuntu</code>.
+Plain <code>http</code> is fine: apt verifies the signatures, not the transport.</li>
+<li><code>InRelease</code>, <code>Release</code> and <code>Release.gpg</code> are passed through byte for byte,
+so clients verify the remote's own signature with the distribution keyring.
+They are revalidated after <code>metadata_ttl</code> (<code>0</code> means 30 minutes). While the
+remote is down, the cached copy is served.</li>
+<li><code>Packages</code> and other index files are served while they match the hashes of
+the cached <code>Release</code>. When they no longer match, they are fetched again.</li>
+<li><code>by-hash/</code> files and <code>pool/</code> packages are cached forever. Distributions that
+set <code>Acquire-By-Hash: yes</code>, such as Debian and Ubuntu, are fetched by hash by
+apt.</li>
+<li>A proxy has no signing key of its own, so <code>public.key</code> answers <code>404</code>.</li>
+</ul>
+<h3 id="group">Group<a class="anchor" href="#group" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{ &quot;name&quot;: &quot;apt-all&quot;, &quot;format&quot;: &quot;apt&quot;, &quot;type&quot;: &quot;group&quot;,
+        &quot;config&quot;: { &quot;group&quot;: { &quot;members&quot;: [&quot;apt-hosted&quot;, &quot;apt-team&quot;] } } }&#x27;</span></code></pre></div>
+<p><strong>APT groups combine hosted repositories only.</strong> Their <code>Packages</code> and
+<code>Release</code> files are regenerated from the members' packages and signed with
+the group's own key. If two members hold the same package version and
+architecture, the first member wins.</p>
+<p>A group with a proxy member answers <code>400</code> with an explanation. A remote's
+signed <code>Release</code> cannot be merged with other packages without either
+breaking its signature or re-signing someone else's archive. Point clients at
+the proxy directly, next to the group.</p>
+<h2 id="client-setup">Client setup<a class="anchor" href="#client-setup" aria-label="Link to this section">#</a></h2>
+<h3 id="hosted-or-group-repository">Hosted or group repository<a class="anchor" href="#hosted-or-group-repository" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-comment"># The signing key, in the format Signed-By expects</span>
+curl -fsSL -u &lt;user&gt;:&lt;token&gt; https://hangar.example.com/repository/apt-hosted/public.gpg \
+  | <span class="hljs-built_in">sudo</span> <span class="hljs-built_in">tee</span> /etc/apt/keyrings/apt-hosted.gpg &gt; /dev/null
+
+<span class="hljs-built_in">sudo</span> <span class="hljs-built_in">tee</span> /etc/apt/sources.list.d/apt-hosted.sources &lt;&lt;<span class="hljs-string">&#x27;EOF&#x27;</span>
+Types: deb
+URIs: https://hangar.example.com/repository/apt-hosted/
+Suites: stable
+Components: main
+Signed-By: /etc/apt/keyrings/apt-hosted.gpg
+EOF
+
+<span class="hljs-comment"># Private repositories: apt reads credentials from auth.conf.d, never from the URL</span>
+<span class="hljs-built_in">echo</span> <span class="hljs-string">&#x27;machine hangar.example.com login &lt;user&gt; password &lt;token&gt;&#x27;</span> \
+  | <span class="hljs-built_in">sudo</span> <span class="hljs-built_in">tee</span> /etc/apt/auth.conf.d/hangar.conf &gt; /dev/null
+<span class="hljs-built_in">sudo</span> <span class="hljs-built_in">chmod</span> 600 /etc/apt/auth.conf.d/hangar.conf
+
+<span class="hljs-built_in">sudo</span> apt-get update
+<span class="hljs-built_in">sudo</span> apt-get install hello</code></pre></div>
+<ul>
+<li><code>public.key</code> is the same key, ASCII-armored, for <code>apt-key</code>-era tools.</li>
+<li>Older apt (Debian 10, Ubuntu 18.04) reads one-line <code>.list</code> files:
+<code>deb [signed-by=/etc/apt/keyrings/apt-hosted.gpg] https://hangar.example.com/repository/apt-hosted/ stable main</code>.</li>
+<li>Repositories with anonymous read need neither <code>-u</code> nor <code>auth.conf.d</code>.</li>
+<li>apt sends <code>auth.conf.d</code> credentials over plain <code>http</code> only when the entry
+names the scheme: <code>machine http://hangar.example.com:8080 login ...</code>.</li>
+</ul>
+<h3 id="proxy-of-debian-or-ubuntu">Proxy of Debian or Ubuntu<a class="anchor" href="#proxy-of-debian-or-ubuntu" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-built_in">sudo</span> <span class="hljs-built_in">tee</span> /etc/apt/sources.list.d/debian.sources &lt;&lt;<span class="hljs-string">&#x27;EOF&#x27;</span>
+Types: deb
+URIs: https://hangar.example.com/repository/debian-proxy/
+Suites: bookworm bookworm-updates
+Components: main
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF</code></pre></div>
+<p>On Ubuntu use <code>/usr/share/keyrings/ubuntu-archive-keyring.gpg</code>.</p>
+<h2 id="upload">Upload<a class="anchor" href="#upload" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-comment"># Raw body; distribution and component default to stable / main</span>
+curl -u &lt;user&gt;:&lt;token&gt; --upload-file ./hello_2.10-3_amd64.deb \
+  <span class="hljs-string">&quot;https://hangar.example.com/repository/apt-hosted/upload?distribution=bookworm&amp;component=main&quot;</span>
+
+<span class="hljs-comment"># Multipart form</span>
+curl -u &lt;user&gt;:&lt;token&gt; -F distribution=bookworm -F component=main -F package=@hello_2.10-3_amd64.deb \
+  https://hangar.example.com/repository/apt-hosted/upload</code></pre></div>
+<ul>
+<li>The control file is read from the package (<code>control.tar.gz</code>, <code>.xz</code>, <code>.zst</code>
+or uncompressed). <code>Package</code>, <code>Version</code> and <code>Architecture</code> are required.</li>
+<li>The response is <code>201</code> with the pool path. Uploading the same file to
+another distribution lists it there too; it is still stored once.</li>
+<li>Uploading through a group needs <code>write_member</code>.</li>
+</ul>
+<h2 id="delete">Delete<a class="anchor" href="#delete" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -u &lt;user&gt;:&lt;token&gt; -X DELETE \
+  https://hangar.example.com/repository/apt-hosted/pool/main/h/hello/hello_2.10-3_amd64.deb</code></pre></div>
+<p>Deleting a version in the web UI, or through cleanup policies, regenerates the
+indexes too. Quarantined packages leave the indexes until they are released.</p>
+<h2 id="signing-keys">Signing keys<a class="anchor" href="#signing-keys" aria-label="Link to this section">#</a></h2>
+<p>The key is generated when the repository is created: RSA 4096, which every
+apt and gpgv release in use accepts. Admin API:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-comment"># Details and the armored public key</span>
+curl -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> https://hangar.example.com/api/v1/repositories/apt-hosted/signing-key
+
+<span class="hljs-comment"># Rotate (body optional; &quot;ed25519&quot; needs apt with gpgv 2.1+)</span>
+curl -X POST -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{&quot;algorithm&quot;: &quot;rsa4096&quot;}&#x27;</span> https://hangar.example.com/api/v1/repositories/apt-hosted/signing-key:rotate
+
+<span class="hljs-comment"># Import an existing key</span>
+jq -n --rawfile k private.asc --arg p <span class="hljs-string">&quot;<span class="hljs-variable">$PASSPHRASE</span>&quot;</span> <span class="hljs-string">&#x27;{private_key: $k, passphrase: $p}&#x27;</span> |
+  curl -X PUT -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+    --data-binary @- https://hangar.example.com/api/v1/repositories/apt-hosted/signing-key</code></pre></div>
+<p>After a rotation or import, metadata is signed with the new key at once.
+Clients fail with <code>NO_PUBKEY</code> until they download the new <code>public.gpg</code>.
+Rotating needs repository administration; the shared key (<code>signing_key: shared</code>) needs <code>system:repos:admin</code>. Both are audited (<code>signing_key.rotate</code>,
+<code>signing_key.import</code>).</p>
+<p>In the web UI, the <strong>Signing key</strong> panel on the settings page of a hosted or
+group repository shows the fingerprint, algorithm and creation date, whether
+the key is the repository's own or the shared one, and links to <code>public.gpg</code>
+and <code>public.key</code>. <strong>Rotate</strong> asks for confirmation first; <strong>Import key</strong> takes
+a pasted ASCII-armored private key and an optional passphrase, which are sent
+once and never shown again. Users without the rights above see the buttons
+disabled with the reason. Without <code>HANGAR_SECRET_KEY</code> the panel says so.</p>
+<h2 id="vulnerability-scanning">Vulnerability scanning<a class="anchor" href="#vulnerability-scanning" aria-label="Link to this section">#</a></h2>
+<p>Debian and Ubuntu advisories (OSV <code>Debian:12</code>, <code>Ubuntu:22.04:LTS</code>, ...) only
+apply to one distribution release, so a repository is scanned once its
+release is known:</p>
+<ul>
+<li>a proxy of a Debian or Ubuntu archive detects it from the suites clients
+fetch through it (<code>bookworm</code>, <code>bookworm-updates</code> and <code>bookworm-security</code>
+are <code>Debian:12</code>); one proxy serving two releases is not guessed;</li>
+<li>otherwise set <strong>Distribution release</strong> in the repository settings, or in
+the API <code>&quot;config&quot;: {&quot;scanning&quot;: {&quot;distro&quot;: &quot;Debian:12&quot;}}</code>. The setting
+wins over the detection.</li>
+</ul>
+<p>Packages are checked by their source package (<code>libssl3</code> as <code>openssl</code>) and
+version, the fix plan suggests <code>apt-get install --only-upgrade &lt;packages&gt;</code>.
+Until the release is known the packages show &quot;No advisory source&quot;. Details:
+<a href="../vulnerabilities/#apt-and-rpm-distribution-releases">vulnerabilities.md</a>.</p>
+<h2 id="index-updates-and-empty-repositories">Index updates and empty repositories<a class="anchor" href="#index-updates-and-empty-repositories" aria-label="Link to this section">#</a></h2>
+<p>Hosted and group <code>Release</code> files declare <code>Acquire-By-Hash: yes</code>, and every
+<code>Packages</code> file is also served at <code>by-hash/SHA256/&lt;digest&gt;</code> and
+<code>by-hash/SHA512/&lt;digest&gt;</code> in its directory. apt fetches indexes by hash, so an
+<code>apt-get update</code> that reads <code>InRelease</code> just before an upload still finds the
+indexes it names: superseded by-hash files are kept for an hour. A repository
+without packages (before the first upload, or after the last delete) serves a
+signed, empty distribution with the <code>main</code> component and the configured
+architectures, for any distribution name, instead of <code>404</code>.</p>
+<h2 id="limits">Limits<a class="anchor" href="#limits" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Only binary packages (<code>.deb</code>) are indexed. Source packages and <code>Contents-*</code>
+files are not generated.</li>
+<li>Packages themselves are not re-signed (Debian packages are rarely signed
+individually; the signed <code>Release</code> covers them through the hashes).</li>
+</ul>
+<h2 id="routing-rules">Routing rules<a class="anchor" href="#routing-rules" aria-label="Link to this section">#</a></h2>
+<p>A group that combines a hosted repository with a public proxy can serve a
+public package published under one of your internal names. Block internal
+names on the proxy and reserve them for the hosted member (for example <code>edcom-*</code>);
+see <a href="../routing-rules/">routing-rules.md</a>.</p>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/apt.md"><code>docs/guides/apt.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/apt.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../cargo/" rel="prev"><small>Previous</small><b>Cargo</b></a><a class="next" href="../rpm/" rel="next"><small>Next</small><b>RPM</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#repositories">Repositories</a></li><li class="l3"><a href="#hosted">Hosted</a></li><li class="l3"><a href="#proxy">Proxy</a></li><li class="l3"><a href="#group">Group</a></li><li class="l2"><a href="#client-setup">Client setup</a></li><li class="l3"><a href="#hosted-or-group-repository">Hosted or group repository</a></li><li class="l3"><a href="#proxy-of-debian-or-ubuntu">Proxy of Debian or Ubuntu</a></li><li class="l2"><a href="#upload">Upload</a></li><li class="l2"><a href="#delete">Delete</a></li><li class="l2"><a href="#signing-keys">Signing keys</a></li><li class="l2"><a href="#vulnerability-scanning">Vulnerability scanning</a></li><li class="l2"><a href="#index-updates-and-empty-repositories">Index updates and empty repositories</a></li><li class="l2"><a href="#limits">Limits</a></li><li class="l2"><a href="#routing-rules">Routing rules</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

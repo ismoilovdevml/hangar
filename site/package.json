@@ -1,0 +1,26 @@
+{
+  "name": "hangar-site",
+  "private": true,
+  "description": "Builds the Hangar website docs from the markdown in docs/ on main.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "sync": "node sync.mjs",
+    "build": "node sync.mjs && node build.mjs",
+    "build:local": "node build.mjs",
+    "og": "node og/render.mjs",
+    "check": "node check.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/jetbrains-mono": "^5.2.5",
+    "@fontsource-variable/manrope": "^5.2.5",
+    "github-slugger": "^2.0.0",
+    "highlight.js": "^11.11.1",
+    "markdown-it": "^14.1.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
+}

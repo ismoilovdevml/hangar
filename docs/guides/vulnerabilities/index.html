@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vulnerability scanning · Hangar docs</title>
+<meta name="description" content="Hangar checks every npm, Maven, PyPI, NuGet, Go and Cargo package version it stores, and the APT and RPM packages of repositories whose distribution release…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/guides/vulnerabilities/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Vulnerability scanning">
+<meta property="og:description" content="Hangar checks every npm, Maven, PyPI, NuGet, Go and Cargo package version it stores, and the APT and RPM packages of repositories whose distribution release…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/guides/vulnerabilities/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Vulnerability scanning">
+<meta name="twitter:description" content="Hangar checks every npm, Maven, PyPI, NuGet, Go and Cargo package version it stores, and the APT and RPM packages of repositories whose distribution release…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Vulnerability scanning","item":"https://ismoilovdevml.github.io/hangar/docs/guides/vulnerabilities/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../getting-started/">Getting started</a></li><li><a href="../">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../docker/">Docker &amp; OCI</a></li><li><a href="../npm/">npm, pnpm, yarn</a></li><li><a href="../maven/">Maven &amp; Gradle</a></li><li><a href="../pypi/">PyPI</a></li><li><a href="../nuget/">NuGet</a></li><li><a href="../go/">Go modules</a></li><li><a href="../helm/">Helm charts</a></li><li><a href="../cargo/">Cargo</a></li><li><a href="../apt/">APT</a></li><li><a href="../rpm/">RPM</a></li><li><a href="../raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../migrate/">Move to Hangar</a></li><li><a href="../ci/">CI integration</a></li><li><a href="../access/">Access management</a></li><li><a href="../sso/">Single sign-on</a></li><li><a href="../routing-rules/">Routing rules</a></li><li><a href="./" aria-current="page">Vulnerability scanning</a></li><li><a href="../api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Guides</p>
+      <h1>Vulnerability scanning</h1>
+<p class="lead">Hangar checks every npm, Maven, PyPI, NuGet, Go and Cargo package version it
+stores, and the APT and RPM packages of repositories whose distribution
+release is known, against the public <a href="https://osv.dev">OSV</a> advisory
+database (or a mirror of it) and lists what it finds on the <strong>Vulnerabilities</strong> screen as a fix plan
+(what to upgrade, and whether builds still pull the vulnerable versions), on
+the package page and in search (<code>security:findings</code>, <code>cve:CVE-2024-21907</code>).</p>
+<p>Docker and OCI images are scanned with <a href="https://trivy.dev">Trivy</a> when a
+Trivy server is configured (<a href="#container-images">Container images</a>); without
+one they show <em>Image scanning not configured</em>, never <em>Clean</em>. Raw files have
+no advisory source and show <em>No advisory source</em>, and so do APT and RPM
+packages until their repository names a
+<a href="#apt-and-rpm-distribution-releases">distribution release</a>.</p>
+<h2 id="how-it-works">How it works<a class="anchor" href="#how-it-works" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>When</th>
+<th>What is scanned</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A package arrives (hosted publish or a proxy caching it)</td>
+<td>That version, in repositories with <strong>Scan on arrival</strong> (<code>scan_on_arrival: true</code>)</td>
+</tr>
+<tr>
+<td>Every hour, task <code>vulnerability-rescan</code></td>
+<td>Versions never scanned, versions whose last scan failed (after 30 minutes), and versions whose last scan is older than <code>scanning.rescan_interval</code> (default 24 h), in every repository, so new advisories are picked up</td>
+</tr>
+<tr>
+<td>On demand</td>
+<td>Everything: <strong>Rescan</strong> on the Vulnerabilities screen or <code>POST /api/v1/vulnerabilities/rescan</code>. One repository: <code>POST /api/v1/repositories/{name}:scan</code>. One version: <code>POST /api/v1/components/{id}:scan</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>For each version Hangar asks OSV <code>POST /v1/querybatch</code> (up to 1000 versions
+per request, result pages followed) and then <code>GET /v1/vulns/{id}</code> for each
+advisory it has not seen at that modification time. Requests are rate
+limited (10 per second) and retried with exponential backoff on network
+errors, <code>429</code> (honouring <code>Retry-After</code>) and <code>5xx</code>.</p>
+<p>A scan that fails keeps the findings of the previous scan and records the
+error; the package shows <em>Scan failed</em> and the hourly task retries it.</p>
+<p>Package names are sent the way advisories name them: npm <code>@scope/name</code>, Maven
+<code>groupId:artifactId</code>, NuGet the original-case package id, PyPI the project
+name, Go the module path, APT the source package and RPM the source RPM (see
+below).</p>
+<h3 id="apt-and-rpm-distribution-releases">APT and RPM: distribution releases<a class="anchor" href="#apt-and-rpm-distribution-releases" aria-label="Link to this section">#</a></h3>
+<p>Distribution advisories apply to one release: OSV keeps <code>Debian:12</code> and
+<code>Debian:13</code>, <code>Ubuntu:22.04:LTS</code> and <code>Ubuntu:24.04:LTS</code> apart, and the same
+<code>openssl</code> build is fixed in one and not the other. An APT or RPM repository
+is therefore scanned only once its release is known:</p>
+<ul>
+<li>
+<p><strong>Setting</strong>: <em>Distribution release</em> in the repository settings
+(<code>config.scanning.distro</code>), an OSV ecosystem. The picker offers the common
+ones; any other OSV ecosystem of the format is accepted.</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Format</th>
+<th>Examples</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>APT</td>
+<td><code>Debian:11</code>, <code>Debian:12</code>, <code>Debian:13</code>, <code>Ubuntu:20.04:LTS</code>, <code>Ubuntu:22.04:LTS</code>, <code>Ubuntu:24.04:LTS</code>, <code>Ubuntu:24.10</code></td>
+</tr>
+<tr>
+<td>RPM</td>
+<td><code>Rocky Linux:8</code>, <code>Rocky Linux:9</code>, <code>AlmaLinux:9</code>, <code>Red Hat:enterprise_linux:9::baseos</code>, <code>Red Hat:enterprise_linux:9::appstream</code>, <code>openSUSE:Leap 15.6</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Red Hat keeps BaseOS and AppStream apart: use one repository per stream.</p>
+</li>
+<li>
+<p><strong>Detected</strong> for proxies when the setting is empty: an APT proxy of a
+Debian or Ubuntu archive (<code>deb.debian.org</code>, <code>security.debian.org</code>,
+<code>archive.ubuntu.com</code>, <code>ports.ubuntu.com</code>, or a mirror whose path ends in
+<code>/debian</code> or <code>/ubuntu</code>) takes the release of the suites its clients have
+fetched (<code>bookworm</code> and <code>bookworm-updates</code> are <code>Debian:12</code>, <code>jammy</code> is
+<code>Ubuntu:22.04:LTS</code>); a proxy that serves suites of two releases is left
+alone. An RPM proxy of a Rocky Linux or AlmaLinux mirror takes the major
+version in its URL (<code>https://dl.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os</code>
+is <code>Rocky Linux:9</code>), a Red Hat CDN URL its release and stream. Detection
+runs every ten minutes and when the repository changes; the setting always
+wins.</p>
+</li>
+</ul>
+<p>When the release of a repository is set or changes, the repository is
+rescanned. What is asked:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th></th>
+<th>Package name</th>
+<th>Version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>APT</td>
+<td>the source package (<code>Source:</code> of the control file, else the package): <code>libssl3</code> is checked as <code>openssl</code></td>
+<td>the source version when <code>Source:</code> names one (binNMUs), else the package version, with its epoch</td>
+</tr>
+<tr>
+<td>RPM</td>
+<td>the source RPM name (<code>openssl-libs-3.0.7-27.el9</code> comes from <code>openssl-3.0.7-27.el9.src.rpm</code>)</td>
+<td><code>[epoch:]version-release</code> of the package</td>
+</tr>
+</tbody>
+</table></div>
+<p>Versions are compared the way the package manager does (<code>dpkg --compare-versions</code>, rpm's <code>rpmvercmp</code>) for <em>Fixed in</em> and the fix plan, so
+<code>2.36-9+deb12u4</code> fixes <code>2.36-9+deb12u3</code> and an epoch outranks everything.
+The fix plan's command upgrades the installed binary packages:
+<code>apt-get install --only-upgrade libssl3 openssl</code>, <code>dnf upgrade openssl-libs</code>.</p>
+<p>Packages you build yourself and upload to a hosted repository are usually
+not in the distribution's advisories (unless they reuse a distribution
+package name); leave the setting empty for such repositories.</p>
+<h3 id="severity">Severity<a class="anchor" href="#severity" aria-label="Link to this section">#</a></h3>
+<p>The severity is computed from the advisory's CVSS vector: CVSS v4.0 first,
+then v3.1 / v3.0, then v2 (critical ≥ 9.0, high ≥ 7.0, medium ≥ 4.0, low
+below). A severity given for the specific package wins over the advisory's.
+Advisories without a vector use the database's own rating
+(<code>database_specific.severity</code>, e.g. GitHub's <code>MODERATE</code>); with neither the
+severity is <em>unknown</em>.</p>
+<h3 id="fixed-in">Fixed in<a class="anchor" href="#fixed-in" aria-label="Link to this section">#</a></h3>
+<p><em>Fixed in</em> is the lowest version that fixes the version you have, taken from
+the advisory's affected ranges (the range that contains your version; an
+advisory that lists affected versions explicitly is matched exactly). <em>No fix
+yet</em> means no fixing release is known.</p>
+<h2 id="the-fix-plan">The fix plan<a class="anchor" href="#the-fix-plan" aria-label="Link to this section">#</a></h2>
+<p>The Vulnerabilities screen answers &quot;what do we upgrade first?&quot;. Its header
+counts the open findings by severity and shows how many packages are scanned
+and when OSV was last asked; <strong>Rescan</strong> (needs <code>system:security:write</code>)
+queues a scan of every repository and shows the progress until each package
+that existed when it started has been checked (a run that has not finished
+after 3 hours is reported as stopped).</p>
+<p>The banner sums up the impact: <em>Upgrading 6 packages fixes 22 of 33 findings
+that builds actually use</em>. A package version is <strong>in use</strong> when it was
+downloaded within <code>scanning.in_use_window</code> (30 days by default); the bar
+shows the findings in used versus unused packages.</p>
+<p>The table has <strong>one row per package</strong> (format and package name, across
+repositories):</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Package</td>
+<td>The package and its most severe advisory (GHSA and CVE)</td>
+</tr>
+<tr>
+<td>Vulnerable versions</td>
+<td>The versions with unresolved findings present in the registry</td>
+</tr>
+<tr>
+<td>Findings</td>
+<td>How many, the highest severity and the highest CVSS score</td>
+</tr>
+<tr>
+<td>Upgrade to</td>
+<td>Per release line of the vulnerable versions (e.g. 8.x and 10.x) the lowest version that fixes every finding of that line that has a fix: <code>8.0.4 / 10.0.10</code></td>
+</tr>
+<tr>
+<td>Pulled · 7 d</td>
+<td>Downloads of the vulnerable versions in the last 7 days and the distinct clients behind them</td>
+</tr>
+<tr>
+<td>Assignee</td>
+<td>Who fixes it</td>
+</tr>
+</tbody>
+</table></div>
+<p>The upgrade is chosen from the versions the advisories name as fixes: the
+lowest one above every vulnerable version of the line that none of the
+line's advisories still affects (an advisory whose ranges reopen later is
+checked against all of them). Findings without any fixing release are left
+out of the choice and counted as <em>without a fix</em>.</p>
+<p><strong>Copy upgrade</strong> copies the command for the package's ecosystem, one line
+per release line:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Format</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NuGet</td>
+<td><code>dotnet add package Newtonsoft.Json --version 13.0.1</code></td>
+</tr>
+<tr>
+<td>npm</td>
+<td><code>npm install lodash@4.17.21</code></td>
+</tr>
+<tr>
+<td>PyPI</td>
+<td><code>pip install Django==4.2.16</code></td>
+</tr>
+<tr>
+<td>Maven</td>
+<td><code>mvn versions:use-dep-version -Dincludes=org.apache.logging.log4j:log4j-core -DdepVersion=2.17.1 -DforceVersion=true</code></td>
+</tr>
+<tr>
+<td>Go</td>
+<td><code>go get golang.org/x/net@v0.33.0</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Tabs: <strong>In use first</strong> (default: used packages first, then by severity and
+pulls; unused ones are dimmed at the end), <strong>All packages</strong> (by severity)
+and <strong>Waived</strong> (packages with waived findings). <strong>Assigned to me</strong>, the
+repository picker and the search box (package, advisory id, CVE, title)
+narrow the table. <strong>Export CSV</strong> downloads the rows of the current tab and
+filters.</p>
+<p>Click a row to expand it into its findings; click a finding to open it:
+severity, CVSS and status, <strong>How to fix</strong> with the upgrade sentence and a
+copyable command, <strong>Who pulls it · last 7 days</strong>, the affected ranges, the
+publication date, the summary and a link to the full advisory on osv.dev.</p>
+<h3 id="who-pulls-a-package">Who pulls a package<a class="anchor" href="#who-pulls-a-package" aria-label="Link to this section">#</a></h3>
+<p>Every successful download of a package version is attributed to its client:
+the principal (user or service account) for authenticated pulls, otherwise
+the client address and the client kind read from the user agent (<em>NuGet</em>,
+<em>npm</em>, <em>pip</em>, <em>Maven</em>, <em>Go</em>, <em>Docker</em>, <em>Browser</em>, ...). Counts are kept per
+version, UTC day and client in <code>component_pulls</code>. Like the download counters
+they are buffered in memory and written every 15 seconds in one statement;
+every node adds its own counts, so the numbers cover the whole cluster and
+survive restarts. Rows older than 90 days are deleted. The pull columns start
+counting when the server with this feature first runs; <em>in use</em> also looks
+at the last download time every package already had.</p>
+<p>Seeing who pulls a package needs <code>system:security:read</code> (or <code>:write</code>);
+everyone who can read the repository sees the counts.</p>
+<h3 id="assigning">Assigning<a class="anchor" href="#assigning" aria-label="Link to this section">#</a></h3>
+<p><strong>Assign</strong> (in the drawer, or the assignee cell of a row for the whole
+package) makes an active Hangar user responsible. Assigning a package
+assigns all of its unresolved findings, and findings a later scan adds to it
+go to the same user. Assigning needs <code>system:security:write</code> and is audited
+as <code>finding.assign</code> / <code>finding.unassign</code>. Nobody is notified; the assignee is
+shown in the table and the drawer.</p>
+<h2 id="configuration">Configuration<a class="anchor" href="#configuration" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-attr">scanning:</span>
+  <span class="hljs-attr">enabled:</span> <span class="hljs-literal">true</span>              <span class="hljs-comment"># HANGAR_SCANNING_ENABLED</span>
+  <span class="hljs-attr">rescan_interval:</span> <span class="hljs-string">24h</span>       <span class="hljs-comment"># HANGAR_SCANNING_RESCAN_INTERVAL, at least 1h</span>
+  <span class="hljs-attr">in_use_window:</span> <span class="hljs-string">720h</span>        <span class="hljs-comment"># HANGAR_SCANNING_IN_USE_WINDOW, 24h..2160h: &quot;in use&quot; in the fix plan</span>
+  <span class="hljs-attr">osv:</span>
+    <span class="hljs-attr">url:</span> <span class="hljs-string">https://api.osv.dev</span> <span class="hljs-comment"># HANGAR_SCANNING_OSV_URL</span></code></pre></div>
+<ul>
+<li>Requests to OSV go through the server's outbound HTTP settings (<code>http.proxy</code>
+or <code>HTTPS_PROXY</code>, <code>http.no_proxy</code>, <code>http.ca_file</code>), like proxy repositories.
+Behind a corporate proxy, allow <code>api.osv.dev:443</code>.</li>
+<li><strong>Mirror</strong>: any server that answers <code>POST /v1/querybatch</code> and
+<code>GET /v1/vulns/{id}</code> like the OSV API works. A mirror on a private address
+must be listed in <code>http.allow_private_networks</code>, e.g.
+<code>HANGAR_HTTP_ALLOW_PRIVATE_NETWORKS=osv.example.internal</code>.</li>
+<li><code>scanning.enabled: false</code> stops every scan; stored findings stay visible and
+the screen says scanning is off.</li>
+<li>Scan on arrival and quarantine are per repository (<strong>Repository settings →
+Scan on arrival / Quarantine critical</strong>, or <code>scan_on_arrival</code> /
+<code>quarantine_critical</code> in the repository config).</li>
+</ul>
+<p>The task <code>vulnerability-rescan</code> is on <strong>Scheduled tasks</strong>; its schedule can be
+changed or it can be run now. Its last run reports how many versions were
+scanned, the findings and failures.</p>
+<h2 id="container-images">Container images<a class="anchor" href="#container-images" aria-label="Link to this section">#</a></h2>
+<p>Images in Docker repositories (hosted and proxy) are scanned by a Trivy
+server in client/server mode. Their findings are stored with the package
+findings and work the same way: severity, CVSS, <em>fixed in</em>, status,
+waivers, assignment, quarantine, the fix plan, search and the Overview
+<em>Security</em> card.</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>When</th>
+<th>What is scanned</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A tag arrives (push, or a proxy caching it)</td>
+<td>That tag, in repositories with <strong>Scan on arrival</strong></td>
+</tr>
+<tr>
+<td>Every hour, task <code>vulnerability-rescan</code></td>
+<td>Tags never scanned, failed more than 30 minutes ago, or scanned longer than <code>scanning.rescan_interval</code> ago (new advisories are found without pulling layers again: the Trivy server keeps what it analysed)</td>
+</tr>
+<tr>
+<td>On demand</td>
+<td><strong>Rescan</strong>, <code>POST /api/v1/repositories/{name}:scan</code>, <code>POST /api/v1/components/{id}:scan</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>What a scan reports:</p>
+<ul>
+<li><strong>OS packages</strong> installed by the distribution (Alpine, Debian, Ubuntu,
+Red Hat and its rebuilds, Amazon Linux, SUSE, Wolfi, ...) and <strong>libraries</strong>
+of the applications inside the image (jar files, <code>node_modules</code>, Python
+packages, Go and Rust binaries, .NET, PHP, Ruby): everything Trivy's
+vulnerability scanner finds. Secret and misconfiguration scanning are off.</li>
+<li>For each finding: the package and its version, <em>fixed in</em>, the
+distribution's verdict when there is no fix (<em>will not fix</em>, <em>fix
+deferred</em>, <em>end of life</em>), the layer that added the package and, for a
+library, the file it was read from (<code>app/lib/log4j-core-2.14.1.jar</code>).</li>
+<li><strong>Severity</strong> is Trivy's (the distribution's rating for OS packages);
+<strong>CVSS</strong> is the score of the source the severity comes from, else NVD,
+else GHSA (CVSS v4.0 first, then v3.x, then v2).</li>
+<li><strong>Multi-platform images</strong>: every platform manifest of an index is scanned
+by its digest (attestations and other artifacts are skipped) and the
+findings are merged: one finding per advisory, package and file, listing
+the platforms it was found on. <code>scanner.platforms: default</code> scans only
+<code>linux/amd64</code> (or the first platform when there is none).</li>
+<li>Tags of the same digest are scanned once per scan run.</li>
+<li>Helm charts, signatures and other OCI artifacts stored in a Docker
+repository are not images: they show <em>Not a container image</em> (or <em>A Helm
+chart</em>) and are skipped.</li>
+<li>Quarantined images stay scannable, so that fixing or waiving releases
+them; the scanner's pulls do not count as downloads.</li>
+</ul>
+<h3 id="fixing-an-image">Fixing an image<a class="anchor" href="#fixing-an-image" aria-label="Link to this section">#</a></h3>
+<p>The fix plan has one row per image (<code>docker:team/app</code>, across
+repositories), with its vulnerable <strong>tags</strong>. There is no version to upgrade
+to: an image is fixed by rebuilding it. The <em>Upgrade to</em> cell says
+<strong>Rebuild · N packages</strong> when N vulnerable packages have a fixed version,
+and the row lists them:</p>
+<ul>
+<li>OS packages: rebuild on an updated base image (<code>FROM alpine:3.20</code> pulled
+again, or a newer tag), or upgrade them in the Dockerfile. <strong>Copy upgrade</strong>
+copies that line for the image's distribution, e.g.
+<code>RUN apk upgrade --no-cache libcrypto3 libssl3</code> (Alpine, Wolfi),
+<code>RUN apt-get update &amp;&amp; apt-get install -y --only-upgrade ...</code> (Debian,
+Ubuntu), <code>yum update -y ...</code> (Red Hat family), <code>tdnf</code>, <code>zypper</code>.</li>
+<li>Libraries: upgrade them in the application's dependencies (the drawer
+names the file) and rebuild.</li>
+<li><em>No fix yet</em>: the distribution has not shipped a fixed package (or will
+not); a newer base release may not include it, otherwise waive it.</li>
+</ul>
+<p>The version shown for a package is the highest version its advisories name
+as fixed: Trivy reports no affected ranges for images, so Hangar does not
+claim more than &quot;at least this version&quot;.</p>
+<h3 id="design-how-hangar-talks-to-trivy">Design: how Hangar talks to Trivy<a class="anchor" href="#design-how-hangar-talks-to-trivy" aria-label="Link to this section">#</a></h3>
+<p>Trivy's server holds the vulnerability database but never pulls images:
+its RPC (<code>trivy.scanner.v1.Scanner/Scan</code>) only reads what a Trivy <em>client</em>
+analysed and stored in the server's cache (<code>trivy.cache.v1.Cache</code>:
+<code>MissingBlobs</code>, <code>PutBlob</code>, <code>PutArtifact</code>). The client pulls the image,
+unpacks the layers and runs the package analyzers. Three designs were
+considered:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th></th>
+<th>Design</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>a</td>
+<td>Hangar is the Trivy client: it reads the layers from its own blob store and sends the analysis to the cache API</td>
+<td>Rejected: Hangar would re-implement Trivy's analyzers (apk, dpkg, three RPM database formats, jar, npm, Python, Go and Rust binaries, ...) and drift from Trivy's results with every release</td>
+</tr>
+<tr>
+<td>b</td>
+<td>Hangar asks the Trivy server to scan an image reference</td>
+<td>Not possible: the server's <code>Scan</code> takes an artifact and blob ids already in its cache; it has no pull</td>
+</tr>
+<tr>
+<td>c</td>
+<td>A small scan adapter next to the Trivy server runs the real Trivy client for each request, pulls the image from Hangar by digest and returns the JSON report</td>
+<td><strong>Chosen</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p>How (c) works:</p>
+<ol>
+<li>For a tag, Hangar reads its manifest (for an index, the platform
+manifests) from its own storage.</li>
+<li>For each manifest it issues a <strong>registry token</strong> for that one
+repository: pull only, valid for 15 minutes (the registry token lifetime),
+signed with the registry token key, not renewable at the token
+endpoint, never stored. The scanner gets no account and no long-lived
+credential.</li>
+<li>It calls the adapter (<code>POST /v1/scan</code>, authenticated with
+<code>scanner.adapter_token</code>) with
+<code>&lt;registry&gt;/&lt;repository&gt;/&lt;image&gt;@sha256:&lt;digest&gt;</code>; images are always
+scanned by digest. The adapter runs
+<code>trivy image --server &lt;scanner.trivy_url&gt; --image-src remote --scanners vuln --format json &lt;ref&gt;</code>
+directly (no shell), passing the token in the environment
+(<code>TRIVY_REGISTRY_TOKEN</code>), so it never appears in a command line or log.</li>
+<li>Trivy pulls the image from Hangar's <code>/v2/</code> (<code>scanner.registry_url</code>,
+normally the internal address <code>http://hangar:8080</code>), stores the layer
+analysis in the server's cache, and the server matches it against the
+database. Layers already analysed are not pulled again.</li>
+<li>Hangar maps the report to findings.</li>
+</ol>
+<p>The Hangar process itself never runs a command: its image has no shell or
+Trivy binary. The adapter is the <code>hangar-scanner</code> image: the official
+Trivy image with the adapter binary, so its Trivy client always matches the
+pinned version (keep the server on the same one).</p>
+<h3 id="setting-it-up">Setting it up<a class="anchor" href="#setting-it-up" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>Docker Compose</strong>: <code>install.sh --with-trivy</code> (see
+<a href="../../deploy/install-compose/#image-scanning">install-compose.md</a>). It
+starts the <code>trivy</code> and <code>hangar-scanner</code> containers (compose profile
+<code>trivy</code>), keeps the database in <code>&lt;data&gt;/trivy/</code> and generates the adapter
+token.</li>
+<li><strong>Kubernetes</strong>: <code>imageScanning.enabled: true</code> in the Helm chart
+(<a href="../../deploy/install-helm/#image-scanning">install-helm.md</a>).</li>
+<li><strong>By hand</strong>: run <code>trivy server --listen 0.0.0.0:4954 --cache-dir &lt;dir&gt;</code>
+and the adapter (<code>ghcr.io/ismoilovdevml/hangar-scanner:&lt;version&gt;</code>, with
+<code>HANGAR_SCANNER_TOKEN</code>), then set:</li>
+</ul>
+<div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-attr">scanner:</span>
+  <span class="hljs-attr">trivy_url:</span> <span class="hljs-string">http://trivy:4954</span>             <span class="hljs-comment"># HANGAR_SCANNER_TRIVY_URL; empty = images are not scanned</span>
+  <span class="hljs-attr">adapter_url:</span> <span class="hljs-string">http://hangar-scanner:4955</span>  <span class="hljs-comment"># HANGAR_SCANNER_ADAPTER_URL</span>
+  <span class="hljs-attr">adapter_token:</span> <span class="hljs-string">&quot;&quot;</span>                        <span class="hljs-comment"># secret: HANGAR_SCANNER_ADAPTER_TOKEN or secrets/scanner.adapter_token</span>
+  <span class="hljs-attr">registry_url:</span> <span class="hljs-string">http://hangar:8080</span>         <span class="hljs-comment"># where the adapter reaches Hangar&#x27;s /v2/; default server.base_url</span>
+  <span class="hljs-attr">trivy_token:</span> <span class="hljs-string">&quot;&quot;</span>                          <span class="hljs-comment"># secret: the Trivy server&#x27;s --token, if it has one</span>
+  <span class="hljs-attr">platforms:</span> <span class="hljs-string">all</span>                           <span class="hljs-comment"># all | default</span>
+  <span class="hljs-attr">timeout:</span> <span class="hljs-string">15m</span>                             <span class="hljs-comment"># one image</span>
+  <span class="hljs-attr">workers:</span> <span class="hljs-number">2</span>                               <span class="hljs-comment"># images scanned at once</span></code></pre></div>
+<p><code>registry_url</code> must reach the main <code>/v2/</code> endpoint (not a connector host or
+port). With a plain <code>http://</code> URL the adapter allows an insecure registry.</p>
+<h3 id="corporate-proxy-and-offline-databases">Corporate proxy and offline databases<a class="anchor" href="#corporate-proxy-and-offline-databases" aria-label="Link to this section">#</a></h3>
+<p>The Trivy server downloads its vulnerability database from
+<code>mirror.gcr.io/aquasec/trivy-db</code> (falling back to <code>ghcr.io</code>) on the first
+start and every 12 hours after; the adapter downloads the Java index
+database (<code>trivy-java-db</code>, for jar files) the first time it sees one. Both
+honour <code>HTTPS_PROXY</code> / <code>NO_PROXY</code>:</p>
+<ul>
+<li>Compose: <code>install.sh --with-trivy --trivy-proxy http://proxy.example.com:3128</code>
+(stored as <code>TRIVY_HTTPS_PROXY</code> in <code>&lt;data&gt;/.env</code>; Hangar, <code>trivy</code> and
+<code>hangar-scanner</code> are always in <code>NO_PROXY</code>). Allow <code>mirror.gcr.io:443</code>
+(and <code>ghcr.io:443</code>, <code>pkg-containers.githubusercontent.com:443</code>).</li>
+<li>Helm: <code>imageScanning.httpsProxy</code>.</li>
+</ul>
+<p>Without internet access:</p>
+<ul>
+<li>
+<p><strong>A mirror of the databases</strong> (an OCI registry, e.g. a Hangar Docker proxy
+repository of <code>ghcr.io</code>): set <code>TRIVY_DB_REPOSITORY</code> on the Trivy server and
+<code>TRIVY_JAVA_DB_REPOSITORY</code> on the adapter, in a <code>compose.override.yaml</code> next
+to <code>compose.yaml</code> (kept on upgrades) or in the chart's
+<code>imageScanning.trivy.extraEnv</code> / <code>imageScanning.scanner.extraEnv</code>:</p>
+<div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-attr">services:</span>
+  <span class="hljs-attr">trivy:</span>
+    <span class="hljs-attr">environment:</span>
+      <span class="hljs-attr">TRIVY_DB_REPOSITORY:</span> <span class="hljs-string">hangar.example.com/ghcr-proxy/aquasecurity/trivy-db:2</span>
+  <span class="hljs-attr">hangar-scanner:</span>
+    <span class="hljs-attr">environment:</span>
+      <span class="hljs-attr">TRIVY_JAVA_DB_REPOSITORY:</span> <span class="hljs-string">hangar.example.com/ghcr-proxy/aquasecurity/trivy-java-db:1</span></code></pre></div>
+</li>
+<li>
+<p><strong>A copied database</strong>: download it on a connected machine
+(<code>trivy image --download-db-only --cache-dir ./cache</code> and
+<code>trivy image --download-java-db-only --cache-dir ./cache</code>), copy
+<code>cache/db/</code> into <code>&lt;data&gt;/trivy/db/</code> and <code>cache/java-db/</code> into
+<code>&lt;data&gt;/scanner/java-db/</code> (owner 65532), and set <code>TRIVY_SKIP_DB_UPDATE=true</code>
+on the server and <code>TRIVY_SKIP_JAVA_DB_UPDATE=true</code> on the adapter. Refresh
+the copy regularly: findings are only as new as the database.</p>
+</li>
+</ul>
+<h3 id="troubleshooting-images">Troubleshooting images<a class="anchor" href="#troubleshooting-images" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><em><strong>Image scanning not configured</strong></em>: <code>scanner.trivy_url</code> is empty. With the
+installer, re-run it with <code>--with-trivy</code>.</li>
+<li><strong>The header says <em>Trivy unreachable</em></strong>: Hangar cannot read
+<code>&lt;trivy_url&gt;/version</code>; check <code>docker compose logs trivy</code>. The first start
+downloads the database and can take several minutes.</li>
+<li><strong>Scans fail with <code>scan adapter: ... connection refused</code></strong>: the
+<code>hangar-scanner</code> container is not running or <code>scanner.adapter_url</code> is wrong.</li>
+<li><strong>Scans fail with <code>... 401 Unauthorized</code> from the adapter</strong>: the adapter's
+<code>HANGAR_SCANNER_TOKEN</code> differs from <code>scanner.adapter_token</code>.</li>
+<li><strong>Scans fail with <code>unable to ... GET http://hangar:8080/v2/...</code></strong>: the
+adapter cannot reach <code>scanner.registry_url</code>, or the token audience does
+not match: <code>server.base_url</code> must be set (its host is the token's
+audience) and <code>registry_url</code> must not be a connector.</li>
+<li><strong>Scans fail with <code>scan timed out</code></strong>: raise <code>scanner.timeout</code> for very
+large images; the first scan of an image pulls every layer.</li>
+</ul>
+<h2 id="findings-waivers-and-quarantine">Findings, waivers and quarantine<a class="anchor" href="#findings-waivers-and-quarantine" aria-label="Link to this section">#</a></h2>
+<p>A finding is one advisory on one package version. Statuses:</p>
+<ul>
+<li><strong>open</strong>: reported by the last scan.</li>
+<li><strong>waived</strong>: accepted until a date. A waiver needs a reason (3 to 2000
+characters) and an end date at most a year ahead, needs the
+<code>system:security:write</code> privilege, and is audited (<code>finding.waive</code>,
+<code>finding.waiver_revoke</code>). <strong>Waive</strong> on a fix plan row waives every
+finding of the package, or the one picked, with one reason and date. Waived findings do not count as open and do not
+quarantine.</li>
+<li>When a waiver ends the finding is re-opened within a minute (audited as
+<code>finding.waiver_expired</code>); the old reason stays visible.</li>
+<li><strong>fixed</strong>: a later scan no longer reports the advisory for this version
+(for example the advisory was withdrawn or corrected). If it comes back it
+is re-opened with its first-seen date.</li>
+</ul>
+<p><strong>Quarantine critical</strong> (repository setting, off by default): a version with
+an open critical finding is quarantined; downloads answer <code>403</code> with
+<em>component is quarantined</em>. The quarantine is lifted when the finding is
+fixed or waived, or when the setting is turned off. Quarantines set by hand
+are never lifted by the scanner. Every change is audited
+(<code>component.quarantine</code>, <code>component.release</code>) and sent as a live event.</p>
+<p>Who sees what: findings follow repository read access. Scanning a version
+or a repository on demand needs <code>system:security:write</code> or write access to
+the repository.</p>
+<h2 id="api">API<a class="anchor" href="#api" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Call</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /api/v1/findings?severity=critical,high&amp;status=waived&amp;fix_available=true&amp;repository=nuget-proxy&amp;q=CVE-2024-21907</code></td>
+<td>List with totals by severity</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/findings/{id}</code></td>
+<td>One finding with the advisory text and references</td>
+</tr>
+<tr>
+<td><code>POST /api/v1/findings/{id}/waiver</code> <code>{&quot;reason&quot;: &quot;...&quot;, &quot;until&quot;: &quot;2026-12-31T23:59:59Z&quot;}</code></td>
+<td>Waive</td>
+</tr>
+<tr>
+<td><code>DELETE /api/v1/findings/{id}/waiver</code></td>
+<td>Revoke a waiver</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/findings/trend?days=30</code></td>
+<td>Daily counts of unresolved findings</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/vulnerabilities/fix-plan?tab=in_use&amp;window=7d&amp;assignee=me&amp;q=json</code></td>
+<td>The fix plan; <code>format=csv</code> or <code>Accept: text/csv</code> for CSV</td>
+</tr>
+<tr>
+<td><code>POST /api/v1/vulnerabilities/fix-plan/assign</code> <code>{&quot;package&quot;: &quot;nuget:Newtonsoft.Json&quot;, &quot;assignee&quot;: &quot;alice&quot;}</code></td>
+<td>Assign every finding of a package (<code>null</code> removes)</td>
+</tr>
+<tr>
+<td><code>POST /api/v1/vulnerabilities/fix-plan/waive</code> <code>{&quot;package&quot;: &quot;...&quot;, &quot;finding_ids&quot;: [], &quot;reason&quot;: &quot;...&quot;, &quot;until&quot;: &quot;...&quot;}</code></td>
+<td>Waive a package's findings (empty list = all)</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/findings/{id}/pullers?window=7d</code></td>
+<td>Who downloaded the finding's version</td>
+</tr>
+<tr>
+<td><code>PUT</code> / <code>DELETE /api/v1/findings/{id}/assignee</code> <code>{&quot;assignee&quot;: &quot;alice&quot;}</code></td>
+<td>Assign / unassign one finding</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/vulnerabilities/assignees?q=al</code></td>
+<td>Users findings can be assigned to</td>
+</tr>
+<tr>
+<td><code>POST</code> / <code>GET /api/v1/vulnerabilities/rescan</code></td>
+<td>Rescan every repository / its progress</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/components/{id}/findings</code></td>
+<td>Findings and scan state of one version</td>
+</tr>
+<tr>
+<td><code>POST /api/v1/components/{id}:scan</code></td>
+<td>Scan one version now</td>
+</tr>
+<tr>
+<td><code>POST /api/v1/repositories/{name}:scan</code></td>
+<td>Queue a scan of a repository</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/scanning/status</code></td>
+<td>Source, rescan interval, coverage, and image scanning (<code>images</code>: Trivy version, database date)</td>
+</tr>
+</tbody>
+</table></div>
+<p>Examples:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -s -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> \
+  <span class="hljs-string">&quot;https://hangar.example.com/api/v1/findings?severity=critical&amp;fix_available=true&quot;</span> | jq <span class="hljs-string">&#x27;.items[] | {advisory_id, package, installed, fixed_in}&#x27;</span>
+
+<span class="hljs-comment"># What to upgrade, as a spreadsheet</span>
+curl -s -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&quot;Accept: text/csv&quot;</span> \
+  <span class="hljs-string">&quot;https://hangar.example.com/api/v1/vulnerabilities/fix-plan?tab=all&quot;</span> -o fix-plan.csv</code></pre></div>
+<h2 id="troubleshooting">Troubleshooting<a class="anchor" href="#troubleshooting" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><strong>Everything shows <em>Scan failed</em></strong> with <code>osv POST /v1/querybatch: dial tcp ...</code>
+or a timeout: the server cannot reach the advisory database. Check the
+outbound proxy settings, or point <code>scanning.osv.url</code> at a mirror.</li>
+<li><strong>A mirror on a private address is refused</strong> (<code>blocked by outbound address policy</code>):
+add it to <code>http.allow_private_networks</code>.</li>
+<li><strong>Nothing is scanned on arrival</strong>: turn on <em>Scan on arrival</em> for the
+repository. Everything else is still picked up by the hourly task.</li>
+<li><strong>The trend counts findings of deleted packages differently</strong>: deleting a
+package deletes its findings, and with them their history.</li>
+<li><strong>Every row shows 0 pulls right after the upgrade</strong>: pull attribution starts
+when the new server runs; the footer of the table says since when pulls
+are recorded. <em>In use</em> already works from the last download times.</li>
+<li><strong>A row says <em>Several</em> as assignee</strong>: its findings are assigned to
+different users (or some to nobody); assign the package to set one.</li>
+</ul>
+<h2 id="not-covered-yet">Not covered yet<a class="anchor" href="#not-covered-yet" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>APT and RPM repositories whose release cannot be detected and is not set,
+and group repositories (their members are scanned).</li>
+<li>Licence policies and signature requirements.</li>
+<li>Secrets and misconfigurations inside images (Trivy's other scanners).</li>
+<li>Findings inside a package's dependencies: Hangar checks the version itself,
+not what it depends on.</li>
+</ul>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/vulnerabilities.md"><code>docs/guides/vulnerabilities.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/vulnerabilities.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../routing-rules/" rel="prev"><small>Previous</small><b>Routing rules</b></a><a class="next" href="../api/" rel="next"><small>Next</small><b>REST API</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#how-it-works">How it works</a></li><li class="l3"><a href="#apt-and-rpm-distribution-releases">APT and RPM: distribution releases</a></li><li class="l3"><a href="#severity">Severity</a></li><li class="l3"><a href="#fixed-in">Fixed in</a></li><li class="l2"><a href="#the-fix-plan">The fix plan</a></li><li class="l3"><a href="#who-pulls-a-package">Who pulls a package</a></li><li class="l3"><a href="#assigning">Assigning</a></li><li class="l2"><a href="#configuration">Configuration</a></li><li class="l2"><a href="#container-images">Container images</a></li><li class="l3"><a href="#fixing-an-image">Fixing an image</a></li><li class="l3"><a href="#design-how-hangar-talks-to-trivy">Design: how Hangar talks to Trivy</a></li><li class="l3"><a href="#setting-it-up">Setting it up</a></li><li class="l3"><a href="#corporate-proxy-and-offline-databases">Corporate proxy and offline databases</a></li><li class="l3"><a href="#troubleshooting-images">Troubleshooting images</a></li><li class="l2"><a href="#findings-waivers-and-quarantine">Findings, waivers and quarantine</a></li><li class="l2"><a href="#api">API</a></li><li class="l2"><a href="#troubleshooting">Troubleshooting</a></li><li class="l2"><a href="#not-covered-yet">Not covered yet</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

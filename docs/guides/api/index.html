@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Automate Hangar: the REST API · Hangar docs</title>
+<meta name="description" content="Everything the web UI does goes through a JSON REST API under &lt;base_url&gt;/api/v1. Scripts, CI jobs, configuration tools and other automated clients use the…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/guides/api/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Automate Hangar: the REST API">
+<meta property="og:description" content="Everything the web UI does goes through a JSON REST API under &lt;base_url&gt;/api/v1. Scripts, CI jobs, configuration tools and other automated clients use the…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/guides/api/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Automate Hangar: the REST API">
+<meta name="twitter:description" content="Everything the web UI does goes through a JSON REST API under &lt;base_url&gt;/api/v1. Scripts, CI jobs, configuration tools and other automated clients use the…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"REST API","item":"https://ismoilovdevml.github.io/hangar/docs/guides/api/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../getting-started/">Getting started</a></li><li><a href="../">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../docker/">Docker &amp; OCI</a></li><li><a href="../npm/">npm, pnpm, yarn</a></li><li><a href="../maven/">Maven &amp; Gradle</a></li><li><a href="../pypi/">PyPI</a></li><li><a href="../nuget/">NuGet</a></li><li><a href="../go/">Go modules</a></li><li><a href="../helm/">Helm charts</a></li><li><a href="../cargo/">Cargo</a></li><li><a href="../apt/">APT</a></li><li><a href="../rpm/">RPM</a></li><li><a href="../raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../migrate/">Move to Hangar</a></li><li><a href="../ci/">CI integration</a></li><li><a href="../access/">Access management</a></li><li><a href="../sso/">Single sign-on</a></li><li><a href="../routing-rules/">Routing rules</a></li><li><a href="../vulnerabilities/">Vulnerability scanning</a></li><li><a href="./" aria-current="page">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Guides</p>
+      <h1>Automate Hangar: the REST API</h1>
+<p class="lead">Everything the web UI does goes through a JSON REST API under
+<code>&lt;base_url&gt;/api/v1</code>. Scripts, CI jobs, configuration tools and other automated
+clients use the same API with an access token. This page is the starting point:
+how to connect an integration, what a token may do, the calls you need most,
+pagination, errors and rate limits.</p>
+<p>Every server also publishes its own reference, with its real URLs:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Where</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>&lt;base_url&gt;/api-docs</code></td>
+<td>API reference in the web UI: every endpoint by area, schemas, curl examples and &quot;Try it&quot; (also under Settings → API reference)</td>
+</tr>
+<tr>
+<td><code>&lt;base_url&gt;/api/v1/openapi.yaml</code>, <code>/api/v1/openapi.json</code></td>
+<td>the OpenAPI 3.1 document (<a href="https://github.com/ismoilovdevml/hangar/blob/main/api/openapi.yaml">api/openapi.yaml</a>); public, no token needed</td>
+</tr>
+<tr>
+<td><code>&lt;base_url&gt;/api/v1/automation-guide.md</code></td>
+<td>a short Markdown guide for automated clients: authentication, errors, paging, limits and examples</td>
+</tr>
+<tr>
+<td><code>&lt;base_url&gt;/llms.txt</code></td>
+<td>a plain-text index of the documents above, at the conventional root path</td>
+</tr>
+</tbody>
+</table></div>
+<p>Placeholders:</p>
+<ul>
+<li><code>https://hangar.example.com</code>: the server's <code>server.base_url</code>.</li>
+<li><code>$HANGAR_TOKEN</code>: a personal access token (<code>hgr_...</code>) in an environment variable.</li>
+<li><code>&lt;id&gt;</code>: an id returned by a previous call.</li>
+</ul>
+<h2 id="connect-an-integration">Connect an integration<a class="anchor" href="#connect-an-integration" aria-label="Link to this section">#</a></h2>
+<ol>
+<li><strong>Create a token.</strong> In the web UI: My account → Personal access tokens →
+New token for yourself, or Access &amp; audit → Service accounts → (account) →
+Tokens → New token for a shared integration. Prefer a service account per
+integration: its actions are audited under its own name and it does not
+stop working when a person leaves.</li>
+<li><strong>Give it only what it needs.</strong> Pick a preset or build a custom set of
+permissions (see <a href="#tokens">Tokens</a> below), a short expiry, and optionally
+the networks it may be used from and a read-only flag.</li>
+<li><strong>Hand it over.</strong> After creation the secret is shown once, with
+ready-to-paste snippets: a curl call, <code>HANGAR_URL</code> / <code>HANGAR_TOKEN</code> lines,
+package-client configuration (npm, NuGet, pip, Maven, docker) and a block
+for automation that also points at <code>/llms.txt</code> and the OpenAPI document.</li>
+<li><strong>Let the client check itself.</strong> <code>GET /api/v1/me</code> answers who the caller is,
+what it may do and when its token expires.</li>
+</ol>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-built_in">export</span> HANGAR_URL=https://hangar.example.com
+<span class="hljs-built_in">export</span> HANGAR_TOKEN=hgr_...
+curl -fsS -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR_URL</span>/api/v1/me&quot;</span></code></pre></div>
+<div class="code"><div class="code-head"><span>json</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="json"><code><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;user&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;username&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;ci-publisher&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;kind&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;service_account&quot;</span><span class="hljs-punctuation">,</span> ...<span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+ <span class="hljs-attr">&quot;privileges&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">[</span><span class="hljs-string">&quot;repo:npm-hosted:read&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-string">&quot;repo:npm-hosted:write&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+ <span class="hljs-attr">&quot;auth_method&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;token&quot;</span><span class="hljs-punctuation">,</span>
+ <span class="hljs-attr">&quot;token&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;id&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;...&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;kind&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;personal&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;name&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;release pipeline&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;prefix&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;hgr_1Hzo&quot;</span><span class="hljs-punctuation">,</span>
+          <span class="hljs-attr">&quot;scopes&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">[</span><span class="hljs-string">&quot;repo:npm-hosted:read&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-string">&quot;repo:npm-hosted:write&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+          <span class="hljs-attr">&quot;expires_at&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;2027-02-01T00:00:00Z&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;read_only&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-literal"><span class="hljs-keyword">false</span></span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;allowed_cidrs&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">[</span><span class="hljs-string">&quot;10.20.0.0/16&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+ <span class="hljs-attr">&quot;token_policy&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;max_lifetime&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;8784h0m0s&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;max_lifetime_days&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-number">366</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;expiry_warning&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;336h0m0s&quot;</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span> ...<span class="hljs-punctuation">}</span></code></pre></div>
+<p><code>privileges</code> is what this request may do: the owner's roles narrowed by the
+token's scopes. <code>GET /auth/session</code> returns the same body.</p>
+<h2 id="authentication">Authentication<a class="anchor" href="#authentication" aria-label="Link to this section">#</a></h2>
+<p>Every request may carry one of:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Method</th>
+<th>Header</th>
+<th>Use for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bearer token</td>
+<td><code>Authorization: Bearer hgr_...</code></td>
+<td>scripts and automation (recommended)</td>
+</tr>
+<tr>
+<td>Basic, token as password</td>
+<td><code>Authorization: Basic base64(&lt;any&gt;:hgr_...)</code> (<code>curl -u any:$HANGAR_TOKEN</code>)</td>
+<td>tools that only speak Basic</td>
+</tr>
+<tr>
+<td>Basic, username and password</td>
+<td><code>curl -u admin:&lt;password&gt;</code></td>
+<td>bootstrapping the first token; counts towards account lockout</td>
+</tr>
+<tr>
+<td>Session cookie</td>
+<td><code>hangar_session</code> cookie + <code>X-CSRF-Token</code> header (the <code>hangar_csrf</code> cookie's value) on writes</td>
+<td>the web UI; <a href="#first-sign-in-from-a-script">first sign-in</a></td>
+</tr>
+</tbody>
+</table></div>
+<p>Every route requires sign-in except <code>GET /system/status</code>, <code>GET /system/version</code>,
+<code>GET /auth/providers</code>, <code>POST /auth/login</code> and the documents <code>GET /openapi.yaml</code>,
+<code>GET /openapi.json</code> and <code>GET /automation-guide.md</code>; anonymous calls to anything else
+answer <code>401</code>. (Package endpoints are different: repositories with
+<code>anonymous_read</code> serve downloads without credentials.) Wrong, expired or revoked
+credentials answer <code>401</code> (with <code>WWW-Authenticate: Bearer realm=&quot;Hangar API&quot;</code>) on
+every route, the public ones included, and so do package endpoints, a public
+service index or signing key included: a client with a bad token learns it on its
+first request. Leave the <code>Authorization</code> header out to call public routes
+anonymously. Failed attempts count towards the per-IP limit
+(<code>security.rate_limit.failed_auth</code>); a locked account answers <code>423</code>. Token-authenticated
+requests get the intersection of the owner's roles and the token's scopes.</p>
+<p>Browsers may call the API only from <code>server.base_url</code>'s origin; list other origins
+in <code>security.cors.allowed_origins</code> if a separate web app needs access.</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> https://hangar.example.com/api/v1/auth/session</code></pre></div>
+<p>returns the caller and its effective privileges (see
+<a href="#connect-an-integration">Connect an integration</a> for the token section).</p>
+<h3 id="session-cookies-and-csrf">Session cookies and CSRF<a class="anchor" href="#session-cookies-and-csrf" aria-label="Link to this section">#</a></h3>
+<p><code>POST /auth/login</code> signs in with a username and password and answers with two
+cookies: <code>hangar_session</code> (the session, HttpOnly) and <code>hangar_csrf</code> (readable).
+The same CSRF value is also in the response's <code>X-CSRF-Token</code> header. Every
+request authenticated by the session cookie that is not GET or HEAD must echo
+it in an <code>X-CSRF-Token</code> header, or it answers <code>403 csrf_failed</code>. Requests with
+a token or Basic credentials need no CSRF header. Changing the password starts
+a new session with a new CSRF value: read the cookie again afterwards.</p>
+<h3 id="first-sign-in-from-a-script">First sign-in from a script<a class="anchor" href="#first-sign-in-from-a-script" aria-label="Link to this section">#</a></h3>
+<p>A new administrator (from <code>bootstrap.admin_password</code> or <code>hangar admin reset-password</code>) must set their own password before anything else; every other
+call answers <code>403 password_change_required</code>. To get from there to a token
+without the web UI, with a session:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>jar=$(<span class="hljs-built_in">mktemp</span>)
+<span class="hljs-function"><span class="hljs-title">csrf</span></span>() { awk <span class="hljs-string">&#x27;$6 == &quot;hangar_csrf&quot; { print $7 }&#x27;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$jar</span>&quot;</span>; }
+
+<span class="hljs-comment"># 1. Sign in; the cookies land in the jar.</span>
+curl -fsS -c <span class="hljs-string">&quot;<span class="hljs-variable">$jar</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> -X POST <span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR_URL</span>/api/v1/auth/login&quot;</span> \
+  -d <span class="hljs-string">&quot;<span class="hljs-subst">$(jq -n --arg p <span class="hljs-string">&quot;<span class="hljs-variable">$ONE_TIME_PASSWORD</span>&quot;</span> &#x27;{username: <span class="hljs-string">&quot;admin&quot;</span>, password: $p}&#x27;)</span>&quot;</span>
+
+<span class="hljs-comment"># 2. Set the new password: a session write, so it carries X-CSRF-Token.</span>
+curl -fsS -b <span class="hljs-string">&quot;<span class="hljs-variable">$jar</span>&quot;</span> -c <span class="hljs-string">&quot;<span class="hljs-variable">$jar</span>&quot;</span> -H <span class="hljs-string">&quot;X-CSRF-Token: <span class="hljs-subst">$(csrf)</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -X PUT <span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR_URL</span>/api/v1/me/password&quot;</span> \
+  -d <span class="hljs-string">&quot;<span class="hljs-subst">$(jq -n --arg c <span class="hljs-string">&quot;<span class="hljs-variable">$ONE_TIME_PASSWORD</span>&quot;</span> --arg n <span class="hljs-string">&quot;<span class="hljs-variable">$NEW_PASSWORD</span>&quot;</span> &#x27;{current_password: $c, new_password: $n}&#x27;)</span>&quot;</span>
+
+<span class="hljs-comment"># 3. Create a token with the new session (and its new CSRF value).</span>
+curl -fsS -b <span class="hljs-string">&quot;<span class="hljs-variable">$jar</span>&quot;</span> -H <span class="hljs-string">&quot;X-CSRF-Token: <span class="hljs-subst">$(csrf)</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -X POST <span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR_URL</span>/api/v1/tokens&quot;</span> \
+  -d <span class="hljs-string">&#x27;{&quot;name&quot;: &quot;bootstrap&quot;, &quot;scopes&quot;: [&quot;system:*&quot;], &quot;expires_at&quot;: &quot;2027-01-01T00:00:00Z&quot;}&#x27;</span> | jq -r .secret
+<span class="hljs-built_in">rm</span> -f <span class="hljs-string">&quot;<span class="hljs-variable">$jar</span>&quot;</span></code></pre></div>
+<p>Over plain HTTP the cookies are only sent back when <code>auth.session.insecure</code> is
+set; use HTTPS. Basic credentials skip the cookies and CSRF altogether:
+<code>curl -u &quot;admin:$ONE_TIME_PASSWORD&quot; -X PUT .../me/password</code> with the same body,
+then <code>curl -u &quot;admin:$NEW_PASSWORD&quot; -X POST .../tokens</code>.</p>
+<p>On the server itself, <code>hangar admin token create --user admin --name ci --scopes 'system:*' --expires 90d</code> prints a token without any sign-in, and
+<code>hangar admin reset-password --user NAME</code> prints a new one-time password (it
+also clears a lockout). Both read the same configuration as <code>hangar serve</code>.</p>
+<h2 id="common-operations">Common operations<a class="anchor" href="#common-operations" aria-label="Link to this section">#</a></h2>
+<p>The examples set the header once:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>H=<span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span>
+API=https://hangar.example.com/api/v1</code></pre></div>
+<h3 id="server">Server<a class="anchor" href="#server" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/system/status&quot;</span>           <span class="hljs-comment"># no sign-in: state, version, base_url, registry_host, dependency health</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/formats&quot;</span>         <span class="hljs-comment"># formats compiled into this server</span></code></pre></div>
+<p><code>/healthz</code>, <code>/readyz</code> and <code>/metrics</code> (Prometheus) live at the server root, outside
+<code>/api/v1</code>.</p>
+<h3 id="repositories">Repositories<a class="anchor" href="#repositories" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-comment"># list (filters: type=hosted|proxy|group, format=npm, q=&lt;substring of the name&gt;)</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/repositories?format=npm&amp;limit=50&quot;</span>
+
+<span class="hljs-comment"># get one (JSON, or YAML with Accept: application/yaml)</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/repositories/npm-hosted&quot;</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> -H <span class="hljs-string">&#x27;Accept: application/yaml&#x27;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/repositories/npm-hosted&quot;</span>
+
+<span class="hljs-comment"># create</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> -X POST <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/repositories&quot;</span> -d <span class="hljs-string">&#x27;{
+  &quot;name&quot;: &quot;raw-hosted&quot;, &quot;format&quot;: &quot;raw&quot;, &quot;type&quot;: &quot;hosted&quot;, &quot;blob_store&quot;: &quot;default&quot;,
+  &quot;config&quot;: {&quot;hosted&quot;: {&quot;write_policy&quot;: &quot;allow&quot;}}
+}&#x27;</span>
+
+<span class="hljs-comment"># update (send the whole document; name, format and type cannot change)</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> -X PUT <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/repositories/raw-hosted&quot;</span> -d <span class="hljs-string">&#x27;{
+  &quot;blob_store&quot;: &quot;default&quot;, &quot;online&quot;: true,
+  &quot;config&quot;: {&quot;hosted&quot;: {&quot;write_policy&quot;: &quot;allow_once&quot;}, &quot;anonymous_read&quot;: true}
+}&#x27;</span>
+
+<span class="hljs-comment"># delete</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> -X DELETE <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/repositories/raw-hosted&quot;</span>
+
+<span class="hljs-comment"># proxy only: forget remembered 404s and upstream rate limits (cached content stays)</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> -X POST <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/repositories/npm-proxy/cache:invalidate&quot;</span>
+<span class="hljs-comment"># -&gt; {&quot;repository&quot;:&quot;npm-proxy&quot;,&quot;negative_entries&quot;:3,&quot;rate_limited_hosts&quot;:0}</span></code></pre></div>
+<p>A hosted repository created without <code>write_policy</code> gets <code>allow_once</code> (published
+versions cannot be replaced by different bytes; <code>docker</code> gets <code>allow</code>, so tags
+can move). An update without <code>write_policy</code> keeps the stored policy.</p>
+<p>Creating, updating, deleting and cache invalidation need <code>system:repos:admin</code> or
+<code>repo:&lt;name&gt;:admin</code>. The JSON shape of each format and type is shown in the client
+guides. The YAML returned by <code>Accept: application/yaml</code> can be sent back with
+<code>Content-Type: application/yaml</code>, which suits configuration kept in git.
+Upstream secrets are never returned; sending the redacted document back keeps
+them. Saving a repository with upstream credentials needs <code>HANGAR_SECRET_KEY</code> on
+the server (<code>501</code> otherwise).</p>
+<p><code>config.format</code> holds the settings of one format. The OpenAPI document describes
+each format's keys, types, allowed values and defaults in its own schema
+(<code>NugetFormatConfig</code>, <code>GoFormatConfig</code>, ...; <code>RepositoryConfig.format</code> lists them
+under <code>x-format-schemas</code>):</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Format</th>
+<th><code>config.format</code> keys</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>apt</td>
+<td><code>architectures</code>, <code>signing_key</code></td>
+</tr>
+<tr>
+<td>cargo</td>
+<td><code>download_url</code> (proxy)</td>
+</tr>
+<tr>
+<td>docker, helm, raw</td>
+<td>none (host and port connectors are <code>config.connector</code>)</td>
+</tr>
+<tr>
+<td>go</td>
+<td><code>sumdbs</code>, <code>sumdb_via</code> (proxy)</td>
+</tr>
+<tr>
+<td>maven</td>
+<td><code>version_policy</code>, <code>layout_policy</code></td>
+</tr>
+<tr>
+<td>npm</td>
+<td><code>unpublish_window</code>, <code>login_token_ttl</code>, <code>reuse_unpublished_versions</code></td>
+</tr>
+<tr>
+<td>nuget</td>
+<td><code>delete_mode</code>, <code>service_index</code> (proxy)</td>
+</tr>
+<tr>
+<td>pypi</td>
+<td><code>file_hosts</code> (proxy)</td>
+</tr>
+<tr>
+<td>rpm</td>
+<td><code>repodata_depth</code>, <code>signing_key</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Groups take no <code>blob_store</code>; one sent anyway is ignored.</p>
+<h3 id="components">Components<a class="anchor" href="#components" aria-label="Link to this section">#</a></h3>
+<p>A component is one package version (an npm version, a Maven GAV, a Docker tag, a
+raw file); its files are assets.</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-comment"># list (filters: repository=&lt;exact name&gt;, format=&lt;format&gt;, name=&lt;exact name&gt;;</span>
+<span class="hljs-comment"># sort=-published_at (default) | published_at | name | -downloads)</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/components?repository=pypi-hosted&amp;limit=20&quot;</span>
+
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/components/&lt;id&gt;&quot;</span>            <span class="hljs-comment"># details, checksums, install command</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/components/&lt;id&gt;/assets&quot;</span>     <span class="hljs-comment"># files, with download_url</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/components/&lt;id&gt;/versions&quot;</span>   <span class="hljs-comment"># other versions of the same package</span>
+
+<span class="hljs-comment"># delete a component and its files (needs repo:&lt;repo&gt;:delete)</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> -X DELETE <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/components/&lt;id&gt;&quot;</span></code></pre></div>
+<h3 id="search">Search<a class="anchor" href="#search" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/search?q=ledger+format:maven&amp;limit=20&quot;</span></code></pre></div>
+<p>Free text matches name prefixes (<code>led cor</code> finds <code>com.acme:ledger-core</code>).
+Qualifiers: <code>format:</code>, <code>repo:</code>, <code>sha256:&lt;hex prefix&gt;</code>, <code>license:</code>,
+<code>security:pending|clean|findings|quarantined</code>, <code>unused:&lt;N&gt;d|h|w</code>,
+<code>published:&lt;date</code>, <code>published:&gt;date</code>, <code>cve:</code>. <code>sort</code> is <code>relevance</code> (default),
+<code>-downloads</code> or <code>-published_at</code>. The response adds <code>total</code> and <code>facets</code>
+(<code>format</code>, <code>security</code>, <code>repository</code>) to the usual page:</p>
+<div class="code"><div class="code-head"><span>json</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="json"><code><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;items&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">[</span><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;component_id&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;...&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;format&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;pypi&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;coordinates&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;acme-tiny==0.2.0&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;namespace&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;name&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;acme-tiny&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;version&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;0.2.0&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;repository&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;pypi-hosted&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;versions&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-number">2</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;downloads&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-number">0</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;security&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;pending&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;published_at&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;...&quot;</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+ <span class="hljs-attr">&quot;next_cursor&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-literal"><span class="hljs-keyword">null</span></span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;total&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-number">1</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;facets&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;format&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">[</span>...<span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;security&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">[</span>...<span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;repository&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">[</span>...<span class="hljs-punctuation">]</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">}</span></code></pre></div>
+<h3 id="tokens">Tokens<a class="anchor" href="#tokens" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-comment"># create a token for yourself (expires_at: RFC 3339, at most 366 days ahead)</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> -X POST <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/tokens&quot;</span> -d <span class="hljs-string">&#x27;{
+  &quot;name&quot;: &quot;laptop&quot;, &quot;scopes&quot;: [&quot;repo:*:read&quot;], &quot;expires_at&quot;: &quot;2027-06-30T00:00:00Z&quot;
+}&#x27;</span>
+
+<span class="hljs-comment"># create a token for a service account (needs system:tokens:write)</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> -X POST <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/tokens&quot;</span> -d <span class="hljs-string">&#x27;{
+  &quot;name&quot;: &quot;gitlab-ci&quot;, &quot;owner&quot;: &quot;ci-publisher&quot;,
+  &quot;scopes&quot;: [&quot;repo:npm-hosted:read&quot;, &quot;repo:npm-hosted:write&quot;], &quot;expires_at&quot;: &quot;2027-02-01T00:00:00Z&quot;
+}&#x27;</span>
+
+<span class="hljs-comment"># list your tokens</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/tokens&quot;</span>
+<span class="hljs-comment"># someone else&#x27;s, or everyone&#x27;s (needs system:tokens:read);</span>
+<span class="hljs-comment"># filters: owner, owner_kind=user|service_account, status=active|expired, q=&lt;name substring&gt;</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/tokens?owner=ci-publisher&quot;</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/tokens?all=true&amp;owner_kind=service_account&amp;status=active&quot;</span>
+
+<span class="hljs-comment"># revoke (204); tokens minted from it stop working too</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> -X DELETE <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/tokens/&lt;id&gt;&quot;</span>
+
+<span class="hljs-comment"># restrict a token to networks and to reading</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> -X POST <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/tokens&quot;</span> -d <span class="hljs-string">&#x27;{
+  &quot;name&quot;: &quot;dashboard&quot;, &quot;scopes&quot;: [&quot;repo:*:read&quot;, &quot;system:audit:read&quot;], &quot;expires_at&quot;: &quot;2027-01-31T00:00:00Z&quot;,
+  &quot;allowed_cidrs&quot;: [&quot;10.20.0.0/16&quot;, &quot;203.0.113.7&quot;], &quot;read_only&quot;: true
+}&#x27;</span>
+
+<span class="hljs-comment"># rotate: a new secret with the same name, scopes, restrictions and lifetime;</span>
+<span class="hljs-comment"># the old token keeps working for 24 hours (&quot;0s&quot;: revoked now; omit: kept)</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> -X POST <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/tokens/&lt;id&gt;/rotate&quot;</span> -d <span class="hljs-string">&#x27;{&quot;revoke_old_after&quot;: &quot;24h&quot;}&#x27;</span>
+<span class="hljs-comment"># -&gt; the new token with &quot;secret&quot;, plus &quot;replaced&quot;: {&quot;id&quot;, &quot;revoked&quot;, &quot;expires_at&quot;}</span></code></pre></div>
+<p>The secret (<code>secret</code> in the create response) is shown once. Listings show only the
+<code>prefix</code> (<code>hgr_1Hzo</code>) plus <code>owner_kind</code>, <code>last_used_at</code>, <code>last_used_ip</code>,
+<code>allowed_cidrs</code> and <code>read_only</code>. A token created by a scoped token cannot exceed
+the caller's scopes, and a read-only token can only create read-only tokens.</p>
+<p>A token never does more than its owner: every request needs both a privilege
+from the owner's roles and a matching scope, checked again on each request, so
+taking a role away from the owner narrows the token at once. Scopes the owner
+lacks are accepted but have no effect; the web UI greys them out and says why.</p>
+<p>Restrictions, both optional:</p>
+<ul>
+<li><code>allowed_cidrs</code>: up to 32 addresses or CIDR networks. A request from any other
+client address fails authentication with <code>401</code> and is audited as
+<code>auth.token.failed</code> with reason <code>address_not_allowed</code>. Behind a reverse proxy
+the client address comes from <code>X-Forwarded-For</code> only when the proxy is in
+<code>server.trusted_proxies</code>.</li>
+<li><code>read_only</code>: the token's scopes are narrowed to <code>read</code>, and the REST API
+answers <code>403 read_only_token</code> to anything other than GET and HEAD.</li>
+</ul>
+<p>Registry logins (docker, and other clients that trade the token for a short
+session token) inherit both restrictions.</p>
+<p>Rotation keeps the old lifetime (capped at the server maximum). Rotating your
+own token needs nothing more; a service account's needs <code>system:tokens:write</code>,
+plus <code>system:tokens:delete</code> to end the old one. Nobody can rotate another
+person's token. Rotations are audited as <code>token.rotate</code>.</p>
+<p>Presets in the web UI and the scopes they create:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Preset</th>
+<th>Scopes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Read only</td>
+<td><code>repo:*:read</code></td>
+</tr>
+<tr>
+<td>Publish to selected repositories</td>
+<td><code>repo:&lt;name or glob&gt;:read</code> and <code>:write</code> for each pick</td>
+</tr>
+<tr>
+<td>Repository admin</td>
+<td><code>repo:&lt;name or glob&gt;:admin</code> for each pick</td>
+</tr>
+<tr>
+<td>Security reviewer</td>
+<td><code>repo:*:read</code>, <code>system:security:read</code>, <code>system:security:write</code></td>
+</tr>
+<tr>
+<td>Full admin</td>
+<td><code>system:*</code>, <code>repo:*:admin</code></td>
+</tr>
+<tr>
+<td>Custom</td>
+<td>any repositories × read / write / delete / admin, plus read / write / admin per administration area</td>
+</tr>
+</tbody>
+</table></div>
+<p>Scopes have the form <code>repo:&lt;pattern&gt;:&lt;action&gt;</code> or <code>system:&lt;area&gt;:&lt;action&gt;</code>, where
+<code>&lt;pattern&gt;</code> is a glob (<code>*</code>, <code>npm-*</code>) and <code>&lt;action&gt;</code> is <code>read</code>, <code>write</code>, <code>delete</code>,
+<code>admin</code> (all of them) or <code>*</code>. <code>system:*</code> is every system area. Details: <a href="../access/">access.md</a>.</p>
+<h3 id="users-and-roles">Users and roles<a class="anchor" href="#users-and-roles" aria-label="Link to this section">#</a></h3>
+<p><code>/users</code>, <code>/roles</code> and <code>/me</code> manage members, service accounts, roles, role
+membership, sessions, passwords and effective permissions (needs
+<code>system:users:read</code> / <code>system:users:write</code> / <code>system:users:delete</code> for other
+people). The full list of operations is in <a href="../access/">access.md</a>.</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> -X POST <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/users&quot;</span> -d <span class="hljs-string">&#x27;{
+  &quot;username&quot;: &quot;ci-publisher&quot;, &quot;kind&quot;: &quot;service_account&quot;, &quot;roles&quot;: [&quot;CI deployer&quot;]
+}&#x27;</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/users/&lt;id&gt;/permissions&quot;</span>      <span class="hljs-comment"># what this user may do, and why</span></code></pre></div>
+<h3 id="cleanup-policies-and-tasks">Cleanup policies and tasks<a class="anchor" href="#cleanup-policies-and-tasks" aria-label="Link to this section">#</a></h3>
+<p>Cleanup policies delete components by age, download recency, pre-release status
+or a keep-newest count (needs <code>system:cleanup:*</code>). New or changed selection rules
+must be previewed first; the preview returns a <code>preview_token</code> (valid one hour)
+to send with the save:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>POLICY=<span class="hljs-string">&#x27;{&quot;name&quot;: &quot;old-snapshots&quot;, &quot;format&quot;: &quot;maven&quot;, &quot;repositories&quot;: [&quot;maven-snapshots&quot;],
+         &quot;criteria&quot;: {&quot;older_than_days&quot;: 30, &quot;keep_newest&quot;: 5}}&#x27;</span>
+
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> -X POST <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/cleanup-policies/preview&quot;</span> -d <span class="hljs-string">&quot;<span class="hljs-variable">$POLICY</span>&quot;</span>
+<span class="hljs-comment"># -&gt; {&quot;component_count&quot;:..., &quot;bytes&quot;:..., &quot;sample&quot;:[...], &quot;preview_token&quot;:&quot;cpv_...&quot;, ...}</span>
+
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> -X POST <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/cleanup-policies&quot;</span> -d <span class="hljs-string">&#x27;{
+  &quot;name&quot;: &quot;old-snapshots&quot;, &quot;format&quot;: &quot;maven&quot;, &quot;repositories&quot;: [&quot;maven-snapshots&quot;],
+  &quot;criteria&quot;: {&quot;older_than_days&quot;: 30, &quot;keep_newest&quot;: 5},
+  &quot;schedule&quot;: &quot;0 3 * * *&quot;, &quot;preview_token&quot;: &quot;cpv_...&quot;
+}&#x27;</span>
+
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> -X POST <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/cleanup-policies/old-snapshots/run&quot;</span>   <span class="hljs-comment"># run now</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/cleanup-policies/old-snapshots/runs&quot;</span></code></pre></div>
+<p><code>schedule</code> is a five-field cron expression in UTC; omit it to run only on demand.
+Other criteria: <code>not_downloaded_days</code>, <code>keep_matching</code> (globs),
+<code>version_include</code> / <code>version_exclude</code> (regular expressions), <code>prerelease_only</code>,
+<code>min_size_bytes</code>. Scheduled jobs (built-in maintenance such as blob garbage
+collection and audit partitions, plus one task per scheduled policy) are listed
+and controlled under <code>/tasks</code>
+(<code>GET /tasks</code>, <code>POST /tasks/&lt;id&gt;/run</code>, <code>GET /tasks/&lt;id&gt;/runs/&lt;run_id&gt;/log</code>; needs
+<code>system:tasks:*</code>).</p>
+<h3 id="audit-log">Audit log<a class="anchor" href="#audit-log" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/audit?limit=100&quot;</span>                 <span class="hljs-comment"># needs system:audit:read</span>
+curl -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/audit/export?format=csv&quot;</span> -o audit.csv      <span class="hljs-comment"># or format=json (NDJSON)</span></code></pre></div>
+<p>See <code>openapi.yaml</code> for the filters.</p>
+<h2 id="pagination">Pagination<a class="anchor" href="#pagination" aria-label="Link to this section">#</a></h2>
+<p>List endpoints share one scheme:</p>
+<ul>
+<li><code>limit</code>: 1 to 1000, default 50. Out of range is <code>400 invalid_argument</code>.</li>
+<li><code>cursor</code>: opaque; pass the previous response's <code>next_cursor</code> unchanged.</li>
+<li>Response: <code>{&quot;items&quot;: [...], &quot;next_cursor&quot;: &quot;...&quot;}</code>; <code>next_cursor</code> is <code>null</code> on the
+last page.</li>
+</ul>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>cursor=<span class="hljs-string">&quot;&quot;</span>
+<span class="hljs-keyword">while</span> :; <span class="hljs-keyword">do</span>
+  page=$(curl -fsS -H <span class="hljs-string">&quot;<span class="hljs-variable">$H</span>&quot;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$API</span>/repositories?limit=100<span class="hljs-variable">${cursor:+&amp;cursor=$cursor}</span>&quot;</span>)
+  <span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;<span class="hljs-variable">$page</span>&quot;</span> | jq -r <span class="hljs-string">&#x27;.items[].name&#x27;</span>
+  cursor=$(<span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;<span class="hljs-variable">$page</span>&quot;</span> | jq -r <span class="hljs-string">&#x27;.next_cursor // empty&#x27;</span>)
+  [ -z <span class="hljs-string">&quot;<span class="hljs-variable">$cursor</span>&quot;</span> ] &amp;&amp; <span class="hljs-built_in">break</span>
+<span class="hljs-keyword">done</span></code></pre></div>
+<p><code>GET /repositories</code> also returns <code>counts</code> (<code>all</code>, <code>hosted</code>, <code>proxy</code>, <code>group</code>) for
+the current filters. <code>sort</code> orders the list before paging: <code>name</code> (default),
+<code>type</code>, <code>format</code> or <code>last_activity</code>, with a leading <code>-</code> to reverse. Each
+repository carries <code>last_activity_at</code>, the latest upload, cache fill or download
+(for a group, in its direct members), or <code>null</code>.</p>
+<h2 id="errors">Errors<a class="anchor" href="#errors" aria-label="Link to this section">#</a></h2>
+<p>Every error has the same JSON body:</p>
+<div class="code"><div class="code-head"><span>json</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="json"><code><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;code&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;invalid_argument&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;message&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;repository name \&quot;x\&quot; must match ^[a-z0-9][a-z0-9-]{1,62}$: invalid argument&quot;</span><span class="hljs-punctuation">}</span></code></pre></div>
+<p>Some errors add <code>retry_after</code> (seconds) or <code>details</code>.</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Status</th>
+<th><code>code</code></th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>400</td>
+<td><code>invalid_argument</code>, <code>digest_mismatch</code>, <code>preview_required</code></td>
+<td>bad input; a cleanup policy saved without a valid <code>preview_token</code></td>
+</tr>
+<tr>
+<td>401</td>
+<td><code>unauthenticated</code></td>
+<td>missing or wrong credentials, or sign-in required</td>
+</tr>
+<tr>
+<td>403</td>
+<td><code>forbidden</code>, <code>read_only_token</code>, <code>quarantined</code>, <code>csrf_failed</code>, <code>cors_denied</code></td>
+<td>not allowed; a write with a read-only token; component quarantined; cookie request without a valid <code>X-CSRF-Token</code>; browser call from an origin not allowed</td>
+</tr>
+<tr>
+<td>404</td>
+<td><code>not_found</code></td>
+<td>does not exist, you may not read it, or no such endpoint</td>
+</tr>
+<tr>
+<td>405</td>
+<td><code>method_not_allowed</code></td>
+<td></td>
+</tr>
+<tr>
+<td>409</td>
+<td><code>already_exists</code> (or <code>conflict</code> on <code>/users</code>, <code>/roles</code>, <code>/tokens</code>), <code>write_denied</code>, <code>already_running</code>, <code>not_running</code>, <code>managed</code></td>
+<td>name taken; write policy refused; task or policy run state</td>
+</tr>
+<tr>
+<td>413</td>
+<td><code>body_too_large</code></td>
+<td>request body over <code>security.limits.api_body_bytes</code> (1 MiB)</td>
+</tr>
+<tr>
+<td>423</td>
+<td><code>locked</code></td>
+<td>this address is locked out of the username after failed password checks (<code>Retry-After</code> set)</td>
+</tr>
+<tr>
+<td>429</td>
+<td><code>rate_limited</code></td>
+<td>a rate limit below was hit (<code>Retry-After</code> set)</td>
+</tr>
+<tr>
+<td>501</td>
+<td><code>not_implemented</code></td>
+<td>endpoint described in <code>openapi.yaml</code> but not available yet</td>
+</tr>
+<tr>
+<td>502</td>
+<td><code>upstream_unavailable</code></td>
+<td>a proxy remote failed</td>
+</tr>
+<tr>
+<td>503</td>
+<td><code>offline</code></td>
+<td>repository offline</td>
+</tr>
+<tr>
+<td>500</td>
+<td><code>internal</code></td>
+<td>server error (details only in the server log)</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="rate-limits">Rate limits<a class="anchor" href="#rate-limits" aria-label="Link to this section">#</a></h2>
+<p>Limits are per client IP (IPv6 per /64). The client IP comes from
+<code>X-Forwarded-For</code> only when the peer is in <code>server.trusted_proxies</code>; otherwise
+every client behind a reverse proxy shares the proxy's budget.</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Limit</th>
+<th>Default</th>
+<th>Setting</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>API requests (<code>/api/v1</code>)</td>
+<td>1200 per minute, burst 300</td>
+<td><code>security.rate_limit.api</code></td>
+</tr>
+<tr>
+<td>Failed authentications (<code>401</code>) on the API and package endpoints</td>
+<td>30 per minute, burst 30</td>
+<td><code>security.rate_limit.failed_auth</code></td>
+</tr>
+<tr>
+<td>Sign-in attempts (<code>POST /auth/login</code>)</td>
+<td>10 per minute, burst 10</td>
+<td><code>auth.login_rate</code></td>
+</tr>
+<tr>
+<td>Failed password checks per username and address</td>
+<td>5 in 15 minutes, then that address is locked out 15 minutes (<code>423</code>); from 10 failures from all addresses attempts are slowed down</td>
+<td><code>auth.lockout</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Clients should retry only <code>429</code> and <code>5xx</code> answers, after the <code>Retry-After</code>
+seconds (also <code>retry_after</code> in the body), with backoff; other <code>4xx</code> answers will
+not change on a retry.</p>
+<p>When an address runs out of its failed-authentication budget, every request from
+it that carries credentials answers <code>429</code>, even with a valid token, until the
+budget refills. A misconfigured CI job with a revoked token can therefore block
+the other jobs on the same runner address for a short while. <code>per_minute: 0</code>
+disables a limit. Details in <a href="../../security/">docs/security.md</a>.</p>
+<h2 id="not-implemented-yet">Not implemented yet<a class="anchor" href="#not-implemented-yet" aria-label="Link to this section">#</a></h2>
+<p><code>openapi.yaml</code> also describes endpoints that currently answer
+<code>501 not_implemented</code>: component SBOMs and dependents, moving repositories
+between blob stores, and replication. Check the status code before relying on one of them. A
+path the document does not describe at all answers <code>404 not_found</code>.</p>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/api.md"><code>docs/guides/api.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/api.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../vulnerabilities/" rel="prev"><small>Previous</small><b>Vulnerability scanning</b></a><a class="next" href="../../security/" rel="next"><small>Next</small><b>Security</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#connect-an-integration">Connect an integration</a></li><li class="l2"><a href="#authentication">Authentication</a></li><li class="l3"><a href="#session-cookies-and-csrf">Session cookies and CSRF</a></li><li class="l3"><a href="#first-sign-in-from-a-script">First sign-in from a script</a></li><li class="l2"><a href="#common-operations">Common operations</a></li><li class="l3"><a href="#server">Server</a></li><li class="l3"><a href="#repositories">Repositories</a></li><li class="l3"><a href="#components">Components</a></li><li class="l3"><a href="#search">Search</a></li><li class="l3"><a href="#tokens">Tokens</a></li><li class="l3"><a href="#users-and-roles">Users and roles</a></li><li class="l3"><a href="#cleanup-policies-and-tasks">Cleanup policies and tasks</a></li><li class="l3"><a href="#audit-log">Audit log</a></li><li class="l2"><a href="#pagination">Pagination</a></li><li class="l2"><a href="#errors">Errors</a></li><li class="l2"><a href="#rate-limits">Rate limits</a></li><li class="l2"><a href="#not-implemented-yet">Not implemented yet</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

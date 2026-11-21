@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Security · Hangar docs</title>
+<meta name="description" content="How Hangar protects the artifacts, credentials and accounts it holds, what an operator must configure, and how to report a vulnerability (SECURITY.md).">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/security/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Security">
+<meta property="og:description" content="How Hangar protects the artifacts, credentials and accounts it holds, what an operator must configure, and how to report a vulnerability (SECURITY.md).">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/security/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Security">
+<meta name="twitter:description" content="How Hangar protects the artifacts, credentials and accounts it holds, what an operator must configure, and how to report a vulnerability (SECURITY.md).">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Security","item":"https://ismoilovdevml.github.io/hangar/docs/security/"}]}</script>
+<script src="../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../">Home</a>
+    <a class="hide-sm" href="../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../">Introduction</a></li><li><a href="../guides/getting-started/">Getting started</a></li><li><a href="../guides/">Concepts and guides</a></li><li><a href="../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../deploy/">Deploying Hangar</a></li><li><a href="../deploy/requirements/">Requirements and sizing</a></li><li><a href="../deploy/install-compose/">Docker Compose</a></li><li><a href="../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../deploy/install-binary/">Binary and systemd</a></li><li><a href="../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../deploy/first-admin/">First administrator</a></li><li><a href="../deploy/backup-restore/">Backup and restore</a></li><li><a href="../deploy/upgrade/">Upgrades</a></li><li><a href="../deploy/high-availability/">High availability</a></li><li><a href="../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../ui/">The web UI</a></li><li><a href="../ui/repositories/">Repositories</a></li><li><a href="../ui/packages/">Packages &amp; search</a></li><li><a href="../ui/connect/">Connect a client</a></li><li><a href="../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../ui/access/">Access &amp; tokens</a></li><li><a href="../ui/tasks/">Scheduled tasks</a></li><li><a href="../ui/blob-stores/">Blob stores</a></li><li><a href="../ui/system/">Status, logs &amp; audit</a></li><li><a href="../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../guides/docker/">Docker &amp; OCI</a></li><li><a href="../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../guides/pypi/">PyPI</a></li><li><a href="../guides/nuget/">NuGet</a></li><li><a href="../guides/go/">Go modules</a></li><li><a href="../guides/helm/">Helm charts</a></li><li><a href="../guides/cargo/">Cargo</a></li><li><a href="../guides/apt/">APT</a></li><li><a href="../guides/rpm/">RPM</a></li><li><a href="../guides/raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../guides/migrate/">Move to Hangar</a></li><li><a href="../guides/ci/">CI integration</a></li><li><a href="../guides/access/">Access management</a></li><li><a href="../guides/sso/">Single sign-on</a></li><li><a href="../guides/routing-rules/">Routing rules</a></li><li><a href="../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../guides/api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="./" aria-current="page">Security</a></li><li><a href="../operations/monitoring/">Monitoring</a></li><li><a href="../operations/runbooks/">Alert runbooks</a></li><li><a href="../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../architecture/">Architecture</a></li><li><a href="../formats/">Format protocols</a></li><li><a href="../adr/">Decision records</a></li><li><a href="../product-spec/">Product specification</a></li><li><a href="../design-system/">Design system</a></li><li><a href="../roadmap/">Roadmap</a></li><li><a href="../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Operations</p>
+      <h1>Security</h1>
+<p class="lead">How Hangar protects the artifacts, credentials and accounts it holds, what
+an operator must configure, and how to report a vulnerability
+(<a href="https://github.com/ismoilovdevml/hangar/blob/main/SECURITY.md">SECURITY.md</a>).</p>
+<h2 id="threat-model-summary">Threat model (summary)<a class="anchor" href="#threat-model-summary" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Asset</th>
+<th>Threat</th>
+<th>Control</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Private packages</td>
+<td>Read or overwrite by a caller without rights</td>
+<td>Every API operation and package endpoint authorizes the principal (<code>repo:&lt;name&gt;:read/write/delete/admin</code>, <code>system:*</code>); token scopes narrow a user's roles. Enforced twice: at the HTTP boundary and in the services that mutate. Checked end to end by <code>test/security</code> (below).</td>
+</tr>
+<tr>
+<td>Accounts</td>
+<td>Password guessing, credential stuffing, token guessing, account enumeration</td>
+<td>argon2id hashes, lockout per username and client address with a per-username slow-down (below), the same answer for names with and without an account, per-IP login rate limit, per-IP limit on failed authentications on the API and package endpoints, tokens with 238 bits of entropy and a checksum, stored as SHA-256.</td>
+</tr>
+<tr>
+<td>Browser sessions</td>
+<td>CSRF, XSS, clickjacking, session theft through uploaded content</td>
+<td><code>HttpOnly</code>/<code>Secure</code>/<code>SameSite</code> session cookie, CSRF token on mutations, origin check, CORS deny-by-default, CSP for the UI, sandboxed CSP for everything served from package endpoints, <code>X-Frame-Options: DENY</code>, <code>frame-ancestors 'none'</code>, <code>nosniff</code>.</td>
+</tr>
+<tr>
+<td>Single sign-on</td>
+<td>Login CSRF, code interception, token substitution, account takeover by name</td>
+<td>OIDC authorization code flow with PKCE (S256); state, nonce and verifier in a short-lived AES-GCM encrypted <code>HttpOnly</code> cookie (key derived from <code>security.secret_key</code>); ID token signature, issuer, audience, expiry and nonce verified; same-origin post-login redirects only. External identities are linked by issuer and subject and never take over a local, service or other external account. LDAP: filter values escaped, exactly one entry required, empty passwords refused (no anonymous bind).</td>
+</tr>
+<tr>
+<td>Upstream credentials and S3 keys</td>
+<td>Disclosure through a database dump, backup, read-only SQL access or the API</td>
+<td>Envelope encryption at rest (below); never returned by the API; opened only when the outbound client or the storage driver is built; never sent to redirect targets.</td>
+</tr>
+<tr>
+<td>Internal network</td>
+<td>Server-side request forgery through proxy repositories and README images</td>
+<td>Outbound address policy: loopback, private, link-local (cloud metadata), CGNAT, multicast, reserved and IPv4-embedding IPv6 ranges are refused when a proxy is saved, on every redirect hop and when a connection is dialled. Only <code>http.allow_private_networks</code> opens exceptions.</td>
+</tr>
+<tr>
+<td>Availability</td>
+<td>Slow-header, slow-body and oversized requests, API floods</td>
+<td><code>server.read_header_timeout</code>, body idle timeout, header and API body limits, per-IP API rate limit; uploads are streamed, never buffered.</td>
+</tr>
+<tr>
+<td>Rights</td>
+<td>A limited administrator widening their own rights or taking over an account</td>
+<td>Grants and account changes are limited to what the caller holds; groups expose only what their creator may read (below). Registry tokens are not credentials: renewing one reloads the account.</td>
+</tr>
+<tr>
+<td>Audit trail</td>
+<td>Repudiation</td>
+<td>Every mutation, denial and failed sign-in is recorded in the append-only audit log with the client IP (forwarding headers honoured only from <code>server.trusted_proxies</code>).</td>
+</tr>
+</tbody>
+</table></div>
+<p>Out of scope: an attacker who can write to the database or read the
+server's environment (they hold the secret key, and can redirect a proxy to
+their own host); a compromised host or reverse proxy.</p>
+<h2 id="privilege-escalation-model">Privilege escalation model<a class="anchor" href="#privilege-escalation-model" aria-label="Link to this section">#</a></h2>
+<p>Administration is split into privileges (<code>system:users:write</code>,
+<code>system:tokens:write</code>, <code>repo:&lt;pattern&gt;:admin</code>, ...), so it can be delegated.
+Delegation never lets a caller go beyond what they hold:</p>
+<ul>
+<li><strong>Covering.</strong> Creating, changing or deleting a role, binding or removing a
+role, and creating a member with roles need the caller to <em>cover</em> every
+privilege involved: each one must be implied by one of the caller's own
+effective privileges (roles narrowed by the token's scopes).
+<code>repo:team-*:read</code> covers <code>repo:team-a:read</code>; <code>repo:*:admin</code> covers every
+repository action; two narrower privileges never add up to a wider one.</li>
+<li><strong>Acting on an account.</strong> Setting or resetting a member's password,
+disabling or enabling, editing, deleting, requiring a password change and
+ending sessions of another account need <code>system:users:write</code> (or <code>delete</code>)
+<em>and</em> covering everything that account holds. A helpdesk role with
+<code>system:users:write</code> can therefore manage accounts without roles, but not
+a Reader, and never an administrator: only holders of <code>system:*</code> manage
+holders of <code>system:*</code>.</li>
+<li><strong>Service-account tokens.</strong> <code>system:tokens:write</code> issues a token for a
+service account only when the caller covers that account's privileges.</li>
+<li><strong>Passwords set by someone else</strong> must be replaced at the next sign-in
+(<code>must_change_password</code>): the administrator who typed it does not keep a
+working password of the account.</li>
+<li><strong>Groups.</strong> A group serves its members to everyone who may read the
+group, so adding a member needs <code>repo:&lt;member&gt;:read</code> for the member and
+every repository a nested group member reaches; a write member needs
+<code>repo:&lt;member&gt;:write</code>; turning on anonymous read of a group needs read on
+everything it reaches. Holders of <code>system:repos:admin</code> may create any
+repository but are held to the same rule. Routing rules only narrow what
+members serve. A cross-repository blob mount needs pull on the source,
+which for a group is the same rule. Every refusal is audited with the
+repository or privilege the caller lacks.</li>
+<li><strong>Registry tokens.</strong> <code>/v2/token</code> does not treat a registry token as a
+credential. Presented there, it is renewed only after the account is
+reloaded from the database (it must exist, be enabled, not be waiting for
+a password change; a token it came from must still be live and its
+address restrictions met; roles are the current ones), and the renewed
+token never expires later than the first token of the chain. There are no
+refresh tokens (<code>offline_token</code> is ignored, <code>grant_type=refresh_token</code> is
+refused). A registry token already issued keeps the roles it was issued
+with until it expires (15 minutes).</li>
+</ul>
+<p>Groups created before this rule by someone who could not read a member are
+not changed; review group members after upgrading (see the changelog).</p>
+<h2 id="sign-in-lockout">Sign-in lockout<a class="anchor" href="#sign-in-lockout" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Failed password checks are counted per <strong>(username, client address)</strong>.
+After <code>auth.lockout.max_attempts</code> (5) failures within <code>window</code> (15m) that
+address is locked out of that username for <code>duration</code> (15m) and gets <code>423</code>
+with <code>Retry-After</code>. Other addresses can still sign in, so nobody can lock
+an administrator out by guessing from their own machine.</li>
+<li>Failures from <strong>all</strong> addresses for a username only slow it down: from
+<code>slowdown_after</code> (10) failures within the window every further attempt
+waits first, a quarter second doubling up to <code>max_delay</code> (4s). It never
+locks.</li>
+<li>Counting is the same for names that have no account, disabled accounts and
+accounts without a local password, and the answers are the same (<code>401</code>
+<code>invalid username or password</code>, then <code>423</code>). Every refused name spends one
+password verification's time; a locked-out attempt spends none. Answers
+therefore do not tell which usernames exist.</li>
+<li>Wrong current passwords on <strong>My account</strong> count the same way. A correct
+password ends the count for that address; <strong>Unlock</strong>, a password reset and
+a password change clear it for every address. The members list shows an
+account as <code>locked</code> while at least one address is locked out of it.</li>
+<li>The per-IP login rate limit (<code>auth.login_rate</code>) and the failed
+authentication limit (<code>security.rate_limit.failed_auth</code>) still apply.</li>
+<li>Once an address has used up its failed-authentication budget, every request
+from it that carries credentials answers 429 until the budget refills,
+including requests with a <strong>valid</strong> token: they are refused before they are
+checked. Anonymous requests are not affected. CI runners behind one NAT
+address share the budget, so one job with a wrong or empty token can make
+the other jobs on that runner fail with 429; fix the job's token, or raise
+<code>security.rate_limit.failed_auth</code> for such networks.</li>
+</ul>
+<h2 id="how-secrets-and-tokens-are-stored">How secrets and tokens are stored<a class="anchor" href="#how-secrets-and-tokens-are-stored" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Secret</th>
+<th>Stored as</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Local passwords</td>
+<td>argon2id hash (parameters in <code>auth.argon2</code>), re-hashed on login when parameters change</td>
+</tr>
+<tr>
+<td>Personal, service-account and session tokens</td>
+<td>SHA-256 of the token; the token (<code>hgr_…</code>) is shown once</td>
+</tr>
+<tr>
+<td>Proxy upstream password, bearer token, header value</td>
+<td>Sealed (envelope encryption) in <code>repositories.config</code></td>
+</tr>
+<tr>
+<td>Password in a proxy <code>remote_url</code> or <code>http.proxy</code> URL</td>
+<td>Sealed in place of the password: <code>http://user:hgs1.…@host</code></td>
+</tr>
+<tr>
+<td>S3 secret key and session token of blob stores</td>
+<td>Sealed in <code>blob_stores.config</code> (<code>secret_access_key_sealed</code>)</td>
+</tr>
+<tr>
+<td>Server-level secrets (<code>storage.s3.secret_access_key</code>, <code>http.proxy_password</code>, <code>docker.token_key</code>, <code>security.secret_key</code>)</td>
+<td>Not stored; read from the environment</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Envelope encryption</strong> (<code>internal/secrets</code>). Each value gets a fresh
+256-bit data key; the value is encrypted with AES-256-GCM under the data
+key, and the data key with AES-256-GCM under the key encryption key
+(<code>security.secret_key</code>). The stored form is
+<code>hgs1.&lt;key id&gt;.&lt;wrapped data key&gt;.&lt;ciphertext&gt;</code>; the key id is derived from
+the key, so ids never need to be assigned. Values are sealed when a
+repository or blob store is saved and opened only by the proxy engine and
+the S3 driver. The API answers with the password removed and URL passwords
+as <code>REDACTED</code>; saving the redacted form back keeps the stored secret.</p>
+<p>A database check constraint (migration <code>00050</code>) rejects plaintext secrets
+in every new or updated row, so no code path can store them by mistake.
+Rows written before the upgrade are sealed by <code>hangar serve</code> on its first
+start with a key; until a key is configured they keep working, and the
+server logs a warning on every start.</p>
+<p>Without <code>security.secret_key</code>, creating or updating a repository or blob
+store that carries a credential answers <code>501</code> with an explanation.</p>
+<h3 id="key-rotation">Key rotation<a class="anchor" href="#key-rotation" aria-label="Link to this section">#</a></h3>
+<ol>
+<li>Generate a key: <code>openssl rand -base64 32</code>.</li>
+<li>On every node set <code>HANGAR_SECRET_KEY=&lt;new&gt;</code> and
+<code>HANGAR_SECURITY_PREVIOUS_SECRET_KEYS=&lt;old&gt;</code>; restart the nodes.</li>
+<li>Run <code>hangar admin rotate-secrets</code> once (<code>--dry-run</code> shows the counts). It
+re-wraps every data key under the new key and seals any plaintext left;
+it exits non-zero if a value cannot be opened with the configured keys.</li>
+<li>Remove the old key from <code>previous_secret_keys</code>; restart.</li>
+</ol>
+<p>A lost key cannot be recovered: re-enter the affected credentials.</p>
+<h2 id="hardening-checklist-for-operators">Hardening checklist for operators<a class="anchor" href="#hardening-checklist-for-operators" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>
+<p><strong>Dependency confusion</strong>: on every proxy of a public registry, block the names
+your hosted repositories publish, and reserve them for the hosted member in
+groups. See <a href="../guides/routing-rules/">guides/routing-rules.md</a>.</p>
+</li>
+<li>
+<p>[ ] Serve Hangar over HTTPS only. Terminate TLS at a reverse proxy, list
+it in <code>server.trusted_proxies</code> so <code>X-Forwarded-Proto</code> is believed, and
+set <code>server.base_url</code> to the <code>https://</code> URL. HSTS is then sent
+(<code>security.hsts</code>); enable <code>include_subdomains</code> only when every
+subdomain is HTTPS.</p>
+</li>
+<li>
+<p>[ ] Set <code>HANGAR_SECRET_KEY</code> (and keep a copy in your secret manager) before
+adding proxy credentials or S3 blob stores. Same value on every node.</p>
+</li>
+<li>
+<p>[ ] Set <code>HANGAR_DOCKER_TOKEN_KEY</code> (32+ random bytes), same on every node.</p>
+</li>
+<li>
+<p>[ ] Single sign-on (<a href="../guides/sso/">guide</a>): keep <code>auth.oidc.client_secret</code>
+and <code>auth.ldap.bind_password</code> in the environment, use <code>ldaps://</code> or
+<code>start_tls</code> (plain <code>ldap://</code> sends passwords in clear text), never
+<code>insecure_skip_verify</code> (use <code>ca_file</code>), give the LDAP service account
+read-only rights, and restrict sign-in with <code>allowed_groups</code> when the
+provider serves more people than should use Hangar. External sign-ins
+never take over a local account with the same username.</p>
+</li>
+<li>
+<p>[ ] Keep secrets in the environment or a secret store, never in
+<code>hangar.yaml</code> (<code>storage.s3.secret_access_key</code>, <code>http.proxy_password</code>,
+<code>bootstrap.admin_password</code>).</p>
+</li>
+<li>
+<p>[ ] After the first start, remove <code>HANGAR_BOOTSTRAP_ADMIN_PASSWORD</code> from the
+environment and sign in to change the bootstrap password (Hangar
+requires it unless <code>bootstrap.require_password_change</code> is <code>false</code>).</p>
+</li>
+<li>
+<p>[ ] Without bootstrap settings, the first start generates the <code>admin</code>
+password and prints it once to standard error (never into the
+System logs buffer) and to <code>bootstrap.initial_password_file</code> (mode
+<code>0600</code>). Sign in and replace it promptly: until then the account can do
+nothing else, and the file is deleted after the change. Treat container
+logs from the first start as sensitive. See
+<a href="../deploy/first-admin/">first administrator</a>.</p>
+</li>
+<li>
+<p>[ ] In a cluster, a password change or reset takes effect at once on the
+node that made it, but every other node keeps accepting the old
+password for up to <code>auth.basic_cache_ttl</code> (default <code>2m</code>), because each
+node remembers verified Basic credentials in memory. Disabling or
+locking an account is not affected: the cached login re-reads the
+account on every request. When a leaked password must stop working
+immediately, disable the account until the TTL has passed, or set
+<code>basic_cache_ttl</code> to a negative value (every Basic request then pays
+for an argon2 check). Tokens are never cached this way.</p>
+</li>
+<li>
+<p>[ ] Give CI tokens the narrowest scopes (<code>repo:&lt;name&gt;:write</code>) and an
+expiry; prefer service accounts over personal tokens.</p>
+</li>
+<li>
+<p>[ ] Leave <code>anonymous_read</code> off except for repositories that are meant to
+be public.</p>
+</li>
+<li>
+<p>[ ] Keep <code>http.allow_private_networks</code> as short as possible: list the
+internal mirrors by host name or exact CIDR, never whole private ranges.
+Avoid <code>insecure_skip_verify</code> on remotes; use <code>ca_bundle</code> instead.</p>
+</li>
+<li>
+<p>[ ] Expose only the HTTP port. Do not expose the embedded NATS listener
+(<code>nats.listen</code>) or PostgreSQL to clients; restrict <code>/metrics</code> at the
+reverse proxy if it should not be public.</p>
+</li>
+<li>
+<p>[ ] Use TLS to PostgreSQL (<code>sslmode=verify-full</code>) and to S3 when they are
+on another host; encrypt database backups — they contain password
+hashes and sealed secrets.</p>
+</li>
+<li>
+<p>[ ] Ship the audit log off the host (export or syslog/webhook) and alert on
+repeated <code>auth.login.failed</code> and <code>auth.token.failed</code>.</p>
+</li>
+<li>
+<p>[ ] Review <code>security.rate_limit</code> for clients behind one NAT address (all
+share one budget) and <code>security.limits.upload_body_bytes</code> if uploads
+should be capped.</p>
+</li>
+<li>
+<p>[ ] Run the container image as shipped (distroless, non-root) and keep it
+updated.</p>
+</li>
+</ul>
+<h3 id="http-hardening-reference">HTTP hardening reference<a class="anchor" href="#http-hardening-reference" aria-label="Link to this section">#</a></h3>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Concern</th>
+<th>Behaviour</th>
+<th>Setting</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Security headers</td>
+<td><code>X-Content-Type-Options: nosniff</code>, <code>Referrer-Policy: no-referrer</code>, <code>X-Frame-Options: DENY</code> everywhere; CSP per area: UI (<code>default-src 'self'</code>, no inline script), API (<code>default-src 'none'</code>, <code>Cache-Control: no-store</code>), package endpoints (<code>sandbox</code>)</td>
+<td>—</td>
+</tr>
+<tr>
+<td>HSTS</td>
+<td>On HTTPS requests</td>
+<td><code>security.hsts.*</code></td>
+</tr>
+<tr>
+<td>CORS</td>
+<td>Same origin only; preflights and API calls from other origins answer 403</td>
+<td><code>security.cors.allowed_origins</code></td>
+</tr>
+<tr>
+<td>Anonymous API access</td>
+<td>Only <code>GET /system/status</code>, <code>GET /system/version</code>, <code>GET /auth/providers</code>, <code>POST /auth/login</code> (<code>security: []</code> in <code>api/openapi.yaml</code>)</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Request headers</td>
+<td>Bounded; slow headers cut off</td>
+<td><code>security.limits.max_header_bytes</code>, <code>server.read_header_timeout</code></td>
+</tr>
+<tr>
+<td>Request bodies</td>
+<td>API 1 MiB, uploads unlimited and streamed, everything else 64 KiB; a body that stalls is aborted</td>
+<td><code>security.limits.*</code></td>
+</tr>
+<tr>
+<td>Rate limits</td>
+<td>Per client IP (IPv6 per /64): API requests; failed authentications on API and package endpoints</td>
+<td><code>security.rate_limit.*</code>, <code>auth.login_rate</code></td>
+</tr>
+<tr>
+<td>Idle connections</td>
+<td>Closed</td>
+<td><code>server.idle_timeout</code></td>
+</tr>
+<tr>
+<td>README images</td>
+<td>Loaded from Hangar's own origin, see <a href="#readme-images">README images</a>; the UI policy keeps <code>img-src 'self' data:</code> unless <code>direct</code> is chosen</td>
+<td><code>ui.readme_images</code>, <code>ui.readme_images_allow_http</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="readme-images">README images<a class="anchor" href="#readme-images" aria-label="Link to this section">#</a></h3>
+<p>Package READMEs reference images on other hosts (badges, logos) and files
+inside the package or its source repository. The web UI's policy
+(<code>img-src 'self' data:</code>) blocks other hosts, so the package info API
+(<code>GET /components/{id}/info</code>) resolves every image of a README and returns,
+per image source, the URL the browser may load. <code>ui.readme_images</code> decides
+what that is:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Mode</th>
+<th>Remote images</th>
+<th>Privacy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>proxy</code> (default)</td>
+<td>Hangar fetches them and serves them from <code>GET /api/v1/components/{id}/readme-images/{sig}</code></td>
+<td>Browsers contact no other host; the image hosts see Hangar's address only</td>
+</tr>
+<tr>
+<td><code>direct</code></td>
+<td>Browsers load them from their hosts; the UI policy becomes <code>img-src 'self' data: https:</code> (<code>http:</code> too with <code>ui.readme_images_allow_http</code>)</td>
+<td>Every image host learns each viewer's IP address, browser, and when a README was opened</td>
+</tr>
+<tr>
+<td><code>off</code></td>
+<td>Not loaded; the image's alternative text is shown as a placeholder</td>
+<td>Nothing leaves the browser or the server</td>
+</tr>
+</tbody>
+</table></div>
+<p>Images stored inside the package (NuGet <code>&lt;icon&gt;</code> and README images in the
+.nupkg, files in an npm tarball) are always served by Hangar from the stored
+blob, in every mode. Relative image paths are resolved inside the package
+first, then in the source repository the package names (github.com and
+gitlab.com raw file URLs, at the published commit when known).</p>
+<p>The image endpoint is not an open proxy:</p>
+<ul>
+<li>Image URLs are signed with HMAC-SHA256 over the component id and the
+source; the key is derived from <code>security.secret_key</code> (else generated
+once and kept in <code>readme_image_key</code>, migration <code>00160</code>). Only URLs the
+info API issued are accepted (<code>403 invalid_signature</code> otherwise).</li>
+<li>The caller needs read access to the component's repository, like for the
+README itself (<code>401</code> signed out, <code>404</code> without access).</li>
+<li>Fetches use the outbound HTTP settings (platform default proxy, CA
+bundle) and the outbound address policy on the URL, on every redirect hop
+(at most 5) and on every dialled address. https only: <code>http://</code> sources
+are upgraded to <code>https://</code> and redirects to <code>http://</code> refused, unless
+<code>ui.readme_images_allow_http</code>. No cookies, credentials or referrer are
+sent; 15 s and 5 MiB at most.</li>
+<li>Only content that sniffs as PNG, JPEG, GIF, WebP, AVIF or SVG is served,
+whatever type the remote declares. Responses carry
+<code>Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; sandbox</code>,
+<code>X-Content-Type-Options: nosniff</code> and <code>Cross-Origin-Resource-Policy: same-origin</code>,
+so an SVG opened on its own runs no script and loads nothing.</li>
+<li>Results are cached in memory (32 MiB) and in <code>readme_image_cache</code> for
+24 hours, failures for 15 minutes, shared by every node. A remote image
+that cannot be loaded answers <code>404 image_unavailable</code> (not a 5xx, so a
+broken third-party badge does not trigger server error alerts).</li>
+</ul>
+<h2 id="security-tests">Security tests<a class="anchor" href="#security-tests" aria-label="Link to this section">#</a></h2>
+<p><code>test/security</code> runs against a real <code>hangar serve</code> (it needs
+<code>HANGAR_TEST_DATABASE_URL</code>, as in CI):</p>
+<ul>
+<li><strong>Authorization sweep</strong>: every operation in <code>api/openapi.yaml</code> and every
+package endpoint of every format is called as an anonymous caller, as a
+reader and with a token scoped to other repositories, against private
+hosted repositories and a group and a proxy over them. Any answer that
+serves a caller who must be refused fails the build. An API operation or
+format route that is not classified in the test fails it too.</li>
+<li>Privilege escalation through tokens, roles and the registry token service;
+group membership escalation (a repository administrator cannot expose a
+repository they cannot read); a helpdesk role cannot take over an
+administrator; a disabled user cannot renew a registry token.</li>
+<li>SSRF: remotes at loopback, <code>169.254.169.254</code>, private and IPv6-mapped
+addresses are refused; rows that bypass that check are blocked when
+fetched; redirects to internal addresses or other schemes are not followed.</li>
+<li>Upstream credentials: stored sealed, never returned, sent only to the
+remote, not to redirect targets.</li>
+<li>Headers, CORS and size limits on the running server.</li>
+</ul>
+<h2 id="static-analysis">Static analysis<a class="anchor" href="#static-analysis" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Tool</th>
+<th>Result (this release)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>golangci-lint</code> (includes gosec)</td>
+<td>0 issues</td>
+</tr>
+<tr>
+<td><code>gosec ./...</code> (standalone)</td>
+<td>40 findings, each annotated in the code with <code>//nolint:gosec</code> and its reason (standalone gosec does not read that annotation): MD5/SHA-1 are protocol checksums (Maven, npm, PyPI, raw), not security controls; integer conversions are bounded; redirects stay on the request's own path; <code>InsecureSkipVerify</code> is an explicit, audited per-remote option; file paths come from the operator or from validated digests; error bodies are <code>text/plain</code> with <code>nosniff</code>.</td>
+</tr>
+<tr>
+<td><code>govulncheck ./...</code></td>
+<td>No vulnerable code reached. The module-level advisory GO-2026-5932 concerns <code>golang.org/x/crypto/openpgp</code>, which Hangar does not import.</td>
+</tr>
+<tr>
+<td><code>npm audit --omit=dev</code> (web)</td>
+<td>0 vulnerabilities in what ships. 14 moderate advisories remain in development-only tooling (ESLint and <code>openapi-typescript</code> through <code>minimatch</code>), which never runs in production.</td>
+</tr>
+</tbody>
+</table></div>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/security.md"><code>docs/security.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/security.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../guides/api/" rel="prev"><small>Previous</small><b>REST API</b></a><a class="next" href="../operations/monitoring/" rel="next"><small>Next</small><b>Monitoring</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#threat-model-summary">Threat model (summary)</a></li><li class="l2"><a href="#privilege-escalation-model">Privilege escalation model</a></li><li class="l2"><a href="#sign-in-lockout">Sign-in lockout</a></li><li class="l2"><a href="#how-secrets-and-tokens-are-stored">How secrets and tokens are stored</a></li><li class="l3"><a href="#key-rotation">Key rotation</a></li><li class="l2"><a href="#hardening-checklist-for-operators">Hardening checklist for operators</a></li><li class="l3"><a href="#http-hardening-reference">HTTP hardening reference</a></li><li class="l3"><a href="#readme-images">README images</a></li><li class="l2"><a href="#security-tests">Security tests</a></li><li class="l2"><a href="#static-analysis">Static analysis</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

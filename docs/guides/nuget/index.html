@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NuGet · Hangar docs</title>
+<meta name="description" content="Hangar implements the NuGet V3 protocol: dotnet restore, dotnet add package, dotnet nuget push, dotnet nuget delete and dotnet package search work against it.">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/guides/nuget/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="NuGet">
+<meta property="og:description" content="Hangar implements the NuGet V3 protocol: dotnet restore, dotnet add package, dotnet nuget push, dotnet nuget delete and dotnet package search work against it.">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/guides/nuget/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="NuGet">
+<meta name="twitter:description" content="Hangar implements the NuGet V3 protocol: dotnet restore, dotnet add package, dotnet nuget push, dotnet nuget delete and dotnet package search work against it.">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"NuGet","item":"https://ismoilovdevml.github.io/hangar/docs/guides/nuget/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../getting-started/">Getting started</a></li><li><a href="../">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../docker/">Docker &amp; OCI</a></li><li><a href="../npm/">npm, pnpm, yarn</a></li><li><a href="../maven/">Maven &amp; Gradle</a></li><li><a href="../pypi/">PyPI</a></li><li><a href="./" aria-current="page">NuGet</a></li><li><a href="../go/">Go modules</a></li><li><a href="../helm/">Helm charts</a></li><li><a href="../cargo/">Cargo</a></li><li><a href="../apt/">APT</a></li><li><a href="../rpm/">RPM</a></li><li><a href="../raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../migrate/">Move to Hangar</a></li><li><a href="../ci/">CI integration</a></li><li><a href="../access/">Access management</a></li><li><a href="../sso/">Single sign-on</a></li><li><a href="../routing-rules/">Routing rules</a></li><li><a href="../vulnerabilities/">Vulnerability scanning</a></li><li><a href="../api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Package formats</p>
+      <h1>NuGet</h1>
+<p class="lead">Hangar implements the NuGet V3 protocol: <code>dotnet restore</code>, <code>dotnet add package</code>,
+<code>dotnet nuget push</code>, <code>dotnet nuget delete</code> and <code>dotnet package search</code> work against
+it.</p>
+<p>Placeholders:</p>
+<ul>
+<li><code>hangar.example.com</code>: the host of <code>server.base_url</code>.</li>
+<li><code>&lt;token&gt;</code>: a personal access token (<code>hgr_...</code>).</li>
+<li><code>$HANGAR_TOKEN</code>: the token in an environment variable.</li>
+</ul>
+<p>Package source URL (service index): <code>https://hangar.example.com/repository/&lt;repo&gt;/index.json</code>.</p>
+<h2 id="repositories">Repositories<a class="anchor" href="#repositories" aria-label="Link to this section">#</a></h2>
+<h3 id="hosted">Hosted<a class="anchor" href="#hosted" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;nuget-hosted&quot;,
+        &quot;format&quot;: &quot;nuget&quot;,
+        &quot;type&quot;: &quot;hosted&quot;,
+        &quot;blob_store&quot;: &quot;default&quot;,
+        &quot;config&quot;: {
+          &quot;hosted&quot;: { &quot;write_policy&quot;: &quot;allow_once&quot; },
+          &quot;format&quot;: { &quot;delete_mode&quot;: &quot;unlist&quot; }
+        }
+      }&#x27;</span></code></pre></div>
+<p><code>config.format.delete_mode</code>: <code>unlist</code> (default; <code>dotnet nuget delete</code> hides the
+version from search but keeps it restorable) or <code>delete</code> (removes it). With
+<code>allow_once</code> (the default for repositories created without a policy) or <code>deny</code>,
+pushing an id and version that already exist gets <code>409</code>, also with identical
+bytes, as on nuget.org; <code>dotnet nuget push --skip-duplicate</code> skips it. With
+<code>allow</code> the package is replaced and keeps its listed or unlisted state.</p>
+<h3 id="proxy-nugetorg">Proxy (nuget.org)<a class="anchor" href="#proxy-nugetorg" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;nuget-proxy&quot;,
+        &quot;format&quot;: &quot;nuget&quot;,
+        &quot;type&quot;: &quot;proxy&quot;,
+        &quot;blob_store&quot;: &quot;default&quot;,
+        &quot;config&quot;: { &quot;proxy&quot;: { &quot;remote_url&quot;: &quot;https://api.nuget.org&quot;, &quot;metadata_ttl&quot;: &quot;1h&quot; } }
+      }&#x27;</span></code></pre></div>
+<p><code>remote_url</code> is the feed base, not the service index. The service index path
+defaults to <code>v3/index.json</code>; for another feed layout set
+<code>config.format.service_index</code> (a path relative to <code>remote_url</code>). Metadata is cached
+for <code>metadata_ttl</code> (<code>0</code> means 1h); packages are cached forever. Hosts the
+service index points to outside <code>remote_url</code> (nuget.org's search service) are
+fetched as related hosts, without the remote's credentials. When search there
+fails, is rate limited or the proxy is <code>offline</code>, search answers from the cached
+packages.</p>
+<h4 id="feeds-that-need-a-key">Feeds that need a key</h4>
+<p>Some private feeds take their key in the URL path (<code>https://feed.example.com/&lt;feed-key&gt;/api/v3/index.json</code>):
+configured as <code>remote_url: https://feed.example.com</code> and
+<code>service_index: /&lt;feed-key&gt;/api/v3/index.json</code>. Hangar treats <code>service_index</code>
+as sensitive: it is returned only to administrators of the repository
+(<code>repo:&lt;name&gt;:admin</code> or <code>system:repos:admin</code>); everyone else, the YAML export
+included, sees <code>***</code>, which shows that a custom index is set. An update that
+sends <code>***</code> back keeps the stored value. Error messages sent to clients name
+it <code>&lt;service_index&gt;</code>.</p>
+<p>The path is still stored in the repository configuration as plain text,
+unlike <code>config.proxy.auth</code>, whose secrets are encrypted at rest and never
+returned by the API. Where the feed accepts the key as a credential (HTTP
+Basic or a header; check the feed's own documentation), put it in
+<code>config.proxy.auth</code> and keep <code>service_index</code> free of secrets:</p>
+<div class="code"><div class="code-head"><span>json</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="json"><code><span class="hljs-attr">&quot;config&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;proxy&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;remote_url&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;https://feed.example.com&quot;</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">&quot;auth&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;kind&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;basic&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;username&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;&lt;user&gt;&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;password&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;&lt;feed-key&gt;&quot;</span> <span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span></code></pre></div>
+<h3 id="group">Group<a class="anchor" href="#group" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -X POST https://hangar.example.com/api/v1/repositories \
+  -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{
+        &quot;name&quot;: &quot;nuget-group&quot;,
+        &quot;format&quot;: &quot;nuget&quot;,
+        &quot;type&quot;: &quot;group&quot;,
+        &quot;config&quot;: { &quot;group&quot;: { &quot;members&quot;: [&quot;nuget-hosted&quot;, &quot;nuget-proxy&quot;], &quot;write_member&quot;: &quot;nuget-hosted&quot; } }
+      }&#x27;</span></code></pre></div>
+<p>Versions, registrations and search results are merged across members (first
+member wins per version). Pushes to the group go to <code>write_member</code>.</p>
+<h2 id="configure-a-source">Configure a source<a class="anchor" href="#configure-a-source" aria-label="Link to this section">#</a></h2>
+<h3 id="nugetconfig"><code>nuget.config</code><a class="anchor" href="#nugetconfig" aria-label="Link to this section">#</a></h3>
+<p>Place it next to the solution (NuGet merges config files from the project
+directory upwards):</p>
+<div class="code"><div class="code-head"><span>xml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="xml"><code><span class="hljs-meta">&lt;?xml version=<span class="hljs-string">&quot;1.0&quot;</span> encoding=<span class="hljs-string">&quot;utf-8&quot;</span>?&gt;</span>
+<span class="hljs-tag">&lt;<span class="hljs-name">configuration</span>&gt;</span>
+  <span class="hljs-tag">&lt;<span class="hljs-name">packageSources</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">clear</span> /&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">add</span> <span class="hljs-attr">key</span>=<span class="hljs-string">&quot;hangar&quot;</span> <span class="hljs-attr">value</span>=<span class="hljs-string">&quot;https://hangar.example.com/repository/nuget-group/index.json&quot;</span> /&gt;</span>
+  <span class="hljs-tag">&lt;/<span class="hljs-name">packageSources</span>&gt;</span>
+  <span class="hljs-tag">&lt;<span class="hljs-name">packageSourceCredentials</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">hangar</span>&gt;</span>
+      <span class="hljs-tag">&lt;<span class="hljs-name">add</span> <span class="hljs-attr">key</span>=<span class="hljs-string">&quot;Username&quot;</span> <span class="hljs-attr">value</span>=<span class="hljs-string">&quot;token&quot;</span> /&gt;</span>
+      <span class="hljs-tag">&lt;<span class="hljs-name">add</span> <span class="hljs-attr">key</span>=<span class="hljs-string">&quot;ClearTextPassword&quot;</span> <span class="hljs-attr">value</span>=<span class="hljs-string">&quot;%HANGAR_TOKEN%&quot;</span> /&gt;</span>
+    <span class="hljs-tag">&lt;/<span class="hljs-name">hangar</span>&gt;</span>
+  <span class="hljs-tag">&lt;/<span class="hljs-name">packageSourceCredentials</span>&gt;</span>
+<span class="hljs-tag">&lt;/<span class="hljs-name">configuration</span>&gt;</span></code></pre></div>
+<ul>
+<li><code>%HANGAR_TOKEN%</code> is expanded from the environment, so the file can be
+committed. The username is not checked when the password is a token.</li>
+<li><code>&lt;clear /&gt;</code> makes Hangar the only source; restore of public packages then goes
+through the group's nuget.org proxy.</li>
+<li>The service index is public; every other request needs credentials unless the
+repository allows anonymous read. A request that sends a wrong, expired or
+revoked token answers <code>401 (Unauthorized)</code>, the service index included.</li>
+</ul>
+<h3 id="dotnet-nuget-add-source"><code>dotnet nuget add source</code><a class="anchor" href="#dotnet-nuget-add-source" aria-label="Link to this section">#</a></h3>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>dotnet nuget add <span class="hljs-built_in">source</span> https://hangar.example.com/repository/nuget-group/index.json \
+  --name hangar --username token --password <span class="hljs-string">&#x27;&lt;token&gt;&#x27;</span> --store-password-in-clear-text</code></pre></div>
+<p><code>--store-password-in-clear-text</code> is required on macOS and Linux, where the
+password cannot be encrypted.</p>
+<h3 id="plain-http">Plain HTTP<a class="anchor" href="#plain-http" aria-label="Link to this section">#</a></h3>
+<p>Recent .NET SDKs refuse <code>http://</code> sources unless allowed per source:</p>
+<div class="code"><div class="code-head"><span>xml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="xml"><code><span class="hljs-tag">&lt;<span class="hljs-name">add</span> <span class="hljs-attr">key</span>=<span class="hljs-string">&quot;hangar&quot;</span> <span class="hljs-attr">value</span>=<span class="hljs-string">&quot;http://hangar.example.com:8080/repository/nuget-group/index.json&quot;</span>
+     <span class="hljs-attr">allowInsecureConnections</span>=<span class="hljs-string">&quot;true&quot;</span> /&gt;</span></code></pre></div>
+<p><code>dotnet nuget add source</code> takes <code>--allow-insecure-connections</code> for the same
+setting, and <code>dotnet nuget push</code> accepts <code>--allow-insecure-connections</code> too.</p>
+<h2 id="restore-and-add-packages">Restore and add packages<a class="anchor" href="#restore-and-add-packages" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-built_in">export</span> HANGAR_TOKEN=<span class="hljs-string">&#x27;&lt;token&gt;&#x27;</span>
+dotnet add package Acme.Tiny
+dotnet restore
+dotnet package search Acme --<span class="hljs-built_in">source</span> hangar</code></pre></div>
+<h2 id="push">Push<a class="anchor" href="#push" aria-label="Link to this section">#</a></h2>
+<p><code>dotnet nuget push</code> sends the API key in the <code>X-NuGet-ApiKey</code> header; use a token as
+the key:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>dotnet pack -c Release -o out
+dotnet nuget push out/Acme.Tiny.1.0.0.nupkg \
+  -s https://hangar.example.com/repository/nuget-hosted/index.json -k <span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span></code></pre></div>
+<p>Pushing to the group URL stores the package in its <code>write_member</code>. Symbol packages
+(<code>.snupkg</code>) are not supported: the service index does not advertise a symbol
+endpoint, so <code>dotnet nuget push</code> sends only the <code>.nupkg</code>, and a direct symbol
+push is refused with 400. Embed symbols in the package (<code>&lt;DebugType&gt;embedded&lt;/DebugType&gt;</code>)
+or publish them to a symbol server.</p>
+<h2 id="unlist-relist-delete">Unlist, relist, delete<a class="anchor" href="#unlist-relist-delete" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-comment"># source name from nuget.config, pointing at the hosted repository</span>
+dotnet nuget delete Acme.Tiny 1.0.0 -s hangar-hosted -k <span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> --non-interactive</code></pre></div>
+<p>With <code>delete_mode: unlist</code> this unlists the version. <code>dotnet nuget delete</code> has no
+<code>--allow-insecure-connections</code> flag; for an <code>http://</code> server, reference a named
+source that has <code>allowInsecureConnections=&quot;true&quot;</code>. To relist, send
+<code>POST https://hangar.example.com/repository/nuget-hosted/api/v2/package/Acme.Tiny/1.0.0</code>
+with the token in <code>X-NuGet-ApiKey</code>.</p>
+<p>Permissions: push needs <code>repo:&lt;name&gt;:write</code>, unlist needs <code>delete</code> and <code>write</code>,
+relist needs <code>write</code>.</p>
+<h2 id="quarantine-and-nuget-audit">Quarantine and NuGet Audit<a class="anchor" href="#quarantine-and-nuget-audit" aria-label="Link to this section">#</a></h2>
+<p>A version quarantined by a security policy is left out of the version list,
+the registration and search of the repository and of the groups containing it,
+so <code>dotnet</code> resolves floating versions and ranges to a version it can
+download; its <code>.nupkg</code> answers <code>403</code>.</p>
+<p>Every repository advertises a <code>VulnerabilityInfo/6.7.0</code> resource, which NuGet
+Audit reads during <code>dotnet restore</code> (warnings <code>NU1901</code> to <code>NU1904</code>):</p>
+<ul>
+<li>a hosted repository serves the open findings of this server's vulnerability
+scans on its packages (only when scanning is enabled; waived and fixed
+findings are left out);</li>
+<li>a proxy passes the remote's vulnerability pages through, cached for the
+metadata TTL (nuget.org publishes them);</li>
+<li>a group lists the pages of its members.</li>
+</ul>
+<p>Audit settings are the client's: <code>&lt;NuGetAudit&gt;</code>, <code>&lt;NuGetAuditMode&gt;all&lt;/NuGetAuditMode&gt;</code>
+for transitive packages, <code>&lt;NuGetAuditLevel&gt;</code>.</p>
+<h2 id="routing-rules">Routing rules<a class="anchor" href="#routing-rules" aria-label="Link to this section">#</a></h2>
+<p>A group that combines a hosted repository with a public proxy can serve a
+public package published under one of your internal names. Block internal
+names on the proxy and reserve them for the hosted member (for example <code>Edcom.*</code>);
+see <a href="../routing-rules/">routing-rules.md</a>.</p>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/nuget.md"><code>docs/guides/nuget.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/nuget.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../pypi/" rel="prev"><small>Previous</small><b>PyPI</b></a><a class="next" href="../go/" rel="next"><small>Next</small><b>Go modules</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#repositories">Repositories</a></li><li class="l3"><a href="#hosted">Hosted</a></li><li class="l3"><a href="#proxy-nugetorg">Proxy (nuget.org)</a></li><li class="l3"><a href="#group">Group</a></li><li class="l2"><a href="#configure-a-source">Configure a source</a></li><li class="l3"><a href="#nugetconfig">nuget.config</a></li><li class="l3"><a href="#dotnet-nuget-add-source">dotnet nuget add source</a></li><li class="l3"><a href="#plain-http">Plain HTTP</a></li><li class="l2"><a href="#restore-and-add-packages">Restore and add packages</a></li><li class="l2"><a href="#push">Push</a></li><li class="l2"><a href="#unlist-relist-delete">Unlist, relist, delete</a></li><li class="l2"><a href="#quarantine-and-nuget-audit">Quarantine and NuGet Audit</a></li><li class="l2"><a href="#routing-rules">Routing rules</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

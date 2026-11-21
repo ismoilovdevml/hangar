@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CI integration · Hangar docs</title>
+<meta name="description" content="CI systems are ordinary Hangar clients: they authenticate with a token stored as a masked secret. Hangar needs no plugin or callback into the CI system.">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/guides/ci/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="CI integration">
+<meta property="og:description" content="CI systems are ordinary Hangar clients: they authenticate with a token stored as a masked secret. Hangar needs no plugin or callback into the CI system.">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/guides/ci/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="CI integration">
+<meta name="twitter:description" content="CI systems are ordinary Hangar clients: they authenticate with a token stored as a masked secret. Hangar needs no plugin or callback into the CI system.">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"CI integration","item":"https://ismoilovdevml.github.io/hangar/docs/guides/ci/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../getting-started/">Getting started</a></li><li><a href="../">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../docker/">Docker &amp; OCI</a></li><li><a href="../npm/">npm, pnpm, yarn</a></li><li><a href="../maven/">Maven &amp; Gradle</a></li><li><a href="../pypi/">PyPI</a></li><li><a href="../nuget/">NuGet</a></li><li><a href="../go/">Go modules</a></li><li><a href="../helm/">Helm charts</a></li><li><a href="../cargo/">Cargo</a></li><li><a href="../apt/">APT</a></li><li><a href="../rpm/">RPM</a></li><li><a href="../raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../migrate/">Move to Hangar</a></li><li><a href="./" aria-current="page">CI integration</a></li><li><a href="../access/">Access management</a></li><li><a href="../sso/">Single sign-on</a></li><li><a href="../routing-rules/">Routing rules</a></li><li><a href="../vulnerabilities/">Vulnerability scanning</a></li><li><a href="../api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Guides</p>
+      <h1>CI integration</h1>
+<p class="lead">CI systems are ordinary Hangar clients: they authenticate with a token stored as a
+masked secret. Hangar needs no plugin or callback into the CI system.</p>
+<p>Placeholders:</p>
+<ul>
+<li><code>hangar.example.com</code>: the host of <code>server.base_url</code>.</li>
+<li><code>&lt;admin-token&gt;</code>: a token of an administrator (needs <code>system:users:write</code> and
+<code>system:tokens:write</code>, for example an <code>Admin</code>'s token with scope <code>system:*</code>).</li>
+<li><code>ci-publisher</code>: the service account the pipelines use.</li>
+<li><code>HANGAR_TOKEN</code>: the secret / masked variable holding the service account's token.</li>
+</ul>
+<h2 id="1-create-a-service-account-and-a-scoped-token">1. Create a service account and a scoped token<a class="anchor" href="#1-create-a-service-account-and-a-scoped-token" aria-label="Link to this section">#</a></h2>
+<p>A service account is a non-human user without a password; it authenticates only
+with tokens. Give it a role, then issue tokens that are narrower still.</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-comment"># service account with the built-in &quot;CI deployer&quot; role</span>
+<span class="hljs-comment"># (read every repository, publish and delete in hosted repositories)</span>
+curl -X POST https://hangar.example.com/api/v1/users \
+  -H <span class="hljs-string">&#x27;Authorization: Bearer &lt;admin-token&gt;&#x27;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{&quot;username&quot;: &quot;ci-publisher&quot;, &quot;kind&quot;: &quot;service_account&quot;,
+       &quot;display_name&quot;: &quot;CI publisher&quot;, &quot;roles&quot;: [&quot;CI deployer&quot;]}&#x27;</span>
+
+<span class="hljs-comment"># token owned by the service account, limited to two repositories, expiring in 90 days</span>
+curl -X POST https://hangar.example.com/api/v1/tokens \
+  -H <span class="hljs-string">&#x27;Authorization: Bearer &lt;admin-token&gt;&#x27;</span> -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> \
+  -d <span class="hljs-string">&#x27;{&quot;name&quot;: &quot;gitlab-ci&quot;, &quot;owner&quot;: &quot;ci-publisher&quot;,
+       &quot;scopes&quot;: [&quot;repo:npm-hosted:read&quot;, &quot;repo:npm-hosted:write&quot;,
+                  &quot;repo:npm-group:read&quot;],
+       &quot;expires_at&quot;: &quot;2027-02-01T00:00:00Z&quot;}&#x27;</span></code></pre></div>
+<p>Copy <code>secret</code> from the response into your CI system's secret store; it is shown
+once. The same can be done on the server host with
+<code>hangar admin token create --user ci-publisher --name gitlab-ci --scopes 'repo:npm-hosted:read,repo:npm-hosted:write' --expires 90d</code>.</p>
+<p>Recommendations:</p>
+<ul>
+<li>One service account per pipeline family, one token per CI system, so a leak can
+be revoked without breaking everything else (<code>DELETE /api/v1/tokens/&lt;id&gt;</code>).</li>
+<li>Scope tokens to the repositories the job touches: <code>repo:&lt;repo&gt;:read</code> to resolve,
+<code>repo:&lt;repo&gt;:write</code> to publish, <code>repo:&lt;repo&gt;:delete</code> only for cleanup jobs.
+Patterns work: <code>repo:npm-*:write</code>.</li>
+<li>Always set an expiry (at most 366 days) and rotate before it.</li>
+<li>Publish to the hosted repository URL; resolve through the group.</li>
+<li>Remove expired or revoked tokens from CI promptly. Failed authentications are
+rate limited per client address: after about 30 failures in a minute, every
+request from that runner address that carries credentials gets <code>429</code> until the
+budget refills, including jobs with valid tokens (see
+<a href="../api/#rate-limits">api.md</a>). Runners behind one NAT address share that budget.</li>
+<li>The same steps are available in the web UI (Access &amp; audit, Service accounts),
+which also warns about tokens close to expiry. See <a href="../access/">access.md</a> for
+roles and privileges.</li>
+</ul>
+<p>The examples below publish a Docker image, an npm package and a Maven artifact.
+Each assumes the matching repositories exist (see the client guides) and that
+<code>HANGAR_TOKEN</code> is a masked secret. A single token for all three jobs needs
+<code>read</code> and <code>write</code> on <code>docker-hosted</code>, <code>npm-hosted</code> and <code>maven-releases</code>, plus
+<code>read</code> on <code>npm-group</code> and <code>maven-public</code>; separate tokens per job are better.</p>
+<h2 id="gitlab-ci">GitLab CI<a class="anchor" href="#gitlab-ci" aria-label="Link to this section">#</a></h2>
+<p>Add <code>HANGAR_TOKEN</code> under Settings, CI/CD, Variables with &quot;Masked&quot; (and
+&quot;Protected&quot; if only protected branches publish).</p>
+<div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-attr">variables:</span>
+  <span class="hljs-attr">HANGAR_HOST:</span> <span class="hljs-string">hangar.example.com</span>
+  <span class="hljs-attr">HANGAR_USER:</span> <span class="hljs-string">ci-publisher</span>
+
+<span class="hljs-attr">docker-push:</span>
+  <span class="hljs-attr">image:</span> <span class="hljs-string">docker:27</span>
+  <span class="hljs-attr">services:</span> [<span class="hljs-string">docker:27-dind</span>]
+  <span class="hljs-attr">script:</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-string">echo</span> <span class="hljs-string">&quot;$HANGAR_TOKEN&quot;</span> <span class="hljs-string">|</span> <span class="hljs-string">docker</span> <span class="hljs-string">login</span> <span class="hljs-string">&quot;$HANGAR_HOST&quot;</span> <span class="hljs-string">-u</span> <span class="hljs-string">&quot;$HANGAR_USER&quot;</span> <span class="hljs-string">--password-stdin</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-string">docker</span> <span class="hljs-string">build</span> <span class="hljs-string">-t</span> <span class="hljs-string">&quot;$HANGAR_HOST/docker-hosted/team/app:$CI_COMMIT_SHORT_SHA&quot;</span> <span class="hljs-string">.</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-string">docker</span> <span class="hljs-string">push</span> <span class="hljs-string">&quot;$HANGAR_HOST/docker-hosted/team/app:$CI_COMMIT_SHORT_SHA&quot;</span>
+
+<span class="hljs-attr">npm-publish:</span>
+  <span class="hljs-attr">image:</span> <span class="hljs-string">node:22</span>
+  <span class="hljs-attr">script:</span>
+    <span class="hljs-comment"># npm expands ${HANGAR_TOKEN} itself; the secret never lands in the file</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-string">echo</span> <span class="hljs-string">&quot;//$HANGAR_HOST/repository/npm-group/:_authToken=\${HANGAR_TOKEN}&quot;</span> <span class="hljs-string">&gt;</span> <span class="hljs-string">.npmrc</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-string">echo</span> <span class="hljs-string">&quot;//$HANGAR_HOST/repository/npm-hosted/:_authToken=\${HANGAR_TOKEN}&quot;</span> <span class="hljs-string">&gt;&gt;</span> <span class="hljs-string">.npmrc</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-string">npm</span> <span class="hljs-string">ci</span> <span class="hljs-string">--registry</span> <span class="hljs-string">&quot;https://$HANGAR_HOST/repository/npm-group/&quot;</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-string">npm</span> <span class="hljs-string">publish</span> <span class="hljs-string">--registry</span> <span class="hljs-string">&quot;https://$HANGAR_HOST/repository/npm-hosted/&quot;</span>
+
+<span class="hljs-attr">maven-deploy:</span>
+  <span class="hljs-attr">image:</span> <span class="hljs-string">maven:3-eclipse-temurin-21</span>
+  <span class="hljs-attr">script:</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-string">|
+      cat &gt; ci-settings.xml &lt;&lt;&#x27;EOF&#x27;
+      &lt;settings&gt;
+        &lt;servers&gt;
+          &lt;server&gt;
+            &lt;id&gt;hangar&lt;/id&gt;
+            &lt;username&gt;${env.HANGAR_USER}&lt;/username&gt;
+            &lt;password&gt;${env.HANGAR_TOKEN}&lt;/password&gt;
+          &lt;/server&gt;
+        &lt;/servers&gt;
+        &lt;mirrors&gt;
+          &lt;mirror&gt;&lt;id&gt;hangar&lt;/id&gt;&lt;mirrorOf&gt;*&lt;/mirrorOf&gt;
+            &lt;url&gt;https://hangar.example.com/repository/maven-public/&lt;/url&gt;&lt;/mirror&gt;
+        &lt;/mirrors&gt;
+      &lt;/settings&gt;
+      EOF
+</span>    <span class="hljs-bullet">-</span> <span class="hljs-string">mvn</span> <span class="hljs-string">-B</span> <span class="hljs-string">-s</span> <span class="hljs-string">ci-settings.xml</span> <span class="hljs-string">deploy</span></code></pre></div>
+<p>The Maven job expects <code>distributionManagement</code> with repository id <code>hangar</code> in the
+POM (see <a href="../maven/">maven.md</a>), or pass the target on the command line:
+<code>-DaltDeploymentRepository=hangar::https://hangar.example.com/repository/maven-releases/</code>.</p>
+<p>The npm job needs a token with read on <code>npm-group</code> and write on <code>npm-hosted</code>.</p>
+<h2 id="github-actions">GitHub Actions<a class="anchor" href="#github-actions" aria-label="Link to this section">#</a></h2>
+<p>Store the token as a repository or organization secret named <code>HANGAR_TOKEN</code>.</p>
+<div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-attr">name:</span> <span class="hljs-string">publish</span>
+<span class="hljs-attr">on:</span>
+  <span class="hljs-attr">push:</span>
+    <span class="hljs-attr">tags:</span> [<span class="hljs-string">&quot;v*&quot;</span>]
+
+<span class="hljs-attr">env:</span>
+  <span class="hljs-attr">HANGAR_HOST:</span> <span class="hljs-string">hangar.example.com</span>
+
+<span class="hljs-attr">jobs:</span>
+  <span class="hljs-attr">docker:</span>
+    <span class="hljs-attr">runs-on:</span> <span class="hljs-string">ubuntu-latest</span>
+    <span class="hljs-attr">steps:</span>
+      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@v4</span>
+      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">docker/setup-buildx-action@v3</span>
+      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">docker/login-action@v3</span>
+        <span class="hljs-attr">with:</span>
+          <span class="hljs-attr">registry:</span> <span class="hljs-string">${{</span> <span class="hljs-string">env.HANGAR_HOST</span> <span class="hljs-string">}}</span>
+          <span class="hljs-attr">username:</span> <span class="hljs-string">ci-publisher</span>
+          <span class="hljs-attr">password:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.HANGAR_TOKEN</span> <span class="hljs-string">}}</span>
+      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">docker/build-push-action@v6</span>
+        <span class="hljs-attr">with:</span>
+          <span class="hljs-attr">push:</span> <span class="hljs-literal">true</span>
+          <span class="hljs-attr">platforms:</span> <span class="hljs-string">linux/amd64,linux/arm64</span>
+          <span class="hljs-attr">tags:</span> <span class="hljs-string">${{</span> <span class="hljs-string">env.HANGAR_HOST</span> <span class="hljs-string">}}/docker-hosted/team/app:${{</span> <span class="hljs-string">github.ref_name</span> <span class="hljs-string">}}</span>
+
+  <span class="hljs-attr">npm:</span>
+    <span class="hljs-attr">runs-on:</span> <span class="hljs-string">ubuntu-latest</span>
+    <span class="hljs-attr">steps:</span>
+      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@v4</span>
+      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/setup-node@v4</span>
+        <span class="hljs-attr">with:</span>
+          <span class="hljs-attr">node-version:</span> <span class="hljs-number">22</span>
+          <span class="hljs-attr">registry-url:</span> <span class="hljs-string">https://hangar.example.com/repository/npm-hosted/</span>
+      <span class="hljs-bullet">-</span> <span class="hljs-attr">run:</span> <span class="hljs-string">npm</span> <span class="hljs-string">ci</span>
+      <span class="hljs-bullet">-</span> <span class="hljs-attr">run:</span> <span class="hljs-string">npm</span> <span class="hljs-string">publish</span>
+        <span class="hljs-attr">env:</span>
+          <span class="hljs-attr">NODE_AUTH_TOKEN:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.HANGAR_TOKEN</span> <span class="hljs-string">}}</span>
+
+  <span class="hljs-attr">maven:</span>
+    <span class="hljs-attr">runs-on:</span> <span class="hljs-string">ubuntu-latest</span>
+    <span class="hljs-attr">steps:</span>
+      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@v4</span>
+      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/setup-java@v4</span>
+        <span class="hljs-attr">with:</span>
+          <span class="hljs-attr">distribution:</span> <span class="hljs-string">temurin</span>
+          <span class="hljs-attr">java-version:</span> <span class="hljs-number">21</span>
+          <span class="hljs-attr">server-id:</span> <span class="hljs-string">hangar</span>                 <span class="hljs-comment"># must match the id in distributionManagement</span>
+          <span class="hljs-attr">server-username:</span> <span class="hljs-string">HANGAR_USER</span>      <span class="hljs-comment"># names of environment variables, not values</span>
+          <span class="hljs-attr">server-password:</span> <span class="hljs-string">HANGAR_TOKEN</span>
+      <span class="hljs-bullet">-</span> <span class="hljs-attr">run:</span> <span class="hljs-string">mvn</span> <span class="hljs-string">-B</span> <span class="hljs-string">deploy</span>
+        <span class="hljs-attr">env:</span>
+          <span class="hljs-attr">HANGAR_USER:</span> <span class="hljs-string">ci-publisher</span>
+          <span class="hljs-attr">HANGAR_TOKEN:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.HANGAR_TOKEN</span> <span class="hljs-string">}}</span></code></pre></div>
+<p><code>setup-node</code> writes an <code>.npmrc</code> with <code>registry=</code> and
+<code>//hangar.example.com/repository/npm-hosted/:_authToken=${NODE_AUTH_TOKEN}</code>; in this
+example <code>npm ci</code> therefore also installs from <code>npm-hosted</code>. To install through the
+group instead, point <code>registry-url</code> at <code>npm-group</code> and publish with
+<code>npm publish --registry https://hangar.example.com/repository/npm-hosted/</code> after
+adding an auth line for that URL.</p>
+<p>For Gradle, pass the credentials as project properties:
+<code>ORG_GRADLE_PROJECT_hangarUsername</code> and <code>ORG_GRADLE_PROJECT_hangarPassword</code>
+(see <a href="../maven/#gradle">maven.md</a>).</p>
+<h2 id="gitea-actions">Gitea Actions<a class="anchor" href="#gitea-actions" aria-label="Link to this section">#</a></h2>
+<p>Gitea Actions runs GitHub Actions syntax with <code>act_runner</code>. Store the token under
+the repository's Settings, Actions, Secrets as <code>HANGAR_TOKEN</code>; the workflow above
+works unchanged in <code>.gitea/workflows/publish.yaml</code>. A minimal shell-only variant:</p>
+<div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-attr">name:</span> <span class="hljs-string">publish</span>
+<span class="hljs-attr">on:</span> [<span class="hljs-string">push</span>]
+<span class="hljs-attr">jobs:</span>
+  <span class="hljs-attr">docker:</span>
+    <span class="hljs-attr">runs-on:</span> <span class="hljs-string">ubuntu-latest</span>
+    <span class="hljs-attr">steps:</span>
+      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@v4</span>
+      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Push</span> <span class="hljs-string">image</span>
+        <span class="hljs-attr">env:</span>
+          <span class="hljs-attr">HANGAR_TOKEN:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.HANGAR_TOKEN</span> <span class="hljs-string">}}</span>
+        <span class="hljs-attr">run:</span> <span class="hljs-string">|
+          echo &quot;$HANGAR_TOKEN&quot; | docker login hangar.example.com -u ci-publisher --password-stdin
+          docker build -t hangar.example.com/docker-hosted/team/app:${GITHUB_SHA::8} .
+          docker push hangar.example.com/docker-hosted/team/app:${GITHUB_SHA::8}</span></code></pre></div>
+<h2 id="jenkins-declarative-pipeline">Jenkins (declarative pipeline)<a class="anchor" href="#jenkins-declarative-pipeline" aria-label="Link to this section">#</a></h2>
+<p>Create a &quot;Username with password&quot; credential with id <code>hangar-ci</code>: username
+<code>ci-publisher</code>, password the token. The Credentials Binding plugin masks it in the
+log.</p>
+<div class="code"><div class="code-head"><span>groovy</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="groovy"><code>pipeline {
+  agent any
+  environment {
+    HANGAR_HOST = <span class="hljs-string">&#x27;hangar.example.com&#x27;</span>
+  }
+  stages {
+    stage(<span class="hljs-string">&#x27;Docker push&#x27;</span>) {
+      steps {
+        withCredentials([usernamePassword(<span class="hljs-attr">credentialsId:</span> <span class="hljs-string">&#x27;hangar-ci&#x27;</span>,
+                                          <span class="hljs-symbol">usernameVariable:</span> <span class="hljs-string">&#x27;HANGAR_USER&#x27;</span>,
+                                          <span class="hljs-symbol">passwordVariable:</span> <span class="hljs-string">&#x27;HANGAR_TOKEN&#x27;</span>)]) {
+          sh <span class="hljs-string">&#x27;&#x27;&#x27;
+            echo &quot;$HANGAR_TOKEN&quot; | docker login &quot;$HANGAR_HOST&quot; -u &quot;$HANGAR_USER&quot; --password-stdin
+            docker build -t &quot;$HANGAR_HOST/docker-hosted/team/app:$BUILD_NUMBER&quot; .
+            docker push &quot;$HANGAR_HOST/docker-hosted/team/app:$BUILD_NUMBER&quot;
+          &#x27;&#x27;&#x27;</span>
+        }
+      }
+    }
+    stage(<span class="hljs-string">&#x27;npm publish&#x27;</span>) {
+      steps {
+        withCredentials([usernamePassword(<span class="hljs-attr">credentialsId:</span> <span class="hljs-string">&#x27;hangar-ci&#x27;</span>,
+                                          <span class="hljs-symbol">usernameVariable:</span> <span class="hljs-string">&#x27;HANGAR_USER&#x27;</span>,
+                                          <span class="hljs-symbol">passwordVariable:</span> <span class="hljs-string">&#x27;HANGAR_TOKEN&#x27;</span>)]) {
+          sh <span class="hljs-string">&#x27;&#x27;&#x27;
+            echo &quot;//$HANGAR_HOST/repository/npm-hosted/:_authToken=\\${HANGAR_TOKEN}&quot; &gt; .npmrc
+            npm publish --registry &quot;https://$HANGAR_HOST/repository/npm-hosted/&quot;
+          &#x27;&#x27;&#x27;</span>
+        }
+      }
+    }
+    stage(<span class="hljs-string">&#x27;Maven deploy&#x27;</span>) {
+      steps {
+        withCredentials([usernamePassword(<span class="hljs-attr">credentialsId:</span> <span class="hljs-string">&#x27;hangar-ci&#x27;</span>,
+                                          <span class="hljs-symbol">usernameVariable:</span> <span class="hljs-string">&#x27;HANGAR_USER&#x27;</span>,
+                                          <span class="hljs-symbol">passwordVariable:</span> <span class="hljs-string">&#x27;HANGAR_TOKEN&#x27;</span>)]) {
+          <span class="hljs-comment">// ci-settings.xml as in the GitLab example, reading ${env.HANGAR_USER} / ${env.HANGAR_TOKEN}</span>
+          sh <span class="hljs-string">&#x27;mvn -B -s ci-settings.xml deploy&#x27;</span>
+        }
+      }
+    }
+  }
+}</code></pre></div>
+<p>Use single-quoted <code>sh '''...'''</code> blocks so Groovy does not interpolate the secret
+into the command line.</p>
+<h2 id="other-formats-in-ci">Other formats in CI<a class="anchor" href="#other-formats-in-ci" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>PyPI: <code>uv publish</code> with <code>UV_PUBLISH_USERNAME=__token__</code> and
+<code>UV_PUBLISH_PASSWORD=$HANGAR_TOKEN</code>, or <code>twine upload --repository-url ... -u __token__ -p &quot;$HANGAR_TOKEN&quot;</code>;
+see <a href="../pypi/">pypi.md</a>.</li>
+<li>NuGet: <code>dotnet nuget push ... -k &quot;$HANGAR_TOKEN&quot;</code>; see <a href="../nuget/">nuget.md</a>.</li>
+<li>Raw: <code>curl -fsS -H &quot;Authorization: Bearer $HANGAR_TOKEN&quot; -T file URL</code>; see <a href="../raw/">raw.md</a>.</li>
+</ul>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/ci.md"><code>docs/guides/ci.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/ci.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../migrate/" rel="prev"><small>Previous</small><b>Move to Hangar</b></a><a class="next" href="../access/" rel="next"><small>Next</small><b>Access management</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#1-create-a-service-account-and-a-scoped-token">1. Create a service account and a scoped token</a></li><li class="l2"><a href="#gitlab-ci">GitLab CI</a></li><li class="l2"><a href="#github-actions">GitHub Actions</a></li><li class="l2"><a href="#gitea-actions">Gitea Actions</a></li><li class="l2"><a href="#jenkins-declarative-pipeline">Jenkins (declarative pipeline)</a></li><li class="l2"><a href="#other-formats-in-ci">Other formats in CI</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

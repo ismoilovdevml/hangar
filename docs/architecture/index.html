@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hangar — architecture · Hangar docs</title>
+<meta name="description" content="Hangar — architecture: Handler validates format rules → streams to temp blob while hashing → dedup by sha256 → transaction: component/asset rows, write…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/architecture/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Hangar — architecture">
+<meta property="og:description" content="Hangar — architecture: Handler validates format rules → streams to temp blob while hashing → dedup by sha256 → transaction: component/asset rows, write…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/architecture/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Hangar — architecture">
+<meta name="twitter:description" content="Hangar — architecture: Handler validates format rules → streams to temp blob while hashing → dedup by sha256 → transaction: component/asset rows, write…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Architecture","item":"https://ismoilovdevml.github.io/hangar/docs/architecture/"}]}</script>
+<script src="../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../">Home</a>
+    <a class="hide-sm" href="../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../">Introduction</a></li><li><a href="../guides/getting-started/">Getting started</a></li><li><a href="../guides/">Concepts and guides</a></li><li><a href="../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../deploy/">Deploying Hangar</a></li><li><a href="../deploy/requirements/">Requirements and sizing</a></li><li><a href="../deploy/install-compose/">Docker Compose</a></li><li><a href="../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../deploy/install-binary/">Binary and systemd</a></li><li><a href="../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../deploy/first-admin/">First administrator</a></li><li><a href="../deploy/backup-restore/">Backup and restore</a></li><li><a href="../deploy/upgrade/">Upgrades</a></li><li><a href="../deploy/high-availability/">High availability</a></li><li><a href="../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../ui/">The web UI</a></li><li><a href="../ui/repositories/">Repositories</a></li><li><a href="../ui/packages/">Packages &amp; search</a></li><li><a href="../ui/connect/">Connect a client</a></li><li><a href="../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../ui/access/">Access &amp; tokens</a></li><li><a href="../ui/tasks/">Scheduled tasks</a></li><li><a href="../ui/blob-stores/">Blob stores</a></li><li><a href="../ui/system/">Status, logs &amp; audit</a></li><li><a href="../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../guides/docker/">Docker &amp; OCI</a></li><li><a href="../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../guides/pypi/">PyPI</a></li><li><a href="../guides/nuget/">NuGet</a></li><li><a href="../guides/go/">Go modules</a></li><li><a href="../guides/helm/">Helm charts</a></li><li><a href="../guides/cargo/">Cargo</a></li><li><a href="../guides/apt/">APT</a></li><li><a href="../guides/rpm/">RPM</a></li><li><a href="../guides/raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../guides/migrate/">Move to Hangar</a></li><li><a href="../guides/ci/">CI integration</a></li><li><a href="../guides/access/">Access management</a></li><li><a href="../guides/sso/">Single sign-on</a></li><li><a href="../guides/routing-rules/">Routing rules</a></li><li><a href="../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../guides/api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../security/">Security</a></li><li><a href="../operations/monitoring/">Monitoring</a></li><li><a href="../operations/runbooks/">Alert runbooks</a></li><li><a href="../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="./" aria-current="page">Architecture</a></li><li><a href="../formats/">Format protocols</a></li><li><a href="../adr/">Decision records</a></li><li><a href="../product-spec/">Product specification</a></li><li><a href="../design-system/">Design system</a></li><li><a href="../roadmap/">Roadmap</a></li><li><a href="../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Project</p>
+      <h1>Hangar — architecture</h1>
+<h2 id="runtime-topology">Runtime topology<a class="anchor" href="#runtime-topology" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>text</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0"><code>                  ┌──────────── clients ─────────────┐
+                  docker  npm  mvn  pip  go  helm  CI
+                              │ HTTPS
+                     ┌────────▼────────┐   (L7 load balancer, sticky not required)
+                     │  hangar node ×N │  single Go binary: format handlers, API, UI, jobs
+                     └───┬────┬────┬───┘
+         PostgreSQL ◄────┘    │    └────► S3 / MinIO / FS  (blobs, content-addressed)
+         (metadata,           │
+          audit, jobs)   NATS JetStream (events, job queue)
+                              │
+        Trivy server + scan adapter (optional) · OSV advisories · OIDC/LDAP</code></pre></div>
+<ul>
+<li>
+<p>Image scanning: Hangar asks the scan adapter (<code>cmd/hangar-scanner</code>) to scan
+an image by digest; the adapter runs the Trivy client against the Trivy
+server and pulls the image back from Hangar's <code>/v2/</code> with a short-lived,
+pull-only registry token for that repository
+(<a href="../guides/vulnerabilities/#design-how-hangar-talks-to-trivy">vulnerabilities.md</a>).</p>
+</li>
+<li>
+<p>Nodes are stateless. They keep small in-memory caches (repository lookups,
+authorization decisions, generated metadata) that NATS events invalidate. A
+per-node on-disk blob cache and edge replication are planned
+(<a href="../roadmap/">roadmap</a>).</p>
+</li>
+<li>
+<p>Leader (via PostgreSQL advisory lock) starts scheduled task runs (cron schedules in <code>tasks</code>); any node executes runs, heart-beating progress, and takes over runs whose node went silent (resuming from checkpoints).</p>
+</li>
+<li>
+<p>Single-node mode: embedded NATS, filesystem blobs, one PostgreSQL — <code>docker compose up</code> works.</p>
+</li>
+</ul>
+<h2 id="request-path-download">Request path (download)<a class="anchor" href="#request-path-download" aria-label="Link to this section">#</a></h2>
+<ol>
+<li>Router matches format mount (<code>/v2/</code> for OCI, <code>/repository/&lt;repo&gt;/...</code> for others, plus vanity hosts like <code>cr.acme.io</code>).</li>
+<li>Auth: bearer/basic/token → principal; anonymous if repo allows.</li>
+<li>RBAC check <code>repo:&lt;name&gt;:read</code>.</li>
+<li>Format handler resolves path → component/asset (group: walk members in order; proxy: cache lookup → upstream fetch on miss with singleflight).</li>
+<li>Quarantine check → 403 with explanation body.</li>
+<li>Stream blob from the blob store; record download (batched, async) for &quot;last downloaded&quot; and stats.</li>
+</ol>
+<h2 id="upload-path">Upload path<a class="anchor" href="#upload-path" aria-label="Link to this section">#</a></h2>
+<p>Handler validates format rules → streams to temp blob while hashing → dedup by sha256 → transaction: component/asset rows, write policy check → emits <code>component.published</code> → scanner job, live feed (SSE). Search reads PostgreSQL directly; replication is planned.</p>
+<h2 id="core-interfaces-go-internalcore">Core interfaces (Go, <code>internal/core</code>)<a class="anchor" href="#core-interfaces-go-internalcore" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>go</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="go"><code><span class="hljs-keyword">type</span> BlobStore <span class="hljs-keyword">interface</span> {
+    Put(ctx context.Context, r io.Reader) (Digest, <span class="hljs-type">int64</span>, <span class="hljs-type">error</span>) <span class="hljs-comment">// streams, hashes, dedups</span>
+    Get(ctx context.Context, d Digest) (io.ReadSeekCloser, <span class="hljs-type">error</span>)
+    Stat(ctx context.Context, d Digest) (BlobInfo, <span class="hljs-type">error</span>)
+    Delete(ctx context.Context, d Digest) <span class="hljs-type">error</span> <span class="hljs-comment">// only by GC/compaction</span>
+}
+
+<span class="hljs-keyword">type</span> Format <span class="hljs-keyword">interface</span> {
+    Name() <span class="hljs-type">string</span>                          <span class="hljs-comment">// &quot;docker&quot;, &quot;npm&quot;, ...</span>
+    Mount(r chi.Router, deps Deps)         <span class="hljs-comment">// registers protocol routes</span>
+    Validate(repo *Repository) <span class="hljs-type">error</span>       <span class="hljs-comment">// format-specific config checks</span>
+    Coordinates(asset *Asset) Coordinates  <span class="hljs-comment">// for UI/search</span>
+}
+
+<span class="hljs-keyword">type</span> Upstream <span class="hljs-keyword">interface</span> { <span class="hljs-comment">// proxy repos</span>
+    Fetch(ctx context.Context, req UpstreamRequest) (*UpstreamResponse, <span class="hljs-type">error</span>) <span class="hljs-comment">// path, method, headers, conditional</span>
+}</code></pre></div>
+<p>The full set, with doc comments, is in <code>internal/core/interfaces.go</code>:
+<code>BlobStore</code>, <code>BlobStores</code>, <code>Format</code> (+ optional <code>RootMounter</code>), <code>Upstream</code>/<code>Upstreams</code>,
+<code>HTTPClientFactory</code>, <code>RepositoryService</code>, <code>ComponentService</code>, <code>Authenticator</code>,
+<code>TokenIssuer</code>, <code>AuthZ</code>, <code>EventBus</code>, <code>JobQueue</code>, <code>AuditLog</code>, and the <code>Deps</code> struct
+every format receives. In-memory fakes for all of them live in
+<code>internal/core/coretest</code>. Decisions behind them: <code>docs/adr/</code>.</p>
+<h2 id="routing">Routing<a class="anchor" href="#routing" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Path</th>
+<th>Served by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/healthz</code>, <code>/readyz</code>, <code>/metrics</code></td>
+<td>operations (liveness; DB + blob store + NATS readiness; Prometheus)</td>
+</tr>
+<tr>
+<td><code>/api/v1/...</code></td>
+<td>REST API (<code>api/openapi.yaml</code>)</td>
+</tr>
+<tr>
+<td><code>/repository/{repo}/...</code></td>
+<td>format handlers; the dispatcher resolves the repository first</td>
+</tr>
+<tr>
+<td><code>/v2/...</code></td>
+<td>OCI (docker format, root mount)</td>
+</tr>
+<tr>
+<td>anything else</td>
+<td>web UI (SPA, embedded)</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="corporate-networks-and-reverse-proxies">Corporate networks and reverse proxies<a class="anchor" href="#corporate-networks-and-reverse-proxies" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><strong>Outbound</strong>: every proxy repository reaches its remote through one HTTP
+client factory. Server-wide <code>http.proxy</code> (http/https/socks5, credentials from
+env), <code>http.no_proxy</code>, <code>HTTP_PROXY</code>/<code>HTTPS_PROXY</code>/<code>NO_PROXY</code> (default on),
+<code>http.ca_file</code>, timeouts and pool limits; each remote may override <code>proxy</code>
+(<code>inherit</code> | <code>none</code> | URL), <code>ca_bundle</code>, <code>insecure_skip_verify</code> and timeouts.
+Upstream credentials (basic, bearer, named header) are sent only to the
+remote's own host, never to redirect targets.</li>
+<li><strong>Inbound</strong>: <code>server.base_url</code> is the only source of generated absolute URLs
+(npm tarballs, OCI token realm, Maven/PyPI links). <code>X-Forwarded-For/Proto/Host</code>
+are honoured only from <code>server.trusted_proxies</code>. Docker repositories can get
+a connector: a dedicated host name (<code>cr.example.com</code>) or port.</li>
+<li>See <code>docs/adr/0008-outbound-http-and-reverse-proxies.md</code>.</li>
+</ul>
+<h2 id="data-model-postgresql-simplified">Data model (PostgreSQL, simplified)<a class="anchor" href="#data-model-postgresql-simplified" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>text</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0"><code>blob_stores(id, name, kind, config jsonb, soft_quota_bytes)
+blobs(store_id, digest, size, created_at, ref_count, soft_deleted_at, pk(store_id, digest))
+repositories(id, name unique, format, type, blob_store_id, config jsonb, online)
+group_members(group_id, member_id, position)
+components(id, repo_id, namespace, name, version, created_at, published_by,
+           last_downloaded_at, download_count, quarantined bool, attributes jsonb,
+           unique(repo_id, namespace, name, version))
+assets(id, component_id null, repo_id, path, blob_digest, content_type, size,
+       checksums jsonb, created_at, unique(repo_id, path))
+findings(id, component_id, advisory_id, severity, cvss, package, installed, fixed_in,
+         status, waiver_reason, waiver_until, assignee)
+users, roles, privileges, role_bindings, tokens(hash, scopes, expires_at), identity_providers
+cleanup_policies(id, name, criteria jsonb, schedule), policy_repos
+tasks(id, name, type, schedule, config, enabled, builtin, policy_id, next_run_at),
+task_runs(id, task_id, status, progress, message, log, state, result, node, heartbeat_at, claims, started, finished)
+audit_events(id, at, actor, action, target, ip, details jsonb)  -- append-only, partitioned by month
+nodes(id, address, role, last_heartbeat, stats jsonb)
+replication_targets, replication_state  -- created by a migration, unused until edge replication ships</code></pre></div>
+<h2 id="api">API<a class="anchor" href="#api" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><code>GET/POST /api/v1/...</code> JSON REST for UI and automation, described in <code>api/openapi.yaml</code>.
+Resources: repositories, blob-stores, components, assets, search, findings, waivers,
+cleanup-policies (+ <code>/preview</code>, <code>/{name}/run</code>, <code>/{name}/stop</code>, <code>/{name}/runs</code>), tasks (+ <code>/{id}/run</code>, <code>/{id}/stop</code>, <code>/{id}/runs</code>), users, roles, tokens,
+audit, nodes, system/status, metrics/overview. Operations marked <code>x-status: planned</code>
+(replication targets, SBOM, dependents, moving repositories between blob stores)
+answer 501 until they are implemented.</li>
+<li><code>GET /api/v1/events</code> — Server-Sent Events: publishes, quarantines, task progress.</li>
+<li>Config as code (planned): the UI shows every repository's settings as YAML; a
+<code>hangar apply -f</code> / <code>hangar export</code> CLI and a Terraform provider do not exist yet.
+Automate with the REST API meanwhile.</li>
+<li>Health: <code>/healthz</code> (liveness), <code>/readyz</code> (DB, blob store, NATS reachable), <code>/metrics</code>.</li>
+</ul>
+<h2 id="security">Security<a class="anchor" href="#security" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>TLS everywhere; HSTS on UI.</li>
+<li>Passwords argon2id; tokens stored as SHA-256 hashes, prefix <code>hgr_</code> for secret scanners.</li>
+<li>CSRF protection for cookie sessions; tokens for CLI/CI.</li>
+<li>Rate limiting per client address; lockout on failed logins.</li>
+<li>Proxy SSRF guard: loopback, private, link-local and other internal ranges are refused unless listed in <code>http.allow_private_networks</code> (<a href="../security/">security</a>).</li>
+<li>Cosign signatures are stored and served; verifying them by policy is planned.</li>
+</ul>
+<h2 id="integrations-no-hard-dependency">Integrations (no hard dependency)<a class="anchor" href="#integrations-no-hard-dependency" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>CI systems (GitLab CI, Gitea Actions, GitHub Actions, Jenkins, Drone) authenticate with service-account tokens; docs show snippets for each.</li>
+<li>Planned: OIDC token exchange so CI jobs use their own JWT (GitLab <code>id_tokens</code>, GitHub OIDC) instead of long-lived secrets.</li>
+<li>Planned: webhooks on events (Slack/Teams via webhook). Today, follow <code>GET /api/v1/events</code> (SSE) or the audit log.</li>
+</ul>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/ARCHITECTURE.md"><code>docs/ARCHITECTURE.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/ARCHITECTURE.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../operations/performance/" rel="prev"><small>Previous</small><b>Performance</b></a><a class="next" href="../formats/" rel="next"><small>Next</small><b>Format protocols</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#runtime-topology">Runtime topology</a></li><li class="l2"><a href="#request-path-download">Request path (download)</a></li><li class="l2"><a href="#upload-path">Upload path</a></li><li class="l2"><a href="#core-interfaces-go-internalcore">Core interfaces (Go, internal/core)</a></li><li class="l2"><a href="#routing">Routing</a></li><li class="l2"><a href="#corporate-networks-and-reverse-proxies">Corporate networks and reverse proxies</a></li><li class="l2"><a href="#data-model-postgresql-simplified">Data model (PostgreSQL, simplified)</a></li><li class="l2"><a href="#api">API</a></li><li class="l2"><a href="#security">Security</a></li><li class="l2"><a href="#integrations-no-hard-dependency">Integrations (no hard dependency)</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hangar — product specification · Hangar docs</title>
+<meta name="description" content="Hangar — product specification: Every number shown in the UI comes from the API. This is the product design. Parts marked (planned) are not built yet; the…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/product-spec/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Hangar — product specification">
+<meta property="og:description" content="Hangar — product specification: Every number shown in the UI comes from the API. This is the product design. Parts marked (planned) are not built yet; the…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/product-spec/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Hangar — product specification">
+<meta name="twitter:description" content="Hangar — product specification: Every number shown in the UI comes from the API. This is the product design. Parts marked (planned) are not built yet; the…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Product specification","item":"https://ismoilovdevml.github.io/hangar/docs/product-spec/"}]}</script>
+<script src="../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../">Home</a>
+    <a class="hide-sm" href="../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../">Introduction</a></li><li><a href="../guides/getting-started/">Getting started</a></li><li><a href="../guides/">Concepts and guides</a></li><li><a href="../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../deploy/">Deploying Hangar</a></li><li><a href="../deploy/requirements/">Requirements and sizing</a></li><li><a href="../deploy/install-compose/">Docker Compose</a></li><li><a href="../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../deploy/install-binary/">Binary and systemd</a></li><li><a href="../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../deploy/first-admin/">First administrator</a></li><li><a href="../deploy/backup-restore/">Backup and restore</a></li><li><a href="../deploy/upgrade/">Upgrades</a></li><li><a href="../deploy/high-availability/">High availability</a></li><li><a href="../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../ui/">The web UI</a></li><li><a href="../ui/repositories/">Repositories</a></li><li><a href="../ui/packages/">Packages &amp; search</a></li><li><a href="../ui/connect/">Connect a client</a></li><li><a href="../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../ui/access/">Access &amp; tokens</a></li><li><a href="../ui/tasks/">Scheduled tasks</a></li><li><a href="../ui/blob-stores/">Blob stores</a></li><li><a href="../ui/system/">Status, logs &amp; audit</a></li><li><a href="../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../guides/docker/">Docker &amp; OCI</a></li><li><a href="../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../guides/pypi/">PyPI</a></li><li><a href="../guides/nuget/">NuGet</a></li><li><a href="../guides/go/">Go modules</a></li><li><a href="../guides/helm/">Helm charts</a></li><li><a href="../guides/cargo/">Cargo</a></li><li><a href="../guides/apt/">APT</a></li><li><a href="../guides/rpm/">RPM</a></li><li><a href="../guides/raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../guides/migrate/">Move to Hangar</a></li><li><a href="../guides/ci/">CI integration</a></li><li><a href="../guides/access/">Access management</a></li><li><a href="../guides/sso/">Single sign-on</a></li><li><a href="../guides/routing-rules/">Routing rules</a></li><li><a href="../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../guides/api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../security/">Security</a></li><li><a href="../operations/monitoring/">Monitoring</a></li><li><a href="../operations/runbooks/">Alert runbooks</a></li><li><a href="../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../architecture/">Architecture</a></li><li><a href="../formats/">Format protocols</a></li><li><a href="../adr/">Decision records</a></li><li><a href="./" aria-current="page">Product specification</a></li><li><a href="../design-system/">Design system</a></li><li><a href="../roadmap/">Roadmap</a></li><li><a href="../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Project</p>
+      <h1>Hangar — product specification</h1>
+<p class="lead">Every number shown in the UI comes from the API.</p>
+<p>This is the product design. Parts marked <em>(planned)</em> are not built yet; the
+<a href="../roadmap/">roadmap</a> has the current status of each.</p>
+<h2 id="concepts">Concepts<a class="anchor" href="#concepts" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Repository</td>
+<td>Named container of one <strong>format</strong> and one <strong>type</strong>: <code>hosted</code>, <code>proxy</code> or <code>group</code>.</td>
+</tr>
+<tr>
+<td>Hosted</td>
+<td>Clients publish here. Write policy: <code>allow</code>, <code>allow_once</code> (immutable versions; the default, except docker: <code>allow</code>), <code>deny</code>.</td>
+</tr>
+<tr>
+<td>Proxy</td>
+<td>Fetches from a remote URL on demand and caches. Has metadata TTL, content TTL, negative-cache TTL, upstream auth, circuit breaker, related hosts, rate-limit (429) handling, concurrency and transfer limits, offline mode.</td>
+</tr>
+<tr>
+<td>Group</td>
+<td>Ordered list of member repositories of the same format behind one URL. Reads resolve in member order; writes go to a designated hosted member (Docker/npm).</td>
+</tr>
+<tr>
+<td>Component</td>
+<td>A package version (e.g. <code>payments-api:2.14.0</code>, <code>@acme/ui-kit@5.3.1</code>, <code>com.acme:ledger-core:7.0.0</code>).</td>
+</tr>
+<tr>
+<td>Asset</td>
+<td>A file belonging to a component (jar, pom, tgz, wheel, manifest, layer…).</td>
+</tr>
+<tr>
+<td>Blob</td>
+<td>Content-addressed bytes in a blob store; many assets can point at one blob.</td>
+</tr>
+<tr>
+<td>Blob store</td>
+<td>A storage backend (S3/MinIO bucket+prefix, or filesystem path) with soft quota.</td>
+</tr>
+<tr>
+<td>Cleanup policy</td>
+<td>Criteria that select components for deletion; attached to repositories; previewable.</td>
+</tr>
+<tr>
+<td>Finding</td>
+<td>A vulnerability or licence issue on a component, from the scanner.</td>
+</tr>
+<tr>
+<td>Quarantine</td>
+<td>A component blocked from download by policy until fixed or waived.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="01--sign-in-login">01 · Sign in (<code>Login</code>)<a class="anchor" href="#01--sign-in-login" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>SSO button (OIDC, configured provider name), LDAP and SAML <em>(planned)</em> buttons, local username/password with &quot;remember me&quot;.</li>
+<li>Hint for CLI/CI users: <code>hangar login --token</code>.</li>
+<li>Footer: version, docs and API links; header: system status dot.</li>
+<li>Lockout after N failed attempts (configurable), audit event on every attempt.</li>
+</ul>
+<h2 id="02--overview-main">02 · Overview (<code>Main</code>)<a class="anchor" href="#02--overview-main" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Header without a bar: breadcrumb, system state pill (links to System status), notifications, account menu.</li>
+<li>Hero: &quot;What do you need today?&quot; search box (submits to Search), qualifier examples, quick actions
+(connect a client — set-up snippets in a dialog —, create a token, new repository, browse packages).</li>
+<li>Range switch: 1h / Today / 7 days / 30 days — drives the activity card, request outcomes, the upstream card and rejected pushes.</li>
+<li>Activity: one sentence (requests, packages cached by proxies, published, pushes rejected) and requests per interval.</li>
+<li>Request outcomes: ring with the share of requests answered without a 5xx or a 401/403, p95 latency, denied and server-error counts.</li>
+<li>To do: what needs attention, built from real signals only — system not ok, unreachable upstreams, rejected pushes,
+critical findings, expiring tokens, a missing or failed database backup, scanning turned off, no storage quota.</li>
+<li>Storage (used, share per format, quota), Security (critical findings or clean, scanned count), Upstream (worst proxy remote, latency, cache hit ratio).</li>
+<li>Most downloaded: top packages by downloads, all time.</li>
+<li>The Overview fits one screen, so it has no list of recent publications; packages are browsed on the Packages page. Live events (<code>GET /api/v1/events</code>) refresh the cards.</li>
+</ul>
+<h2 id="03--repositories">03 · Repositories<a class="anchor" href="#03--repositories" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Count cards for hosted / proxy / group.</li>
+<li>Tabs All/Hosted/Proxy/Group with counts, format filter, name filter, pagination.</li>
+<li>Table: name + description, type pill, format, URL, size, status (online, slow upstream, blocked by policy, offline), copy-URL button.</li>
+<li>&quot;New repository&quot; → screen 04. Row → repository settings (same form as 04, pre-filled, name/format read-only).</li>
+</ul>
+<h2 id="04--new-repository-repocreate">04 · New repository (<code>RepoCreate</code>)<a class="anchor" href="#04--new-repository-repocreate" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Step 1 format grid (Docker, npm, Maven, PyPI, Go, Helm, NuGet, Cargo, APT, Raw).</li>
+<li>Step 2 type cards with one-line explanations.</li>
+<li>Step 3 settings: name (validated <code>^[a-z0-9][a-z0-9-]{1,62}$</code>), blob store (shows free space), remote URL for proxy (prefilled per format), re-upload policy, cleanup policy, toggles: scan on arrival, quarantine critical, anonymous read. Group type shows a member picker with drag ordering.</li>
+<li>Summary panel with the final URL and the <strong>same config as YAML</strong>. <em>(planned)</em> Copyable <code>hangar</code> CLI / Terraform, and a round trip: <code>hangar apply -f repo.yaml</code> creates the identical repo.</li>
+</ul>
+<h2 id="05--package-detail-browse">05 · Package detail (<code>Browse</code>)<a class="anchor" href="#05--package-detail-browse" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Left tree: repository → package → versions.</li>
+<li>Header: format badge, name, version pill, signed badge, platform list, publisher and time; actions Download SBOM <em>(planned)</em>, Delete (RBAC + confirm).</li>
+<li>Pull/install command for the format, with copy.</li>
+<li>Tabs: Overview, Versions, Layers (OCI) / Files (others), Vulnerabilities, Dependents <em>(planned)</em>.</li>
+<li>Overview metadata: digest/checksums, size, downloads 30d, last pulled (+ by whom/which cluster), base image, source commit link.</li>
+<li>Versions list with scan status; Layers with size bars.</li>
+</ul>
+<h2 id="06--search">06 · Search<a class="anchor" href="#06--search" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Single search box with query language: free text, <code>format:</code>, <code>repo:</code>, <code>sha256:</code> prefix, <code>cve:</code>, <code>unused:&gt;90d</code>, <code>license:</code>, <code>published:&lt;2026-01-01</code>.</li>
+<li>Facets: format (with counts), security state, repository.</li>
+<li>Results: format badge, coordinates, repo, versions, downloads, security pill. Sort by downloads/newest.</li>
+</ul>
+<h2 id="07--blob-stores-blobstores">07 · Blob stores (<code>BlobStores</code>)<a class="anchor" href="#07--blob-stores-blobstores" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Totals: used vs capacity, saved by dedup, growth/day with time-to-full estimate, reclaimable now (+ run compaction).</li>
+<li>Card per store: type, location, state, used/capacity bar, soft quota, repositories count, blob count, write latency, encryption; actions Settings, Move repositories (online migration job, <em>planned</em>).</li>
+</ul>
+<h2 id="08--cleanup-policies-cleanup">08 · Cleanup policies (<code>Cleanup</code>)<a class="anchor" href="#08--cleanup-policies-cleanup" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Policy list; editor written as readable sentences: delete versions older than N days AND not downloaded in N days; keep newest N per package; keep tags/versions matching glob list; optional pre-release/snapshot only.</li>
+<li>Applies-to repository chips.</li>
+<li><strong>Preview (dry run)</strong> is mandatory before save: count, bytes, sample table, CSV export.</li>
+<li>Schedule shown and editable (cron + human text). Deleted items go to soft-delete; compaction frees space.</li>
+</ul>
+<h2 id="09--vulnerabilities-scanning">09 · Vulnerabilities (<code>Scanning</code>)<a class="anchor" href="#09--vulnerabilities-scanning" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Severity cards (critical/high/medium/low) with sub-notes.</li>
+<li>Findings table: advisory id + title, severity, package@version, fixed-in, affected components, status (open, assigned, waived until date, quarantined).</li>
+<li>Filters: fix available, in production (pulled in last N days), waived.</li>
+<li>Policy panel: quarantine critical; <em>(planned)</em> require signatures (cosign) per repo, licence deny-list.</li>
+<li>30-day trend chart.</li>
+<li>Rescan on new advisory DB; waivers need reason + expiry, are audited.</li>
+</ul>
+<h2 id="10--access--audit-access">10 · Access &amp; audit (<code>Access</code>)<a class="anchor" href="#10--access--audit-access" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Tabs: Members, Roles, Access tokens, Service accounts.</li>
+<li>Members table: avatar, name/email, role, source (OIDC/AD/local/token), tokens, last active.</li>
+<li>Sign-in providers status; audit log stream with export (CSV/JSON, also streamed to syslog/webhook).</li>
+<li>Roles = sets of privileges (<code>repo:&lt;pattern&gt;:read|write|delete|admin</code>, <code>system:*</code>); built-ins Admin, Publisher, Reader, CI deployer. Group→role mapping for OIDC/LDAP.</li>
+<li>Tokens: scoped to repos + actions, expiry required, shown once.</li>
+</ul>
+<h2 id="11--scheduled-tasks-tasks">11 · Scheduled tasks (<code>Tasks</code>)<a class="anchor" href="#11--scheduled-tasks-tasks" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>&quot;Running now&quot; banner with progress and Stop.</li>
+<li>Table: task, description, schedule (human + cron), last run result with status dot, next run, Run now.</li>
+<li>Built-in task types: cleanup, blob compaction, docker GC, docker upload cleanup, rescan, auth purge, audit partitions. <em>(planned)</em> reindex search, directory sync, DB backup, replication, proxy metadata refresh.</li>
+</ul>
+<h2 id="12--cluster--replication-cluster-planned">12 · Cluster &amp; replication (<code>Cluster</code>) <em>(planned)</em><a class="anchor" href="#12--cluster--replication-cluster-planned" aria-label="Link to this section">#</a></h2>
+<p>Today the screen is a placeholder; node health is on Settings → System.</p>
+<ul>
+<li>Overall health + quorum.</li>
+<li>Node cards: role (leader/follower), zone, CPU/memory/cache-disk meters (warn colour &gt; 75%), req/s, uptime.</li>
+<li>Replication targets (edge nodes, DR): repos replicated, lag or failure + retry, objects today; Add edge node.</li>
+<li>Dependencies health: PostgreSQL, object storage, event bus, search, scanner.</li>
+</ul>
+<h2 id="global">Global<a class="anchor" href="#global" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>Sidebar navigation, org switcher, system status card.</li>
+<li>⌘K command palette: jump to package/repo/user/CVE, run actions.</li>
+<li>Notifications bell: quarantines, failed tasks, quota warnings.</li>
+<li>Every list is URL-addressable (filters in query string). Every page works at 390 px width.</li>
+</ul>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/PRODUCT_SPEC.md"><code>docs/PRODUCT_SPEC.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/PRODUCT_SPEC.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../adr/0009-rest-api-conventions/" rel="prev"><small>Previous</small><b>0009. REST API conventions</b></a><a class="next" href="../design-system/" rel="next"><small>Next</small><b>Design system</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#concepts">Concepts</a></li><li class="l2"><a href="#01--sign-in-login">01 · Sign in (Login)</a></li><li class="l2"><a href="#02--overview-main">02 · Overview (Main)</a></li><li class="l2"><a href="#03--repositories">03 · Repositories</a></li><li class="l2"><a href="#04--new-repository-repocreate">04 · New repository (RepoCreate)</a></li><li class="l2"><a href="#05--package-detail-browse">05 · Package detail (Browse)</a></li><li class="l2"><a href="#06--search">06 · Search</a></li><li class="l2"><a href="#07--blob-stores-blobstores">07 · Blob stores (BlobStores)</a></li><li class="l2"><a href="#08--cleanup-policies-cleanup">08 · Cleanup policies (Cleanup)</a></li><li class="l2"><a href="#09--vulnerabilities-scanning">09 · Vulnerabilities (Scanning)</a></li><li class="l2"><a href="#10--access--audit-access">10 · Access &amp; audit (Access)</a></li><li class="l2"><a href="#11--scheduled-tasks-tasks">11 · Scheduled tasks (Tasks)</a></li><li class="l2"><a href="#12--cluster--replication-cluster-planned">12 · Cluster &amp; replication (Cluster) (planned)</a></li><li class="l2"><a href="#global">Global</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

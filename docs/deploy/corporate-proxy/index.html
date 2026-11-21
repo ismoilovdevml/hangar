@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Corporate HTTP proxy · Hangar docs</title>
+<meta name="description" content="Proxy repositories fetch from public registries: Maven Central (repo1.maven.org), npmjs (registry.npmjs.org), Docker Hub (registry-1.docker.io…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/deploy/corporate-proxy/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Corporate HTTP proxy">
+<meta property="og:description" content="Proxy repositories fetch from public registries: Maven Central (repo1.maven.org), npmjs (registry.npmjs.org), Docker Hub (registry-1.docker.io…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/deploy/corporate-proxy/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Corporate HTTP proxy">
+<meta name="twitter:description" content="Proxy repositories fetch from public registries: Maven Central (repo1.maven.org), npmjs (registry.npmjs.org), Docker Hub (registry-1.docker.io…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Corporate HTTP proxy","item":"https://ismoilovdevml.github.io/hangar/docs/deploy/corporate-proxy/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../../guides/getting-started/">Getting started</a></li><li><a href="../../guides/">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../">Deploying Hangar</a></li><li><a href="../requirements/">Requirements and sizing</a></li><li><a href="../install-compose/">Docker Compose</a></li><li><a href="../install-helm/">Helm (Kubernetes)</a></li><li><a href="../install-binary/">Binary and systemd</a></li><li><a href="../reverse-proxy/">TLS and reverse proxies</a></li><li><a href="./" aria-current="page">Corporate HTTP proxy</a></li><li><a href="../first-admin/">First administrator</a></li><li><a href="../backup-restore/">Backup and restore</a></li><li><a href="../upgrade/">Upgrades</a></li><li><a href="../high-availability/">High availability</a></li><li><a href="../troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../../guides/docker/">Docker &amp; OCI</a></li><li><a href="../../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../../guides/pypi/">PyPI</a></li><li><a href="../../guides/nuget/">NuGet</a></li><li><a href="../../guides/go/">Go modules</a></li><li><a href="../../guides/helm/">Helm charts</a></li><li><a href="../../guides/cargo/">Cargo</a></li><li><a href="../../guides/apt/">APT</a></li><li><a href="../../guides/rpm/">RPM</a></li><li><a href="../../guides/raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Install and run</p>
+      <h1>Corporate HTTP proxy</h1>
+<p class="lead">Proxy repositories fetch from public registries: Maven Central
+(<code>repo1.maven.org</code>), npmjs (<code>registry.npmjs.org</code>), Docker Hub
+(<code>registry-1.docker.io</code>, <code>auth.docker.io</code>, <code>production.cloudflare.docker.com</code>),
+PyPI (<code>pypi.org</code>, <code>files.pythonhosted.org</code>), nuget.org (<code>api.nuget.org</code> and
+its search hosts). In networks where outbound traffic must pass a proxy,
+define one or more named proxies, make one the platform default, and let
+each proxy repository inherit the default, pick another proxy or connect
+directly.</p>
+<p>Nothing else in Hangar makes outbound requests (PostgreSQL, S3 and NATS
+connections do not use the HTTP proxy settings).</p>
+<p>With image scanning, the Trivy server and the scan adapter download
+vulnerability databases themselves (<code>mirror.gcr.io</code>, <code>ghcr.io</code>); they take
+<code>HTTPS_PROXY</code> from their own environment, not these settings:
+<code>install.sh --trivy-proxy URL</code>, or <code>imageScanning.httpsProxy</code> in the Helm
+chart (<a href="../../guides/vulnerabilities/#corporate-proxy-and-offline-databases">vulnerabilities.md</a>).</p>
+<h2 id="named-proxies-settings--internet-access">Named proxies (Settings → Internet access)<a class="anchor" href="#named-proxies-settings--internet-access" aria-label="Link to this section">#</a></h2>
+<p>Administrators (<code>system:settings:admin</code>) manage outbound proxies in
+<strong>Settings → Internet access</strong> (<code>/settings/proxies</code>) or through the API, without a restart. Users with
+<code>system:settings:read</code> see the page read-only.</p>
+<p>With no proxy yet, the page says how remotes are reached today:
+<em>Connecting directly</em>, or <em>Using the server's proxy</em> with the
+<code>HTTPS_PROXY</code> value when the server environment sets one. <strong>Add a proxy</strong>
+opens a short form:</p>
+<ol>
+<li><strong>Proxy address</strong>, written as in <code>HTTPS_PROXY</code>:
+<code>http://proxy.example.com:3128</code> (the port is required; <code>user:password@</code>
+in the address moves to the credential fields). The proxy is named after
+its host (<code>proxy.example.com</code>); <strong>Choose a name</strong> sets another one.</li>
+<li><strong>Use for every proxy repository</strong> makes it the platform default.</li>
+<li><strong>Needs a username and password</strong> and <strong>Exceptions and certificates</strong>
+(no-proxy hosts, redirect target hosts, a CA certificate to upload or
+paste) stay folded until needed.</li>
+<li><strong>Test</strong> fetches <code>https://api.nuget.org/v3/index.json</code> through the
+unsaved values and shows <em>api.nuget.org answered 200 in 182 ms</em>;
+<strong>Change</strong> picks another URL. <strong>Save</strong> applies it on every node.</li>
+</ol>
+<p>Once proxies exist, the page lists each one with its address, whether it
+is the platform default and how many repositories pick it or inherit it,
+with <strong>Edit</strong>, <strong>Test</strong> and <strong>Delete</strong> per row and <strong>Add another proxy</strong>
+below.</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Name</td>
+<td>Key repositories refer to (<code>corp-proxy</code>); the host by default, fixed after creation.</td>
+</tr>
+<tr>
+<td>Proxy address</td>
+<td>Scheme (<code>http</code> or <code>https</code>), host and port, e.g. <code>http://proxy.example.com:3128</code>.</td>
+</tr>
+<tr>
+<td>Username, password</td>
+<td>Proxy Basic credentials. The password is sealed with <code>HANGAR_SECRET_KEY</code> and write-only.</td>
+</tr>
+<tr>
+<td>No proxy for</td>
+<td>Hosts, <code>.domain</code> suffixes, IPs and CIDRs reached directly.</td>
+</tr>
+<tr>
+<td>Redirect target hosts</td>
+<td>Hosts that upstream redirects may lead to and still go through this proxy, such as a registry's CDN (<code>.cloudflare.docker.com</code>). When the list is not empty, only the repository's remote host and these hosts use the proxy and everything else is reached directly. When it is empty, every host uses the proxy.</td>
+</tr>
+<tr>
+<td>CA certificates</td>
+<td>PEM trusted for requests through this proxy (the root of a TLS-inspecting proxy).</td>
+</tr>
+<tr>
+<td>Platform default</td>
+<td>Used by every repository that inherits. At most one proxy is the default.</td>
+</tr>
+</tbody>
+</table></div>
+<p>NTLM proxy authentication is not supported; use Basic credentials or a
+proxy that accepts the server's address.</p>
+<p><strong>Test</strong> fetches a URL (default <code>https://api.nuget.org/v3/index.json</code>)
+through the proxy and shows the HTTP status and the time it took; it works
+on unsaved form values too and, from the list, on a saved proxy. A <code>407</code> means the proxy wants other credentials.</p>
+<p>A proxy that repositories select by name cannot be deleted: the API answers
+<code>409 in_use</code> with the repository names. Point those repositories elsewhere
+first. Deleting the default is allowed; inheriting repositories then use
+<code>HTTPS_PROXY</code> from the environment (with <code>use_environment</code>) or connect
+directly.</p>
+<p>Changes apply on every node within seconds (the event bus, and a 30-second
+poll as a safety net). Every change is audited (<code>proxy.create</code>,
+<code>proxy.update</code>, <code>proxy.delete</code>, <code>proxy.test</code>) without the password.</p>
+<p>API (<code>api/openapi.yaml</code>):</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Method and path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /api/v1/proxies</code></td>
+<td>List (names only for users without <code>system:settings:read</code>)</td>
+</tr>
+<tr>
+<td><code>POST /api/v1/proxies</code></td>
+<td>Create</td>
+</tr>
+<tr>
+<td><code>GET</code>, <code>PUT</code>, <code>DELETE /api/v1/proxies/{name}</code></td>
+<td>Read, replace, delete</td>
+</tr>
+<tr>
+<td><code>POST /api/v1/proxies/{name}:test</code></td>
+<td>Fetch <code>url</code> through it (<code>{&quot;url&quot;: &quot;...&quot;, &quot;settings&quot;: {...}}</code>)</td>
+</tr>
+</tbody>
+</table></div>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="sh"><code>curl -u admin -X POST https://hangar.example.com/api/v1/proxies \
+  -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> -d <span class="hljs-string">&#x27;{
+    &quot;name&quot;: &quot;corp-proxy&quot;, &quot;scheme&quot;: &quot;http&quot;, &quot;host&quot;: &quot;proxy.example.com&quot;, &quot;port&quot;: 3128,
+    &quot;username&quot;: &quot;hangar&quot;, &quot;password&quot;: &quot;…&quot;, &quot;no_proxy&quot;: [&quot;.corp.example&quot;, &quot;10.0.0.0/8&quot;],
+    &quot;redirect_hosts&quot;: [], &quot;ca_pem&quot;: &quot;&quot;, &quot;default&quot;: true}&#x27;</span></code></pre></div>
+<h3 id="precedence">Precedence<a class="anchor" href="#precedence" aria-label="Link to this section">#</a></h3>
+<ol>
+<li>A proxy set in the configuration file (<code>http.proxy</code> below) is listed as
+<code>config</code>, read-only and labelled <em>set in configuration file</em>. It is the
+platform default; no proxy from the UI can take that role.</li>
+<li>Otherwise the proxy marked <em>Platform default</em> in the UI.</li>
+<li>Otherwise, with <code>http.use_environment</code> (the default), <code>HTTPS_PROXY</code>,
+<code>HTTP_PROXY</code> and <code>NO_PROXY</code> of the server's environment.</li>
+<li>Otherwise a direct connection.</li>
+</ol>
+<p><code>http.ca_file</code> is trusted for every request in addition to each proxy's own
+CA certificates.</p>
+<h2 id="server-wide-settings">Server-wide settings<a class="anchor" href="#server-wide-settings" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-attr">http:</span>
+  <span class="hljs-attr">proxy:</span> <span class="hljs-string">http://proxy.corp.example:3128</span>   <span class="hljs-comment"># http://, https:// or socks5://</span>
+  <span class="hljs-attr">proxy_username:</span> <span class="hljs-string">hangar</span>
+  <span class="hljs-comment"># proxy_password: from HANGAR_HTTP_PROXY_PASSWORD</span>
+  <span class="hljs-attr">no_proxy:</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-string">.corp.example</span>          <span class="hljs-comment"># domain suffix</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-string">legacy-registry.corp.example</span> <span class="hljs-comment"># host</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-number">10.0</span><span class="hljs-number">.0</span><span class="hljs-number">.0</span><span class="hljs-string">/8</span>             <span class="hljs-comment"># CIDR</span>
+  <span class="hljs-attr">use_environment:</span> <span class="hljs-literal">true</span>      <span class="hljs-comment"># with proxy empty: honour HTTP_PROXY/HTTPS_PROXY/NO_PROXY</span>
+  <span class="hljs-attr">ca_file:</span> <span class="hljs-string">/etc/hangar/ca/corp-root.pem</span>
+  <span class="hljs-attr">connect_timeout:</span> <span class="hljs-string">10s</span>
+  <span class="hljs-attr">read_timeout:</span> <span class="hljs-string">60s</span>          <span class="hljs-comment"># wait for response headers</span></code></pre></div>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Setting</th>
+<th>Env</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>http.proxy</code></td>
+<td><code>HANGAR_HTTP_PROXY</code></td>
+<td>The platform default proxy, listed as <code>config</code> in the UI.</td>
+</tr>
+<tr>
+<td><code>http.proxy_username</code></td>
+<td><code>HANGAR_HTTP_PROXY_USERNAME</code></td>
+<td>Proxy credentials (Basic).</td>
+</tr>
+<tr>
+<td><code>http.proxy_password</code></td>
+<td><code>HANGAR_HTTP_PROXY_PASSWORD</code></td>
+<td>Keep it in the environment / a Secret.</td>
+</tr>
+<tr>
+<td><code>http.no_proxy</code></td>
+<td><code>HANGAR_HTTP_NO_PROXY</code> (comma-separated)</td>
+<td>Reached directly: hosts, <code>.domain</code> suffixes, CIDRs.</td>
+</tr>
+<tr>
+<td><code>http.use_environment</code></td>
+<td><code>HANGAR_HTTP_USE_ENVIRONMENT</code></td>
+<td>When <code>http.proxy</code> is empty, use the standard <code>HTTP_PROXY</code>, <code>HTTPS_PROXY</code>, <code>NO_PROXY</code> variables.</td>
+</tr>
+<tr>
+<td><code>http.ca_file</code></td>
+<td><code>HANGAR_HTTP_CA_FILE</code></td>
+<td>PEM bundle trusted in addition to the system roots: the root of a TLS-inspecting proxy, or a private CA of an internal mirror.</td>
+</tr>
+<tr>
+<td><code>http.allow_private_networks</code></td>
+<td><code>HANGAR_HTTP_ALLOW_PRIVATE_NETWORKS</code></td>
+<td>Internal addresses proxy repositories may reach (see below).</td>
+</tr>
+<tr>
+<td><code>http.dns.cache</code></td>
+<td><code>HANGAR_HTTP_DNS_CACHE</code></td>
+<td>Cache remote host name lookups in process (default <code>true</code>; see <a href="#dns-cache">DNS cache</a>).</td>
+</tr>
+<tr>
+<td><code>http.dns.ttl</code></td>
+<td><code>HANGAR_HTTP_DNS_TTL</code></td>
+<td>How long an answer is used: <code>1s</code> to <code>1h</code>, default <code>60s</code>.</td>
+</tr>
+<tr>
+<td><code>http.dns.negative_ttl</code></td>
+<td><code>HANGAR_HTTP_DNS_NEGATIVE_TTL</code></td>
+<td>How long a failed lookup is remembered: <code>0</code> (off) to <code>5m</code>, default <code>5s</code>.</td>
+</tr>
+<tr>
+<td><code>http.dns.stale_ttl</code></td>
+<td><code>HANGAR_HTTP_DNS_STALE_TTL</code></td>
+<td>How long past <code>ttl</code> the last answer is still used while the DNS servers time out or fail: <code>0</code> (off) to <code>24h</code>, default <code>10m</code>.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Where to set them:</p>
+<ul>
+<li>Compose (<code>install.sh</code>): <code>http.proxy</code> and <code>http.no_proxy</code> in
+<code>&lt;data&gt;/config/hangar.yaml</code>, the password in the file
+<code>&lt;data&gt;/secrets/http.proxy_password</code> (mode 600, owner 65532). For a CA
+file, mount it into the container (an extra <code>volumes:</code> entry in
+<code>&lt;data&gt;/compose.override.yaml</code>) and set <code>http.ca_file</code> in <code>hangar.yaml</code>.</li>
+<li>Helm: <code>config.http.*</code>, the password in <code>httpProxyPassword</code>, the CA via
+<code>extraVolumes</code>/<code>extraVolumeMounts</code> (<a href="../install-helm/#private-ca-and-corporate-proxy">install-helm.md</a>).
+Add the cluster's internal domains (<code>.svc</code>, <code>.cluster.local</code>) to <code>no_proxy</code>.</li>
+<li>systemd: <code>/etc/hangar/hangar.yaml</code> and <code>HANGAR_HTTP_PROXY_PASSWORD</code> in
+<code>/etc/hangar/hangar.env</code>.</li>
+</ul>
+<h3 id="dns-cache">DNS cache<a class="anchor" href="#dns-cache" aria-label="Link to this section">#</a></h3>
+<p>Every connection to a remote (and to an outbound proxy) resolves its host
+name through an in-process cache shared by all proxy repositories. During
+CI bursts this keeps hundreds of requests a minute from each asking the
+DNS servers, which corporate DNS servers may answer with timeouts:</p>
+<ul>
+<li>an answer is used for <code>http.dns.ttl</code>; concurrent lookups of one name
+share one query;</li>
+<li>a lookup that times out or fails temporarily (SERVFAIL) is retried once
+after 200 ms; when that fails too, the last answer is used for up to
+<code>http.dns.stale_ttl</code> and DNS is asked again every <code>http.dns.negative_ttl</code>;</li>
+<li><code>no such host</code> (NXDOMAIN) is a real answer: no stale fallback;</li>
+<li>every address, cached or not, is checked against the address policy
+when the URL is checked and again when it is dialled, so the cache does
+not let a name reach internal addresses.</li>
+</ul>
+<p>Timeouts and temporary DNS failures count towards a remote's circuit
+breaker at most once per second: a burst of requests failing on one
+unanswered lookup does not take the remote (and the groups it is a member
+of) offline, while a DNS outage that lasts still trips the breaker after
+the usual number of failures. <code>hangar_upstream_dns_errors_total</code> and
+<code>hangar_upstream_dns_cache_requests_total</code> show the resolver's behaviour
+(<a href="../../operations/monitoring/#proxy-remotes">monitoring.md</a>). Set
+<code>http.dns.cache: false</code> to resolve on every connection, as before.</p>
+<h2 id="per-repository">Per repository<a class="anchor" href="#per-repository" aria-label="Link to this section">#</a></h2>
+<p>In the repository settings, <strong>Outbound proxy</strong> offers <em>Platform default</em>
+(the default), each named proxy, and <em>No proxy (direct)</em>. In the API that is
+<code>config.proxy.http.proxy_name</code> (a named proxy), or <code>proxy</code>. The rest of
+<code>config.proxy.http</code> tunes the connection for this remote only:</p>
+<div class="code"><div class="code-head"><span>json</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="json"><code><span class="hljs-attr">&quot;proxy&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;remote_url&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;https://repo1.maven.org/maven2/&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;http&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;proxy&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;none&quot;</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">&quot;ca_bundle&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;-----BEGIN CERTIFICATE-----\n...&quot;</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">&quot;connect_timeout&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;5s&quot;</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">&quot;read_timeout&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;120s&quot;</span>
+  <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span></code></pre></div>
+<p><code>proxy_name</code> names a proxy from <code>GET /api/v1/proxies</code>; saving a repository
+with an unknown name is refused. <code>proxy</code> is <code>inherit</code> (default: the platform
+default proxy, honouring its <code>no_proxy</code>), <code>none</code> (direct), or a URL,
+optionally with <code>user:password@</code>, kept for repositories configured before
+named proxies existed; the password is stored encrypted
+(<code>HANGAR_SECRET_KEY</code> required) and never returned by the API. <code>insecure_skip_verify</code> exists for emergencies, is audited, and should
+not be used.</p>
+<h2 id="internal-mirrors-and-the-address-policy">Internal mirrors and the address policy<a class="anchor" href="#internal-mirrors-and-the-address-policy" aria-label="Link to this section">#</a></h2>
+<p>To prevent server-side request forgery, proxy repositories may not connect
+to loopback, private (RFC 1918), link-local (cloud metadata), CGNAT and other
+internal ranges: such a remote is refused when the repository is saved and on
+every connection. When the remote really is internal (an old repository
+manager being migrated, an internal mirror), allow it explicitly:</p>
+<div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-attr">http:</span>
+  <span class="hljs-attr">allow_private_networks:</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-number">10.20</span><span class="hljs-number">.30</span><span class="hljs-number">.0</span><span class="hljs-string">/24</span>
+    <span class="hljs-bullet">-</span> <span class="hljs-string">.corp.example</span></code></pre></div>
+<p>The policy applies to the address Hangar dials. Through a proxy, that is the
+proxy's address, so an internal proxy needs to be listed as well when it
+resolves to a private address.</p>
+<h2 id="checking-it">Checking it<a class="anchor" href="#checking-it" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>The repository's status in the UI and <code>GET /api/v1/repositories/&lt;name&gt;</code>
+show an unreachable remote; the logs carry the outbound error (proxy refused
+the connection, TLS verification failed, timeout).</li>
+<li>Metrics: <code>hangar_upstream_fetches_total</code> and <code>hangar_upstream_state</code> and the upstream dashboard in
+<code>deploy/observability/grafana/</code> break failures down by remote.</li>
+<li>A TLS error <code>x509: certificate signed by unknown authority</code> on every remote
+means the proxy inspects TLS: set <code>http.ca_file</code> to its root certificate.</li>
+</ul>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/corporate-proxy.md"><code>docs/deploy/corporate-proxy.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/corporate-proxy.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../reverse-proxy/" rel="prev"><small>Previous</small><b>TLS and reverse proxies</b></a><a class="next" href="../first-admin/" rel="next"><small>Next</small><b>First administrator</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#named-proxies-settings--internet-access">Named proxies (Settings → Internet access)</a></li><li class="l3"><a href="#precedence">Precedence</a></li><li class="l2"><a href="#server-wide-settings">Server-wide settings</a></li><li class="l3"><a href="#dns-cache">DNS cache</a></li><li class="l2"><a href="#per-repository">Per repository</a></li><li class="l2"><a href="#internal-mirrors-and-the-address-policy">Internal mirrors and the address policy</a></li><li class="l2"><a href="#checking-it">Checking it</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

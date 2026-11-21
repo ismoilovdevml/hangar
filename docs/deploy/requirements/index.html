@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Requirements and sizing · Hangar docs</title>
+<meta name="description" content="Requirements and sizing: PostgreSQL user rights: Hangar needs to own its schema (create tables, indexes, partitions and run migrations). Create a dedicated…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/deploy/requirements/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Requirements and sizing">
+<meta property="og:description" content="Requirements and sizing: PostgreSQL user rights: Hangar needs to own its schema (create tables, indexes, partitions and run migrations). Create a dedicated…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/deploy/requirements/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Requirements and sizing">
+<meta name="twitter:description" content="Requirements and sizing: PostgreSQL user rights: Hangar needs to own its schema (create tables, indexes, partitions and run migrations). Create a dedicated…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Requirements and sizing","item":"https://ismoilovdevml.github.io/hangar/docs/deploy/requirements/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../../guides/getting-started/">Getting started</a></li><li><a href="../../guides/">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../">Deploying Hangar</a></li><li><a href="./" aria-current="page">Requirements and sizing</a></li><li><a href="../install-compose/">Docker Compose</a></li><li><a href="../install-helm/">Helm (Kubernetes)</a></li><li><a href="../install-binary/">Binary and systemd</a></li><li><a href="../reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../first-admin/">First administrator</a></li><li><a href="../backup-restore/">Backup and restore</a></li><li><a href="../upgrade/">Upgrades</a></li><li><a href="../high-availability/">High availability</a></li><li><a href="../troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../../guides/docker/">Docker &amp; OCI</a></li><li><a href="../../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../../guides/pypi/">PyPI</a></li><li><a href="../../guides/nuget/">NuGet</a></li><li><a href="../../guides/go/">Go modules</a></li><li><a href="../../guides/helm/">Helm charts</a></li><li><a href="../../guides/cargo/">Cargo</a></li><li><a href="../../guides/apt/">APT</a></li><li><a href="../../guides/rpm/">RPM</a></li><li><a href="../../guides/raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Install and run</p>
+      <h1>Requirements and sizing</h1>
+<h2 id="components">Components<a class="anchor" href="#components" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Component</th>
+<th>Required</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Hangar</td>
+<td>yes</td>
+<td>One static binary (<code>linux/amd64</code>, <code>linux/arm64</code>) or the container image <code>ghcr.io/ismoilovdevml/hangar</code> (distroless, runs as UID 65532). Stateless apart from the embedded NATS and filesystem blob options.</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>yes</td>
+<td>Version 16 or newer. Holds repositories, components, assets, users, tokens, audit log, task state. Hangar applies its own schema migrations.</td>
+</tr>
+<tr>
+<td>Blob storage</td>
+<td>yes</td>
+<td><strong>S3-compatible</strong> (AWS S3, MinIO, Ceph RGW, ...) or a <strong>filesystem path</strong>. Blobs are content-addressed and immutable. Several nodes need S3 or a shared ReadWriteMany volume.</td>
+</tr>
+<tr>
+<td>NATS with JetStream</td>
+<td>yes</td>
+<td>Events and the job queue. Embedded in the process for a single node; an external cluster (3 nodes) for several nodes.</td>
+</tr>
+<tr>
+<td>Reverse proxy / ingress</td>
+<td>for TLS</td>
+<td>Hangar serves plain HTTP. Terminate TLS in Caddy, Traefik, a cloud load balancer or an ingress controller.</td>
+</tr>
+<tr>
+<td>OSV API (<code>api.osv.dev:443</code>) or a mirror</td>
+<td>no</td>
+<td>Vulnerability scanning of npm, Maven, PyPI, NuGet and Go packages (<code>scanning.osv.url</code>); without it scans fail and are retried.</td>
+</tr>
+<tr>
+<td>Trivy server and the scan adapter</td>
+<td>no</td>
+<td>Container image scanning (<code>scanner.trivy_url</code>, <code>install.sh --with-trivy</code>, Helm <code>imageScanning</code>). The Trivy server downloads its database from <code>mirror.gcr.io:443</code> (or <code>ghcr.io</code>) through <code>HTTPS_PROXY</code>; about 1 GiB of disk and 2 GiB of memory. Without it images show <em>Image scanning not configured</em>.</td>
+</tr>
+</tbody>
+</table></div>
+<p>PostgreSQL user rights: Hangar needs to own its schema (create tables,
+indexes, partitions and run migrations). Create a dedicated database and
+role:</p>
+<div class="code"><div class="code-head"><span>sql</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="sql"><code><span class="hljs-keyword">CREATE</span> ROLE hangar LOGIN PASSWORD <span class="hljs-string">&#x27;...&#x27;</span>;
+<span class="hljs-keyword">CREATE</span> DATABASE hangar OWNER hangar;</code></pre></div>
+<p>S3 rights for the bucket: <code>s3:ListBucket</code>, <code>s3:GetBucketLocation</code>,
+<code>s3:ListBucketMultipartUploads</code> on the bucket, and <code>s3:GetObject</code>,
+<code>s3:PutObject</code>, <code>s3:DeleteObject</code>, <code>s3:AbortMultipartUpload</code>,
+<code>s3:ListMultipartUploadParts</code> on its objects. The compose stack creates a
+MinIO user with exactly this policy.</p>
+<h2 id="sizing">Sizing<a class="anchor" href="#sizing" aria-label="Link to this section">#</a></h2>
+<p>The numbers below are starting points for planning, derived from the single-
+node measurements in <a href="../../operations/performance/">performance.md</a> (one node
+served 14 000 to 28 000 metadata and download requests per second on a
+12-core machine with the database on the same host) and from the memory
+settings Hangar uses. Measure your own workload before committing hardware;
+the Grafana dashboards in <code>deploy/observability/</code> show request rates,
+latencies and resource use per node.</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Size</th>
+<th>Users / CI runners</th>
+<th>Hangar</th>
+<th>PostgreSQL</th>
+<th>Blob storage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Small</td>
+<td>up to 50 / 10</td>
+<td>1 node: 2 vCPU, 4 GiB</td>
+<td>2 vCPU, 4 GiB, 20 GiB SSD</td>
+<td>200 GiB</td>
+</tr>
+<tr>
+<td>Medium</td>
+<td>up to 500 / 100</td>
+<td>2 nodes: 4 vCPU, 8 GiB each</td>
+<td>4 vCPU, 16 GiB, 100 GiB SSD</td>
+<td>1-5 TiB S3</td>
+</tr>
+<tr>
+<td>Large</td>
+<td>500+ / 100+</td>
+<td>3+ nodes: 8 vCPU, 16 GiB each</td>
+<td>8+ vCPU, 32 GiB, replicated</td>
+<td>S3, sized from growth</td>
+</tr>
+</tbody>
+</table></div>
+<p>What drives each resource:</p>
+<ul>
+<li><strong>CPU</strong>: request rate, TLS (at the proxy), SHA-256 of every upload, argon2
+password checks. Clients that authenticate with tokens are much cheaper
+than password logins.</li>
+<li><strong>Memory</strong> per node: Go heap for in-flight requests and caches (npm
+packuments, Maven metadata, repository lookups), plus argon2:
+<code>auth.argon2.memory_kib</code> (64 MiB) x <code>auth.max_concurrent_hashes</code> (4) =
+256 MiB at peak. Uploads and downloads are streamed and do not grow with
+artifact size. Start with a 2 GiB limit per node and watch
+<code>go_memstats_heap_inuse_bytes</code>.</li>
+<li><strong>Database connections</strong>: each node uses up to <code>database.max_conns</code> (20)
+plus up to 16 connections for advisory locks. Set PostgreSQL
+<code>max_connections</code> to at least <code>nodes x (max_conns + 16)</code> plus room for
+backups and administration.</li>
+<li><strong>Database size</strong>: metadata only (no artifact bytes), roughly a few KiB per
+asset plus the audit log, which is partitioned by month.</li>
+<li><strong>Blob storage</strong>: the sum of unique artifact bytes (identical layers and
+files are stored once) plus cached proxy content. Cleanup policies and blob
+GC reclaim space; GC keeps unreferenced blobs for
+<code>storage.gc.grace_period</code> (48h) before deleting them.</li>
+<li><strong>Disk for filesystem blobs</strong>: local SSD or NFS. Each write is fsynced, so
+flush latency bounds publish throughput.</li>
+<li><strong>Embedded NATS</strong>: a few hundred MiB of disk under <code>nats.data_dir</code>.</li>
+</ul>
+<h2 id="network">Network<a class="anchor" href="#network" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>From</th>
+<th>To</th>
+<th>Port</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Clients, CI</td>
+<td>reverse proxy</td>
+<td>443</td>
+<td>UI, API, every package format</td>
+</tr>
+<tr>
+<td>Reverse proxy</td>
+<td>Hangar</td>
+<td>8080 (<code>server.addr</code>)</td>
+<td>HTTP</td>
+</tr>
+<tr>
+<td>Docker clients</td>
+<td>Hangar</td>
+<td>per connector</td>
+<td>only for Docker port connectors (<code>connector.http_port</code>)</td>
+</tr>
+<tr>
+<td>Hangar</td>
+<td>PostgreSQL</td>
+<td>5432</td>
+<td></td>
+</tr>
+<tr>
+<td>Hangar</td>
+<td>S3 endpoint</td>
+<td>443 / 9000</td>
+<td>blob storage</td>
+</tr>
+<tr>
+<td>Hangar</td>
+<td>NATS</td>
+<td>4222</td>
+<td>external NATS only</td>
+</tr>
+<tr>
+<td>Hangar</td>
+<td>Internet or corporate proxy</td>
+<td>443</td>
+<td>proxy repositories (Maven Central, npmjs, Docker Hub, PyPI, nuget.org)</td>
+</tr>
+<tr>
+<td>Prometheus</td>
+<td>Hangar</td>
+<td>8080 <code>/metrics</code></td>
+<td>scraping; keep <code>/metrics</code> off public hosts</td>
+</tr>
+</tbody>
+</table></div>
+<p>Docker clients need the registry at the root of a host name (<code>/v2/</code>). Hangar
+serves it on the main host, and the deploy examples add an optional separate
+registry host (<code>registry.example.com</code>), see <a href="../reverse-proxy/">reverse-proxy.md</a>.</p>
+<h2 id="large-artifacts">Large artifacts<a class="anchor" href="#large-artifacts" aria-label="Link to this section">#</a></h2>
+<p>Hangar streams request and response bodies and has no upload size limit by
+default (<code>security.limits.upload_body_bytes: 0</code>). Everything in front of it
+must allow the same:</p>
+<ul>
+<li>no request body size limit,</li>
+<li>no request buffering (spooling multi-GiB uploads to the proxy's disk),</li>
+<li>read and write timeouts measured between two reads, not for the whole
+transfer, of at least several minutes.</li>
+</ul>
+<p><a href="../reverse-proxy/">reverse-proxy.md</a> has the exact settings for Caddy,
+Traefik and the Kubernetes ingress controllers.</p>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/requirements.md"><code>docs/deploy/requirements.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/requirements.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../" rel="prev"><small>Previous</small><b>Deploying Hangar</b></a><a class="next" href="../install-compose/" rel="next"><small>Next</small><b>Docker Compose</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#components">Components</a></li><li class="l2"><a href="#sizing">Sizing</a></li><li class="l2"><a href="#network">Network</a></li><li class="l2"><a href="#large-artifacts">Large artifacts</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

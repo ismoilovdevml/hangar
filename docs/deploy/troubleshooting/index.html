@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Troubleshooting · Hangar docs</title>
+<meta name="description" content="Troubleshooting: Start with the three views every install has: Logs are JSON lines; every request line carries request_id (also returned in the X-Request-Id…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/deploy/troubleshooting/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Troubleshooting">
+<meta property="og:description" content="Troubleshooting: Start with the three views every install has: Logs are JSON lines; every request line carries request_id (also returned in the X-Request-Id…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/deploy/troubleshooting/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Troubleshooting">
+<meta name="twitter:description" content="Troubleshooting: Start with the three views every install has: Logs are JSON lines; every request line carries request_id (also returned in the X-Request-Id…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Troubleshooting","item":"https://ismoilovdevml.github.io/hangar/docs/deploy/troubleshooting/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../../guides/getting-started/">Getting started</a></li><li><a href="../../guides/">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../">Deploying Hangar</a></li><li><a href="../requirements/">Requirements and sizing</a></li><li><a href="../install-compose/">Docker Compose</a></li><li><a href="../install-helm/">Helm (Kubernetes)</a></li><li><a href="../install-binary/">Binary and systemd</a></li><li><a href="../reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../first-admin/">First administrator</a></li><li><a href="../backup-restore/">Backup and restore</a></li><li><a href="../upgrade/">Upgrades</a></li><li><a href="../high-availability/">High availability</a></li><li><a href="./" aria-current="page">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../../guides/docker/">Docker &amp; OCI</a></li><li><a href="../../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../../guides/pypi/">PyPI</a></li><li><a href="../../guides/nuget/">NuGet</a></li><li><a href="../../guides/go/">Go modules</a></li><li><a href="../../guides/helm/">Helm charts</a></li><li><a href="../../guides/cargo/">Cargo</a></li><li><a href="../../guides/apt/">APT</a></li><li><a href="../../guides/rpm/">RPM</a></li><li><a href="../../guides/raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Install and run</p>
+      <h1>Troubleshooting</h1>
+<p class="lead">Start with the three views every install has:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -s https://hangar.example.com/readyz          <span class="hljs-comment"># which dependency fails</span>
+curl -s https://hangar.example.com/api/v1/system/status
+docker compose logs --<span class="hljs-built_in">tail</span> 100 hangar               <span class="hljs-comment"># or kubectl logs / journalctl -u hangar</span></code></pre></div>
+<p>Logs are JSON lines; every request line carries <code>request_id</code> (also returned
+in the <code>X-Request-Id</code> response header) and, with tracing, <code>trace_id</code>. Set
+<code>log.level: debug</code> temporarily for probe and scrape requests and more detail.
+Alert-specific runbooks are in <a href="../../operations/runbooks/">operations/runbooks.md</a>.</p>
+<h2 id="start-up">Start-up<a class="anchor" href="#start-up" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>config file ... not found</code> / <code>parse ...: field xyz not found</code></td>
+<td>Wrong path, or an unknown or misspelled key (Hangar rejects unknown keys).</td>
+<td>Compare with <code>hangar.example.yaml</code>.</td>
+</tr>
+<tr>
+<td><code>database.url (HANGAR_DATABASE_URL) is required</code></td>
+<td>No database configured.</td>
+<td>Set <code>HANGAR_DATABASE_URL</code>.</td>
+</tr>
+<tr>
+<td><code>database schema is out of date: run hangar migrate up</code></td>
+<td>New version, migrations not applied, <code>migrate_on_start: false</code>.</td>
+<td><code>hangar migrate up</code> once (Helm: check the <code>hangar-migrate</code> Job), then start.</td>
+</tr>
+<tr>
+<td><code>storage.gc.grace_period ... must be longer than 24h</code></td>
+<td>Grace period too short for Docker upload sessions.</td>
+<td>Use more than <code>24h</code> (default <code>48h</code>).</td>
+</tr>
+<tr>
+<td><code>bootstrap.admin_user and bootstrap.admin_password must be set together</code></td>
+<td>Only one of the two set.</td>
+<td>Set both or neither.</td>
+</tr>
+<tr>
+<td>A <code>security.secret_key</code> error</td>
+<td>Key not 32 bytes in base64 or hex.</td>
+<td><code>openssl rand -base64 32</code>.</td>
+</tr>
+<tr>
+<td><code>connect nats: ... i/o timeout</code></td>
+<td>External NATS unreachable or not ready yet.</td>
+<td>Check <code>nats.url</code>, network policy, NATS pods. The Helm chart waits for its bundled NATS in an init container.</td>
+</tr>
+<tr>
+<td><code>create job stream: ... stream is offline</code></td>
+<td>The NATS server holding the job stream is down or restarting (single-replica stream).</td>
+<td>Bring the NATS server back; Hangar restarts until the stream is available. Set <code>nats.replicas: 3</code> on a 3-node cluster (<a href="../high-availability/#job-queue-replicas">high-availability.md</a>).</td>
+</tr>
+<tr>
+<td><code>update job stream HANGAR_JOBS (replicas 1 to 5): ... no suitable peers for placement</code></td>
+<td><code>nats.replicas</code> is higher than the number of NATS servers.</td>
+<td>Lower <code>nats.replicas</code> to at most the cluster size.</td>
+</tr>
+<tr>
+<td><code>nats.replicas 3: embedded NATS is a single server</code></td>
+<td>Replicas above 1 with <code>nats.embedded: true</code>.</td>
+<td>Use 1, or an external NATS cluster.</td>
+</tr>
+<tr>
+<td>Start hangs after <code>waiting for the migration lock: another process is applying migrations</code></td>
+<td>Another node or <code>hangar migrate up</code> is migrating the same database.</td>
+<td>Wait; it continues when that migration finishes. If nothing should be migrating, find the session holding the lock (connected to Hangar's database and schema): <code>SELECT a.pid, a.application_name, a.client_addr, a.backend_start FROM pg_locks l JOIN pg_stat_activity a USING (pid) WHERE l.locktype = 'advisory' AND l.granted AND l.objsubid = 1 AND ((l.classid::bigint &lt;&lt; 32) | l.objid::bigint) = hashtextextended('hangar.migrations:' || current_schema(), 0)</code>.</td>
+</tr>
+<tr>
+<td><code>metrics.auth=bearer needs metrics.bearer_token ...</code></td>
+<td><code>metrics.auth</code> set without its credentials (or shorter than 16 characters).</td>
+<td>Set <code>HANGAR_METRICS_BEARER_TOKEN</code> (or <code>metrics.bearer_token_file</code>); for <code>basic</code>, the username and password.</td>
+</tr>
+<tr>
+<td>Helm: <code>execution error ... config.server.base_url is required</code> (or another chart message)</td>
+<td>The chart validates values before rendering.</td>
+<td>Follow the message; <a href="../install-helm/">install-helm.md</a>.</td>
+</tr>
+<tr>
+<td>Container exits with permission errors on <code>/var/lib/hangar</code></td>
+<td>Volume owned by another UID.</td>
+<td>The image runs as 65532; <code>chown -R 65532:65532</code> the volume, or let Kubernetes <code>fsGroup: 65532</code> handle it.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="readiness-readyz-answers-503">Readiness (<code>/readyz</code> answers 503)<a class="anchor" href="#readiness-readyz-answers-503" aria-label="Link to this section">#</a></h2>
+<p>The body names the failing check:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Check</th>
+<th>Typical causes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>database</code></td>
+<td>PostgreSQL down, <code>max_connections</code> exhausted (<code>nodes x (max_conns + 16)</code>), credentials changed.</td>
+</tr>
+<tr>
+<td><code>blobstore</code></td>
+<td>S3 endpoint unreachable, wrong credentials or bucket, bucket policy missing an action; filesystem full or read-only.</td>
+</tr>
+<tr>
+<td><code>eventbus</code></td>
+<td>NATS connection lost, JetStream disabled or lost quorum.</td>
+</tr>
+</tbody>
+</table></div>
+<p>During shutdown a node answers 503 on purpose (draining).</p>
+<h2 id="clients">Clients<a class="anchor" href="#clients" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Large uploads fail after exactly 60 s, or with 413 / <code>request entity too large</code></td>
+<td>The reverse proxy limits body size or time (Traefik's 60 s <code>readTimeout</code>, an L7 load balancer's idle timeout, an ingress body limit).</td>
+<td><a href="../reverse-proxy/">reverse-proxy.md</a>.</td>
+</tr>
+<tr>
+<td>Uploads are slow to start, then proxy disk fills</td>
+<td>The proxy buffers request bodies.</td>
+<td>Turn request buffering off.</td>
+</tr>
+<tr>
+<td><code>docker login</code> loops or reports <code>unauthorized</code> although the password is right</td>
+<td><code>server.base_url</code> is wrong: the token realm in the 401 points to a host or scheme the client cannot reach.</td>
+<td>Set <code>server.base_url</code> to the public HTTPS URL; check <code>curl -sI https://&lt;host&gt;/v2/</code> for the <code>WWW-Authenticate</code> realm.</td>
+</tr>
+<tr>
+<td><code>docker push</code> to <code>registry.example.com</code> fails on the token request</td>
+<td>The registry host is reachable but the UI host (realm) is not.</td>
+<td>Make <code>server.base_url</code> reachable from Docker clients too.</td>
+</tr>
+<tr>
+<td>Every client gets 429 at once</td>
+<td>All clients appear with the proxy's IP and share one rate-limit bucket.</td>
+<td>Set <code>server.trusted_proxies</code> to the proxy's address.</td>
+</tr>
+<tr>
+<td>429 for one client with valid credentials</td>
+<td>That IP had many failed authentications (<code>security.rate_limit.failed_auth</code>), e.g. a CI job with an expired token.</td>
+<td>Fix the client's credentials; the bucket refills within minutes.</td>
+</tr>
+<tr>
+<td><code>423 Locked</code> on sign-in</td>
+<td>This address is locked out of the username after repeated wrong passwords (<code>auth.lockout</code>).</td>
+<td>Wait 15 minutes, sign in from another address, or unlock it as an administrator.</td>
+</tr>
+<tr>
+<td>Server does not start: <code>... is the public development key from deploy/docker-compose.yml</code></td>
+<td>The configuration uses a key published for development.</td>
+<td>Generate your own: <code>openssl rand -base64 48</code> for <code>docker.token_key</code>; <code>openssl rand -base64 32</code> for <code>security.secret_key</code>, keeping the old key in <code>security.previous_secret_keys</code> until <code>hangar admin rotate-secrets</code> has run. <code>server.dev_mode: true</code> is for development servers only.</td>
+</tr>
+<tr>
+<td>Browser sign-in does not stick over plain HTTP</td>
+<td>Session cookies are <code>Secure</code>.</td>
+<td>Use HTTPS. Only for a lab on plain HTTP (not localhost), <code>auth.session.insecure: true</code>.</td>
+</tr>
+<tr>
+<td>Links in npm metadata or the UI point at <code>localhost</code> or the wrong host</td>
+<td><code>server.base_url</code> not set.</td>
+<td>Set it; generated links never use the request's <code>Host</code>.</td>
+</tr>
+<tr>
+<td><code>501</code> when saving a proxy repository with credentials or a blob store with keys</td>
+<td>No <code>security.secret_key</code>.</td>
+<td>Set <code>HANGAR_SECRET_KEY</code> on every node and restart (<a href="../../security/">security.md</a>).</td>
+</tr>
+<tr>
+<td>Proxy repository shows offline; logs <code>x509: certificate signed by unknown authority</code></td>
+<td>TLS-inspecting corporate proxy or private CA.</td>
+<td><code>http.ca_file</code> (<a href="../corporate-proxy/">corporate-proxy.md</a>).</td>
+</tr>
+<tr>
+<td>Proxy repository to an internal host is refused</td>
+<td>Outbound address policy (SSRF guard).</td>
+<td><code>http.allow_private_networks</code>.</td>
+</tr>
+<tr>
+<td>Proxy repository shows <em>authentication failed (401)</em> or <em>access denied (403)</em></td>
+<td>The remote refuses the repository's upstream credentials (wrong, expired or missing token; too few rights).</td>
+<td>Update the credentials in the repository's settings.</td>
+</tr>
+<tr>
+<td>Groups answer 502 during CI bursts; logs show DNS <code>i/o timeout</code></td>
+<td>The DNS servers time out under the load.</td>
+<td>Keep <code>http.dns.cache</code> on (default) and watch <code>hangar_upstream_dns_errors_total</code> (<a href="../corporate-proxy/#dns-cache">corporate-proxy.md</a>).</td>
+</tr>
+<tr>
+<td><code>/metrics</code> reachable from the Internet</td>
+<td>The public host routes everything to Hangar.</td>
+<td>Block it at the proxy (the shipped Caddy, Traefik and Helm examples do).</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="storage">Storage<a class="anchor" href="#storage" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Disk or bucket keeps growing after deletes</td>
+<td>Blob GC keeps unreferenced blobs for <code>storage.gc.grace_period</code> and runs daily on the leader.</td>
+<td>Wait for the next GC run, or check the task list for failed <code>blob.gc</code> runs. Cleanup policies decide what gets deleted in the first place.</td>
+</tr>
+<tr>
+<td>S3 <code>AccessDenied</code> on uploads only</td>
+<td>Missing <code>s3:PutObject</code> or multipart actions.</td>
+<td>Grant the actions in <a href="../requirements/">requirements.md</a>.</td>
+</tr>
+<tr>
+<td>An upload fails with <code>blob sha256:... was reclaimed by garbage collection during the publish; upload it again</code></td>
+<td>The content was identical to an unreferenced blob that <code>blob.gc</code> deleted while the upload was being published. Hangar refuses the publish rather than store a reference to deleted bytes.</td>
+<td>Retry the upload; it stores the bytes again. Rare, and only while <code>blob.gc</code> runs.</td>
+</tr>
+<tr>
+<td>After a restore, some downloads fail</td>
+<td>Blobs copied before the database dump, or later than the GC grace period.</td>
+<td>Restore blobs from a later copy; see <a href="../backup-restore/">backup-restore.md</a>.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="getting-more-detail">Getting more detail<a class="anchor" href="#getting-more-detail" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><code>log.level: debug</code> (or <code>HANGAR_LOG_LEVEL=debug</code>) and restart.</li>
+<li>Tracing: <code>observability.tracing.enabled: true</code> with an OTLP collector, then
+follow the <code>trace_id</code> from the log line (<a href="../../operations/monitoring/">monitoring.md</a>).</li>
+<li>Configuration as loaded: Hangar logs <code>starting hangar</code> with the address,
+base URL, storage kind and NATS mode; secrets are never logged.</li>
+</ul>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/troubleshooting.md"><code>docs/deploy/troubleshooting.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/troubleshooting.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../high-availability/" rel="prev"><small>Previous</small><b>High availability</b></a><a class="next" href="../../ui/" rel="next"><small>Next</small><b>The web UI</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#start-up">Start-up</a></li><li class="l2"><a href="#readiness-readyz-answers-503">Readiness (/readyz answers 503)</a></li><li class="l2"><a href="#clients">Clients</a></li><li class="l2"><a href="#storage">Storage</a></li><li class="l2"><a href="#getting-more-detail">Getting more detail</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

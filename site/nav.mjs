@@ -1,0 +1,77 @@
+// The docs sidebar: sections in order, each item a source file and its short label.
+// "docs/..." files come from main (see sync.mjs); "content/..." files live in this folder.
+// A markdown file on main that is missing here is still built, listed under "More",
+// and reported by the build so it can be given a place.
+// `children` makes every other page under that folder belong to the item: not listed
+// in the sidebar, highlighted through its parent, and in the pager after it.
+export const SECTIONS = [
+  ['Start here', [
+    ['content/index.md', 'Introduction'],
+    ['docs/guides/getting-started.md', 'Getting started'],
+    ['docs/guides/README.md', 'Concepts and guides'],
+    ['content/faq.md', 'FAQ'],
+  ]],
+  ['Install and run', [
+    ['docs/deploy/README.md', 'Deploying Hangar'],
+    ['docs/deploy/requirements.md', 'Requirements and sizing'],
+    ['docs/deploy/install-compose.md', 'Docker Compose'],
+    ['docs/deploy/install-helm.md', 'Helm (Kubernetes)'],
+    ['docs/deploy/install-binary.md', 'Binary and systemd'],
+    ['docs/deploy/reverse-proxy.md', 'TLS and reverse proxies'],
+    ['docs/deploy/corporate-proxy.md', 'Corporate HTTP proxy'],
+    ['docs/deploy/first-admin.md', 'First administrator'],
+    ['docs/deploy/backup-restore.md', 'Backup and restore'],
+    ['docs/deploy/upgrade.md', 'Upgrades'],
+    ['docs/deploy/high-availability.md', 'High availability'],
+    ['docs/deploy/troubleshooting.md', 'Troubleshooting'],
+  ]],
+  ['Using the UI', [
+    ['content/ui/index.md', 'The web UI'],
+    ['content/ui/repositories.md', 'Repositories'],
+    ['content/ui/packages.md', 'Packages & search'],
+    ['content/ui/connect.md', 'Connect a client'],
+    ['content/ui/vulnerabilities.md', 'Vulnerabilities'],
+    ['content/ui/access.md', 'Access & tokens'],
+    ['content/ui/tasks.md', 'Scheduled tasks'],
+    ['content/ui/blob-stores.md', 'Blob stores'],
+    ['content/ui/system.md', 'Status, logs & audit'],
+    ['content/ui/settings.md', 'Settings'],
+  ]],
+  ['Package formats', [
+    ['docs/guides/docker.md', 'Docker & OCI'],
+    ['docs/guides/npm.md', 'npm, pnpm, yarn'],
+    ['docs/guides/maven.md', 'Maven & Gradle'],
+    ['docs/guides/pypi.md', 'PyPI'],
+    ['docs/guides/nuget.md', 'NuGet'],
+    ['docs/guides/go.md', 'Go modules'],
+    ['docs/guides/helm.md', 'Helm charts'],
+    ['docs/guides/cargo.md', 'Cargo'],
+    ['docs/guides/apt.md', 'APT'],
+    ['docs/guides/rpm.md', 'RPM'],
+    ['docs/guides/raw.md', 'Raw files'],
+  ]],
+  ['Guides', [
+    ['docs/guides/migrate.md', 'Move to Hangar'],
+    ['docs/guides/ci.md', 'CI integration'],
+    ['docs/guides/access.md', 'Access management'],
+    ['docs/guides/sso.md', 'Single sign-on'],
+    ['docs/guides/routing-rules.md', 'Routing rules'],
+    ['docs/guides/vulnerabilities.md', 'Vulnerability scanning'],
+    ['docs/guides/api.md', 'REST API'],
+  ]],
+  ['Operations', [
+    ['docs/security.md', 'Security'],
+    ['docs/operations/monitoring.md', 'Monitoring'],
+    ['docs/operations/runbooks.md', 'Alert runbooks'],
+    ['docs/operations/performance.md', 'Performance'],
+  ]],
+  ['Project', [
+    ['docs/ARCHITECTURE.md', 'Architecture'],
+    ['docs/FORMATS.md', 'Format protocols'],
+    ['docs/adr/README.md', 'Decision records', { children: 'docs/adr/' }],
+    ['docs/PRODUCT_SPEC.md', 'Product specification'],
+    ['docs/DESIGN_SYSTEM.md', 'Design system'],
+    ['docs/ROADMAP.md', 'Roadmap'],
+    ['docs/changelog.md', 'Changelog'],
+  ]],
+];

@@ -1,0 +1,1896 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Changelog · Hangar docs</title>
+<meta name="description" content="Changelog: A security and reliability release. Upgrading is recommended for every installation; read Upgrade notes first. Foundation every later milestone…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/changelog/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Changelog">
+<meta property="og:description" content="Changelog: A security and reliability release. Upgrading is recommended for every installation; read Upgrade notes first. Foundation every later milestone…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/changelog/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Changelog">
+<meta name="twitter:description" content="Changelog: A security and reliability release. Upgrading is recommended for every installation; read Upgrade notes first. Foundation every later milestone…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Changelog","item":"https://ismoilovdevml.github.io/hangar/docs/changelog/"}]}</script>
+<script src="../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../">Home</a>
+    <a class="hide-sm" href="../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../">Introduction</a></li><li><a href="../guides/getting-started/">Getting started</a></li><li><a href="../guides/">Concepts and guides</a></li><li><a href="../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../deploy/">Deploying Hangar</a></li><li><a href="../deploy/requirements/">Requirements and sizing</a></li><li><a href="../deploy/install-compose/">Docker Compose</a></li><li><a href="../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../deploy/install-binary/">Binary and systemd</a></li><li><a href="../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../deploy/first-admin/">First administrator</a></li><li><a href="../deploy/backup-restore/">Backup and restore</a></li><li><a href="../deploy/upgrade/">Upgrades</a></li><li><a href="../deploy/high-availability/">High availability</a></li><li><a href="../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../ui/">The web UI</a></li><li><a href="../ui/repositories/">Repositories</a></li><li><a href="../ui/packages/">Packages &amp; search</a></li><li><a href="../ui/connect/">Connect a client</a></li><li><a href="../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../ui/access/">Access &amp; tokens</a></li><li><a href="../ui/tasks/">Scheduled tasks</a></li><li><a href="../ui/blob-stores/">Blob stores</a></li><li><a href="../ui/system/">Status, logs &amp; audit</a></li><li><a href="../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../guides/docker/">Docker &amp; OCI</a></li><li><a href="../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../guides/pypi/">PyPI</a></li><li><a href="../guides/nuget/">NuGet</a></li><li><a href="../guides/go/">Go modules</a></li><li><a href="../guides/helm/">Helm charts</a></li><li><a href="../guides/cargo/">Cargo</a></li><li><a href="../guides/apt/">APT</a></li><li><a href="../guides/rpm/">RPM</a></li><li><a href="../guides/raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../guides/migrate/">Move to Hangar</a></li><li><a href="../guides/ci/">CI integration</a></li><li><a href="../guides/access/">Access management</a></li><li><a href="../guides/sso/">Single sign-on</a></li><li><a href="../guides/routing-rules/">Routing rules</a></li><li><a href="../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../guides/api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../security/">Security</a></li><li><a href="../operations/monitoring/">Monitoring</a></li><li><a href="../operations/runbooks/">Alert runbooks</a></li><li><a href="../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../architecture/">Architecture</a></li><li><a href="../formats/">Format protocols</a></li><li><a href="../adr/">Decision records</a></li><li><a href="../product-spec/">Product specification</a></li><li><a href="../design-system/">Design system</a></li><li><a href="../roadmap/">Roadmap</a></li><li><a href="./" aria-current="page">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Project</p>
+      <h1>Changelog</h1>
+<h2 id="unreleased">Unreleased<a class="anchor" href="#unreleased" aria-label="Link to this section">#</a></h2>
+<h2 id="v019-2026-11-20">v0.1.9 (2026-11-20)<a class="anchor" href="#v019-2026-11-20" aria-label="Link to this section">#</a></h2>
+<p>A security and reliability release. Upgrading is recommended for every
+installation; read <strong>Upgrade notes</strong> first.</p>
+<h3 id="upgrade-notes">Upgrade notes<a class="anchor" href="#upgrade-notes" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>Repository-level proxies are checked like remote URLs.</strong> A repository
+whose <code>config.proxy.http.proxy</code> points at a private, loopback or
+link-local address is refused on save and blocked when dialled. List the
+address in <code>http.allow_private_networks</code>, or define it as a named proxy
+(Settings › Proxies) and use <code>proxy_name</code>. Until then any other update of
+such a repository is refused too.</li>
+<li><strong>S3 blob stores managed through the API need static keys.</strong> Creating,
+changing or testing an S3 store through the API without an access key is
+refused unless the new <code>storage.allow_ambient_credentials</code> is <code>true</code>
+(<code>HANGAR_STORAGE_ALLOW_AMBIENT_CREDENTIALS</code>). The default store from the
+configuration file and existing keyless stores keep working.</li>
+<li><strong>Sealed values are not accepted as input.</strong> API, YAML and UI inputs
+refuse <code>hgs1.…</code> secrets (400); omit the field to keep the stored secret.</li>
+<li><strong>Moving a secret's target needs the secret again.</strong> Changing an OIDC
+issuer origin, an LDAP URL, a proxy's scheme, host or port, or an S3
+endpoint (also in <code>:test</code>) requires <code>client_secret</code>, <code>bind_password</code>,
+<code>password</code> or <code>s3.secret_access_key</code> to be entered again.</li>
+<li><strong>Compose installs:</strong> <code>secrets/</code> is mounted read-only and the one-time
+admin password moves to <code>&lt;data&gt;/bootstrap/initial-admin-password</code>.
+<code>install.sh</code> creates <code>bootstrap/</code> and moves an existing password; upgrade
+with <code>install.sh</code> rather than copying <code>compose.yaml</code> by hand.</li>
+<li><strong>Helm:</strong> the chart is 0.1.9 and defaults to the 0.1.9 images (it pointed
+at 0.1.0, and <code>imageScanning.enabled</code> pulled a scanner tag that does not
+exist). <code>config.auth.oidc.client_secret</code> and
+<code>config.auth.ldap.bind_password</code> in values now fail the render; pass them
+with <code>extraEnv</code> from a Secret.</li>
+<li><strong>npm login tokens are scoped to the repository</strong> (and a group's write
+member) and no longer reach other repositories or the REST API.</li>
+<li><strong>Unknown blob store names are an error</strong>: a repository whose named blob
+store is missing no longer writes to the <code>default</code> store.</li>
+<li>The development compose project is now <code>hangar-dev</code>, so its old volumes
+(<code>hangar_postgres</code>, …) are no longer used.</li>
+</ul>
+<h3 id="security">Security<a class="anchor" href="#security" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>SSRF through a repository proxy (critical)</strong>: a repository's own
+<code>http.proxy</code> was added to the server-wide list of trusted proxy addresses,
+which skipped the outbound address guard for that address for every
+repository; a repository admin could reach cloud metadata or internal
+services. Only operator proxies are trusted now, and repository proxies
+pass the same policy as remote URLs.</li>
+<li><strong>Sealed secrets could be opened by replay (critical)</strong>: a sealed <code>hgs1.</code>
+value copied from the database or a backup could be pasted into a
+repository or import task credential, and Hangar sent its plaintext to the
+configured host. Sealed input is refused everywhere a secret is accepted.</li>
+<li><strong>Stored secrets follow their endpoint</strong>: OIDC, LDAP, proxy and blob store
+saves and connection tests no longer send a stored secret to a changed
+host.</li>
+<li><strong>Probe and S3 dials refuse cloud metadata addresses</strong>; API-managed S3
+stores no longer sign requests with the host's ambient AWS credentials.</li>
+<li><strong>Image imports</strong> send registry credentials only to the source's own
+origin or an https token service.</li>
+<li><strong>Sign-in providers cannot grant more than their editor holds</strong>: saving an
+enabled OIDC or LDAP provider needs every privilege of its default and
+mapped roles (a settings admin could map new users to Admin).</li>
+<li><strong>Tokens minted through a token stay inside its limits</strong>: a token created
+or rotated with an API or session token can't outlive it and inherits its
+allowed networks; rotating a token through itself no longer extends its
+life. Creating tokens in the web UI is unchanged.</li>
+<li><strong>Unlocking a user</strong> needs the same coverage as resetting their password.</li>
+<li><strong><code>GET /users/{self}/permissions</code></strong> with a scoped token shows only what
+the token can do.</li>
+<li><strong>npm login</strong> counts against <code>auth.login_rate</code> (429 with <code>Retry-After</code>)
+and refuses users who can't read the repository.</li>
+<li><strong>Opening a Docker connector port</strong> (<code>connector.http_port</code>) needs
+<code>system:repos:admin</code>.</li>
+<li><strong>Forwarded headers</strong>: behind trusted proxies, <code>X-Forwarded-Proto</code> and
+<code>X-Forwarded-Host</code> come from the outermost trusted proxy's entry, not the
+client's.</li>
+<li><strong>IPv6 clients</strong> are grouped by /64 for sign-in lockout and the login rate
+limit.</li>
+<li><strong>Event streams</strong> (<code>/api/v1/events</code>) close within about 30 s of sign-out,
+session or token expiry or revocation, or the account being disabled; role
+changes apply to open streams.</li>
+<li><strong>NuGet proxy cache poisoning</strong>: a proxied <code>.nupkg</code> whose manifest names a
+different id or version than the one requested is no longer cached under
+the manifest's identity (the client gets 502). Invalid ids in flat
+container and registration paths return 404.</li>
+<li><strong>Upstream URLs with dot segments</strong> (<code>.</code>/<code>..</code>, also percent-encoded) taken
+from an index or a redirect are refused for every format, so they can't
+climb out of the remote's path with its credentials.</li>
+<li><strong>Archive bombs</strong>: uploads are refused with 400 when the archive expands
+past a cap (Helm chart over 256 MiB, <code>.deb</code> control member over 256 MiB,
+<code>.crate</code> over 1 GiB); package info stops reading after 1 GiB.</li>
+<li><strong>RPM</strong>: header lengths are no longer trusted for allocation (a 112-byte
+request could reserve 512 MiB); headers with more than 65,535 index
+entries are refused. Group metadata is kept only for roots that hold
+packages, so arbitrary paths no longer grow memory.</li>
+<li><strong>Quarantine fails closed</strong>: if the quarantine lookup fails, downloads
+answer 500 instead of serving the file (Maven, PyPI, NuGet, Go, Cargo,
+Helm). Quarantined Maven non-unique SNAPSHOTs return 403. npm proxy and
+group packuments hide quarantined versions, and <code>latest</code> moves to the
+highest remaining one.</li>
+<li><strong>Offline write members</strong>: group uploads to an offline write member return
+503 (PyPI, Go, Cargo, APT, RPM).</li>
+<li><strong>Delete-only users</strong> can delete APT and RPM packages and unlist NuGet
+packages; the indexes are regenerated instead of failing with 403.</li>
+<li><strong>NuGet symbol packages</strong> are no longer accepted (they were stored but
+never served): the service index has no <code>SymbolPackagePublish</code>, and a
+symbol push returns 400.</li>
+</ul>
+<h3 id="reliability">Reliability<a class="anchor" href="#reliability" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>Stopping the server no longer hangs while a web UI tab is open</strong>: event
+streams end when shutdown begins, instead of holding it for
+<code>server.shutdown_timeout</code>.</li>
+<li><strong>Docker connector ports</strong> drain and stop together with the main port;
+stopping takes at most <code>drain_delay</code> + <code>shutdown_timeout</code>.</li>
+<li><strong>Deadlock fixed</strong> (PostgreSQL 40P01) between download statistics and
+component deletes or publishes. While the database is unreachable,
+download counts for at most 10,000 assets are kept in memory; the rest are
+dropped with a warning.</li>
+<li><strong>Background jobs in HA</strong>: each node takes one job of a type at a time, so
+idle nodes pick up the backlog. Image scans longer than 10 minutes finish
+instead of being retried and dropped (the per-job limit is
+<code>max(10m, 2×(scanner.timeout+1m))</code>, 32 minutes by default). On shutdown,
+running jobs are cancelled and returned to the queue.</li>
+<li><strong>Idle transactions</strong>: database sessions idle inside a transaction for 5
+minutes are ended, unless PostgreSQL or the database URL
+(<code>idle_in_transaction_session_timeout</code>) sets otherwise.</li>
+<li><strong>Blob GC</strong> deletes each blob in its own short transaction instead of
+holding a batch of row locks across storage calls;
+<code>storage.gc.batch_size</code> is now how many candidates are listed at a time.</li>
+</ul>
+<h3 id="web-ui">Web UI<a class="anchor" href="#web-ui" aria-label="Link to this section">#</a></h3>
+<ul>
+<li>Dialogs keep their own size and padding; the new-token dialog scrolls with
+Create and Cancel always visible, and only the chosen expiry is
+highlighted.</li>
+<li>Search: Enter runs the search; a suggestion is inserted only when picked
+with the arrow keys or the mouse.</li>
+<li>⌘K no longer opens behind an open dialog; the Cleanup notice's Dismiss
+button is reachable with a screen reader.</li>
+<li>Optional sections (token restrictions, upstream connection, sign-in setup)
+no longer close while you edit them.</li>
+<li>Fewer background requests: status and upstream health refresh once a
+minute and pause in hidden tabs; the sign-in page no longer re-renders
+every second.</li>
+<li>Package lists, search and findings refresh when packages are published,
+quarantined or deleted.</li>
+<li>The Overview shows the system status once, server messages show local
+times, counts have thousands separators (&quot;76,992 versions&quot;), and long
+package names wrap at dots and slashes.</li>
+<li>Placeholders for unbuilt features are gone (Dependents tab, Move
+repositories, Replication); the Cluster page is named Cluster.</li>
+<li>The demo shows the real release version and a clean sample README.</li>
+</ul>
+<h3 id="deployment-ci-and-observability">Deployment, CI and observability<a class="anchor" href="#deployment-ci-and-observability" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>Releases run the full test suite by default</strong> (set the repository
+variable <code>RELEASE_SKIP_TESTS=true</code> to skip), refuse a tag that doesn't
+match the chart's <code>appVersion</code>, and tag the scanner image only after its
+smoke test passes. Go tests under <code>deploy/</code> now run with the rest.</li>
+<li><strong>Helm</strong>: NetworkPolicies for Trivy and the scan adapter; <code>helm test</code>
+works with <code>networkPolicy.ingressFrom</code>; the migration Job gets
+<code>extraEnv</code>, <code>extraEnvFrom</code>, <code>extraVolumes</code>, <code>extraVolumeMounts</code>,
+<code>podLabels</code>, <code>podAnnotations</code> and an existing ServiceAccount.</li>
+<li><strong>Installer</strong>: a failed pre-upgrade backup is retried on the next run
+instead of being skipped; <code>GITHUB_TOKEN</code> is used for the version lookup,
+with a fallback when the API rate limit is hit.</li>
+<li><strong>Alerts and dashboards</strong>: <code>HangarUpstreamCircuitOpen</code> resolves once a
+remote is idle; <code>HangarDown</code> matches any job containing <code>hangar</code>; &quot;Remotes
+not healthy&quot; leaves out remotes not used yet; the RSS and error panels are
+fixed. <code>make alerts-check</code> runs the alert rule tests when <code>promtool</code> is
+installed.</li>
+</ul>
+<h2 id="v018-2026-11-15">v0.1.8 (2026-11-15)<a class="anchor" href="#v018-2026-11-15" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>
+<p><strong>Times are local, everywhere</strong>: every timestamp in the web UI (Audit log
+rows and details, Access &amp; audit, tasks, tokens, sessions, cluster, System
+status and logs, Settings) is shown in the browser's time zone with the
+zone named, e.g. &quot;11 Nov 2026, 12:23 (UTC+5)&quot;, and the same instant in UTC
+on hover. The Audit log's custom range is entered in local time. Exports
+(CSV, NDJSON, log downloads) and cron schedules stay in UTC. Relative times
+carry the full time in their hover text.</p>
+</li>
+<li>
+<p><strong>Overview days start at the viewer's midnight</strong>: <code>GET /metrics/overview</code>
+and <code>GET /upstreams/health</code> take <code>tz_offset</code> (minutes east of UTC), so
+&quot;Today&quot; no longer begins at 05:00 in UTC+5; the chart starts at the first
+recorded interval instead of a row of &quot;not recorded&quot; bars.</p>
+</li>
+<li>
+<p><strong>One byte unit</strong>: sizes are shown in binary units (KiB, MiB, GiB), and
+durations in their short form (repository TTLs read &quot;24h&quot;, not
+&quot;24h0m0s&quot;).</p>
+</li>
+<li>
+<p><strong>Storage numbers that respect quotas</strong>: the Overview's storage card and
+the quota reminder name the blob stores without a quota (and link to the
+one) instead of &quot;no quota&quot; while other stores have one. Blob store growth
+is averaged over the days the stores actually hold data
+(<code>growth_window_days</code>), and not extrapolated from less than a day.
+Deduplication savings under 1% read &quot;&lt;1%&quot;.</p>
+</li>
+<li>
+<p><strong>Error, empty and loading states</strong>: an unknown address shows a 404 inside
+the app shell (with search and links); <code>/repositories/&lt;name&gt;</code> and
+<code>/packages</code> lead to the page meant. A page that fails to render shows
+&quot;This page could not be shown&quot; with Retry inside the shell, instead of the
+router's developer screen. Every &quot;Could not load …&quot; says why in plain
+words, with the server's answer under Details. A missing repository, blob
+store, task, package or version has one not-found page. Pickers say when
+their options failed to load (with Retry) instead of &quot;none exist&quot;, tables
+show placeholder rows while loading, and live status pills say when the
+last update failed.</p>
+</li>
+<li>
+<p><strong>Errors in words, at the field</strong>: a refused repository setting (such as
+a remote URL blocked by the outbound address policy) is shown under its
+field; a taken member or role name and an empty one say so under the
+name; a bad &quot;keep tags matching&quot; pattern is caught at the field;
+connection tests (proxies, LDAP, OIDC) give one sentence about the likely
+cause and the raw error once, under Details; search lists every problem in
+a query, warns about unknown qualifiers and formats, and no longer squeezes
+the error into the facet column.</p>
+</li>
+<li>
+<p><strong>API error messages</strong>: validation messages no longer end in &quot;: invalid
+argument&quot;, and duplicates read &quot;… already exists&quot; once. <code>POST /repositories</code> without <code>blob_store</code> uses the <code>default</code> store; messages name
+fields as the API spells them (<code>blob_store</code>, <code>http_port</code>).</p>
+</li>
+<li>
+<p><strong>Vulnerabilities</strong>: a search that matches nothing no longer turns the
+banner into &quot;No open vulnerabilities&quot;; the findings pill reads
+&quot;8 findings · 2 critical · CVSS 10.0&quot; (breakdown on hover); the pull
+column and the in-use window are labelled apart; a rescan no longer moves
+the header or repeats its progress, and the scan line says why some
+packages are not counted (&quot;60 of 65 scanned (5 unsupported)&quot;). The package
+page keeps its Vulnerabilities tab and says why it is empty.</p>
+</li>
+<li>
+<p><strong>Locked accounts</strong> show when they unlock (&quot;unlocks at 12:12 (UTC+5), in
+14 min&quot;) instead of only the date.</p>
+</li>
+<li>
+<p><strong>Suggestion lists</strong> (Audit log action, distribution release) use an
+app-styled list with keyboard support instead of the browser's own popup.</p>
+</li>
+<li>
+<p><strong>API error code for rate limits</strong>: a remote's 429 surfacing through the REST
+API answers <code>rate_limited</code> (it was <code>upstream_unavailable</code>).</p>
+</li>
+<li>
+<p><strong>Docs</strong>: registry logins stay valid until they expire after a token is
+revoked or a password changes; the failed-authentication limit also refuses
+valid credentials from the same address (CI behind NAT); the npm README's
+known limits match the cluster lock and tombstones.</p>
+</li>
+<li>
+<p><strong>Faster first load of the web UI</strong>: the build writes brotli and gzip
+copies of its scripts, styles and page, and the server sends the one the
+browser accepts (<code>Vary: Accept-Encoding</code>; hashed assets stay cached for a
+year, the page is revalidated). Pages other than Overview load on first
+visit, so the first load fetches 178 KB instead of 1.09 MB. A boot screen
+shows while the scripts arrive; on a 500 kbit/s link with 400 ms latency
+it appears after about 0.8 s and the page after about 5 s, where the
+screen used to stay blank for 18.8 s. A tab opened before an upgrade
+reloads once when it asks for a script the new release no longer has (the
+server now answers 404 for it instead of the page). <code>openapi.json</code> is sent
+gzipped.</p>
+</li>
+<li>
+<p><strong>System logs keep the errors that matter</strong>: the web UI's own successful
+reads (its files and a browser session's <code>GET</code> API calls, which every open
+tab repeats every few seconds) are logged at debug level, so they no
+longer fill the in-memory buffer. The newest warnings and errors (a fifth
+of <code>log.buffer_size</code>, at least 100) also outlive their place in it.</p>
+</li>
+<li>
+<p><strong>The node list no longer waits for slow checks</strong>: <code>/system/nodes</code> and
+<code>/nodes</code> answer from the last check run and refresh it in the background,
+so a store probe waiting for its 3 s timeout does not hold up the System
+status and System logs screens. A client that cancels the request no
+longer logs &quot;other nodes unavailable&quot;.</p>
+</li>
+<li>
+<p><strong>One source of truth for health</strong>: <code>GET /system/status</code> is now the rollup
+of the System status checks (the same ones <code>/system/nodes</code> and
+<code>/system/health</code> report), so a broken blob store reads <code>down</code> in both, and
+its message names the failing check (&quot;Blob storage down&quot;). Signed-in
+callers get the failing checks in <code>problems</code>; their detail and the
+dependency errors need <code>system:cluster:read</code>. <code>/system/nodes</code> carries the
+same rollup in <code>summary</code>. The sidebar card, the Overview pill, the bell,
+System status, Settings › System and the Settings hub all show it, in grey
+while it loads or cannot be read; the bell lists the To do items.</p>
+</li>
+<li>
+<p><strong>Blob store state is real</strong>: every store is probed each heartbeat (one
+hanging store no longer times the whole check out), and <code>/blob-stores</code>
+reports <code>ok</code>, <code>degraded</code> or <code>unavailable</code> with what the probe found
+(<code>state_detail</code>, <code>checked_at</code>) instead of a fixed <code>unknown</code>. A repository on
+an unavailable store is <code>offline</code> with <code>status_reason</code>
+<code>blob_store_unavailable</code>.</p>
+</li>
+<li>
+<p><strong>Proxy remotes are not &quot;healthy&quot; before they are used</strong>: a remote this
+node has not contacted since it started is <code>unknown</code>; a request that fails
+(no answer or a 5xx) makes it <code>offline</code> at once with <code>last_error</code>, before
+the circuit breaker trips, and the next answer clears it. The repository
+list shows such a proxy as &quot;Upstream unreachable&quot; (<code>status_reason</code>
+<code>upstream_unreachable</code>, <code>status_detail</code>) instead of a green &quot;Online&quot;.
+<code>hangar_upstream_state</code> gains <code>state=&quot;unknown&quot;</code>.</p>
+</li>
+<li>
+<p><strong>Vulnerability scanner check</strong>: System status lists the scanner (advisory
+scans that worked and failed, and whether the Trivy server answers).</p>
+</li>
+<li>
+<p><strong>Every sidebar entry is reachable on laptop screens</strong>: sections fold from
+their heading and the browser remembers which (a section opens again on its
+own pages); when the list runs past the status card its ends fade and a
+button scrolls on; the current page's entry is scrolled into view.</p>
+</li>
+<li>
+<p><strong>Wide tables keep their key columns</strong>: when a table does not fit its
+panel, secondary columns give way first (address, timestamps, descriptions)
+so the name, status and actions stay on screen; if it still has to scroll,
+a shadow marks the side with more columns. On phones each row becomes a
+card. Applies to repositories, scheduled tasks, the fix plan, members,
+tokens, roles, both audit logs, blob store, system and package tables.</p>
+</li>
+<li>
+<p><strong>Package detail gets the width</strong>: the version and setup cards move under
+the package until it has room beside them, tabs wrap instead of clipping,
+advisory titles wrap, and the browse tree folds away with a button (also
+remembered).</p>
+</li>
+<li>
+<p><strong>Phone layouts</strong>: the Overview header keeps the bell and account on the
+breadcrumb row; repository counts form one compact strip and the type tabs
+scroll on one row; search filters fold behind a &quot;Filters&quot; row; Packages and
+the API reference show their title before the tree or endpoint index;
+repository settings show Save under the settings and keep it in reach while
+there are unsaved changes; buttons and links on touch screens get 44 px
+targets.</p>
+</li>
+<li>
+<p><strong>Repository actions in the UI</strong>: proxy settings offer &quot;Invalidate cache&quot;
+(with a confirmation and what was dropped), and repositories of a scanned
+format offer &quot;Scan now&quot;. A package version can be scanned from its page.
+The Dependents tab is shown as planned; there is no SBOM download until the
+server serves SBOMs.</p>
+</li>
+<li>
+<p><strong>Scheduled tasks can be edited</strong>: schedule and on/off on every task except
+cleanup policy tasks (which link to their policy), and tasks an
+administrator added can be deleted. New task adds blob compaction and Docker
+garbage collection, and an optional schedule for imports and pre-warms.</p>
+</li>
+<li>
+<p><strong>Blob store connection test</strong>: <code>POST /blob-stores:test</code> checks an S3
+store's settings without saving them (bucket, write, read, delete; a failure
+names the S3 error code). Adding an S3 store tests it first; &quot;Add anyway&quot;
+saves a store that failed the test. S3 stores added in the UI get an
+&quot;Edit connection&quot; form (credentials, region, path style; the location only
+while the store is empty).</p>
+</li>
+<li>
+<p><strong>The default blob store shows the settings in effect</strong>: its stored
+settings follow the server configuration and environment on every start
+(e.g. <code>HANGAR_STORAGE_S3_USE_PATH_STYLE</code>), and <code>from_config</code> marks it as
+defined by the configuration.</p>
+</li>
+<li>
+<p><strong>Blob stores page</strong>: &quot;Run compaction&quot; on the reclaimable total, and
+&quot;Move repositories&quot; shown as planned.</p>
+</li>
+<li>
+<p><strong>Vulnerabilities summary</strong>: severity cards (with how many have a fix), the
+quarantine policy of the repositories with the number of quarantined
+packages, and the open critical and high findings of the last 30 days.</p>
+</li>
+<li>
+<p><strong>Search finds pasted ids</strong>: a bare advisory id (<code>CVE-2021-44228</code>,
+<code>GHSA-…</code>, <code>PYSEC-…</code>, <code>RUSTSEC-…</code>) searches as <code>cve:</code>, and a bare hex word of
+8 to 64 digits matches a digest prefix or the package name.</p>
+</li>
+<li>
+<p><strong>Command palette</strong>: jumps to repositories, packages, advisories (by CVE or
+GHSA id) and users; a matching page ranks first and Enter opens it, the
+package search is the last option, and ArrowUp no longer wraps to
+&quot;Sign out&quot;. &quot;Create a token&quot; is an action.</p>
+</li>
+<li>
+<p><strong>Routing suggestions</strong> no longer say &quot;already in place&quot; for patterns that
+are in the form but not saved.</p>
+</li>
+<li>
+<p><strong>Development compose stack</strong>: Hangar addresses the bundled MinIO
+path-style, so the default S3 store works.</p>
+</li>
+<li>
+<p><strong>&quot;Connect a client&quot; offers every format</strong>: the dialog pages through
+<code>/me/client-endpoints</code> instead of showing the first three, and the
+endpoint per format prefers a group, then a proxy, then a hosted
+repository. Endpoints now carry <code>type</code>, <code>publishes</code> and <code>anonymous_read</code>.</p>
+</li>
+<li>
+<p><strong>Client snippets follow the repository type and work as copied</strong>: Maven
+mirrors everything only to a proxy or group; a hosted repository is added
+by URL in an active profile, and every Maven snippet carries the URL; the
+token export is its own shell block, out of <code>settings.xml</code>. Cargo never
+names a registry <code>crates-io</code> (cargo's own source). Over plain http, NuGet
+sources get <code>--allow-insecure-connections</code>, pip trusts the host, Gradle
+sets <code>isAllowInsecureProtocol</code>, and Go says plainly that it sends
+credentials over HTTPS only (serve Hangar over HTTPS, or allow anonymous
+read) instead of a <code>.netrc</code> that is never sent. Install commands carry the
+signed-in user and, for pip and uv, the token. Checked with npm, pip,
+twine, uv, mvn, gradle, go, cargo, helm, dotnet, docker and curl.</p>
+</li>
+<li>
+<p><strong>Code is shown as typed</strong>: no font ligatures in code (<code>&lt;!--</code> stays
+<code>&lt;!--</code>), and config blocks scroll sideways instead of wrapping mid-tag.</p>
+</li>
+<li>
+<p><strong>The package tree is repository, package, version</strong>: folders lead down to
+packages, and a package opens to its versions (newest first, from every
+member of a group). Stored files moved to a repository's <strong>Files</strong> view
+(<code>/repositories/{name}/browse?view=packages</code> is the tree; <code>view=files</code>,
+the default, is unchanged). apt and rpm list their packages by name. Links
+that name a package (search results, shared URLs) open and select it in
+the tree. Long names are cut in the middle, and filtering the tree links
+to a search of every package.</p>
+</li>
+<li>
+<p><strong>Docker images are sized by their layers</strong>: a version's size, its
+Versions row and the Layers tab come from the manifest (config plus
+layers; a multi-platform index by its linux/amd64 image, with every
+platform listed). The component detail has a new <code>image</code> field.</p>
+</li>
+<li>
+<p><strong>No single-file delete in Docker repositories</strong>: layers and manifests are
+shared by tags; the UI no longer offers &quot;Delete file&quot; for them, and
+<code>DELETE /assets/{id}</code> answers 400 for docker files.</p>
+</li>
+<li>
+<p><strong>Delete a whole package</strong>: the Versions tab deletes every version of a
+package after typing its name.</p>
+</li>
+<li>
+<p><strong>Raw files found by search open as files</strong>, not as a package with a
+version and an empty README.</p>
+</li>
+<li>
+<p><strong>npm: the package state goes with the last version</strong> deleted outside npm
+(the REST API, cleanup), so no package without versions is left behind
+unless it holds unpublish tombstones.</p>
+</li>
+<li>
+<p><strong>Overview numbers follow what the viewer may read</strong>: without
+<code>system:cluster:read</code>, <code>GET /metrics/overview</code> counts only the
+repositories the caller may read (findings, storage, publications,
+rejected pushes) and leaves the instance-wide request, cache and capacity
+numbers null; the new <code>scope</code> field says which. The Overview labels the
+scoped numbers and says request statistics are for administrators.</p>
+</li>
+<li>
+<p><strong>Guessable passwords are refused</strong>: new local passwords with fewer than 5
+different characters, a run such as <code>123456789012</code>, or a common password
+padded with digits and symbols (<code>Password2026!</code>) are rejected unless
+<code>auth.password.allow_weak</code> is true. The rule is listed live on the forced
+password change and on My account.</p>
+</li>
+<li>
+<p><strong>Sign-in says how many attempts are left</strong>: a wrong password answers
+<code>details.attempts_left</code> and <code>details.lockout_seconds</code>; the sign-in page
+warns two attempts before the lock. A lockout only holds the username it
+was for, so another name can sign in at once; the page names the empty
+field, clears a wrong password, shows the system status and how to get a
+password reset.</p>
+</li>
+<li>
+<p><strong>A session that ends keeps the page</strong>: on a 401 the app asks for the
+password in place instead of leaving the page, so unsaved edits survive;
+single sign-on runs in a new tab. A tab without a session goes to sign-in
+with &quot;Your session ended&quot;.</p>
+</li>
+<li>
+<p><strong>The forced password change does not ask again</strong> for the password typed
+at sign-in a moment ago (kept in memory only) and confirms the change.</p>
+</li>
+<li>
+<p><strong>Unsaved changes are guarded</strong>: repository settings, the new repository
+form and cleanup policies ask before leaving with unsaved edits, and the
+browser asks before a reload.</p>
+</li>
+<li>
+<p><strong>Writes confirm themselves</strong>: deleting a repository, version or file,
+waiving (with Undo), assigning, creating or saving roles and members, and
+saving a quota show a toast. Hidden Overview reminders can be undone and
+shown again.</p>
+</li>
+<li>
+<p><strong>Token reveal</strong>: the one-time secret opens at the top with Copy focused,
+and closing before &quot;I have stored the token&quot; is ticked asks first.</p>
+</li>
+<li>
+<p><strong>Escape closes only the topmost dialog</strong>, not the drawer under it.</p>
+</li>
+<li>
+<p><strong>Soft quota editor</strong> offers GiB and TiB, shows a stored quota exactly
+(2 GiB stays 2147483648 bytes) and saves only what was changed.</p>
+</li>
+<li>
+<p><strong>Deleting a group</strong> says that its members and their packages are not
+touched. The &quot;is ready&quot; note after creating a repository sits at the top
+of the summary instead of covering it.</p>
+</li>
+<li>
+<p><strong>Signed-in devices</strong> are grouped by device and address, five at a time,
+with each session's expiry.</p>
+</li>
+<li>
+<p><strong>Demo build of the web UI</strong>: <code>npm run build:demo</code> in <code>web/</code> builds the UI
+with its in-browser sample server into <code>web/dist-demo/</code>, served from
+<code>/hangar/demo/</code> on the project website. It starts signed in, every page and
+form works against sample data, and changes reset on reload. Links of the
+form <code>demo/#/repositories</code> open a page directly. The product build is
+unchanged and contains no mock code. <code>npm run site:screenshots -- &lt;site-dir&gt;</code>
+takes the website's UI screenshots from it.</p>
+</li>
+<li>
+<p><strong>Release checks are opt-in</strong>: the test, lint and deploy-check jobs of the
+release workflow run only when the repository variable <code>RELEASE_TESTS</code> is
+<code>true</code>. When they run, images, binaries and the release wait for them and
+stop if one fails.</p>
+</li>
+<li>
+<p><strong>Overview success rate no longer counts authentication challenges as
+denied</strong>: a 401 to a request that presented no credentials at all (NuGet
+and .NET clients, docker, npm and pip ask without credentials and retry
+with them) is counted in the new <code>hangar_http_auth_challenges_total</code> and
+stored apart (migration 00300); <code>denied</code> and the success rate leave it
+out, and the Overview note's tooltip says how many were not counted. A 401
+to wrong or expired credentials and every 403 still count as denied.</p>
+</li>
+<li>
+<p><strong>A client that hangs up is not a server error</strong>: when the request is
+cancelled mid-way (dotnet probing workload manifests), every format answers
+499, logs at debug level instead of error, and the request is not counted
+as a 5xx. A remote or database timeout is still an error. Docker now answers
+500 instead of 401 when authentication fails for a reason other than the
+credentials.</p>
+</li>
+<li>
+<p><strong>NuGet <code>service_index</code> is treated as a secret</strong>: some feeds carry their
+key in the path, so <code>config.format.service_index</code> is returned only to
+administrators of the repository (<code>***</code> to everyone else, the YAML export
+included); an update that sends <code>***</code> keeps the stored value, and error
+messages sent to clients no longer contain the path.</p>
+</li>
+<li>
+<p><strong>Proxy cache hit ratio</strong>: a remote answering not found is no longer a
+cache miss. In a group whose first proxies' remotes do not have a package
+and whose last proxy serves it from its cache, the request is a hit; only
+content a remote supplied makes a miss. Index lookups that only locate a
+download do not count either.</p>
+</li>
+</ul>
+<h2 id="v017-2026-11-09">v0.1.7 (2026-11-09)<a class="anchor" href="#v017-2026-11-09" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>
+<p><strong>Releases are tested before they are published</strong>: the release workflow
+runs <code>go test -race</code> against PostgreSQL, golangci-lint, the web lint,
+typecheck, unit tests and build, the installer tests and <code>helm lint</code> on
+the tagged commit, in parallel; images, binaries and the GitHub release
+wait for all of them.</p>
+</li>
+<li>
+<p><strong>CI workflow, ready to switch on</strong>: the real-client e2e suite with every
+client in containers (<code>test/e2e/run-docker.sh</code>, <code>make e2e-docker</code>, image
+<code>test/e2e/runner/Dockerfile</code>) under <code>HANGAR_E2E_STRICT=1</code>, the S3 driver
+against MinIO, <code>make deploy-check</code>, Playwright against the mock build and a
+Playwright smoke test against a real server (<code>web/e2e/live</code>,
+<code>make web-e2e-live</code>), plus the image-scanning and LDAP e2e runners.</p>
+</li>
+<li>
+<p><strong>e2e suite</strong>: works with Helm 4 (and still Helm 3) and on arm64 (the RPM
+proxy test picks the mirror for the machine's architecture);
+<code>HANGAR_E2E_STRICT=1</code> turns a missing client, credential or Docker daemon
+into a failure, <code>HANGAR_E2E_ALLOW_MISSING</code> names exceptions, and optional
+clients (buildx, crane, cosign, helm OCI) run as subtests that report a
+skip. Stronger checks: Maven artifacts are compared with what the client
+built and with Maven Central, a forced Helm overwrite on <code>allow_once</code> must
+answer 409 and leave the chart unchanged, and a raw proxy answering 502
+fails (the requirement on <code>http.allow_private_networks</code> is documented).</p>
+</li>
+<li>
+<p><strong><code>make test</code> needs a test database</strong>: without <code>HANGAR_TEST_DATABASE_URL</code>
+it stops instead of skipping a quarter of the Go tests;
+<code>HANGAR_TEST_SKIP_DB=1</code> runs anyway and reports the skip count.</p>
+</li>
+<li>
+<p><strong>API contract</strong>: the six operations that answer 501 (<code>sbom</code>, <code>dependents</code>,
+<code>move-repositories</code>, replication targets) are marked <code>x-status: planned</code>
+with a documented 501 <code>not_implemented</code> answer; <code>docker_upload_cleanup</code>
+is in the <code>TaskType</code> enum. Tests check routes against <code>api/openapi.yaml</code>
+in both directions (including the sign-in, settings and signing-key
+routes) and that the web UI's mock server mocks only documented
+operations.</p>
+</li>
+<li>
+<p><strong>Test robustness</strong>: queue, scheduler and task takeover tests assert on
+state instead of sleeping; web page tests allow for loaded CI runners.</p>
+</li>
+<li>
+<p><strong>Docs</strong>: README lists the 11 formats; the roadmap, architecture and
+product spec say what is done, partial and planned; <code>CONTRIBUTING.md</code>
+explains the test suites; the changelog is split by release.</p>
+</li>
+<li>
+<p><strong>npm audit answers for real</strong> (it always reported &quot;0 vulnerabilities&quot;):
+proxies pass the audit to their remote with only the names their routing
+rules allow, hosted repositories answer from Hangar's stored OSV findings,
+groups merge both. Bulk, quick and full audit endpoints, gzip bodies.
+When Hangar cannot vouch for a hosted version (not scanned yet, scanning
+off) or a remote fails, the audit fails (503/502) and npm says so instead
+of &quot;found 0 vulnerabilities&quot;. <code>pnpm audit</code> works the same way.</p>
+</li>
+<li>
+<p><strong>npm search</strong>: <code>/-/v1/search</code> on hosted (component search), proxy (remote
+search, routing rules applied) and group repositories.</p>
+</li>
+<li>
+<p><strong>npm logout</strong> revokes the token <code>npm login</code> issued; personal access tokens
+are left alone. Tokens can be revoked through <code>core.TokenRevoker</code>.</p>
+</li>
+<li>
+<p>npm proxies serve tarballs whose upstream URL does not end in <code>.tgz</code>.</p>
+</li>
+<li>
+<p>PyPI: upload versions are compared by PEP 440 (<code>1.0</code> no longer matches a
+<code>10</code> file name); Simple API pages carry an <code>ETag</code> and answer <code>304</code>.</p>
+</li>
+<li>
+<p>Cargo: <code>foo-bar</code> and <code>foo_bar</code> are one crate, as on crates.io; publishing
+the other spelling answers <code>409</code>.</p>
+</li>
+<li>
+<p>Helm proxies leave malformed entries of a remote <code>index.yaml</code> out instead of
+failing the whole index; new metric <code>hangar_proxy_index_entries_skipped_total</code>.</p>
+</li>
+<li>
+<p>Docker: proxy tag lists follow the remote's <code>Link: rel=&quot;next&quot;</code> paging; a
+push through a group no longer fails with <code>MANIFEST_BLOB_UNKNOWN</code> when a
+layer or platform manifest exists in another member: the content is linked
+into the write member.</p>
+</li>
+<li>
+<p>Proxy upstreams accept idempotent POST queries (<code>UpstreamRequest.Body</code>).</p>
+</li>
+<li>
+<p>The download-attribution wrapper keeps the component search, so NuGet,
+cargo and npm search use the full-text index in production.</p>
+</li>
+<li>
+<p><strong>Security fixes</strong> (see <code>docs/security.md</code>, privilege escalation model and
+sign-in lockout):</p>
+<ul>
+<li>Groups expose only what their author may read: adding a member needs
+<code>repo:&lt;member&gt;:read</code> on it and on everything a nested group member
+reaches, a write member needs <code>repo:&lt;member&gt;:write</code>, and opening a group
+to anonymous readers needs read on all of it. <code>system:repos:admin</code> alone
+no longer reaches content through a group. Refusals are audited.</li>
+<li>User and role management cannot grant more than the caller holds:
+creating or changing roles, binding roles and creating members with roles
+need the caller to cover every privilege; setting a password, disabling,
+enabling, editing, deleting and signing out another account need covering
+everything it holds, so only holders of <code>system:*</code> manage administrators.
+<code>system:tokens:write</code> issues service-account tokens only for accounts the
+caller covers.</li>
+<li>A password set by another member (reset or edit) must be replaced at the
+next sign-in.</li>
+<li><code>/v2/token</code> reloads the account before renewing a registry token: a
+disabled member, a revoked token or a removed role no longer renews it,
+and a renewal never outlives the first token of its chain.</li>
+<li>Lockout is per username and client address (migration 00290), with a
+per-username slow-down (<code>auth.lockout.slowdown_after</code>, <code>max_delay</code>)
+instead of locking an account for everyone. Unknown usernames are counted
+and answered the same way, so <code>423</code> no longer reveals which accounts
+exist.</li>
+<li>The server refuses to start with the public development keys of
+<code>deploy/docker-compose.yml</code> unless <code>server.dev_mode</code> is set (the
+development compose file sets it).</li>
+<li>New installations protect <code>/metrics</code> with a generated bearer token
+(<code>secrets/metrics.bearer_token</code>, <code>metrics.auth: bearer</code>); a server with an
+open <code>/metrics</code> logs a warning on start.</li>
+<li><strong>Upgrade notes</strong>: groups created earlier by someone who could not read
+a member are not changed; review the members of your groups (and which
+are anonymous). Members whose password an administrator sets must now
+choose a new one at the next sign-in. Helpdesk-style roles with only
+<code>system:users:write</code> can no longer manage members who hold more than they
+do. Upgraded installations keep their <code>metrics.auth</code> (<code>none</code> unless you
+changed it). A server started with the development keys outside the
+development compose file must get its own keys, or <code>server.dev_mode</code>.</li>
+</ul>
+</li>
+<li>
+<p><strong>Fix: updating a proxy repository no longer drops its upstream
+credentials.</strong> <code>PUT /repositories/{name}</code> without <code>config.proxy.auth</code>
+keeps the stored credentials; <code>&quot;auth&quot;: null</code> removes them; an empty
+password or token with the same kind, username and header still keeps the
+secret. When <code>remote_url</code> moves to another scheme, host or port, stored
+secrets are not carried over: the request must resend them or set
+<code>&quot;auth&quot;: null</code> (400 otherwise). The <code>repository.update</code> audit record notes
+<code>upstream_auth</code> (<code>added</code>, <code>removed</code>, <code>replaced</code>, <code>unchanged</code>), never the
+secret. The settings form sends <code>&quot;auth&quot;: null</code> when authentication is set
+to none and asks for the secret again after a host change.</p>
+</li>
+<li>
+<p><strong>Upstream DNS cache</strong> (<code>http.dns</code>, on by default): remote host names are
+resolved once per <code>ttl</code> (60s) with one shared query per name, a timeout or
+SERVFAIL is retried once, the last answer is served for up to <code>stale_ttl</code>
+(10m) while DNS fails, failures are remembered for <code>negative_ttl</code> (5s).
+Every address is still checked against the outbound address policy at
+check and dial time. Metrics <code>hangar_upstream_dns_cache_requests_total</code>,
+<code>hangar_upstream_dns_errors_total</code>, <code>hangar_proxy_upstream_dns_failures_total</code>.</p>
+</li>
+<li>
+<p><strong>Fix: DNS timeout bursts no longer open the circuit breaker.</strong> Transient
+DNS failures count towards a remote's breaker at most once per second, so
+a CI burst failing on one lookup no longer turns a group into 502; a
+lasting DNS outage and NXDOMAIN still trip it as before.</p>
+</li>
+<li>
+<p><strong>Upstream 401/403 are named as credential problems.</strong> Upstream health
+(<code>reason</code>), repositories (<code>status_reason</code>) and the System status upstream
+check tell <code>authentication failed (401)</code> and <code>access denied (403)</code> apart
+from an unreachable or policy-blocked remote, with a hint to check the
+proxy credentials; the Repositories list, repository pages and Overview
+show the same.</p>
+</li>
+<li>
+<p><strong>Web UI follows the user's roles</strong>:</p>
+<ul>
+<li>The sidebar, Settings and the command palette list only pages the user
+can open; empty sections disappear. Pages a role does not open (tasks,
+blob stores, cleanup, audit, access, cluster, system status and logs,
+new repository, new task, sign-in and proxy settings) say &quot;You don't have
+access to … ask an administrator for <code>&lt;privilege&gt;</code>&quot; without calling the
+API. A refusal the session did not predict shows the same note instead of
+&quot;Could not load&quot; and Retry.</li>
+<li>Actions a role cannot take are hidden: New repository, Add blob store and
+blob store management, Take offline and Delete on repository settings.
+Repository creation counts <code>repo:&lt;pattern&gt;:admin</code> as well as
+<code>system:repos:admin</code>.</li>
+</ul>
+</li>
+<li>
+<p><strong>Web UI fixes</strong>:</p>
+<ul>
+<li>The token secret's copy button is readable (it was white on white).</li>
+<li>Versions show one &quot;v&quot; (<code>v0.1.6</code>, not <code>vv0.1.6</code>) in the sidebar, sign-in
+page, Settings → System and the API reference.</li>
+<li>Advisory text in the finding drawer is rendered as Markdown with the
+README renderer (no raw HTML, no images, restricted links), opens on its
+first section with <strong>Show full advisory</strong>, and code blocks scroll. Advisory
+titles render inline code and emphasis.</li>
+<li>The Overview's status pill weighs the same signals as its cards
+(unreachable upstreams, server errors, node health); the sidebar card says
+&quot;All nodes healthy&quot;.</li>
+<li>The database backup reminder links the backup guide when the server has
+no backup task, and can be dismissed.</li>
+<li>My account summarises repository rights (one row per distinct grant, with
+exceptions) behind <strong>Show all N repositories</strong>.</li>
+<li>Repositories: cards on phones; the count cards stay totals under a name or
+format filter; creating a repository opens its page with a confirmation
+and <strong>Connect a client</strong>; the YAML preview shows <code>&lt;format&gt;</code> and <code>&lt;type&gt;</code>
+until they are chosen.</li>
+<li>Cluster &amp; replication shows the nodes from <code>GET /nodes</code>; replication is
+marked planned.</li>
+<li>Most downloaded names the repository when a package repeats; avatars of
+<code>qa-bob</code> and <code>qa-help</code> read &quot;QB&quot; and &quot;QH&quot;.</li>
+<li>The UI no longer calls <code>GET /components/{id}/dependents</code> or
+<code>GET /system/config</code> (neither exists); Settings → System says where
+configuration lives.</li>
+<li>The sign-in card no longer moves when an error appears; a 423 says &quot;Too
+many failed sign-ins from this address&quot; (or the server's message), not
+&quot;This account is locked&quot;.</li>
+<li>Accessibility: 24 px tap targets on phones, one <code>main</code> landmark on the API
+reference, unique table landmarks, heading order on Blob stores, and
+scrolling code blocks reachable by keyboard.</li>
+</ul>
+</li>
+<li>
+<p><strong>Move to Hangar: import and pre-warm tasks</strong> (issue #74, guide
+<code>docs/guides/migrate.md</code>):</p>
+<ul>
+<li><code>repository_import</code> copies packages from any registry that speaks a
+format's client protocol into a hosted repository: npm, NuGet (V3, V2),
+Maven, PyPI, Go, Cargo, Helm, Docker/OCI (every platform), raw, APT and
+RPM. Name patterns, version ranges or globs, newest N, pre-releases.
+Identical versions are skipped, different ones reported as conflicts;
+publish dates, yanked, unlisted and dist-tag state are kept where the
+format has them. Rate-limited, concurrent, resumable from checkpoints.</li>
+<li><code>proxy_prewarm</code> fetches coordinates through a proxy or group so its cache
+holds them: pasted lists, lockfiles (<code>package-lock.json</code>,
+<code>pnpm-lock.yaml</code>, <code>yarn.lock</code>, <code>packages.lock.json</code>, <code>requirements.txt</code>,
+<code>uv.lock</code>, <code>poetry.lock</code>, <code>go.sum</code>, <code>Cargo.lock</code>, <code>gradle.lockfile</code>,
+<code>Chart.lock</code>) or a source registry's inventory. Reports cached, failed
+and skipped (routing-blocked names are skipped).</li>
+<li>Source credentials are sealed with the secret key, never returned, kept
+on edits, swept by <code>rotate-secrets</code>, and guarded in the database
+(migration 00285). Creating, editing and running these tasks also needs
+write on the target repository.</li>
+<li>API: task types and configs in <code>api/openapi.yaml</code>, <code>POST /lockfiles</code>
+reads a lockfile (gzip accepted). Imports keep the source's publish time
+through <code>core.WithPublishedAt</code>.</li>
+<li>UI: <strong>Scheduled tasks → New task</strong> (import or pre-warm, lockfile upload),
+<strong>Import</strong> / <strong>Pre-warm</strong> on repository pages, run results with conflict
+and failure lists.</li>
+</ul>
+</li>
+<li>
+<p><strong>Blob storage integrity</strong>:</p>
+<ul>
+<li>A publish can no longer reference bytes that blob GC deleted. A publish
+that takes the first reference of a blob confirms, under the blob row
+lock and inside its transaction, that the bytes still exist; if GC
+removed them meanwhile, the upload fails with <code>404</code> (docker:
+<code>BLOB_UNKNOWN</code>) and can be retried, instead of leaving an image or
+package that never downloads again. Docker blob uploads and
+cross-repository mounts go through the same check.</li>
+<li>Content that is stored but never published (a docker digest mismatch, an
+upload over a limit, a failed validation, a refused publish) is now
+reclaimed: every upload is recorded as an unreferenced blob, which a
+publish turns into a referenced one and blob GC otherwise deletes after
+<code>storage.gc.grace_period</code>. Uploading content again restarts the grace
+period of its unreferenced blob. Such uploads count as reclaimable bytes.</li>
+<li>Failed and cancelled uploads leave nothing staged on either driver
+(filesystem temp files, S3 multipart uploads and temp objects), now
+covered by tests; crashed uploads are still swept by <code>blob.gc</code> after
+<code>storage.gc.temp_max_age</code>.</li>
+</ul>
+</li>
+<li>
+<p><strong>Proxy negative cache</strong>: the per-remote cache of 404 answers is a bounded
+LRU (10,000 paths) with a per-entry expiry. A full cache evicts its least
+recently used path instead of forgetting every path at once, which sent a
+burst of requests to the remote. Evictions are counted in
+<code>hangar_proxy_negative_cache_evictions_total{repository}</code>.</p>
+</li>
+<li>
+<p><strong>Docs</strong>: <code>docs/security.md</code> explains that other cluster nodes keep
+accepting an old password for up to <code>auth.basic_cache_ttl</code> after a change.</p>
+</li>
+<li>
+<p><strong>Write policy default, upgrade note</strong>: a hosted repository created through
+the API without <code>write_policy</code> now gets <code>allow_once</code> (as the web UI already
+did), so a published release cannot be replaced by different bytes;
+<code>docker</code> keeps <code>allow</code>, because tags such as <code>latest</code> are meant to move.
+Existing repositories keep their stored policy, and an update that leaves
+<code>write_policy</code> out keeps it too. Scripts that relied on overwriting releases
+must now set <code>&quot;write_policy&quot;: &quot;allow&quot;</code> explicitly. Re-publishing different
+bytes answers <code>409</code> in every format (identical bytes stay idempotent);
+Maven SNAPSHOTs remain redeployable.</p>
+</li>
+<li>
+<p><strong>NuGet</strong>: a push of a version that already exists answers <code>409</code> under
+<code>allow_once</code> and <code>deny</code> (what <code>dotnet nuget push --skip-duplicate</code> skips),
+and a re-push under <code>allow</code> no longer relists an unlisted version. New
+<code>VulnerabilityInfo/6.7.0</code> resource, so NuGet Audit (<code>dotnet restore</code>)
+reports vulnerable packages: hosted repositories serve this server's open
+scan findings, proxies pass the remote's pages through (nuget.org publishes
+them), groups list their members' pages.</p>
+</li>
+<li>
+<p><strong>Quarantined versions are no longer advertised</strong> in NuGet (flat container
+list, registration, search), Maven (<code>maven-metadata.xml</code> of hosted and
+proxy repositories; the build list of a quarantined SNAPSHOT answers <code>403</code>)
+and Go proxies (<code>@v/list</code>, <code>@latest</code> falls back to the newest other version,
+a query resolving to a quarantined version answers <code>403</code>). Clients now pick
+a version they can download instead of failing on its content.</p>
+</li>
+<li>
+<p><strong>Maven</strong>: a non-unique SNAPSHOT file is replaced in one transaction (no
+window without the file, and no <code>delete</code> privilege needed). A proxy answers
+<code>.sha1</code>/<code>.md5</code> requests from the remote's side file instead of downloading
+the whole artifact first.</p>
+</li>
+<li>
+<p><strong>APT</strong>: <code>Release</code> files declare <code>Acquire-By-Hash: yes</code> and every index is
+also served at <code>by-hash/SHA256/&lt;digest&gt;</code> and <code>by-hash/SHA512/&lt;digest&gt;</code>;
+superseded by-hash files stay for an hour, so <code>apt-get update</code> racing an
+upload no longer fails with &quot;Hash Sum mismatch&quot;. A repository without
+packages (new, or after the last delete) serves a valid, signed, empty
+distribution instead of <code>404</code>.</p>
+</li>
+<li>
+<p><strong>RPM</strong>: <code>repomd.xml.asc</code> always verifies the <code>repomd.xml</code> the same client
+was served, also when an upload replaces it between dnf's two requests.
+The same name-epoch-version-release.arch stored at two paths is listed once
+in <code>primary.xml</code> (the newest copy); under <code>allow_once</code> the second path is
+refused with <code>409</code>.</p>
+</li>
+<li>
+<p><strong>Raw</strong>: concurrent uploads of <code>a</code> and <code>a/b</code> can no longer both succeed;
+the file/directory check and the write are serialized per top-level
+directory.</p>
+</li>
+<li>
+<p><strong>Routing rules against dependency confusion</strong> (issue #73):</p>
+<ul>
+<li>Proxy repositories take <code>config.routing.block</code> and <code>allow</code> name patterns:
+a blocked name is never requested from the remote nor served from the
+cache (also content cached before the rule). Groups take per-member
+<code>exclusive</code> (names served only by that member) and <code>block</code> patterns.</li>
+<li>Enforced in every format (apt, cargo, docker, go, helm, maven, npm, nuget,
+pypi, raw, rpm): merged metadata, search and indexes leave out excluded
+versions, downloads answer 404 naming the rule, and the
+<code>X-Hangar-Routing</code> header explains exclusions. Remote requests of a proxy
+with rules must declare their package, so no format can leak an internal
+name upstream. APT and RPM proxies still pass the remote's signed indexes
+through; only downloads of blocked packages are refused.</li>
+<li>Patterns match each format's identity: case-insensitive NuGet ids,
+normalized PyPI names, npm <code>@scope/*</code>, Maven <code>groupId[:artifactId]</code>, Go
+module path prefixes (GOPRIVATE syntax), Cargo crates, Docker image paths,
+Helm charts, APT/RPM package names, raw paths.</li>
+<li>API: <code>GET/PUT/DELETE /repositories/{name}/routing</code>,
+<code>POST .../routing:test</code> (which member serves a name) and
+<code>GET .../routing:suggest</code> (patterns from what hosted repositories
+publish). Changes are audited as <code>repository.routing.update</code>; exclusions
+are counted in <code>hangar_routing_blocked_total</code> and audited as
+<code>routing.blocked</code> (at most once per name every 10 minutes).</li>
+<li>Web UI: a <strong>Routing rules</strong> panel in proxy and group settings with a
+suggested default and a <strong>Test a name</strong> field.</li>
+<li>Guide: <code>docs/guides/routing-rules.md</code>.</li>
+</ul>
+</li>
+<li>
+<p><strong>API and client feedback</strong> (issues #67, #69, #70, #71, #75):</p>
+<ul>
+<li>A request with a wrong, expired or revoked token or password answers
+<code>401</code> on every endpoint, public ones included: a NuGet service index, apt
+and rpm signing keys, cargo <code>config.json</code>, unknown paths and offline
+repositories of anonymous-read repositories, and <code>GET /system/status</code> or
+<code>GET /auth/providers</code> in the REST API. Each format answers with its usual
+challenge (<code>Basic realm=&quot;Hangar NuGet&quot;</code>, <code>Cargo login_url=...</code>, ...); the
+REST API sends <code>WWW-Authenticate: Bearer realm=&quot;Hangar API&quot;</code>. Requests
+without credentials are served as before, and the failures count towards
+<code>security.rate_limit.failed_auth</code>. The credentials are checked once per
+request. A NuGet push that sends a valid <code>X-NuGet-ApiKey</code> together with
+wrong Basic credentials now gets <code>401</code>.</li>
+<li>Creating or updating a group with <code>blob_store</code> no longer fails: the field
+is ignored (logged at debug level) and left out of the answer.</li>
+<li>The API guide and <code>/api/v1/automation-guide.md</code> explain the
+<code>X-CSRF-Token</code> header (the <code>hangar_csrf</code> cookie's value) for session
+writes and show the first sign-in from a script: <code>POST /auth/login</code>,
+<code>PUT /me/password</code>, then <code>POST /tokens</code>, plus <code>hangar admin token create</code>
+and <code>hangar admin reset-password</code>.</li>
+<li>The OpenAPI document describes each format's <code>config.format</code> keys in its
+own schema (<code>NugetFormatConfig</code>, <code>GoFormatConfig</code>, ...), referenced from
+<code>RepositoryConfig.format</code> (<code>anyOf</code>, <code>x-format-schemas</code>); the wire format
+and generated client types stay compatible. A test keeps these schemas,
+and <code>RepositoryConfig</code>, in step with the Go structs.</li>
+<li>npm scoped tarballs are advertised as <code>@scope/name/-/name-&lt;version&gt;.tgz</code>
+in every repository type, also for proxies of remotes that name them
+<code>@scope/name/-/@scope/name-&lt;version&gt;.tgz</code>; that form is still served, so
+existing lockfiles keep installing, and tarballs a proxy cached under it
+are reused.</li>
+</ul>
+</li>
+<li>
+<p><strong>Container image scanning with Trivy.</strong> Docker and OCI images are scanned
+with a Trivy server in client/server mode when <code>scanner.trivy_url</code> is set;
+otherwise they still show <em>Image scanning not configured</em>.</p>
+<ul>
+<li>A new scan adapter (<code>cmd/hangar-scanner</code>, image
+<code>ghcr.io/ismoilovdevml/hangar-scanner</code> built on the official Trivy image)
+runs the Trivy client for each image. It pulls the image from Hangar by
+digest with a registry token issued for that one repository: pull only,
+valid for 15 minutes, not renewable, able to read quarantined content,
+not counted as a download. The Hangar process runs no command.</li>
+<li>Every platform manifest of a multi-platform image is scanned
+(<code>scanner.platforms: default</code> scans only <code>linux/amd64</code>); findings are
+merged per advisory, package and file with their platforms. Helm charts
+and other OCI artifacts are reported as <em>Not a container image</em>.</li>
+<li>OS packages and application libraries land in the same findings tables
+(source <code>trivy</code>) with severity, CVSS, <em>fixed in</em>, the layer, the file of a
+library and the distribution's verdict. Arrival scans, the hourly rescan,
+<code>:scan</code>, waivers, assignment, quarantine, search and the Overview card
+work for images.</li>
+<li>The fix plan has one row per image with its tags and <strong>Rebuild · N
+packages</strong>; <strong>Copy upgrade</strong> copies a Dockerfile line for the image's
+distribution (<code>RUN apk upgrade --no-cache ...</code>). The package page and the
+drawer show where a package sits in the image.</li>
+<li><code>GET /api/v1/scanning/status</code> reports the Trivy server version and its
+database date (<code>images</code>).</li>
+<li>Settings: <code>scanner.trivy_url</code>, <code>trivy_token</code>, <code>adapter_url</code>,
+<code>adapter_token</code>, <code>registry_url</code>, <code>platforms</code>, <code>timeout</code>, <code>workers</code>.
+Migration <code>00250</code> adds <code>findings.location</code> and <code>findings.image</code>, widens
+the finding key to the location and allows <code>unsupported</code> scan rows.</li>
+<li><code>install.sh --with-trivy</code> (asked on a first interactive install) adds the
+compose profile <code>trivy</code> with the database in <code>&lt;data&gt;/trivy/</code>, generates
+<code>secrets/scanner.adapter_token</code> and wires <code>scanner.*</code>; <code>--trivy-proxy</code>
+sends the database downloads through a corporate proxy and
+<code>--without-trivy</code> turns it off. The Helm chart gets <code>imageScanning</code>.
+Guide: <code>docs/guides/vulnerabilities.md#container-images</code>.</li>
+</ul>
+</li>
+<li>
+<p><strong>Faster repository list</strong> (issue #68): <code>GET /api/v1/repositories</code> and
+<code>GET /api/v1/repositories/{name}</code> no longer aggregate every asset on each
+request. Database triggers log each asset and component change in the
+writer's transaction, and the totals are folded into stored rows: by a
+background loop every 5 s, and before each read, so a client sees its own
+uploads at once. Groups keep reference counts of the blobs and versions
+their members serve, so a shared blob or version is still counted once.
+Every hour the totals are recounted from scratch; any difference is
+repaired and logged as a warning. With 50 repositories and 100k assets the
+list drops from about 440 ms to 2 ms (median). Migration 00275 adds the
+tables, the triggers and an index for last activity; the first fold after
+the upgrade counts the existing content (about 1.5 s per 100k assets).</p>
+</li>
+<li>
+<p><strong>Client cancellation is not an error</strong>: an API request whose client goes
+away (for example by leaving a page) is logged at debug level and answered
+with status 499. It is no longer logged as <code>ERROR ... context canceled</code>
+or counted as a server error. The access log also logs a 5xx caused by a
+departed client at debug level.</p>
+</li>
+<li>
+<p><strong>Search</strong>: the total and the facets of dimensions the query does not
+filter on come from one statement instead of four. <code>GET /api/v1/search</code>
+takes about 35% less time with 33k components.</p>
+</li>
+<li>
+<p><strong>Cluster operations</strong> (issue #34):</p>
+<ul>
+<li><code>nats.replicas</code> (1 to 5, default 1) sets the replica count of the
+JetStream job stream. Every node creates or scales the stream on start,
+so changing it updates an existing stream in place; embedded NATS accepts
+only 1. Helm: <code>nats.streamReplicas</code>, which defaults to
+<code>nats.bundled.replicas</code>, so <strong>upgrading a release with the bundled NATS
+cluster scales the job stream from 1 to 3 replicas</strong>.</li>
+<li>Migrations hold a PostgreSQL advisory lock (per schema). Nodes that start
+together with <code>migrate_on_start</code>, or <code>hangar migrate up</code> next to starting
+nodes, no longer fail with <code>duplicate key value violates unique constraint</code>:
+one process migrates and the others wait, then find nothing pending.
+Nodes without <code>migrate_on_start</code> wait for a running migration instead of
+refusing to start. The Helm chart now allows <code>migrations.mode: onStart</code>
+with several replicas. The lock needs a session-level connection (not
+PgBouncer in transaction pooling mode), and <code>database.max_conns</code> must be
+at least 2.</li>
+<li><code>/metrics</code> authentication: <code>metrics.auth</code> <code>none</code> (default), <code>bearer</code>
+(<code>metrics.bearer_token</code> or <code>metrics.bearer_token_file</code>) or <code>basic</code>
+(<code>metrics.username</code>, <code>metrics.password</code> or <code>metrics.password_file</code>), plus
+an optional <code>metrics.allowed_cidrs</code> allowlist that uses the trusted-proxy
+aware client address. Credentials are compared in constant time and count
+towards the failed authentication limit. Helm: <code>metrics.auth.mode</code> and
+<code>metrics.auth.existingSecret</code>, also used by the ServiceMonitor. Scrape
+configurations: <code>docs/operations/monitoring.md#protecting-metrics</code>.</li>
+<li><code>server.drain_delay</code> (0s to 5m, default 0s): after SIGTERM a node keeps
+serving with <code>/readyz</code> failing (and <code>Connection: close</code>) before the
+listener closes, for load balancers that poll <code>/readyz</code>.
+<code>server.shutdown_timeout</code> is now validated (1s to 24h). Kubernetes
+guidance: <code>docs/deploy/high-availability.md#draining-nodes</code>.</li>
+</ul>
+</li>
+<li>
+<p><strong>Vulnerability scanning of APT and RPM packages by distribution release.</strong>
+A repository's <code>config.scanning.distro</code> (an OSV ecosystem such as
+<code>Debian:12</code>, <code>Ubuntu:22.04:LTS</code>, <code>Rocky Linux:9</code>, <code>AlmaLinux:9</code>,
+<code>Red Hat:enterprise_linux:9::baseos</code>; <strong>Distribution release</strong> in the
+repository settings, a picker with the common releases plus free text)
+names the release whose advisories apply. Proxies of Debian and Ubuntu
+archives detect it from the suites clients fetch, Rocky Linux, AlmaLinux and
+Red Hat proxies from the remote URL; the setting wins. Packages are checked
+by source package (Debian <code>Source:</code>, with the source version of binNMUs) or
+source RPM, versions are ordered like dpkg and rpm do, and the fix plan
+suggests <code>apt-get install --only-upgrade</code> / <code>dnf upgrade</code> for the installed
+binaries. A repository whose release is set or changes is rescanned.
+Migration <code>00265</code> adds <code>repository_distros</code>.</p>
+</li>
+<li>
+<p><strong>OIDC sign-out ends the provider session too</strong> (RP-Initiated Logout).
+<code>auth.oidc.logout: provider</code> (default; <em>Sign out</em> in Settings →
+Authentication) sends the browser to the provider's <code>end_session_endpoint</code>
+with <code>id_token_hint</code>, <code>client_id</code> and <code>post_logout_redirect_uri</code> =
+<code>&lt;base_url&gt;/login</code>; <code>local</code> ends the Hangar session only, as does a provider
+without the endpoint. The ID token is stored with the session, sealed with a
+key derived from the session cookie (migration <code>00266</code>). <code>POST /api/v1/auth/logout</code> answers <code>200 {&quot;logout_url&quot;}</code> for a provider sign-out,
+<code>204</code> otherwise. Register <code>&lt;base_url&gt;/login</code> as a post-logout redirect URI
+(Keycloak: <em>Valid post logout redirect URIs</em>). Back-channel logout is not
+supported.</p>
+</li>
+<li>
+<p><strong>LDAP / Active Directory acceptance test.</strong> <code>test/e2e/ldap/run.sh</code> runs
+<code>TestLDAP</code> (build tag <code>e2e</code>) against OpenLDAP and a Samba AD domain
+controller in Docker: sign-in, group mapping with AD nested groups,
+StartTLS and ldaps with certificate checks, wrong passwords, lockout, Basic
+auth from a package client and the settings <em>Test</em> endpoint.</p>
+</li>
+</ul>
+<h2 id="v016-2026-11-09">v0.1.6 (2026-11-09)<a class="anchor" href="#v016-2026-11-09" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><strong>Web UI: format settings and signing keys.</strong> The repository form edits
+APT <code>architectures</code>, RPM <code>repodata_depth</code>, the APT/RPM <code>signing_key</code>, Go
+proxy <code>sumdbs</code> and <code>sumdb_via</code>, Cargo proxy <code>download_url</code> and Helm proxy
+<code>related_hosts</code>, each only for the format and type it applies to and checked
+like the server does. APT and RPM settings pages get a <strong>Signing key</strong> panel:
+fingerprint, algorithm, own or shared key, <code>public.gpg</code> / <code>public.key</code>
+links, rotation with a confirmation, and a write-only key import. Saving a
+proxy no longer drops its <code>related_hosts</code>, <code>offline</code> and
+<code>max_concurrent_requests</code>.</li>
+<li><strong>APT and RPM repositories</strong> (<code>apt</code>, <code>rpm</code>): hosted, proxy and group repositories
+for Debian/Ubuntu and RHEL/Rocky/AlmaLinux/Fedora.
+<ul>
+<li>APT: <code>.deb</code> uploads (raw <code>PUT</code> or multipart), Packages/.gz/.xz per
+distribution, component and architecture, and a Release with every hash.
+InRelease and Release.gpg are signed with the repository key.</li>
+<li>RPM: <code>.rpm</code> uploads with the header parsed in Go, regenerated createrepo
+repodata (sha256, <code>rpm:header-range</code>), <code>repomd.xml.asc</code> for
+<code>repo_gpgcheck=1</code>, and an optional per-directory layout (<code>repodata_depth</code>).</li>
+<li>Proxies pass the remote's signed metadata through unchanged. Index files
+are checked against the cached Release or repomd.xml; by-hash files,
+repodata files and packages are cached forever.</li>
+<li>Groups combine hosted members only and are signed with the group's key.</li>
+<li>Signing keys are OpenPGP (RSA 4096 by default, or Ed25519), one per
+repository or one shared key, sealed with <code>security.secret_key</code>.
+<code>GET</code>/<code>PUT /api/v1/repositories/{name}/signing-key</code> and
+<code>POST .../signing-key:rotate</code> show, import and rotate them; rotations and
+imports are audited. <code>hangar admin rotate-secrets</code> re-wraps them.</li>
+<li>Guides: <code>docs/guides/apt.md</code>, <code>docs/guides/rpm.md</code>.</li>
+</ul>
+</li>
+<li><strong>Helm chart repositories</strong> (<code>helm</code>): hosted, proxy and group. <code>helm repo add</code>,
+<code>helm install</code>, <code>helm pull --verify</code> with provenance files, <code>helm cm-push</code> and
+<code>curl --upload-file</code> uploads, a generated and cached <code>index.yaml</code>, and the
+ChartMuseum read API. Guide: <code>docs/guides/helm.md</code>.</li>
+<li><strong>Go modules</strong> (<code>go</code> format): the GOPROXY protocol (<code>@v/list</code>, <code>.info</code>,
+<code>.mod</code>, <code>.zip</code>, <code>@latest</code>, case-encoded paths) for hosted, proxy and group
+repositories. Proxies of <code>proxy.golang.org</code> or any GOPROXY cache versions
+forever and lists for <code>metadata_ttl</code>; 404/410 keep <code>GOPROXY=a,b</code> fallback
+working. Hosted modules are published with <code>PUT .../@v/&lt;version&gt;.zip</code>
+(validated against the module zip rules; optional <code>.mod</code> and <code>.info</code>),
+write-once under <code>allow_once</code>, deleted with <code>DELETE .../@v/&lt;version&gt;</code>.
+Proxies pass the <code>sum.golang.org</code> checksum database through. Browse tree,
+README and licence from the module zip, OSV scanning. Guide:
+<code>docs/guides/go.md</code>.</li>
+<li><strong>Cargo format</strong>: Rust crate registries over the sparse index protocol.
+Hosted repositories take <code>cargo publish</code> (crate name and SemVer rules,
+tarball checks, versions immutable), <code>cargo yank</code> / <code>--undo</code>,
+<code>cargo search</code> and <code>cargo owner --list</code>; index files carry ETag and
+Last-Modified. Proxies cache crates.io index files for <code>metadata_ttl</code> and
+<code>.crate</code> files forever (verified against the index checksum); groups merge
+members per version and send publishes to the write member. Private
+repositories announce <code>auth-required</code>, cargo's raw token and <code>Bearer</code> are
+accepted. README, licence and repository come from the <code>.crate</code>; crates are
+scanned against OSV <code>crates.io</code>. Guide: <code>docs/guides/cargo.md</code>.</li>
+</ul>
+<h2 id="v015-2026-11-05">v0.1.5 (2026-11-05)<a class="anchor" href="#v015-2026-11-05" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><strong>Automation-friendly API</strong>: the OpenAPI document is public at
+<code>/api/v1/openapi.yaml</code> and <code>/api/v1/openapi.json</code>; <code>/api/v1/automation-guide.md</code>
+and <code>/llms.txt</code> give scripts and automated clients a short guide with the
+server's real URLs (authentication, error body, paging, rate limits, common
+calls). <code>GET /me</code> (same body as <code>GET /auth/session</code>) now includes a <code>token</code>
+section with the token's scopes, restrictions and expiry. Requests to paths
+the API does not have answer <code>404 not_found</code> instead of <code>501</code>.</li>
+<li><strong>API reference page</strong> at <code>/api-docs</code> (login footer, avatar menu,
+Settings, ⌘K): every endpoint grouped by area, parameters, bodies,
+responses and schemas, search, copyable curl commands for this server, and
+&quot;Try it&quot; with the current session or a pasted token. Public; built in, no
+third-party renderer.</li>
+<li><strong>Token creation, redone</strong>: permission presets (read only, publish to
+selected repositories, repository admin, security reviewer, full admin,
+custom), a repository picker with glob patterns, a custom editor with a
+live plain-language summary, and greyed-out choices beyond the owner's own
+rights. After creation the secret comes with paste-ready snippets: curl,
+<code>HANGAR_URL</code> / <code>HANGAR_TOKEN</code>, npm, NuGet, pip, Maven and docker
+configuration, and a block for automation.</li>
+<li><strong>Token restrictions</strong>: optional <code>allowed_cidrs</code> (client networks) and
+<code>read_only</code> (scopes narrowed to read; the API refuses writes with
+<code>403 read_only_token</code>); registry logins inherit them. Migration <code>00210</code>.</li>
+<li><strong>Token rotation</strong>: <code>POST /tokens/{id}/rotate</code> and a Rotate button create a
+replacement with the same scopes, restrictions and lifetime; the old token
+is revoked now, after a grace period, or kept. Audited as <code>token.rotate</code>.</li>
+<li><strong>Settings hub</strong>: a new Settings page (<code>/settings</code>, avatar menu → Settings,
+⌘K) gathers addresses, instance name, sign-in, internet access, storage,
+nodes, configuration, system status, system logs, the audit log, My account
+and access tokens in grouped rows, each with a one-line live status
+(&quot;corp-proxy · proxy.example.com:3128&quot;, &quot;All 14 checks passing&quot;). Rows follow
+the user's privileges: a user without system privileges sees only their
+account. The System page moved from <code>/settings</code> to <code>/settings/system</code>; every
+other address (<code>/account</code>, <code>/audit</code>, <code>/system/status</code>, <code>/system/logs</code>,
+<code>/settings/authentication</code>, <code>/settings/proxies</code>) is unchanged and shows
+&quot;Settings&quot; in its breadcrumb.</li>
+<li><strong>Shorter sidebar</strong>: System status, System logs, System, Audit log, My
+account and the Settings section left the sidebar. A page without its own
+entry lights up the entry of its area (Access &amp; audit or Cluster &amp;
+replication). The command palette still finds every page and hides the ones
+the user may not open.</li>
+<li><strong>First administrator without configuration</strong>: on the first start of an
+empty installation without <code>bootstrap.admin_user</code>, Hangar creates the local
+user <code>admin</code> with a generated one-time password, printed once to standard
+error (never into the System logs buffer) and written to
+<code>bootstrap.initial_password_file</code> (mode 0600) when set. A password already
+in that file is used instead. The file is deleted after the first password
+change. Only one node creates the user. See
+<a href="../deploy/first-admin/">first administrator</a>.</li>
+<li><strong>Required password change</strong>: the generated administrator, administrators
+from <code>bootstrap.admin_user</code> / <code>hangar admin bootstrap</code> (unless
+<code>bootstrap.require_password_change: false</code>), users given a one-time
+password by the new <code>hangar admin reset-password --user NAME</code>, and members
+an administrator flags with <strong>Require password change</strong>
+(<code>POST /users/{id}/require-password-change</code>) must set a new password before
+anything else. Until then their password sessions reach only
+<code>GET /auth/session</code> (<code>password_change_required: true</code>), <code>PUT /me/password</code>
+and logout; everything else answers 403 <code>password_change_required</code>, package
+clients and token creation are refused, and the UI shows only a
+<strong>Set a new password</strong> page with live policy checks. The change re-issues
+the session and is audited as <code>user.password.changed</code> (<code>reason: first_login</code>). Members show a <strong>Must change password</strong> badge
+(<code>must_change_password</code>); the session reports <code>password_policy</code>. Migration
+<code>00200</code>. Changing your own password now always re-issues the session
+cookie.</li>
+<li><strong>Behaviour change</strong>: administrators created from
+<code>HANGAR_BOOTSTRAP_ADMIN_USER</code> / <code>HANGAR_BOOTSTRAP_ADMIN_PASSWORD</code> or
+<code>hangar admin bootstrap</code> must now change their password at the first
+sign-in. Set <code>HANGAR_BOOTSTRAP_REQUIRE_PASSWORD_CHANGE=false</code> for automation
+that keeps using the configured password.</li>
+<li><strong>Two-question install</strong>: <code>curl -fsSL https://github.com/ismoilovdevml/hangar/releases/latest/download/install.sh | sudo bash</code> asks for a data directory (default <code>/srv/hangar</code>) and an
+optional domain (Caddy with automatic TLS, or behind your reverse proxy),
+generates every secret, starts Hangar and PostgreSQL and prints the URL,
+the user <code>admin</code> and the one-time password the server generated
+(<code>bootstrap.initial_password_file</code>, <code>&lt;data&gt;/secrets/initial-admin-password</code>). Every question has a flag
+(<code>--data-dir</code>, <code>--domain</code>, <code>--tls caddy|proxy</code>, <code>--port</code>, <code>--yes</code>).
+Re-running it upgrades in place after dumping the database to
+<code>&lt;data&gt;/backups/</code>; <code>--uninstall</code> keeps the data, <code>--purge</code> deletes it after
+a typed confirmation; <code>--files-from</code> and <code>--mirror</code> serve offline hosts.</li>
+<li><strong>One data directory, no named volumes</strong>: the compose stack bind-mounts
+<code>config/</code>, <code>secrets/</code>, <code>postgres/</code>, <code>blobs/</code>, <code>nats/</code> and <code>caddy/</code> of the
+data directory with SELinux labels and the container users' ownership.
+The installer-managed <code>.env</code> holds no secrets. MinIO is no longer part of
+the compose stack, and the release archive <code>hangar-compose.tar.gz</code> no
+longer contains <code>env.example</code>.</li>
+<li><strong>Secrets from files</strong>: new setting <code>secrets_dir</code> (<code>HANGAR_SECRETS_DIR</code>):
+a file named after a setting's path (<code>security.secret_key</code>,
+<code>database.url</code>, <code>auth.oidc.client_secret</code>) holds its value; the
+environment still wins. Works with Kubernetes secret volumes.</li>
+<li><strong>Moving <code>/opt/hangar</code> installations</strong>: <code>install.sh --migrate-from /opt/hangar --data-dir /srv/hangar</code> (offered automatically when found)
+converts the <code>.env</code> secrets into files, keeps <code>hangar.yaml</code>, the URL, port,
+bind address and trusted proxies, copies the <code>hangar_postgres-data</code> and
+<code>hangar_hangar-data</code> volumes, starts the new layout, checks <code>/readyz</code> and
+prints rollback steps; the old directory and volumes are left untouched.
+The installer flags <code>--dir</code>, <code>--storage</code>, <code>--s3-endpoint</code> and
+<code>--admin-user</code> are gone.</li>
+</ul>
+<h2 id="v014-2026-11-05">v0.1.4 (2026-11-05)<a class="anchor" href="#v014-2026-11-05" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><strong>README images</strong>: badges, logos and screenshots in package READMEs now
+load. The package info API returns, for every image of a README, a
+same-origin URL signed by the server (<code>readme.images</code>); Hangar fetches
+remote images through the outbound proxy and address policy (https only,
+5 MiB, images only, content sniffed, SVG sandboxed) and caches them for
+24 hours in memory and PostgreSQL (<code>readme_image_cache</code>, migration
+<code>00160</code>). New endpoint <code>GET /components/{id}/readme-images/{sig}</code>. Relative
+image paths are served from the package (.nupkg, npm tarball) or resolved
+in the source repository on github.com / gitlab.com; image links copied
+from github.com pages are unwrapped. New setting <code>ui.readme_images</code>
+(<code>proxy</code> default, <code>direct</code>, <code>off</code>) and <code>ui.readme_images_allow_http</code>; see
+<a href="../security/#readme-images">security</a> for the privacy trade-off.</li>
+<li><strong>README rendering</strong>: badge rows stay on one line, linked images stay
+clickable, <code>&lt;img width&gt;</code> is honoured, images are bounded and load lazily
+without a referrer, and an image that is not shown or fails to load becomes
+a small chip with its alternative text instead of <code>[image: …]</code>.</li>
+<li><strong>Package icon</strong>: NuGet packages show their own icon (<code>&lt;icon&gt;</code> in the
+.nupkg, or <code>&lt;iconUrl&gt;</code> through the image proxy) in the package header
+(<code>icon_url</code> in the package info API).</li>
+<li><strong>Overview, rebuilt</strong>: a search hero with quick actions (connect a client,
+create a token, new repository, browse packages); an activity sentence with
+requests per interval; a request outcome ring (share answered without a 5xx
+or a 401/403, p95); a To do list built from real signals (unhealthy system or
+upstreams, rejected pushes, critical findings, expiring tokens, missing or
+failed database backup, scanning off, no storage quota); Storage, Security
+and Upstream cards; the most downloaded packages; recently published.
+<code>GET /metrics/overview</code> adds <code>activity</code> (published, cached, pushes rejected
+over the range), <code>requests.server_errors</code>, <code>requests.denied</code> and per-bucket
+<code>traffic[].requests</code>; the outcomes are recorded from this version on
+(migration <code>00170</code>).</li>
+<li><strong>Account menu</strong>: the avatar opens a solid menu with name, email and role,
+My account, Access tokens, Password &amp; sessions (Signed-in devices for single
+sign-on users) and Sign out, with full keyboard support.</li>
+<li><strong>Sidebar status card</strong> stays pinned at the bottom while the links scroll,
+links to System status and turns amber or red when the system is degraded or
+down. The bell shows a dot while tokens are about to expire.</li>
+<li><strong>Settings → Authentication, presets first</strong>: pick the identity provider
+(Active Directory, OpenLDAP, FreeIPA, Keycloak, Microsoft Entra ID, Google
+Workspace, Okta or any other OIDC / LDAP) and fill in three fields; the
+preset sets scopes, claims, filters, attributes and nested groups, with
+every field one <em>Customize</em> away. Setup steps per provider next to the
+redirect URI, status chips for the methods in use, <em>Switch to …</em> when
+another provider replaces the one in use. Typed credentials survive
+switching cards. The chosen preset is stored as <code>preset</code> on
+<code>/identity-providers/oidc</code> and <code>/identity-providers/ldap</code> (optional,
+informational).</li>
+<li><strong>Settings → Proxies, calm and short</strong>: with no proxy the page says how
+remotes are reached (directly, or through the server's <code>HTTPS_PROXY</code>).
+A new proxy needs one field, the proxy address as in <code>HTTPS_PROXY</code>, plus
+the platform-default switch; credentials, exceptions and the CA
+certificate (upload or paste) are folded away. The test reports the
+answer inline. Proxies are listed with their default flag and usage.</li>
+<li><strong>Vulnerability fix plan</strong>: the Vulnerabilities screen groups findings by
+package and says what to upgrade: the vulnerable versions present, the
+lowest version fixing every finding per release line (e.g.
+<code>8.0.4 / 10.0.10</code>), a copyable <code>dotnet add package</code> / <code>npm install</code> /
+<code>pip install</code> / <code>mvn versions:use-dep-version</code> / <code>go get</code> command, and how
+often the vulnerable versions were pulled in the last 7 days and by how
+many clients. Packages nobody downloaded within <code>scanning.in_use_window</code>
+(default 30 days) are dimmed and listed last; a banner sums up what the
+upgrades fix. Tabs <em>In use first</em>, <em>All packages</em> and <em>Waived</em>, CSV export
+(<code>GET /vulnerabilities/fix-plan?format=csv</code>).</li>
+<li><strong>Who pulls a package</strong>: downloads are attributed per package version, UTC
+day and client (principal, or address and client kind) in
+<code>component_pulls</code> (migration <code>00150</code>, kept 90 days), batched like the
+download counters and summed over every node. The finding drawer lists the
+busiest clients of the last 7 days (<code>GET /findings/{id}/pullers</code>,
+<code>system:security:read</code>).</li>
+<li><strong>Assign findings</strong> to a Hangar user, one finding or a whole package (new
+findings of the package follow), shown in the fix plan with an <em>Assigned to
+me</em> filter; audited as <code>finding.assign</code> / <code>finding.unassign</code>. Waive a whole
+package or one of its findings in one step.</li>
+<li><strong>Rescan</strong> on the Vulnerabilities screen (<code>system:security:write</code>) queues a
+scan of every repository and shows its progress
+(<code>POST/GET /vulnerabilities/rescan</code>, audited as <code>vulnerability.rescan</code>).</li>
+<li>The trend chart, the scanner panel and the per-repository <em>Scan now</em>
+button left the Vulnerabilities screen; <code>GET /findings/trend</code> and
+<code>POST /repositories/{name}:scan</code> are unchanged.</li>
+<li><strong>Fewer release files</strong>: the compose stack ships as one <code>hangar-compose.tar.gz</code>
+and only Linux binaries are published (<code>hangar-linux-amd64</code>,
+<code>hangar-linux-arm64</code>), next to <code>install.sh</code> and <code>SHA256SUMS</code>. The installer
+still reads releases that publish each compose file separately.</li>
+<li><strong>System status redesign</strong>: the page leads with one headline (&quot;Everything
+is working&quot;, &quot;1 check needs attention&quot;) and the share of checks passing,
+then a checklist per node: one row per subsystem with its summary and a
+headline value (ping, free space, scheduler role, probe time, slowest proxy
+latency). Rows with a problem open by themselves; an open row shows the
+details, what the check probes, since when the status holds, the last
+incident and a link to the matching page. Live refresh pauses from the
+&quot;Live · every 15 s&quot; toggle. <code>SystemSubsystem</code> gains <code>metric</code>, <code>target</code>,
+<code>since</code> and <code>last_incident</code>; subsystem labels are now Database, Blob
+storage, Event bus, Task scheduler, Search index, Sign-in (with the enabled
+providers) and Upstream proxies.</li>
+</ul>
+<h2 id="v013-2026-11-04">v0.1.3 (2026-11-04)<a class="anchor" href="#v013-2026-11-04" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><strong>System status</strong> (Operations → System status, <code>system:cluster:read</code>): every
+node with its URL, version and commit, uptime, last heartbeat and scheduler
+role, and the health of PostgreSQL, blob stores, NATS / JetStream, the task
+scheduler, the search index, external sign-in and upstream proxies, each
+healthy, degraded or down with details. Nodes publish their checks every
+15 s into <code>system_nodes</code> (migration <code>00140</code>); a silent node shows as not
+responding. New endpoints <code>GET /system/nodes</code> and <code>GET /system/health</code>;
+<code>GET /nodes</code> is implemented from the same heartbeats and
+<code>/system/status</code> reports real <code>nodes_up</code> / <code>nodes_total</code>.</li>
+<li><strong>System logs</strong> (Operations → System logs, <code>system:cluster:admin</code>): each
+node keeps its newest <code>log.buffer_size</code> records (default 5000) in memory,
+scrubbed like stderr. Filter by node, level and text, follow with pause and
+refresh, open a line as JSON and download JSON lines.
+<code>GET /system/logs</code> supports cursors and long polling; other nodes answer
+over NATS. New setting <code>server.node_id</code>.</li>
+<li><strong>Log redaction</strong> also covers headers and query values logged as maps
+(<code>Authorization</code>, <code>Cookie</code>, <code>Set-Cookie</code>, <code>X-Api-Key</code>, ...).</li>
+<li><strong>Settings → Authentication</strong>: administrators configure OIDC and LDAP
+sign-in in the web UI or with <code>GET/PUT /identity-providers/oidc</code> and
+<code>/identity-providers/ldap</code>, without a restart: changes apply on every node
+(event bus plus a revision poll). Group → role mapping table with role
+pickers, the redirect URI to copy, and <strong>Test</strong> buttons (OIDC discovery,
+issuer, keys and a client-credentials check; LDAP connect, service bind
+and user lookup). Providers enabled in the configuration file win and are
+shown read-only. The login page follows the saved settings at once.</li>
+<li><strong>Named outbound proxies</strong> (Settings → Proxies, <code>/proxies</code>): several
+proxies with credentials, no-proxy hosts, redirect target hosts and a CA
+bundle; one is the platform default. Proxy repositories pick <em>Platform
+default</em>, a named proxy (<code>config.proxy.http.proxy_name</code>) or <em>No proxy</em>.
+A proxy in use cannot be deleted (<code>409 in_use</code>). <code>http.proxy</code> from the
+configuration file is listed read-only as <code>config</code> and stays the default.
+<strong>Test</strong> fetches a URL through the proxy and reports status and latency.</li>
+<li>Secrets of these settings (OIDC client secret, LDAP bind password, proxy
+passwords) are sealed with <code>HANGAR_SECRET_KEY</code>, write-only in the API, and
+re-wrapped by <code>hangar admin rotate-secrets</code>. Changes are audited without
+secret values. Migration <code>00090</code> adds <code>settings</code>, <code>outbound_proxies</code> and
+<code>settings_revision</code>.</li>
+<li><strong>Repository browser</strong>: the Packages page is a tree of repositories with
+each one's content laid out as clients see it (npm scopes and packages,
+Maven coordinates, NuGet ids and versions, PyPI projects, Docker images and
+tags, raw directories), loaded folder by folder, keyboard navigable, with a
+filter box and links that keep the selected node. Groups merge their
+readable members and name the member that holds each entry. The version
+picker is a versions table; no native selects remain.</li>
+<li><strong>Package page</strong>: version card (newest, published or cached, downloads for
+the version and in total, size, vulnerability status, licences, home page,
+keywords), a &quot;Set me up&quot; panel with install commands per client, a Download
+button, and Readme, Versions, Files and Repositories tabs. READMEs are
+rendered as restricted Markdown (no raw HTML, http(s)/mailto links only,
+https images without a referrer).</li>
+<li><strong>File page</strong>: path, repository (and the group it was reached through),
+package, content type, size, checksums, blob and file dates, downloads,
+the upstream of cached proxy files, a download link and <strong>Delete file</strong>.</li>
+<li>API: <code>GET /repositories/{name}/browse</code> (direct children of a folder,
+cursor-paged, one index seek per child), <code>GET /assets/{id}</code>,
+<code>DELETE /assets/{id}</code> (<code>repo:&lt;name&gt;:delete</code>, audited as <code>asset.delete</code>, the
+blob becomes eligible for compaction) and <code>GET /components/{id}/info</code>
+(README, description, licences, keywords and home page, read from the
+npm manifest or tarball, the <code>.nupkg</code>'s nuspec and README, PyPI core
+metadata or the Maven POM). The versions listing reports <code>size_bytes</code>.</li>
+<li>Migration <code>00110</code> adds <code>component_info</code>, the cache of extracted package
+facts (dropped with the version).</li>
+<li><strong>Vulnerability scanning</strong> of npm, Maven, PyPI, NuGet and Go packages
+against the OSV advisory database (<code>scanning.osv.url</code>, default
+<code>https://api.osv.dev</code>, or a mirror) through the shared outbound HTTP client:
+batched <code>querybatch</code> requests with pagination, advisory details cached by
+modification time, rate limiting and retries with backoff. Severity from
+CVSS v4.0 / v3.x / v2 vectors or the database's own rating; <em>fixed in</em> from
+the affected ranges. Scans on arrival (hosted publish or proxy caching, in
+repositories with <code>scan_on_arrival</code>), on demand
+(<code>POST /components/{id}:scan</code>, <code>POST /repositories/{name}:scan</code>) and in the
+hourly built-in task <code>vulnerability-rescan</code>, which rechecks versions older
+than <code>scanning.rescan_interval</code> (default 24h). <code>scanning.enabled</code> turns it
+off. Docker images are labelled <em>image scanning not configured</em>.</li>
+<li><strong>Findings</strong>: advisory id and aliases (CVE, GHSA), summary and text, CVSS
+score and vector, affected and fixed versions, references, first and last
+seen; findings no longer reported become <em>fixed</em> and re-open if they come
+back. Per-component scan status (never, ok, failed with the error, last
+scan time) in <code>ScanSummary</code> and new scan states <code>failed</code> and <code>unsupported</code>
+(also in search: <code>security:failed</code>; <code>cve:</code> now matches aliases).</li>
+<li><strong>Waivers</strong> need a reason and an end date at most a year ahead
+(<code>system:security:write</code>), are audited, and re-open the finding when they
+expire. <strong>Quarantine critical</strong> (repository setting, off by default) blocks
+downloads of versions with an open critical finding and lifts the block
+when it is fixed, waived or the setting is turned off.</li>
+<li>New endpoints <code>GET /findings/{id}</code>, <code>GET /findings/trend</code>,
+<code>GET /scanning/status</code>; <code>GET /findings</code> gains <code>repository</code>, <code>q</code>,
+multi-value <code>severity</code>/<code>status</code>, <code>total</code>, <code>fixable</code>, <code>waived</code> and
+<code>components</code>; <code>GET /components/{id}/findings</code> reports the scan state.</li>
+<li><strong>Web: Vulnerabilities</strong> replaces the placeholder: severity cards, 30-day
+trend, scanner coverage with <em>Scan repository now</em>, findings table with
+severity, status, fix and repository filters and search, and a finding
+drawer with references, waiver form, revoke and rescan. The Overview
+<em>Critical issues</em> card says when nothing has been scanned yet or scanning
+is off instead of showing <em>Clear</em>.</li>
+<li>Migration <code>00100</code> adds <code>component_scans</code> and the advisory columns of
+<code>findings</code>. Guide: <a href="../guides/vulnerabilities/">docs/guides/vulnerabilities.md</a>.</li>
+</ul>
+<h2 id="v012-2026-11-04">v0.1.2 (2026-11-04)<a class="anchor" href="#v012-2026-11-04" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><strong>Overview traffic survives restarts and covers the cluster</strong>: requests,
+downloads, response time, proxy cache hits and misses and proxy remote
+latency are added every 15 seconds by each node to per-minute rows in
+PostgreSQL (migration <code>00120</code>, kept 62 days) instead of living in process
+memory. The 1h / Today / 7 days / 30 days ranges read exactly those
+windows; <code>coverage_start</code> says when recording began.</li>
+<li><strong>Served from cache</strong> counts every format and requests that reach a proxy
+through a group, once per client request; the card shows hits of total
+proxy requests and bytes saved, and says so when no proxy served content in
+the range. <code>cache.hits</code> and <code>cache.misses</code> are new in the overview API.</li>
+<li><strong>Upstream latency</strong>: <code>GET /upstreams/health?range=</code> reports the median
+remote latency (<code>latency_ms</code>) and the number of remote requests
+(<code>requests</code>) recorded over the range; the Overview card follows the
+selected range. <code>upstream.status</code> events now name the repository, so the
+card updates the right row.</li>
+<li><strong>Group size</strong>: groups report what they serve: <code>size_bytes</code> is their
+members' content with shared blobs counted once (nested groups resolved),
+<code>component_count</code> the distinct versions. The Repositories list shows
+&quot;5.2 MB via 2 members&quot; and the version count.</li>
+<li>&quot;Published since yesterday&quot; and the uploads in the traffic chart count
+hosted repositories only; proxy cache fills are no longer counted as
+publications.</li>
+<li><strong>UI shell</strong>: menus and popovers sit on their own stacking layer (z-index
+scale in the design tokens), so page content such as the overview range
+switch no longer covers the account menu or notifications. The sidebar
+shows a static instance badge instead of an organisation switcher that did
+nothing; an unnamed instance reads &quot;Hangar&quot; and empty environment or region
+leave no stray separator.</li>
+<li><strong>Select fields</strong>: one accessible listbox (keyboard, type-ahead, optional
+filter for long lists, form submission) replaces the native selects outside
+the package browser.</li>
+<li><strong>Connect a client</strong>: per-format set-up commands that match the format
+guides (NuGet <code>index.json</code> with credentials, <code>.npmrc</code> with a token, pip,
+Maven <code>settings.xml</code>, Docker login, raw curl), publish commands for hosted
+repositories, the signed-in username filled in, and a link to create an
+access token. Everything is built from server-provided URLs.</li>
+<li><strong>Format marks</strong>: Docker, npm, Maven, NuGet, PyPI, Helm and Go logos (Simple
+Icons, CC0; Maven under Apache 2.0, see <code>web/THIRD_PARTY_NOTICES.md</code>) in
+badges, tables, pickers and search facets, with a neutral icon for raw and
+any other format.</li>
+<li><strong>Repositories list</strong>: a &quot;Last activity&quot; column (<code>last_activity_at</code>, from
+existing upload and download timestamps, no extra writes), type icons, and
+sorting by name, type, format or last activity (<code>GET /repositories?sort=</code>).</li>
+</ul>
+<h2 id="v011-2026-11-04">v0.1.1 (2026-11-04)<a class="anchor" href="#v011-2026-11-04" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><strong>Single sign-on (OIDC)</strong>: &quot;Continue with SSO&quot; through any OpenID Connect
+provider (<code>auth.oidc</code>): authorization code flow with PKCE (S256),
+<code>client_secret_basic</code> or <code>client_secret_post</code>, encrypted state cookie,
+ID token and nonce verification, userinfo fallback for missing claims,
+lazy discovery with retry. New endpoints <code>GET /auth/oidc/start</code> and
+<code>GET /auth/oidc/callback</code>; failures return to <code>/login?error=&lt;code&gt;</code>.</li>
+<li><strong>LDAP / Active Directory sign-in</strong> (<code>auth.ldap</code>): the login form's
+directory realm and HTTP Basic for package clients, with service bind,
+escaped user filter, groups from <code>memberOf</code> or a group search, optional AD
+nested groups, LDAPS or StartTLS, and the local lockout and rate limits.</li>
+<li><strong>Group to role mapping</strong>: <code>group_roles</code>, <code>default_roles</code> and
+<code>allowed_groups</code> per provider, plus role group mappings for providers
+<code>oidc</code> and <code>ldap</code>. Mapped roles are re-synced on every sign-in; roles bound
+by hand are kept. Keycloak full group paths (<code>/devops</code>) match. Unknown role
+names stop the server at start-up.</li>
+<li><strong>External users</strong> are created at first sign-in (<code>auto_create</code>), linked by
+issuer and subject (OIDC), have no local password, and never take over an
+existing account with the same username (<code>account_conflict</code>).</li>
+<li><code>GET /auth/providers</code> reports the OIDC button and LDAP toggle;
+<code>GET /identity-providers</code> lists both providers and their state.</li>
+<li>Migration <code>00080</code> adds <code>users.external_issuer</code> and
+<code>role_bindings.mapped_from</code>. Guide: <a href="../guides/sso/">docs/guides/sso.md</a>.</li>
+</ul>
+<h2 id="v010-2026-11-04">v0.1.0 (2026-11-04)<a class="anchor" href="#v010-2026-11-04" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><strong>Releases</strong>: version tags publish a multi-arch image
+(<code>ghcr.io/ismoilovdevml/hangar</code>, linux/amd64 and linux/arm64, smoke-tested
+against PostgreSQL), binaries for Linux and macOS with <code>SHA256SUMS</code>, and a
+GitHub Release carrying the compose stack and the installer.</li>
+<li><strong>Installer</strong>: <code>deploy/install.sh</code> installs or upgrades the compose stack
+from a release image in one command (<code>--tls caddy</code> or behind an existing
+reverse proxy), generates secrets once without printing them, and supports
+<code>--uninstall [--purge]</code>. The registry host moved to
+<code>deploy/compose/sites/registry.caddy</code>.</li>
+<li><strong>Web: Packages</strong> (<code>/browse</code>): repository tree with packages and their
+newest versions; package header with format, version selector, signed,
+quarantine and security state; install command per client (npm/pnpm/Yarn,
+pip/uv/Poetry, Maven/Gradle/pom, dotnet/PackageReference, Docker/Podman,
+curl/wget) with copy; Overview (digest, checksums, size, downloads, last
+download, licence, source), Versions (delete with confirmation, disabled
+without delete rights) and Files/Layers (checksums, downloads with the
+signed-in session). Dependents and Vulnerabilities tabs appear only when the
+server reports them.</li>
+<li><strong>Web: Search</strong>: query box with qualifier and value completion, facets for
+format, security and repository that edit the query, highlighted results,
+sorting, paging, keyboard navigation and shareable URLs.</li>
+<li><strong>Web: Blob stores</strong>: totals (used, dedup savings, growth and time to full,
+reclaimable), per-store usage against the soft quota and state; add
+filesystem or S3 stores (secret write-only); store page with the
+repositories using it, soft quota editing and deletion of empty stores.</li>
+<li><strong>Web: Repository settings</strong> (<code>/repositories/&lt;name&gt;/settings</code>, opened from a
+repository row): the New repository form pre-filled, online/offline switch,
+delete with typed confirmation and copyable client configuration.</li>
+<li><strong>Secrets at rest</strong>: proxy upstream passwords, tokens and header values,
+passwords in proxy remote and outbound proxy URLs, and S3 keys of blob
+stores are encrypted in the database (AES-256-GCM envelope encryption,
+key from <code>HANGAR_SECRET_KEY</code>). Existing plaintext values are sealed on the
+first start with a key; the database rejects plaintext secrets. Without a
+key, configurations carrying credentials are refused (<code>501</code>).</li>
+<li><strong>Key rotation</strong>: <code>security.previous_secret_keys</code> and
+<code>hangar admin rotate-secrets [--dry-run]</code>.</li>
+<li><strong>API</strong>: every route except <code>GET /system/status</code>, <code>GET /system/version</code>,
+<code>GET /auth/providers</code> and <code>POST /auth/login</code> now requires sign-in
+(anonymous callers previously could list repositories, components and
+search results of anonymously readable repositories).</li>
+<li><strong>Proxy repositories</strong>: remote URLs pointing at loopback, private,
+link-local or other internal addresses are refused when the repository
+is saved (<code>400</code>), not only when fetching.</li>
+<li><strong>HTTP hardening</strong>: security headers and content security policies for
+the UI, API and package endpoints; HSTS on HTTPS; CORS denied by default
+(<code>security.cors.allowed_origins</code>); API body limit (1 MiB), streamed
+uploads, body idle timeout and header size limit; per-IP rate limits for
+the API and for failed authentications (<code>security.rate_limit</code>).</li>
+<li><strong>Security tests</strong>: <code>test/security</code> sweeps every API operation and package
+endpoint for authorization, SSRF and secret handling against a running
+server.</li>
+<li><strong>Docs</strong>: <code>docs/security.md</code> (threat model, secret storage, operator
+checklist) and <code>SECURITY.md</code> (vulnerability reporting).</li>
+<li><strong>Cleanup policies</strong> (<code>/api/v1/cleanup-policies</code>): delete versions by age,
+download recency, keep-newest per package, version include/exclude regexes,
+keep globs, pre-release/snapshot only and minimum size, for attached
+repositories and repositories naming the policy in <code>config.cleanup_policies</code>.
+Quarantined versions and versions with the <code>legal_hold</code> attribute are never
+deleted. A dry-run preview (JSON or full CSV) is required before saving
+(<code>preview_token</code>); preview and run share one selection. Runs delete through
+the component service (audited, <code>component.deleted</code> events) in checkpointed
+batches, on a cron schedule or with Run now, and can be stopped.</li>
+<li><strong>Tasks</strong> (<code>/api/v1/tasks</code>): built-in tasks (docker GC, blob compaction,
+auth purge, audit partitions) and the task of every cleanup policy, with
+editable cron schedules, Run now, Stop, run history, leveled run logs
+(<code>/tasks/{id}/runs/{run_id}/log</code>) and live <code>task.progress</code> /
+<code>task.finished</code> events. Runs execute on any node, survive node loss (taken
+over and resumed from their checkpoint) and are handed back on shutdown;
+only the scheduler leader starts scheduled runs.</li>
+<li><strong>Docker GC</strong> (#7): deletes untagged manifests, their referrers entries and
+unreferenced layer/config blobs older than 7 days (configurable, dry run
+available); blob compaction then frees the bytes.</li>
+<li><strong>Blob stores</strong>: <code>PUT</code> (soft quota, credentials; location only while
+empty) and <code>DELETE</code> (empty stores only) on <code>/api/v1/blob-stores/{name}</code>.</li>
+<li><strong>API</strong> (#16): <code>GET /system/status</code> returns <code>base_url</code> and <code>registry_host</code>;
+<code>soft_quota_bytes</code> is nullable; <code>online</code> / <code>enabled</code> inputs are optional.</li>
+<li>Cleanup and task changes require <code>system:cleanup:write</code> /
+<code>system:tasks:write</code>; reads require <code>:read</code>.</li>
+<li><strong>Web UI · Cleanup policies</strong>: policy list and an editor written as sentences
+(age, last download, pre-release only, keep newest N, keep tags matching
+globs), repository chips, a schedule builder that shows the cron in plain
+words with the next run, a mandatory preview (count, bytes, sample, full CSV
+export) before saving, Run now and Delete with confirmation, and run history.</li>
+<li><strong>Web UI · Scheduled tasks</strong>: &quot;Running now&quot; banner with live progress (SSE
+<code>task.progress</code>), time-left estimate and Stop; task table with schedule, last
+and next run, type/status/name filters in the URL, and Run now (confirmation
+for tasks that delete data). Task page with paged run history and a run view
+with progress and a live log.</li>
+<li><strong>Web UI · Audit log</strong>: filters for actor, action, target, outcome and time
+range (presets or a custom UTC range) kept in the URL, expandable event
+details, cursor paging, and CSV / NDJSON export with the same filters.</li>
+<li><strong>Web UI · System</strong>: status, version and build, uptime, nodes, dependency
+health, base URL and registry host, and the effective configuration with
+secrets masked.</li>
+<li>Run, stop, save and delete actions are hidden from users without the matching
+<code>system:&lt;area&gt;</code> privilege; screens say plainly when a server does not support
+an endpoint yet.</li>
+<li><strong>Observability</strong>: Prometheus metrics for package traffic per format and
+repository type (requests, latency, upload and download bytes), blob store
+operations per driver, store usage, quotas and filesystem free space, proxy
+remote fetches and circuit breaker state, database statements and pool,
+job queue depth and job outcomes, NATS connection, authentication failures
+and lockouts, the audit queue and readiness. Labels are bounded: route
+patterns, standard methods and capped value sets, never raw paths.</li>
+<li><strong>Tracing</strong>: OpenTelemetry traces over OTLP/HTTP
+(<code>observability.tracing.{enabled,endpoint,sample_ratio,service_name}</code>) with
+spans for HTTP requests, database statements, blob store operations, proxy
+fetches and jobs; incoming W3C <code>traceparent</code> headers are honoured.</li>
+<li><strong>Logs</strong>: every request log record carries <code>request_id</code>, <code>trace_id</code>,
+<code>principal</code>, <code>repository</code> and <code>format</code>; credentials are scrubbed from all
+log output; <code>observability.access_log.sample_ratio</code> samples the access log
+(server errors are always logged). The access log fields <code>bytes</code> became
+<code>bytes_in</code> and <code>bytes_out</code>.</li>
+<li><strong>Deploy</strong>: Grafana dashboards (overview, formats, storage, upstreams, jobs,
+auth) and Prometheus alert rules with unit tests in <code>deploy/observability/</code>;
+metric reference in <code>docs/operations/monitoring.md</code> and a runbook per alert
+in <code>docs/operations/runbooks.md</code>.</li>
+<li><strong>Fix</strong>: request metrics (and the Overview screen numbers) are recorded when
+<code>metrics.enabled</code> is false; only the <code>/metrics</code> endpoint is turned off.</li>
+<li><strong>Proxy related hosts</strong>: proxy repositories fetch resources their remote
+links to on other hosts through the same upstream engine (SSRF guard,
+per-host circuit breaker, request collapsing, negative cache, outbound
+proxy, metrics), never sending the remote's credentials there. PyPI file
+downloads (files.pythonhosted.org) and NuGet search/registration hosts named
+by the service index (azuresearch-*.nuget.org) use it; npm follows tarball
+CDNs listed in the new <code>proxy.related_hosts</code>.</li>
+<li><strong>Rate limits (429)</strong>: a remote's <code>Retry-After</code> is honoured for retries
+within a 10s budget; beyond that clients get 429 with the remote's
+<code>Retry-After</code> instead of 502 (a cached copy is served when there is one),
+the host is held until the wait passes and 429s no longer trip the circuit
+breaker. A rate-limited remote reports <code>slow</code> on the upstream health page.</li>
+<li><strong>Upstream tuning</strong> per proxy repository: <code>max_concurrent_requests</code>,
+<code>http.max_conns_per_host</code>, <code>http.max_idle_conns_per_host</code>,
+<code>http.disable_http2</code>, and <code>http.body_timeout</code> (stall timeout between body
+reads; 60s default). HTTP/2 is negotiated with health pings; interrupted
+large downloads resume with Range/If-Range when the remote supports it.</li>
+<li><strong>Offline mode</strong> (<code>proxy.offline</code>): a proxy repository serves only its
+cache and answers 404 for anything not cached, without contacting the remote.</li>
+<li><strong>Cache purge</strong>: <code>POST /api/v1/repositories/{name}/cache:invalidate</code> forgets
+a proxy repository's remembered 404s and rate-limit holds on every node
+(audited).</li>
+<li><strong>Metrics</strong>: <code>hangar_proxy_upstream_requests_total{repository,host,result}</code>,
+<code>hangar_proxy_upstream_request_duration_seconds</code>,
+<code>hangar_proxy_upstream_retries_total</code>, <code>hangar_proxy_upstream_resumes_total</code>,
+<code>hangar_proxy_upstream_inflight_requests</code>.</li>
+<li><strong>Access management</strong> (see <code>docs/guides/access.md</code>):
+<ul>
+<li>Members and service accounts: search and filter by role, status
+(active, locked, disabled) and source; disable/enable, unlock, admin
+password reset, sign out everywhere, delete — with guards for your own
+account and the last administrator. Service accounts take a description.</li>
+<li>Self-service: <code>PUT /me/password</code> (current password required, other
+sessions end), <code>PUT /me/profile</code>, <code>GET/DELETE /me/sessions</code>.</li>
+<li>Personal access tokens: last use is recorded with the client address;
+administrators list everyone's tokens (<code>GET /tokens?all=true</code> with owner,
+owner kind, status and name filters); scopes are validated; the session
+payload carries the token policy and expiry warnings
+(<code>auth.token_expiry_warning</code>, default 14 days).</li>
+<li>Roles: <code>GET /roles/{name}</code>, add/remove members
+(<code>/roles/{name}/members</code>), privilege validation.</li>
+<li>Effective permissions report: <code>GET /users/{id}/permissions</code> lists, per
+repository and system area, the allowed actions and the role, privilege
+or anonymous read behind each.</li>
+<li>Every change and every refused attempt is audited (<code>user.disable</code>,
+<code>user.enable</code>, <code>session.revoke</code>, <code>session.revoke_all</code>, <code>role.bind</code>,
+<code>role.unbind</code>, …).</li>
+<li>Web UI: Access &amp; audit (members, service accounts, access tokens, roles
+with a privilege editor, access audit log) and My account (profile,
+password, tokens, signed-in devices, own permissions), with a
+create-token dialog that builds scopes, offers expiry presets and shows
+the secret once.</li>
+<li>Migration <code>00040</code>: <code>tokens.last_used_ip</code>, <code>users.description</code>, token
+indexes.</li>
+</ul>
+</li>
+<li><strong>Docker / OCI — push through a group fixed</strong>: a group with a Docker Hub
+proxy member answered <code>502</code> to the existence probe of a new tag
+(<code>HEAD /v2/&lt;group&gt;/&lt;image&gt;/manifests/&lt;tag&gt;</code>), because Docker Hub answers
+<code>401</code> for unknown repositories. Remote <code>401/403/404/400 NAME_INVALID</code> now
+mean <code>MANIFEST_UNKNOWN</code> / <code>BLOB_UNKNOWN</code>, <code>429</code> is passed on as
+<code>TOOMANYREQUESTS</code>, and a group treats an unreachable remote as a miss.</li>
+<li><strong>Docker / OCI — proxy blob dedup is confirmed with the remote</strong>: a blob
+already in the shared store is linked into a proxy only after a <code>HEAD</code>
+confirms the remote serves it under that name (no more serving stored
+bytes by digest alone).</li>
+<li><strong>Docker / OCI — quarantine by digest</strong>: manifests pulled by digest,
+platform manifests of a quarantined index, blobs that belong only to
+quarantined images and cross-repository mounts are refused (<code>403 DENIED</code>).</li>
+<li><strong>Docker / OCI — connectors</strong>: <code>connector.host</code> (e.g. <code>cr.example.com</code>)
+and <code>connector.http_port</code> route a host name or a dedicated port to one
+docker repository, with image names without the repository prefix and
+tokens bound to that entry point. nginx and Caddy examples in
+<code>internal/formats/docker/README.md</code>.</li>
+<li><strong>Docker / OCI — upload sessions</strong>: session records live in the blob
+store temp area (new optional <code>core.TempStore</code>, implemented by the fs and
+S3 drivers) instead of leaking a blob per request; sessions resume on any
+node and across restarts; the hourly built-in task <code>docker-upload-cleanup</code>
+ends abandoned sessions and releases leftover chunks to blob compaction.</li>
+<li><strong>npm</strong>: unpublished versions leave a tombstone and cannot be published
+again (<code>403</code>), as on the public registry; set
+<code>config.format.reuse_unpublished_versions: true</code> to allow reuse.
+Unpublishing now also needs <code>repo:&lt;name&gt;:write</code> (it rewrites the package
+state).</li>
+<li><strong>npm</strong>: package state changes (publish, dist-tags, deprecate, unpublish)
+are serialised per package across all nodes with PostgreSQL advisory locks
+(a dedicated pool of up to 16 connections per node), so concurrent dist-tag
+updates on different nodes are no longer lost.</li>
+<li><strong>Performance</strong>: hosted npm packuments are rendered once per change (about
+6x the throughput of the previous build; 100-version packument p95 from
+99 ms to 4 ms); generated Maven metadata is cached with event invalidation
+(document and checksums always agree); repository lookups are cached;
+component and asset listings keep using their indexes under generic query
+plans. Results: <code>docs/operations/performance.md</code>.</li>
+<li><strong>NuGet</strong>: hosted search uses a PostgreSQL full-text index (migration
+<code>00070</code>). Words now match as prefixes of tokens: <code>json</code> and <code>newt</code> find
+<code>Newtonsoft.Json</code>, a substring such as <code>tonsoft</code> no longer does.</li>
+<li><strong>Events</strong>: <code>asset.published</code> and <code>asset.deleted</code> for assets without a
+component (repository metadata, raw files).</li>
+<li><strong>Tools</strong>: <code>cmd/hangar-seed</code> fills a database with synthetic components and
+assets; k6 load scenarios in <code>test/load</code>.</li>
+<li><strong>Docs</strong>: user guides in <code>docs/guides</code> (getting started, one page per
+client, CI integration, REST API) and a shorter README.</li>
+<li><strong>Container image</strong>: the web UI is always embedded; a static
+<code>hangar-healthcheck</code> probe drives the <code>HEALTHCHECK</code> on the distroless,
+non-root image; builds are reproducible (build date from
+<code>SOURCE_DATE_EPOCH</code>, no VCS stamping, no build ids).</li>
+<li><strong>Production Docker Compose</strong> (<code>deploy/compose</code>): Hangar, tuned
+PostgreSQL 16, MinIO with a bucket-only user, and Caddy with automatic TLS
+for the UI host and a separate registry host; secrets from <code>.env</code>
+(<code>HANGAR_SECRET_KEY</code> and <code>HANGAR_DOCKER_TOKEN_KEY</code> required), healthchecks,
+resource limits, read-only containers, <code>/metrics</code> kept off the public host,
+and an override for Docker port connectors.</li>
+<li><strong>Helm chart</strong> (<code>deploy/helm/hangar</code>): stateless multi-replica Deployment
+with anti-affinity, PDB and optional HPA; migrations in a pre-install and
+pre-upgrade hook Job; optional bundled NATS JetStream cluster; Ingress
+presets for ingress-nginx and Traefik with a registry host, or Gateway API
+routes; <code>existingSecret</code> for every secret, with generated secret and token
+keys kept across upgrades; ServiceMonitor, NetworkPolicies, connector ports
+on the Service, <code>values.schema.json</code> and validation of unsupported
+combinations.</li>
+<li><strong>Operations</strong>: backup and restore scripts (<code>deploy/scripts</code>: PostgreSQL
+dump plus an add-only blob copy for filesystem, S3 and the compose MinIO),
+a hardened systemd unit (<code>deploy/systemd/hangar.service</code>), deployment
+guides in <code>docs/deploy</code> (requirements and sizing, compose, Helm, binary,
+TLS and reverse proxies, corporate proxy, first administrator, backup,
+upgrades, high availability, troubleshooting), and a <code>hangar.example.yaml</code>
+that covers every configuration key. <code>make deploy-check</code> validates the
+chart, the compose stack and the scripts.</li>
+</ul>
+<h2 id="m0--skeleton-2026-11-03">M0 — Skeleton (2026-11-03)<a class="anchor" href="#m0--skeleton-2026-11-03" aria-label="Link to this section">#</a></h2>
+<p>Foundation every later milestone builds on. No package format is functional yet.</p>
+<ul>
+<li><strong>Server</strong>: single <code>hangar</code> binary with <code>serve</code>, <code>migrate</code> and <code>version</code>
+subcommands; chi router; request ids and JSON logs (<code>slog</code>); Prometheus
+<code>/metrics</code>; <code>/healthz</code> (liveness) and <code>/readyz</code> (PostgreSQL, blob store,
+NATS); graceful shutdown that fails readiness first and drains in-flight
+requests.</li>
+<li><strong>Configuration</strong>: <code>hangar.yaml</code> plus <code>HANGAR_*</code> environment overrides, strict
+unknown-key checking and validation (<code>hangar.example.yaml</code>). Includes outbound
+HTTP proxy / CA / timeout settings for proxy repositories and trusted reverse
+proxies.</li>
+<li><strong>Core contracts</strong> (<code>internal/core</code>): domain types (repositories, components,
+assets, digests, principals, privileges, events, jobs, audit events) and
+interfaces (<code>BlobStore</code>, <code>Format</code>, <code>Upstream</code>, <code>HTTPClientFactory</code>,
+<code>RepositoryService</code>, <code>ComponentService</code>, <code>Authenticator</code>, <code>TokenIssuer</code>,
+<code>AuthZ</code>, <code>EventBus</code>, <code>JobQueue</code>, <code>AuditLog</code>, <code>Deps</code>), with in-memory fakes and
+a blob store conformance suite in <code>internal/core/coretest</code>.</li>
+<li><strong>Formats</strong>: registry and <code>/repository/{repo}/</code> dispatcher; <code>/v2/</code> root mount
+for OCI. Stub packages for docker, npm, maven and raw (answer 501).</li>
+<li><strong>Storage</strong>: filesystem blob store with streaming sha256, dedup and atomic
+commit.</li>
+<li><strong>Database</strong>: goose migrations for the full data model (blob stores, blobs,
+repositories, groups, components, assets, identity and access, cleanup
+policies, tasks, month-partitioned append-only audit log, nodes, replication,
+findings) with seeded built-in roles. Tested up/down against PostgreSQL.</li>
+<li><strong>Events</strong>: embedded NATS JetStream for single-node mode or an external
+cluster; event bus and durable job queue with retries.</li>
+<li><strong>Outbound HTTP</strong>: client factory honouring global/per-remote proxies
+(http, https, socks5), <code>no_proxy</code>, proxy environment variables, extra CAs,
+credential scoping and timeouts.</li>
+<li><strong>API</strong>: <code>api/openapi.yaml</code> (OpenAPI 3.1) covering repositories, blob stores,
+components, search, findings, cleanup policies, tasks, users, roles, tokens,
+audit, cluster, overview metrics, system status and the SSE event stream.
+Implemented so far: <code>GET /api/v1/system/status</code>, <code>/system/version</code>, <code>/formats</code>;
+other endpoints answer 501.</li>
+<li><strong>Web UI hook</strong>: <code>web/dist</code> is embedded with <code>-tags webui</code>; otherwise a
+fallback page is served.</li>
+<li><strong>Delivery</strong>: Makefile, multi-stage Dockerfile (distroless, non-root),
+<code>deploy/docker-compose.yml</code> (PostgreSQL 16, MinIO, NATS, Trivy, Hangar), CI
+(vet/test with PostgreSQL, golangci-lint, govulncheck, web checks, image build).</li>
+<li><strong>Decisions</strong>: ADRs 0001–0009 in <code>docs/adr/</code>.</li>
+</ul>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/changelog.md"><code>docs/changelog.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/changelog.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../roadmap/" rel="prev"><small>Previous</small><b>Roadmap</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#unreleased">Unreleased</a></li><li class="l2"><a href="#v019-2026-11-20">v0.1.9 (2026-11-20)</a></li><li class="l3"><a href="#upgrade-notes">Upgrade notes</a></li><li class="l3"><a href="#security">Security</a></li><li class="l3"><a href="#reliability">Reliability</a></li><li class="l3"><a href="#web-ui">Web UI</a></li><li class="l3"><a href="#deployment-ci-and-observability">Deployment, CI and observability</a></li><li class="l2"><a href="#v018-2026-11-15">v0.1.8 (2026-11-15)</a></li><li class="l2"><a href="#v017-2026-11-09">v0.1.7 (2026-11-09)</a></li><li class="l2"><a href="#v016-2026-11-09">v0.1.6 (2026-11-09)</a></li><li class="l2"><a href="#v015-2026-11-05">v0.1.5 (2026-11-05)</a></li><li class="l2"><a href="#v014-2026-11-05">v0.1.4 (2026-11-05)</a></li><li class="l2"><a href="#v013-2026-11-04">v0.1.3 (2026-11-04)</a></li><li class="l2"><a href="#v012-2026-11-04">v0.1.2 (2026-11-04)</a></li><li class="l2"><a href="#v011-2026-11-04">v0.1.1 (2026-11-04)</a></li><li class="l2"><a href="#v010-2026-11-04">v0.1.0 (2026-11-04)</a></li><li class="l2"><a href="#m0--skeleton-2026-11-03">M0 — Skeleton (2026-11-03)</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>
