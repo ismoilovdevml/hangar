@@ -354,11 +354,11 @@ func (s *Service) ReloadPrincipal(ctx context.Context, p *core.Principal) (*core
 		})
 		return nil, errBadCredentials
 	}
-	if !validUUID(p.ID) {
+	if !core.IsUUID(p.ID) {
 		return fail("unknown_user")
 	}
 	if p.TokenID != "" {
-		if !validUUID(p.TokenID) {
+		if !core.IsUUID(p.TokenID) {
 			return fail("unknown_expired_or_revoked")
 		}
 		np, reason, err := s.tokenPrincipal(ctx, `t.id = $1`, p.TokenID)

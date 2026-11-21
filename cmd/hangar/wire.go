@@ -514,7 +514,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	// its log buffer, served to the other nodes over NATS.
 	storeStates := sysmon.NewStoreStates()
 	mon := newMonitor(monitorDeps{cfg: cfg, pool: pool, health: hc, nats: rt, blobStore: blobs.ByName,
-		upstreams: healthReporter, stores: storeStates, oidc: sso, auth: authSvc, started: started, log: log})
+		upstreams: healthReporter, stores: storeStates, oidc: signIn.Provider, auth: authSvc, started: started, log: log})
 	sysLogs := sysmon.NewLogs(mon.NodeID(), logRing, rt.Conn, log)
 	if err := sysLogs.Serve(); err != nil {
 		return nil, err
@@ -608,7 +608,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		Health:               hc, TrustedProxies: trusted,
 		API: restAPI, Formats: reg, Deps: formatDeps,
 		FormatMiddleware: []func(http.Handler) http.Handler{httpapi.DownloadSessions(authSvc)},
-		Security:         securityOptions(cfg),
+		Security:         sharedSecurityOptions(cfg, pool, log),
 	})
 
 	// First administrator: from the environment, or generated.

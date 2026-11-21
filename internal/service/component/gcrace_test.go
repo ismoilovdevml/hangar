@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ismoilovdevml/hangar/internal/config"
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/service/component"
 	"github.com/ismoilovdevml/hangar/internal/tasks/blobgc"
@@ -67,8 +68,10 @@ func (f *fixture) wantNoDanglingAssets(t *testing.T) {
 }
 
 // GC runs to completion after Publish has seen the blob and before its
-// transaction references it.
-func TestPublishFailsWhenGCDeletesBlobAfterCheck(t *testing.T) {
+// transaction references it. The blob check pinned the blob first (restarted
+// its grace period), so GC leaves it alone and the publish succeeds; before,
+// GC deleted it and the publish failed in its transaction.
+func TestPublishPinsBlobAgainstGCAfterCheck(t *testing.T) {
 	f := newFixture(t)
 	r := f.repo(t, "raw-gc1", core.RepoHosted, core.WriteAllow)
 	d, storeID := f.eligibleBlob(t, "layer bytes "+randHex(t))
@@ -78,16 +81,43 @@ func TestPublishFailsWhenGCDeletesBlobAfterCheck(t *testing.T) {
 	component.SetAfterBlobCheck(f.svc, func() {
 		ran = true
 		res, err := gc.Run(context.Background(), blobgc.Request{StoreID: storeID})
-		if err != nil || res.Deleted != 1 {
+		if err != nil || res.Deleted != 0 {
+			t.Errorf("gc = %+v, %v; want nothing deleted", res, err)
+		}
+	})
+	if _, _, err := f.svc.Publish(f.ctx, r, core.PublishRequest{Assets: []*core.Asset{asset("img/blobs/layer", d, "")}}); err != nil {
+		t.Fatalf("publish of a pinned blob = %v", err)
+	}
+	if !ran {
+		t.Fatal("hook did not run")
+	}
+	f.wantBlob(t, d, 1, false)
+	f.wantNoDanglingAssets(t)
+}
+
+// The pin only holds for a grace period. A publish whose transaction starts
+// later than PinValidity after its blob check must not revive a blob GC may
+// have reclaimed meanwhile; here GC did reclaim it (the row is aged past the
+// grace period to stand in for the elapsed time).
+func TestPublishFailsWhenPinExpired(t *testing.T) {
+	f := newFixture(t)
+	r := f.repo(t, "raw-gc4", core.RepoHosted, core.WriteAllow)
+	d, storeID := f.eligibleBlob(t, "layer bytes "+randHex(t))
+	gc := f.collector(f.pool, f.blobs)
+	component.SetPinValidity(f.svc, -time.Second) // every pin is already stale
+
+	component.SetAfterBlobCheck(f.svc, func() {
+		if _, err := f.pool.Exec(context.Background(),
+			`UPDATE blobs SET soft_deleted_at = now() - interval '72 hours' WHERE digest = $1`, string(d)); err != nil {
+			t.Error(err)
+		}
+		if res, err := gc.Run(context.Background(), blobgc.Request{StoreID: storeID}); err != nil || res.Deleted != 1 {
 			t.Errorf("gc = %+v, %v; want 1 deleted", res, err)
 		}
 	})
 	_, _, err := f.svc.Publish(f.ctx, r, core.PublishRequest{Assets: []*core.Asset{asset("img/blobs/layer", d, "")}})
-	if !ran {
-		t.Fatal("hook did not run")
-	}
 	if !errors.Is(err, core.ErrNotFound) {
-		t.Fatalf("publish of a collected blob = %v, want ErrNotFound", err)
+		t.Fatalf("publish after the pin expired = %v, want ErrNotFound", err)
 	}
 	if _, err := f.svc.GetAsset(context.Background(), r.ID, "img/blobs/layer"); !errors.Is(err, core.ErrNotFound) {
 		t.Fatalf("asset after failed publish: %v, want ErrNotFound", err)
@@ -96,6 +126,30 @@ func TestPublishFailsWhenGCDeletesBlobAfterCheck(t *testing.T) {
 		t.Fatalf("blob row survived the failed publish: %+v", row)
 	}
 	f.wantNoDanglingAssets(t)
+}
+
+// A blob that already has a reference needs no pin age check: GC never
+// selects it, so even a stale pin publishes.
+func TestStalePinDoesNotAffectReferencedBlobs(t *testing.T) {
+	f := newFixture(t)
+	r := f.repo(t, "raw-gc5", core.RepoHosted, core.WriteAllow)
+	d := f.blob(t, "shared "+randHex(t))
+	if _, _, err := f.svc.Publish(f.ctx, r, core.PublishRequest{Assets: []*core.Asset{asset("a/1", d, "")}}); err != nil {
+		t.Fatal(err)
+	}
+	component.SetPinValidity(f.svc, -time.Second)
+	if _, _, err := f.svc.Publish(f.ctx, r, core.PublishRequest{Assets: []*core.Asset{asset("a/2", d, "")}}); err != nil {
+		t.Fatalf("second reference with a stale pin = %v", err)
+	}
+	f.wantBlob(t, d, 2, false)
+}
+
+// The pin must expire well before blob GC may collect a pinned row.
+func TestPinValidityBelowMinimumGracePeriod(t *testing.T) {
+	if component.PinValidity <= 0 || component.PinValidity >= config.MinGCGracePeriod {
+		t.Fatalf("PinValidity %s must be positive and below config.MinGCGracePeriod %s",
+			component.PinValidity, config.MinGCGracePeriod)
+	}
 }
 
 // gateStore blocks Delete of one digest until released, so a GC batch can be

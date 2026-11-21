@@ -21,7 +21,7 @@ import (
 // itself authenticated with a token, by that token's scopes; the new token
 // also stops working when that token is revoked or expires.
 func (s *Service) Issue(ctx context.Context, p *core.Principal, req core.TokenRequest) (string, time.Time, error) {
-	if p.IsAnonymous() || !validUUID(p.ID) {
+	if p.IsAnonymous() || !core.IsUUID(p.ID) {
 		return "", time.Time{}, fmt.Errorf("issue token: %w", core.ErrUnauthenticated)
 	}
 	if p.PasswordChangeRequired {
@@ -137,7 +137,7 @@ func (s *Service) CreateToken(ctx context.Context, in TokenInput) (*TokenInfo, s
 // planToken validates in and checks that the caller may create it.
 func (s *Service) planToken(ctx context.Context, in TokenInput) (*tokenPlan, error) {
 	p := core.PrincipalFrom(ctx)
-	if p.IsAnonymous() || !validUUID(p.ID) {
+	if p.IsAnonymous() || !core.IsUUID(p.ID) {
 		return nil, fmt.Errorf("create token: %w", core.ErrUnauthenticated)
 	}
 	// Checked against the account, not the principal: a token or the CLI
@@ -288,7 +288,7 @@ func (s *Service) RotateToken(ctx context.Context, id string, in RotateInput) (*
 		return nil, fmt.Errorf("rotate token: %w", core.ErrUnauthenticated)
 	}
 	notFound := fmt.Errorf("token %q: %w", id, core.ErrNotFound)
-	if !validUUID(id) {
+	if !core.IsUUID(id) {
 		return nil, notFound
 	}
 	if in.RevokeOldAfter != nil && *in.RevokeOldAfter < 0 {
@@ -524,7 +524,7 @@ const maxTokenWarnings = 20
 // else would notice expiring).
 func (s *Service) TokenWarnings(ctx context.Context) ([]*TokenInfo, error) {
 	p := core.PrincipalFrom(ctx)
-	if p.IsAnonymous() || !validUUID(p.ID) {
+	if p.IsAnonymous() || !core.IsUUID(p.ID) {
 		return []*TokenInfo{}, nil
 	}
 	serviceAccounts := s.authz.Authorize(ctx, p, core.ActionRead, core.SystemResource(core.SystemTokens)) == nil
@@ -551,7 +551,7 @@ func (s *Service) RevokeToken(ctx context.Context, id string) error {
 	if p.IsAnonymous() {
 		return fmt.Errorf("revoke token: %w", core.ErrUnauthenticated)
 	}
-	if !validUUID(id) {
+	if !core.IsUUID(id) {
 		return fmt.Errorf("token %q: %w", id, core.ErrNotFound)
 	}
 	var ownerID, ownerName, name string
@@ -605,7 +605,7 @@ func decodeTimeCursor(c string) (*time.Time, *string, error) {
 		var id string
 		ts, rest, ok := strings.Cut(string(b), "|")
 		if ok {
-			if _, err = fmt.Sscan(ts, &nanos); err == nil && validUUID(rest) {
+			if _, err = fmt.Sscan(ts, &nanos); err == nil && core.IsUUID(rest) {
 				id = rest
 				t := time.Unix(0, nanos).UTC()
 				return &t, &id, nil

@@ -21,7 +21,7 @@ var errWrongPassword = fmt.Errorf("the current password is incorrect: %w", core.
 // returns the number of browser sessions ended.
 func endSessions(ctx context.Context, tx pgx.Tx, userID, keep string) (int64, error) {
 	var keepID *string
-	if validUUID(keep) {
+	if core.IsUUID(keep) {
 		keepID = &keep
 	}
 	tag, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1 AND ($2::uuid IS NULL OR id <> $2)`, userID, keepID)
@@ -152,7 +152,7 @@ func (s *Service) ResetPassword(ctx context.Context, id, password string) error 
 // revoked. Personal access tokens keep working.
 func (s *Service) ChangePassword(ctx context.Context, current, next, keepSession string) error {
 	p := core.PrincipalFrom(ctx)
-	if p.IsAnonymous() || !validUUID(p.ID) {
+	if p.IsAnonymous() || !core.IsUUID(p.ID) {
 		return fmt.Errorf("change password: %w", core.ErrUnauthenticated)
 	}
 	if p.TokenID != "" {
@@ -254,7 +254,7 @@ type ProfileInput struct {
 // cannot change the profile.
 func (s *Service) UpdateProfile(ctx context.Context, in ProfileInput) (*User, error) {
 	p := core.PrincipalFrom(ctx)
-	if p.IsAnonymous() || !validUUID(p.ID) {
+	if p.IsAnonymous() || !core.IsUUID(p.ID) {
 		return nil, fmt.Errorf("update profile: %w", core.ErrUnauthenticated)
 	}
 	if p.Scopes != nil {

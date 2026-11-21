@@ -256,7 +256,7 @@ every change made since.
 | Anonymous API access | Only `GET /system/status`, `GET /system/version`, `GET /auth/providers`, `POST /auth/login` (`security: []` in `api/openapi.yaml`) | — |
 | Request headers | Bounded; slow headers cut off | `security.limits.max_header_bytes`, `server.read_header_timeout` |
 | Request bodies | API 1 MiB, uploads unlimited and streamed, everything else 64 KiB; a body that stalls is aborted | `security.limits.*` |
-| Rate limits | Per client IP (IPv6 per /64): API requests; failed authentications on API and package endpoints | `security.rate_limit.*`, `auth.login_rate` |
+| Rate limits | Per client IP (IPv6 per /64): sign-in attempts and failed authentications on API and package endpoints, shared by every node of a cluster (PostgreSQL); API requests, per node (see [high availability](deploy/high-availability.md#cluster-wide-and-per-node-state)) | `security.rate_limit.*`, `auth.login_rate` |
 | Idle connections | Closed | `server.idle_timeout` |
 | README images | Loaded from Hangar's own origin, see [README images](#readme-images); the UI policy keeps `img-src 'self' data:` unless `direct` is chosen | `ui.readme_images`, `ui.readme_images_allow_http` |
 

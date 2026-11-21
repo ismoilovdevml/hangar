@@ -517,50 +517,70 @@ type AuthProvider struct {
 // AuthCheck reports external sign-in providers. Local accounts always work,
 // so a failing provider degrades sign-in but never takes it down.
 func AuthCheck(providers []AuthProvider) Check {
+	return LiveAuthCheck(func() []AuthProvider { return providers })
+}
+
+// LiveAuthCheck is AuthCheck for providers that change while the server
+// runs: sign-in settings saved from the UI turn OIDC and LDAP on and off
+// without a restart. providers is called on every run and returns the
+// providers in effect.
+func LiveAuthCheck(providers func() []AuthProvider) Check {
+	return Check{Name: "auth", Label: authLabel(providers()),
+		LabelFunc: func() string { return authLabel(providers()) },
+		Run:       func(context.Context) Result { return authResult(providers()) }}
+}
+
+func authNames(providers []AuthProvider) []string {
 	names := make([]string, len(providers))
 	for i, p := range providers {
 		names[i] = p.Name
 	}
-	label := "Sign-in"
-	if len(names) > 0 {
-		label += " (" + strings.Join(names, ", ") + ")"
+	return names
+}
+
+func authLabel(providers []AuthProvider) string {
+	if len(providers) == 0 {
+		return "Sign-in"
 	}
-	return Check{Name: "auth", Label: label, Run: func(context.Context) Result {
-		if len(providers) == 0 {
-			return Result{Status: StatusHealthy, Metric: "local", Detail: "No external provider; local accounts only"}
-		}
-		res := Result{Status: StatusHealthy, Metric: "ok"}
-		var failing []string
-		used := 0
-		for _, p := range providers {
-			ok, at, err := p.Status()
-			value := "Working"
-			switch {
-			case err != nil:
-				value = "Failing: " + observability.Scrub(err.Error())
-				failing = append(failing, p.Name)
-			case !ok:
-				value = "Not contacted yet"
-			default:
-				used++
-			}
-			if !at.IsZero() {
-				value += " (last used " + at.UTC().Format(time.RFC3339) + ")"
-			}
-			res.Facts = append(res.Facts, Fact{p.Name, value})
-		}
-		res.Detail = strings.Join(names, " and ") + " enabled"
+	return "Sign-in (" + strings.Join(authNames(providers), ", ") + ")"
+}
+
+func authResult(providers []AuthProvider) Result {
+	names := authNames(providers)
+	if len(providers) == 0 {
+		return Result{Status: StatusHealthy, Metric: "local", Detail: "No external provider; local accounts only"}
+	}
+	res := Result{Status: StatusHealthy, Metric: "ok"}
+	var failing []string
+	used := 0
+	for _, p := range providers {
+		ok, at, err := p.Status()
+		value := "Working"
 		switch {
-		case len(failing) > 0:
-			res.Status, res.Metric = StatusDegraded, "failing"
-			res.Detail = strings.Join(failing, " and ") + " failing; local accounts still sign in"
-		case used == len(providers):
-			res.Detail += " · worked at last use"
-		case used == 0:
-			res.Detail += " · not used since start"
+		case err != nil:
+			value = "Failing: " + observability.Scrub(err.Error())
+			failing = append(failing, p.Name)
+		case !ok:
+			value = "Not contacted yet"
+		default:
+			used++
 		}
-		return res
-	}}
+		if !at.IsZero() {
+			value += " (last used " + at.UTC().Format(time.RFC3339) + ")"
+		}
+		res.Facts = append(res.Facts, Fact{p.Name, value})
+	}
+	res.Detail = strings.Join(names, " and ") + " enabled"
+	switch {
+	case len(failing) > 0:
+		res.Status, res.Metric = StatusDegraded, "failing"
+		res.Detail = strings.Join(failing, " and ") + " failing; local accounts still sign in"
+	case used == len(providers):
+		res.Detail += " · worked at last use"
+	case used == 0:
+		res.Detail += " · not used since start"
+	}
+	return res
 }
 
 // UpstreamLister pages through proxy remote health (proxy.HealthReporter).

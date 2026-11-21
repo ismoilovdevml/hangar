@@ -12,6 +12,10 @@
 //
 //   - Content that fits in one part is hashed before it is sent, so it is
 //     written straight to its final key with a single PUT (atomic in S3).
+//     Up to 1 MiB the PUT carries If-None-Match: *, and a 412 means the
+//     content is already stored; larger content is checked with a HEAD
+//     first. Endpoints without conditional writes overwrite the key with
+//     identical bytes (on a versioned bucket: a new version of it).
 //   - Larger content is streamed as a multipart upload to a temp key under
 //     tmp/. Once complete, the digest is known: if the final key already
 //     exists the temp object is dropped (deduplication), otherwise it is
@@ -365,9 +369,34 @@ func (s *Store) Put(ctx context.Context, r io.Reader) (core.Digest, int64, error
 	return s.putMultipart(ctx, src, h, part)
 }
 
+// conditionalPutMax is the largest blob putSingle writes without asking
+// first whether it exists. Up to this size, sending the bytes with
+// If-None-Match: * (one request; 412 means already stored) costs about what
+// the HEAD it replaces did, so the common case of new content takes one
+// round trip instead of two. Above it the HEAD stays: re-sending up to
+// part_size bytes of content the store already holds would cost more than
+// the round trip saves.
+const conditionalPutMax = 1 << 20
+
 // putSingle writes content whose digest is already known to its final key.
 func (s *Store) putSingle(ctx context.Context, d core.Digest, data []byte) error {
 	key := s.blobKey(d.Hex())
+	if len(data) <= conditionalPutMax {
+		opts := minio.PutObjectOptions{ContentType: contentType, DisableContentSha256: true}
+		opts.SetMatchETagExcept("*") // If-None-Match: *
+		_, err := s.core.PutObject(ctx, s.bucket, key, bytes.NewReader(data), int64(len(data)), "", s.payloadSHA256(data), opts)
+		switch code := minio.ToErrorResponse(err).Code; {
+		case err == nil:
+			return nil
+		case code == minio.PreconditionFailed:
+			return nil // deduplicated
+		case code == "ConditionalRequestConflict" || code == minio.NotImplemented:
+			// A concurrent conditional write of the same key (AWS), or an
+			// endpoint without conditional writes: check, then write.
+		default:
+			return fmt.Errorf("s3 put %s: %w", d, err)
+		}
+	}
 	if exists, err := s.exists(ctx, key); err != nil {
 		return fmt.Errorf("s3 put %s: %w", d, err)
 	} else if exists {
@@ -477,19 +506,91 @@ func (s *Store) exists(ctx context.Context, key string) (bool, error) {
 	return false, err
 }
 
-// Get implements core.BlobStore. The returned reader fetches content lazily
-// with ranged GETs, so Seek (used by net/http for Range requests) costs
-// nothing until the next Read.
+// headSize is how much of a blob Get fetches. Get must report ErrNotFound and
+// the size before the caller answers, so it needs one request either way;
+// asking for the first bytes rather than a HEAD (StatObject) costs the same
+// round trip and, for blobs up to headSize (metadata documents, checksums,
+// POMs, most small packages), is the only request. Larger blobs take a
+// second, ranged GET from headSize on, as many requests as a HEAD and a GET
+// did. HEAD requests, 304s and Range requests never issue more requests than
+// before, and a headSize body is always read to its end, so the connection
+// goes back to the pool. It is also the most memory an open reader holds
+// for it.
+const headSize = 64 << 10
+
+// Get implements core.BlobStore. It fetches the first headSize bytes of the
+// blob with its size and ETag in one request; the returned reader serves
+// them from memory and fetches the rest lazily with ranged GETs, so Seek
+// (used by net/http for Range requests) costs nothing until the next Read.
 func (s *Store) Get(ctx context.Context, d core.Digest) (io.ReadSeekCloser, error) {
 	key, err := s.BlobKey(d)
 	if err != nil {
 		return nil, err
 	}
+	opts := minio.GetObjectOptions{}
+	if err := opts.SetRange(0, headSize-1); err != nil {
+		return nil, fmt.Errorf("s3 get %s: %w", d, err)
+	}
+	body, info, hdr, err := s.core.GetObject(ctx, s.bucket, key, opts)
+	if isInvalidRange(err) {
+		// S3 refuses any range of an empty object.
+		return s.getEmpty(ctx, d, key)
+	}
+	if err != nil {
+		return nil, s.mapErr("get", d, err)
+	}
+	r := &objectReader{ctx: ctx, core: s.core, bucket: s.bucket, key: key, size: info.Size, etag: info.ETag}
+	ranged := hdr.Get("Content-Range") != ""
+	if ranged {
+		if r.size, err = contentRangeTotal(hdr.Get("Content-Range")); err != nil {
+			_ = body.Close()
+			return nil, fmt.Errorf("s3 get %s: %w", d, err)
+		}
+	}
+	r.head = make([]byte, min(r.size, headSize))
+	if _, err := io.ReadFull(body, r.head); err != nil {
+		_ = body.Close()
+		return nil, fmt.Errorf("s3 get %s: %w", d, err)
+	}
+	if !ranged && r.size > int64(len(r.head)) {
+		// The endpoint ignored the Range header and sends the whole object:
+		// keep reading this response instead of asking again.
+		r.body, r.bodyOff = body, int64(len(r.head))
+		return r, nil
+	}
+	// Read to EOF (nothing is left) so the connection is reused.
+	_, _ = io.Copy(io.Discard, body)
+	_ = body.Close()
+	return r, nil
+}
+
+// getEmpty opens a blob whose ranged GET was refused: it must be empty, or
+// it is gone.
+func (s *Store) getEmpty(ctx context.Context, d core.Digest, key string) (io.ReadSeekCloser, error) {
 	info, err := s.core.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{})
 	if err != nil {
 		return nil, s.mapErr("get", d, err)
 	}
 	return &objectReader{ctx: ctx, core: s.core, bucket: s.bucket, key: key, size: info.Size, etag: info.ETag}, nil
+}
+
+// contentRangeTotal returns the complete length of a "bytes a-b/total"
+// Content-Range value.
+func contentRangeTotal(v string) (int64, error) {
+	_, total, ok := strings.Cut(v, "/")
+	n, err := strconv.ParseInt(total, 10, 64)
+	if !ok || err != nil || n < 0 {
+		return 0, fmt.Errorf("unexpected Content-Range %q", v)
+	}
+	return n, nil
+}
+
+func isInvalidRange(err error) bool {
+	if err == nil {
+		return false
+	}
+	resp := minio.ToErrorResponse(err)
+	return resp.Code == minio.InvalidRange || resp.StatusCode == http.StatusRequestedRangeNotSatisfiable
 }
 
 // Stat implements core.BlobStore. CreatedAt is the object's Last-Modified time.
@@ -505,8 +606,11 @@ func (s *Store) Stat(ctx context.Context, d core.Digest) (core.BlobInfo, error) 
 	return core.BlobInfo{Digest: d, Size: info.Size, CreatedAt: info.LastModified.UTC()}, nil
 }
 
-// Delete implements core.BlobStore. S3 deletes are idempotent, so the blob
-// is checked first to report ErrNotFound as the contract requires.
+// Delete implements core.BlobStore. S3 deletes are idempotent (204 whether
+// or not the key exists), so the blob is checked first to report ErrNotFound
+// as the contract requires; blob GC, the only caller, counts those as
+// missing rather than freed. Unlike Get and Put, no single S3 request both
+// deletes and tells whether something was there, so the HEAD stays.
 func (s *Store) Delete(ctx context.Context, d core.Digest) error {
 	key, err := s.BlobKey(d)
 	if err != nil {

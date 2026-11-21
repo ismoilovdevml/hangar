@@ -42,7 +42,7 @@ func (h *handler) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setStateCookie(w, "", -1) // single use
-	if ok, _ := h.svc.LoginLimiter().Allow(auth.AddressKey(clientIP(r))); !ok {
+	if ok, _ := h.svc.AllowLoginAddress(r.Context(), clientIP(r)); !ok {
 		h.loginFailed(w, r, "rate_limited")
 		return
 	}

@@ -95,6 +95,8 @@ type Service struct {
 	// afterBlobCheck, when set (tests), runs between the blob existence check
 	// and the publish transaction.
 	afterBlobCheck func()
+	// pinValidity is the constant pinValidity; tests shorten it.
+	pinValidity time.Duration
 }
 
 type download struct {
@@ -121,7 +123,7 @@ func New(pool *pgxpool.Pool, opts Options) *Service {
 		log = slog.New(slog.DiscardHandler)
 	}
 	s := &Service{
-		pool: pool, opts: opts, log: log,
+		pool: pool, opts: opts, log: log, pinValidity: pinValidity,
 		pending: map[string]*download{},
 		kick:    make(chan struct{}, 1),
 		done:    make(chan struct{}),
@@ -199,7 +201,7 @@ func (s *Service) publish(ctx context.Context, repo *core.Repository, req core.P
 	if req.Replace && policy == core.WriteAllowOnce {
 		policy = core.WriteAllow // the format marked these paths mutable
 	}
-	if !isUUID(repo.ID) {
+	if !core.IsUUID(repo.ID) {
 		return nil, nil, fmt.Errorf("repository %q: %w", repo.Name, core.ErrNotFound)
 	}
 	assets, order, err := normaliseAssets(req.Assets)
@@ -212,7 +214,7 @@ func (s *Service) publish(ctx context.Context, repo *core.Repository, req core.P
 	if req.Component != nil && req.Component.Name == "" {
 		return nil, nil, fmt.Errorf("publish: component name is required: %w", core.ErrInvalid)
 	}
-	bs, err := s.checkBlobs(ctx, repo, assets)
+	pin, err := s.checkBlobs(ctx, repo, assets)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -229,6 +231,9 @@ func (s *Service) publish(ctx context.Context, repo *core.Repository, req core.P
 		storeID, err := lockRepo(ctx, tx, repo)
 		if err != nil {
 			return err
+		}
+		if pin != nil && pin.storeID != storeID {
+			return fmt.Errorf("repository %q changed blob store during the publish: %w", repo.Name, core.ErrInvalid)
 		}
 		if req.Component != nil {
 			if comp, err = upsertComponent(ctx, tx, repo, req.Component, principal); err != nil {
@@ -255,7 +260,7 @@ func (s *Service) publish(ctx context.Context, repo *core.Repository, req core.P
 		if err != nil {
 			return err
 		}
-		return confirmBlobs(ctx, bs, revived)
+		return pin.confirm(ctx, tx, revived)
 	})
 	if err != nil {
 		return nil, nil, err
@@ -343,13 +348,44 @@ func normaliseAssets(in []*core.Asset) ([]*core.Asset, []int, error) {
 	return sorted, idx, nil
 }
 
-// checkBlobs verifies each blob exists in the repository's store, fills zero
-// sizes from it and returns the store (nil when Options.Blobs is unset).
+// pinValidity bounds the time from blobPin until the publish transaction
+// takes its blob row locks. It must stay below the shortest blob GC grace
+// period a configuration accepts (config.MinGCGracePeriod, 24 hours), which
+// the tests check; a publish that takes longer fails and is retried by the
+// client.
+const pinValidity = time.Hour
+
+// blobPin records that a publish restarted the grace period of the blobs it
+// is about to reference (see checkBlobs).
+type blobPin struct {
+	storeID  string
+	at       time.Time // database clock
+	validity time.Duration
+}
+
+// checkBlobs verifies each blob exists in the repository's store and fills
+// zero sizes from it. It returns nil when Options.Blobs is unset or there are
+// no assets.
 //
-// The check runs before the transaction and only fails a publish early: blob
-// GC may delete the bytes right after it. confirmBlobs repeats it inside the
-// transaction, under the blob row locks, for every blob the publish revives.
-func (s *Service) checkBlobs(ctx context.Context, repo *core.Repository, assets []*core.Asset) (core.BlobStore, error) {
+// The storage calls run here, before the publish transaction, so no
+// transaction stays open (and holds row locks) across a round trip to the
+// store. That is safe against blob GC because the blobs are pinned first:
+// every unreferenced row of the digests gets soft_deleted_at = now(),
+// committed before the store is asked. Blob GC deletes bytes only while it
+// holds the row lock of a row whose soft_deleted_at is older than the grace
+// period (more than a day), re-checked under that lock, and deletes the row
+// with them. So either
+//   - GC held the lock first: the pin waits for it, finds the row gone, and
+//     the Stat below sees the bytes gone and fails the publish; or
+//   - the pin committed first: GC cannot select the row for a grace period,
+//     long after the transaction has taken the row lock (blobPin.confirm
+//     enforces pinValidity) and set a reference, after which GC never
+//     selects it.
+//
+// Digests without a row cannot lose their bytes to GC, which only deletes
+// the bytes of rows; a row created meanwhile (a Put, a publish whose
+// reference is dropped again) starts its own grace period.
+func (s *Service) checkBlobs(ctx context.Context, repo *core.Repository, assets []*core.Asset) (*blobPin, error) {
 	if s.opts.Blobs == nil || len(assets) == 0 {
 		return nil, nil
 	}
@@ -357,11 +393,26 @@ func (s *Service) checkBlobs(ctx context.Context, repo *core.Repository, assets 
 	if err != nil {
 		return nil, fmt.Errorf("repository %q blob store: %w", repo.Name, err)
 	}
+	digests := make([]string, 0, len(assets))
+	for _, a := range assets {
+		digests = append(digests, string(a.BlobDigest))
+	}
+	pin, err := s.pinBlobs(ctx, repo, digests)
+	if pin != nil {
+		pin.validity = s.pinValidity
+	}
+	if err != nil {
+		return nil, err
+	}
 	sizes := map[core.Digest]int64{}
 	for _, a := range assets {
 		size, ok := sizes[a.BlobDigest]
 		if !ok {
 			info, err := bs.Stat(ctx, a.BlobDigest)
+			if errors.Is(err, core.ErrNotFound) {
+				return nil, fmt.Errorf("asset %q blob %s: %w (if blob garbage collection reclaimed it, upload it again)",
+					a.Path, a.BlobDigest, err)
+			}
 			if err != nil {
 				return nil, fmt.Errorf("asset %q blob %s: %w", a.Path, a.BlobDigest, err)
 			}
@@ -374,26 +425,53 @@ func (s *Service) checkBlobs(ctx context.Context, repo *core.Repository, assets 
 			return nil, fmt.Errorf("asset %q: size %d does not match blob size %d: %w", a.Path, a.Size, size, core.ErrInvalid)
 		}
 	}
-	return bs, nil
+	return pin, nil
 }
 
-// confirmBlobs checks, inside the publish transaction and after the blob rows
-// are locked, that the bytes of every revived blob (one that had no reference
-// before this publish) still exist. Blob GC deletes bytes only while holding
-// the row lock of a blob with no reference and removes the row in the same
-// transaction, so once this check passes under our lock the bytes stay until
-// the reference is dropped again. Blobs that already had references need no
-// check: GC never selects them.
-func confirmBlobs(ctx context.Context, bs core.BlobStore, revived []core.Digest) error {
-	if bs == nil {
+// pinBlobs restarts the grace period of the unreferenced rows of digests in
+// the repository's blob store and returns the store and the time. Rows are
+// locked in digest order, the order publishes and blob GC lock them in.
+func (s *Service) pinBlobs(ctx context.Context, repo *core.Repository, digests []string) (*blobPin, error) {
+	var (
+		storeID *string
+		at      time.Time
+	)
+	err := s.pool.QueryRow(ctx, `
+WITH r AS (SELECT blob_store_id FROM repositories WHERE id = $1),
+     l AS (SELECT store_id, digest FROM blobs
+            WHERE store_id = (SELECT blob_store_id FROM r) AND digest = ANY($2) AND ref_count = 0
+            ORDER BY digest FOR UPDATE),
+     p AS (UPDATE blobs b SET soft_deleted_at = now() FROM l
+            WHERE b.store_id = l.store_id AND b.digest = l.digest AND b.ref_count = 0)
+SELECT (SELECT blob_store_id::text FROM r), now()`, repo.ID, digests).Scan(&storeID, &at)
+	if err != nil {
+		return nil, fmt.Errorf("repository %q: pin blobs: %w", repo.Name, err)
+	}
+	if storeID == nil {
+		// No such repository, or no store: the transaction reports it.
+		return &blobPin{at: at}, nil
+	}
+	return &blobPin{storeID: *storeID, at: at}, nil
+}
+
+// confirm runs inside the publish transaction after the blob rows are
+// locked and referenced. revived are the blobs that had no reference before
+// (new rows, and rows with ref_count 0 that GC may have been about to
+// collect). Their bytes were seen after the pin; GC cannot have deleted
+// them unless more than a grace period passed since, which pinValidity
+// rules out. A nil pin (no blob store configured) confirms nothing.
+func (p *blobPin) confirm(ctx context.Context, tx pgx.Tx, revived []core.Digest) error {
+	if p == nil || len(revived) == 0 {
 		return nil
 	}
-	for _, d := range revived {
-		if _, err := bs.Stat(ctx, d); errors.Is(err, core.ErrNotFound) {
-			return fmt.Errorf("blob %s was reclaimed by garbage collection during the publish; upload it again: %w", d, core.ErrNotFound)
-		} else if err != nil {
-			return fmt.Errorf("blob %s: %w", d, err)
-		}
+	var fresh bool
+	if err := tx.QueryRow(ctx, `SELECT clock_timestamp() < $1::timestamptz + make_interval(secs => $2)`,
+		p.at, p.validity.Seconds()).Scan(&fresh); err != nil {
+		return fmt.Errorf("publish: check blob pin: %w", err)
+	}
+	if !fresh {
+		return fmt.Errorf("blob %s: the publish took longer than %s after checking its blobs; retry: %w",
+			revived[0], p.validity, core.ErrNotFound)
 	}
 	return nil
 }
@@ -464,7 +542,7 @@ func publishedAt(ctx context.Context) *time.Time {
 
 func checkComponent(ctx context.Context, tx pgx.Tx, repoID, id string) error {
 	var ok bool
-	if isUUID(id) {
+	if core.IsUUID(id) {
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM components WHERE id = $1 AND repo_id = $2)`, id, repoID).Scan(&ok); err != nil {
 			return err
 		}
@@ -624,7 +702,7 @@ func scanComponentRepo(row pgx.Row) (*core.Component, error) {
 
 // GetComponent implements core.ComponentService.
 func (s *Service) GetComponent(ctx context.Context, repoID, namespace, name, version string) (*core.Component, error) {
-	if !isUUID(repoID) {
+	if !core.IsUUID(repoID) {
 		return nil, fmt.Errorf("component %s/%s@%s: %w", namespace, name, version, core.ErrNotFound)
 	}
 	c, err := scanComponentRepo(s.pool.QueryRow(ctx, selectComponent+`
@@ -640,7 +718,7 @@ func (s *Service) GetComponent(ctx context.Context, repoID, namespace, name, ver
 
 // GetComponentByID implements core.ComponentService.
 func (s *Service) GetComponentByID(ctx context.Context, id string) (*core.Component, error) {
-	if !isUUID(id) {
+	if !core.IsUUID(id) {
 		return nil, fmt.Errorf("component %q: %w", id, core.ErrNotFound)
 	}
 	c, err := scanComponentRepo(s.pool.QueryRow(ctx, selectComponent+` WHERE c.id = $1`, id))
@@ -667,7 +745,7 @@ func (s *Service) ListComponents(ctx context.Context, q core.ComponentQuery) (co
 	if q.RepositoryID == "" {
 		return page, fmt.Errorf("list components: repository id required: %w", core.ErrInvalid)
 	}
-	if !isUUID(q.RepositoryID) {
+	if !core.IsUUID(q.RepositoryID) {
 		return core.Page[*core.Component]{Items: []*core.Component{}}, nil
 	}
 	var after *componentCursor
@@ -724,7 +802,7 @@ func (s *Service) ListComponents(ctx context.Context, q core.ComponentQuery) (co
 // GetAsset implements core.ComponentService.
 func (s *Service) GetAsset(ctx context.Context, repoID, path string) (*core.Asset, error) {
 	p := core.CleanPath(path)
-	if !isUUID(repoID) || p == "" {
+	if !core.IsUUID(repoID) || p == "" {
 		return nil, fmt.Errorf("asset %q: %w", p, core.ErrNotFound)
 	}
 	a, err := scanAsset(s.pool.QueryRow(ctx, `SELECT `+assetCols+` FROM assets WHERE repo_id = $1 AND path = $2`, repoID, p))
@@ -743,7 +821,7 @@ func (s *Service) ListAssets(ctx context.Context, q core.AssetQuery) (core.Page[
 	if q.RepositoryID == "" {
 		return page, fmt.Errorf("list assets: repository id required: %w", core.ErrInvalid)
 	}
-	if !isUUID(q.RepositoryID) || (q.ComponentID != "" && !isUUID(q.ComponentID)) {
+	if !core.IsUUID(q.RepositoryID) || (q.ComponentID != "" && !core.IsUUID(q.ComponentID)) {
 		return core.Page[*core.Asset]{Items: []*core.Asset{}}, nil
 	}
 	after := ""
@@ -842,7 +920,7 @@ func (s *Service) DeleteComponent(ctx context.Context, repo *core.Repository, id
 	if err := s.authorize(ctx, core.ActionDelete, repo, "component.delete", "component:"+repo.Name+"/"+id); err != nil {
 		return err
 	}
-	if !isUUID(id) || !isUUID(repo.ID) {
+	if !core.IsUUID(id) || !core.IsUUID(repo.ID) {
 		return fmt.Errorf("component %q: %w", id, core.ErrNotFound)
 	}
 	var comp *core.Component
@@ -910,7 +988,7 @@ func (s *Service) DeleteAsset(ctx context.Context, repo *core.Repository, path s
 	if err := s.authorize(ctx, core.ActionDelete, repo, "asset.delete", target); err != nil {
 		return err
 	}
-	if !isUUID(repo.ID) || p == "" {
+	if !core.IsUUID(repo.ID) || p == "" {
 		return fmt.Errorf("asset %q: %w", p, core.ErrNotFound)
 	}
 	var orphan *core.Component
@@ -982,7 +1060,7 @@ RETURNING `+componentCols, compID))
 // background loop adds the counts to assets and components every
 // FlushInterval (or sooner when MaxPending assets are buffered).
 func (s *Service) RecordDownload(_ context.Context, asset *core.Asset) {
-	if asset == nil || !isUUID(asset.ID) {
+	if asset == nil || !core.IsUUID(asset.ID) {
 		return
 	}
 	now := time.Now().UTC()
@@ -1062,7 +1140,7 @@ func (s *Service) FlushDownloads(ctx context.Context) error {
 		d := batch[id]
 		counts = append(counts, d.n)
 		lasts = append(lasts, d.last)
-		if isUUID(d.componentID) {
+		if core.IsUUID(d.componentID) {
 			c := comps[d.componentID]
 			if c == nil {
 				c = &download{}
@@ -1214,24 +1292,4 @@ func mapErr(what string, err error) error {
 		}
 	}
 	return fmt.Errorf("%s: %w", what, err)
-}
-
-func isUUID(s string) bool {
-	if len(s) != 36 {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch i {
-		case 8, 13, 18, 23:
-			if c != '-' {
-				return false
-			}
-		default:
-			if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
-				return false
-			}
-		}
-	}
-	return true
 }

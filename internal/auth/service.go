@@ -113,7 +113,8 @@ type Service struct {
 	basicKey []byte
 	basic    *ttlCache[[32]byte, string] // HMAC(username, password) -> user id
 
-	loginLimiter *RateLimiter
+	// loginLimiter is auth.login_rate, shared by every node (PostgreSQL).
+	loginLimiter *SharedLimiter
 
 	usageMu    sync.Mutex
 	tokenUsage map[string]tokenUse
@@ -182,7 +183,7 @@ func New(pool *pgxpool.Pool, opts Options) (*Service, error) {
 		return nil, fmt.Errorf("auth: random key: %w", err)
 	}
 	s.basic = newTTLCache[[32]byte, string](cfg.BasicCacheTTL, 10_000, s.now)
-	s.loginLimiter = NewRateLimiter(cfg.LoginRate, s.now)
+	s.loginLimiter = NewSharedLimiter(pool, ScopeLogin, cfg.LoginRate, s.now, s.log)
 	s.authz = NewAuthorizer(s.rolePrivileges, opts.Repos, cfg.AuthZCacheTTL, s.now)
 	dummy, err := s.hasher.Hash(context.Background(), "hangar-timing-equalizer")
 	if err != nil {
@@ -209,8 +210,14 @@ func (s *Service) RecordLogout(ctx context.Context) {
 // Authorizer returns the core.AuthZ backed by this service's roles.
 func (s *Service) Authorizer() *Authorizer { return s.authz }
 
-// LoginLimiter is the per-IP limiter for interactive logins.
-func (s *Service) LoginLimiter() *RateLimiter { return s.loginLimiter }
+// AllowLoginAddress takes one attempt from the login rate limit
+// (auth.login_rate) for client address ip (see AddressKey), shared by every
+// node of a cluster. It reports false, with how long to wait, when none is
+// left.
+func (s *Service) AllowLoginAddress(ctx context.Context, ip string) (bool, time.Duration) {
+	ok, _, wait := s.loginLimiter.Take(ctx, AddressKey(ip))
+	return ok, wait
+}
 
 // Close stops the background writer after a final flush.
 func (s *Service) Close() {
@@ -329,6 +336,9 @@ func (s *Service) PurgeExpired(ctx context.Context) error {
 	}
 	if _, err := s.pool.Exec(ctx, `DELETE FROM oidc_exchanged_ids WHERE expires_at < $1`, now); err != nil {
 		return fmt.Errorf("purge exchanged ID tokens: %w", err)
+	}
+	if err := PurgeBuckets(ctx, s.pool, now); err != nil {
+		return err
 	}
 	return s.purgeSignInFailures(ctx)
 }

@@ -22,7 +22,7 @@ func (s *Service) SearchComponents(ctx context.Context, q core.ComponentTextQuer
 	if q.RepositoryID == "" {
 		return nil, false, fmt.Errorf("search components: repository id required: %w", core.ErrInvalid)
 	}
-	if !isUUID(q.RepositoryID) {
+	if !core.IsUUID(q.RepositoryID) {
 		return []*core.Component{}, false, nil
 	}
 	limit := q.MaxNames

@@ -256,6 +256,102 @@ func TestFailedAuthLimit(t *testing.T) {
 	}
 }
 
+// sharedBuckets is an in-memory stand-in for the PostgreSQL buckets every
+// node shares (auth.SharedLimiter): one token bucket per key.
+type sharedBuckets struct {
+	mu     sync.Mutex
+	perSec float64
+	burst  float64
+	now    func() time.Time
+	b      map[string]*tokens
+	takes  int
+}
+
+func (s *sharedBuckets) Take(_ context.Context, key string) (bool, float64, time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.takes++
+	now := s.now()
+	b, ok := s.b[key]
+	if !ok {
+		b = &tokens{n: s.burst, last: now}
+		s.b[key] = b
+	}
+	b.n = min(s.burst, b.n+now.Sub(b.last).Seconds()*s.perSec)
+	b.last = now
+	if b.n < 1 {
+		return false, b.n, time.Duration((1 - b.n) / s.perSec * float64(time.Second))
+	}
+	b.n--
+	return true, b.n, 0
+}
+
+// The failed-authentication limit guards against credential guessing, so it
+// holds for the cluster: a client spreading attempts over two nodes gets
+// the budget once, plus at most one attempt per node that has not yet seen
+// it exhausted. Before, each node had its own budget. Requests that do not
+// fail never touch the shared store.
+func TestFailedAuthLimitIsClusterWide(t *testing.T) {
+	clock := &fakeClock{t: time.Unix(1_700_000_000, 0)}
+	store := &sharedBuckets{perSec: 0.1, burst: 3, now: clock.now, b: map[string]*tokens{}}
+	sec := Security{FailedAuthRate: Rate{PerMinute: 6, Burst: 3}, FailedAuthShared: store, Now: clock.now}
+	nodeA, nodeB := securedRouter(t, sec), securedRouter(t, sec)
+	attempt := func(h http.Handler) int {
+		r := httptest.NewRequest(http.MethodGet, "/repository/raw-hosted/f", nil)
+		r.RemoteAddr = "198.51.100.9:1000"
+		r.SetBasicAuth("alice", "wrong")
+		return serve(h, r).Code
+	}
+	steps := []struct {
+		name string
+		node http.Handler
+		want int
+	}{
+		{"a 1", nodeA, http.StatusUnauthorized},
+		{"b 2", nodeB, http.StatusUnauthorized},
+		{"a 3, budget spent", nodeA, http.StatusUnauthorized},
+		{"a knows", nodeA, http.StatusTooManyRequests},
+		{"b has not seen it: one more failure, then it knows", nodeB, http.StatusUnauthorized},
+		{"b knows", nodeB, http.StatusTooManyRequests},
+	}
+	for _, s := range steps {
+		if code := attempt(s.node); code != s.want {
+			t.Fatalf("%s = %d, want %d", s.name, code, s.want)
+		}
+	}
+	if store.takes != 4 {
+		t.Fatalf("shared store charged %d times, want 4 (one per failure)", store.takes)
+	}
+	// One token per 10 s for the cluster; each node again lets one failure
+	// through before it learns the budget is spent.
+	clock.add(10 * time.Second)
+	for _, s := range []struct {
+		name string
+		node http.Handler
+		want int
+	}{
+		{"b after one refill", nodeB, http.StatusUnauthorized},
+		{"b knows", nodeB, http.StatusTooManyRequests},
+		{"a has not seen it", nodeA, http.StatusUnauthorized},
+		{"a knows", nodeA, http.StatusTooManyRequests},
+	} {
+		if code := attempt(s.node); code != s.want {
+			t.Fatalf("%s = %d, want %d", s.name, code, s.want)
+		}
+	}
+	if store.takes != 6 {
+		t.Fatalf("shared store charged %d times, want 6", store.takes)
+	}
+
+	// Anonymous requests are never counted.
+	r := httptest.NewRequest(http.MethodGet, "/v2/", nil)
+	r.RemoteAddr = "198.51.100.10:1000"
+	before := store.takes
+	if code := serve(nodeA, r).Code; code != http.StatusUnauthorized || store.takes != before {
+		t.Fatalf("anonymous /v2/ = %d, takes %d -> %d", code, before, store.takes)
+	}
+}
+
 // A body that stalls is cut off by the idle timeout; one that keeps
 // flowing is not, however long it takes in total.
 func TestBodyIdleTimeout(t *testing.T) {

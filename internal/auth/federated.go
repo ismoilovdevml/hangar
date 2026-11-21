@@ -76,7 +76,7 @@ type FederatedToken struct {
 // the exchange.
 func (s *Service) IssueFederated(ctx context.Context, req FederatedTokenRequest) (*FederatedToken, error) {
 	switch {
-	case !validUUID(req.PolicyID) || !validUUID(req.ServiceAccountID):
+	case !core.IsUUID(req.PolicyID) || !core.IsUUID(req.ServiceAccountID):
 		return nil, fmt.Errorf("issue federated token: policy and service account ids are required: %w", core.ErrInvalid)
 	case len(req.Scopes) == 0:
 		return nil, fmt.Errorf("issue federated token: at least one scope is required: %w", core.ErrInvalid)
@@ -142,7 +142,7 @@ func (s *Service) IssueFederated(ctx context.Context, req FederatedTokenRequest)
 // the policy changes or is disabled; session tokens minted from them stop
 // working with them. It returns how many were revoked.
 func (s *Service) RevokeFederatedTokens(ctx context.Context, policyID string) (int64, error) {
-	if !validUUID(policyID) {
+	if !core.IsUUID(policyID) {
 		return 0, nil
 	}
 	tag, err := s.pool.Exec(ctx, `

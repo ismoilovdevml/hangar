@@ -141,6 +141,28 @@ MinIO, PostgreSQL):
 - **Filesystem blobs on NFS**: every write is fsynced; NFS latency bounds
   publish throughput. Prefer S3 for several nodes.
 
+## Cluster-wide and per-node state
+
+Most state lives in PostgreSQL and the blob store and is the same on every
+node. A few protections keep counters, and whether those counters must be
+shared depends on what they protect:
+
+| State | Scope | Why |
+|---|---|---|
+| Sign-in lockout (`auth.lockout`: failures per username and address, lock duration, slow-down) | Cluster (PostgreSQL `login_failures`) | Security control: an attacker spreading guesses over nodes must hit the same counter. |
+| Login rate limit (`auth.login_rate`, per client address) | Cluster (PostgreSQL `rate_limit_buckets`) | Security control against password guessing and spraying. Two nodes allow what one allows, not twice as much. One statement per sign-in attempt. |
+| Failed-authentication limit (`security.rate_limit.failed_auth`, per client address) | Cluster (PostgreSQL `rate_limit_buckets`) | Security control against token and password guessing on the API and package endpoints. Only failed attempts (401, 423) write to the database; the check on each request is answered from the node's memory, so a node learns that a client's budget is spent at that client's next failure on it. A client spreading guesses over N nodes therefore gets the budget once plus at most one attempt per node, not N budgets. |
+| API rate limit (`security.rate_limit.api`, per client address) | Per node | Load shedding, not a security control: it runs on every API request, where a database write each time would cost more than it protects. With N nodes a client can send up to N times the configured rate; lower the setting accordingly if that matters, or limit at the load balancer. |
+| Upstream circuit breaker and health (proxy repositories) | Per node | Each node observes its own connections to the remote, which may differ (network path, DNS, egress proxy). A node opens its breaker after its own consecutive failures; the others keep trying until they see failures too. The System status screen shows each node's view. |
+| Upstream 429 throttle (`Retry-After` from a remote) | Per node | A remote that rate-limits one node usually limits by source address, which differs per node. Every node backs off when it is told to. |
+| Live events stream (SSE, `Last-Event-ID` resume) | Per node | The replay buffer of the last 256 events is in the node's memory. A browser that reconnects to another node (no sticky sessions) sends a `Last-Event-ID` that node never saw, gets no replay, and misses the events published while it was disconnected; screens show them on their next refresh. Live updates are a convenience, not a record: the audit log and the API are authoritative. |
+
+When PostgreSQL cannot be reached, the shared limits fall back to a bucket
+in the node's memory with the same settings and log `rate limit: shared
+bucket unavailable, limiting on this node only`; sign-in needs the database
+anyway, so this only matters for its brief outages. Buckets that are full
+again are deleted by every node's hourly purge.
+
 ## Multiple sites
 
 Run one Hangar cluster per site against that site's database and blob

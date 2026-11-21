@@ -123,7 +123,7 @@ func collectTargets(rows pgx.Rows, err error) ([]*Target, error) {
 
 // target loads one component (core.ErrNotFound if absent).
 func (s *store) target(ctx context.Context, componentID string) (*Target, error) {
-	if !isUUID(componentID) {
+	if !core.IsUUID(componentID) {
 		return nil, fmt.Errorf("component %q: %w", componentID, core.ErrNotFound)
 	}
 	t, err := scanTarget(s.pool.QueryRow(ctx, `SELECT `+targetCols+targetFrom+` WHERE c.id = $1`, componentID))
@@ -659,7 +659,7 @@ func (s *store) listFindings(ctx context.Context, q FindingQuery) (*FindingList,
 		scope = append(scope, "r.name = "+b.arg(q.Repository))
 	}
 	if q.ComponentID != "" {
-		if !isUUID(q.ComponentID) {
+		if !core.IsUUID(q.ComponentID) {
 			return &FindingList{Items: []*Finding{}}, nil
 		}
 		scope = append(scope, "c.id = "+b.arg(q.ComponentID)+"::uuid")
@@ -756,7 +756,7 @@ func likeEscape(s string) string {
 
 // finding returns one finding with its details (core.ErrNotFound if absent).
 func (s *store) finding(ctx context.Context, id string, repoIDs []string) (*Finding, error) {
-	if !isUUID(id) {
+	if !core.IsUUID(id) {
 		return nil, fmt.Errorf("finding %q: %w", id, core.ErrNotFound)
 	}
 	var b builder
@@ -893,24 +893,4 @@ func (s *store) componentScan(ctx context.Context, componentID, format string) (
 	at = at.UTC()
 	cs.ScannedAt = &at
 	return &cs, nil
-}
-
-func isUUID(s string) bool {
-	if len(s) != 36 {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch i {
-		case 8, 13, 18, 23:
-			if c != '-' {
-				return false
-			}
-		default:
-			if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
-				return false
-			}
-		}
-	}
-	return true
 }

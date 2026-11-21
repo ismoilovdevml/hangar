@@ -9,10 +9,13 @@ import (
 	"github.com/minio/minio-go/v7"
 )
 
-// objectReader is an io.ReadSeekCloser over one S3 object. Seek only moves
-// the offset; the next Read opens a ranged GET from there. Every GET carries
-// If-Match with the ETag seen by Get, so a reader never mixes bytes from two
-// object versions (blobs are immutable, so this only trips on tampering).
+// objectReader is an io.ReadSeekCloser over one S3 object. It starts with
+// head, the first bytes of the object fetched by Get together with its size
+// and ETag; reads within head cost no request. Seek only moves the offset;
+// a read beyond head opens a ranged GET from there, and keeps reading that
+// body while reads are sequential. Every such GET carries If-Match with the
+// ETag seen by Get, so a reader never mixes bytes from two object versions
+// (blobs are immutable, so this only trips on tampering).
 type objectReader struct {
 	ctx    context.Context
 	core   *minio.Core
@@ -21,9 +24,14 @@ type objectReader struct {
 	size   int64
 	etag   string
 
-	off    int64
-	body   io.ReadCloser
-	closed bool
+	// head holds the object's bytes [0, len(head)). It is dropped once a
+	// read moves past it; a later Seek back below it costs a ranged GET.
+	head []byte
+	off  int64
+	// body streams the object from bodyOff; nil when no GET is open.
+	body    io.ReadCloser
+	bodyOff int64
+	closed  bool
 }
 
 func (o *objectReader) Read(p []byte) (int, error) {
@@ -35,6 +43,16 @@ func (o *objectReader) Read(p []byte) (int, error) {
 	}
 	if len(p) == 0 {
 		return 0, nil
+	}
+	if o.off < int64(len(o.head)) {
+		n := copy(p, o.head[o.off:])
+		o.off += int64(n)
+		return n, nil
+	}
+	o.head = nil
+	if o.body != nil && o.bodyOff != o.off {
+		_ = o.body.Close()
+		o.body = nil
 	}
 	if o.body == nil {
 		opts := minio.GetObjectOptions{}
@@ -52,16 +70,20 @@ func (o *objectReader) Read(p []byte) (int, error) {
 		if err != nil {
 			return 0, fmt.Errorf("s3 blob reader: get %s at %d: %w", o.key, o.off, err)
 		}
-		o.body = body
+		o.body, o.bodyOff = body, o.off
 	}
 	n, err := o.body.Read(p)
 	o.off += int64(n)
+	o.bodyOff += int64(n)
 	if errors.Is(err, io.EOF) && o.off < o.size {
 		return n, fmt.Errorf("s3 blob reader: %s: %w", o.key, io.ErrUnexpectedEOF)
 	}
 	return n, err
 }
 
+// Seek moves the offset only; the next Read reconciles an open body with it.
+// net/http's ServeContent seeks to the end and back to learn the size, and
+// back to 0 after sniffing the content type: neither costs a request.
 func (o *objectReader) Seek(offset int64, whence int) (int64, error) {
 	if o.closed {
 		return 0, errors.New("s3 blob reader: seek after close")
@@ -80,10 +102,6 @@ func (o *objectReader) Seek(offset int64, whence int) (int64, error) {
 	if abs < 0 {
 		return 0, errors.New("s3 blob reader: negative position")
 	}
-	if abs != o.off && o.body != nil {
-		_ = o.body.Close()
-		o.body = nil
-	}
 	o.off = abs
 	return abs, nil
 }
@@ -93,6 +111,7 @@ func (o *objectReader) Close() error {
 		return nil
 	}
 	o.closed = true
+	o.head = nil
 	if o.body != nil {
 		err := o.body.Close()
 		o.body = nil

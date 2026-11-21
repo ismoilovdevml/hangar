@@ -60,7 +60,7 @@ func (s *Service) SyncDistros(ctx context.Context, repoID string) error {
 	q := `SELECT id::text, format, type, config FROM repositories WHERE format = ANY($1)`
 	args := []any{distroFormats}
 	if repoID != "" {
-		if !isUUID(repoID) {
+		if !core.IsUUID(repoID) {
 			return nil
 		}
 		q += ` AND id = $2::uuid`

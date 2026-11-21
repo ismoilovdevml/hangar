@@ -109,7 +109,11 @@ type track struct {
 type Check struct {
 	Name  string
 	Label string
-	Run   func(ctx context.Context) Result
+	// LabelFunc, when set, replaces Label on every run, for checks whose
+	// subject changes while the server runs (sign-in providers turned on
+	// from the UI).
+	LabelFunc func() string
+	Run       func(ctx context.Context) Result
 }
 
 // Node is one Hangar process as shown on the System status screen (schema
@@ -271,6 +275,9 @@ func (m *Monitor) withRuntime(n Node) Node {
 // into a down result.
 func (m *Monitor) run(ctx context.Context, c Check) (s Subsystem) {
 	s = Subsystem{Name: c.Name, Label: c.Label}
+	if c.LabelFunc != nil {
+		s.Label = c.LabelFunc()
+	}
 	ctx, cancel := context.WithTimeout(ctx, m.opts.CheckTimeout)
 	defer cancel()
 	done := make(chan Result, 1)

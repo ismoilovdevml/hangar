@@ -18,8 +18,8 @@ import (
 )
 
 // fakeS3 is an in-memory, path-style S3 endpoint implementing the subset of
-// the S3 REST API the store uses: HeadBucket, GetBucketLocation, PutObject,
-// CopyObject, GetObject (Range, If-Match), HeadObject, DeleteObject,
+// the S3 REST API the store uses: HeadBucket, GetBucketLocation, PutObject
+// (If-None-Match: *), CopyObject, GetObject (Range, If-Match), HeadObject, DeleteObject,
 // ListObjectsV2, CreateMultipartUpload, UploadPart, UploadPartCopy,
 // CompleteMultipartUpload, AbortMultipartUpload and ListMultipartUploads.
 // Signatures are not verified. Streaming (aws-chunked) bodies are rejected so
@@ -34,6 +34,12 @@ type fakeS3 struct {
 	fail func(r *http.Request) (status int, code string)
 	// ops counts requests by operation name.
 	ops map[string]int
+	// noConditional ignores If-None-Match on PutObject, like S3-compatible
+	// services without conditional writes.
+	noConditional bool
+	// ignoreRange answers ranged GETs with the whole object (200), as some
+	// S3-compatible services do.
+	ignoreRange bool
 }
 
 type fakeObject struct {
@@ -80,6 +86,14 @@ func (f *fakeS3) keys(bucket, prefix string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// object returns the stored object at bucket/key (nil if absent), to tell
+// whether a write replaced it.
+func (f *fakeS3) object(bucket, key string) *fakeObject {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.buckets[bucket][key]
 }
 
 // uploadCount returns the number of incomplete multipart uploads.
@@ -156,6 +170,11 @@ func (f *fakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "ListMultipartUploads":
 		f.listUploads(w, bucket, q)
 	case "PutObject":
+		if _, exists := objs[key]; exists && r.Header.Get("If-None-Match") == "*" && !f.noConditional {
+			_, _ = io.Copy(io.Discard, r.Body)
+			writeError(w, r, http.StatusPreconditionFailed, "PreconditionFailed", "At least one of the pre-conditions you specified did not hold.")
+			return
+		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			writeError(w, r, http.StatusBadRequest, "IncompleteBody", err.Error())
@@ -283,7 +302,7 @@ func (f *fakeS3) getObject(w http.ResponseWriter, r *http.Request, objs map[stri
 	size := int64(len(o.data))
 	start, end := int64(0), size-1
 	status := http.StatusOK
-	if rg := r.Header.Get("Range"); rg != "" && !head {
+	if rg := r.Header.Get("Range"); rg != "" && !head && !f.ignoreRange {
 		var ok bool
 		start, end, ok = parseRange(rg, size)
 		if !ok {

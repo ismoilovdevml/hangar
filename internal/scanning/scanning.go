@@ -679,7 +679,7 @@ func (s *Service) handleRepositoryJob(ctx context.Context, j core.Job) error {
 		return nil
 	}
 	p, ok := s.payload(j)
-	if !ok || !isUUID(p.RepositoryID) {
+	if !ok || !core.IsUUID(p.RepositoryID) {
 		return nil
 	}
 	sum, err := s.scanRepository(ctx, p.RepositoryID)
@@ -693,7 +693,7 @@ func (s *Service) handleRepositoryJob(ctx context.Context, j core.Job) error {
 
 func (s *Service) handlePolicyJob(ctx context.Context, j core.Job) error {
 	p, ok := s.payload(j)
-	if !ok || !isUUID(p.RepositoryID) {
+	if !ok || !core.IsUUID(p.RepositoryID) {
 		return nil
 	}
 	_, _, err := s.enforce(ctx, "c.repo_id = $1::uuid", p.RepositoryID)
@@ -717,7 +717,7 @@ func (s *Service) Subscribe(ctx context.Context, bus core.EventBus) (func(), err
 				ID     string `json:"id"`
 				Format string `json:"format"`
 			}
-			if json.Unmarshal(e.Data, &r) != nil || !isUUID(r.ID) || (r.Format != "" && !IsDistroFormat(r.Format)) {
+			if json.Unmarshal(e.Data, &r) != nil || !core.IsUUID(r.ID) || (r.Format != "" && !IsDistroFormat(r.Format)) {
 				return
 			}
 			if err := s.SyncDistros(ctx, r.ID); err != nil {
@@ -740,7 +740,7 @@ func (s *Service) Subscribe(ctx context.Context, bus core.EventBus) (func(), err
 		var c struct {
 			ID string `json:"id"`
 		}
-		if json.Unmarshal(e.Data, &c) != nil || !isUUID(c.ID) {
+		if json.Unmarshal(e.Data, &c) != nil || !core.IsUUID(c.ID) {
 			return
 		}
 		payload, _ := json.Marshal(jobPayload{ComponentID: c.ID, Reason: ReasonArrival})
@@ -757,7 +757,7 @@ func (s *Service) Subscribe(ctx context.Context, bus core.EventBus) (func(), err
 		var r struct {
 			ID string `json:"id"`
 		}
-		if json.Unmarshal(e.Data, &r) != nil || !isUUID(r.ID) {
+		if json.Unmarshal(e.Data, &r) != nil || !core.IsUUID(r.ID) {
 			return
 		}
 		key := e.ID

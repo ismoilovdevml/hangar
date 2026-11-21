@@ -96,7 +96,7 @@ func (s *Service) userByName(ctx context.Context, q querier, username string) (*
 }
 
 func (s *Service) userByID(ctx context.Context, q querier, id string) (*User, error) {
-	if !validUUID(id) {
+	if !core.IsUUID(id) {
 		return nil, fmt.Errorf("user %q: %w", id, core.ErrNotFound)
 	}
 	u, err := scanUser(q.QueryRow(ctx, `SELECT `+userCols+` FROM users u WHERE u.id = $1`, id))
@@ -131,26 +131,6 @@ func (s *Service) rolePrivileges(ctx context.Context, roles []string) ([]core.Pr
 type querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-}
-
-func validUUID(s string) bool {
-	if len(s) != 36 {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch i {
-		case 8, 13, 18, 23:
-			if c != '-' {
-				return false
-			}
-		default:
-			if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 func parsePrivileges(strs []string) []core.Privilege {

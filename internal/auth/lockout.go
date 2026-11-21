@@ -59,11 +59,12 @@ func AddressKey(ip string) string {
 }
 
 // AllowLogin takes one attempt from the per-address login rate limit
-// (auth.login_rate) for the context's client address (see AddressKey). It
-// reports false, with how long to wait, when none is left. Every endpoint
-// that checks a password for an interactive or client login uses it.
+// (auth.login_rate, shared by every node) for the context's client
+// address (see AddressKey). It reports false, with how long to wait, when
+// none is left. Every endpoint that checks a password for an interactive or
+// client login uses it.
 func (s *Service) AllowLogin(ctx context.Context) (bool, time.Duration) {
-	return s.loginLimiter.Allow(AddressKey(core.RequestInfoFrom(ctx).RemoteIP))
+	return s.AllowLoginAddress(ctx, core.RequestInfoFrom(ctx).RemoteIP)
 }
 
 // signInLocked returns a *LockedError while username is locked out for the

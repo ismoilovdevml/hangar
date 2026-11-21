@@ -34,7 +34,7 @@ const sessionTouchInterval = time.Minute
 // CreateSession starts a browser session for p (a user who just signed in)
 // and returns the cookie secret.
 func (s *Service) CreateSession(ctx context.Context, p *core.Principal, remember bool) (string, *Session, error) {
-	if p.IsAnonymous() || !validUUID(p.ID) {
+	if p.IsAnonymous() || !core.IsUUID(p.ID) {
 		return "", nil, fmt.Errorf("create session: %w", core.ErrUnauthenticated)
 	}
 	secret, err := randomURLSafe(32)
@@ -181,7 +181,7 @@ func (s *Service) RevokeSession(ctx context.Context, userID, sessionID string) e
 	if err != nil {
 		return err
 	}
-	if !validUUID(sessionID) {
+	if !core.IsUUID(sessionID) {
 		return fmt.Errorf("session %q: %w", sessionID, core.ErrNotFound)
 	}
 	tag, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE id = $1 AND user_id = $2`, sessionID, userID)
