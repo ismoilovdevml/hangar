@@ -153,6 +153,11 @@ type Exec struct {
 	claims int
 	state  json.RawMessage
 
+	// writeMu orders the log writes: it is held from taking the pending
+	// lines to the UPDATE that appends them, so a heartbeat and a checkpoint
+	// writing at once cannot append their lines out of order.
+	writeMu sync.Mutex
+
 	mu        sync.Mutex
 	progress  float64
 	message   string
@@ -260,6 +265,8 @@ func (x *Exec) unflush(log string) {
 // flush writes the heartbeat, progress, message, new log lines and (when
 // state is not nil) the checkpoint. It reports whether a stop was requested.
 func (x *Exec) flush(ctx context.Context, state []byte) (stop bool, err error) {
+	x.writeMu.Lock()
+	defer x.writeMu.Unlock()
 	progress, message, log := x.pending()
 	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
@@ -364,6 +371,8 @@ func (s *Service) heartbeat(ctx context.Context, x *Exec, cancel context.CancelC
 
 // finish records the end of a run and publishes task.finished.
 func (s *Service) finish(x *Exec, status, message string, log *slog.Logger) {
+	x.writeMu.Lock()
+	defer x.writeMu.Unlock()
 	progress, last, lines := x.pending()
 	if message == "" {
 		message = last
@@ -403,6 +412,8 @@ SELECT `+strings.ReplaceAll(runCols, "r.", "u.")+` FROM u JOIN tasks t ON t.id =
 
 // release hands a run back to the queue (shutdown), to be resumed by any node.
 func (s *Service) release(x *Exec, log *slog.Logger) {
+	x.writeMu.Lock()
+	defer x.writeMu.Unlock()
 	progress, message, lines := x.pending()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
