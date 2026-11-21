@@ -79,7 +79,8 @@ database:
   # production; percent-encode special characters in the password.
   url: "postgres://hangar@localhost:5432/hangar?sslmode=disable"
   # Connection pool per process (at least 2); size PostgreSQL
-  # max_connections for nodes x max_conns plus maintenance headroom.
+  # max_connections for nodes x (max_conns + 17) plus maintenance headroom:
+  # each node also holds up to 16 lock connections and one event listener.
   max_conns: 20
   min_conns: 2
   conn_lifetime: 1h

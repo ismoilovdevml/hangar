@@ -99,7 +99,7 @@ offline databases and troubleshooting:
 | `bootstrap/` | The first administrator's one-time password until the first sign-in | 65532 |
 | `postgres/` | PostgreSQL data | 70 (postgres) |
 | `blobs/` | Package files | 65532 |
-| `nats/` | Job queue state | 65532 |
+| `nats/` | Only on installations from v0.1.x: the former NATS job queue, no longer used; remove it once you will not roll back (the installer says so) | 65532 |
 | `caddy/` | Caddyfile, `sites/`, certificates (with `--tls caddy`) | root |
 | `scanner.env` | Image scanning settings of the hangar service; empty without `--with-trivy`; managed by the installer | root |
 | `trivy/` | Trivy vulnerability database (with `--with-trivy`) | 65532 |
@@ -193,8 +193,9 @@ layout. It:
    trusted proxies and resource limits;
 3. copies `/opt/hangar/hangar.yaml` (with your `auth.oidc` block and other
    settings) to `config/hangar.yaml`;
-4. stops the old stack, copies both volumes into `postgres/`, `blobs/` and
-   `nats/`, starts the new stack and waits for `/readyz`.
+4. stops the old stack, copies both volumes into `postgres/` and `blobs/`
+   (the NATS job state in the old volume is not used since v0.2.0), starts
+   the new stack and waits for `/readyz`.
 
 `/opt/hangar` and the volumes are never changed, so rollback is:
 
@@ -239,7 +240,8 @@ directory; install those with their own `install.sh`.
 - **hangar**: read-only root filesystem, all capabilities dropped,
   `no-new-privileges`, health check on `/readyz`, 60 s stop grace period.
   Published on `127.0.0.1` with Caddy, else on all addresses. Applies
-  database migrations on start; NATS runs embedded.
+  database migrations on start. Events and background jobs go through
+  PostgreSQL; there is no other service to run.
 - **postgres**: PostgreSQL 16 with data checksums, sized for an 8 GiB host,
   not published on the host.
 - **trivy**, **hangar-scanner** (`--with-trivy`): non-root (65532), all

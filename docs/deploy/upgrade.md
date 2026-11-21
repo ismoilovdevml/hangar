@@ -36,6 +36,86 @@ version. Otherwise stop all nodes, migrate, and start the new version.
 taken before the upgrade: down migrations can drop data that the newer
 version wrote.
 
+## Upgrading to 0.2.0
+
+v0.2.0 removes NATS. Events between nodes go through PostgreSQL
+(LISTEN/NOTIFY) and the job queue is the `jobs` table
+([ADR 0011](../adr/0011-postgresql-events-and-jobs.md)).
+
+**Before the upgrade**
+
+- PostgreSQL connections: every node opens one more long-lived session (the
+  event listener). Allow `nodes x (database.max_conns + 17)` connections. A
+  PgBouncer in front of Hangar must use session pooling for its database;
+  in transaction pooling mode the listener cannot work and the nodes stay
+  unready ([high-availability.md](high-availability.md#pgbouncer)).
+- Several nodes: each node reads the System logs of the others over HTTP at
+  `server.node_url` (by default the address it reaches the database from,
+  with the port of `server.addr`). Open that port between the nodes. The
+  Helm chart sets the URL to the pod IP and allows the traffic in its
+  NetworkPolicy.
+- Jobs waiting in NATS JetStream are not carried over. Let the queue drain
+  first if you want none lost (`hangar_job_queue_depth` at 0 on the Jobs
+  dashboard). Scheduled jobs (blob GC, audit partitions, cleanup, token
+  purge) are enqueued again on their next schedule either way.
+- Take a database backup, as before every upgrade. It is also your way back
+  (see the secrets note below).
+
+**Upgrade all nodes together.** v0.1 nodes use NATS and v0.2 nodes use
+PostgreSQL, so in a mixed cluster they do not share events (cache
+invalidation) or jobs. Stop or replace every node in one go:
+
+- Compose (one node): re-run the installer as below.
+- Helm: upgrade from the OCI chart, which is published from this release on:
+
+  ```bash
+  helm upgrade hangar oci://ghcr.io/ismoilovdevml/charts/hangar --version 0.2.0 \
+    -n hangar -f values-prod.yaml --wait
+  ```
+
+  The rolling update keeps old and new pods side by side for a few minutes,
+  during which the old pods may serve stale cached answers and jobs they
+  enqueue are lost. To avoid that window, at the cost of a short outage,
+  add `--set updateStrategy.type=Recreate --set updateStrategy.rollingUpdate=null`
+  to this one upgrade. If your values come from a checkout of the
+  repository (`deploy/helm/hangar`), switch to the OCI chart now.
+- Binary and systemd: stop every node, run `hangar migrate up` once, then
+  start every node on the new binary.
+
+**Remove the `nats` settings.** `nats.*` in `hangar.yaml` and
+`HANGAR_NATS_*` variables are ignored; the server logs one warning at start
+(`deprecated configuration: nats.* (HANGAR_NATS_*) is ignored`). Helm values
+under `nats:` are ignored too (the schema still accepts them, and the release
+notes print a reminder).
+
+**Remove NATS once every node runs 0.2.0:**
+
+- Helm with the bundled NATS: the upgrade deletes its StatefulSet, Services
+  and Secret but not its volumes:
+  `kubectl -n hangar delete pvc -l app.kubernetes.io/instance=hangar,app.kubernetes.io/component=nats`.
+- External NATS: decommission it, or remove Hangar's streams
+  (`HANGAR_JOBS`) and user if other applications still use it.
+- Compose: `<data>/nats` is no longer mounted; the installer leaves it in
+  place and prints `rm -rf <data>/nats` for when you no longer need a
+  rollback to v0.1.x.
+- Binary: the directory of the former `nats.data_dir`.
+
+**Metrics.** `hangar_nats_connected` is now `hangar_event_listener_connected`
+and `hangar_nats_reconnects_total` is now
+`hangar_event_listener_reconnects_total`; `hangar_job_queue_dead` is new. The
+bundled dashboards and alerts use the new names; update your own.
+
+**Stored secrets (`hgs2`).** On its first start v0.2.0 re-seals the
+credentials stored in the database (proxy upstream passwords, blob store keys)
+in the `hgs2` format, bound to their row and field
+([ADR 0010](../adr/0010-context-bound-sealed-secrets.md)). v0.1.x cannot read
+`hgs2`. To go back, restore the backup taken before the upgrade (it still
+holds `hgs1`), and bring NATS back for v0.1.x. If you keep the database
+instead, stop every v0.2 node and run `hangar admin rotate-secrets --downgrade`
+with the v0.2.0 binary before you start v0.1.x: a v0.1.x server that finds
+`hgs2` values takes them for plaintext and seals them again, and those
+credentials stop working until they are entered again.
+
 ## Compose
 
 Re-run the installer with the data directory (add `--version vX.Y.Z` to pin

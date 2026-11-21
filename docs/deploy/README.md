@@ -31,7 +31,7 @@ and the user guides in [docs/guides](../guides/README.md).
 | PostgreSQL | bundled or external | external | external |
 | Blob storage | bundled MinIO, external S3 or a volume | S3, or a ReadWriteMany volume | local disk, NFS or S3 |
 | TLS | Caddy (automatic) | your ingress controller / Gateway | your reverse proxy |
-| Event bus (NATS) | embedded | bundled 3-node cluster, external, or embedded (1 replica) | embedded, or an external cluster |
+| Events and job queue | PostgreSQL (nothing to run) | PostgreSQL (nothing to run; session pooling if PgBouncer) | PostgreSQL (nothing to run; session pooling if PgBouncer) |
 | Upgrades | `docker compose pull && up -d` | `helm upgrade` (migration hook) | replace binary, `hangar migrate up`, restart |
 
 ## Container image

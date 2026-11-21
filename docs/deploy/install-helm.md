@@ -1,8 +1,9 @@
 # Install with Helm
 
 The chart in `deploy/helm/hangar` runs Hangar as a stateless Deployment with
-two or more replicas against an external PostgreSQL and S3, and can deploy a
-3-node NATS JetStream cluster for it. Every value is described in
+two or more replicas against an external PostgreSQL and S3. PostgreSQL also
+carries the events between pods and the job queue: there is no other
+stateful service. Every value is described in
 [`values.yaml`](../../deploy/helm/hangar/values.yaml) and checked by
 `values.schema.json`; unsupported combinations fail at render time with an
 explanation.
@@ -13,7 +14,10 @@ explanation.
   shutdown), Helm 3.8+.
 - PostgreSQL 16+ reachable from the cluster: a managed service,
   CloudNativePG, or similar. Create a database and an owner role
-  ([requirements.md](requirements.md)).
+  ([requirements.md](requirements.md)). Allow `replicas x
+  (database.max_conns + 17)` connections; a PgBouncer in front must use
+  session pooling, not transaction pooling
+  ([high-availability.md](high-availability.md#what-each-node-needs)).
 - S3-compatible storage and a bucket, or a ReadWriteMany storage class for
   `storage.kind=fs` with more than one replica.
 - An ingress controller (ingress-nginx, Traefik, ...) or a Gateway API
@@ -89,9 +93,6 @@ dockerTokenKey:
 bootstrapAdmin:
   existingSecret: hangar-admin
 
-nats:
-  mode: bundled             # 3-node JetStream cluster with persistent volumes
-
 ingress:
   enabled: true
   className: nginx
@@ -128,18 +129,17 @@ after the first sign-in ([first-admin.md](first-admin.md)).
 
 | Resource | Notes |
 |---|---|
-| Deployment | `replicaCount` or the HPA. Read-only root filesystem, non-root (65532), all capabilities dropped, seccomp `RuntimeDefault`, no service account token. Probes: startup and liveness on `/healthz`, readiness on `/readyz` (database, blob store, NATS). Soft pod anti-affinity by host (`podAntiAffinityPreset: hard` to require it), `topologySpreadConstraints` for zones. Rolling updates with `maxUnavailable: 0`. Pods restart when the config or secret values change. |
-| ConfigMap | `hangar.yaml` rendered from `config`. The chart sets `server.addr`, `database.migrate_on_start`, `storage.*` and `nats.*` itself and refuses secrets placed in `config`. |
-| Secret | Only what no `existingSecret` provides. Generated values (`secretKey`, `dockerTokenKey`, the NATS password) are created once and kept on upgrades; the Secret is kept on `helm uninstall`. |
+| Deployment | `replicaCount` or the HPA. Read-only root filesystem, non-root (65532), all capabilities dropped, seccomp `RuntimeDefault`, no service account token. Probes: startup and liveness on `/healthz`, readiness on `/readyz` (database, blob store, event listener). `HANGAR_SERVER_NODE_URL=http://$(POD_IP):8080`, where the other pods read its System logs (unless `config.server.node_url` is set, which is refused with more than one replica). Soft pod anti-affinity by host (`podAntiAffinityPreset: hard` to require it), `topologySpreadConstraints` for zones. Rolling updates with `maxUnavailable: 0`. Pods restart when the config or secret values change. |
+| ConfigMap | `hangar.yaml` rendered from `config`. The chart sets `server.addr`, `database.migrate_on_start` and `storage.*` itself, drops a leftover `nats` section, and refuses secrets placed in `config`. |
+| Secret | Only what no `existingSecret` provides. Generated values (`secretKey`, `dockerTokenKey`) are created once and kept on upgrades; the Secret is kept on `helm uninstall`. |
 | Job (hook) | `hangar migrate up` before install and before every upgrade (`migrations.mode: job`), so pods never start on an old schema and only one process migrates. It gets the server's `extraEnv`, `extraEnvFrom`, `extraVolumes`, `extraVolumeMounts`, `podLabels` and `podAnnotations`, and runs under `serviceAccount.name` when `serviceAccount.create` is false (otherwise the namespace's default ServiceAccount: the chart's own does not exist yet on the first install). |
 | Service | Port 80, plus `service.connectorPorts` for Docker port connectors. |
 | Ingress / HTTPRoute | The UI host, an optional registry host (`/v2` only), and the metrics path blocked publicly (`blockMetrics`). Presets for ingress-nginx and Traefik ([reverse-proxy.md](reverse-proxy.md)). |
 | PodDisruptionBudget | `minAvailable: 1` with two or more replicas. |
 | HorizontalPodAutoscaler | `autoscaling.enabled`; scales in by one pod at most every two minutes. |
-| NATS StatefulSet | `nats.mode: bundled`: JetStream cluster with password auth, persistent volumes, lame-duck shutdown, PDB, network policy (clients: Hangar pods only). Hangar pods wait for it with an init container. |
 | ServiceMonitor | Prometheus Operator scraping `/metrics` on every pod. |
 | Trivy Deployment, scan adapter Deployment | `imageScanning.enabled`: the Trivy server (database on a PersistentVolumeClaim) and the scan adapter, with their Services and the adapter token Secret ([image scanning](#image-scanning)). |
-| NetworkPolicy | Ingress to Hangar only from `networkPolicy.ingressFrom` (any source when empty), plus the chart's `helm test` pod and, with image scanning, the scan adapter. With image scanning the Trivy server accepts only Hangar and the scan adapter, and the scan adapter only Hangar. Optional egress restriction (`networkPolicy.egress`): DNS, NATS and the rules you list. Proxy repositories need their remotes or the corporate proxy in that list. |
+| NetworkPolicy | Ingress to Hangar only from `networkPolicy.ingressFrom` (any source when empty), plus the other Hangar pods (System logs), the chart's `helm test` pod and, with image scanning, the scan adapter. With image scanning the Trivy server accepts only Hangar and the scan adapter, and the scan adapter only Hangar. Optional egress restriction (`networkPolicy.egress`): DNS, the other Hangar pods on 8080 and the rules you list. PostgreSQL, the blob store, and the remotes of proxy repositories (or the corporate proxy) need to be in that list. |
 
 ## Choosing modes
 
@@ -147,8 +147,6 @@ after the first sign-in ([first-admin.md](first-admin.md)).
 |---|---|
 | `storage.kind` | `s3` (recommended). `fs` with a PersistentVolumeClaim: `ReadWriteOnce` for one replica (the Deployment switches to `Recreate`), `ReadWriteMany` for more. The claim is kept on uninstall. |
 | `storage.s3` credentials | `existingSecret` / `accessKeyID`+`secretAccessKey`, or none: the AWS default chain (IRSA, EKS Pod Identity) with `serviceAccount.annotations`. |
-| `nats.mode` | `bundled` (default), `external` (`nats.external.url` or `existingSecret`, JetStream required), `embedded` (one replica only). |
-| `nats.streamReplicas` | Replicas of the job stream (`nats.replicas`), 1 to 5. `0` (default): `nats.bundled.replicas` for `bundled`, 1 otherwise. See [high-availability.md](high-availability.md#job-queue-replicas). |
 | `migrations.mode` | `job` (default), `onStart` (every pod migrates on start; an advisory lock lets one apply and the others wait), `none` (you run `hangar migrate up`). |
 | `metrics.auth.mode` | `none` (default), `bearer` or `basic`, with the credentials in `metrics.auth.existingSecret`; the ServiceMonitor sends them. See [monitoring.md](../operations/monitoring.md#protecting-metrics). |
 | `config.server.drain_delay` | Time a terminating pod keeps serving with `/readyz` failing (default `0s`; the pre-stop sleep covers Kubernetes 1.30+). Keep `terminationGracePeriodSeconds` above `lifecycle.preStopSleepSeconds + drain_delay + shutdown_timeout`. See [high-availability.md](high-availability.md#draining-nodes). |
@@ -158,8 +156,7 @@ after the first sign-in ([first-admin.md](first-admin.md)).
 Tools that render the chart offline cannot read existing Secrets, so values
 generated by the chart would change on every render. Provide all of them:
 `secretKey.existingSecret` (or `value`), `dockerTokenKey.existingSecret`,
-`nats.bundled.existingSecret` (letters and digits only), plus
-`database.existingSecret` and `storage.s3.existingSecret`. Argo CD runs the
+plus `database.existingSecret` and `storage.s3.existingSecret`. Argo CD runs the
 migration hook as a `PreSync` hook.
 
 ## Image scanning
@@ -214,7 +211,16 @@ storage:
 
 `make helm-lint` and `make helm-template` lint and render the chart with
 every value set in `deploy/helm/hangar/ci/` (HA with S3 and network
-policies; autoscaling with external NATS and IRSA; single node with a volume
-and embedded NATS; two replicas on ReadWriteMany). Plain `helm lint` without
+policies; autoscaling with IRSA and a leftover 0.1.x `nats` section; single
+node with a volume and a fixed node URL; two replicas on ReadWriteMany), and
+validate the manifests with kubeconform when it is installed
+(`KUBECONFORM_REQUIRED=1` makes it mandatory, as in CI). Plain `helm lint` without
 values fails on purpose: `config.server.base_url` and a database are
 required.
+
+## Upgrading from 0.1.x
+
+Chart 0.2.0 no longer deploys NATS, and `nats.*` values are ignored (the
+schema still accepts them, and the release notes print a reminder to remove
+them). The bundled NATS StatefulSet is deleted by the upgrade; its volumes are
+not. See [upgrade.md](upgrade.md#upgrading-to-020) for the whole procedure.
