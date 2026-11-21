@@ -22,6 +22,7 @@ export const SECTIONS = [
     ['docs/deploy/first-admin.md', 'First administrator'],
     ['docs/deploy/backup-restore.md', 'Backup and restore'],
     ['docs/deploy/upgrade.md', 'Upgrades'],
+    ['docs/deploy/verify-release.md', 'Verify a release'],
     ['docs/deploy/high-availability.md', 'High availability'],
     ['docs/deploy/troubleshooting.md', 'Troubleshooting'],
   ]],
@@ -53,6 +54,9 @@ export const SECTIONS = [
   ['Guides', [
     ['docs/guides/migrate.md', 'Move to Hangar'],
     ['docs/guides/ci.md', 'CI integration'],
+    ['docs/guides/ci-oidc.md', 'CI trusted publishing (OIDC)'],
+    ['docs/guides/config-as-code.md', 'Configuration as code'],
+    ['docs/guides/webhooks.md', 'Webhooks'],
     ['docs/guides/access.md', 'Access management'],
     ['docs/guides/sso.md', 'Single sign-on'],
     ['docs/guides/routing-rules.md', 'Routing rules'],

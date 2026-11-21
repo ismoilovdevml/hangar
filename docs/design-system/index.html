@@ -45,10 +45,10 @@
 <div class="layout">
   <nav class="side" id="side" aria-label="Documentation">
 <p class="side-h">Start here</p><ul><li><a href="../">Introduction</a></li><li><a href="../guides/getting-started/">Getting started</a></li><li><a href="../guides/">Concepts and guides</a></li><li><a href="../faq/">FAQ</a></li></ul>
-<p class="side-h">Install and run</p><ul><li><a href="../deploy/">Deploying Hangar</a></li><li><a href="../deploy/requirements/">Requirements and sizing</a></li><li><a href="../deploy/install-compose/">Docker Compose</a></li><li><a href="../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../deploy/install-binary/">Binary and systemd</a></li><li><a href="../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../deploy/first-admin/">First administrator</a></li><li><a href="../deploy/backup-restore/">Backup and restore</a></li><li><a href="../deploy/upgrade/">Upgrades</a></li><li><a href="../deploy/high-availability/">High availability</a></li><li><a href="../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../deploy/">Deploying Hangar</a></li><li><a href="../deploy/requirements/">Requirements and sizing</a></li><li><a href="../deploy/install-compose/">Docker Compose</a></li><li><a href="../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../deploy/install-binary/">Binary and systemd</a></li><li><a href="../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../deploy/first-admin/">First administrator</a></li><li><a href="../deploy/backup-restore/">Backup and restore</a></li><li><a href="../deploy/upgrade/">Upgrades</a></li><li><a href="../deploy/verify-release/">Verify a release</a></li><li><a href="../deploy/high-availability/">High availability</a></li><li><a href="../deploy/troubleshooting/">Troubleshooting</a></li></ul>
 <p class="side-h">Using the UI</p><ul><li><a href="../ui/">The web UI</a></li><li><a href="../ui/repositories/">Repositories</a></li><li><a href="../ui/packages/">Packages &amp; search</a></li><li><a href="../ui/connect/">Connect a client</a></li><li><a href="../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../ui/access/">Access &amp; tokens</a></li><li><a href="../ui/tasks/">Scheduled tasks</a></li><li><a href="../ui/blob-stores/">Blob stores</a></li><li><a href="../ui/system/">Status, logs &amp; audit</a></li><li><a href="../ui/settings/">Settings</a></li></ul>
 <p class="side-h">Package formats</p><ul><li><a href="../guides/docker/">Docker &amp; OCI</a></li><li><a href="../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../guides/pypi/">PyPI</a></li><li><a href="../guides/nuget/">NuGet</a></li><li><a href="../guides/go/">Go modules</a></li><li><a href="../guides/helm/">Helm charts</a></li><li><a href="../guides/cargo/">Cargo</a></li><li><a href="../guides/apt/">APT</a></li><li><a href="../guides/rpm/">RPM</a></li><li><a href="../guides/raw/">Raw files</a></li></ul>
-<p class="side-h">Guides</p><ul><li><a href="../guides/migrate/">Move to Hangar</a></li><li><a href="../guides/ci/">CI integration</a></li><li><a href="../guides/access/">Access management</a></li><li><a href="../guides/sso/">Single sign-on</a></li><li><a href="../guides/routing-rules/">Routing rules</a></li><li><a href="../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../guides/api/">REST API</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../guides/migrate/">Move to Hangar</a></li><li><a href="../guides/ci/">CI integration</a></li><li><a href="../guides/ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../guides/config-as-code/">Configuration as code</a></li><li><a href="../guides/webhooks/">Webhooks</a></li><li><a href="../guides/access/">Access management</a></li><li><a href="../guides/sso/">Single sign-on</a></li><li><a href="../guides/routing-rules/">Routing rules</a></li><li><a href="../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../guides/api/">REST API</a></li></ul>
 <p class="side-h">Operations</p><ul><li><a href="../security/">Security</a></li><li><a href="../operations/monitoring/">Monitoring</a></li><li><a href="../operations/runbooks/">Alert runbooks</a></li><li><a href="../operations/performance/">Performance</a></li></ul>
 <p class="side-h">Project</p><ul><li><a href="../architecture/">Architecture</a></li><li><a href="../formats/">Format protocols</a></li><li><a href="../adr/">Decision records</a></li><li><a href="../product-spec/">Product specification</a></li><li><a href="./" aria-current="page">Design system</a></li><li><a href="../roadmap/">Roadmap</a></li><li><a href="../changelog/">Changelog</a></li></ul>
   </nav>
@@ -77,11 +77,16 @@ Wallpaper file: <code>web/public/lake-dawn.jpg</code> (2400×1500).</p>
   <span class="hljs-attr">--hairline</span>: <span class="hljs-built_in">rgba</span>(<span class="hljs-number">30</span>,<span class="hljs-number">43</span>,<span class="hljs-number">58</span>,<span class="hljs-number">0.07</span>);
   <span class="hljs-attr">--track</span>: <span class="hljs-built_in">rgba</span>(<span class="hljs-number">30</span>,<span class="hljs-number">43</span>,<span class="hljs-number">58</span>,<span class="hljs-number">0.08</span>);
 
+  <span class="hljs-comment">/* washes: a lighter layer on glass (hover tints, chips, inputs, menus); never a raw rgba in a page */</span>
+  <span class="hljs-attr">--wash-faint</span>: <span class="hljs-built_in">rgba</span>(<span class="hljs-number">255</span>,<span class="hljs-number">255</span>,<span class="hljs-number">255</span>,<span class="hljs-number">0.35</span>); <span class="hljs-attr">--wash-hover</span>: <span class="hljs-built_in">rgba</span>(<span class="hljs-number">255</span>,<span class="hljs-number">255</span>,<span class="hljs-number">255</span>,<span class="hljs-number">0.5</span>);
+  <span class="hljs-attr">--wash</span>: <span class="hljs-built_in">rgba</span>(<span class="hljs-number">255</span>,<span class="hljs-number">255</span>,<span class="hljs-number">255</span>,<span class="hljs-number">0.6</span>); <span class="hljs-attr">--wash-strong</span>: <span class="hljs-built_in">rgba</span>(<span class="hljs-number">255</span>,<span class="hljs-number">255</span>,<span class="hljs-number">255</span>,<span class="hljs-number">0.8</span>);
+  <span class="hljs-attr">--field-bg</span>: <span class="hljs-built_in">rgba</span>(<span class="hljs-number">255</span>,<span class="hljs-number">255</span>,<span class="hljs-number">255</span>,<span class="hljs-number">0.9</span>); <span class="hljs-attr">--popover-bg</span>: <span class="hljs-built_in">rgba</span>(<span class="hljs-number">255</span>,<span class="hljs-number">255</span>,<span class="hljs-number">255</span>,<span class="hljs-number">0.94</span>);
+
   <span class="hljs-comment">/* text */</span>
   <span class="hljs-attr">--ink-strong</span>: <span class="hljs-number">#172433</span>;  <span class="hljs-comment">/* page titles */</span>
   <span class="hljs-attr">--ink</span>: <span class="hljs-number">#1E2B3A</span>;         <span class="hljs-comment">/* body */</span>
   <span class="hljs-attr">--ink-2</span>: <span class="hljs-number">#3E4C5C</span>;       <span class="hljs-comment">/* secondary */</span>
-  <span class="hljs-attr">--ink-3</span>: <span class="hljs-number">#5A6878</span>;       <span class="hljs-comment">/* labels, meta — min 4.5:1 on glass */</span>
+  <span class="hljs-attr">--ink-3</span>: <span class="hljs-number">#556373</span>;       <span class="hljs-comment">/* labels, meta — min 4.5:1 on glass and on the bare wall */</span>
 
   <span class="hljs-comment">/* brand */</span>
   <span class="hljs-attr">--lake</span>: <span class="hljs-number">#2F6A8A</span>;        <span class="hljs-comment">/* primary buttons, active marks */</span>
@@ -119,15 +124,25 @@ content column; both wrap to one column under ~860 px.</li>
 title, one-sentence explanation, primary action → glass panels in grids with 16 px gaps.
 The Overview drops the bar: its header is the breadcrumb, a system state pill, bell and
 avatar, and its hero carries the search box.</li>
-<li>The sidebar holds only the everyday pages (Registry, Storage, Security, Operations). Its
-links scroll on short screens; the system status card (state, nodes up, version) stays
-pinned at its bottom and links to System status. A page without its own entry lights
-up the entry of its area: Sign-in, My account and Audit log under Access &amp; audit, the
-other Settings and System pages under Cluster &amp; replication.</li>
-<li><strong>Settings</strong> (<code>/settings</code>, avatar menu → Settings, ⌘K) gathers configuration and
-personal pages as rows in glass cards (720 px column): name, a one-line live status,
-chevron. Rows the user may not open are left out. Pages reached from it keep their
-addresses and show &quot;Settings / &lt;page&gt;&quot; in the breadcrumb.</li>
+<li>The sidebar has one entry per area (Registry, Storage, Security, Operations, Settings),
+and only the entries the user may open; a section left empty is dropped. Its links
+scroll on short screens; the system status card (state, nodes up, version) stays
+pinned at its bottom and links to System. Pages inside an area (a repository's
+settings, a task, a System tab) light up the area's entry.</li>
+<li><strong>System</strong> (<code>/system</code>) is one area with tabs: Status, Nodes and Logs for operators
+(<code>system:cluster:read</code>, Logs <code>system:cluster:admin</code>), About (version, addresses,
+dependency health, where the configuration lives) for everyone. <code>/system</code> opens the
+first tab the user may see; with only About there is no tab bar. The breadcrumb reads
+&quot;System / &lt;tab&gt;&quot;.</li>
+<li><strong>Settings</strong> has no page of its own: Authentication and Proxies are sidebar entries
+(breadcrumb &quot;Settings / &lt;page&gt;&quot;), personal pages (My account, access tokens, API
+reference) are in the avatar menu, and <code>/settings</code> opens the first settings page the
+user may see, or My account.</li>
+<li><strong>Audit log</strong> (<code>/audit</code>) is the one audit view; the Access page shows only the latest
+access events and links to it.</li>
+<li>Old addresses keep working as redirects: <code>/cluster</code> → System → Nodes (or About),
+<code>/settings/system</code> → System → About (anchors kept), <code>/access?tab=audit</code> → Audit log
+filtered to the tab's category.</li>
 <li>Tables live inside a panel; wide tables scroll horizontally inside it.</li>
 </ul>
 <h2 id="components">Components<a class="anchor" href="#components" aria-label="Link to this section">#</a></h2>
@@ -135,6 +150,8 @@ addresses and show &quot;Settings / &lt;page&gt;&quot; in the breadcrumb.</li>
 <li><strong>Panel</strong>: <code>background: var(--glass-bg); backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-border); box-shadow: var(--shadow-panel); border-radius: var(--r-panel)</code>.</li>
 <li><strong>Primary button</strong>: lake bg, white text, <code>--shadow-primary</code>, 44–48 px tall.</li>
 <li><strong>Secondary button</strong>: <code>--glass-bg-strong</code>, 1px hairline border, ink text.</li>
+<li><strong>Ghost button</strong>: transparent, ink-2 text, <code>--surface-muted</code> on hover; for row and toolbar actions that should not compete with the content (Waive, Browse).</li>
+<li><strong>Dark button</strong> (sign-in): <code>--button-dark-bg</code> / <code>--button-dark-ink</code>, darkest ink at dawn, lightest at dusk.</li>
 <li><strong>Segmented control</strong>: glass track; active segment white + <code>--shadow-raised</code> + lake-ink text.</li>
 <li><strong>Nav item</strong>: icon (18 px, 1.7 stroke, <code>currentColor</code>) + label; active = white bg, raised shadow, lake-ink, 700.</li>
 <li><strong>Pill</strong>: 12/600, <code>--r-pill</code>, tinted bg + matching ink (status, type, severity).</li>
@@ -153,10 +170,10 @@ pattern: arrows, Home/End, Escape returns focus to the avatar.</li>
 <li>Icon-only buttons have <code>aria-label</code>.</li>
 <li>Respect <code>prefers-reduced-motion</code>; transitions ≤ 150 ms, opacity/transform only.</li>
 <li>Fallback when <code>backdrop-filter</code> is unsupported: <code>--glass-bg</code> at 0.9 opacity.</li>
-<li>Dark mode (later milestone): &quot;dusk&quot; wallpaper variant, same structure.</li>
+<li>Dark mode: &quot;dusk&quot; (<code>&lt;html data-theme=&quot;dusk&quot;&gt;</code>, no toggle yet) redefines the same tokens. Stylesheets take surface colours from tokens, never <code>rgba(255,255,255,…)</code> or hex; <code>web/src/styles/tokens.test.ts</code> checks WCAG AA for every text/surface pair in both themes and that no stylesheet adds a literal colour.</li>
 </ul>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/DESIGN_SYSTEM.md"><code>docs/DESIGN_SYSTEM.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/DESIGN_SYSTEM.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/DESIGN_SYSTEM.md"><code>docs/DESIGN_SYSTEM.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/DESIGN_SYSTEM.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
       <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../product-spec/" rel="prev"><small>Previous</small><b>Product specification</b></a><a class="next" href="../roadmap/" rel="next"><small>Next</small><b>Roadmap</b></a></nav>
     </article>
   </main>

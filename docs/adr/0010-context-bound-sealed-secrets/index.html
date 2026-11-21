@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>0010. Sealed secrets bound to their row and field (hgs2) · Hangar docs</title>
+<meta name="description" content="0010. Sealed secrets bound to their row and field (hgs2): Date: 2026-11-21 · Status: Accepted Stored credentials (proxy upstream auth and URL passwords, S3…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/adr/0010-context-bound-sealed-secrets/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="0010. Sealed secrets bound to their row and field (hgs2)">
+<meta property="og:description" content="0010. Sealed secrets bound to their row and field (hgs2): Date: 2026-11-21 · Status: Accepted Stored credentials (proxy upstream auth and URL passwords, S3…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/adr/0010-context-bound-sealed-secrets/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="0010. Sealed secrets bound to their row and field (hgs2)">
+<meta name="twitter:description" content="0010. Sealed secrets bound to their row and field (hgs2): Date: 2026-11-21 · Status: Accepted Stored credentials (proxy upstream auth and URL passwords, S3…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"0010. Sealed secrets bound to their row and field (hgs2)","item":"https://ismoilovdevml.github.io/hangar/docs/adr/0010-context-bound-sealed-secrets/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../../guides/getting-started/">Getting started</a></li><li><a href="../../guides/">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/verify-release/">Verify a release</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../../guides/docker/">Docker &amp; OCI</a></li><li><a href="../../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../../guides/pypi/">PyPI</a></li><li><a href="../../guides/nuget/">NuGet</a></li><li><a href="../../guides/go/">Go modules</a></li><li><a href="../../guides/helm/">Helm charts</a></li><li><a href="../../guides/cargo/">Cargo</a></li><li><a href="../../guides/apt/">APT</a></li><li><a href="../../guides/rpm/">RPM</a></li><li><a href="../../guides/raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../../guides/config-as-code/">Configuration as code</a></li><li><a href="../../guides/webhooks/">Webhooks</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../" aria-current="page">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Project › <a href="../">Decision records</a></p>
+      <h1>0010. Sealed secrets bound to their row and field (hgs2)</h1>
+<p class="lead">Date: 2026-11-21 · Status: Accepted</p>
+<h2 id="context">Context<a class="anchor" href="#context" aria-label="Link to this section">#</a></h2>
+<p>Stored credentials (proxy upstream auth and URL passwords, S3 keys of blob
+stores, OIDC/LDAP secrets, outbound proxy passwords, repository signing keys,
+import task source credentials) are sealed by <code>internal/secrets</code> with
+envelope encryption (AES-256-GCM data key per value, wrapped by
+<code>security.secret_key</code>). Up to v0.1.x the format <code>hgs1.</code> used one fixed
+additional data for every ciphertext, so a sealed value opened in any row of
+any table. v0.1.9 closed the API replay (a ciphertext submitted as &quot;my
+password&quot; was opened and sent to the submitter's host) by refusing sealed
+input, but a value copied by other means (database access without the key, a
+restored backup) still opened wherever it was put.</p>
+<h2 id="decision">Decision<a class="anchor" href="#decision" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>New format <code>hgs2.&lt;key id&gt;.&lt;wrapped data key&gt;.&lt;ciphertext&gt;</code>: same envelope,
+but the ciphertext's GCM additional data is the value's encryption context
+<code>&quot;hgs2&quot; || be32(len) table || be32(len) row || be32(len) field</code>, and the
+wrapped data key's is <code>&quot;hgs2.&quot; || key id</code>. The context is not stored in the
+value; sealing and opening code both derive it from where the value lives.</li>
+<li>The row key is the row's identity, which never changes while the value is
+stored and is known before the row is written: the id of <code>repositories</code>,
+<code>blob_stores</code> and <code>tasks</code> (allocated with <code>gen_random_uuid()</code> before the
+insert, so a row re-created under the same name gets a new id), the key of
+<code>settings</code>, and the primary-key name of <code>outbound_proxies</code> and
+<code>signing_keys</code>. Fields are JSON paths (<code>proxy.auth.password</code>,
+<code>inventory.source.token</code>) or column names (<code>password</code>, <code>private_key</code>).</li>
+<li><code>hgs1</code> values still open (the context is required but not bound). Every
+write produces <code>hgs2</code>; a kept legacy value is re-sealed on save. On start,
+<code>hangar serve</code> upgrades every stored <code>hgs1</code> value (the existing secrets
+sweep, one transaction, idempotent). Key rotation (<code>Rewrap</code>) accepts both
+formats and writes <code>hgs2</code>.</li>
+<li>The plaintext guards of migrations 00050/00090/00285 accept <code>hgs1.</code> and
+<code>hgs2.</code> (migration 00330); plaintext stays refused. Sealed input is refused
+by the API in either format.</li>
+<li><code>hangar admin rotate-secrets --downgrade</code> writes every value back as <code>hgs1</code>,
+the only form Hangar before v0.2.0 reads.</li>
+</ul>
+<h2 id="consequences">Consequences<a class="anchor" href="#consequences" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>A sealed value moved to another row, field or table fails to open there
+(<code>ErrMalformed</code>); the startup sweep and <code>rotate-secrets</code> report it.</li>
+<li>Context binding does not protect the non-secret columns: someone who can
+write the database can still point a row's own URL elsewhere. Moving a
+secret between rows is what it prevents.</li>
+<li>Legacy <code>hgs1</code> values planted after the upgrade still open until the next
+sweep upgrades them; refusing <code>hgs1</code> outright is left for a later release.</li>
+<li>After the first start of v0.2.0 the database is no longer readable by
+v0.1.x. A downgrade needs <code>rotate-secrets --downgrade</code> first; a v0.1.x
+server started on <code>hgs2</code> values takes them for plaintext and seals them
+again, so its credentials stop working until re-entered.</li>
+</ul>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/adr/0010-context-bound-sealed-secrets.md"><code>docs/adr/0010-context-bound-sealed-secrets.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/adr/0010-context-bound-sealed-secrets.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../0009-rest-api-conventions/" rel="prev"><small>Previous</small><b>0009. REST API conventions</b></a><a class="next" href="../0011-postgresql-events-and-jobs/" rel="next"><small>Next</small><b>0011. PostgreSQL for events and jobs; NATS removed</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#context">Context</a></li><li class="l2"><a href="#decision">Decision</a></li><li class="l2"><a href="#consequences">Consequences</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

@@ -45,10 +45,10 @@
 <div class="layout">
   <nav class="side" id="side" aria-label="Documentation">
 <p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../../guides/getting-started/">Getting started</a></li><li><a href="../../guides/">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
-<p class="side-h">Install and run</p><ul><li><a href="../">Deploying Hangar</a></li><li><a href="./" aria-current="page">Requirements and sizing</a></li><li><a href="../install-compose/">Docker Compose</a></li><li><a href="../install-helm/">Helm (Kubernetes)</a></li><li><a href="../install-binary/">Binary and systemd</a></li><li><a href="../reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../first-admin/">First administrator</a></li><li><a href="../backup-restore/">Backup and restore</a></li><li><a href="../upgrade/">Upgrades</a></li><li><a href="../high-availability/">High availability</a></li><li><a href="../troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../">Deploying Hangar</a></li><li><a href="./" aria-current="page">Requirements and sizing</a></li><li><a href="../install-compose/">Docker Compose</a></li><li><a href="../install-helm/">Helm (Kubernetes)</a></li><li><a href="../install-binary/">Binary and systemd</a></li><li><a href="../reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../first-admin/">First administrator</a></li><li><a href="../backup-restore/">Backup and restore</a></li><li><a href="../upgrade/">Upgrades</a></li><li><a href="../verify-release/">Verify a release</a></li><li><a href="../high-availability/">High availability</a></li><li><a href="../troubleshooting/">Troubleshooting</a></li></ul>
 <p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
 <p class="side-h">Package formats</p><ul><li><a href="../../guides/docker/">Docker &amp; OCI</a></li><li><a href="../../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../../guides/pypi/">PyPI</a></li><li><a href="../../guides/nuget/">NuGet</a></li><li><a href="../../guides/go/">Go modules</a></li><li><a href="../../guides/helm/">Helm charts</a></li><li><a href="../../guides/cargo/">Cargo</a></li><li><a href="../../guides/apt/">APT</a></li><li><a href="../../guides/rpm/">RPM</a></li><li><a href="../../guides/raw/">Raw files</a></li></ul>
-<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../../guides/config-as-code/">Configuration as code</a></li><li><a href="../../guides/webhooks/">Webhooks</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
 <p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
 <p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
   </nav>
@@ -70,22 +70,17 @@
 <tr>
 <td>Hangar</td>
 <td>yes</td>
-<td>One static binary (<code>linux/amd64</code>, <code>linux/arm64</code>) or the container image <code>ghcr.io/ismoilovdevml/hangar</code> (distroless, runs as UID 65532). Stateless apart from the embedded NATS and filesystem blob options.</td>
+<td>One static binary (<code>linux/amd64</code>, <code>linux/arm64</code>) or the container image <code>ghcr.io/ismoilovdevml/hangar</code> (distroless, runs as UID 65532). Stateless apart from the filesystem blob option.</td>
 </tr>
 <tr>
 <td>PostgreSQL</td>
 <td>yes</td>
-<td>Version 16 or newer. Holds repositories, components, assets, users, tokens, audit log, task state. Hangar applies its own schema migrations.</td>
+<td>Version 16 or newer. Holds repositories, components, assets, users, tokens, audit log, task state, the job queue, and carries the events between nodes (LISTEN/NOTIFY: needs session-mode connections, not PgBouncer transaction pooling). Hangar applies its own schema migrations.</td>
 </tr>
 <tr>
 <td>Blob storage</td>
 <td>yes</td>
 <td><strong>S3-compatible</strong> (AWS S3, MinIO, Ceph RGW, ...) or a <strong>filesystem path</strong>. Blobs are content-addressed and immutable. Several nodes need S3 or a shared ReadWriteMany volume.</td>
-</tr>
-<tr>
-<td>NATS with JetStream</td>
-<td>yes</td>
-<td>Events and the job queue. Embedded in the process for a single node; an external cluster (3 nodes) for several nodes.</td>
 </tr>
 <tr>
 <td>Reverse proxy / ingress</td>
@@ -109,6 +104,15 @@ indexes, partitions and run migrations). Create a dedicated database and
 role:</p>
 <div class="code"><div class="code-head"><span>sql</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="sql"><code><span class="hljs-keyword">CREATE</span> ROLE hangar LOGIN PASSWORD <span class="hljs-string">&#x27;...&#x27;</span>;
 <span class="hljs-keyword">CREATE</span> DATABASE hangar OWNER hangar;</code></pre></div>
+<p>Global search uses the <code>pg_trgm</code> extension (part of PostgreSQL's contrib
+modules, included in the official packages and images) for substring
+matches. As the database owner, Hangar creates it itself (in schema
+<code>public</code> when it may create objects there). If it cannot, the migration
+still succeeds, Hangar logs a warning at start, and search reads every
+component for substring matches. To add the index later, run as a
+privileged role:</p>
+<div class="code"><div class="code-head"><span>sql</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="sql"><code><span class="hljs-keyword">CREATE</span> EXTENSION pg_trgm;
+<span class="hljs-keyword">SELECT</span> hangar_search_trgm();  <span class="hljs-comment">-- in Hangar&#x27;s database (and schema); returns true</span></code></pre></div>
 <p>S3 rights for the bucket: <code>s3:ListBucket</code>, <code>s3:GetBucketLocation</code>,
 <code>s3:ListBucketMultipartUploads</code> on the bucket, and <code>s3:GetObject</code>,
 <code>s3:PutObject</code>, <code>s3:DeleteObject</code>, <code>s3:AbortMultipartUpload</code>,
@@ -179,7 +183,6 @@ GC reclaim space; GC keeps unreferenced blobs for
 <code>storage.gc.grace_period</code> (48h) before deleting them.</li>
 <li><strong>Disk for filesystem blobs</strong>: local SSD or NFS. Each write is fsynced, so
 flush latency bounds publish throughput.</li>
-<li><strong>Embedded NATS</strong>: a few hundred MiB of disk under <code>nats.data_dir</code>.</li>
 </ul>
 <h2 id="network">Network<a class="anchor" href="#network" aria-label="Link to this section">#</a></h2>
 <div class="tbl-wrap"><table class="tbl">
@@ -224,9 +227,9 @@ flush latency bounds publish throughput.</li>
 </tr>
 <tr>
 <td>Hangar</td>
-<td>NATS</td>
-<td>4222</td>
-<td>external NATS only</td>
+<td>Hangar</td>
+<td>8080 (<code>server.node_url</code>)</td>
+<td>several nodes: System logs of other nodes (signed requests)</td>
 </tr>
 <tr>
 <td>Hangar</td>
@@ -258,7 +261,7 @@ transfer, of at least several minutes.</li>
 <p><a href="../reverse-proxy/">reverse-proxy.md</a> has the exact settings for Caddy,
 Traefik and the Kubernetes ingress controllers.</p>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/requirements.md"><code>docs/deploy/requirements.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/requirements.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/requirements.md"><code>docs/deploy/requirements.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/requirements.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
       <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../" rel="prev"><small>Previous</small><b>Deploying Hangar</b></a><a class="next" href="../install-compose/" rel="next"><small>Next</small><b>Docker Compose</b></a></nav>
     </article>
   </main>

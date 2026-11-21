@@ -45,10 +45,10 @@
 <div class="layout">
   <nav class="side" id="side" aria-label="Documentation">
 <p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../../guides/getting-started/">Getting started</a></li><li><a href="../../guides/">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
-<p class="side-h">Install and run</p><ul><li><a href="../">Deploying Hangar</a></li><li><a href="../requirements/">Requirements and sizing</a></li><li><a href="./" aria-current="page">Docker Compose</a></li><li><a href="../install-helm/">Helm (Kubernetes)</a></li><li><a href="../install-binary/">Binary and systemd</a></li><li><a href="../reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../first-admin/">First administrator</a></li><li><a href="../backup-restore/">Backup and restore</a></li><li><a href="../upgrade/">Upgrades</a></li><li><a href="../high-availability/">High availability</a></li><li><a href="../troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../">Deploying Hangar</a></li><li><a href="../requirements/">Requirements and sizing</a></li><li><a href="./" aria-current="page">Docker Compose</a></li><li><a href="../install-helm/">Helm (Kubernetes)</a></li><li><a href="../install-binary/">Binary and systemd</a></li><li><a href="../reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../first-admin/">First administrator</a></li><li><a href="../backup-restore/">Backup and restore</a></li><li><a href="../upgrade/">Upgrades</a></li><li><a href="../verify-release/">Verify a release</a></li><li><a href="../high-availability/">High availability</a></li><li><a href="../troubleshooting/">Troubleshooting</a></li></ul>
 <p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
 <p class="side-h">Package formats</p><ul><li><a href="../../guides/docker/">Docker &amp; OCI</a></li><li><a href="../../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../../guides/pypi/">PyPI</a></li><li><a href="../../guides/nuget/">NuGet</a></li><li><a href="../../guides/go/">Go modules</a></li><li><a href="../../guides/helm/">Helm charts</a></li><li><a href="../../guides/cargo/">Cargo</a></li><li><a href="../../guides/apt/">APT</a></li><li><a href="../../guides/rpm/">RPM</a></li><li><a href="../../guides/raw/">Raw files</a></li></ul>
-<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../../guides/config-as-code/">Configuration as code</a></li><li><a href="../../guides/webhooks/">Webhooks</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
 <p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
 <p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
   </nav>
@@ -170,7 +170,7 @@ offline databases and troubleshooting:
 </tr>
 <tr>
 <td><code>nats/</code></td>
-<td>Job queue state</td>
+<td>Only on installations from v0.1.x: the former NATS job queue, no longer used; remove it once you will not roll back (the installer says so)</td>
 <td>65532</td>
 </tr>
 <tr>
@@ -267,8 +267,9 @@ outbound proxy settings) and keeps the domain, URL, port, bind address,
 trusted proxies and resource limits;</li>
 <li>copies <code>/opt/hangar/hangar.yaml</code> (with your <code>auth.oidc</code> block and other
 settings) to <code>config/hangar.yaml</code>;</li>
-<li>stops the old stack, copies both volumes into <code>postgres/</code>, <code>blobs/</code> and
-<code>nats/</code>, starts the new stack and waits for <code>/readyz</code>.</li>
+<li>stops the old stack, copies both volumes into <code>postgres/</code> and <code>blobs/</code>
+(the NATS job state in the old volume is not used since v0.2.0), starts
+the new stack and waits for <code>/readyz</code>.</li>
 </ol>
 <p><code>/opt/hangar</code> and the volumes are never changed, so rollback is:</p>
 <div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-built_in">cd</span> /srv/hangar &amp;&amp; <span class="hljs-built_in">sudo</span> docker compose down
@@ -302,7 +303,8 @@ directory; install those with their own <code>install.sh</code>.</p>
 <li><strong>hangar</strong>: read-only root filesystem, all capabilities dropped,
 <code>no-new-privileges</code>, health check on <code>/readyz</code>, 60 s stop grace period.
 Published on <code>127.0.0.1</code> with Caddy, else on all addresses. Applies
-database migrations on start; NATS runs embedded.</li>
+database migrations on start. Events and background jobs go through
+PostgreSQL; there is no other service to run.</li>
 <li><strong>postgres</strong>: PostgreSQL 16 with data checksums, sized for an 8 GiB host,
 not published on the host.</li>
 <li><strong>trivy</strong>, <strong>hangar-scanner</strong> (<code>--with-trivy</code>): non-root (65532), all
@@ -317,7 +319,7 @@ Hangar trusts <code>X-Forwarded-*</code> only from the stack's network and
 <code>hangar:8080/metrics</code> (<a href="../../operations/monitoring/">monitoring.md</a>).</li>
 </ul>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/install-compose.md"><code>docs/deploy/install-compose.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/install-compose.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/install-compose.md"><code>docs/deploy/install-compose.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/install-compose.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
       <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../requirements/" rel="prev"><small>Previous</small><b>Requirements and sizing</b></a><a class="next" href="../install-helm/" rel="next"><small>Next</small><b>Helm (Kubernetes)</b></a></nav>
     </article>
   </main>

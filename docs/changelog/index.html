@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Changelog · Hangar docs</title>
-<meta name="description" content="Changelog: A security and reliability release. Upgrading is recommended for every installation; read Upgrade notes first. Foundation every later milestone…">
+<meta name="description" content="Changelog: NATS is gone: events and jobs run on the PostgreSQL every node already shares. Also new: webhooks, CI OIDC trusted publishing, hangar apply…">
 <link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/changelog/">
 <meta name="theme-color" content="#ffffff">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Hangar — self-hosted package registry">
 <meta property="og:title" content="Changelog">
-<meta property="og:description" content="Changelog: A security and reliability release. Upgrading is recommended for every installation; read Upgrade notes first. Foundation every later milestone…">
+<meta property="og:description" content="Changelog: NATS is gone: events and jobs run on the PostgreSQL every node already shares. Also new: webhooks, CI OIDC trusted publishing, hangar apply…">
 <meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/changelog/">
 <meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
 <meta property="og:image:width" content="1200">
@@ -18,7 +18,7 @@
 <meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Changelog">
-<meta name="twitter:description" content="Changelog: A security and reliability release. Upgrading is recommended for every installation; read Upgrade notes first. Foundation every later milestone…">
+<meta name="twitter:description" content="Changelog: NATS is gone: events and jobs run on the PostgreSQL every node already shares. Also new: webhooks, CI OIDC trusted publishing, hangar apply…">
 <meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preload" href="../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -45,10 +45,10 @@
 <div class="layout">
   <nav class="side" id="side" aria-label="Documentation">
 <p class="side-h">Start here</p><ul><li><a href="../">Introduction</a></li><li><a href="../guides/getting-started/">Getting started</a></li><li><a href="../guides/">Concepts and guides</a></li><li><a href="../faq/">FAQ</a></li></ul>
-<p class="side-h">Install and run</p><ul><li><a href="../deploy/">Deploying Hangar</a></li><li><a href="../deploy/requirements/">Requirements and sizing</a></li><li><a href="../deploy/install-compose/">Docker Compose</a></li><li><a href="../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../deploy/install-binary/">Binary and systemd</a></li><li><a href="../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../deploy/first-admin/">First administrator</a></li><li><a href="../deploy/backup-restore/">Backup and restore</a></li><li><a href="../deploy/upgrade/">Upgrades</a></li><li><a href="../deploy/high-availability/">High availability</a></li><li><a href="../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../deploy/">Deploying Hangar</a></li><li><a href="../deploy/requirements/">Requirements and sizing</a></li><li><a href="../deploy/install-compose/">Docker Compose</a></li><li><a href="../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../deploy/install-binary/">Binary and systemd</a></li><li><a href="../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../deploy/first-admin/">First administrator</a></li><li><a href="../deploy/backup-restore/">Backup and restore</a></li><li><a href="../deploy/upgrade/">Upgrades</a></li><li><a href="../deploy/verify-release/">Verify a release</a></li><li><a href="../deploy/high-availability/">High availability</a></li><li><a href="../deploy/troubleshooting/">Troubleshooting</a></li></ul>
 <p class="side-h">Using the UI</p><ul><li><a href="../ui/">The web UI</a></li><li><a href="../ui/repositories/">Repositories</a></li><li><a href="../ui/packages/">Packages &amp; search</a></li><li><a href="../ui/connect/">Connect a client</a></li><li><a href="../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../ui/access/">Access &amp; tokens</a></li><li><a href="../ui/tasks/">Scheduled tasks</a></li><li><a href="../ui/blob-stores/">Blob stores</a></li><li><a href="../ui/system/">Status, logs &amp; audit</a></li><li><a href="../ui/settings/">Settings</a></li></ul>
 <p class="side-h">Package formats</p><ul><li><a href="../guides/docker/">Docker &amp; OCI</a></li><li><a href="../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../guides/pypi/">PyPI</a></li><li><a href="../guides/nuget/">NuGet</a></li><li><a href="../guides/go/">Go modules</a></li><li><a href="../guides/helm/">Helm charts</a></li><li><a href="../guides/cargo/">Cargo</a></li><li><a href="../guides/apt/">APT</a></li><li><a href="../guides/rpm/">RPM</a></li><li><a href="../guides/raw/">Raw files</a></li></ul>
-<p class="side-h">Guides</p><ul><li><a href="../guides/migrate/">Move to Hangar</a></li><li><a href="../guides/ci/">CI integration</a></li><li><a href="../guides/access/">Access management</a></li><li><a href="../guides/sso/">Single sign-on</a></li><li><a href="../guides/routing-rules/">Routing rules</a></li><li><a href="../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../guides/api/">REST API</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../guides/migrate/">Move to Hangar</a></li><li><a href="../guides/ci/">CI integration</a></li><li><a href="../guides/ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../guides/config-as-code/">Configuration as code</a></li><li><a href="../guides/webhooks/">Webhooks</a></li><li><a href="../guides/access/">Access management</a></li><li><a href="../guides/sso/">Single sign-on</a></li><li><a href="../guides/routing-rules/">Routing rules</a></li><li><a href="../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../guides/api/">REST API</a></li></ul>
 <p class="side-h">Operations</p><ul><li><a href="../security/">Security</a></li><li><a href="../operations/monitoring/">Monitoring</a></li><li><a href="../operations/runbooks/">Alert runbooks</a></li><li><a href="../operations/performance/">Performance</a></li></ul>
 <p class="side-h">Project</p><ul><li><a href="../architecture/">Architecture</a></li><li><a href="../formats/">Format protocols</a></li><li><a href="../adr/">Decision records</a></li><li><a href="../product-spec/">Product specification</a></li><li><a href="../design-system/">Design system</a></li><li><a href="../roadmap/">Roadmap</a></li><li><a href="./" aria-current="page">Changelog</a></li></ul>
   </nav>
@@ -58,10 +58,183 @@
       <p class="crumb">Project</p>
       <h1>Changelog</h1>
 <h2 id="unreleased">Unreleased<a class="anchor" href="#unreleased" aria-label="Link to this section">#</a></h2>
+<h2 id="v020-2026-11-21">v0.2.0 (2026-11-21)<a class="anchor" href="#v020-2026-11-21" aria-label="Link to this section">#</a></h2>
+<p>NATS is gone: events and jobs run on the PostgreSQL every node already
+shares. Also new: webhooks, CI OIDC trusted publishing, <code>hangar apply</code>,
+context-bound secrets, faster search, and signed releases with the Helm chart
+on OCI. <strong>Read the upgrade notes before upgrading</strong>; full steps are in
+<a href="../deploy/upgrade/#upgrading-to-020">upgrade.md</a>.</p>
+<h3 id="upgrade-notes">Upgrade notes<a class="anchor" href="#upgrade-notes" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>Upgrade every node together.</strong> v0.1 and v0.2 nodes share neither events
+nor jobs. With Helm, add <code>--set updateStrategy.type=Recreate --set updateStrategy.rollingUpdate=null</code> to this one upgrade to avoid a mixed
+window. Run the migrations (00310–00380).</li>
+<li><strong>NATS is no longer used.</strong> Remove <code>nats:</code> and <code>HANGAR_NATS_*</code> (they are
+ignored, with one startup warning). Jobs still queued in JetStream are not
+carried over: drain the queue first (<code>hangar_job_queue_depth</code> = 0) to lose
+none; scheduled jobs run again on their next schedule. Afterwards the NATS
+server and its data can be removed:
+<ul>
+<li>Helm: the chart no longer deploys NATS; the upgrade deletes its
+StatefulSet, Services and Secret but keeps the PVCs (<code>kubectl delete pvc -l app.kubernetes.io/instance=&lt;release&gt;,app.kubernetes.io/component=nats</code>).
+Old <code>nats.*</code> values are accepted and ignored.</li>
+<li>Compose: <code>install.sh</code> no longer creates or mounts <code>&lt;data&gt;/nats</code> and leaves
+an existing one in place for a rollback; remove it when you no longer need
+one.</li>
+</ul>
+</li>
+<li><strong>PostgreSQL connections.</strong> Each node holds one extra long-lived session for
+the event listener: budget <code>nodes × (database.max_conns + 17)</code>. PgBouncer
+must use session pooling, not transaction pooling.</li>
+<li><strong>System logs across nodes</strong> are read over HTTP: each node's
+<code>server.node_url</code> (<code>HANGAR_SERVER_NODE_URL</code>) must be reachable from the
+others. The chart sets it to the pod IP and its NetworkPolicy allows
+pod-to-pod HTTP; elsewhere it defaults to the local address used to reach
+the database plus the port of <code>server.addr</code>.</li>
+<li><strong>Secrets are re-sealed as <code>hgs2</code></strong> (bound to their row and field) on the
+first start. <strong>v0.1.x cannot read them afterwards</strong>: to roll back, restore
+the pre-upgrade backup, or stop every v0.2 node and run <code>hangar admin rotate-secrets --downgrade</code> before starting v0.1.x (which also needs its
+NATS back).</li>
+<li><strong>Search</strong> pages stop at 10,000 results. <code>pg_trgm</code> is created by the
+migration when the database owner may; otherwise Hangar warns at start and
+<code>CREATE EXTENSION pg_trgm; SELECT hangar_search_trgm();</code> adds the index
+later.</li>
+<li><strong>Retention.</strong> New <code>tasks.run_retention</code> (default <code>2160h</code>, 90 days) prunes
+finished task runs; the first run after the upgrade deletes older ones (set
+<code>0s</code> to keep all). New <code>audit.retention</code> defaults to <code>0s</code>: audit history is
+kept unless you set a limit.</li>
+<li><strong>Dropped schema:</strong> the unused <code>nodes</code>, <code>replication_targets</code> and
+<code>replication_state</code> tables and <code>task_runs.node_id</code>.</li>
+<li><strong>Metrics renamed:</strong> <code>hangar_nats_connected</code> →
+<code>hangar_event_listener_connected</code>, <code>hangar_nats_reconnects_total</code> →
+<code>hangar_event_listener_reconnects_total</code>; new <code>hangar_job_queue_dead</code>.</li>
+<li><strong>Web UI addresses:</strong> <code>/cluster</code>, <code>/settings/system</code>, <code>/settings</code> and
+<code>/access?tab=audit</code> redirect to the new System area, Audit log and settings
+pages.</li>
+<li><strong>APT and RPM groups with proxy members</strong> need the remote's public keys in
+the proxy's <code>format.remote_keys</code>; without them the group answers 400.</li>
+</ul>
+<h3 id="events-and-jobs-on-postgresql">Events and jobs on PostgreSQL<a class="anchor" href="#events-and-jobs-on-postgresql" aria-label="Link to this section">#</a></h3>
+<ul>
+<li>Cache invalidation and live events use LISTEN/NOTIFY on one dedicated
+connection per node; after a reconnect every cache resyncs and live
+streams restart.</li>
+<li>Jobs (task runs, scans, policy jobs) are claimed from a <code>jobs</code> table with
+<code>FOR UPDATE SKIP LOCKED</code> under a lease that long jobs renew; expired leases
+are reclaimed, failed jobs are retried with backoff and kept as dead for 7
+days. One job per type at a time per node, as in v0.1.9.</li>
+<li>APT and RPM reindexing and npm state cleanup are durable, debounced jobs run
+once per repository: deleting 1,000 packages triggers one reindex, not one
+per node per package, and nothing is lost when a node restarts.</li>
+<li>System logs of other nodes are fetched over signed HTTP.</li>
+<li><code>/readyz</code> &quot;eventbus&quot; reports the listener; System status shows it with job
+counts.</li>
+</ul>
+<h3 id="new-features">New features<a class="anchor" href="#new-features" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>Webhooks</strong> (Settings › Webhooks, <code>/api/v1/webhooks</code>): component
+published, deleted, quarantined and released, repository created and
+deleted, and new scan findings, sent as generic JSON, Slack or Microsoft
+Teams messages. Deliveries are signed (<code>X-Hangar-Signature</code>, HMAC-SHA256),
+retried with backoff for about an hour from a PostgreSQL outbox, can be
+inspected and redelivered, and a webhook that keeps failing is disabled.
+URLs follow the outbound address policy of proxy remotes and are
+write-only; a URL on another host needs the secret again. New privilege
+<code>system:webhooks:read|admin</code>. See <a href="../guides/webhooks/">webhooks</a>.</li>
+<li><strong>CI OIDC trusted publishing</strong> (Settings › CI trust,
+<code>POST /api/v1/auth/oidc/exchange</code>): GitHub Actions, GitLab CI and other OIDC
+issuers trade their ID token for a short-lived token scoped by a trust
+policy (issuer, audience, claim conditions, service account, scopes,
+lifetime up to 1 h). Tokens are single-use per ID token, never listed or
+rotated, and revoked when their policy changes. GitHub and GitLab policies
+must pin the owner. Managing policies needs <code>system:settings:admin</code> and
+every privilege the policy grants. See <a href="../guides/ci-oidc/">CI OIDC</a>.</li>
+<li><strong>Configuration as code</strong>: <code>hangar apply -f FILE|DIR</code>, <code>hangar diff</code> and
+<code>hangar export</code> manage repositories (every format and type, with routing
+rules), blob stores, cleanup policies, roles and outbound proxies from YAML
+over the REST API. Plans are idempotent and ordered by dependency; secrets
+come from <code>valueFrom: {env|file}</code> and are never exported; <code>--prune</code> deletes
+only what the named apply set created or adopted (kept in the new
+<code>/resource-labels</code> API). JSON schema: <code>api/hangar-config.schema.json</code>. See
+<a href="../guides/config-as-code/">config as code</a>.</li>
+<li><strong>APT and RPM groups take proxy members.</strong> A remote's packages are listed
+next to hosted ones under the group's signature after the remote's own
+signature (InRelease/Release.gpg, repomd.xml.asc) is verified with
+<code>format.remote_keys</code>; quarantine, routing rules and offline members are
+respected. The web UI has a &quot;Remote signing keys&quot; field.</li>
+</ul>
+<h3 id="security">Security<a class="anchor" href="#security" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>Secrets bound to their place (<code>hgs2</code>)</strong>: a sealed value copied to another
+row or field can no longer be opened there, closing the replay path that
+v0.1.9 blocked at the API. Key rotation and the startup sweep upgrade
+<code>hgs1</code> values; see <a href="../adr/0010-context-bound-sealed-secrets/">ADR 0010</a>.</li>
+<li><strong>Login and failed-authentication rate limits are cluster-wide</strong> (new
+<code>rate_limit_buckets</code> table), not per node.</li>
+<li>Repository imports from APT, RPM, Cargo and PyPI sources bound
+decompression and memory; an oversized index fails the import instead of
+being read truncated.</li>
+<li>PyPI proxies hide quarantined cached files past the first 1,000 versions.</li>
+</ul>
+<h3 id="performance-and-reliability">Performance and reliability<a class="anchor" href="#performance-and-reliability" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>Search</strong> runs one statement over one match set with a trigram index for
+substrings: in a 100k-component test, an empty query went from 356 to
+127 ms and a query with no match from 17 to 0.6 ms.</li>
+<li><strong>Blob GC</strong> lists candidates from two partial indexes (a batch went from
+23–33 ms to under 1 ms).</li>
+<li><strong>Audit partitions</strong>: rows that landed in the default partition no longer
+block creating later months; months older than <code>audit.retention</code> are
+dropped when it is set.</li>
+<li><strong>S3</strong>: small reads and writes take one request instead of HEAD plus
+request; publishing no longer calls storage inside its database
+transaction, and a blob GC run racing a publish no longer fails it.</li>
+<li><strong>Outbound HTTP</strong> no longer takes a global lock per request; the client
+cache is bounded.</li>
+<li>System status shows OIDC and LDAP enabled from the web UI.</li>
+</ul>
+<h3 id="web-ui">Web UI<a class="anchor" href="#web-ui" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>One System area</strong> (<code>/system</code>: Status, Nodes, Logs, About) replaces
+Cluster, System status, System logs and Settings › System; users without
+cluster access land on About instead of an error. <strong>One Audit log</strong>
+(<code>/audit</code>); the Access page drops its Audit tab. The Settings hub is gone.</li>
+<li><strong>Dusk (dark) theme</strong> is readable: every colour comes from tokens checked
+for WCAG AA in both themes.</li>
+<li>An empty server's Overview starts with <strong>&quot;Create your first repository&quot;</strong>.</li>
+<li>Admins of some repositories (e.g. <code>repo:npm-*:admin</code>) can create
+repositories on the default blob store.</li>
+<li>Vulnerabilities: lighter row actions; the quarantined count is no longer
+cut off. Search: one search box, examples from your own repositories. New
+task: errors at each field. Most downloaded keeps npm scopes and Maven
+groups. Large package trees no longer recompute on every scroll.</li>
+<li>One dialog, confirmation, filter field, error message and permission check
+everywhere; the permission check now matches the server exactly.</li>
+<li>Unhashed static files (login wallpaper, favicon) are revalidated with an
+ETag.</li>
+<li>The demo's numbers agree across pages.</li>
+</ul>
+<h3 id="releases-deployment-and-docs">Releases, deployment and docs<a class="anchor" href="#releases-deployment-and-docs" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>Signed releases</strong>: both images (every platform), the Helm chart and every
+release file are signed with cosign (keyless, bound to the release
+workflow); SPDX SBOMs and SLSA provenance are attached. See
+<a href="../deploy/verify-release/">verify a release</a>.</li>
+<li><strong>Helm chart on OCI</strong>: <code>helm install hangar oci://ghcr.io/ismoilovdevml/charts/hangar --version 0.2.0</code>. Pod templates no
+longer repeat their selector labels (strict parsers such as kubeconform
+rejected them).</li>
+<li>The release gate also runs govulncheck, <code>npm audit</code>, Trivy on both images
+and kubeconform on the chart; Dependabot proposes weekly grouped updates.</li>
+<li>Every exported metric is documented (a test enforces it); the proxy
+upstream metrics and <code>hangar_routing_blocked_total</code> are on the dashboards.</li>
+<li>Docs: getting started lists all 11 formats and the real write policy
+default; README compares Hangar with Nexus, Artifactory and Harbor; a code
+of conduct, issue forms and a pull request template were added.</li>
+</ul>
 <h2 id="v019-2026-11-20">v0.1.9 (2026-11-20)<a class="anchor" href="#v019-2026-11-20" aria-label="Link to this section">#</a></h2>
 <p>A security and reliability release. Upgrading is recommended for every
 installation; read <strong>Upgrade notes</strong> first.</p>
-<h3 id="upgrade-notes">Upgrade notes<a class="anchor" href="#upgrade-notes" aria-label="Link to this section">#</a></h3>
+<h3 id="upgrade-notes-1">Upgrade notes<a class="anchor" href="#upgrade-notes-1" aria-label="Link to this section">#</a></h3>
 <ul>
 <li><strong>Repository-level proxies are checked like remote URLs.</strong> A repository
 whose <code>config.proxy.http.proxy</code> points at a private, loopback or
@@ -96,7 +269,7 @@ store is missing no longer writes to the <code>default</code> store.</li>
 <li>The development compose project is now <code>hangar-dev</code>, so its old volumes
 (<code>hangar_postgres</code>, …) are no longer used.</li>
 </ul>
-<h3 id="security">Security<a class="anchor" href="#security" aria-label="Link to this section">#</a></h3>
+<h3 id="security-1">Security<a class="anchor" href="#security-1" aria-label="Link to this section">#</a></h3>
 <ul>
 <li><strong>SSRF through a repository proxy (critical)</strong>: a repository's own
 <code>http.proxy</code> was added to the server-wide list of trusted proxy addresses,
@@ -187,7 +360,7 @@ minutes are ended, unless PostgreSQL or the database URL
 holding a batch of row locks across storage calls;
 <code>storage.gc.batch_size</code> is now how many candidates are listed at a time.</li>
 </ul>
-<h3 id="web-ui">Web UI<a class="anchor" href="#web-ui" aria-label="Link to this section">#</a></h3>
+<h3 id="web-ui-1">Web UI<a class="anchor" href="#web-ui-1" aria-label="Link to this section">#</a></h3>
 <ul>
 <li>Dialogs keep their own size and padding; the new-token dialog scrolls with
 Create and Cancel always visible, and only the chosen expiry is
@@ -1875,11 +2048,11 @@ fallback page is served.</li>
 <li><strong>Decisions</strong>: ADRs 0001–0009 in <code>docs/adr/</code>.</li>
 </ul>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/changelog.md"><code>docs/changelog.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/changelog.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/changelog.md"><code>docs/changelog.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/changelog.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
       <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../roadmap/" rel="prev"><small>Previous</small><b>Roadmap</b></a></nav>
     </article>
   </main>
-  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#unreleased">Unreleased</a></li><li class="l2"><a href="#v019-2026-11-20">v0.1.9 (2026-11-20)</a></li><li class="l3"><a href="#upgrade-notes">Upgrade notes</a></li><li class="l3"><a href="#security">Security</a></li><li class="l3"><a href="#reliability">Reliability</a></li><li class="l3"><a href="#web-ui">Web UI</a></li><li class="l3"><a href="#deployment-ci-and-observability">Deployment, CI and observability</a></li><li class="l2"><a href="#v018-2026-11-15">v0.1.8 (2026-11-15)</a></li><li class="l2"><a href="#v017-2026-11-09">v0.1.7 (2026-11-09)</a></li><li class="l2"><a href="#v016-2026-11-09">v0.1.6 (2026-11-09)</a></li><li class="l2"><a href="#v015-2026-11-05">v0.1.5 (2026-11-05)</a></li><li class="l2"><a href="#v014-2026-11-05">v0.1.4 (2026-11-05)</a></li><li class="l2"><a href="#v013-2026-11-04">v0.1.3 (2026-11-04)</a></li><li class="l2"><a href="#v012-2026-11-04">v0.1.2 (2026-11-04)</a></li><li class="l2"><a href="#v011-2026-11-04">v0.1.1 (2026-11-04)</a></li><li class="l2"><a href="#v010-2026-11-04">v0.1.0 (2026-11-04)</a></li><li class="l2"><a href="#m0--skeleton-2026-11-03">M0 — Skeleton (2026-11-03)</a></li></ul></aside>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#unreleased">Unreleased</a></li><li class="l2"><a href="#v020-2026-11-21">v0.2.0 (2026-11-21)</a></li><li class="l3"><a href="#upgrade-notes">Upgrade notes</a></li><li class="l3"><a href="#events-and-jobs-on-postgresql">Events and jobs on PostgreSQL</a></li><li class="l3"><a href="#new-features">New features</a></li><li class="l3"><a href="#security">Security</a></li><li class="l3"><a href="#performance-and-reliability">Performance and reliability</a></li><li class="l3"><a href="#web-ui">Web UI</a></li><li class="l3"><a href="#releases-deployment-and-docs">Releases, deployment and docs</a></li><li class="l2"><a href="#v019-2026-11-20">v0.1.9 (2026-11-20)</a></li><li class="l3"><a href="#upgrade-notes-1">Upgrade notes</a></li><li class="l3"><a href="#security-1">Security</a></li><li class="l3"><a href="#reliability">Reliability</a></li><li class="l3"><a href="#web-ui-1">Web UI</a></li><li class="l3"><a href="#deployment-ci-and-observability">Deployment, CI and observability</a></li><li class="l2"><a href="#v018-2026-11-15">v0.1.8 (2026-11-15)</a></li><li class="l2"><a href="#v017-2026-11-09">v0.1.7 (2026-11-09)</a></li><li class="l2"><a href="#v016-2026-11-09">v0.1.6 (2026-11-09)</a></li><li class="l2"><a href="#v015-2026-11-05">v0.1.5 (2026-11-05)</a></li><li class="l2"><a href="#v014-2026-11-05">v0.1.4 (2026-11-05)</a></li><li class="l2"><a href="#v013-2026-11-04">v0.1.3 (2026-11-04)</a></li><li class="l2"><a href="#v012-2026-11-04">v0.1.2 (2026-11-04)</a></li><li class="l2"><a href="#v011-2026-11-04">v0.1.1 (2026-11-04)</a></li><li class="l2"><a href="#v010-2026-11-04">v0.1.0 (2026-11-04)</a></li><li class="l2"><a href="#m0--skeleton-2026-11-03">M0 — Skeleton (2026-11-03)</a></li></ul></aside>
 </div>
 <div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
   <div class="search-box">

@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Verify a release · Hangar docs</title>
+<meta name="description" content="Every release is built by the repository's release workflow (.github/workflows/release.yml) from a version tag, after the test suite and the security scans…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/deploy/verify-release/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Verify a release">
+<meta property="og:description" content="Every release is built by the repository's release workflow (.github/workflows/release.yml) from a version tag, after the test suite and the security scans…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/deploy/verify-release/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Verify a release">
+<meta name="twitter:description" content="Every release is built by the repository's release workflow (.github/workflows/release.yml) from a version tag, after the test suite and the security scans…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Verify a release","item":"https://ismoilovdevml.github.io/hangar/docs/deploy/verify-release/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../../guides/getting-started/">Getting started</a></li><li><a href="../../guides/">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../">Deploying Hangar</a></li><li><a href="../requirements/">Requirements and sizing</a></li><li><a href="../install-compose/">Docker Compose</a></li><li><a href="../install-helm/">Helm (Kubernetes)</a></li><li><a href="../install-binary/">Binary and systemd</a></li><li><a href="../reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../first-admin/">First administrator</a></li><li><a href="../backup-restore/">Backup and restore</a></li><li><a href="../upgrade/">Upgrades</a></li><li><a href="./" aria-current="page">Verify a release</a></li><li><a href="../high-availability/">High availability</a></li><li><a href="../troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../../guides/docker/">Docker &amp; OCI</a></li><li><a href="../../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../../guides/pypi/">PyPI</a></li><li><a href="../../guides/nuget/">NuGet</a></li><li><a href="../../guides/go/">Go modules</a></li><li><a href="../../guides/helm/">Helm charts</a></li><li><a href="../../guides/cargo/">Cargo</a></li><li><a href="../../guides/apt/">APT</a></li><li><a href="../../guides/rpm/">RPM</a></li><li><a href="../../guides/raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../../guides/config-as-code/">Configuration as code</a></li><li><a href="../../guides/webhooks/">Webhooks</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Install and run</p>
+      <h1>Verify a release</h1>
+<p class="lead">Every release is built by the repository's release workflow
+(<code>.github/workflows/release.yml</code>) from a version tag, after the test suite and
+the security scans pass. From v0.2.0 on, that workflow also signs what it
+publishes, without a long-lived key: each signature carries a short-lived
+<a href="https://www.sigstore.dev/">Sigstore</a> certificate that names the workflow and
+the tag it ran for, and is recorded in the public Rekor transparency log.
+Earlier releases have <code>SHA256SUMS</code> only.</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Artifact</th>
+<th>Signature</th>
+<th>SBOM (SPDX JSON)</th>
+<th>Build provenance (SLSA)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ghcr.io/ismoilovdevml/hangar:&lt;version&gt;</code></td>
+<td>cosign, the index and each platform</td>
+<td>cosign attestation per platform, and on the release page</td>
+<td>GitHub attestation, also stored in the registry</td>
+</tr>
+<tr>
+<td><code>ghcr.io/ismoilovdevml/hangar-scanner:&lt;version&gt;</code></td>
+<td>cosign, the index and each platform</td>
+<td>cosign attestation per platform, and on the release page</td>
+<td>GitHub attestation, also stored in the registry</td>
+</tr>
+<tr>
+<td><code>oci://ghcr.io/ismoilovdevml/charts/hangar</code>, version <code>&lt;version&gt;</code></td>
+<td>cosign</td>
+<td></td>
+<td>GitHub attestation, also stored in the registry</td>
+</tr>
+<tr>
+<td>Release files (binaries, <code>install.sh</code>, <code>hangar-compose.tar.gz</code>, SBOMs, <code>SHA256SUMS</code>)</td>
+<td><code>&lt;file&gt;.sigstore.json</code> bundle next to each file</td>
+<td><code>hangar-linux-&lt;arch&gt;.spdx.json</code> for the binaries</td>
+<td>GitHub attestation</td>
+</tr>
+</tbody>
+</table></div>
+<p>You need <a href="https://docs.sigstore.dev/cosign/system_config/installation/">cosign</a>
+for signatures and SBOMs, and the <a href="https://cli.github.com/">GitHub CLI</a> (<code>gh</code>)
+for build provenance. The commands below have not yet been run against a
+published release: v0.2.0 is the first one signed this way. If a command
+fails on a release that should be signed, report it as described in
+<a href="https://github.com/ismoilovdevml/hangar/blob/main/SECURITY.md">SECURITY.md</a>.</p>
+<h2 id="the-identity-to-trust">The identity to trust<a class="anchor" href="#the-identity-to-trust" aria-label="Link to this section">#</a></h2>
+<p>A signature is only worth the identity you require. Release signatures come
+from this workflow file, run for a version tag:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>VERSION=0.2.0   <span class="hljs-comment"># the release, without the &quot;v&quot;</span>
+ISSUER=https://token.actions.githubusercontent.com
+IDENTITY=<span class="hljs-string">&quot;https://github.com/ismoilovdevml/hangar/.github/workflows/release.yml@refs/tags/v<span class="hljs-variable">$VERSION</span>&quot;</span></code></pre></div>
+<p>Use <code>--certificate-identity &quot;$IDENTITY&quot;</code> to accept exactly that release. To
+accept any release (for example in an admission policy), use this regular
+expression instead. It also accepts a release re-run by hand from <code>main</code>
+(the workflow's <em>Run workflow</em> button), which signs with
+<code>@refs/heads/main</code>; drop that alternative if you only trust tag pushes:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>IDENTITY_RE=<span class="hljs-string">&#x27;^https://github\.com/ismoilovdevml/hangar/\.github/workflows/release\.yml@refs/(tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?|heads/main)$&#x27;</span></code></pre></div>
+<p>Every command below takes either
+<code>--certificate-identity &quot;$IDENTITY&quot;</code> or
+<code>--certificate-identity-regexp &quot;$IDENTITY_RE&quot;</code>, always together with
+<code>--certificate-oidc-issuer &quot;$ISSUER&quot;</code>. Never verify without them: a
+signature by anyone else's workflow would pass.</p>
+<h2 id="container-images">Container images<a class="anchor" href="#container-images" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>cosign verify <span class="hljs-string">&quot;ghcr.io/ismoilovdevml/hangar:<span class="hljs-variable">$VERSION</span>&quot;</span> \
+  --certificate-identity <span class="hljs-string">&quot;<span class="hljs-variable">$IDENTITY</span>&quot;</span> --certificate-oidc-issuer <span class="hljs-string">&quot;<span class="hljs-variable">$ISSUER</span>&quot;</span>
+
+cosign verify <span class="hljs-string">&quot;ghcr.io/ismoilovdevml/hangar-scanner:<span class="hljs-variable">$VERSION</span>&quot;</span> \
+  --certificate-identity <span class="hljs-string">&quot;<span class="hljs-variable">$IDENTITY</span>&quot;</span> --certificate-oidc-issuer <span class="hljs-string">&quot;<span class="hljs-variable">$ISSUER</span>&quot;</span></code></pre></div>
+<p>A tag can be moved; a digest cannot. Verify, then deploy the digest that was
+verified (<code>cosign verify</code> prints it as <code>docker-manifest-digest</code>):</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>cosign verify <span class="hljs-string">&quot;ghcr.io/ismoilovdevml/hangar:<span class="hljs-variable">$VERSION</span>&quot;</span> \
+  --certificate-identity <span class="hljs-string">&quot;<span class="hljs-variable">$IDENTITY</span>&quot;</span> --certificate-oidc-issuer <span class="hljs-string">&quot;<span class="hljs-variable">$ISSUER</span>&quot;</span> |
+  jq -r <span class="hljs-string">&#x27;.[0].critical.image.&quot;docker-manifest-digest&quot;&#x27;</span></code></pre></div>
+<p>Each platform's manifest is signed too, so pulling
+<code>ghcr.io/ismoilovdevml/hangar@sha256:&lt;platform digest&gt;</code> verifies the same way.</p>
+<h3 id="sboms">SBOMs<a class="anchor" href="#sboms" aria-label="Link to this section">#</a></h3>
+<p>The SPDX SBOM of each platform is attached to the image as a signed
+attestation:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>cosign verify-attestation --<span class="hljs-built_in">type</span> spdxjson <span class="hljs-string">&quot;ghcr.io/ismoilovdevml/hangar:<span class="hljs-variable">$VERSION</span>&quot;</span> \
+  --certificate-identity <span class="hljs-string">&quot;<span class="hljs-variable">$IDENTITY</span>&quot;</span> --certificate-oidc-issuer <span class="hljs-string">&quot;<span class="hljs-variable">$ISSUER</span>&quot;</span> |
+  jq -r <span class="hljs-string">&#x27;.payload&#x27;</span> | <span class="hljs-built_in">base64</span> -d | jq -r <span class="hljs-string">&#x27;.predicate.name&#x27;</span></code></pre></div>
+<p>To feed an SBOM to a scanner, take the predicate of one of them
+(<code>... | base64 -d | jq '.predicate' &gt; hangar.spdx.json</code>), or download
+<code>hangar-image-linux-amd64.spdx.json</code> (and <code>arm64</code>, and the
+<code>hangar-scanner-image-*</code> files) from the release page and verify its bundle
+like any other release file.</p>
+<h2 id="helm-chart">Helm chart<a class="anchor" href="#helm-chart" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>cosign verify <span class="hljs-string">&quot;ghcr.io/ismoilovdevml/charts/hangar:<span class="hljs-variable">$VERSION</span>&quot;</span> \
+  --certificate-identity <span class="hljs-string">&quot;<span class="hljs-variable">$IDENTITY</span>&quot;</span> --certificate-oidc-issuer <span class="hljs-string">&quot;<span class="hljs-variable">$ISSUER</span>&quot;</span>
+
+helm install hangar oci://ghcr.io/ismoilovdevml/charts/hangar --version <span class="hljs-string">&quot;<span class="hljs-variable">$VERSION</span>&quot;</span></code></pre></div>
+<p>The chart installs the two images above at the same version, so verify them
+as well.</p>
+<h2 id="binaries-installsh-and-the-compose-stack">Binaries, install.sh and the compose stack<a class="anchor" href="#binaries-installsh-and-the-compose-stack" aria-label="Link to this section">#</a></h2>
+<p>Download the files you need with their <code>.sigstore.json</code> bundles and
+<code>SHA256SUMS</code> from the release page, then check the sums and the signature of
+<code>SHA256SUMS</code>, which covers every file:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>base=https://github.com/ismoilovdevml/hangar/releases/download/v<span class="hljs-variable">$VERSION</span>
+curl -fsSLO <span class="hljs-string">&quot;<span class="hljs-variable">$base</span>/hangar-linux-amd64&quot;</span>
+curl -fsSLO <span class="hljs-string">&quot;<span class="hljs-variable">$base</span>/SHA256SUMS&quot;</span>
+curl -fsSLO <span class="hljs-string">&quot;<span class="hljs-variable">$base</span>/SHA256SUMS.sigstore.json&quot;</span>
+
+cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity <span class="hljs-string">&quot;<span class="hljs-variable">$IDENTITY</span>&quot;</span> --certificate-oidc-issuer <span class="hljs-string">&quot;<span class="hljs-variable">$ISSUER</span>&quot;</span>
+<span class="hljs-built_in">sha256sum</span> -c SHA256SUMS --ignore-missing</code></pre></div>
+<p>Each file also has its own bundle, so one file can be checked without
+<code>SHA256SUMS</code>. For the installer, verify before you run it instead of piping
+it into a shell:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -fsSLO <span class="hljs-string">&quot;<span class="hljs-variable">$base</span>/install.sh&quot;</span>
+curl -fsSLO <span class="hljs-string">&quot;<span class="hljs-variable">$base</span>/install.sh.sigstore.json&quot;</span>
+cosign verify-blob install.sh --bundle install.sh.sigstore.json \
+  --certificate-identity <span class="hljs-string">&quot;<span class="hljs-variable">$IDENTITY</span>&quot;</span> --certificate-oidc-issuer <span class="hljs-string">&quot;<span class="hljs-variable">$ISSUER</span>&quot;</span>
+<span class="hljs-built_in">sudo</span> bash install.sh --version <span class="hljs-string">&quot;v<span class="hljs-variable">$VERSION</span>&quot;</span></code></pre></div>
+<h2 id="build-provenance">Build provenance<a class="anchor" href="#build-provenance" aria-label="Link to this section">#</a></h2>
+<p>The release workflow records SLSA build provenance for both images, the chart
+and every release file: which repository, workflow, commit and runner built
+it. Check it with the GitHub CLI:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>gh attestation verify <span class="hljs-string">&quot;oci://ghcr.io/ismoilovdevml/hangar:<span class="hljs-variable">$VERSION</span>&quot;</span> --repo ismoilovdevml/hangar
+gh attestation verify <span class="hljs-string">&quot;oci://ghcr.io/ismoilovdevml/hangar-scanner:<span class="hljs-variable">$VERSION</span>&quot;</span> --repo ismoilovdevml/hangar
+gh attestation verify <span class="hljs-string">&quot;oci://ghcr.io/ismoilovdevml/charts/hangar:<span class="hljs-variable">$VERSION</span>&quot;</span> --repo ismoilovdevml/hangar
+gh attestation verify hangar-linux-amd64 --repo ismoilovdevml/hangar</code></pre></div>
+<h2 id="enforcing-it-in-kubernetes">Enforcing it in Kubernetes<a class="anchor" href="#enforcing-it-in-kubernetes" aria-label="Link to this section">#</a></h2>
+<p>An admission controller can refuse unsigned images: Kyverno's
+<code>verifyImages</code> rule or the Sigstore policy-controller, with the issuer above
+and <code>IDENTITY_RE</code> as the subject regular expression, for
+<code>ghcr.io/ismoilovdevml/hangar*</code>. Pin the server image by the verified digest
+with the chart's <code>image.digest</code> value (it takes precedence over <code>image.tag</code>),
+so what runs is what was checked. The scan adapter image
+(<code>imageScanning.scanner.image</code>) has no digest value; it is pulled by tag.</p>
+<h2 id="mirrors-and-air-gapped-installs">Mirrors and air-gapped installs<a class="anchor" href="#mirrors-and-air-gapped-installs" aria-label="Link to this section">#</a></h2>
+<p><code>cosign copy</code> copies an image together with its signatures and attestations:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>cosign copy <span class="hljs-string">&quot;ghcr.io/ismoilovdevml/hangar:<span class="hljs-variable">$VERSION</span>&quot;</span> <span class="hljs-string">&quot;registry.internal.example/hangar:<span class="hljs-variable">$VERSION</span>&quot;</span></code></pre></div>
+<p>Verify against the mirror with the same identity. Offline verification
+(without reaching Rekor) needs the bundle and a trusted root: see
+<code>cosign verify --help</code> (<code>--offline</code>, <code>--trusted-root</code>).</p>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/verify-release.md"><code>docs/deploy/verify-release.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/verify-release.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../upgrade/" rel="prev"><small>Previous</small><b>Upgrades</b></a><a class="next" href="../high-availability/" rel="next"><small>Next</small><b>High availability</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#the-identity-to-trust">The identity to trust</a></li><li class="l2"><a href="#container-images">Container images</a></li><li class="l3"><a href="#sboms">SBOMs</a></li><li class="l2"><a href="#helm-chart">Helm chart</a></li><li class="l2"><a href="#binaries-installsh-and-the-compose-stack">Binaries, install.sh and the compose stack</a></li><li class="l2"><a href="#build-provenance">Build provenance</a></li><li class="l2"><a href="#enforcing-it-in-kubernetes">Enforcing it in Kubernetes</a></li><li class="l2"><a href="#mirrors-and-air-gapped-installs">Mirrors and air-gapped installs</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

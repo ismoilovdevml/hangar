@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Install with Helm · Hangar docs</title>
-<meta name="description" content="The chart in deploy/helm/hangar runs Hangar as a stateless Deployment with two or more replicas against an external PostgreSQL and S3, and can deploy a…">
+<meta name="description" content="The chart in deploy/helm/hangar runs Hangar as a stateless Deployment with two or more replicas against an external PostgreSQL and S3. PostgreSQL also…">
 <link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/deploy/install-helm/">
 <meta name="theme-color" content="#ffffff">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Hangar — self-hosted package registry">
 <meta property="og:title" content="Install with Helm">
-<meta property="og:description" content="The chart in deploy/helm/hangar runs Hangar as a stateless Deployment with two or more replicas against an external PostgreSQL and S3, and can deploy a…">
+<meta property="og:description" content="The chart in deploy/helm/hangar runs Hangar as a stateless Deployment with two or more replicas against an external PostgreSQL and S3. PostgreSQL also…">
 <meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/deploy/install-helm/">
 <meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
 <meta property="og:image:width" content="1200">
@@ -18,7 +18,7 @@
 <meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Install with Helm">
-<meta name="twitter:description" content="The chart in deploy/helm/hangar runs Hangar as a stateless Deployment with two or more replicas against an external PostgreSQL and S3, and can deploy a…">
+<meta name="twitter:description" content="The chart in deploy/helm/hangar runs Hangar as a stateless Deployment with two or more replicas against an external PostgreSQL and S3. PostgreSQL also…">
 <meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -45,10 +45,10 @@
 <div class="layout">
   <nav class="side" id="side" aria-label="Documentation">
 <p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../../guides/getting-started/">Getting started</a></li><li><a href="../../guides/">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
-<p class="side-h">Install and run</p><ul><li><a href="../">Deploying Hangar</a></li><li><a href="../requirements/">Requirements and sizing</a></li><li><a href="../install-compose/">Docker Compose</a></li><li><a href="./" aria-current="page">Helm (Kubernetes)</a></li><li><a href="../install-binary/">Binary and systemd</a></li><li><a href="../reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../first-admin/">First administrator</a></li><li><a href="../backup-restore/">Backup and restore</a></li><li><a href="../upgrade/">Upgrades</a></li><li><a href="../high-availability/">High availability</a></li><li><a href="../troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../">Deploying Hangar</a></li><li><a href="../requirements/">Requirements and sizing</a></li><li><a href="../install-compose/">Docker Compose</a></li><li><a href="./" aria-current="page">Helm (Kubernetes)</a></li><li><a href="../install-binary/">Binary and systemd</a></li><li><a href="../reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../first-admin/">First administrator</a></li><li><a href="../backup-restore/">Backup and restore</a></li><li><a href="../upgrade/">Upgrades</a></li><li><a href="../verify-release/">Verify a release</a></li><li><a href="../high-availability/">High availability</a></li><li><a href="../troubleshooting/">Troubleshooting</a></li></ul>
 <p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
 <p class="side-h">Package formats</p><ul><li><a href="../../guides/docker/">Docker &amp; OCI</a></li><li><a href="../../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../../guides/pypi/">PyPI</a></li><li><a href="../../guides/nuget/">NuGet</a></li><li><a href="../../guides/go/">Go modules</a></li><li><a href="../../guides/helm/">Helm charts</a></li><li><a href="../../guides/cargo/">Cargo</a></li><li><a href="../../guides/apt/">APT</a></li><li><a href="../../guides/rpm/">RPM</a></li><li><a href="../../guides/raw/">Raw files</a></li></ul>
-<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../../guides/config-as-code/">Configuration as code</a></li><li><a href="../../guides/webhooks/">Webhooks</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
 <p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
 <p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
   </nav>
@@ -58,8 +58,9 @@
       <p class="crumb">Install and run</p>
       <h1>Install with Helm</h1>
 <p class="lead">The chart in <code>deploy/helm/hangar</code> runs Hangar as a stateless Deployment with
-two or more replicas against an external PostgreSQL and S3, and can deploy a
-3-node NATS JetStream cluster for it. Every value is described in
+two or more replicas against an external PostgreSQL and S3. PostgreSQL also
+carries the events between pods and the job queue: there is no other
+stateful service. Every value is described in
 <a href="https://github.com/ismoilovdevml/hangar/blob/main/deploy/helm/hangar/values.yaml"><code>values.yaml</code></a> and checked by
 <code>values.schema.json</code>; unsupported combinations fail at render time with an
 explanation.</p>
@@ -69,12 +70,23 @@ explanation.</p>
 shutdown), Helm 3.8+.</li>
 <li>PostgreSQL 16+ reachable from the cluster: a managed service,
 CloudNativePG, or similar. Create a database and an owner role
-(<a href="../requirements/">requirements.md</a>).</li>
+(<a href="../requirements/">requirements.md</a>). Allow <code>replicas x (database.max_conns + 17)</code> connections; a PgBouncer in front must use
+session pooling, not transaction pooling
+(<a href="../high-availability/#what-each-node-needs">high-availability.md</a>).</li>
 <li>S3-compatible storage and a bucket, or a ReadWriteMany storage class for
 <code>storage.kind=fs</code> with more than one replica.</li>
 <li>An ingress controller (ingress-nginx, Traefik, ...) or a Gateway API
 implementation, and certificates (for example cert-manager).</li>
 </ul>
+<h2 id="the-chart">The chart<a class="anchor" href="#the-chart" aria-label="Link to this section">#</a></h2>
+<p>Each release publishes the chart as an OCI artifact, signed like the images
+(<a href="../verify-release/#helm-chart">verify a release</a>). Its version and
+<code>appVersion</code> are the release version, so by default it installs the images of
+that release:</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>helm show values oci://ghcr.io/ismoilovdevml/charts/hangar --version &lt;version&gt;</code></pre></div>
+<p>The OCI chart exists from v0.2.0 on. For an earlier release, or to install
+from a checkout, use the path <code>deploy/helm/hangar</code> of that tag wherever this
+page says <code>oci://ghcr.io/ismoilovdevml/charts/hangar --version &lt;version&gt;</code>.</p>
 <h2 id="minimal-production-install">Minimal production install<a class="anchor" href="#minimal-production-install" aria-label="Link to this section">#</a></h2>
 <p>Create the secrets out of band (or with your secret manager / External
 Secrets):</p>
@@ -95,8 +107,8 @@ kubectl -n hangar create secret generic hangar-admin \
   --from-literal=admin-username=admin \
   --from-literal=admin-password=<span class="hljs-string">&quot;<span class="hljs-subst">$(openssl rand -base64 18)</span>&quot;</span></code></pre></div>
 <p><code>values-prod.yaml</code>:</p>
-<div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-attr">image:</span>
-  <span class="hljs-attr">tag:</span> <span class="hljs-string">&quot;&lt;version&gt;&quot;</span>          <span class="hljs-comment"># pin a release</span>
+<div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-comment"># image.tag defaults to the chart&#x27;s appVersion: `--version` picks the release.</span>
+<span class="hljs-comment"># Pin the verified digest with image.digest (verify-release.md).</span>
 <span class="hljs-attr">replicaCount:</span> <span class="hljs-number">3</span>
 
 <span class="hljs-attr">config:</span>
@@ -123,9 +135,6 @@ kubectl -n hangar create secret generic hangar-admin \
 <span class="hljs-attr">bootstrapAdmin:</span>
   <span class="hljs-attr">existingSecret:</span> <span class="hljs-string">hangar-admin</span>
 
-<span class="hljs-attr">nats:</span>
-  <span class="hljs-attr">mode:</span> <span class="hljs-string">bundled</span>             <span class="hljs-comment"># 3-node JetStream cluster with persistent volumes</span>
-
 <span class="hljs-attr">ingress:</span>
   <span class="hljs-attr">enabled:</span> <span class="hljs-literal">true</span>
   <span class="hljs-attr">className:</span> <span class="hljs-string">nginx</span>
@@ -145,7 +154,8 @@ kubectl -n hangar create secret generic hangar-admin \
         <span class="hljs-attr">matchLabels:</span> { <span class="hljs-attr">kubernetes.io/metadata.name:</span> <span class="hljs-string">ingress-nginx</span> }
     <span class="hljs-bullet">-</span> <span class="hljs-attr">namespaceSelector:</span>
         <span class="hljs-attr">matchLabels:</span> { <span class="hljs-attr">kubernetes.io/metadata.name:</span> <span class="hljs-string">monitoring</span> }</code></pre></div>
-<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>helm upgrade --install hangar deploy/helm/hangar -n hangar -f values-prod.yaml --<span class="hljs-built_in">wait</span>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>helm upgrade --install hangar oci://ghcr.io/ismoilovdevml/charts/hangar --version &lt;version&gt; \
+  -n hangar -f values-prod.yaml --<span class="hljs-built_in">wait</span>
 kubectl -n hangar rollout status deploy/hangar
 helm <span class="hljs-built_in">test</span> hangar -n hangar        <span class="hljs-comment"># the Service answers /readyz</span></code></pre></div>
 <p>The release notes printed by Helm repeat the URL, the Docker login host and
@@ -162,15 +172,15 @@ after the first sign-in (<a href="../first-admin/">first-admin.md</a>).</p>
 <tbody>
 <tr>
 <td>Deployment</td>
-<td><code>replicaCount</code> or the HPA. Read-only root filesystem, non-root (65532), all capabilities dropped, seccomp <code>RuntimeDefault</code>, no service account token. Probes: startup and liveness on <code>/healthz</code>, readiness on <code>/readyz</code> (database, blob store, NATS). Soft pod anti-affinity by host (<code>podAntiAffinityPreset: hard</code> to require it), <code>topologySpreadConstraints</code> for zones. Rolling updates with <code>maxUnavailable: 0</code>. Pods restart when the config or secret values change.</td>
+<td><code>replicaCount</code> or the HPA. Read-only root filesystem, non-root (65532), all capabilities dropped, seccomp <code>RuntimeDefault</code>, no service account token. Probes: startup and liveness on <code>/healthz</code>, readiness on <code>/readyz</code> (database, blob store, event listener). <code>HANGAR_SERVER_NODE_URL=http://$(POD_IP):8080</code>, where the other pods read its System logs (unless <code>config.server.node_url</code> is set, which is refused with more than one replica). Soft pod anti-affinity by host (<code>podAntiAffinityPreset: hard</code> to require it), <code>topologySpreadConstraints</code> for zones. Rolling updates with <code>maxUnavailable: 0</code>. Pods restart when the config or secret values change.</td>
 </tr>
 <tr>
 <td>ConfigMap</td>
-<td><code>hangar.yaml</code> rendered from <code>config</code>. The chart sets <code>server.addr</code>, <code>database.migrate_on_start</code>, <code>storage.*</code> and <code>nats.*</code> itself and refuses secrets placed in <code>config</code>.</td>
+<td><code>hangar.yaml</code> rendered from <code>config</code>. The chart sets <code>server.addr</code>, <code>database.migrate_on_start</code> and <code>storage.*</code> itself, drops a leftover <code>nats</code> section, and refuses secrets placed in <code>config</code>.</td>
 </tr>
 <tr>
 <td>Secret</td>
-<td>Only what no <code>existingSecret</code> provides. Generated values (<code>secretKey</code>, <code>dockerTokenKey</code>, the NATS password) are created once and kept on upgrades; the Secret is kept on <code>helm uninstall</code>.</td>
+<td>Only what no <code>existingSecret</code> provides. Generated values (<code>secretKey</code>, <code>dockerTokenKey</code>) are created once and kept on upgrades; the Secret is kept on <code>helm uninstall</code>.</td>
 </tr>
 <tr>
 <td>Job (hook)</td>
@@ -193,10 +203,6 @@ after the first sign-in (<a href="../first-admin/">first-admin.md</a>).</p>
 <td><code>autoscaling.enabled</code>; scales in by one pod at most every two minutes.</td>
 </tr>
 <tr>
-<td>NATS StatefulSet</td>
-<td><code>nats.mode: bundled</code>: JetStream cluster with password auth, persistent volumes, lame-duck shutdown, PDB, network policy (clients: Hangar pods only). Hangar pods wait for it with an init container.</td>
-</tr>
-<tr>
 <td>ServiceMonitor</td>
 <td>Prometheus Operator scraping <code>/metrics</code> on every pod.</td>
 </tr>
@@ -206,7 +212,7 @@ after the first sign-in (<a href="../first-admin/">first-admin.md</a>).</p>
 </tr>
 <tr>
 <td>NetworkPolicy</td>
-<td>Ingress to Hangar only from <code>networkPolicy.ingressFrom</code> (any source when empty), plus the chart's <code>helm test</code> pod and, with image scanning, the scan adapter. With image scanning the Trivy server accepts only Hangar and the scan adapter, and the scan adapter only Hangar. Optional egress restriction (<code>networkPolicy.egress</code>): DNS, NATS and the rules you list. Proxy repositories need their remotes or the corporate proxy in that list.</td>
+<td>Ingress to Hangar only from <code>networkPolicy.ingressFrom</code> (any source when empty), plus the other Hangar pods (System logs), the chart's <code>helm test</code> pod and, with image scanning, the scan adapter. With image scanning the Trivy server accepts only Hangar and the scan adapter, and the scan adapter only Hangar. Optional egress restriction (<code>networkPolicy.egress</code>): DNS, the other Hangar pods on 8080 and the rules you list. PostgreSQL, the blob store, and the remotes of proxy repositories (or the corporate proxy) need to be in that list.</td>
 </tr>
 </tbody>
 </table></div>
@@ -228,14 +234,6 @@ after the first sign-in (<a href="../first-admin/">first-admin.md</a>).</p>
 <td><code>existingSecret</code> / <code>accessKeyID</code>+<code>secretAccessKey</code>, or none: the AWS default chain (IRSA, EKS Pod Identity) with <code>serviceAccount.annotations</code>.</td>
 </tr>
 <tr>
-<td><code>nats.mode</code></td>
-<td><code>bundled</code> (default), <code>external</code> (<code>nats.external.url</code> or <code>existingSecret</code>, JetStream required), <code>embedded</code> (one replica only).</td>
-</tr>
-<tr>
-<td><code>nats.streamReplicas</code></td>
-<td>Replicas of the job stream (<code>nats.replicas</code>), 1 to 5. <code>0</code> (default): <code>nats.bundled.replicas</code> for <code>bundled</code>, 1 otherwise. See <a href="../high-availability/#job-queue-replicas">high-availability.md</a>.</td>
-</tr>
-<tr>
 <td><code>migrations.mode</code></td>
 <td><code>job</code> (default), <code>onStart</code> (every pod migrates on start; an advisory lock lets one apply and the others wait), <code>none</code> (you run <code>hangar migrate up</code>).</td>
 </tr>
@@ -253,8 +251,7 @@ after the first sign-in (<a href="../first-admin/">first-admin.md</a>).</p>
 <p>Tools that render the chart offline cannot read existing Secrets, so values
 generated by the chart would change on every render. Provide all of them:
 <code>secretKey.existingSecret</code> (or <code>value</code>), <code>dockerTokenKey.existingSecret</code>,
-<code>nats.bundled.existingSecret</code> (letters and digits only), plus
-<code>database.existingSecret</code> and <code>storage.s3.existingSecret</code>. Argo CD runs the
+plus <code>database.existingSecret</code> and <code>storage.s3.existingSecret</code>. Argo CD runs the
 migration hook as a <code>PreSync</code> hook.</p>
 <h2 id="image-scanning">Image scanning<a class="anchor" href="#image-scanning" aria-label="Link to this section">#</a></h2>
 <div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-attr">imageScanning:</span>
@@ -297,16 +294,23 @@ Details: <a href="../../guides/vulnerabilities/#container-images">vulnerabilitie
 <h2 id="checking-the-chart">Checking the chart<a class="anchor" href="#checking-the-chart" aria-label="Link to this section">#</a></h2>
 <p><code>make helm-lint</code> and <code>make helm-template</code> lint and render the chart with
 every value set in <code>deploy/helm/hangar/ci/</code> (HA with S3 and network
-policies; autoscaling with external NATS and IRSA; single node with a volume
-and embedded NATS; two replicas on ReadWriteMany). Plain <code>helm lint</code> without
+policies; autoscaling with IRSA and a leftover 0.1.x <code>nats</code> section; single
+node with a volume and a fixed node URL; two replicas on ReadWriteMany), and
+validate the manifests with kubeconform when it is installed
+(<code>KUBECONFORM_REQUIRED=1</code> makes it mandatory, as in CI). Plain <code>helm lint</code> without
 values fails on purpose: <code>config.server.base_url</code> and a database are
 required.</p>
+<h2 id="upgrading-from-01x">Upgrading from 0.1.x<a class="anchor" href="#upgrading-from-01x" aria-label="Link to this section">#</a></h2>
+<p>Chart 0.2.0 no longer deploys NATS, and <code>nats.*</code> values are ignored (the
+schema still accepts them, and the release notes print a reminder to remove
+them). The bundled NATS StatefulSet is deleted by the upgrade; its volumes are
+not. See <a href="../upgrade/#upgrading-to-020">upgrade.md</a> for the whole procedure.</p>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/install-helm.md"><code>docs/deploy/install-helm.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/install-helm.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/install-helm.md"><code>docs/deploy/install-helm.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/install-helm.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
       <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../install-compose/" rel="prev"><small>Previous</small><b>Docker Compose</b></a><a class="next" href="../install-binary/" rel="next"><small>Next</small><b>Binary and systemd</b></a></nav>
     </article>
   </main>
-  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#prerequisites">Prerequisites</a></li><li class="l2"><a href="#minimal-production-install">Minimal production install</a></li><li class="l2"><a href="#what-gets-deployed">What gets deployed</a></li><li class="l2"><a href="#choosing-modes">Choosing modes</a></li><li class="l2"><a href="#gitops-argo-cd-flux">GitOps (Argo CD, Flux)</a></li><li class="l2"><a href="#image-scanning">Image scanning</a></li><li class="l2"><a href="#private-ca-and-corporate-proxy">Private CA and corporate proxy</a></li><li class="l2"><a href="#checking-the-chart">Checking the chart</a></li></ul></aside>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#prerequisites">Prerequisites</a></li><li class="l2"><a href="#the-chart">The chart</a></li><li class="l2"><a href="#minimal-production-install">Minimal production install</a></li><li class="l2"><a href="#what-gets-deployed">What gets deployed</a></li><li class="l2"><a href="#choosing-modes">Choosing modes</a></li><li class="l2"><a href="#gitops-argo-cd-flux">GitOps (Argo CD, Flux)</a></li><li class="l2"><a href="#image-scanning">Image scanning</a></li><li class="l2"><a href="#private-ca-and-corporate-proxy">Private CA and corporate proxy</a></li><li class="l2"><a href="#checking-the-chart">Checking the chart</a></li><li class="l2"><a href="#upgrading-from-01x">Upgrading from 0.1.x</a></li></ul></aside>
 </div>
 <div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
   <div class="search-box">

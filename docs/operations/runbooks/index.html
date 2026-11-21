@@ -45,10 +45,10 @@
 <div class="layout">
   <nav class="side" id="side" aria-label="Documentation">
 <p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../../guides/getting-started/">Getting started</a></li><li><a href="../../guides/">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
-<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/verify-release/">Verify a release</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
 <p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
 <p class="side-h">Package formats</p><ul><li><a href="../../guides/docker/">Docker &amp; OCI</a></li><li><a href="../../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../../guides/pypi/">PyPI</a></li><li><a href="../../guides/nuget/">NuGet</a></li><li><a href="../../guides/go/">Go modules</a></li><li><a href="../../guides/helm/">Helm charts</a></li><li><a href="../../guides/cargo/">Cargo</a></li><li><a href="../../guides/apt/">APT</a></li><li><a href="../../guides/rpm/">RPM</a></li><li><a href="../../guides/raw/">Raw files</a></li></ul>
-<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../../guides/config-as-code/">Configuration as code</a></li><li><a href="../../guides/webhooks/">Webhooks</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
 <p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../monitoring/">Monitoring</a></li><li><a href="./" aria-current="page">Alert runbooks</a></li><li><a href="../performance/">Performance</a></li></ul>
 <p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
   </nav>
@@ -106,10 +106,11 @@ Check PostgreSQL logs, <code>max_connections</code>, disk space and failover sta
 <li><code>blobstore</code>: for <code>fs</code>, the directory must exist and be writable by the hangar
 user (a full or read-only filesystem fails the check). For <code>s3</code>, check
 credentials, bucket policy, endpoint reachability and certificate.</li>
-<li><code>eventbus</code>: with external NATS check the cluster through its monitoring
-port (<code>curl http://&lt;nats&gt;:8222/healthz?js-enabled-only=true</code>);
-<code>hangar_nats_connected</code> shows the node's connection. With embedded NATS check that <code>nats.data_dir</code> is
-writable and not full.</li>
+<li><code>eventbus</code>: the node's event listener (one long-lived PostgreSQL
+session, <code>application_name = hangar-listener</code>) is down; it reconnects on
+its own with backoff. <code>hangar_event_listener_connected</code> shows it; a
+database that refuses new connections (<code>max_connections</code>) or a
+transaction-pooling PgBouncer in front of it keeps it down.</li>
 </ul>
 <h2 id="hangarhigh5xxrate">HangarHigh5xxRate<a class="anchor" href="#hangarhigh5xxrate" aria-label="Link to this section">#</a></h2>
 <p><strong>Meaning.</strong> More than 5% of the node's requests (at least 0.1 per second) have
@@ -183,13 +184,15 @@ Look for long-running queries and lock waits.</li>
 node count) or adding nodes.</p>
 <h2 id="hangarjobfailures">HangarJobFailures<a class="anchor" href="#hangarjobfailures" aria-label="Link to this section">#</a></h2>
 <p><strong>Meaning.</strong> A background job failed on its last attempt (5 attempts with
-backoff) and was dropped.</p>
+backoff). It stays in the <code>jobs</code> table as <code>dead</code> for 7 days
+(<code>hangar_job_queue_dead</code>) and is not retried.</p>
 <p><strong>Impact.</strong> Depends on the job: <code>blob.gc</code> → storage is not reclaimed;
 <code>audit.ensure_partitions</code> → audit writes fail when the month rolls over;
 <code>auth.purge_expired</code> → expired tokens and sessions accumulate.</p>
 <p><strong>Diagnose.</strong> Node log: <code>&quot;msg&quot;:&quot;job failed permanently&quot;</code> with <code>type</code>, <code>job_id</code>
 and the error; earlier <code>&quot;job failed, will retry&quot;</code> lines show the history. Jobs
-dashboard → <em>Executions by result</em>.</p>
+dashboard → <em>Executions by result</em>. The dead jobs and their last error stay in
+the database for 7 days: <code>SELECT id, type, attempts, finished_at, last_error FROM jobs WHERE state = 'dead' ORDER BY finished_at DESC</code>.</p>
 <p><strong>Fix.</strong> Fix the cause (database, blob store, permissions). Scheduled jobs run
 again on their next schedule; for <code>audit.ensure_partitions</code> near a month
 boundary, restart the leader node to schedule it promptly.</p>
@@ -197,12 +200,11 @@ boundary, restart the leader node to schedule it promptly.</p>
 <p><strong>Meaning.</strong> More than 100 jobs of one type have been queued for 30 minutes.</p>
 <p><strong>Impact.</strong> Background work (scans, cleanup) runs late.</p>
 <p><strong>Diagnose.</strong> Jobs dashboard: is anything executing (<em>Executions by result</em>)?
-<code>hangar_job_queue_up</code> and <code>hangar_nats_connected</code> show whether nodes can reach
-the queue. Repeated <code>retry</code> results mean jobs keep failing; long durations mean
+<code>hangar_job_queue_up</code> shows whether nodes can read the queue; <code>SELECT type, state, count(*) FROM jobs GROUP BY 1, 2</code> shows what waits, runs and died. Repeated <code>retry</code> results mean jobs keep failing; long durations mean
 workers are slow.</p>
-<p><strong>Fix.</strong> Restore NATS connectivity or the failing dependency. Make sure at
-least one node runs (every node executes jobs). If a bug enqueues duplicates,
-fix it before purging the stream.</p>
+<p><strong>Fix.</strong> Restore the failing dependency. Make sure at least one node runs
+(every node executes jobs). If a bug enqueues duplicates, fix it before
+deleting the queued rows of that type.</p>
 <h2 id="hangarblobstorequotanearlimit">HangarBlobStoreQuotaNearLimit<a class="anchor" href="#hangarblobstorequotanearlimit" aria-label="Link to this section">#</a></h2>
 <p><strong>Meaning.</strong> A blob store uses more than 90% of its soft quota.</p>
 <p><strong>Impact.</strong> None yet; it is a capacity warning before the store fills.</p>
@@ -217,8 +219,7 @@ soft quota or move repositories to another store.</p>
 <h2 id="hangarblobstoredisknearlyfull">HangarBlobStoreDiskNearlyFull<a class="anchor" href="#hangarblobstoredisknearlyfull" aria-label="Link to this section">#</a></h2>
 <p><strong>Meaning.</strong> The filesystem holding an <code>fs</code> blob store has had less than 10%
 free space for 15 minutes.</p>
-<p><strong>Impact.</strong> When it fills, every upload and proxy cache fill fails, and the
-embedded NATS store may fail too if it shares the disk.</p>
+<p><strong>Impact.</strong> When it fills, every upload and proxy cache fill fails.</p>
 <p><strong>Diagnose.</strong> <code>df -h &lt;storage.fs.path&gt;</code>; the Storage dashboard → <em>Filesystem
 free</em>. Check whether other data (logs, temporary files under the store's
 <code>tmp/</code>) shares the filesystem.</p>
@@ -240,7 +241,7 @@ sustained for 5 minutes.</p>
 <li>Auth dashboard → <em>Failures by reason</em>: <code>unknown_user</code> across many names is
 guessing; <code>bad_password</code> on one user is often a CI job with a stale password;
 <code>unknown_expired_or_revoked</code> is a client with an old token.</li>
-<li>Audit log (<code>GET /api/v1/audit?action=auth.login.failed</code>, or the Audit screen)
+<li>Audit log (<code>GET /api/v1/audit?action=auth.login.failed</code>, or the Audit log screen)
 shows actor and source IP of each attempt.</li>
 </ol>
 <p><strong>Fix.</strong> Block abusive source addresses at the firewall or reverse proxy.
@@ -273,7 +274,7 @@ database. Auth dashboard → <em>Audit queue</em>.</p>
 from the <code>audit event not stored</code> log lines if your compliance rules require a
 complete trail.</p>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md"><code>docs/operations/runbooks.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/operations/runbooks.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md"><code>docs/operations/runbooks.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/operations/runbooks.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
       <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../monitoring/" rel="prev"><small>Previous</small><b>Monitoring</b></a><a class="next" href="../performance/" rel="next"><small>Next</small><b>Performance</b></a></nav>
     </article>
   </main>

@@ -45,10 +45,10 @@
 <div class="layout">
   <nav class="side" id="side" aria-label="Documentation">
 <p class="side-h">Start here</p><ul><li><a href="../">Introduction</a></li><li><a href="../guides/getting-started/">Getting started</a></li><li><a href="../guides/">Concepts and guides</a></li><li><a href="../faq/">FAQ</a></li></ul>
-<p class="side-h">Install and run</p><ul><li><a href="../deploy/">Deploying Hangar</a></li><li><a href="../deploy/requirements/">Requirements and sizing</a></li><li><a href="../deploy/install-compose/">Docker Compose</a></li><li><a href="../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../deploy/install-binary/">Binary and systemd</a></li><li><a href="../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../deploy/first-admin/">First administrator</a></li><li><a href="../deploy/backup-restore/">Backup and restore</a></li><li><a href="../deploy/upgrade/">Upgrades</a></li><li><a href="../deploy/high-availability/">High availability</a></li><li><a href="../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../deploy/">Deploying Hangar</a></li><li><a href="../deploy/requirements/">Requirements and sizing</a></li><li><a href="../deploy/install-compose/">Docker Compose</a></li><li><a href="../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../deploy/install-binary/">Binary and systemd</a></li><li><a href="../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../deploy/first-admin/">First administrator</a></li><li><a href="../deploy/backup-restore/">Backup and restore</a></li><li><a href="../deploy/upgrade/">Upgrades</a></li><li><a href="../deploy/verify-release/">Verify a release</a></li><li><a href="../deploy/high-availability/">High availability</a></li><li><a href="../deploy/troubleshooting/">Troubleshooting</a></li></ul>
 <p class="side-h">Using the UI</p><ul><li><a href="../ui/">The web UI</a></li><li><a href="../ui/repositories/">Repositories</a></li><li><a href="../ui/packages/">Packages &amp; search</a></li><li><a href="../ui/connect/">Connect a client</a></li><li><a href="../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../ui/access/">Access &amp; tokens</a></li><li><a href="../ui/tasks/">Scheduled tasks</a></li><li><a href="../ui/blob-stores/">Blob stores</a></li><li><a href="../ui/system/">Status, logs &amp; audit</a></li><li><a href="../ui/settings/">Settings</a></li></ul>
 <p class="side-h">Package formats</p><ul><li><a href="../guides/docker/">Docker &amp; OCI</a></li><li><a href="../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../guides/pypi/">PyPI</a></li><li><a href="../guides/nuget/">NuGet</a></li><li><a href="../guides/go/">Go modules</a></li><li><a href="../guides/helm/">Helm charts</a></li><li><a href="../guides/cargo/">Cargo</a></li><li><a href="../guides/apt/">APT</a></li><li><a href="../guides/rpm/">RPM</a></li><li><a href="../guides/raw/">Raw files</a></li></ul>
-<p class="side-h">Guides</p><ul><li><a href="../guides/migrate/">Move to Hangar</a></li><li><a href="../guides/ci/">CI integration</a></li><li><a href="../guides/access/">Access management</a></li><li><a href="../guides/sso/">Single sign-on</a></li><li><a href="../guides/routing-rules/">Routing rules</a></li><li><a href="../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../guides/api/">REST API</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../guides/migrate/">Move to Hangar</a></li><li><a href="../guides/ci/">CI integration</a></li><li><a href="../guides/ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../guides/config-as-code/">Configuration as code</a></li><li><a href="../guides/webhooks/">Webhooks</a></li><li><a href="../guides/access/">Access management</a></li><li><a href="../guides/sso/">Single sign-on</a></li><li><a href="../guides/routing-rules/">Routing rules</a></li><li><a href="../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../guides/api/">REST API</a></li></ul>
 <p class="side-h">Operations</p><ul><li><a href="../security/">Security</a></li><li><a href="../operations/monitoring/">Monitoring</a></li><li><a href="../operations/runbooks/">Alert runbooks</a></li><li><a href="../operations/performance/">Performance</a></li></ul>
 <p class="side-h">Project</p><ul><li><a href="../architecture/">Architecture</a></li><li><a href="../formats/">Format protocols</a></li><li><a href="../adr/">Decision records</a></li><li><a href="./" aria-current="page">Product specification</a></li><li><a href="../design-system/">Design system</a></li><li><a href="../roadmap/">Roadmap</a></li><li><a href="../changelog/">Changelog</a></li></ul>
   </nav>
@@ -124,7 +124,7 @@
 </ul>
 <h2 id="02--overview-main">02 · Overview (<code>Main</code>)<a class="anchor" href="#02--overview-main" aria-label="Link to this section">#</a></h2>
 <ul>
-<li>Header without a bar: breadcrumb, system state pill (links to System status), notifications, account menu.</li>
+<li>Header without a bar: breadcrumb, system state pill (links to System), notifications, account menu.</li>
 <li>Hero: &quot;What do you need today?&quot; search box (submits to Search), qualifier examples, quick actions
 (connect a client — set-up snippets in a dialog —, create a token, new repository, browse packages).</li>
 <li>Range switch: 1h / Today / 7 days / 30 days — drives the activity card, request outcomes, the upstream card and rejected pushes.</li>
@@ -145,7 +145,7 @@ critical findings, expiring tokens, a missing or failed database backup, scannin
 </ul>
 <h2 id="04--new-repository-repocreate">04 · New repository (<code>RepoCreate</code>)<a class="anchor" href="#04--new-repository-repocreate" aria-label="Link to this section">#</a></h2>
 <ul>
-<li>Step 1 format grid (Docker, npm, Maven, PyPI, Go, Helm, NuGet, Cargo, APT, Raw).</li>
+<li>Step 1 format grid (Docker, npm, Maven, PyPI, Go, Helm, NuGet, Cargo, APT, RPM, Raw).</li>
 <li>Step 2 type cards with one-line explanations.</li>
 <li>Step 3 settings: name (validated <code>^[a-z0-9][a-z0-9-]{1,62}$</code>), blob store (shows free space), remote URL for proxy (prefilled per format), re-upload policy, cleanup policy, toggles: scan on arrival, quarantine critical, anonymous read. Group type shows a member picker with drag ordering.</li>
 <li>Summary panel with the final URL and the <strong>same config as YAML</strong>. <em>(planned)</em> Copyable <code>hangar</code> CLI / Terraform, and a round trip: <code>hangar apply -f repo.yaml</code> creates the identical repo.</li>
@@ -186,11 +186,12 @@ critical findings, expiring tokens, a missing or failed database backup, scannin
 <li>30-day trend chart.</li>
 <li>Rescan on new advisory DB; waivers need reason + expiry, are audited.</li>
 </ul>
-<h2 id="10--access--audit-access">10 · Access &amp; audit (<code>Access</code>)<a class="anchor" href="#10--access--audit-access" aria-label="Link to this section">#</a></h2>
+<h2 id="10--access-access-and-audit-log-audit-log">10 · Access (<code>Access</code>) and Audit log (<code>Audit log</code>)<a class="anchor" href="#10--access-access-and-audit-log-audit-log" aria-label="Link to this section">#</a></h2>
 <ul>
-<li>Tabs: Members, Roles, Access tokens, Service accounts.</li>
+<li>Access tabs: Members, Service accounts, Access tokens, Roles.</li>
 <li>Members table: avatar, name/email, role, source (OIDC/AD/local/token), tokens, last active.</li>
-<li>Sign-in providers status; audit log stream with export (CSV/JSON, also streamed to syslog/webhook).</li>
+<li>Sign-in providers status; the latest access events, linking to the Audit log.</li>
+<li>Audit log (one page, <code>/audit</code>): filters by actor, action, target, outcome and time range; access events in plain words; export (CSV/NDJSON, also streamed to syslog/webhook).</li>
 <li>Roles = sets of privileges (<code>repo:&lt;pattern&gt;:read|write|delete|admin</code>, <code>system:*</code>); built-ins Admin, Publisher, Reader, CI deployer. Group→role mapping for OIDC/LDAP.</li>
 <li>Tokens: scoped to repos + actions, expiry required, shown once.</li>
 </ul>
@@ -200,8 +201,10 @@ critical findings, expiring tokens, a missing or failed database backup, scannin
 <li>Table: task, description, schedule (human + cron), last run result with status dot, next run, Run now.</li>
 <li>Built-in task types: cleanup, blob compaction, docker GC, docker upload cleanup, rescan, auth purge, audit partitions. <em>(planned)</em> reindex search, directory sync, DB backup, replication, proxy metadata refresh.</li>
 </ul>
-<h2 id="12--cluster--replication-cluster-planned">12 · Cluster &amp; replication (<code>Cluster</code>) <em>(planned)</em><a class="anchor" href="#12--cluster--replication-cluster-planned" aria-label="Link to this section">#</a></h2>
-<p>Today the screen is a placeholder; node health is on Settings → System.</p>
+<h2 id="12--system-system-status-nodes-logs-about">12 · System (<code>System</code>): Status, Nodes, Logs, About<a class="anchor" href="#12--system-system-status-nodes-logs-about" aria-label="Link to this section">#</a></h2>
+<p>Today Status (every check of every node), Nodes (node cards, quorum, leader),
+Logs (each node's in-memory log buffer) and About (version, addresses,
+dependency health, configuration) are built. Replication below is <em>planned</em>.</p>
 <ul>
 <li>Overall health + quorum.</li>
 <li>Node cards: role (leader/follower), zone, CPU/memory/cache-disk meters (warn colour &gt; 75%), req/s, uptime.</li>
@@ -216,11 +219,11 @@ critical findings, expiring tokens, a missing or failed database backup, scannin
 <li>Every list is URL-addressable (filters in query string). Every page works at 390 px width.</li>
 </ul>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/PRODUCT_SPEC.md"><code>docs/PRODUCT_SPEC.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/PRODUCT_SPEC.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
-      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../adr/0009-rest-api-conventions/" rel="prev"><small>Previous</small><b>0009. REST API conventions</b></a><a class="next" href="../design-system/" rel="next"><small>Next</small><b>Design system</b></a></nav>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/PRODUCT_SPEC.md"><code>docs/PRODUCT_SPEC.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/PRODUCT_SPEC.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../adr/0011-postgresql-events-and-jobs/" rel="prev"><small>Previous</small><b>0011. PostgreSQL for events and jobs; NATS removed</b></a><a class="next" href="../design-system/" rel="next"><small>Next</small><b>Design system</b></a></nav>
     </article>
   </main>
-  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#concepts">Concepts</a></li><li class="l2"><a href="#01--sign-in-login">01 · Sign in (Login)</a></li><li class="l2"><a href="#02--overview-main">02 · Overview (Main)</a></li><li class="l2"><a href="#03--repositories">03 · Repositories</a></li><li class="l2"><a href="#04--new-repository-repocreate">04 · New repository (RepoCreate)</a></li><li class="l2"><a href="#05--package-detail-browse">05 · Package detail (Browse)</a></li><li class="l2"><a href="#06--search">06 · Search</a></li><li class="l2"><a href="#07--blob-stores-blobstores">07 · Blob stores (BlobStores)</a></li><li class="l2"><a href="#08--cleanup-policies-cleanup">08 · Cleanup policies (Cleanup)</a></li><li class="l2"><a href="#09--vulnerabilities-scanning">09 · Vulnerabilities (Scanning)</a></li><li class="l2"><a href="#10--access--audit-access">10 · Access &amp; audit (Access)</a></li><li class="l2"><a href="#11--scheduled-tasks-tasks">11 · Scheduled tasks (Tasks)</a></li><li class="l2"><a href="#12--cluster--replication-cluster-planned">12 · Cluster &amp; replication (Cluster) (planned)</a></li><li class="l2"><a href="#global">Global</a></li></ul></aside>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#concepts">Concepts</a></li><li class="l2"><a href="#01--sign-in-login">01 · Sign in (Login)</a></li><li class="l2"><a href="#02--overview-main">02 · Overview (Main)</a></li><li class="l2"><a href="#03--repositories">03 · Repositories</a></li><li class="l2"><a href="#04--new-repository-repocreate">04 · New repository (RepoCreate)</a></li><li class="l2"><a href="#05--package-detail-browse">05 · Package detail (Browse)</a></li><li class="l2"><a href="#06--search">06 · Search</a></li><li class="l2"><a href="#07--blob-stores-blobstores">07 · Blob stores (BlobStores)</a></li><li class="l2"><a href="#08--cleanup-policies-cleanup">08 · Cleanup policies (Cleanup)</a></li><li class="l2"><a href="#09--vulnerabilities-scanning">09 · Vulnerabilities (Scanning)</a></li><li class="l2"><a href="#10--access-access-and-audit-log-audit-log">10 · Access (Access) and Audit log (Audit log)</a></li><li class="l2"><a href="#11--scheduled-tasks-tasks">11 · Scheduled tasks (Tasks)</a></li><li class="l2"><a href="#12--system-system-status-nodes-logs-about">12 · System (System): Status, Nodes, Logs, About</a></li><li class="l2"><a href="#global">Global</a></li></ul></aside>
 </div>
 <div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
   <div class="search-box">

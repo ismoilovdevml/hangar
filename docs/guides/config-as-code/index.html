@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configuration as code · Hangar docs</title>
+<meta name="description" content="hangar apply, hangar diff and hangar export manage a Hangar server's configuration from YAML files kept in Git: repositories (hosted, proxy and group, every…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/guides/config-as-code/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Configuration as code">
+<meta property="og:description" content="hangar apply, hangar diff and hangar export manage a Hangar server's configuration from YAML files kept in Git: repositories (hosted, proxy and group, every…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/guides/config-as-code/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Configuration as code">
+<meta name="twitter:description" content="hangar apply, hangar diff and hangar export manage a Hangar server's configuration from YAML files kept in Git: repositories (hosted, proxy and group, every…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Configuration as code","item":"https://ismoilovdevml.github.io/hangar/docs/guides/config-as-code/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../getting-started/">Getting started</a></li><li><a href="../">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/verify-release/">Verify a release</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../docker/">Docker &amp; OCI</a></li><li><a href="../npm/">npm, pnpm, yarn</a></li><li><a href="../maven/">Maven &amp; Gradle</a></li><li><a href="../pypi/">PyPI</a></li><li><a href="../nuget/">NuGet</a></li><li><a href="../go/">Go modules</a></li><li><a href="../helm/">Helm charts</a></li><li><a href="../cargo/">Cargo</a></li><li><a href="../apt/">APT</a></li><li><a href="../rpm/">RPM</a></li><li><a href="../raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../migrate/">Move to Hangar</a></li><li><a href="../ci/">CI integration</a></li><li><a href="../ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="./" aria-current="page">Configuration as code</a></li><li><a href="../webhooks/">Webhooks</a></li><li><a href="../access/">Access management</a></li><li><a href="../sso/">Single sign-on</a></li><li><a href="../routing-rules/">Routing rules</a></li><li><a href="../vulnerabilities/">Vulnerability scanning</a></li><li><a href="../api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Guides</p>
+      <h1>Configuration as code</h1>
+<p class="lead"><code>hangar apply</code>, <code>hangar diff</code> and <code>hangar export</code> manage a Hangar server's
+configuration from YAML files kept in Git: repositories (hosted, proxy and
+group, every format, routing rules included), blob stores, cleanup policies,
+roles and outbound proxies. They are subcommands of the <code>hangar</code> binary and
+talk to a running server over the REST API; they need no database access.</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="sh"><code><span class="hljs-built_in">export</span> HANGAR_URL=https://hangar.example.com
+<span class="hljs-built_in">export</span> HANGAR_TOKEN=hgr_...            <span class="hljs-comment"># or --token-file /run/secrets/hangar-token</span>
+hangar diff  -f hangar/ --apply-set platform
+hangar apply -f hangar/ --apply-set platform --prune</code></pre></div>
+<h2 id="resource-documents">Resource documents<a class="anchor" href="#resource-documents" aria-label="Link to this section">#</a></h2>
+<p>Each resource is one YAML document; a file may hold several, separated by
+<code>---</code>. The <code>spec</code> is the request body of the REST API for that resource
+(<code>api/openapi.yaml</code>) without its name, which is <code>metadata.name</code>:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th><code>kind</code></th>
+<th>REST collection</th>
+<th><code>spec</code> schema</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>OutboundProxy</code></td>
+<td><code>/proxies</code></td>
+<td><code>OutboundProxyInput</code></td>
+</tr>
+<tr>
+<td><code>BlobStore</code></td>
+<td><code>/blob-stores</code></td>
+<td><code>BlobStoreInput</code></td>
+</tr>
+<tr>
+<td><code>Role</code></td>
+<td><code>/roles</code></td>
+<td><code>RoleInput</code></td>
+</tr>
+<tr>
+<td><code>Repository</code></td>
+<td><code>/repositories</code></td>
+<td><code>RepositoryInput</code></td>
+</tr>
+<tr>
+<td><code>CleanupPolicy</code></td>
+<td><code>/cleanup-policies</code></td>
+<td><code>CleanupPolicyInput</code> (apply previews the policy and sends <code>preview_token</code> itself)</td>
+</tr>
+</tbody>
+</table></div>
+<p>Routing rules are <code>config.routing</code> of the proxy or group repository they
+protect (see <a href="../routing-rules/">routing-rules.md</a>); they are not a kind of
+their own.</p>
+<div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-comment"># yaml-language-server: $schema=https://raw.githubusercontent.com/ismoilovdevml/hangar/main/api/hangar-config.schema.json</span>
+<span class="hljs-attr">apiVersion:</span> <span class="hljs-string">hangar/v1</span>
+<span class="hljs-attr">kind:</span> <span class="hljs-string">BlobStore</span>
+<span class="hljs-attr">metadata:</span>
+  <span class="hljs-attr">name:</span> <span class="hljs-string">s3-main</span>
+<span class="hljs-attr">spec:</span>
+  <span class="hljs-attr">kind:</span> <span class="hljs-string">s3</span>
+  <span class="hljs-attr">s3:</span>
+    <span class="hljs-attr">endpoint:</span> <span class="hljs-string">https://s3.eu-central-1.amazonaws.com</span>
+    <span class="hljs-attr">region:</span> <span class="hljs-string">eu-central-1</span>
+    <span class="hljs-attr">bucket:</span> <span class="hljs-string">acme-hangar</span>
+    <span class="hljs-attr">access_key_id:</span> <span class="hljs-string">AKIA...</span>
+    <span class="hljs-attr">secret_access_key:</span> {<span class="hljs-attr">valueFrom:</span> {<span class="hljs-attr">env:</span> <span class="hljs-string">HANGAR_S3_SECRET</span>}}
+<span class="hljs-meta">---</span>
+<span class="hljs-attr">apiVersion:</span> <span class="hljs-string">hangar/v1</span>
+<span class="hljs-attr">kind:</span> <span class="hljs-string">Repository</span>
+<span class="hljs-attr">metadata:</span>
+  <span class="hljs-attr">name:</span> <span class="hljs-string">npm-hosted</span>
+  <span class="hljs-attr">labels:</span>
+    <span class="hljs-attr">team:</span> <span class="hljs-string">web</span>
+<span class="hljs-attr">spec:</span>
+  <span class="hljs-attr">format:</span> <span class="hljs-string">npm</span>
+  <span class="hljs-attr">type:</span> <span class="hljs-string">hosted</span>
+  <span class="hljs-attr">blob_store:</span> <span class="hljs-string">s3-main</span>
+  <span class="hljs-attr">description:</span> <span class="hljs-string">Internal</span> <span class="hljs-string">packages</span>
+  <span class="hljs-attr">config:</span>
+    <span class="hljs-attr">hosted:</span>
+      <span class="hljs-attr">write_policy:</span> <span class="hljs-string">allow_once</span>
+<span class="hljs-meta">---</span>
+<span class="hljs-attr">apiVersion:</span> <span class="hljs-string">hangar/v1</span>
+<span class="hljs-attr">kind:</span> <span class="hljs-string">Repository</span>
+<span class="hljs-attr">metadata:</span>
+  <span class="hljs-attr">name:</span> <span class="hljs-string">npm-proxy</span>
+<span class="hljs-attr">spec:</span>
+  <span class="hljs-attr">format:</span> <span class="hljs-string">npm</span>
+  <span class="hljs-attr">type:</span> <span class="hljs-string">proxy</span>
+  <span class="hljs-attr">blob_store:</span> <span class="hljs-string">s3-main</span>
+  <span class="hljs-attr">config:</span>
+    <span class="hljs-attr">proxy:</span>
+      <span class="hljs-attr">remote_url:</span> <span class="hljs-string">https://registry.npmjs.org</span>
+      <span class="hljs-attr">metadata_ttl:</span> <span class="hljs-string">30m</span>
+      <span class="hljs-attr">auth:</span>
+        <span class="hljs-attr">kind:</span> <span class="hljs-string">bearer</span>
+        <span class="hljs-attr">token:</span> {<span class="hljs-attr">valueFrom:</span> {<span class="hljs-attr">file:</span> <span class="hljs-string">secrets/npm-token</span>}}
+    <span class="hljs-attr">routing:</span>
+      <span class="hljs-attr">block:</span> [<span class="hljs-string">&quot;@acme/*&quot;</span>]
+<span class="hljs-meta">---</span>
+<span class="hljs-attr">apiVersion:</span> <span class="hljs-string">hangar/v1</span>
+<span class="hljs-attr">kind:</span> <span class="hljs-string">Repository</span>
+<span class="hljs-attr">metadata:</span>
+  <span class="hljs-attr">name:</span> <span class="hljs-string">npm</span>
+<span class="hljs-attr">spec:</span>
+  <span class="hljs-attr">format:</span> <span class="hljs-string">npm</span>
+  <span class="hljs-attr">type:</span> <span class="hljs-string">group</span>
+  <span class="hljs-attr">config:</span>
+    <span class="hljs-attr">group:</span>
+      <span class="hljs-attr">members:</span> [<span class="hljs-string">npm-hosted</span>, <span class="hljs-string">npm-proxy</span>]
+      <span class="hljs-attr">write_member:</span> <span class="hljs-string">npm-hosted</span>
+<span class="hljs-meta">---</span>
+<span class="hljs-attr">apiVersion:</span> <span class="hljs-string">hangar/v1</span>
+<span class="hljs-attr">kind:</span> <span class="hljs-string">Role</span>
+<span class="hljs-attr">metadata:</span>
+  <span class="hljs-attr">name:</span> <span class="hljs-string">ci-publisher</span>
+<span class="hljs-attr">spec:</span>
+  <span class="hljs-attr">description:</span> <span class="hljs-string">CI</span> <span class="hljs-string">pipelines</span> <span class="hljs-string">publishing</span> <span class="hljs-string">npm</span> <span class="hljs-string">packages</span>
+  <span class="hljs-attr">privileges:</span> [<span class="hljs-string">&quot;repo:npm-hosted:write&quot;</span>, <span class="hljs-string">&quot;repo:*:read&quot;</span>]
+<span class="hljs-meta">---</span>
+<span class="hljs-attr">apiVersion:</span> <span class="hljs-string">hangar/v1</span>
+<span class="hljs-attr">kind:</span> <span class="hljs-string">CleanupPolicy</span>
+<span class="hljs-attr">metadata:</span>
+  <span class="hljs-attr">name:</span> <span class="hljs-string">npm-prereleases</span>
+<span class="hljs-attr">spec:</span>
+  <span class="hljs-attr">criteria:</span>
+    <span class="hljs-attr">prerelease_only:</span> <span class="hljs-literal">true</span>
+    <span class="hljs-attr">older_than_days:</span> <span class="hljs-number">30</span>
+    <span class="hljs-attr">keep_newest:</span> <span class="hljs-number">5</span>
+  <span class="hljs-attr">repositories:</span> [<span class="hljs-string">npm-hosted</span>]
+  <span class="hljs-attr">schedule:</span> <span class="hljs-string">&quot;0 3 * * *&quot;</span></code></pre></div>
+<p><code>metadata.labels</code> are free-form labels (<code>[prefix/]name: value</code>); keys under
+<code>hangar/</code> are reserved for apply.</p>
+<p><strong>Editor validation.</strong> <a href="https://github.com/ismoilovdevml/hangar/blob/main/api/hangar-config.schema.json"><code>api/hangar-config.schema.json</code></a>
+is a JSON schema for these documents, generated from <code>api/openapi.yaml</code>. With
+the YAML extension of VS Code (or any editor using yaml-language-server), the
+first-line comment above enables completion and validation, or map it in the
+settings: <code>&quot;yaml.schemas&quot;: {&quot;&lt;path&gt;/api/hangar-config.schema.json&quot;: &quot;hangar/**/*.yaml&quot;}</code>.</p>
+<h2 id="secrets">Secrets<a class="anchor" href="#secrets" aria-label="Link to this section">#</a></h2>
+<p>Write-only values (upstream passwords and tokens, S3 secret keys, proxy
+passwords) are never written into files. Any value can instead be a reference
+that apply reads when it runs:</p>
+<div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-attr">token:</span> {<span class="hljs-attr">valueFrom:</span> {<span class="hljs-attr">env:</span> <span class="hljs-string">NPM_TOKEN</span>}}           <span class="hljs-comment"># an environment variable</span>
+<span class="hljs-attr">password:</span> {<span class="hljs-attr">valueFrom:</span> {<span class="hljs-attr">file:</span> <span class="hljs-string">secrets/corp-pw</span>}} <span class="hljs-comment"># a file, relative to this YAML file</span></code></pre></div>
+<p>A missing or empty variable or file stops apply before anything is sent. One
+trailing newline of a file is dropped. Plans and messages print <code>(secret)</code>
+instead of these values, and passwords in URLs as <code>REDACTED</code>. A secret written
+literally into a file works but draws a note in the plan.</p>
+<p>The server never returns secrets, so apply cannot see whether a stored secret
+still equals the declared one: a resource whose only change is a rotated
+secret shows as unchanged. Run <code>hangar apply --update-secrets</code> after rotating
+a secret to send every declared secret again.</p>
+<h2 id="what-apply-does">What apply does<a class="anchor" href="#what-apply-does" aria-label="Link to this section">#</a></h2>
+<p><code>hangar apply</code> reads every document (<code>-f</code> takes files, directories, or <code>-</code> for
+stdin, repeatable; <code>-R</code> also reads subdirectories), reads the current state
+from the server, prints the plan, and carries it out:</p>
+<div class="code"><div class="code-head"><span>text</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0"><code>Hangar https://hangar.example.com, apply set &quot;platform&quot;
+
++ BlobStore/s3-main create
+~ Repository/npm-proxy update
+    config.proxy.metadata_ttl: &quot;1h0m0s&quot; -&gt; &quot;30m&quot;
+~ Repository/npm-hosted update
+    labels: adopted into apply set &quot;platform&quot;
++ CleanupPolicy/npm-prereleases create
+    note: would delete 12 versions (48.3 MiB) if it ran now
+- Repository/old-raw delete
+    note: no longer declared
+    note: deleting a repository deletes its content
+
+Plan: 2 to create, 2 to update, 1 to delete, 6 unchanged.</code></pre></div>
+<ul>
+<li><strong>Create</strong> what does not exist, <strong>update</strong> what differs, leave the rest
+alone. Running apply twice in a row changes nothing the second time.</li>
+<li><strong>Fields you leave out are not managed.</strong> An update sends the server's
+current settings with the declared fields laid over them, and the diff only
+compares declared fields. Removing a field from a file therefore keeps its
+current value; to reset it, declare it (<code>description: &quot;&quot;</code>, <code>auth: null</code> to
+remove upstream credentials). Lists (group members, privileges) are replaced
+as a whole; objects are merged key by key, except <code>config.proxy.auth</code>, which
+is replaced as a whole.</li>
+<li>The comparison knows the API's spelling: <code>24h</code> equals <code>24h0m0s</code>, <code>0</code>,
+<code>false</code>, <code>&quot;&quot;</code>, <code>[]</code> and <code>{}</code> equal a field the API leaves out, and lists the
+API sorts (role privileges, cleanup policy repositories) compare as sets.</li>
+<li><strong>Order.</strong> Outbound proxies, then blob stores, roles, repositories, groups
+(a group after the groups it contains) and cleanup policies; deletions in
+the reverse order, after every create and update.</li>
+<li><strong>Errors.</strong> Each failure names the resource, the server's status, code and
+message, and the fields the server named. A failure skips the later stages
+(a repository is not created on a blob store that failed) and every
+deletion; the other resources of the same stage still apply. After a
+successful create or update apply compares the answer with the file and
+warns about fields the server did not keep (usually a misspelled key).</li>
+<li><code>--dry-run</code> prints the plan and changes nothing; <code>-v</code> also lists unchanged
+resources.</li>
+</ul>
+<p>Built-in roles and resources defined in the server configuration file (the
+<code>default</code> blob store, an <code>http.proxy</code> outbound proxy) cannot be changed by
+apply; the configured blob store accepts only a new <code>soft_quota_bytes</code>.</p>
+<h2 id="ownership-and---prune">Ownership and <code>--prune</code><a class="anchor" href="#ownership-and---prune" aria-label="Link to this section">#</a></h2>
+<p>Apply marks everything it creates or adopts with two labels, kept by the
+server (<code>GET /api/v1/resource-labels?kind=...</code>):</p>
+<div class="code"><div class="code-head"><span>text</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0"><code>hangar/managed-by: hangar-apply
+hangar/apply-set:  &lt;name of --apply-set&gt;</code></pre></div>
+<p><code>--apply-set NAME</code> names the configuration (default <code>default</code>). Use one name
+per Git repository or directory that manages a server, e.g. <code>platform</code>,
+<code>team-web</code>.</p>
+<ul>
+<li><strong>Adoption.</strong> A declared resource that already exists without these labels
+(made in the UI, or before apply was introduced) is taken over: the plan says
+<code>labels: adopted into apply set &quot;...&quot;</code>.</li>
+<li><strong>Conflicts.</strong> A declared resource that another apply set owns is refused,
+so two configurations never fight over one resource. Remove it from one of
+them, or pass <code>--take-ownership</code> to move it.</li>
+<li><strong>Prune.</strong> <code>hangar apply --prune --apply-set NAME</code> also deletes resources
+that carry the labels of <em>that</em> apply set and are no longer declared.
+Nothing else is ever deleted: not resources made by hand, not those of other
+apply sets, not built-in roles or configured stores. <code>--prune</code> refuses to run
+without an explicit <code>--apply-set</code>, and apply refuses to run when the files
+hold no resources at all (a wrong path never prunes everything).</li>
+<li><strong>Labels belong to the resource.</strong> The server binds labels to the identity
+of the resource they were set on. If a pruned (or otherwise deleted)
+resource is created again under the same name by someone else, it starts
+without labels and is not pruned.</li>
+<li>If the token may not read a kind (for example roles), the plan warns and
+does not prune that kind.</li>
+</ul>
+<p>The token needs the privileges of what it manages: <code>system:repos:admin</code> (or
+<code>repo:&lt;name&gt;:admin</code> per repository), <code>system:blobstores:admin</code>,
+<code>system:cleanup:write</code>, <code>system:users:write</code> for roles and
+<code>system:settings:admin</code> for outbound proxies; a service account with a role
+holding exactly these is the usual choice.</p>
+<h2 id="diff-and-exit-status">diff and exit status<a class="anchor" href="#diff-and-exit-status" aria-label="Link to this section">#</a></h2>
+<p><code>hangar diff -f ...</code> (or <code>hangar apply --dry-run</code>) prints the plan and exits
+like <code>terraform plan -detailed-exitcode</code>:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Exit</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>the server matches the files</td>
+</tr>
+<tr>
+<td>2</td>
+<td>applying would change something</td>
+</tr>
+<tr>
+<td>1</td>
+<td>error (invalid file, missing secret, refused ownership, server error)</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>hangar apply</code> exits 0 when every change applied, 1 otherwise.</p>
+<h2 id="gitops-in-ci">GitOps in CI<a class="anchor" href="#gitops-in-ci" aria-label="Link to this section">#</a></h2>
+<p>Plan on pull requests, apply on the default branch. The server image
+(<code>ghcr.io/ismoilovdevml/hangar</code>) is distroless with <code>hangar</code> as its
+entrypoint, so run it as a command rather than as a job image (or put the
+<code>hangar</code> binary of a release on the runner). GitHub Actions:</p>
+<div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-attr">name:</span> <span class="hljs-string">hangar</span>
+<span class="hljs-attr">on:</span>
+  <span class="hljs-attr">pull_request:</span> {<span class="hljs-attr">paths:</span> [<span class="hljs-string">&quot;hangar/**&quot;</span>]}
+  <span class="hljs-attr">push:</span> {<span class="hljs-attr">branches:</span> [<span class="hljs-string">main</span>], <span class="hljs-attr">paths:</span> [<span class="hljs-string">&quot;hangar/**&quot;</span>]}
+<span class="hljs-attr">concurrency:</span> <span class="hljs-string">hangar</span>            <span class="hljs-comment"># one apply at a time</span>
+<span class="hljs-attr">env:</span>
+  <span class="hljs-attr">HANGAR_URL:</span> <span class="hljs-string">https://hangar.example.com</span>
+  <span class="hljs-attr">HANGAR_TOKEN:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.HANGAR_TOKEN</span> <span class="hljs-string">}}</span>      <span class="hljs-comment"># a service-account token</span>
+  <span class="hljs-attr">NPM_TOKEN:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.NPM_TOKEN</span> <span class="hljs-string">}}</span>            <span class="hljs-comment"># referenced by valueFrom</span>
+  <span class="hljs-attr">HANGAR_S3_SECRET:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.HANGAR_S3_SECRET</span> <span class="hljs-string">}}</span>
+<span class="hljs-attr">jobs:</span>
+  <span class="hljs-attr">hangar:</span>
+    <span class="hljs-attr">runs-on:</span> <span class="hljs-string">ubuntu-latest</span>
+    <span class="hljs-attr">steps:</span>
+      <span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@v4</span>
+      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">plan</span> <span class="hljs-string">or</span> <span class="hljs-string">apply</span>
+        <span class="hljs-attr">run:</span> <span class="hljs-string">|
+          cmd=diff
+          [ &quot;${{ github.event_name }}&quot; = push ] &amp;&amp; cmd=apply
+          docker run --rm -v &quot;$PWD/hangar:/hangar:ro&quot; \
+            -e HANGAR_URL -e HANGAR_TOKEN -e NPM_TOKEN -e HANGAR_S3_SECRET \
+            ghcr.io/ismoilovdevml/hangar:0.2.0 \
+            $cmd -f /hangar -R --apply-set platform --prune || test $? -eq 2 -a $cmd = diff</span></code></pre></div>
+<p>In GitLab CI the same <code>docker run</code> works in a job with Docker access. Pass
+every variable a <code>valueFrom: {env: ...}</code> names into the container (<code>-e</code>), and
+mount the directory so <code>valueFrom: {file: ...}</code> paths resolve.</p>
+<p>Drift detection is a scheduled <code>hangar diff</code>: exit status 2 means someone
+changed the server outside Git.</p>
+<h2 id="export-edit-apply">export, edit, apply<a class="anchor" href="#export-edit-apply" aria-label="Link to this section">#</a></h2>
+<p><code>hangar export</code> writes the server's configuration as documents, ready for
+apply. Secrets are never exported: each one becomes a <code>valueFrom: {env: ...}</code>
+reference, and the header lists the variables to set.</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="sh"><code>hangar <span class="hljs-built_in">export</span> &gt; hangar/all.yaml                      <span class="hljs-comment"># everything</span>
+hangar <span class="hljs-built_in">export</span> --kind Repository,CleanupPolicy -o repos.yaml
+hangar <span class="hljs-built_in">export</span> --apply-set platform                   <span class="hljs-comment"># what one apply set owns</span></code></pre></div>
+<div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-comment"># Exported by hangar export. Apply with: hangar apply -f &lt;this file&gt;</span>
+<span class="hljs-comment"># Secrets are never exported. Set these environment variables (or edit the</span>
+<span class="hljs-comment"># references to valueFrom: {file: PATH}) before applying:</span>
+<span class="hljs-comment">#   HANGAR_SECRET_REPOSITORY_NPM_PROXY_AUTH_TOKEN  (Repository/npm-proxy spec.config.proxy.auth.token)</span></code></pre></div>
+<p>Export writes every input field the server returns, defaults included, so a
+fresh export applied back shows no changes. Built-in roles and resources from
+the server configuration file are left out (listed as notes on stderr). A
+NuGet <code>service_index</code> other than a plain <code>v3/index.json</code> may carry a feed key
+and is exported as a reference too.</p>
+<p>A typical start: export the server, commit the file, run
+<code>hangar apply --apply-set platform -f ...</code> once (it adopts everything and
+changes nothing else), then edit and apply through merge requests.</p>
+<h2 id="flags">Flags<a class="anchor" href="#flags" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Flag</th>
+<th>Commands</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--server URL</code></td>
+<td>all</td>
+<td>server base URL; default <code>$HANGAR_URL</code></td>
+</tr>
+<tr>
+<td><code>--token-file FILE</code></td>
+<td>all</td>
+<td>token file; default <code>$HANGAR_TOKEN</code>. The token is never printed.</td>
+</tr>
+<tr>
+<td><code>--timeout 30s</code></td>
+<td>all</td>
+<td>limit for each API request attempt</td>
+</tr>
+<tr>
+<td><code>-f PATH</code></td>
+<td>apply, diff</td>
+<td>file, directory or <code>-</code>; repeatable</td>
+</tr>
+<tr>
+<td><code>-R</code></td>
+<td>apply, diff</td>
+<td>read subdirectories</td>
+</tr>
+<tr>
+<td><code>--apply-set NAME</code></td>
+<td>apply, diff, export</td>
+<td>owning configuration (export: filter)</td>
+</tr>
+<tr>
+<td><code>--prune</code></td>
+<td>apply, diff</td>
+<td>delete what the apply set owns and the files no longer declare</td>
+</tr>
+<tr>
+<td><code>--take-ownership</code></td>
+<td>apply, diff</td>
+<td>adopt resources owned by another apply set</td>
+</tr>
+<tr>
+<td><code>--update-secrets</code></td>
+<td>apply, diff</td>
+<td>send declared secrets again</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>apply</td>
+<td>print the plan only</td>
+</tr>
+<tr>
+<td><code>-v</code></td>
+<td>apply, diff</td>
+<td>list unchanged resources too</td>
+</tr>
+<tr>
+<td><code>--kind LIST</code></td>
+<td>export</td>
+<td>kinds to export</td>
+</tr>
+<tr>
+<td><code>-o FILE</code></td>
+<td>export</td>
+<td>output file (written only when the export succeeded)</td>
+</tr>
+</tbody>
+</table></div>
+<p>Reads are retried up to three times on 429, 502, 503 and 504 (honouring
+<code>Retry-After</code>, at most 30 s); writes only on 429, which the server answers
+before doing anything. Redirects are refused, so the token never follows one
+to another host. A warning is printed when the token would travel over plain
+<code>http://</code> to a host other than localhost.</p>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/config-as-code.md"><code>docs/guides/config-as-code.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/config-as-code.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../ci-oidc/" rel="prev"><small>Previous</small><b>CI trusted publishing (OIDC)</b></a><a class="next" href="../webhooks/" rel="next"><small>Next</small><b>Webhooks</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#resource-documents">Resource documents</a></li><li class="l2"><a href="#secrets">Secrets</a></li><li class="l2"><a href="#what-apply-does">What apply does</a></li><li class="l2"><a href="#ownership-and---prune">Ownership and --prune</a></li><li class="l2"><a href="#diff-and-exit-status">diff and exit status</a></li><li class="l2"><a href="#gitops-in-ci">GitOps in CI</a></li><li class="l2"><a href="#export-edit-apply">export, edit, apply</a></li><li class="l2"><a href="#flags">Flags</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

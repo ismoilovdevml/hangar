@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Webhooks · Hangar docs</title>
+<meta name="description" content="Hangar can tell other systems when something happens: a package is published or deleted, a component is quarantined, a scan finds new vulnerabilities, a…">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/guides/webhooks/">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Webhooks">
+<meta property="og:description" content="Hangar can tell other systems when something happens: a package is published or deleted, a component is quarantined, a scan finds new vulnerabilities, a…">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/guides/webhooks/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Webhooks">
+<meta name="twitter:description" content="Hangar can tell other systems when something happens: a package is published or deleted, a component is quarantined, a scan finds new vulnerabilities, a…">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/docs.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Hangar","item":"https://ismoilovdevml.github.io/hangar/"},{"@type":"ListItem","position":2,"name":"Docs","item":"https://ismoilovdevml.github.io/hangar/docs/"},{"@type":"ListItem","position":3,"name":"Webhooks","item":"https://ismoilovdevml.github.io/hangar/docs/guides/webhooks/"}]}</script>
+<script src="../../../assets/docs-ui.js" defer></script>
+</head>
+<body data-root="../../../">
+<a class="skip" href="#article">Skip to content</a>
+<header class="top">
+  <button class="icon-btn menu-btn" type="button" id="menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="side">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="../../../"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#111"/><path d="M8 24V13l8-5 8 5v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/></svg> Hangar <small>Docs</small></a>
+  <button class="search-btn" type="button" id="search-btn" aria-haspopup="dialog">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg><span>Search docs</span><kbd>⌘K</kbd>
+  </button>
+  <nav class="top-links" aria-label="Site">
+    <a class="hide-sm" href="../../../">Home</a>
+    <a class="hide-sm" href="../../../demo/">Demo</a>
+    <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
+  </nav>
+</header>
+<div class="layout">
+  <nav class="side" id="side" aria-label="Documentation">
+<p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../getting-started/">Getting started</a></li><li><a href="../">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/verify-release/">Verify a release</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
+<p class="side-h">Package formats</p><ul><li><a href="../docker/">Docker &amp; OCI</a></li><li><a href="../npm/">npm, pnpm, yarn</a></li><li><a href="../maven/">Maven &amp; Gradle</a></li><li><a href="../pypi/">PyPI</a></li><li><a href="../nuget/">NuGet</a></li><li><a href="../go/">Go modules</a></li><li><a href="../helm/">Helm charts</a></li><li><a href="../cargo/">Cargo</a></li><li><a href="../apt/">APT</a></li><li><a href="../rpm/">RPM</a></li><li><a href="../raw/">Raw files</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../migrate/">Move to Hangar</a></li><li><a href="../ci/">CI integration</a></li><li><a href="../ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../config-as-code/">Configuration as code</a></li><li><a href="./" aria-current="page">Webhooks</a></li><li><a href="../access/">Access management</a></li><li><a href="../sso/">Single sign-on</a></li><li><a href="../routing-rules/">Routing rules</a></li><li><a href="../vulnerabilities/">Vulnerability scanning</a></li><li><a href="../api/">REST API</a></li></ul>
+<p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
+<p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+  <main class="content">
+    <article class="article" id="article">
+      <p class="crumb">Guides</p>
+      <h1>Webhooks</h1>
+<p class="lead">Hangar can tell other systems when something happens: a package is published
+or deleted, a component is quarantined, a scan finds new vulnerabilities, a
+repository is created or deleted. A webhook is an HTTP endpoint that receives
+these events as <code>POST</code> requests, as plain JSON or as a Slack or Microsoft
+Teams message.</p>
+<h2 id="events">Events<a class="anchor" href="#events" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Event</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>component.published</code></td>
+<td>A component (package version) was published or cached by a proxy</td>
+</tr>
+<tr>
+<td><code>component.deleted</code></td>
+<td>A component was deleted (by a user, a cleanup policy or Docker GC)</td>
+</tr>
+<tr>
+<td><code>component.quarantined</code></td>
+<td>The quarantine policy blocked a component (<code>data.reason</code> says why)</td>
+</tr>
+<tr>
+<td><code>component.released</code></td>
+<td>A component left quarantine</td>
+</tr>
+<tr>
+<td><code>repository.created</code></td>
+<td>A repository was created</td>
+</tr>
+<tr>
+<td><code>repository.deleted</code></td>
+<td>A repository was deleted</td>
+</tr>
+<tr>
+<td><code>scan.finding</code></td>
+<td>A scan found vulnerabilities that are new to a component</td>
+</tr>
+</tbody>
+</table></div>
+<p>A webhook names the events it wants (at least one) and, optionally, the
+repositories whose events it gets: names or globs such as <code>npm-*</code>. No
+repositories means every repository.</p>
+<h2 id="create-a-webhook">Create a webhook<a class="anchor" href="#create-a-webhook" aria-label="Link to this section">#</a></h2>
+<p>Webhooks are managed in the web UI (Settings › Webhooks) or with the REST API
+below. You
+need the <code>system:webhooks:admin</code> privilege (<code>system:webhooks:read</code> to look),
+and read access to every repository the webhook names: a webhook sends those
+repositories' events to a URL you choose, so it cannot reach further than you
+can. A webhook for every repository therefore needs <code>repo:*:read</code>. The
+built-in Admin role has both.</p>
+<div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>curl -sS -X POST <span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR</span>/api/v1/webhooks&quot;</span> -H <span class="hljs-string">&quot;Authorization: Bearer <span class="hljs-variable">$TOKEN</span>&quot;</span> \
+  -H <span class="hljs-string">&#x27;Content-Type: application/json&#x27;</span> -d <span class="hljs-string">&#x27;{
+    &quot;name&quot;: &quot;ci-trigger&quot;,
+    &quot;url&quot;: &quot;https://ci.example.com/hooks/hangar&quot;,
+    &quot;events&quot;: [&quot;component.published&quot;],
+    &quot;repositories&quot;: [&quot;npm-*&quot;, &quot;maven-releases&quot;],
+    &quot;format&quot;: &quot;generic&quot;,
+    &quot;secret&quot;: &quot;a-long-random-string&quot;
+  }&#x27;</span></code></pre></div>
+<ul>
+<li><code>format</code>: <code>generic</code> (the JSON below), <code>slack</code> (a Slack incoming webhook URL)
+or <code>teams</code> (a Teams Workflows or incoming webhook URL; the message is an
+Adaptive Card).</li>
+<li><code>secret</code>: signs every request (see below). Storing it needs
+<code>security.secret_key</code> on the server; it is encrypted at rest and never
+returned. Leave it out on update to keep the stored one; send
+<code>&quot;clear_secret&quot;: true</code> to remove it.</li>
+<li>The URL is write-only as well: Slack and Teams put their credential in the
+URL path, so the API shows only <code>https://host/***</code>. Leave <code>url</code> out on
+update to keep it. Changing the URL to another scheme, host or port needs
+the secret again (or <code>clear_secret</code>), so a stored secret is never sent to an
+endpoint it was not entered for.</li>
+<li>The URL must pass the same outbound address policy as proxy repository
+remotes: loopback, private, link-local (cloud metadata) and other reserved
+addresses are refused unless the operator allows them with
+<code>http.allow_private_networks</code>. URLs with user information are refused.
+Requests go through the configured outbound proxy and CA bundle, and
+redirects are not followed.</li>
+</ul>
+<p>Other endpoints (all under <code>/api/v1</code>, see <code>openapi.yaml</code>):</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Call</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /webhooks</code>, <code>GET /webhooks/{id}</code></td>
+<td>List, read</td>
+</tr>
+<tr>
+<td><code>PUT /webhooks/{id}</code>, <code>DELETE /webhooks/{id}</code></td>
+<td>Change, delete (with its deliveries)</td>
+</tr>
+<tr>
+<td><code>POST /webhooks/{id}:test</code></td>
+<td>Send a <code>ping</code> now and return the outcome (also for a disabled webhook)</td>
+</tr>
+<tr>
+<td><code>GET /webhooks/{id}/deliveries?state=failed</code></td>
+<td>Deliveries, newest first (cursor pagination)</td>
+</tr>
+<tr>
+<td><code>GET /webhooks/{id}/deliveries/{delivery_id}</code></td>
+<td>One delivery with the payload that was sent</td>
+</tr>
+<tr>
+<td><code>POST /webhooks/{id}/deliveries/{delivery_id}:redeliver</code></td>
+<td>Send that event again as a new delivery</td>
+</tr>
+</tbody>
+</table></div>
+<p>Creating, changing, deleting, testing and redelivering are audited
+(<code>webhook.create</code>, <code>webhook.update</code>, <code>webhook.delete</code>, <code>webhook.test</code>,
+<code>webhook.redeliver</code>), with the URL redacted and without the secret.</p>
+<h2 id="delivery-and-retries">Delivery and retries<a class="anchor" href="#delivery-and-retries" aria-label="Link to this section">#</a></h2>
+<p>Events are written to an outbox in the database right after they happen and
+delivered by a worker on every node, so a delivery survives a restart and
+any node can send it.</p>
+<ul>
+<li>Each attempt has 10 seconds to connect and answer. Any <code>2xx</code> is success;
+everything else, including redirects, timeouts and connection errors, is a
+failure.</li>
+<li>A failed delivery is retried with exponential backoff: 6 attempts in all,
+2, 4, 8, 16 and 32 minutes apart (about an hour). Then it is <code>failed</code>; you
+can redeliver it.</li>
+<li>Every delivery records its state, attempts, the last status code, latency
+and error. Finished deliveries are kept for 30 days.</li>
+<li>20 failed attempts in a row (no success in between) disable the webhook:
+<code>enabled</code> turns false, <code>disabled_reason</code> says why, and the audit log gets a
+<code>webhook.disable</code> record by <code>system</code>. New events are not queued for a
+disabled webhook. Fix the receiver, test it, and enable the webhook again,
+which resets the count.</li>
+<li>Delivery is at least once: a receiver may see an event twice (a retry after
+a lost answer, a redelivery). Deduplicate on the envelope <code>id</code>.</li>
+</ul>
+<h2 id="payload-generic">Payload (generic)<a class="anchor" href="#payload-generic" aria-label="Link to this section">#</a></h2>
+<div class="code"><div class="code-head"><span>json</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="json"><code><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;id&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;5b0c7a7e4f0e4c2a9d0f7c3c1f2e8a11&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;event&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;component.published&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;occurred_at&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;2026-11-21T09:30:12.123Z&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;actor&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;ci-bot&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;repository&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;npm-hosted&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;subject&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;@acme/ui@1.4.0&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;data&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;id&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;…&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;repository&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;npm-hosted&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;namespace&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;@acme&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;name&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;ui&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;version&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;1.4.0&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;attributes&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-punctuation">}</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;instance&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;https://hangar.example.com&quot;</span>
+<span class="hljs-punctuation">}</span></code></pre></div>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>Event id; retries and redeliveries repeat it</td>
+</tr>
+<tr>
+<td><code>event</code></td>
+<td>Event type, or <code>ping</code> for a test</td>
+</tr>
+<tr>
+<td><code>occurred_at</code></td>
+<td>When the event happened (RFC 3339, UTC)</td>
+</tr>
+<tr>
+<td><code>actor</code></td>
+<td>Who caused it (<code>system</code> for policies and scans)</td>
+</tr>
+<tr>
+<td><code>repository</code>, <code>subject</code></td>
+<td>The repository, and the component or repository the event is about</td>
+</tr>
+<tr>
+<td><code>data</code></td>
+<td>The component (<code>component.*</code>); <code>id</code>, <code>name</code>, <code>format</code>, <code>type</code>, <code>online</code> (<code>repository.*</code>); for <code>scan.finding</code> <code>count</code>, <code>max_severity</code>, <code>scanner</code> and <code>findings</code> (advisory id, severity, CVSS, package, installed and fixed version)</td>
+</tr>
+<tr>
+<td><code>instance</code></td>
+<td><code>server.base_url</code> of the sending server</td>
+</tr>
+</tbody>
+</table></div>
+<p>Values that look like credentials (keys containing <code>password</code>, <code>secret</code>,
+<code>token</code>, <code>authorization</code>, <code>credential</code>, …, and passwords in URLs) are
+replaced by <code>REDACTED</code>. An envelope larger than 64 KiB is sent with
+<code>&quot;data&quot;: {&quot;truncated&quot;: true, &quot;size&quot;: &lt;bytes&gt;}</code>; read the details through the
+API.</p>
+<p>Headers of every request:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Header</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>X-Hangar-Event</code></td>
+<td>Event type</td>
+</tr>
+<tr>
+<td><code>X-Hangar-Delivery</code></td>
+<td>Delivery id (repeated by retries)</td>
+</tr>
+<tr>
+<td><code>X-Hangar-Timestamp</code></td>
+<td>Unix time in seconds when the attempt was signed</td>
+</tr>
+<tr>
+<td><code>X-Hangar-Signature</code></td>
+<td><code>sha256=</code> + hex HMAC-SHA256 of <code>&lt;timestamp&gt;.&lt;body&gt;</code> with the secret (only with a secret)</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="verify-the-signature">Verify the signature<a class="anchor" href="#verify-the-signature" aria-label="Link to this section">#</a></h2>
+<p>Compute HMAC-SHA256 over the timestamp header, a dot and the raw request
+body, compare it with the signature in constant time, and reject timestamps
+older than a few minutes to stop replays.</p>
+<p>Go:</p>
+<div class="code"><div class="code-head"><span>go</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="go"><code><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">verify</span><span class="hljs-params">(r *http.Request, body []<span class="hljs-type">byte</span>, secret <span class="hljs-type">string</span>)</span></span> <span class="hljs-type">bool</span> {
+	ts := r.Header.Get(<span class="hljs-string">&quot;X-Hangar-Timestamp&quot;</span>)
+	n, err := strconv.ParseInt(ts, <span class="hljs-number">10</span>, <span class="hljs-number">64</span>)
+	<span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> || time.Since(time.Unix(n, <span class="hljs-number">0</span>)).Abs() &gt; <span class="hljs-number">5</span>*time.Minute {
+		<span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>
+	}
+	mac := hmac.New(sha256.New, []<span class="hljs-type">byte</span>(secret))
+	mac.Write([]<span class="hljs-type">byte</span>(ts + <span class="hljs-string">&quot;.&quot;</span>))
+	mac.Write(body)
+	want := <span class="hljs-string">&quot;sha256=&quot;</span> + hex.EncodeToString(mac.Sum(<span class="hljs-literal">nil</span>))
+	<span class="hljs-keyword">return</span> hmac.Equal([]<span class="hljs-type">byte</span>(want), []<span class="hljs-type">byte</span>(r.Header.Get(<span class="hljs-string">&quot;X-Hangar-Signature&quot;</span>)))
+}</code></pre></div>
+<p>Python:</p>
+<div class="code"><div class="code-head"><span>python</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="python"><code><span class="hljs-keyword">import</span> hashlib, hmac, time
+
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">verify</span>(<span class="hljs-params">headers, body: <span class="hljs-built_in">bytes</span>, secret: <span class="hljs-built_in">str</span></span>) -&gt; <span class="hljs-built_in">bool</span>:
+    ts = headers.get(<span class="hljs-string">&quot;X-Hangar-Timestamp&quot;</span>, <span class="hljs-string">&quot;&quot;</span>)
+    <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> ts.isdigit() <span class="hljs-keyword">or</span> <span class="hljs-built_in">abs</span>(time.time() - <span class="hljs-built_in">int</span>(ts)) &gt; <span class="hljs-number">300</span>:
+        <span class="hljs-keyword">return</span> <span class="hljs-literal">False</span>
+    want = <span class="hljs-string">&quot;sha256=&quot;</span> + hmac.new(secret.encode(), ts.encode() + <span class="hljs-string">b&quot;.&quot;</span> + body, hashlib.sha256).hexdigest()
+    <span class="hljs-keyword">return</span> hmac.compare_digest(want, headers.get(<span class="hljs-string">&quot;X-Hangar-Signature&quot;</span>, <span class="hljs-string">&quot;&quot;</span>))</code></pre></div>
+<p>Node.js:</p>
+<div class="code"><div class="code-head"><span>js</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="js"><code><span class="hljs-keyword">const</span> crypto = <span class="hljs-built_in">require</span>(<span class="hljs-string">&quot;node:crypto&quot;</span>);
+
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">verify</span>(<span class="hljs-params">headers, rawBody, secret</span>) {
+  <span class="hljs-keyword">const</span> ts = headers[<span class="hljs-string">&quot;x-hangar-timestamp&quot;</span>] ?? <span class="hljs-string">&quot;&quot;</span>;
+  <span class="hljs-keyword">if</span> (!<span class="hljs-regexp">/^\d+$/</span>.<span class="hljs-title function_">test</span>(ts) || <span class="hljs-title class_">Math</span>.<span class="hljs-title function_">abs</span>(<span class="hljs-title class_">Date</span>.<span class="hljs-title function_">now</span>() / <span class="hljs-number">1000</span> - <span class="hljs-title class_">Number</span>(ts)) &gt; <span class="hljs-number">300</span>) <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;
+  <span class="hljs-keyword">const</span> want = <span class="hljs-string">&quot;sha256=&quot;</span> + crypto.<span class="hljs-title function_">createHmac</span>(<span class="hljs-string">&quot;sha256&quot;</span>, secret).<span class="hljs-title function_">update</span>(<span class="hljs-string">`<span class="hljs-subst">${ts}</span>.`</span>).<span class="hljs-title function_">update</span>(rawBody).<span class="hljs-title function_">digest</span>(<span class="hljs-string">&quot;hex&quot;</span>);
+  <span class="hljs-keyword">const</span> got = headers[<span class="hljs-string">&quot;x-hangar-signature&quot;</span>] ?? <span class="hljs-string">&quot;&quot;</span>;
+  <span class="hljs-keyword">return</span> got.<span class="hljs-property">length</span> === want.<span class="hljs-property">length</span> &amp;&amp; crypto.<span class="hljs-title function_">timingSafeEqual</span>(<span class="hljs-title class_">Buffer</span>.<span class="hljs-title function_">from</span>(got), <span class="hljs-title class_">Buffer</span>.<span class="hljs-title function_">from</span>(want));
+}</code></pre></div>
+<p>Use the raw body bytes as received; re-serialising parsed JSON changes them.</p>
+<h2 id="troubleshooting">Troubleshooting<a class="anchor" href="#troubleshooting" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><strong>400 on <code>url</code>, &quot;refused by the outbound address policy&quot;</strong>: the host is or
+resolves to an internal address. An operator can allow it with
+<code>http.allow_private_networks</code> (a host name, <code>.domain</code> suffix or CIDR).</li>
+<li><strong>Deliveries fail with <code>HTTP 3xx</code></strong>: point the webhook at the final URL;
+redirects are not followed.</li>
+<li><strong><code>no answer within 10s</code></strong>: answer quickly (queue the work and return <code>202</code>).</li>
+<li><strong>Webhook disabled</strong>: see <code>disabled_reason</code>, fix the receiver, use
+<code>:test</code>, then set <code>&quot;enabled&quot;: true</code>.</li>
+</ul>
+
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/webhooks.md"><code>docs/guides/webhooks.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/webhooks.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../config-as-code/" rel="prev"><small>Previous</small><b>Configuration as code</b></a><a class="next" href="../access/" rel="next"><small>Next</small><b>Access management</b></a></nav>
+    </article>
+  </main>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#events">Events</a></li><li class="l2"><a href="#create-a-webhook">Create a webhook</a></li><li class="l2"><a href="#delivery-and-retries">Delivery and retries</a></li><li class="l2"><a href="#payload-generic">Payload (generic)</a></li><li class="l2"><a href="#verify-the-signature">Verify the signature</a></li><li class="l2"><a href="#troubleshooting">Troubleshooting</a></li></ul></aside>
+</div>
+<div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
+  <div class="search-box">
+    <label>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sr-only">Search the docs</span>
+      <input id="search-input" type="search" placeholder="Search: proxy, OIDC, npm, backup…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="results" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </label>
+    <ul class="results" id="results" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+</body>
+</html>

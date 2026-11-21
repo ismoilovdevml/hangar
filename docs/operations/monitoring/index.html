@@ -45,10 +45,10 @@
 <div class="layout">
   <nav class="side" id="side" aria-label="Documentation">
 <p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../../guides/getting-started/">Getting started</a></li><li><a href="../../guides/">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
-<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/verify-release/">Verify a release</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
 <p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
 <p class="side-h">Package formats</p><ul><li><a href="../../guides/docker/">Docker &amp; OCI</a></li><li><a href="../../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../../guides/pypi/">PyPI</a></li><li><a href="../../guides/nuget/">NuGet</a></li><li><a href="../../guides/go/">Go modules</a></li><li><a href="../../guides/helm/">Helm charts</a></li><li><a href="../../guides/cargo/">Cargo</a></li><li><a href="../../guides/apt/">APT</a></li><li><a href="../../guides/rpm/">RPM</a></li><li><a href="../../guides/raw/">Raw files</a></li></ul>
-<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../../guides/config-as-code/">Configuration as code</a></li><li><a href="../../guides/webhooks/">Webhooks</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
 <p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="./" aria-current="page">Monitoring</a></li><li><a href="../runbooks/">Alert runbooks</a></li><li><a href="../performance/">Performance</a></li></ul>
 <p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
   </nav>
@@ -284,7 +284,8 @@ the pods and, with <code>metrics.serviceMonitor.enabled</code>, adds the matchin
 <code>authorization</code> or <code>basicAuth</code> to the ServiceMonitor:</p>
 <div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>kubectl -n hangar create secret generic hangar-metrics \
   --from-literal=metrics-token=<span class="hljs-string">&quot;<span class="hljs-subst">$(openssl rand -hex 32)</span>&quot;</span>
-helm upgrade hangar deploy/helm/hangar -n hangar --reuse-values \
+helm upgrade hangar oci://ghcr.io/ismoilovdevml/charts/hangar --version &lt;installed version&gt; \
+  -n hangar --reuse-values \
   --<span class="hljs-built_in">set</span> metrics.auth.mode=bearer --<span class="hljs-built_in">set</span> metrics.auth.existingSecret=hangar-metrics</code></pre></div>
 <p>Check a node with <code>curl -H &quot;Authorization: Bearer $TOKEN&quot; http://hangar-1.internal:8080/metrics | head</code>;
 without the header it answers <code>401</code>.</p>
@@ -300,10 +301,16 @@ aggregate across instances in queries.</p>
 matched are <code>route=&quot;unmatched&quot;</code>.</li>
 <li><code>method</code> is one of the standard HTTP methods or <code>OTHER</code>; <code>code</code> is the
 status code or <code>other</code> outside 100–599.</li>
-<li>Repository names appear only in <code>hangar_upstream_state</code> (one series per proxy
-repository and state, capped at 512 repositories) and store names only in the
-blob store usage gauges (capped at 64 stores). Both sets are created by
-administrators.</li>
+<li>Repository names appear in <code>hangar_upstream_state</code> (one series per proxy
+repository and state, capped at 512 repositories), in the per-repository
+proxy metrics (those with a <code>repository</code> label) and in
+<code>hangar_routing_blocked_total</code>; store names appear only in the blob store
+usage gauges (capped at 64 stores). Repositories, stores and routing rules
+are created by administrators.</li>
+<li>The <code>host</code> label of <code>hangar_proxy_upstream_requests_total</code> is the remote's
+host or a host that matched the repository's <code>related_hosts</code> (or a format's
+built-in file hosts). It is not capped: a suffix pattern such as
+<code>.cdn.example.com</code> adds one series per subdomain the remote links to.</li>
 <li><code>format</code>, job <code>type</code> and similar values from code or configuration are capped
 (32 formats, 64 job types); anything beyond becomes <code>other</code>.</li>
 </ul>
@@ -543,6 +550,57 @@ run finishes after start the usage gauges are absent.</p>
 <td><code>repository</code></td>
 <td>Remote requests that failed on a DNS timeout or temporary error. They count towards the circuit breaker at most once per second.</td>
 </tr>
+<tr>
+<td><code>hangar_proxy_upstream_requests_total</code></td>
+<td>counter</td>
+<td><code>repository</code>, <code>host</code>, <code>result</code></td>
+<td>HTTP requests proxy repositories sent to their remote and its related hosts, by final result: <code>2xx</code> … <code>5xx</code>, <code>rate_limited</code> (a 429 beyond the <code>Retry-After</code> budget, or the host is still held back after one), <code>error</code> (connection, TLS, timeout, or refused by the outbound address policy), <code>circuit_open</code> (refused by the open breaker without contacting the host) or <code>offline</code> (the repository is in offline mode). A request that was retried counts once, with its last result. Unlike <code>hangar_upstream_fetches_total</code> it names the repository and the host, so it shows which remote, or which download host behind it, fails.</td>
+</tr>
+<tr>
+<td><code>hangar_proxy_upstream_request_duration_seconds</code></td>
+<td>histogram</td>
+<td><code>repository</code></td>
+<td>Time from sending a remote request to its response headers, retries and their waits included. Only requests that got a response are observed (not <code>error</code>, <code>circuit_open</code>, <code>offline</code> or <code>rate_limited</code> results).</td>
+</tr>
+<tr>
+<td><code>hangar_proxy_upstream_retries_total</code></td>
+<td>counter</td>
+<td><code>repository</code>, <code>reason</code></td>
+<td>Retries of remote requests by <code>reason</code>: <code>error</code> (connection failure), <code>5xx</code>, <code>rate_limited</code> (a 429 within the <code>Retry-After</code> budget). A steady rate means a remote is flaky even when the final results are <code>2xx</code>.</td>
+</tr>
+<tr>
+<td><code>hangar_proxy_upstream_resumes_total</code></td>
+<td>counter</td>
+<td><code>repository</code></td>
+<td>Interrupted remote downloads continued with a <code>Range</code> request instead of starting over.</td>
+</tr>
+<tr>
+<td><code>hangar_proxy_upstream_inflight_requests</code></td>
+<td>gauge</td>
+<td><code>repository</code></td>
+<td>Remote requests in progress: waiting for a slot, waiting for headers or streaming a body. Requests queued for a slot count too, so with <code>max_concurrent_requests</code> set a value above that limit means requests wait for the remote.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="routing-rules">Routing rules<a class="anchor" href="#routing-rules" aria-label="Link to this section">#</a></h3>
+<p><a href="../../guides/routing-rules/">Routing rules</a> keep internal package names away
+from proxy remotes and group members (dependency confusion protection).</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hangar_routing_blocked_total</code></td>
+<td>counter</td>
+<td><code>format</code>, <code>repository</code>, <code>member</code>, <code>rule</code></td>
+<td>Package names a routing rule kept from a proxy remote or a group member. <code>repository</code> holds the rule, <code>member</code> is the excluded group member (empty for proxy rules), <code>rule</code> is <code>block</code>, <code>allow</code> (the name was not on a proxy's allow list) or <code>exclusive</code> (another member reserves the name). Every exclusion is counted; it is also logged and audited as <code>routing.blocked</code>, at most once per 10 minutes per node for the same repository, member, rule and package name. A rise for one package name on a proxy means builds asked a public remote for an internal name: either a client is missing the internal repository or someone is probing for a dependency confusion; the audit log names the package.</td>
+</tr>
 </tbody>
 </table></div>
 <h3 id="database">Database<a class="anchor" href="#database" aria-label="Link to this section">#</a></h3>
@@ -648,25 +706,31 @@ features).</p>
 <td><code>hangar_job_queue_depth</code></td>
 <td>gauge</td>
 <td><code>type</code></td>
-<td>Jobs waiting or running in the cluster-wide JetStream work queue (same value on every node).</td>
+<td>Jobs waiting or running in the cluster-wide job queue (the <code>jobs</code> table; same value on every node).</td>
+</tr>
+<tr>
+<td><code>hangar_job_queue_dead</code></td>
+<td>gauge</td>
+<td><code>type</code></td>
+<td>Jobs that failed their last attempt, kept 7 days for inspection.</td>
 </tr>
 <tr>
 <td><code>hangar_job_queue_up</code></td>
 <td>gauge</td>
 <td></td>
-<td>1 if the job stream could be read on this scrape.</td>
+<td>1 if the job queue could be read on this scrape.</td>
 </tr>
 <tr>
-<td><code>hangar_nats_connected</code></td>
+<td><code>hangar_event_listener_connected</code></td>
 <td>gauge</td>
 <td></td>
-<td>1 while connected to NATS.</td>
+<td>1 while this node listens for events (its dedicated PostgreSQL connection is up).</td>
 </tr>
 <tr>
-<td><code>hangar_nats_reconnects_total</code></td>
+<td><code>hangar_event_listener_reconnects_total</code></td>
 <td>counter</td>
 <td></td>
-<td>Reconnections to NATS.</td>
+<td>Reconnections of the event listener; each one drops the node's caches.</td>
 </tr>
 </tbody>
 </table></div>
@@ -800,8 +864,8 @@ every logging path, including the in-memory buffer below, and fails if any of
 them reaches the output.</p>
 <h3 id="system-logs-screen">System logs screen<a class="anchor" href="#system-logs-screen" aria-label="Link to this section">#</a></h3>
 <p>Each node also keeps its newest <code>log.buffer_size</code> records in memory, after the
-same scrubbing, so administrators can read them under <strong>Operations → System
-logs</strong> without access to the host. The buffer is a fixed ring: appending is
+same scrubbing, so administrators can read them under <strong>System → Logs</strong>
+without access to the host. The buffer is a fixed ring: appending is
 constant time and never waits for readers, and the oldest records are
 overwritten. Warnings and errors are kept longer: the newest of them (a fifth
 of <code>log.buffer_size</code>, at least 100) stay readable after a burst of info
@@ -821,7 +885,7 @@ downloads the node's buffer, with the current filters, as JSON lines.</p>
 <tbody>
 <tr>
 <td><code>node</code></td>
-<td>Node id from <code>/system/nodes</code>; default the node that answers. Other nodes are asked over NATS.</td>
+<td>Node id from <code>/system/nodes</code>; default the node that answers. Other nodes are asked over HTTP at their <code>server.node_url</code>, signed with the cluster node key.</td>
 </tr>
 <tr>
 <td><code>level</code></td>
@@ -860,7 +924,8 @@ before they were read, or the node restarted. Always pass <code>node</code> when
 balancer spreads requests: a cursor only means something to the node that
 issued it.</p>
 <h2 id="system-status-screen">System status screen<a class="anchor" href="#system-status-screen" aria-label="Link to this section">#</a></h2>
-<p><strong>Operations → System status</strong> (privilege <code>system:cluster:read</code>) opens with a
+<p><strong>System → Status</strong> (privilege <code>system:cluster:read</code>; the sidebar's System
+entry and the status pill open it) opens with a
 headline for the whole installation (<em>Everything is working</em>, <em>1 check needs
 attention</em>, <em>2 checks are down</em>, <em>1 node is not responding</em>), the number of
 checks passing on the nodes that answer, and the version. Below it, every
@@ -902,9 +967,9 @@ node, each checklist has the node's name, role and state above it.</p>
 <tr>
 <td>Event bus</td>
 <td>Readiness ping time</td>
-<td>Connected and JetStream answers</td>
-<td></td>
-<td>Disconnected or JetStream unavailable</td>
+<td>Listening; job counts readable</td>
+<td>Job counts unreadable</td>
+<td>Listener disconnected</td>
 </tr>
 <tr>
 <td>Task scheduler</td>
@@ -1018,15 +1083,15 @@ Hangar does not send trace headers to proxy remotes. Jobs start new traces.</p>
 </tr>
 <tr>
 <td><code>hangar-upstreams.json</code></td>
-<td>Which proxy remotes are offline, blocked or slow? How often do fetches fail and how long do they take?</td>
+<td>Which proxy remotes are offline, blocked or slow? How often do fetches fail and how long do they take? Which repository, and which host behind it, fails, retries or keeps clients waiting?</td>
 </tr>
 <tr>
 <td><code>hangar-jobs.json</code></td>
-<td>Is the job queue draining? Which jobs fail or take long? Is NATS connected?</td>
+<td>Is the job queue draining? Which jobs fail or take long? Is every node listening for events?</td>
 </tr>
 <tr>
 <td><code>hangar-auth.json</code></td>
-<td>Is someone guessing passwords? Are accounts being locked? Is the audit trail complete?</td>
+<td>Is someone guessing passwords? Are accounts being locked? Is the audit trail complete? Are routing rules turning away internal package names, and which rules fire?</td>
 </tr>
 </tbody>
 </table></div>
@@ -1120,12 +1185,19 @@ in Grafana to match Prometheus.</p>
 </tr>
 </tbody>
 </table></div>
+<p>Routing rule exclusions (<code>hangar_routing_blocked_total</code>) and remote retries
+have dashboards but no alert on purpose: an exclusion is a rule doing its
+job, and a retry that ends in success needs no one at night. Watch them on
+<code>hangar-auth.json</code> and <code>hangar-upstreams.json</code>, and read the
+<code>routing.blocked</code> audit events when a rule fires for a name you do not
+expect. A remote that stays down is covered by
+<a href="../runbooks/#hangarupstreamcircuitopen">HangarUpstreamCircuitOpen</a>.</p>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/monitoring.md"><code>docs/operations/monitoring.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/operations/monitoring.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/monitoring.md"><code>docs/operations/monitoring.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/operations/monitoring.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
       <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../../security/" rel="prev"><small>Previous</small><b>Security</b></a><a class="next" href="../runbooks/" rel="next"><small>Next</small><b>Alert runbooks</b></a></nav>
     </article>
   </main>
-  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#quick-start">Quick start</a></li><li class="l2"><a href="#configuration">Configuration</a></li><li class="l2"><a href="#protecting-metrics">Protecting /metrics</a></li><li class="l2"><a href="#metrics">Metrics</a></li><li class="l3"><a href="#cardinality">Cardinality</a></li><li class="l3"><a href="#http">HTTP</a></li><li class="l3"><a href="#package-formats">Package formats</a></li><li class="l3"><a href="#blob-storage">Blob storage</a></li><li class="l3"><a href="#proxy-remotes">Proxy remotes</a></li><li class="l3"><a href="#database">Database</a></li><li class="l3"><a href="#jobs-and-event-bus">Jobs and event bus</a></li><li class="l3"><a href="#authentication-and-audit">Authentication and audit</a></li><li class="l3"><a href="#health-and-build">Health and build</a></li><li class="l2"><a href="#logs">Logs</a></li><li class="l3"><a href="#system-logs-screen">System logs screen</a></li><li class="l2"><a href="#system-status-screen">System status screen</a></li><li class="l2"><a href="#traces">Traces</a></li><li class="l2"><a href="#dashboards">Dashboards</a></li><li class="l2"><a href="#alerts">Alerts</a></li></ul></aside>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#quick-start">Quick start</a></li><li class="l2"><a href="#configuration">Configuration</a></li><li class="l2"><a href="#protecting-metrics">Protecting /metrics</a></li><li class="l2"><a href="#metrics">Metrics</a></li><li class="l3"><a href="#cardinality">Cardinality</a></li><li class="l3"><a href="#http">HTTP</a></li><li class="l3"><a href="#package-formats">Package formats</a></li><li class="l3"><a href="#blob-storage">Blob storage</a></li><li class="l3"><a href="#proxy-remotes">Proxy remotes</a></li><li class="l3"><a href="#routing-rules">Routing rules</a></li><li class="l3"><a href="#database">Database</a></li><li class="l3"><a href="#jobs-and-event-bus">Jobs and event bus</a></li><li class="l3"><a href="#authentication-and-audit">Authentication and audit</a></li><li class="l3"><a href="#health-and-build">Health and build</a></li><li class="l2"><a href="#logs">Logs</a></li><li class="l3"><a href="#system-logs-screen">System logs screen</a></li><li class="l2"><a href="#system-status-screen">System status screen</a></li><li class="l2"><a href="#traces">Traces</a></li><li class="l2"><a href="#dashboards">Dashboards</a></li><li class="l2"><a href="#alerts">Alerts</a></li></ul></aside>
 </div>
 <div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
   <div class="search-box">

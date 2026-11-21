@@ -45,10 +45,10 @@
 <div class="layout">
   <nav class="side" id="side" aria-label="Documentation">
 <p class="side-h">Start here</p><ul><li><a href="../">Introduction</a></li><li><a href="../guides/getting-started/">Getting started</a></li><li><a href="../guides/">Concepts and guides</a></li><li><a href="../faq/">FAQ</a></li></ul>
-<p class="side-h">Install and run</p><ul><li><a href="../deploy/">Deploying Hangar</a></li><li><a href="../deploy/requirements/">Requirements and sizing</a></li><li><a href="../deploy/install-compose/">Docker Compose</a></li><li><a href="../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../deploy/install-binary/">Binary and systemd</a></li><li><a href="../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../deploy/first-admin/">First administrator</a></li><li><a href="../deploy/backup-restore/">Backup and restore</a></li><li><a href="../deploy/upgrade/">Upgrades</a></li><li><a href="../deploy/high-availability/">High availability</a></li><li><a href="../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../deploy/">Deploying Hangar</a></li><li><a href="../deploy/requirements/">Requirements and sizing</a></li><li><a href="../deploy/install-compose/">Docker Compose</a></li><li><a href="../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../deploy/install-binary/">Binary and systemd</a></li><li><a href="../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../deploy/first-admin/">First administrator</a></li><li><a href="../deploy/backup-restore/">Backup and restore</a></li><li><a href="../deploy/upgrade/">Upgrades</a></li><li><a href="../deploy/verify-release/">Verify a release</a></li><li><a href="../deploy/high-availability/">High availability</a></li><li><a href="../deploy/troubleshooting/">Troubleshooting</a></li></ul>
 <p class="side-h">Using the UI</p><ul><li><a href="../ui/">The web UI</a></li><li><a href="../ui/repositories/">Repositories</a></li><li><a href="../ui/packages/">Packages &amp; search</a></li><li><a href="../ui/connect/">Connect a client</a></li><li><a href="../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../ui/access/">Access &amp; tokens</a></li><li><a href="../ui/tasks/">Scheduled tasks</a></li><li><a href="../ui/blob-stores/">Blob stores</a></li><li><a href="../ui/system/">Status, logs &amp; audit</a></li><li><a href="../ui/settings/">Settings</a></li></ul>
 <p class="side-h">Package formats</p><ul><li><a href="../guides/docker/">Docker &amp; OCI</a></li><li><a href="../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../guides/pypi/">PyPI</a></li><li><a href="../guides/nuget/">NuGet</a></li><li><a href="../guides/go/">Go modules</a></li><li><a href="../guides/helm/">Helm charts</a></li><li><a href="../guides/cargo/">Cargo</a></li><li><a href="../guides/apt/">APT</a></li><li><a href="../guides/rpm/">RPM</a></li><li><a href="../guides/raw/">Raw files</a></li></ul>
-<p class="side-h">Guides</p><ul><li><a href="../guides/migrate/">Move to Hangar</a></li><li><a href="../guides/ci/">CI integration</a></li><li><a href="../guides/access/">Access management</a></li><li><a href="../guides/sso/">Single sign-on</a></li><li><a href="../guides/routing-rules/">Routing rules</a></li><li><a href="../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../guides/api/">REST API</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../guides/migrate/">Move to Hangar</a></li><li><a href="../guides/ci/">CI integration</a></li><li><a href="../guides/ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../guides/config-as-code/">Configuration as code</a></li><li><a href="../guides/webhooks/">Webhooks</a></li><li><a href="../guides/access/">Access management</a></li><li><a href="../guides/sso/">Single sign-on</a></li><li><a href="../guides/routing-rules/">Routing rules</a></li><li><a href="../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../guides/api/">REST API</a></li></ul>
 <p class="side-h">Operations</p><ul><li><a href="./" aria-current="page">Security</a></li><li><a href="../operations/monitoring/">Monitoring</a></li><li><a href="../operations/runbooks/">Alert runbooks</a></li><li><a href="../operations/performance/">Performance</a></li></ul>
 <p class="side-h">Project</p><ul><li><a href="../architecture/">Architecture</a></li><li><a href="../formats/">Format protocols</a></li><li><a href="../adr/">Decision records</a></li><li><a href="../product-spec/">Product specification</a></li><li><a href="../design-system/">Design system</a></li><li><a href="../roadmap/">Roadmap</a></li><li><a href="../changelog/">Changelog</a></li></ul>
   </nav>
@@ -114,6 +114,11 @@ an operator must configure, and how to report a vulnerability
 <td>Audit trail</td>
 <td>Repudiation</td>
 <td>Every mutation, denial and failed sign-in is recorded in the append-only audit log with the client IP (forwarding headers honoured only from <code>server.trusted_proxies</code>).</td>
+</tr>
+<tr>
+<td>Hangar's own releases</td>
+<td>A tampered or substituted image, chart, binary or installer</td>
+<td>From v0.2.0 the release workflow signs both images, the Helm chart and every release file with cosign (keyless, certificate bound to the workflow and tag), attaches SPDX SBOMs and records SLSA build provenance; releases are published only after the tests, <code>govulncheck</code>, <code>npm audit</code> and a Trivy scan pass. Verify before deploying: <a href="../deploy/verify-release/">deploy/verify-release.md</a>.</td>
 </tr>
 </tbody>
 </table></div>
@@ -217,11 +222,19 @@ the other jobs on that runner fail with 429; fix the job's token, or raise
 </tr>
 <tr>
 <td>Password in a proxy <code>remote_url</code> or <code>http.proxy</code> URL</td>
-<td>Sealed in place of the password: <code>http://user:hgs1.…@host</code></td>
+<td>Sealed in place of the password: <code>http://user:hgs2.…@host</code></td>
 </tr>
 <tr>
 <td>S3 secret key and session token of blob stores</td>
 <td>Sealed in <code>blob_stores.config</code> (<code>secret_access_key_sealed</code>)</td>
+</tr>
+<tr>
+<td>OIDC client secret, LDAP bind password, outbound proxy passwords</td>
+<td>Sealed in <code>settings</code> / <code>outbound_proxies</code></td>
+</tr>
+<tr>
+<td>Repository signing keys, import task source credentials</td>
+<td>Sealed in <code>signing_keys.private_key</code> / <code>tasks.config</code></td>
 </tr>
 <tr>
 <td>Server-level secrets (<code>storage.s3.secret_access_key</code>, <code>http.proxy_password</code>, <code>docker.token_key</code>, <code>security.secret_key</code>)</td>
@@ -233,10 +246,24 @@ the other jobs on that runner fail with 429; fix the job's token, or raise
 256-bit data key; the value is encrypted with AES-256-GCM under the data
 key, and the data key with AES-256-GCM under the key encryption key
 (<code>security.secret_key</code>). The stored form is
-<code>hgs1.&lt;key id&gt;.&lt;wrapped data key&gt;.&lt;ciphertext&gt;</code>; the key id is derived from
+<code>hgs2.&lt;key id&gt;.&lt;wrapped data key&gt;.&lt;ciphertext&gt;</code>; the key id is derived from
 the key, so ids never need to be assigned. Values are sealed when a
 repository or blob store is saved and opened only by the proxy engine and
-the S3 driver. The API answers with the password removed and URL passwords
+the S3 driver.</p>
+<p><strong>Bound to their place.</strong> Each ciphertext is authenticated together with
+where it is stored: table, row identity and field (the id of a repository,
+blob store or task; the key of a setting; the name of an outbound proxy or
+signing key; the JSON path or column of the secret). The binding is not
+stored in the value. A sealed value copied into another row, field or table
+(through database access, a restored backup or another installation with the
+same key) does not open there: the request that would use it fails, and
+<code>hangar serve</code> and <code>hangar admin rotate-secrets</code> report it as unreadable.
+Format details: <a href="../adr/0010-context-bound-sealed-secrets/">ADR 0010</a> and the
+<code>internal/secrets</code> package documentation.</p>
+<p><strong>Values from before v0.2.0</strong> (<code>hgs1.…</code>) were not bound to a place. They
+still open, and the first start of v0.2.0 with a key re-seals every one of
+them as <code>hgs2</code> (logged as &quot;upgraded stored secrets&quot;). After that the
+database cannot be read by v0.1.x; see <em>Downgrading</em> below. The API answers with the password removed and URL passwords
 as <code>REDACTED</code>; saving the redacted form back keeps the stored secret.</p>
 <p>A database check constraint (migration <code>00050</code>) rejects plaintext secrets
 in every new or updated row, so no code path can store them by mistake.
@@ -256,12 +283,35 @@ it exits non-zero if a value cannot be opened with the configured keys.</li>
 <li>Remove the old key from <code>previous_secret_keys</code>; restart.</li>
 </ol>
 <p>A lost key cannot be recovered: re-enter the affected credentials.</p>
+<h3 id="downgrading-to-v01x">Downgrading to v0.1.x<a class="anchor" href="#downgrading-to-v01x" aria-label="Link to this section">#</a></h3>
+<p>Hangar before v0.2.0 reads only <code>hgs1</code> values, and its start-up sweep would
+take <code>hgs2</code> values for plaintext and seal them again, after which those
+credentials no longer work and must be re-entered. Before starting an older
+version:</p>
+<ol>
+<li>Stop every v0.2+ node (a running one writes <code>hgs2</code> on the next save, and
+upgrades everything again when it starts).</li>
+<li>With the v0.2+ binary and the same keys, run
+<code>hangar admin rotate-secrets --downgrade</code> (<code>--dry-run</code> shows the counts).
+It writes every secret as <code>hgs1</code> under the primary key, giving up the
+binding to its row and field, and exits non-zero if a value cannot be
+opened.</li>
+<li>Roll the schema back as the release notes describe (migration 00330
+restores the <code>hgs1</code>-only guards), then start the older version.</li>
+</ol>
+<p>Restoring a database backup taken before the upgrade also works, but loses
+every change made since.</p>
 <h2 id="hardening-checklist-for-operators">Hardening checklist for operators<a class="anchor" href="#hardening-checklist-for-operators" aria-label="Link to this section">#</a></h2>
 <ul>
 <li>
 <p><strong>Dependency confusion</strong>: on every proxy of a public registry, block the names
 your hosted repositories publish, and reserve them for the hosted member in
 groups. See <a href="../guides/routing-rules/">guides/routing-rules.md</a>.</p>
+</li>
+<li>
+<p>[ ] Verify the images, chart or files you deploy against the release
+workflow's identity, and pin the image by the verified digest
+(<a href="../deploy/verify-release/">deploy/verify-release.md</a>).</p>
 </li>
 <li>
 <p>[ ] Serve Hangar over HTTPS only. Terminate TLS at a reverse proxy, list
@@ -330,8 +380,9 @@ internal mirrors by host name or exact CIDR, never whole private ranges.
 Avoid <code>insecure_skip_verify</code> on remotes; use <code>ca_bundle</code> instead.</p>
 </li>
 <li>
-<p>[ ] Expose only the HTTP port. Do not expose the embedded NATS listener
-(<code>nats.listen</code>) or PostgreSQL to clients; restrict <code>/metrics</code> at the
+<p>[ ] Expose only the HTTP port. Do not expose PostgreSQL to clients;
+<code>/internal/</code> serves only signed requests from other nodes and may be
+blocked at the reverse proxy; restrict <code>/metrics</code> at the
 reverse proxy if it should not be public.</p>
 </li>
 <li>
@@ -395,7 +446,7 @@ updated.</p>
 </tr>
 <tr>
 <td>Rate limits</td>
-<td>Per client IP (IPv6 per /64): API requests; failed authentications on API and package endpoints</td>
+<td>Per client IP (IPv6 per /64): sign-in attempts and failed authentications on API and package endpoints, shared by every node of a cluster (PostgreSQL); API requests, per node (see <a href="../deploy/high-availability/#cluster-wide-and-per-node-state">high availability</a>)</td>
 <td><code>security.rate_limit.*</code>, <code>auth.login_rate</code></td>
 </tr>
 <tr>
@@ -521,11 +572,11 @@ remote, not to redirect targets.</li>
 </tbody>
 </table></div>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/security.md"><code>docs/security.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/security.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/security.md"><code>docs/security.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/security.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
       <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../guides/api/" rel="prev"><small>Previous</small><b>REST API</b></a><a class="next" href="../operations/monitoring/" rel="next"><small>Next</small><b>Monitoring</b></a></nav>
     </article>
   </main>
-  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#threat-model-summary">Threat model (summary)</a></li><li class="l2"><a href="#privilege-escalation-model">Privilege escalation model</a></li><li class="l2"><a href="#sign-in-lockout">Sign-in lockout</a></li><li class="l2"><a href="#how-secrets-and-tokens-are-stored">How secrets and tokens are stored</a></li><li class="l3"><a href="#key-rotation">Key rotation</a></li><li class="l2"><a href="#hardening-checklist-for-operators">Hardening checklist for operators</a></li><li class="l3"><a href="#http-hardening-reference">HTTP hardening reference</a></li><li class="l3"><a href="#readme-images">README images</a></li><li class="l2"><a href="#security-tests">Security tests</a></li><li class="l2"><a href="#static-analysis">Static analysis</a></li></ul></aside>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#threat-model-summary">Threat model (summary)</a></li><li class="l2"><a href="#privilege-escalation-model">Privilege escalation model</a></li><li class="l2"><a href="#sign-in-lockout">Sign-in lockout</a></li><li class="l2"><a href="#how-secrets-and-tokens-are-stored">How secrets and tokens are stored</a></li><li class="l3"><a href="#key-rotation">Key rotation</a></li><li class="l3"><a href="#downgrading-to-v01x">Downgrading to v0.1.x</a></li><li class="l2"><a href="#hardening-checklist-for-operators">Hardening checklist for operators</a></li><li class="l3"><a href="#http-hardening-reference">HTTP hardening reference</a></li><li class="l3"><a href="#readme-images">README images</a></li><li class="l2"><a href="#security-tests">Security tests</a></li><li class="l2"><a href="#static-analysis">Static analysis</a></li></ul></aside>
 </div>
 <div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
   <div class="search-box">

@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Access management · Hangar docs</title>
-<meta name="description" content="How people, service accounts, roles, tokens and sessions work in Hangar, and how to operate them from the web UI (Access &amp; audit, My account) and the REST…">
+<meta name="description" content="How people, service accounts, roles, tokens and sessions work in Hangar, and how to operate them from the web UI (Access, Audit log, My account) and the…">
 <link rel="canonical" href="https://ismoilovdevml.github.io/hangar/docs/guides/access/">
 <meta name="theme-color" content="#ffffff">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Hangar — self-hosted package registry">
 <meta property="og:title" content="Access management">
-<meta property="og:description" content="How people, service accounts, roles, tokens and sessions work in Hangar, and how to operate them from the web UI (Access &amp; audit, My account) and the REST…">
+<meta property="og:description" content="How people, service accounts, roles, tokens and sessions work in Hangar, and how to operate them from the web UI (Access, Audit log, My account) and the…">
 <meta property="og:url" content="https://ismoilovdevml.github.io/hangar/docs/guides/access/">
 <meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
 <meta property="og:image:width" content="1200">
@@ -18,7 +18,7 @@
 <meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Access management">
-<meta name="twitter:description" content="How people, service accounts, roles, tokens and sessions work in Hangar, and how to operate them from the web UI (Access &amp; audit, My account) and the REST…">
+<meta name="twitter:description" content="How people, service accounts, roles, tokens and sessions work in Hangar, and how to operate them from the web UI (Access, Audit log, My account) and the…">
 <meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preload" href="../../../assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -45,10 +45,10 @@
 <div class="layout">
   <nav class="side" id="side" aria-label="Documentation">
 <p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../getting-started/">Getting started</a></li><li><a href="../">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
-<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/verify-release/">Verify a release</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
 <p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
 <p class="side-h">Package formats</p><ul><li><a href="../docker/">Docker &amp; OCI</a></li><li><a href="../npm/">npm, pnpm, yarn</a></li><li><a href="../maven/">Maven &amp; Gradle</a></li><li><a href="../pypi/">PyPI</a></li><li><a href="../nuget/">NuGet</a></li><li><a href="../go/">Go modules</a></li><li><a href="../helm/">Helm charts</a></li><li><a href="../cargo/">Cargo</a></li><li><a href="../apt/">APT</a></li><li><a href="../rpm/">RPM</a></li><li><a href="../raw/">Raw files</a></li></ul>
-<p class="side-h">Guides</p><ul><li><a href="../migrate/">Move to Hangar</a></li><li><a href="../ci/">CI integration</a></li><li><a href="./" aria-current="page">Access management</a></li><li><a href="../sso/">Single sign-on</a></li><li><a href="../routing-rules/">Routing rules</a></li><li><a href="../vulnerabilities/">Vulnerability scanning</a></li><li><a href="../api/">REST API</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../migrate/">Move to Hangar</a></li><li><a href="../ci/">CI integration</a></li><li><a href="../ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../config-as-code/">Configuration as code</a></li><li><a href="../webhooks/">Webhooks</a></li><li><a href="./" aria-current="page">Access management</a></li><li><a href="../sso/">Single sign-on</a></li><li><a href="../routing-rules/">Routing rules</a></li><li><a href="../vulnerabilities/">Vulnerability scanning</a></li><li><a href="../api/">REST API</a></li></ul>
 <p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
 <p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
   </nav>
@@ -58,7 +58,7 @@
       <p class="crumb">Guides</p>
       <h1>Access management</h1>
 <p class="lead">How people, service accounts, roles, tokens and sessions work in Hangar, and
-how to operate them from the web UI (<strong>Access &amp; audit</strong>, <strong>My account</strong>) and
+how to operate them from the web UI (<strong>Access</strong>, <strong>Audit log</strong>, <strong>My account</strong>) and
 the REST API (<code>api/openapi.yaml</code>, tag <code>access</code>).</p>
 <h2 id="model">Model<a class="anchor" href="#model" aria-label="Link to this section">#</a></h2>
 <div class="tbl-wrap"><table class="tbl">
@@ -101,7 +101,9 @@ the REST API (<code>api/openapi.yaml</code>, tag <code>access</code>).</p>
 character, <code>[ab]</code> a set. <code>npm-*</code> matches <code>npm-internal</code> and <code>npm-public</code>.</p>
 <p><strong>System areas</strong>: <code>users</code> (members, service accounts, roles, sessions),
 <code>tokens</code> (other principals' tokens), <code>repos</code>, <code>blobstores</code>, <code>tasks</code>,
-<code>cleanup</code>, <code>security</code>, <code>audit</code>, <code>cluster</code>, <code>settings</code>.</p>
+<code>cleanup</code>, <code>security</code>, <code>audit</code>, <code>cluster</code>, <code>settings</code>, <code>webhooks</code> (outgoing
+webhooks; creating one also needs read access to the repositories it names,
+see <a href="../webhooks/">webhooks.md</a>).</p>
 <p>A request is allowed when one of the principal's role privileges allows it
 <strong>and</strong>, for a token, one of the token's scopes allows it too. A token can
 therefore never do more than its owner. Repositories with <strong>anonymous read</strong>
@@ -139,7 +141,7 @@ anonymous access.</p>
 <p>Built-in roles cannot be changed or deleted. At least one enabled member
 always keeps <strong>Admin</strong>: the last one cannot be disabled, deleted or demoted.</p>
 <h2 id="members">Members<a class="anchor" href="#members" aria-label="Link to this section">#</a></h2>
-<p><em>Access &amp; audit → Members</em>. Filter by name or email, role and status
+<p><em>Access → Members</em>. Filter by name or email, role and status
 (<code>active</code>, <code>locked</code>, <code>disabled</code>). Selecting a member opens a drawer with
 their roles, tokens, sessions and effective permissions.</p>
 <div class="tbl-wrap"><table class="tbl">
@@ -228,7 +230,7 @@ not over <code>finance</code>.</li>
 <p>Refusals answer <code>403</code> and are audited with what was missing. See
 <a href="../../security/#privilege-escalation-model">docs/security.md</a>.</p>
 <h2 id="service-accounts">Service accounts<a class="anchor" href="#service-accounts" aria-label="Link to this section">#</a></h2>
-<p><em>Access &amp; audit → Service accounts → New service account</em>. Give it a name, a
+<p><em>Access → Service accounts → New service account</em>. Give it a name, a
 note about what uses it (&quot;GitLab runners, group infra&quot;) and roles — usually
 <strong>CI deployer</strong>, or a custom role limited to the repositories the pipeline
 publishes to. Then open it and create a token under <strong>Tokens → New token</strong>
@@ -238,7 +240,7 @@ revoked on its own.</p>
 <span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span> | docker login registry.example.com -u ci --password-stdin
 npm config <span class="hljs-built_in">set</span> //registry.example.com/repository/npm-internal/:_authToken <span class="hljs-string">&quot;<span class="hljs-variable">$HANGAR_TOKEN</span>&quot;</span></code></pre></div>
 <h2 id="personal-access-tokens">Personal access tokens<a class="anchor" href="#personal-access-tokens" aria-label="Link to this section">#</a></h2>
-<p><em>My account → Personal access tokens → New token</em>, or <strong>Access &amp; audit →
+<p><em>My account → Personal access tokens → New token</em>, or <strong>Access →
 Access tokens → New token</strong>.</p>
 <ol>
 <li><strong>Name</strong> — what the token is for (&quot;laptop CLI&quot;, &quot;release pipeline&quot;).</li>
@@ -289,7 +291,7 @@ payload (<code>token_warnings</code>), shown on My account and under the notific
 bell. Holders of <code>system:tokens:read</code> also see service-account tokens that
 are about to expire.</p>
 <h2 id="roles-and-permissions">Roles and permissions<a class="anchor" href="#roles-and-permissions" aria-label="Link to this section">#</a></h2>
-<p><em>Access &amp; audit → Roles</em>. Built-in roles are read-only. <strong>New role</strong> opens the
+<p><em>Access → Roles</em>. Built-in roles are read-only. <strong>New role</strong> opens the
 privilege editor: add repository privileges (pattern × action) and
 administration privileges (area × action); each row is described in plain
 words. <strong>Directory groups</strong> map OIDC, LDAP or SAML groups to the role
@@ -324,7 +326,10 @@ session ends; registry logins already issued stay valid until they expire
 <h2 id="audit">Audit<a class="anchor" href="#audit" aria-label="Link to this section">#</a></h2>
 <p>Every change above is written to the audit log with the actor, client address
 and outcome, and every refused attempt is recorded with outcome <code>denied</code>.
-<em>Access &amp; audit → Audit log</em> shows access events by category:</p>
+The <strong>Audit log</strong> page (Security → Audit log) lists them; access events read in
+plain words (&quot;granted role Publisher to malika&quot;). Filter the action by these
+prefixes to see one category (<code>auth.*</code> for sign-ins); the Access page shows the
+latest of them and links to the full log:</p>
 <div class="tbl-wrap"><table class="tbl">
 <thead>
 <tr>
@@ -399,8 +404,8 @@ public proxies (dependency confusion); changes are audited as
 <code>repository.routing.update</code>, exclusions as <code>routing.blocked</code>.</li>
 </ul>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/access.md"><code>docs/guides/access.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/access.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
-      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../ci/" rel="prev"><small>Previous</small><b>CI integration</b></a><a class="next" href="../sso/" rel="next"><small>Next</small><b>Single sign-on</b></a></nav>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/access.md"><code>docs/guides/access.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/access.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../webhooks/" rel="prev"><small>Previous</small><b>Webhooks</b></a><a class="next" href="../sso/" rel="next"><small>Next</small><b>Single sign-on</b></a></nav>
     </article>
   </main>
   <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#model">Model</a></li><li class="l3"><a href="#built-in-roles">Built-in roles</a></li><li class="l2"><a href="#members">Members</a></li><li class="l3"><a href="#delegating-administration">Delegating administration</a></li><li class="l2"><a href="#service-accounts">Service accounts</a></li><li class="l2"><a href="#personal-access-tokens">Personal access tokens</a></li><li class="l2"><a href="#roles-and-permissions">Roles and permissions</a></li><li class="l3"><a href="#effective-permissions">Effective permissions</a></li><li class="l2"><a href="#my-account">My account</a></li><li class="l2"><a href="#audit">Audit</a></li><li class="l2"><a href="#configuration">Configuration</a></li><li class="l2"><a href="#operational-notes">Operational notes</a></li><li class="l2"><a href="#related">Related</a></li></ul></aside>

@@ -45,10 +45,10 @@
 <div class="layout">
   <nav class="side" id="side" aria-label="Documentation">
 <p class="side-h">Start here</p><ul><li><a href="../">Introduction</a></li><li><a href="../guides/getting-started/">Getting started</a></li><li><a href="../guides/">Concepts and guides</a></li><li><a href="../faq/">FAQ</a></li></ul>
-<p class="side-h">Install and run</p><ul><li><a href="../deploy/">Deploying Hangar</a></li><li><a href="../deploy/requirements/">Requirements and sizing</a></li><li><a href="../deploy/install-compose/">Docker Compose</a></li><li><a href="../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../deploy/install-binary/">Binary and systemd</a></li><li><a href="../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../deploy/first-admin/">First administrator</a></li><li><a href="../deploy/backup-restore/">Backup and restore</a></li><li><a href="../deploy/upgrade/">Upgrades</a></li><li><a href="../deploy/high-availability/">High availability</a></li><li><a href="../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../deploy/">Deploying Hangar</a></li><li><a href="../deploy/requirements/">Requirements and sizing</a></li><li><a href="../deploy/install-compose/">Docker Compose</a></li><li><a href="../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../deploy/install-binary/">Binary and systemd</a></li><li><a href="../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../deploy/first-admin/">First administrator</a></li><li><a href="../deploy/backup-restore/">Backup and restore</a></li><li><a href="../deploy/upgrade/">Upgrades</a></li><li><a href="../deploy/verify-release/">Verify a release</a></li><li><a href="../deploy/high-availability/">High availability</a></li><li><a href="../deploy/troubleshooting/">Troubleshooting</a></li></ul>
 <p class="side-h">Using the UI</p><ul><li><a href="../ui/">The web UI</a></li><li><a href="../ui/repositories/">Repositories</a></li><li><a href="../ui/packages/">Packages &amp; search</a></li><li><a href="../ui/connect/">Connect a client</a></li><li><a href="../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../ui/access/">Access &amp; tokens</a></li><li><a href="../ui/tasks/">Scheduled tasks</a></li><li><a href="../ui/blob-stores/">Blob stores</a></li><li><a href="../ui/system/">Status, logs &amp; audit</a></li><li><a href="../ui/settings/">Settings</a></li></ul>
 <p class="side-h">Package formats</p><ul><li><a href="../guides/docker/">Docker &amp; OCI</a></li><li><a href="../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../guides/pypi/">PyPI</a></li><li><a href="../guides/nuget/">NuGet</a></li><li><a href="../guides/go/">Go modules</a></li><li><a href="../guides/helm/">Helm charts</a></li><li><a href="../guides/cargo/">Cargo</a></li><li><a href="../guides/apt/">APT</a></li><li><a href="../guides/rpm/">RPM</a></li><li><a href="../guides/raw/">Raw files</a></li></ul>
-<p class="side-h">Guides</p><ul><li><a href="../guides/migrate/">Move to Hangar</a></li><li><a href="../guides/ci/">CI integration</a></li><li><a href="../guides/access/">Access management</a></li><li><a href="../guides/sso/">Single sign-on</a></li><li><a href="../guides/routing-rules/">Routing rules</a></li><li><a href="../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../guides/api/">REST API</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../guides/migrate/">Move to Hangar</a></li><li><a href="../guides/ci/">CI integration</a></li><li><a href="../guides/ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../guides/config-as-code/">Configuration as code</a></li><li><a href="../guides/webhooks/">Webhooks</a></li><li><a href="../guides/access/">Access management</a></li><li><a href="../guides/sso/">Single sign-on</a></li><li><a href="../guides/routing-rules/">Routing rules</a></li><li><a href="../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../guides/api/">REST API</a></li></ul>
 <p class="side-h">Operations</p><ul><li><a href="../security/">Security</a></li><li><a href="../operations/monitoring/">Monitoring</a></li><li><a href="../operations/runbooks/">Alert runbooks</a></li><li><a href="../operations/performance/">Performance</a></li></ul>
 <p class="side-h">Project</p><ul><li><a href="../architecture/">Architecture</a></li><li><a href="../formats/">Format protocols</a></li><li><a href="../adr/">Decision records</a></li><li><a href="../product-spec/">Product specification</a></li><li><a href="../design-system/">Design system</a></li><li><a href="./" aria-current="page">Roadmap</a></li><li><a href="../changelog/">Changelog</a></li></ul>
   </nav>
@@ -59,10 +59,113 @@
       <h1>Roadmap</h1>
 <p class="lead">Each milestone ends with: green <code>make test lint e2e</code>, updated <code>api/openapi.yaml</code>,
 a short <code>docs/changelog.md</code> entry, and a ticked demo checklist.</p>
-<p>Status as of v0.1.6 and the Unreleased section of the <a href="../changelog/">changelog</a>:
-<strong>done</strong> (shipped and covered by tests), <strong>partial</strong> (shipped with the gaps
-named) or <strong>planned</strong> (not implemented; API operations for it are marked
-<code>x-status: planned</code> in <code>api/openapi.yaml</code> and answer 501).</p>
+<p>Status as of v0.1.9 (2026-11-20) and the work in progress for v0.2.0 (see
+the <a href="../changelog/">changelog</a>): <strong>done</strong> (shipped and covered by tests),
+<strong>partial</strong> (shipped with the gaps named), <strong>in progress</strong> (being built for
+the next release, not shipped) or <strong>planned</strong> (not implemented; API
+operations for it are marked <code>x-status: planned</code> in <code>api/openapi.yaml</code> and
+answer 501).</p>
+<h2 id="releases-so-far">Releases so far<a class="anchor" href="#releases-so-far" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Release</th>
+<th>Date</th>
+<th>Main content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>v0.1.0</td>
+<td>2026-11-04</td>
+<td>First release: multi-arch image on ghcr.io, binaries with <code>SHA256SUMS</code>, the compose installer; web UI with packages, search and blob stores.</td>
+</tr>
+<tr>
+<td>v0.1.1</td>
+<td>2026-11-04</td>
+<td>OIDC and LDAP / Active Directory sign-in.</td>
+</tr>
+<tr>
+<td>v0.1.2 – v0.1.5</td>
+<td>2026-11-04 – 2026-11-05</td>
+<td>Cluster-wide Overview traffic, System status, README images, the public OpenAPI document and automation guide.</td>
+</tr>
+<tr>
+<td>v0.1.6</td>
+<td>2026-11-09</td>
+<td>Go modules, Helm chart repositories, Cargo, APT and RPM: 11 formats.</td>
+</tr>
+<tr>
+<td>v0.1.7</td>
+<td>2026-11-09</td>
+<td>Routing rules against dependency confusion; cluster operations (job stream replicas, migration lock, <code>/metrics</code> authentication); <code>npm audit</code> answered for real.</td>
+</tr>
+<tr>
+<td>v0.1.8</td>
+<td>2026-11-15</td>
+<td>Local times across the web UI and many UI fixes; releases run the test suite before publishing.</td>
+</tr>
+<tr>
+<td>v0.1.9</td>
+<td>2026-11-20</td>
+<td>Security and reliability: SSRF through repository proxies, sealed secret replay, NuGet proxy cache poisoning, archive bombs; the chart defaults to the release's images.</td>
+</tr>
+<tr>
+<td>v0.2.0</td>
+<td>2026-11-21</td>
+<td>NATS removed (PostgreSQL events and jobs), webhooks, CI OIDC trusted publishing, <code>hangar apply</code>, hgs2 secrets, trigram search, signed releases and the OCI chart.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="v020-2026-11-21">v0.2.0 (2026-11-21)<a class="anchor" href="#v020-2026-11-21" aria-label="Link to this section">#</a></h2>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>Item</th>
+<th>Status</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Remove NATS</td>
+<td>Done</td>
+<td>Events on PostgreSQL LISTEN/NOTIFY, jobs in a <code>jobs</code> table (<a href="../adr/0011-postgresql-events-and-jobs/">ADR 0011</a>).</td>
+</tr>
+<tr>
+<td>Webhooks</td>
+<td>Done</td>
+<td>Generic JSON, Slack and Teams, HMAC-signed, from a PostgreSQL outbox (<a href="../guides/webhooks/">guide</a>).</td>
+</tr>
+<tr>
+<td>CI OIDC token exchange</td>
+<td>Done</td>
+<td>GitHub Actions, GitLab CI and other OIDC issuers trade their ID token for a short-lived scoped token (<a href="../guides/ci-oidc/">guide</a>).</td>
+</tr>
+<tr>
+<td>Config as code (<code>hangar apply</code>)</td>
+<td>Done</td>
+<td><code>hangar apply</code>, <code>diff</code> and <code>export</code> (<a href="../guides/config-as-code/">guide</a>).</td>
+</tr>
+<tr>
+<td><code>hgs2</code> sealed secrets</td>
+<td>Done</td>
+<td>Sealed values are bound to their row and field (<a href="../adr/0010-context-bound-sealed-secrets/">ADR 0010</a>).</td>
+</tr>
+<tr>
+<td>Search with <code>pg_trgm</code></td>
+<td>Done</td>
+<td>One statement per search, trigram index for substrings.</td>
+</tr>
+<tr>
+<td>Release supply chain</td>
+<td>Done</td>
+<td>cosign signatures, SPDX SBOMs and SLSA provenance for the images, the chart and the release files; the Helm chart on <code>oci://ghcr.io/ismoilovdevml/charts/hangar</code>; Trivy, govulncheck and npm audit gate the release (<a href="../deploy/verify-release/">verify a release</a>).</td>
+</tr>
+</tbody>
+</table></div>
+<p>Notes for v0.2.0 items describe the goal; the <a href="../changelog/">changelog</a>
+describes what actually ships.</p>
 <div class="tbl-wrap"><table class="tbl">
 <thead>
 <tr>
@@ -76,7 +179,7 @@ named) or <strong>planned</strong> (not implemented; API operations for it are m
 <tr>
 <td>M0</td>
 <td>Skeleton</td>
-<td>Repo layout, Makefile, docker-compose (postgres, minio, nats, trivy), config loading, migrations, <code>/healthz</code>, CI pipeline, ADRs for stack choices.</td>
+<td>Repo layout, Makefile, docker-compose (postgres, minio, trivy), config loading, migrations, <code>/healthz</code>, CI pipeline, ADRs for stack choices.</td>
 <td>Partial: everything exists; the CI workflow is switched off while development is fast; the release workflow runs the full test suite before it publishes (unless the <code>RELEASE_SKIP_TESTS</code> repository variable is <code>true</code>).</td>
 </tr>
 <tr>
@@ -100,7 +203,7 @@ named) or <strong>planned</strong> (not implemented; API operations for it are m
 <tr>
 <td>M4</td>
 <td>Security</td>
-<td>Trivy scanning, findings, waivers, quarantine, cosign verification, licence policy; OIDC, LDAP, SAML; Access &amp; audit and Vulnerabilities screens.</td>
+<td>Trivy scanning, findings, waivers, quarantine, cosign verification, licence policy; OIDC, LDAP, SAML; Access, Audit log and Vulnerabilities screens.</td>
 <td>Partial: cosign verification, licence policy and SAML are planned.</td>
 </tr>
 <tr>
@@ -112,7 +215,7 @@ named) or <strong>planned</strong> (not implemented; API operations for it are m
 <tr>
 <td>M6</td>
 <td>HA &amp; replication</td>
-<td>Multi-node with leader lock, local cache, edge replication via NATS, Cluster screen, Helm chart, load test (k6) 5k req/s.</td>
+<td>Multi-node with leader lock, local cache, edge replication, Cluster screen, Helm chart, load test (k6) 5k req/s.</td>
 <td>Partial: multi-node with a leader lock and the Helm chart are done; the on-disk blob cache, edge replication and the Cluster screen are planned; the measured load is about 1 100 req/s on one node (mixed traffic, a laptop), see <a href="../operations/performance/">performance</a>.</td>
 </tr>
 <tr>
@@ -136,12 +239,12 @@ named) or <strong>planned</strong> (not implemented; API operations for it are m
 <tr>
 <td>Multi-node (HA)</td>
 <td>Done</td>
-<td>Stateless nodes, PostgreSQL advisory-lock leader, NATS job queue; <a href="../deploy/high-availability/">high availability</a>.</td>
+<td>Stateless nodes, PostgreSQL advisory-lock leader, job queue and events in PostgreSQL; <a href="../deploy/high-availability/">high availability</a>.</td>
 </tr>
 <tr>
 <td>Edge replication</td>
 <td>Planned</td>
-<td><code>/api/v1/replication/targets</code> answers 501; the Cluster screen is a placeholder.</td>
+<td><code>/api/v1/replication/targets</code> answers 501; the web UI's replication placeholder was removed in v0.1.9.</td>
 </tr>
 <tr>
 <td>On-disk blob cache per node</td>
@@ -162,6 +265,11 @@ named) or <strong>planned</strong> (not implemented; API operations for it are m
 <td>Quarantine</td>
 <td>Done</td>
 <td>Docker images and scanned packages.</td>
+</tr>
+<tr>
+<td>Routing rules (dependency confusion)</td>
+<td>Done</td>
+<td>Since v0.1.7; <a href="../guides/routing-rules/">routing rules</a>.</td>
 </tr>
 <tr>
 <td>Cosign signatures</td>
@@ -209,9 +317,9 @@ named) or <strong>planned</strong> (not implemented; API operations for it are m
 <td>Use <code>deploy/scripts/backup.sh</code> (<a href="../deploy/backup-restore/">backup and restore</a>).</td>
 </tr>
 <tr>
-<td>Config as code (<code>hangar apply -f</code>, <code>hangar export</code>)</td>
-<td>Planned</td>
-<td>The New repository screen shows the settings as YAML for review and copying; there is no CLI that applies it.</td>
+<td>Config as code (<code>hangar apply -f</code>, <code>hangar diff</code>, <code>hangar export</code>)</td>
+<td>Done (0.2.0)</td>
+<td><a href="../guides/config-as-code/">guides/config-as-code.md</a>. Users, tokens, tasks and sign-in providers are not managed yet.</td>
 </tr>
 <tr>
 <td>Terraform provider</td>
@@ -226,11 +334,11 @@ named) or <strong>planned</strong> (not implemented; API operations for it are m
 </tbody>
 </table></div>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/ROADMAP.md"><code>docs/ROADMAP.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/ROADMAP.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/ROADMAP.md"><code>docs/ROADMAP.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/ROADMAP.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
       <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../design-system/" rel="prev"><small>Previous</small><b>Design system</b></a><a class="next" href="../changelog/" rel="next"><small>Next</small><b>Changelog</b></a></nav>
     </article>
   </main>
-  <aside class="toc" aria-label="On this page"></aside>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#releases-so-far">Releases so far</a></li><li class="l2"><a href="#v020-2026-11-21">v0.2.0 (2026-11-21)</a></li><li class="l2"><a href="#item-by-item">Item by item</a></li></ul></aside>
 </div>
 <div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
   <div class="search-box">

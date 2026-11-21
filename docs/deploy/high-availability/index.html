@@ -45,10 +45,10 @@
 <div class="layout">
   <nav class="side" id="side" aria-label="Documentation">
 <p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="../../guides/getting-started/">Getting started</a></li><li><a href="../../guides/">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
-<p class="side-h">Install and run</p><ul><li><a href="../">Deploying Hangar</a></li><li><a href="../requirements/">Requirements and sizing</a></li><li><a href="../install-compose/">Docker Compose</a></li><li><a href="../install-helm/">Helm (Kubernetes)</a></li><li><a href="../install-binary/">Binary and systemd</a></li><li><a href="../reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../first-admin/">First administrator</a></li><li><a href="../backup-restore/">Backup and restore</a></li><li><a href="../upgrade/">Upgrades</a></li><li><a href="./" aria-current="page">High availability</a></li><li><a href="../troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../">Deploying Hangar</a></li><li><a href="../requirements/">Requirements and sizing</a></li><li><a href="../install-compose/">Docker Compose</a></li><li><a href="../install-helm/">Helm (Kubernetes)</a></li><li><a href="../install-binary/">Binary and systemd</a></li><li><a href="../reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../first-admin/">First administrator</a></li><li><a href="../backup-restore/">Backup and restore</a></li><li><a href="../upgrade/">Upgrades</a></li><li><a href="../verify-release/">Verify a release</a></li><li><a href="./" aria-current="page">High availability</a></li><li><a href="../troubleshooting/">Troubleshooting</a></li></ul>
 <p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
 <p class="side-h">Package formats</p><ul><li><a href="../../guides/docker/">Docker &amp; OCI</a></li><li><a href="../../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../../guides/pypi/">PyPI</a></li><li><a href="../../guides/nuget/">NuGet</a></li><li><a href="../../guides/go/">Go modules</a></li><li><a href="../../guides/helm/">Helm charts</a></li><li><a href="../../guides/cargo/">Cargo</a></li><li><a href="../../guides/apt/">APT</a></li><li><a href="../../guides/rpm/">RPM</a></li><li><a href="../../guides/raw/">Raw files</a></li></ul>
-<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../../guides/migrate/">Move to Hangar</a></li><li><a href="../../guides/ci/">CI integration</a></li><li><a href="../../guides/ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../../guides/config-as-code/">Configuration as code</a></li><li><a href="../../guides/webhooks/">Webhooks</a></li><li><a href="../../guides/access/">Access management</a></li><li><a href="../../guides/sso/">Single sign-on</a></li><li><a href="../../guides/routing-rules/">Routing rules</a></li><li><a href="../../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../../guides/api/">REST API</a></li></ul>
 <p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
 <p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
   </nav>
@@ -64,7 +64,10 @@ shared, highly available dependencies.</p>
                |            |            |
            hangar-1     hangar-2     hangar-3        same config and keys
                \            |            /
-      PostgreSQL (HA)   S3 / shared FS   NATS JetStream cluster (3)</code></pre></div>
+            PostgreSQL (HA)      S3 / shared FS</code></pre></div>
+<p>PostgreSQL also carries the events between nodes (LISTEN/NOTIFY) and the
+job queue (the <code>jobs</code> table); there is no other stateful service
+(<a href="../../adr/0011-postgresql-events-and-jobs/">ADR 0011</a>).</p>
 <h2 id="what-each-node-needs">What each node needs<a class="anchor" href="#what-each-node-needs" aria-label="Link to this section">#</a></h2>
 <div class="tbl-wrap"><table class="tbl">
 <thead>
@@ -76,15 +79,15 @@ shared, highly available dependencies.</p>
 <tbody>
 <tr>
 <td>PostgreSQL</td>
-<td>One database for all nodes, made highly available by the platform: a managed service, Patroni, CloudNativePG. Connections: <code>nodes x (database.max_conns + 16)</code>.</td>
+<td>One database for all nodes, made highly available by the platform: a managed service, Patroni, CloudNativePG. Connections: <code>nodes x (database.max_conns + 17)</code> (16 for locks, 1 for the event listener), for example 3 nodes with the default <code>max_conns</code> of 20 need 111, plus your other clients, below <code>max_connections</code>. Session-mode connections: LISTEN and advisory locks do not work through PgBouncer in transaction pooling mode (see <a href="#pgbouncer">PgBouncer</a>).</td>
 </tr>
 <tr>
 <td>Blob store</td>
 <td><code>storage.kind: s3</code> (recommended) or one filesystem mounted at the same path on every node (NFS, CephFS, a ReadWriteMany volume).</td>
 </tr>
 <tr>
-<td>NATS</td>
-<td><code>nats.embedded: false</code>, <code>nats.url</code> pointing at a 3-node JetStream cluster (the Helm chart's <code>nats.mode: bundled</code>, or your own), and <code>nats.replicas: 3</code> (see <a href="#job-queue-replicas">Job queue replicas</a>).</td>
+<td>Node address</td>
+<td>Each node publishes the URL the others reach it at to read its System logs (<code>POST /internal/v1/system/logs</code>, signed with the shared secret key): <code>server.node_url</code>, by default the local address it reaches the database from with the port of <code>server.addr</code>. Set it when that address is not reachable from the other nodes (a database behind a local proxy or sidecar, NAT). The Helm chart sets <code>HANGAR_SERVER_NODE_URL=http://$(POD_IP):8080</code> on every pod and its NetworkPolicy allows pod-to-pod traffic on that port. Elsewhere, open the port between the nodes in firewalls and security groups.</td>
 </tr>
 <tr>
 <td><code>HANGAR_SECRET_KEY</code></td>
@@ -106,16 +109,19 @@ shared, highly available dependencies.</p>
 their state in signed upload URLs, so consecutive chunks may hit different
 nodes. Sessions are stored in PostgreSQL.</li>
 <li><strong>Background jobs</strong>: every node runs a scheduler, and one is the leader
-(PostgreSQL advisory lock). The leader enqueues the periodic jobs (blob GC,
-audit partitions, cleanup, token purge); any node executes them from the
-NATS job queue. When the leader dies, its lock is released and another node
-takes over within seconds.</li>
+(PostgreSQL advisory lock). The leader enqueues the scheduled task runs
+(blob GC, audit partitions, cleanup, token purge); any node executes them
+from the job queue in PostgreSQL. A job is held under a lease its node
+renews every few minutes; when a node dies, its job runs again elsewhere
+once the lease (10 minutes) expires. When the leader dies, its lock is
+released and another node takes over within seconds. APT and RPM metadata
+and npm package state are regenerated by one coalesced job per repository
+(or package), on one node, about 2 s after the last change.</li>
 <li><strong>Caches</strong>: repository lookups, authorization decisions and generated
-metadata are cached per node and invalidated through NATS events. A node
-that misses an event (NATS disconnect at that moment) can serve a stale
-repository setting for up to 30 s, authorization for up to
-<code>auth.authz_cache_ttl</code> (5 s), and generated Maven metadata for up to a
-minute.</li>
+metadata are cached per node and invalidated through events (PostgreSQL
+LISTEN/NOTIFY). A node whose listener connection drops misses events
+while it is down; when it reconnects it drops all its caches, so stale
+answers last at most as long as the disconnect.</li>
 <li><strong>Shutdown</strong>: on SIGTERM a node fails <code>/readyz</code> at once, keeps serving new
 requests for <code>server.drain_delay</code> (default 0) so a load balancer that polls
 <code>/readyz</code> takes it out of rotation, then stops listening and gives in-flight
@@ -125,33 +131,27 @@ requests <code>server.shutdown_timeout</code> to finish. See
 PostgreSQL advisory lock while they run. Nodes that start together wait
 for the one that migrates and then start on the new schema; a node without
 <code>migrate_on_start</code> waits too instead of failing on a half-migrated schema.</li>
-<li><strong>Readiness</strong>: <code>/readyz</code> fails when the node cannot reach PostgreSQL, the
-blob store or NATS. A database outage makes all nodes unready at once; the
-load balancer then answers 503 until it returns.</li>
+<li><strong>Readiness</strong>: <code>/readyz</code> fails when the node cannot reach PostgreSQL or the
+blob store, or its event listener connection is down. A database outage
+makes all nodes unready at once; the load balancer then answers 503 until
+it returns.</li>
 </ul>
-<h2 id="job-queue-replicas">Job queue replicas<a class="anchor" href="#job-queue-replicas" aria-label="Link to this section">#</a></h2>
-<p>Background jobs are queued in one JetStream stream, <code>HANGAR_JOBS</code>.
-<code>nats.replicas</code> (1 to 5, default 1) sets its replica count; the job
-consumers follow the stream. With 1 the stream lives on a single NATS
-server: while that server is down jobs cannot be queued and starting nodes
-exit with <code>create job stream: ... stream is offline</code>. With 3 on a 3-node
-cluster the stream keeps working while any one NATS server is down.</p>
-<div class="code"><div class="code-head"><span>yaml</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="yaml"><code><span class="hljs-attr">nats:</span>
-  <span class="hljs-attr">embedded:</span> <span class="hljs-literal">false</span>
-  <span class="hljs-attr">url:</span> <span class="hljs-string">nats://hangar:password@nats-1:4222,nats://hangar:password@nats-2:4222,nats://hangar:password@nats-3:4222</span>
-  <span class="hljs-attr">replicas:</span> <span class="hljs-number">3</span></code></pre></div>
-<p>Every node creates or updates the stream on start, so set the same value on
-all nodes. Changing it scales the existing stream in place when the next node
-starts (logged as <code>job stream replicas changed</code>); queued jobs are kept. The
-value cannot exceed the number of NATS servers (the start fails with
-<code>update job stream HANGAR_JOBS (replicas 3 to 5): ... no suitable peers for placement</code> and the stream keeps its replicas), and embedded NATS accepts
-only 1. Check the
-result with <code>nats stream info HANGAR_JOBS</code> (Replicas, and the cluster
-members listed as current).</p>
-<p>The Helm chart sets it from <code>nats.streamReplicas</code>: <code>0</code> (default) uses
-<code>nats.bundled.replicas</code> with the bundled cluster (3) and 1 otherwise. Upgrading
-a release with the bundled cluster therefore scales the job stream from 1 to
-3 replicas.</p>
+<h2 id="pgbouncer">PgBouncer<a class="anchor" href="#pgbouncer" aria-label="Link to this section">#</a></h2>
+<p>Each node keeps one PostgreSQL session open for as long as it runs, the event
+listener (<code>application_name = hangar-listener</code>, LISTEN), and takes
+session-level advisory locks for the scheduler leader and migrations. Neither
+works through PgBouncer in transaction pooling mode: the listener never
+receives events, <code>/readyz</code> fails with <code>eventbus</code>, and locks are lost between
+statements. Either connect Hangar straight to PostgreSQL, or give its
+database <code>pool_mode = session</code> with a pool of at least
+<code>nodes x (database.max_conns + 17)</code> server connections.</p>
+<h2 id="job-queue">Job queue<a class="anchor" href="#job-queue" aria-label="Link to this section">#</a></h2>
+<p>Jobs are rows of the <code>jobs</code> table, as durable as the database. Inspect them
+with SQL:</p>
+<div class="code"><div class="code-head"><span>sql</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="sql"><code><span class="hljs-keyword">SELECT</span> type, state, <span class="hljs-built_in">count</span>(<span class="hljs-operator">*</span>) <span class="hljs-keyword">FROM</span> jobs <span class="hljs-keyword">GROUP</span> <span class="hljs-keyword">BY</span> <span class="hljs-number">1</span>, <span class="hljs-number">2</span>;        <span class="hljs-comment">-- queued, running, done, dead</span>
+<span class="hljs-keyword">SELECT</span> id, type, attempts, last_error, finished_at <span class="hljs-keyword">FROM</span> jobs <span class="hljs-keyword">WHERE</span> state <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;dead&#x27;</span>;</code></pre></div>
+<p>A dead job failed 5 attempts and is kept for 7 days. To run one again:
+<code>UPDATE jobs SET state = 'queued', attempts = 0, run_at = now() WHERE id = '...'</code>.</p>
 <h2 id="draining-nodes">Draining nodes<a class="anchor" href="#draining-nodes" aria-label="Link to this section">#</a></h2>
 <p>Stopping a node without dropping requests needs the load balancer to stop
 sending it traffic before its listener closes, and the service manager to
@@ -189,8 +189,8 @@ addition to it when a load balancer outside the cluster health-checks the
 pods directly (for example <code>drain_delay: 15s</code> for a 5 s check interval and a
 threshold of 2).</p>
 <h2 id="failure-scenarios">Failure scenarios<a class="anchor" href="#failure-scenarios" aria-label="Link to this section">#</a></h2>
-<p>Observed on a test cluster (Helm chart, 2 Hangar replicas, 3 NATS nodes,
-MinIO, PostgreSQL):</p>
+<p>Observed on a test cluster (Helm chart, 2 Hangar replicas, MinIO,
+PostgreSQL; v0.1.x, before the move from NATS to PostgreSQL):</p>
 <div class="tbl-wrap"><table class="tbl">
 <thead>
 <tr>
@@ -207,24 +207,20 @@ MinIO, PostgreSQL):</p>
 <td><code>helm upgrade</code> with a configuration change</td>
 <td>Migration Job ran, pods were replaced one at a time, generated keys stayed the same, previously uploaded artifacts and images were served by the new pods.</td>
 </tr>
-<tr>
-<td>Two of three NATS nodes restarted at once</td>
-<td>One <code>/readyz</code> probe answered 503 (JetStream lost quorum), recovered within seconds once the nodes were back.</td>
-</tr>
-<tr>
-<td>NATS job stream unavailable while a Hangar pod starts</td>
-<td>The pod exits with <code>create job stream: ... stream is offline</code> and is restarted by Kubernetes until the stream is available (see limits).</td>
-</tr>
 </tbody>
 </table></div>
+<p>Covered by the integration tests of v0.2.0 (<code>internal/events</code>): a job
+whose node died is reclaimed once its lease expires; a job that runs for
+longer than the lease keeps it through heartbeats; a node whose listener
+connection is terminated reconnects and drops its caches.</p>
 <h2 id="known-limits">Known limits<a class="anchor" href="#known-limits" aria-label="Link to this section">#</a></h2>
 <ul>
-<li><strong>Job queue replication</strong> needs <code>nats.replicas</code> above 1 (see
-<a href="#job-queue-replicas">Job queue replicas</a>); with the default of 1, a NATS
-server outage stops job queueing until it is back. Events
-(publish/subscribe) are not replicated state and are not affected. Keep
-NATS servers on separate hosts with persistent volumes and the PDB the
-chart creates.</li>
+<li><strong>Event delivery</strong> between nodes is best effort: an event published while
+a node's listener is reconnecting does not reach it, and the node drops
+its caches when it is back. Durable work never depends on an event
+reaching another node: it is queued as a job by the publishing node.</li>
+<li><strong>Rolling upgrade from v0.1.x</strong>: v0.1 nodes use NATS, v0.2 nodes
+PostgreSQL; they do not share events or jobs. Upgrade all nodes together.</li>
 <li><strong>Migration lock</strong>: the advisory lock needs a session-level connection.
 Run <code>hangar migrate up</code> and nodes with <code>migrate_on_start</code> directly against
 PostgreSQL or through a session-pooling proxy, not PgBouncer in
@@ -236,6 +232,60 @@ counted as down after 45 s and forgotten after an hour.</li>
 <li><strong>Filesystem blobs on NFS</strong>: every write is fsynced; NFS latency bounds
 publish throughput. Prefer S3 for several nodes.</li>
 </ul>
+<h2 id="cluster-wide-and-per-node-state">Cluster-wide and per-node state<a class="anchor" href="#cluster-wide-and-per-node-state" aria-label="Link to this section">#</a></h2>
+<p>Most state lives in PostgreSQL and the blob store and is the same on every
+node. A few protections keep counters, and whether those counters must be
+shared depends on what they protect:</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead>
+<tr>
+<th>State</th>
+<th>Scope</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sign-in lockout (<code>auth.lockout</code>: failures per username and address, lock duration, slow-down)</td>
+<td>Cluster (PostgreSQL <code>login_failures</code>)</td>
+<td>Security control: an attacker spreading guesses over nodes must hit the same counter.</td>
+</tr>
+<tr>
+<td>Login rate limit (<code>auth.login_rate</code>, per client address)</td>
+<td>Cluster (PostgreSQL <code>rate_limit_buckets</code>)</td>
+<td>Security control against password guessing and spraying. Two nodes allow what one allows, not twice as much. One statement per sign-in attempt.</td>
+</tr>
+<tr>
+<td>Failed-authentication limit (<code>security.rate_limit.failed_auth</code>, per client address)</td>
+<td>Cluster (PostgreSQL <code>rate_limit_buckets</code>)</td>
+<td>Security control against token and password guessing on the API and package endpoints. Only failed attempts (401, 423) write to the database; the check on each request is answered from the node's memory, so a node learns that a client's budget is spent at that client's next failure on it. A client spreading guesses over N nodes therefore gets the budget once plus at most one attempt per node, not N budgets.</td>
+</tr>
+<tr>
+<td>API rate limit (<code>security.rate_limit.api</code>, per client address)</td>
+<td>Per node</td>
+<td>Load shedding, not a security control: it runs on every API request, where a database write each time would cost more than it protects. With N nodes a client can send up to N times the configured rate; lower the setting accordingly if that matters, or limit at the load balancer.</td>
+</tr>
+<tr>
+<td>Upstream circuit breaker and health (proxy repositories)</td>
+<td>Per node</td>
+<td>Each node observes its own connections to the remote, which may differ (network path, DNS, egress proxy). A node opens its breaker after its own consecutive failures; the others keep trying until they see failures too. The System status screen shows each node's view.</td>
+</tr>
+<tr>
+<td>Upstream 429 throttle (<code>Retry-After</code> from a remote)</td>
+<td>Per node</td>
+<td>A remote that rate-limits one node usually limits by source address, which differs per node. Every node backs off when it is told to.</td>
+</tr>
+<tr>
+<td>Live events stream (SSE, <code>Last-Event-ID</code> resume)</td>
+<td>Per node</td>
+<td>The replay buffer of the last 256 events is in the node's memory. A browser that reconnects to another node (no sticky sessions) sends a <code>Last-Event-ID</code> that node never saw, gets no replay, and misses the events published while it was disconnected; screens show them on their next refresh. Live updates are a convenience, not a record: the audit log and the API are authoritative.</td>
+</tr>
+</tbody>
+</table></div>
+<p>When PostgreSQL cannot be reached, the shared limits fall back to a bucket
+in the node's memory with the same settings and log <code>rate limit: shared bucket unavailable, limiting on this node only</code>; sign-in needs the database
+anyway, so this only matters for its brief outages. Buckets that are full
+again are deleted by every node's hourly purge.</p>
 <h2 id="multiple-sites">Multiple sites<a class="anchor" href="#multiple-sites" aria-label="Link to this section">#</a></h2>
 <p>Run one Hangar cluster per site against that site's database and blob
 store. Replication between sites is on the roadmap (M6). Until then, use the
@@ -243,11 +293,11 @@ database's and the object store's own replication for disaster recovery, and
 keep <code>HANGAR_SECRET_KEY</code> and <code>HANGAR_DOCKER_TOKEN_KEY</code> identical at the DR
 site.</p>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/high-availability.md"><code>docs/deploy/high-availability.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/high-availability.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
-      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../upgrade/" rel="prev"><small>Previous</small><b>Upgrades</b></a><a class="next" href="../troubleshooting/" rel="next"><small>Next</small><b>Troubleshooting</b></a></nav>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/high-availability.md"><code>docs/deploy/high-availability.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/high-availability.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../verify-release/" rel="prev"><small>Previous</small><b>Verify a release</b></a><a class="next" href="../troubleshooting/" rel="next"><small>Next</small><b>Troubleshooting</b></a></nav>
     </article>
   </main>
-  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#what-each-node-needs">What each node needs</a></li><li class="l2"><a href="#how-the-cluster-behaves">How the cluster behaves</a></li><li class="l2"><a href="#job-queue-replicas">Job queue replicas</a></li><li class="l2"><a href="#draining-nodes">Draining nodes</a></li><li class="l2"><a href="#failure-scenarios">Failure scenarios</a></li><li class="l2"><a href="#known-limits">Known limits</a></li><li class="l2"><a href="#multiple-sites">Multiple sites</a></li></ul></aside>
+  <aside class="toc" aria-label="On this page"><p class="toc-h">On this page</p><ul><li class="l2"><a href="#what-each-node-needs">What each node needs</a></li><li class="l2"><a href="#how-the-cluster-behaves">How the cluster behaves</a></li><li class="l2"><a href="#pgbouncer">PgBouncer</a></li><li class="l2"><a href="#job-queue">Job queue</a></li><li class="l2"><a href="#draining-nodes">Draining nodes</a></li><li class="l2"><a href="#failure-scenarios">Failure scenarios</a></li><li class="l2"><a href="#known-limits">Known limits</a></li><li class="l2"><a href="#cluster-wide-and-per-node-state">Cluster-wide and per-node state</a></li><li class="l2"><a href="#multiple-sites">Multiple sites</a></li></ul></aside>
 </div>
 <div class="search" id="search" role="dialog" aria-modal="true" aria-label="Search the docs">
   <div class="search-box">

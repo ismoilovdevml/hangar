@@ -45,10 +45,10 @@
 <div class="layout">
   <nav class="side" id="side" aria-label="Documentation">
 <p class="side-h">Start here</p><ul><li><a href="../">Introduction</a></li><li><a href="../guides/getting-started/">Getting started</a></li><li><a href="../guides/">Concepts and guides</a></li><li><a href="../faq/">FAQ</a></li></ul>
-<p class="side-h">Install and run</p><ul><li><a href="./" aria-current="page">Deploying Hangar</a></li><li><a href="requirements/">Requirements and sizing</a></li><li><a href="install-compose/">Docker Compose</a></li><li><a href="install-helm/">Helm (Kubernetes)</a></li><li><a href="install-binary/">Binary and systemd</a></li><li><a href="reverse-proxy/">TLS and reverse proxies</a></li><li><a href="corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="first-admin/">First administrator</a></li><li><a href="backup-restore/">Backup and restore</a></li><li><a href="upgrade/">Upgrades</a></li><li><a href="high-availability/">High availability</a></li><li><a href="troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="./" aria-current="page">Deploying Hangar</a></li><li><a href="requirements/">Requirements and sizing</a></li><li><a href="install-compose/">Docker Compose</a></li><li><a href="install-helm/">Helm (Kubernetes)</a></li><li><a href="install-binary/">Binary and systemd</a></li><li><a href="reverse-proxy/">TLS and reverse proxies</a></li><li><a href="corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="first-admin/">First administrator</a></li><li><a href="backup-restore/">Backup and restore</a></li><li><a href="upgrade/">Upgrades</a></li><li><a href="verify-release/">Verify a release</a></li><li><a href="high-availability/">High availability</a></li><li><a href="troubleshooting/">Troubleshooting</a></li></ul>
 <p class="side-h">Using the UI</p><ul><li><a href="../ui/">The web UI</a></li><li><a href="../ui/repositories/">Repositories</a></li><li><a href="../ui/packages/">Packages &amp; search</a></li><li><a href="../ui/connect/">Connect a client</a></li><li><a href="../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../ui/access/">Access &amp; tokens</a></li><li><a href="../ui/tasks/">Scheduled tasks</a></li><li><a href="../ui/blob-stores/">Blob stores</a></li><li><a href="../ui/system/">Status, logs &amp; audit</a></li><li><a href="../ui/settings/">Settings</a></li></ul>
 <p class="side-h">Package formats</p><ul><li><a href="../guides/docker/">Docker &amp; OCI</a></li><li><a href="../guides/npm/">npm, pnpm, yarn</a></li><li><a href="../guides/maven/">Maven &amp; Gradle</a></li><li><a href="../guides/pypi/">PyPI</a></li><li><a href="../guides/nuget/">NuGet</a></li><li><a href="../guides/go/">Go modules</a></li><li><a href="../guides/helm/">Helm charts</a></li><li><a href="../guides/cargo/">Cargo</a></li><li><a href="../guides/apt/">APT</a></li><li><a href="../guides/rpm/">RPM</a></li><li><a href="../guides/raw/">Raw files</a></li></ul>
-<p class="side-h">Guides</p><ul><li><a href="../guides/migrate/">Move to Hangar</a></li><li><a href="../guides/ci/">CI integration</a></li><li><a href="../guides/access/">Access management</a></li><li><a href="../guides/sso/">Single sign-on</a></li><li><a href="../guides/routing-rules/">Routing rules</a></li><li><a href="../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../guides/api/">REST API</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../guides/migrate/">Move to Hangar</a></li><li><a href="../guides/ci/">CI integration</a></li><li><a href="../guides/ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../guides/config-as-code/">Configuration as code</a></li><li><a href="../guides/webhooks/">Webhooks</a></li><li><a href="../guides/access/">Access management</a></li><li><a href="../guides/sso/">Single sign-on</a></li><li><a href="../guides/routing-rules/">Routing rules</a></li><li><a href="../guides/vulnerabilities/">Vulnerability scanning</a></li><li><a href="../guides/api/">REST API</a></li></ul>
 <p class="side-h">Operations</p><ul><li><a href="../security/">Security</a></li><li><a href="../operations/monitoring/">Monitoring</a></li><li><a href="../operations/runbooks/">Alert runbooks</a></li><li><a href="../operations/performance/">Performance</a></li></ul>
 <p class="side-h">Project</p><ul><li><a href="../architecture/">Architecture</a></li><li><a href="../formats/">Format protocols</a></li><li><a href="../adr/">Decision records</a></li><li><a href="../product-spec/">Product specification</a></li><li><a href="../design-system/">Design system</a></li><li><a href="../roadmap/">Roadmap</a></li><li><a href="../changelog/">Changelog</a></li></ul>
   </nav>
@@ -69,7 +69,7 @@ how to operate it afterwards.</p>
 <tbody>
 <tr>
 <td><a href="requirements/">Requirements and sizing</a></td>
-<td>PostgreSQL, blob storage, NATS, CPU, memory, disk, network</td>
+<td>PostgreSQL, blob storage, CPU, memory, disk, network</td>
 </tr>
 <tr>
 <td><a href="install-compose/">Install with Docker Compose</a></td>
@@ -102,6 +102,10 @@ how to operate it afterwards.</p>
 <tr>
 <td><a href="upgrade/">Upgrades</a></td>
 <td>Migrations and the upgrade procedure for each install method</td>
+</tr>
+<tr>
+<td><a href="verify-release/">Verify a release</a></td>
+<td>cosign signatures, SBOMs and build provenance of the images, the chart and the release files</td>
 </tr>
 <tr>
 <td><a href="high-availability/">High availability</a></td>
@@ -153,10 +157,10 @@ and the user guides in <a href="../guides/">docs/guides</a>.</p>
 <td>your reverse proxy</td>
 </tr>
 <tr>
-<td>Event bus (NATS)</td>
-<td>embedded</td>
-<td>bundled 3-node cluster, external, or embedded (1 replica)</td>
-<td>embedded, or an external cluster</td>
+<td>Events and job queue</td>
+<td>PostgreSQL (nothing to run)</td>
+<td>PostgreSQL (nothing to run; session pooling if PgBouncer)</td>
+<td>PostgreSQL (nothing to run; session pooling if PgBouncer)</td>
 </tr>
 <tr>
 <td>Upgrades</td>
@@ -167,10 +171,14 @@ and the user guides in <a href="../guides/">docs/guides</a>.</p>
 </tbody>
 </table></div>
 <h2 id="container-image">Container image<a class="anchor" href="#container-image" aria-label="Link to this section">#</a></h2>
-<p>The examples use <code>ghcr.io/ismoilovdevml/hangar:&lt;version&gt;</code>. Until release
-images are published there, build the image from a release tag and push it
-to a registry your hosts can pull from, then set <code>HANGAR_IMAGE</code> (compose) or
-<code>image.repository</code>/<code>image.tag</code> (Helm):</p>
+<p>Releases publish <code>ghcr.io/ismoilovdevml/hangar:&lt;version&gt;</code> and
+<code>ghcr.io/ismoilovdevml/hangar-scanner:&lt;version&gt;</code> (linux/amd64 and
+linux/arm64) and, from v0.2.0, the Helm chart
+<code>oci://ghcr.io/ismoilovdevml/charts/hangar</code>, all signed by the release
+workflow (<a href="verify-release/">verify a release</a>). To mirror them into a
+registry your hosts can reach, <code>cosign copy</code> keeps the signatures. To build
+the image yourself from a release tag, push it to such a registry and set
+<code>HANGAR_IMAGE</code> (compose) or <code>image.repository</code>/<code>image.tag</code> (Helm):</p>
 <div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>git checkout &lt;version&gt;
 make docker IMAGE=registry.internal.example/hangar:&lt;version&gt;
 docker push registry.internal.example/hangar:&lt;version&gt;</code></pre></div>
@@ -225,7 +233,7 @@ Kubernetes secret volumes), never in the file: <code>HANGAR_DATABASE_URL</code>,
 </tbody>
 </table></div>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/README.md"><code>docs/deploy/README.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/README.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/deploy/README.md"><code>docs/deploy/README.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/deploy/README.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
       <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../faq/" rel="prev"><small>Previous</small><b>FAQ</b></a><a class="next" href="requirements/" rel="next"><small>Next</small><b>Requirements and sizing</b></a></nav>
     </article>
   </main>

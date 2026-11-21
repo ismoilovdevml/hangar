@@ -1,1 +1,0 @@
-import{Qa as e}from"./index-CG7QNL02.js";var t=e();function n({reason:e=`not available`}){return(0,t.jsxs)(t.Fragment,{children:[(0,t.jsx)(`span`,{"aria-hidden":`true`,children:`—`}),(0,t.jsx)(`span`,{className:`visually-hidden`,children:e})]})}export{n as t};

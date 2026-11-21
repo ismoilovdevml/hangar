@@ -45,10 +45,10 @@
 <div class="layout">
   <nav class="side" id="side" aria-label="Documentation">
 <p class="side-h">Start here</p><ul><li><a href="../../">Introduction</a></li><li><a href="./" aria-current="page">Getting started</a></li><li><a href="../">Concepts and guides</a></li><li><a href="../../faq/">FAQ</a></li></ul>
-<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
+<p class="side-h">Install and run</p><ul><li><a href="../../deploy/">Deploying Hangar</a></li><li><a href="../../deploy/requirements/">Requirements and sizing</a></li><li><a href="../../deploy/install-compose/">Docker Compose</a></li><li><a href="../../deploy/install-helm/">Helm (Kubernetes)</a></li><li><a href="../../deploy/install-binary/">Binary and systemd</a></li><li><a href="../../deploy/reverse-proxy/">TLS and reverse proxies</a></li><li><a href="../../deploy/corporate-proxy/">Corporate HTTP proxy</a></li><li><a href="../../deploy/first-admin/">First administrator</a></li><li><a href="../../deploy/backup-restore/">Backup and restore</a></li><li><a href="../../deploy/upgrade/">Upgrades</a></li><li><a href="../../deploy/verify-release/">Verify a release</a></li><li><a href="../../deploy/high-availability/">High availability</a></li><li><a href="../../deploy/troubleshooting/">Troubleshooting</a></li></ul>
 <p class="side-h">Using the UI</p><ul><li><a href="../../ui/">The web UI</a></li><li><a href="../../ui/repositories/">Repositories</a></li><li><a href="../../ui/packages/">Packages &amp; search</a></li><li><a href="../../ui/connect/">Connect a client</a></li><li><a href="../../ui/vulnerabilities/">Vulnerabilities</a></li><li><a href="../../ui/access/">Access &amp; tokens</a></li><li><a href="../../ui/tasks/">Scheduled tasks</a></li><li><a href="../../ui/blob-stores/">Blob stores</a></li><li><a href="../../ui/system/">Status, logs &amp; audit</a></li><li><a href="../../ui/settings/">Settings</a></li></ul>
 <p class="side-h">Package formats</p><ul><li><a href="../docker/">Docker &amp; OCI</a></li><li><a href="../npm/">npm, pnpm, yarn</a></li><li><a href="../maven/">Maven &amp; Gradle</a></li><li><a href="../pypi/">PyPI</a></li><li><a href="../nuget/">NuGet</a></li><li><a href="../go/">Go modules</a></li><li><a href="../helm/">Helm charts</a></li><li><a href="../cargo/">Cargo</a></li><li><a href="../apt/">APT</a></li><li><a href="../rpm/">RPM</a></li><li><a href="../raw/">Raw files</a></li></ul>
-<p class="side-h">Guides</p><ul><li><a href="../migrate/">Move to Hangar</a></li><li><a href="../ci/">CI integration</a></li><li><a href="../access/">Access management</a></li><li><a href="../sso/">Single sign-on</a></li><li><a href="../routing-rules/">Routing rules</a></li><li><a href="../vulnerabilities/">Vulnerability scanning</a></li><li><a href="../api/">REST API</a></li></ul>
+<p class="side-h">Guides</p><ul><li><a href="../migrate/">Move to Hangar</a></li><li><a href="../ci/">CI integration</a></li><li><a href="../ci-oidc/">CI trusted publishing (OIDC)</a></li><li><a href="../config-as-code/">Configuration as code</a></li><li><a href="../webhooks/">Webhooks</a></li><li><a href="../access/">Access management</a></li><li><a href="../sso/">Single sign-on</a></li><li><a href="../routing-rules/">Routing rules</a></li><li><a href="../vulnerabilities/">Vulnerability scanning</a></li><li><a href="../api/">REST API</a></li></ul>
 <p class="side-h">Operations</p><ul><li><a href="../../security/">Security</a></li><li><a href="../../operations/monitoring/">Monitoring</a></li><li><a href="../../operations/runbooks/">Alert runbooks</a></li><li><a href="../../operations/performance/">Performance</a></li></ul>
 <p class="side-h">Project</p><ul><li><a href="../../architecture/">Architecture</a></li><li><a href="../../formats/">Format protocols</a></li><li><a href="../../adr/">Decision records</a></li><li><a href="../../product-spec/">Product specification</a></li><li><a href="../../design-system/">Design system</a></li><li><a href="../../roadmap/">Roadmap</a></li><li><a href="../../changelog/">Changelog</a></li></ul>
   </nav>
@@ -70,8 +70,8 @@ own URL (for example <code>https://hangar.example.com</code>) once Hangar runs e
 <h2 id="1-run-the-server">1. Run the server<a class="anchor" href="#1-run-the-server" aria-label="Link to this section">#</a></h2>
 <p>You need PostgreSQL 16 or newer. Hangar applies its schema migrations itself.</p>
 <h3 id="option-a-from-source">Option A: from source<a class="anchor" href="#option-a-from-source" aria-label="Link to this section">#</a></h3>
-<p>Requires Go (see <code>go.mod</code>). Hangar embeds NATS and stores blobs on disk under
-<code>./data</code> by default.</p>
+<p>Requires Go (see <code>go.mod</code>). Hangar needs only PostgreSQL and stores blobs on disk
+under <code>./data</code> by default.</p>
 <div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code><span class="hljs-built_in">export</span> HANGAR_DATABASE_URL=<span class="hljs-string">&#x27;postgres://hangar:hangar@localhost:5432/hangar?sslmode=disable&#x27;</span>
 <span class="hljs-built_in">export</span> HANGAR_BOOTSTRAP_ADMIN_USER=admin
 <span class="hljs-built_in">export</span> HANGAR_BOOTSTRAP_ADMIN_PASSWORD=<span class="hljs-string">&#x27;&lt;admin-password&gt;&#x27;</span>
@@ -81,7 +81,7 @@ Change either with <code>HANGAR_SERVER_ADDR</code> and <code>HANGAR_SERVER_BASE_
 this way has no web UI (it serves a placeholder page); the container image and
 <code>make build-embed</code> include the UI.</p>
 <h3 id="option-b-docker-compose">Option B: Docker Compose<a class="anchor" href="#option-b-docker-compose" aria-label="Link to this section">#</a></h3>
-<p>The bundled stack runs PostgreSQL, NATS, MinIO, a Trivy server and Hangar:</p>
+<p>The bundled stack runs PostgreSQL, MinIO, a Trivy server and Hangar:</p>
 <div class="code"><div class="code-head"><span>shell</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="bash"><code>docker compose -f deploy/docker-compose.yml up -d --build
 curl http://localhost:8080/readyz</code></pre></div>
 <p>The compose file does not set a bootstrap administrator. Create one in the running
@@ -120,11 +120,6 @@ file. Settings you will want early:</p>
 <td><code>storage.fs.path</code></td>
 <td><code>HANGAR_STORAGE_FS_PATH</code></td>
 <td><code>./data/blobs</code></td>
-</tr>
-<tr>
-<td><code>nats.data_dir</code></td>
-<td><code>HANGAR_NATS_DATA_DIR</code></td>
-<td><code>./data/nats</code></td>
 </tr>
 <tr>
 <td><code>security.secret_key</code></td>
@@ -233,7 +228,9 @@ cookie. The cookie is marked <code>Secure</code>, which browsers accept on <code
         &quot;blob_store&quot;: &quot;default&quot;,
         &quot;config&quot;: { &quot;hosted&quot;: { &quot;write_policy&quot;: &quot;allow&quot; } }
       }&#x27;</span></code></pre></div>
-<p>The answer is <code>201 Created</code> with the repository, including the URL clients use:</p>
+<p>The example sets <code>write_policy: allow</code> so the file in step 5 can be replaced;
+without it a hosted <code>raw</code> repository gets the default <code>allow_once</code>. The answer
+is <code>201 Created</code> with the repository, including the URL clients use:</p>
 <div class="code"><div class="code-head"><span>json</span><button class="code-copy" type="button">Copy</button></div><pre tabindex="0" data-lang="json"><code><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;id&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;...&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;name&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;raw-hosted&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;format&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;raw&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;hosted&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;blob_store&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;default&quot;</span><span class="hljs-punctuation">,</span>
  <span class="hljs-attr">&quot;online&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-literal"><span class="hljs-keyword">true</span></span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;config&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;hosted&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;write_policy&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;allow&quot;</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;anonymous_read&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-literal"><span class="hljs-keyword">false</span></span><span class="hljs-punctuation">,</span>...<span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
  <span class="hljs-attr">&quot;url&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;http://localhost:8080/repository/raw-hosted/&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;status&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;online&quot;</span><span class="hljs-punctuation">,</span>...<span class="hljs-punctuation">}</span></code></pre></div>
@@ -252,7 +249,7 @@ cookie. The cookie is marked <code>Secure</code>, which browsers accept on <code
 </tr>
 <tr>
 <td><code>format</code></td>
-<td><code>docker</code>, <code>maven</code>, <code>npm</code>, <code>nuget</code>, <code>pypi</code> or <code>raw</code>, immutable</td>
+<td><code>docker</code> (Docker/OCI), <code>npm</code>, <code>maven</code>, <code>pypi</code>, <code>nuget</code>, <code>go</code>, <code>cargo</code>, <code>helm</code>, <code>apt</code>, <code>rpm</code> or <code>raw</code>, immutable</td>
 </tr>
 <tr>
 <td><code>type</code></td>
@@ -268,7 +265,7 @@ cookie. The cookie is marked <code>Secure</code>, which browsers accept on <code
 </tr>
 <tr>
 <td><code>config.hosted.write_policy</code></td>
-<td><code>allow</code> (default), <code>allow_once</code> (a path can be written once; identical re-uploads are accepted) or <code>deny</code></td>
+<td><code>allow_once</code> (the default, except for <code>docker</code>: a path can be written once; identical re-uploads are accepted, so a published release cannot be replaced by different bytes), <code>allow</code> (the default for <code>docker</code>, whose tags are meant to move: publish and overwrite freely) or <code>deny</code> (read-only)</td>
 </tr>
 <tr>
 <td><code>config.proxy</code></td>
@@ -301,14 +298,17 @@ curl -u <span class="hljs-string">&quot;admin:<span class="hljs-variable">$HANGA
 <p>With a token as the password, the username is not checked; any value works.</p>
 <h2 id="next-steps">Next steps<a class="anchor" href="#next-steps" aria-label="Link to this section">#</a></h2>
 <ul>
-<li>Connect a package client: <a href="../docker/">Docker</a>, <a href="../npm/">npm</a>, <a href="../maven/">Maven</a>,
-<a href="../pypi/">PyPI</a>, <a href="../nuget/">NuGet</a>, <a href="../raw/">raw files</a>.</li>
+<li>Connect a package client: <a href="../docker/">Docker/OCI</a>, <a href="../npm/">npm</a>,
+<a href="../maven/">Maven/Gradle</a>, <a href="../pypi/">PyPI</a>, <a href="../nuget/">NuGet</a>,
+<a href="../go/">Go modules</a>, <a href="../cargo/">Cargo</a>, <a href="../helm/">Helm</a>, <a href="../apt/">APT</a>,
+<a href="../rpm/">RPM</a>, <a href="../raw/">raw files</a>.</li>
+<li>Keep internal package names off public remotes: <a href="../routing-rules/">routing rules</a>.</li>
 <li>Publish from pipelines with a service account: <a href="../ci/">CI integration</a>.</li>
 <li>Automate with the <a href="../api/">REST API</a>.</li>
 <li>Users, roles and scopes: <a href="../access/">access.md</a>.</li>
 </ul>
 
-      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/getting-started.md"><code>docs/guides/getting-started.md</code></a> on main at <code>9ca4207</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/getting-started.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
+      <p class="edit-row">Source: <a href="https://github.com/ismoilovdevml/hangar/blob/main/docs/guides/getting-started.md"><code>docs/guides/getting-started.md</code></a> on main at <code>b8b616d</code> · <a href="https://github.com/ismoilovdevml/hangar/edit/main/docs/guides/getting-started.md">Edit this page</a> · <a href="https://github.com/ismoilovdevml/hangar/issues/new">Report a problem</a></p>
       <nav class="pager" aria-label="Previous and next page"><a class="prev" href="../../" rel="prev"><small>Previous</small><b>Introduction</b></a><a class="next" href="../" rel="next"><small>Next</small><b>Concepts and guides</b></a></nav>
     </article>
   </main>

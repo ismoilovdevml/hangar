@@ -1,0 +1,1 @@
+import{Eo as e,To as t}from"./index-B4yp8Cbr.js";var n=e(t(),1);function r(e){let[t,r]=(0,n.useState)(e),[i,a]=(0,n.useState)(e);return e!==i&&(a(e),e&&r(!0)),{open:t,onToggle:e=>r(e.currentTarget.open)}}export{r as t};
