@@ -1,9 +1,7 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useEscapeLayer } from '../lib/layers';
+import { useModal } from '../lib/modal';
 import { IconClose } from './icons';
-
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export interface DialogProps {
   title: ReactNode;
@@ -49,37 +47,7 @@ export function Dialog({
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descId = useId();
-  // A dialog that cannot be dismissed still takes Escape, so nothing underneath closes instead.
-  useEscapeLayer(dismissible ? onClose : () => {});
-
-  useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
-    const el = ref.current;
-    const first = el?.querySelector<HTMLElement>('[data-autofocus]') ?? el?.querySelector<HTMLElement>(FOCUSABLE);
-    (first ?? el)?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab' || !el) return;
-      const items = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((n) => n.offsetParent !== null || n === document.activeElement);
-      if (items.length === 0) return;
-      const firstItem = items[0]!;
-      const lastItem = items[items.length - 1]!;
-      if (e.shiftKey && (document.activeElement === firstItem || document.activeElement === el)) {
-        e.preventDefault();
-        lastItem.focus();
-      } else if (!e.shiftKey && document.activeElement === lastItem) {
-        e.preventDefault();
-        firstItem.focus();
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
-      if (opener && document.contains(opener)) opener.focus();
-    };
-  }, []);
+  useModal(ref, onClose, { dismissible });
 
   const plain = variant === 'plain';
   const heading = (
