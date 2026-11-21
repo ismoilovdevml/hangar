@@ -129,12 +129,19 @@ func TestMigrationsUpDown(t *testing.T) {
 
 	wantTables := []string{"blob_stores", "blobs", "repositories", "group_members", "components", "assets",
 		"users", "roles", "privileges", "role_bindings", "tokens", "identity_providers", "cleanup_policies",
-		"policy_repos", "tasks", "task_runs", "audit_events", "nodes", "replication_targets",
-		"replication_state", "findings"}
+		"policy_repos", "tasks", "task_runs", "audit_events", "system_nodes", "findings"}
 	for _, tbl := range wantTables {
 		var ok bool
 		if err := pool.QueryRow(ctx, "SELECT to_regclass($1) IS NOT NULL", tbl).Scan(&ok); err != nil || !ok {
 			t.Errorf("table %s missing (err=%v)", tbl, err)
+		}
+	}
+	// Dropped by 00322: unused tables and indexes another index serves.
+	for _, rel := range []string{"nodes", "replication_targets", "replication_state",
+		"components_created_idx", "assets_path_prefix_idx", "findings_component_idx"} {
+		var gone bool
+		if err := pool.QueryRow(ctx, "SELECT to_regclass($1) IS NULL", rel).Scan(&gone); err != nil || !gone {
+			t.Errorf("%s still exists (err=%v)", rel, err)
 		}
 	}
 
