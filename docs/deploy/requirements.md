@@ -20,6 +20,19 @@ CREATE ROLE hangar LOGIN PASSWORD '...';
 CREATE DATABASE hangar OWNER hangar;
 ```
 
+Global search uses the `pg_trgm` extension (part of PostgreSQL's contrib
+modules, included in the official packages and images) for substring
+matches. As the database owner, Hangar creates it itself (in schema
+`public` when it may create objects there). If it cannot, the migration
+still succeeds, Hangar logs a warning at start, and search reads every
+component for substring matches. To add the index later, run as a
+privileged role:
+
+```sql
+CREATE EXTENSION pg_trgm;
+SELECT hangar_search_trgm();  -- in Hangar's database (and schema); returns true
+```
+
 S3 rights for the bucket: `s3:ListBucket`, `s3:GetBucketLocation`,
 `s3:ListBucketMultipartUploads` on the bucket, and `s3:GetObject`,
 `s3:PutObject`, `s3:DeleteObject`, `s3:AbortMultipartUpload`,

@@ -1515,6 +1515,10 @@ paths:
     get:
       tags: [search]
       operationId: search
+      description: >-
+        Packages matching `q`, with the total and facets. Paging stops at the
+        first 10 000 results: the page that reaches them has no `next_cursor`;
+        narrow the query to see more.
       parameters:
         - name: q
           in: query

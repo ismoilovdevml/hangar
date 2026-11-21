@@ -489,3 +489,18 @@ ui:
   # Load http:// README images over plain HTTP instead of upgrading them to
   # https://. HANGAR_UI_README_IMAGES_ALLOW_HTTP.
   readme_images_allow_http: false
+
+# Audit log.
+audit:
+  # How long audit events are kept; 0 (the default) keeps them forever. Audit
+  # history is often kept for compliance, so set a limit deliberately. The log is stored
+  # in monthly partitions: the daily audit-partitions task drops a month
+  # once all of it is older than this. HANGAR_AUDIT_RETENTION.
+  retention: 0s # keep forever; e.g. 8760h for 365 days; 0s or at least 24h
+
+# Background tasks.
+tasks:
+  # How long finished task runs and their logs are kept; 0 keeps them
+  # forever. The newest run of each task is always kept. The hourly
+  # auth-purge task deletes the rest. HANGAR_TASKS_RUN_RETENTION.
+  run_retention: 2160h # 90 days; 0 or at least 24h

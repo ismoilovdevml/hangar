@@ -116,8 +116,7 @@ cleanup_policies(id, name, criteria jsonb, schedule), policy_repos
 tasks(id, name, type, schedule, config, enabled, builtin, policy_id, next_run_at),
 task_runs(id, task_id, status, progress, message, log, state, result, node, heartbeat_at, claims, started, finished)
 audit_events(id, at, actor, action, target, ip, details jsonb)  -- append-only, partitioned by month
-nodes(id, address, role, last_heartbeat, stats jsonb)
-replication_targets, replication_state  -- created by a migration, unused until edge replication ships
+system_nodes(id, hostname, url, version, role, status, heartbeat_at, subsystems jsonb)  -- node heartbeats
 ```
 
 ## API

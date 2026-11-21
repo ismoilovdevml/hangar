@@ -294,18 +294,35 @@ type batchCounts struct{ listed, picked, deleted int }
 
 // eligible is the candidate condition; $1 is the store id, $2 the grace
 // period in seconds. Eligibility uses the database clock, the same clock
-// that set soft_deleted_at and created_at.
+// that set soft_deleted_at and created_at. collectBlob re-checks it under the
+// row lock; candidatesSQL lists the same rows and must stay in step with it.
 const eligible = `store_id = $1 AND ref_count = 0
 	AND (soft_deleted_at < now() - make_interval(secs => $2)
 	     OR (soft_deleted_at IS NULL AND created_at < now() - make_interval(secs => $2)))`
+
+// candidatesSQL lists eligible rows ($1 store id, $2 grace period in
+// seconds, $3 digests to skip, $4 batch size), longest waiting first. The
+// two halves of eligible are separate branches because an OR across them
+// can use no index: with it, every batch read every blob row of the store.
+// Soft-deleted rows are read from blobs_soft_deleted_idx, never-referenced
+// ones from blobs_unreferenced_idx, each in that index's order, so a branch
+// stops after $4 rows; ordering by digest instead lets the planner walk the
+// primary key through every live blob.
+const candidatesSQL = `SELECT digest FROM (
+	(SELECT digest FROM blobs WHERE store_id = $1 AND ref_count = 0
+		AND soft_deleted_at < now() - make_interval(secs => $2) AND digest <> ALL($3)
+		ORDER BY soft_deleted_at LIMIT $4)
+	UNION ALL
+	(SELECT digest FROM blobs WHERE store_id = $1 AND ref_count = 0
+		AND soft_deleted_at IS NULL AND created_at < now() - make_interval(secs => $2) AND digest <> ALL($3)
+		ORDER BY created_at LIMIT $4)
+) c LIMIT $4`
 
 // deleteBatch lists up to BatchSize eligible rows and collects each one in
 // its own transaction (collectBlob). Digests that could not be collected are
 // added to excluded.
 func (c *Collector) deleteBatch(ctx context.Context, storeID string, store core.BlobStore, sr *StoreResult, excluded *[]string) (batchCounts, error) {
-	rows, err := c.pool.Query(ctx, `SELECT digest FROM blobs WHERE `+eligible+`
-		AND digest <> ALL($3) ORDER BY digest LIMIT $4`,
-		storeID, c.opts.GracePeriod.Seconds(), *excluded, c.opts.BatchSize)
+	rows, err := c.pool.Query(ctx, candidatesSQL, storeID, c.opts.GracePeriod.Seconds(), *excluded, c.opts.BatchSize)
 	if err != nil {
 		return batchCounts{}, fmt.Errorf("select candidates: %w", err)
 	}

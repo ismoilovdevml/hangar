@@ -64,6 +64,33 @@ type Config struct {
 	Observability Observability `yaml:"observability"`
 	// UI configures the web UI.
 	UI UI `yaml:"ui"`
+	// Audit configures how long the audit log is kept.
+	Audit Audit `yaml:"audit"`
+	// Tasks configures how long task run history is kept.
+	Tasks Tasks `yaml:"tasks"`
+}
+
+// MinRetention is the shortest accepted audit.retention and
+// tasks.run_retention other than 0 (keep everything): a shorter one is
+// almost certainly a unit mistake, and it would erase the record of what
+// happened yesterday.
+const MinRetention = 24 * time.Hour
+
+// Audit configures the audit log.
+type Audit struct {
+	// Retention is how long audit events are kept; 0 (the default) keeps
+	// them forever, so an upgrade never deletes audit history unasked. The log is partitioned by month: the
+	// daily audit-partitions task drops a month once all of it is older
+	// than Retention, so events are kept at least that long.
+	Retention time.Duration `yaml:"retention"`
+}
+
+// Tasks configures background task bookkeeping.
+type Tasks struct {
+	// RunRetention is how long finished task runs, with their logs, are kept
+	// (default 2160h, 90 days); 0 keeps them forever. The newest run of each
+	// task is always kept. The hourly auth-purge task deletes the rest.
+	RunRetention time.Duration `yaml:"run_retention"`
 }
 
 // UI configures the web UI.
@@ -560,6 +587,8 @@ func Default() Config {
 			AccessLog: AccessLog{SampleRatio: 1},
 		},
 		Bootstrap: Bootstrap{RequirePasswordChange: true},
+		Audit:     Audit{Retention: 0},
+		Tasks:     Tasks{RunRetention: 90 * 24 * time.Hour},
 	}
 }
 
@@ -732,6 +761,14 @@ func (c *Config) Validate() error {
 	}
 	if r := c.Observability.AccessLog.SampleRatio; r < 0 || r > 1 {
 		errs = append(errs, fmt.Errorf("observability.access_log.sample_ratio %v: want 0 to 1", r))
+	}
+	for _, r := range []struct {
+		key string
+		d   time.Duration
+	}{{"audit.retention", c.Audit.Retention}, {"tasks.run_retention", c.Tasks.RunRetention}} {
+		if r.d != 0 && r.d < MinRetention {
+			errs = append(errs, fmt.Errorf("%s %s: want 0 (keep everything) or at least %s", r.key, r.d, MinRetention))
+		}
 	}
 	return errors.Join(errs...)
 }

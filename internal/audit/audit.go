@@ -325,11 +325,32 @@ func withRaw(details map[string]any, ip string) map[string]any {
 }
 
 // EnsurePartitions creates the monthly partitions for the current month and
-// monthsAhead following months (idempotent). The scheduler calls it daily.
+// monthsAhead following months, and for every month with rows in the
+// default partition, moving those rows into it (idempotent). The scheduler
+// calls it daily.
 func EnsurePartitions(ctx context.Context, pool *pgxpool.Pool, monthsAhead int) (int, error) {
 	var n int
 	if err := pool.QueryRow(ctx, "SELECT hangar_ensure_audit_partitions($1)", monthsAhead).Scan(&n); err != nil {
 		return 0, fmt.Errorf("ensure audit partitions: %w", err)
 	}
 	return n, nil
+}
+
+// DropExpiredPartitions drops the monthly partitions whose every event is
+// older than retention and returns their names. Retention is applied in
+// whole months: a partition goes once its month ended retention ago, so
+// events are kept for at least retention. Zero or negative keeps everything.
+func DropExpiredPartitions(ctx context.Context, pool *pgxpool.Pool, retention time.Duration) ([]string, error) {
+	if retention <= 0 {
+		return nil, nil
+	}
+	rows, err := pool.Query(ctx, "SELECT hangar_drop_audit_partitions(now() - make_interval(secs => $1))", retention.Seconds())
+	if err != nil {
+		return nil, fmt.Errorf("drop expired audit partitions: %w", err)
+	}
+	dropped, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, fmt.Errorf("drop expired audit partitions: %w", err)
+	}
+	return dropped, nil
 }

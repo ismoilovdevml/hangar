@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -100,7 +101,10 @@ func TestOffsetCursor(t *testing.T) {
 	if n, err := decodeOffset(encodeOffset(150)); err != nil || n != 150 {
 		t.Fatalf("%d %v", n, err)
 	}
-	for _, bad := range []string{"x", encodeOffset(-1), "bzEwMDAwMDAwMDA"} {
+	if n, err := decodeOffset(encodeOffset(MaxOffset)); err != nil || n != MaxOffset {
+		t.Fatalf("MaxOffset: %d %v", n, err)
+	}
+	for _, bad := range []string{"x", encodeOffset(-1), encodeOffset(MaxOffset + 1), "bzEwMDAwMDAwMDA"} {
 		if _, err := decodeOffset(bad); !errors.Is(err, core.ErrInvalid) {
 			t.Errorf("decodeOffset(%q) = %v", bad, err)
 		}
@@ -192,6 +196,17 @@ func TestSearchIntegration(t *testing.T) {
 	if r = run(Query{Q: "published:>2026-10-01"}); r.Total != 0 {
 		t.Errorf("published:> %+v", r.Items)
 	}
+	// Several facet filters at once: each facet leaves out only its own, and
+	// the security filter picks the newest version that passes it.
+	r = run(Query{Q: "acme format:npm security:quarantined repo:npm-hosted"})
+	if r.Total != 1 || r.Items[0].ComponentID != ui1 || r.Items[0].Versions != 1 {
+		t.Errorf("combined filters: %+v", r)
+	}
+	if !hasFacet(r.Facets.Security, "pending", 1) || !hasFacet(r.Facets.Format, "npm", 1) || len(r.Facets.Repository) != 1 {
+		t.Errorf("combined filter facets: %+v", r.Facets)
+	}
+	run(Query{Q: "acme security:pending format:maven"})
+	run(Query{Q: "acme repo:npm-private repo:maven-releases security:findings"})
 
 	// Readable-repository restriction.
 	if r = run(Query{Q: "acme", RepoIDs: []string{npm, mvn}}); r.Total != 2 || hasFacet(r.Facets.Repository, "npm-private", 1) {
@@ -233,40 +248,57 @@ func hasFacet(vals []FacetValue, v string, n int) bool {
 	return false
 }
 
-// assertSeparateCounts checks the total and facets of r against one
-// statement per number, each facet leaving out its own filter.
+// assertSeparateCounts checks the total and facets of r against the hits
+// themselves: the total is the number of hits, and a facet counts the hits
+// of the same query without that facet's own qualifier.
 func assertSeparateCounts(t *testing.T, svc *Service, q Query, r *Result) {
 	t.Helper()
-	p, err := Parse(q.Q)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx := context.Background()
-	b := &builder{}
-	var total int
-	if err := svc.pool.QueryRow(ctx, svc.matchCTE(b, p, q, dimNone)+`SELECT count(*) FROM g`, b.args...).Scan(&total); err != nil {
-		t.Fatal(err)
-	}
-	if r.Total != total {
-		t.Errorf("%q: total %d, want %d", q.Q, r.Total, total)
-	}
-	for d, got := range map[string][]FacetValue{dimFormat: r.Facets.Format, dimSecurity: r.Facets.Security, dimRepository: r.Facets.Repository} {
-		b := &builder{}
-		rows, err := svc.pool.Query(ctx, svc.matchCTE(b, p, q, d)+`SELECT `+facetColumn[d]+`, count(*) FROM g GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 50`, b.args...)
+	all := func(text string) []Hit {
+		t.Helper()
+		res, err := svc.Search(context.Background(), Query{Q: text, RepoIDs: q.RepoIDs, Limit: 1000})
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("Search(%q): %v", text, err)
+		}
+		if res.NextCursor != "" {
+			t.Fatalf("Search(%q): more than one page", text)
+		}
+		return res.Items
+	}
+	if hits := all(q.Q); r.Total != len(hits) {
+		t.Errorf("%q: total %d, want %d", q.Q, r.Total, len(hits))
+	}
+	facets := []struct {
+		qualifier string
+		got       []FacetValue
+		value     func(Hit) string
+	}{
+		{"format", r.Facets.Format, func(h Hit) string { return h.Format }},
+		{"security", r.Facets.Security, func(h Hit) string { return h.Security }},
+		{"repo", r.Facets.Repository, func(h Hit) string { return h.Repository }},
+	}
+	for _, f := range facets {
+		var words []string
+		for _, w := range strings.Fields(q.Q) {
+			if !strings.HasPrefix(strings.ToLower(w), f.qualifier+":") {
+				words = append(words, w)
+			}
+		}
+		counts := map[string]int{}
+		for _, h := range all(strings.Join(words, " ")) {
+			counts[f.value(h)]++
 		}
 		want := []FacetValue{}
-		for rows.Next() {
-			var f FacetValue
-			if err := rows.Scan(&f.Value, &f.Count); err != nil {
-				t.Fatal(err)
-			}
-			want = append(want, f)
+		for v, n := range counts {
+			want = append(want, FacetValue{Value: v, Count: n})
 		}
-		rows.Close()
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("%q: %s facet = %+v, want %+v", q.Q, d, got, want)
+		sort.Slice(want, func(i, j int) bool {
+			if want[i].Count != want[j].Count {
+				return want[i].Count > want[j].Count
+			}
+			return want[i].Value < want[j].Value
+		})
+		if !reflect.DeepEqual(f.got, want) {
+			t.Errorf("%q: %s facet = %+v, want %+v", q.Q, f.qualifier, f.got, want)
 		}
 	}
 }
