@@ -164,6 +164,44 @@ func TestEnvVars(t *testing.T) {
 	}
 }
 
+func TestRetentionSettings(t *testing.T) {
+	d := Default()
+	if d.Audit.Retention != 365*24*time.Hour || d.Tasks.RunRetention != 90*24*time.Hour {
+		t.Fatalf("defaults: audit %s, tasks %s", d.Audit.Retention, d.Tasks.RunRetention)
+	}
+	tests := []struct {
+		name    string
+		audit   time.Duration
+		runs    time.Duration
+		wantErr string
+	}{
+		{name: "keep everything", audit: 0, runs: 0},
+		{name: "one day", audit: 24 * time.Hour, runs: 24 * time.Hour},
+		{name: "audit too short", audit: time.Hour, runs: 0, wantErr: "audit.retention"},
+		{name: "runs too short", audit: 0, runs: 90 * time.Minute, wantErr: "tasks.run_retention"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := Default()
+			c.Database.URL = "postgres://x/y"
+			c.Audit.Retention, c.Tasks.RunRetention = tt.audit, tt.runs
+			err := c.Validate()
+			switch {
+			case tt.wantErr == "" && err != nil:
+				t.Errorf("Validate: %v", err)
+			case tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)):
+				t.Errorf("Validate = %v, want an error about %s", err, tt.wantErr)
+			}
+		})
+	}
+	vars := EnvVars()
+	for _, want := range []string{"HANGAR_AUDIT_RETENTION", "HANGAR_TASKS_RUN_RETENTION"} {
+		if !slices.Contains(vars, want) {
+			t.Errorf("missing %s", want)
+		}
+	}
+}
+
 // The example config shipped at the repository root must load.
 func TestExampleConfig(t *testing.T) {
 	t.Setenv("HANGAR_CONFIG", "")

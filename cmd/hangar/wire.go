@@ -701,9 +701,9 @@ var builtinTasks = []tasks.Builtin{
 	{Name: "blob-compaction", Type: tasks.TypeBlobCompaction, Schedule: "30 3 * * *",
 		Description: "Delete blob bytes no asset references any more, after the grace period"},
 	{Name: "auth-purge", Type: tasks.TypeAuthPurge, Schedule: "5 * * * *",
-		Description: "Purge expired sessions, tokens and cleanup preview tokens"},
+		Description: "Purge expired sessions, tokens and cleanup preview tokens, and task runs past tasks.run_retention"},
 	{Name: "audit-partitions", Type: tasks.TypeAuditPartitions, Schedule: "15 0 * * *",
-		Description: "Create the audit log partitions for the coming months"},
+		Description: "Create the audit log partitions for the coming months and drop those past audit.retention"},
 }
 
 // dockerUploadCleanupTask ends abandoned docker upload sessions and hands
@@ -733,12 +733,23 @@ func buildTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, queu
 			return err
 		}
 		n, err := cleanupSvc.PurgePreviews(ctx)
-		x.Progress(1, fmt.Sprintf("Purged expired sessions and tokens, %d cleanup previews", n))
+		if err != nil {
+			return err
+		}
+		runs, err := taskSvc.PruneRuns(ctx, cfg.Tasks.RunRetention)
+		x.Progress(1, fmt.Sprintf("Purged expired sessions and tokens, %d cleanup previews, %d task runs", n, runs))
 		return err
 	}), tasks.TypeOptions{})
 	taskSvc.Register(tasks.TypeAuditPartitions, tasks.Func(func(ctx context.Context, x *tasks.Exec) error {
 		created, err := audit.EnsurePartitions(ctx, pool, 2)
-		x.Progress(1, fmt.Sprintf("Audit partitions ensured (%v created)", created))
+		if err != nil {
+			return err
+		}
+		dropped, err := audit.DropExpiredPartitions(ctx, pool, cfg.Audit.Retention)
+		x.Progress(1, fmt.Sprintf("Audit partitions ensured (%d created, %d dropped)", created, len(dropped)))
+		if len(dropped) > 0 {
+			x.Logf("Dropped audit partitions past audit.retention (%s): %s", cfg.Audit.Retention, strings.Join(dropped, ", "))
+		}
 		return err
 	}), tasks.TypeOptions{})
 	taskSvc.Register(scanning.TaskType, scanner.Executor(), tasks.TypeOptions{})
