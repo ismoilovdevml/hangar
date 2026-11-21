@@ -23,12 +23,14 @@
 // publishes are not held up behind a slow store and no transaction idles
 // for long (idle_in_transaction_session_timeout).
 //
-// A publish that references a candidate concurrently either holds the row
-// lock first (GC then skips the row), or waits for that blob's transaction
-// to commit; in that case the row and the bytes are gone when its upsert
-// proceeds and inserts a new row. Every publish that takes the first reference of a blob
-// therefore confirms the bytes still exist after its upsert, under the row
-// lock and inside its transaction, and fails if they do not (see
+// A publish first pins its blobs: it restarts the grace period of their
+// unreferenced rows (soft_deleted_at = now(), committed, rows locked in
+// digest order), then checks the bytes in the store, and only then opens its
+// transaction, which holds no storage call. A pin that meets a row this
+// collector holds waits for it, finds the row gone, and the publish's
+// storage check sees the bytes gone and fails; a pin that commits first makes
+// the row ineligible for a grace period, and the publish transaction refuses
+// to revive a blob pinned longer ago than an hour (see
 // internal/service/component). A Put also restarts the grace period of an
 // unreferenced row for the same digest (internal/storage/pending), so content
 // uploaded again just before a run is not collected under the publish.
