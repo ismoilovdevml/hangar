@@ -4031,18 +4031,22 @@ components:
             - $ref: "#/components/schemas/RpmFormatConfig"
     AptFormatConfig:
       type: object
-      description: "`config.format` of apt repositories. Both keys apply to hosted and group repositories; a proxy serves the remote's metadata."
+      description: "`config.format` of apt repositories. `architectures` and `signing_key` apply to hosted and group repositories (a proxy serves the remote's metadata); `remote_keys` applies to proxies."
       x-format: apt
       additionalProperties: true
       properties:
         architectures:
           type: array
           items: { type: string, examples: [amd64, arm64, i386] }
-          description: Architectures listed in every distribution besides those of the uploaded packages (not `all`). Default `[amd64, arm64]`.
+          description: Architectures listed in every distribution besides those of the uploaded packages (not `all`). Default `[amd64, arm64]`. A group merges these architectures from its proxy members.
         signing_key:
           type: string
           enum: [repository, shared]
           description: Key that signs the metadata. Default `repository` (the repository's own key).
+        remote_keys:
+          type: array
+          items: { type: string }
+          description: "Proxy repositories: the remote archive's ASCII-armored OpenPGP public keys. A group merges the proxy only after its `Release` verifies with one of them; a proxy member without them makes the group answer 400."
     CargoFormatConfig:
       type: object
       description: "`config.format` of cargo repositories."
@@ -4151,7 +4155,7 @@ components:
       properties: {}
     RpmFormatConfig:
       type: object
-      description: "`config.format` of rpm repositories. Both keys apply to hosted and group repositories; a proxy serves the remote's metadata."
+      description: "`config.format` of rpm repositories. `repodata_depth` and `signing_key` apply to hosted and group repositories (a proxy serves the remote's metadata); `remote_keys` applies to proxies."
       x-format: rpm
       additionalProperties: true
       properties:
@@ -4164,6 +4168,10 @@ components:
           type: string
           enum: [repository, shared]
           description: Key that signs the metadata. Default `repository` (the repository's own key).
+        remote_keys:
+          type: array
+          items: { type: string }
+          description: "Proxy repositories: the remote's ASCII-armored OpenPGP public keys. A group merges the proxy only after its `repomd.xml.asc` verifies with one of them; a proxy member without them makes the group answer 400."
     RoutingRules:
       type: object
       description: >-

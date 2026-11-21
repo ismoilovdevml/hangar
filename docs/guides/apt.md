@@ -91,15 +91,61 @@ curl -X POST https://hangar.example.com/api/v1/repositories \
         "config": { "group": { "members": ["apt-hosted", "apt-team"] } } }'
 ```
 
-**APT groups combine hosted repositories only.** Their `Packages` and
-`Release` files are regenerated from the members' packages and signed with
-the group's own key. If two members hold the same package version and
-architecture, the first member wins.
+A group's `Packages` and `Release` files are regenerated from the members'
+packages and signed with the group's own key. If two members hold the same
+pool path, or the same package version and architecture in a component, the
+first member wins.
 
-A group with a proxy member answers `400` with an explanation. A remote's
-signed `Release` cannot be merged with other packages without either
-breaking its signature or re-signing someone else's archive. Point clients at
-the proxy directly, next to the group.
+#### Proxy members
+
+A group can contain proxy members. For each distribution a client asks for,
+the group reads the remote's `InRelease` (or `Release` and `Release.gpg`) and
+`Packages` files through the proxy's own cache, and lists the remote's
+packages next to the hosted ones. Downloads through the group go to the first
+member, in group order, that has the file. For a proxy member that means its
+cache or its remote, and the package is cached in the proxy.
+
+The group signs what it lists with its own key, so clients trust the remote's
+packages because of the group's signature. For this reason the group merges a
+remote only after it verifies the remote's signature. Set the remote archive's
+public keys on the proxy, ASCII-armored, in `format.remote_keys`:
+
+```bash
+# Debian: the archive keys apt itself trusts (ASCII-armored)
+gpg --no-default-keyring --keyring /usr/share/keyrings/debian-archive-keyring.gpg \
+  --export --armor > debian-archive-keys.asc
+
+jq -n --rawfile key debian-archive-keys.asc '{
+    name: "debian-proxy", format: "apt", type: "proxy", blob_store: "default",
+    config: { proxy: { remote_url: "http://deb.debian.org/debian" }, format: { remote_keys: [$key] } } }' \
+| curl -X POST https://hangar.example.com/api/v1/repositories \
+    -H "Authorization: Bearer $HANGAR_TOKEN" -H 'Content-Type: application/json' -d @-
+```
+
+For an existing proxy, send the same `config` with `PUT
+/api/v1/repositories/{name}`, which replaces the settings.
+
+- A proxy member without `remote_keys` makes the group answer `400` with an
+  explanation. A `Release` that does not verify, that names another suite or
+  codename, or whose `Valid-Until` has passed makes it answer `502`. Clients
+  keep their previous lists in both cases.
+- The group's `Release` carries the earliest `Valid-Until` of the merged
+  remotes, so a stale copy of the group's `Release` expires as the remote's
+  would.
+- Only the group's architectures (`format.architectures`, by default
+  `amd64` and `arm64`) are merged from a remote, for every component its
+  `Release` lists. The merged `Packages` indexes of one distribution of one
+  proxy member may hold at most 256 MiB uncompressed. Debian's four
+  components for two architectures need about 100 MiB.
+- Translations (`i18n/`), `Contents` and source indexes of a remote are not
+  merged.
+- Quarantined packages that the proxy has cached are left out of the group's
+  indexes, and their download is refused. Routing rules apply to the
+  remote's packages as they do to hosted ones.
+- A proxy member that is offline (`online: false`) is skipped. A proxy in
+  offline mode contributes what it has cached.
+- Adding a proxy to a group needs read access to the proxy, as for any
+  member.
 
 ## Client setup
 

@@ -110,6 +110,10 @@ type indexOptions struct {
 	Label         string   // Origin and Label of Release files
 	Architectures []string // always listed, besides the uploaded ones
 	Date          time.Time
+	// ValidUntil, when set, is written as Valid-Until: a group that merges
+	// a remote's Release passes on the remote's expiry, so a replayed old
+	// group Release is refused by apt as the remote's would be.
+	ValidUntil time.Time
 }
 
 // releaseDateFormat is the Date field of Release files (RFC 2822 in UTC).
@@ -264,6 +268,9 @@ func releaseFile(dist string, arches, comps []string, files []indexFile, opt ind
 	var b strings.Builder
 	fmt.Fprintf(&b, "Origin: %s\nLabel: %s\nSuite: %s\nCodename: %s\n", opt.Label, opt.Label, dist, dist)
 	fmt.Fprintf(&b, "Date: %s\n", opt.Date.UTC().Format(releaseDateFormat))
+	if !opt.ValidUntil.IsZero() {
+		fmt.Fprintf(&b, "Valid-Until: %s\n", opt.ValidUntil.UTC().Format(releaseDateFormat))
+	}
 	fmt.Fprintf(&b, "Architectures: %s\nComponents: %s\n", strings.Join(arches, " "), strings.Join(comps, " "))
 	fmt.Fprintf(&b, "Description: %s %s\n", opt.Label, dist)
 	b.WriteString("Acquire-By-Hash: yes\n")

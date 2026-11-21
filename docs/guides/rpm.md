@@ -105,11 +105,56 @@ curl -X POST https://hangar.example.com/api/v1/repositories \
         "config": { "group": { "members": ["rpm-hosted", "rpm-team"] } } }'
 ```
 
-**RPM groups combine hosted repositories only.** Their repodata is
-regenerated from the members' packages and signed with the group's own key.
-If two members hold the same package path or the same
-name-epoch:version-release.arch, the first member wins. A group with a proxy
-member answers `400`; configure the proxy as its own `.repo` entry instead.
+A group's repodata is regenerated from the members' packages and signed with
+the group's own key. If two members hold the same package path or the same
+name-epoch:version-release.arch, the first member wins.
+
+#### Proxy members
+
+A group can contain proxy members. For each repodata root a client asks for,
+the group reads the remote's `repomd.xml`, `repomd.xml.asc` and its
+`primary`, `filelists` and `other` documents through the proxy's own cache.
+It lists the remote's packages next to the hosted ones, with their entries
+as the remote has them. Downloads through the group go to the first member,
+in group order, that has the file. For a proxy member that means its cache or
+its remote, and the package is cached in the proxy.
+
+The group signs `repomd.xml` with its own key, so clients trust the remote's
+package list because of the group's signature. For this reason the group
+merges a remote only after it verifies the remote's detached signature
+(`repomd.xml.asc`). Set the remote's public keys on the proxy,
+ASCII-armored, in `format.remote_keys`:
+
+```bash
+jq -n --rawfile key vendor-repo-key.asc '{
+    name: "vendor-proxy", format: "rpm", type: "proxy", blob_store: "default",
+    config: { proxy: { remote_url: "https://packages.example.com/rpm/el9/x86_64/" },
+              format: { remote_keys: [$key] } } }' \
+| curl -X POST https://hangar.example.com/api/v1/repositories \
+    -H "Authorization: Bearer $HANGAR_TOKEN" -H 'Content-Type: application/json' -d @-
+```
+
+- A proxy member without `remote_keys` makes the group answer `400` with an
+  explanation. A remote without `repomd.xml.asc`, or one whose signature does
+  not verify, makes it answer `502`. Repositories that sign only their
+  packages and not `repomd.xml` cannot be merged; give clients the proxy as
+  its own `.repo` entry, next to the group.
+- Only `primary`, `filelists` and `other` are merged. Module metadata
+  (`modules.yaml`), comps groups and `updateinfo` of a remote are not, so
+  modular repositories such as EL8 AppStream belong in their own `.repo`
+  entry.
+- The merged documents of one root of one proxy member may hold at most
+  256 MiB uncompressed. Very large trees such as Fedora Everything exceed
+  it.
+- Packages keep their distribution signature. With `gpgcheck=1`, list the
+  distribution's key in `gpgkey` next to the group's key.
+- Quarantined packages that the proxy has cached are left out of the group's
+  repodata, and their download is refused. Routing rules apply to the
+  remote's packages as they do to hosted ones.
+- A proxy member that is offline (`online: false`) is skipped. A proxy in
+  offline mode contributes what it has cached.
+- Adding a proxy to a group needs read access to the proxy, as for any
+  member.
 
 ## Client setup
 

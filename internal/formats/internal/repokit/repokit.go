@@ -215,8 +215,8 @@ func (b *Base) AuthorizeWrite(w http.ResponseWriter, r *http.Request, repo *core
 	return r, target, true
 }
 
-// Leaf is a hosted member of a group with the group memberships it was
-// reached through (outermost first), whose routing rules apply to it.
+// Leaf is a hosted or proxy member of a group with the group memberships
+// it was reached through (outermost first), whose routing rules apply to it.
 type Leaf struct {
 	Repo *core.Repository
 	Via  []Link
@@ -248,12 +248,17 @@ func (l Leaf) Allows(ctx context.Context, name string) bool {
 	return true
 }
 
-// RoutingKey fingerprints the routing rules that apply to leaves, for cache
-// keys of merged documents: a rule change regenerates them.
+// RoutingKey fingerprints the routing rules that apply to leaves (those of
+// the groups on the way, and a proxy leaf's own), for cache keys of merged
+// documents: a rule change regenerates them.
 func RoutingKey(leaves []Leaf) string {
 	var sb strings.Builder
 	seen := map[string]bool{}
 	for _, l := range leaves {
+		if l.Proxy() && !l.Repo.Config.Routing.Empty() {
+			js, _ := json.Marshal(l.Repo.Config.Routing)
+			sb.WriteString(l.Repo.ID + "=" + string(js) + "\n")
+		}
 		for _, k := range l.Via {
 			if seen[k.Group.ID] || k.Group.Config.Routing.Empty() {
 				continue
@@ -266,26 +271,23 @@ func RoutingKey(leaves []Leaf) string {
 	return sb.String()
 }
 
-// HostedMembers expands a group into its hosted members in resolution
-// order (nested groups depth-first, repeats and offline members skipped).
-// A proxy member fails with core.ErrInvalid: signed metadata of a remote
-// cannot be merged with other content and re-signed honestly, so groups of
-// this format combine hosted repositories only.
-func (b *Base) HostedMembers(ctx context.Context, group *core.Repository) ([]*core.Repository, error) {
-	leaves, err := b.HostedLeaves(ctx, group)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*core.Repository, len(leaves))
-	for i, l := range leaves {
-		out[i] = l.Repo
-	}
-	return out, nil
+// Excludes reports, without recording it, whether the routing rules keep
+// l from serving name: a group's on the way, or a proxy leaf's own. Merging
+// a remote's index checks every package it lists, tens of thousands; an
+// exclusion is recorded (metric, audit) when a download is refused.
+func (l Leaf) Excludes(name string) bool {
+	return l.Block(name) != nil || (l.Proxy() && l.Repo.RoutingBlock(name) != nil)
 }
 
-// HostedLeaves is HostedMembers with the memberships each member was
-// reached through, for routing rules.
-func (b *Base) HostedLeaves(ctx context.Context, group *core.Repository) ([]Leaf, error) {
+// Proxy reports whether l is a proxy repository: it holds what its remote
+// serves, read through its own cache, not only what is stored.
+func (l Leaf) Proxy() bool { return l.Repo.Type == core.RepoProxy }
+
+// Leaves expands a group into its hosted and proxy members in resolution
+// order (nested groups depth-first; repeats, other formats and offline
+// members skipped), each with the memberships it was reached through, for
+// routing rules.
+func (b *Base) Leaves(ctx context.Context, group *core.Repository) ([]Leaf, error) {
 	var out []Leaf
 	seen := map[string]bool{}
 	var walk func(r *core.Repository, via []Link, depth int) error
@@ -306,10 +308,6 @@ func (b *Base) HostedLeaves(ctx context.Context, group *core.Repository) ([]Leaf
 			copy(path, via)
 			path[len(via)] = Link{Group: r, Member: m}
 			switch m.Type {
-			case core.RepoProxy:
-				return fmt.Errorf("%s group %q: member %q is a proxy; %s groups combine hosted repositories only "+
-					"(a remote's signed metadata cannot be merged); point clients at the proxy directly: %w",
-					b.Format, group.Name, m.Name, b.Format, core.ErrInvalid)
 			case core.RepoGroup:
 				if err := walk(m, path, depth+1); err != nil {
 					return err
@@ -326,26 +324,25 @@ func (b *Base) HostedLeaves(ctx context.Context, group *core.Repository) ([]Leaf
 	return out, nil
 }
 
-// FindInMembers returns the first hosted member holding path.
-func (b *Base) FindInMembers(ctx context.Context, members []*core.Repository, path string) (*core.Asset, *core.Repository, error) {
-	for _, m := range members {
-		a, err := b.Deps.Components.GetAsset(ctx, m.ID, path)
-		if err == nil {
-			return a, m, nil
-		}
-		if !errors.Is(err, core.ErrNotFound) {
-			return nil, nil, err
-		}
-	}
-	return nil, nil, fmt.Errorf("%s: %w", path, core.ErrNotFound)
-}
+// ProxyFetch returns a proxy member's copy of a file through the member's
+// own proxy path (its cache, else its remote), as a request to the member
+// would, so the member's routing rules and cache apply.
+type ProxyFetch func(ctx context.Context, member *core.Repository) (*core.Asset, error)
 
 // FindInLeaves returns the first leaf holding path that the routing rules
-// let serve the package name ("" applies no rule). When the rules exclude
-// every leaf the error is the first *core.RoutingBlock.
-func (b *Base) FindInLeaves(ctx context.Context, leaves []Leaf, path, name string) (*core.Asset, *core.Repository, error) {
-	var allowed []*core.Repository
-	var first *core.RoutingBlock
+// let serve the package name ("" applies no rule): a hosted leaf holds what
+// it stores, a proxy leaf what fetch returns (nil skips proxy leaves). A
+// proxy leaf that fails other than with not-found (its remote is down) is
+// passed over, and its error returned when no later leaf holds path. When
+// the rules (the groups' or a proxy's own) exclude every leaf the error is
+// the first *core.RoutingBlock. A failed lookup in a hosted leaf is returned
+// at once.
+func (b *Base) FindInLeaves(ctx context.Context, leaves []Leaf, path, name string, fetch ProxyFetch) (*core.Asset, *core.Repository, error) {
+	var (
+		first   *core.RoutingBlock
+		lastErr error
+		allowed int
+	)
 	for _, l := range leaves {
 		if name != "" {
 			if bl := l.Block(name); bl != nil {
@@ -356,12 +353,71 @@ func (b *Base) FindInLeaves(ctx context.Context, leaves []Leaf, path, name strin
 				continue
 			}
 		}
-		allowed = append(allowed, l.Repo)
+		if l.Proxy() {
+			if fetch == nil {
+				continue
+			}
+			a, err := fetch(ctx, l.Repo)
+			switch {
+			case err == nil:
+				return a, l.Repo, nil
+			case errors.Is(err, core.ErrRoutingBlocked):
+				if bl, ok := core.AsRoutingBlock(err); ok && first == nil {
+					first = bl
+				}
+			case errors.Is(err, core.ErrNotFound):
+				allowed++
+			default:
+				allowed++
+				lastErr = err
+			}
+			continue
+		}
+		allowed++
+		a, err := b.Deps.Components.GetAsset(ctx, l.Repo.ID, path)
+		if err == nil {
+			return a, l.Repo, nil
+		}
+		if !errors.Is(err, core.ErrNotFound) {
+			return nil, nil, err
+		}
 	}
-	if len(allowed) == 0 && first != nil {
+	switch {
+	case lastErr != nil:
+		return nil, nil, lastErr
+	case allowed == 0 && first != nil:
 		return nil, nil, first
 	}
-	return b.FindInMembers(ctx, allowed, path)
+	return nil, nil, fmt.Errorf("%s: %w", path, core.ErrNotFound)
+}
+
+// QuarantinedPaths returns the paths of repoID's assets that belong to a
+// quarantined component. A proxy's merged indexes leave them out, since a
+// cached package is the proxy's only record of a remote package's
+// quarantine.
+func (b *Base) QuarantinedPaths(ctx context.Context, repoID string) (map[string]bool, error) {
+	comps, err := quarantine.Components(ctx, b.Deps.Components, repoID)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for id := range comps {
+		cursor := ""
+		for {
+			page, err := b.Deps.Components.ListAssets(ctx, core.AssetQuery{RepositoryID: repoID, ComponentID: id, Limit: core.MaxPageSize, Cursor: cursor})
+			if err != nil {
+				return nil, err
+			}
+			for _, a := range page.Items {
+				out[a.Path] = true
+			}
+			if page.NextCursor == "" {
+				break
+			}
+			cursor = page.NextCursor
+		}
+	}
+	return out, nil
 }
 
 // AllAssets lists every asset of repoID under prefix.

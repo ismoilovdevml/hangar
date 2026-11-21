@@ -26,41 +26,56 @@ func (h *handler) proxyDists(w http.ResponseWriter, r *http.Request, repo *core.
 	ctx, tally := repokit.Tally(r.Context())
 	defer tally.Record(Name, r.Method)
 	r = r.WithContext(ctx)
-	ttl := repokit.MetadataTTL(repo, DefaultMetadataTTL)
 	var (
 		a   *core.Asset
 		err error
 	)
 	switch {
 	case rest == "InRelease" || rest == "Release":
-		a, err = h.ProxyGet(ctx, repo, repokit.Fetch{Path: p, TTL: ttl, ContentType: ctText})
+		a, err = h.proxyRelease(ctx, repo, dist, rest)
 	case rest == "Release.gpg":
 		var rel *core.Asset
-		rel, err = h.ProxyGet(ctx, repo, repokit.Fetch{Path: "dists/" + dist + "/Release", TTL: ttl, ContentType: ctText})
-		if err == nil {
-			forDigest := rel.BlobDigest.Hex()
-			a, err = h.ProxyGet(ctx, repo, repokit.Fetch{
-				Path: p, ContentType: ctPGPSig, Attributes: map[string]any{attrSignedFor: forDigest},
-				Valid: func(c *core.Asset) bool { return repokit.AttrString(c.Attributes, attrSignedFor) == forDigest },
-			})
+		if rel, err = h.proxyRelease(ctx, repo, dist, "Release"); err == nil {
+			a, err = h.proxyReleaseSig(ctx, repo, dist, rel)
 		}
 	case strings.Contains(rest, "/by-hash/"):
 		a, err = h.ProxyGet(ctx, repo, repokit.Fetch{Path: p, ContentType: indexContentType(rest)})
 	default:
-		want := h.expectedHash(ctx, repo, dist, rest)
-		f := repokit.Fetch{Path: p, TTL: ttl, ContentType: indexContentType(rest)}
-		if want != "" {
-			// Valid while it matches the Release: no TTL needed.
-			f.TTL = 0
-			f.Valid = func(c *core.Asset) bool { return c.BlobDigest.Hex() == want }
-		}
-		a, err = h.ProxyGet(ctx, repo, f)
+		a, err = h.proxyIndex(ctx, repo, dist, rest, h.expectedHash(ctx, repo, dist, rest))
 	}
 	if err != nil {
 		h.Fail(w, r, err)
 		return
 	}
 	h.ServeAsset(w, r, repo, a)
+}
+
+// proxyRelease returns a proxy's InRelease or Release of dist (name),
+// revalidated after the metadata TTL. Groups read it the same way.
+func (h *handler) proxyRelease(ctx context.Context, repo *core.Repository, dist, name string) (*core.Asset, error) {
+	return h.ProxyGet(ctx, repo, repokit.Fetch{Path: "dists/" + dist + "/" + name, TTL: repokit.MetadataTTL(repo, DefaultMetadataTTL), ContentType: ctText})
+}
+
+// proxyReleaseSig returns the Release.gpg that signs rel, refetched when
+// the cached one belongs to another Release.
+func (h *handler) proxyReleaseSig(ctx context.Context, repo *core.Repository, dist string, rel *core.Asset) (*core.Asset, error) {
+	forDigest := rel.BlobDigest.Hex()
+	return h.ProxyGet(ctx, repo, repokit.Fetch{
+		Path: "dists/" + dist + "/Release.gpg", ContentType: ctPGPSig, Attributes: map[string]any{attrSignedFor: forDigest},
+		Valid: func(c *core.Asset) bool { return repokit.AttrString(c.Attributes, attrSignedFor) == forDigest },
+	})
+}
+
+// proxyIndex returns a proxy's index file rest of dist. want is the sha256
+// the Release lists for it ("" when unknown): a cached copy is served while
+// it matches, without a TTL.
+func (h *handler) proxyIndex(ctx context.Context, repo *core.Repository, dist, rest, want string) (*core.Asset, error) {
+	f := repokit.Fetch{Path: "dists/" + dist + "/" + rest, TTL: repokit.MetadataTTL(repo, DefaultMetadataTTL), ContentType: indexContentType(rest)}
+	if want != "" {
+		f.TTL = 0
+		f.Valid = func(c *core.Asset) bool { return c.BlobDigest.Hex() == want }
+	}
+	return h.ProxyGet(ctx, repo, f)
 }
 
 func indexContentType(name string) string {

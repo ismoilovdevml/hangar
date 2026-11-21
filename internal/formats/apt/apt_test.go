@@ -440,8 +440,9 @@ func TestGroupMergesHostedMembers(t *testing.T) {
 	g.Config.Group = &core.GroupConfig{Members: []string{"apt-hosted", "apt-px"}}
 	f.env.Repos.Put(&g)
 	rec := f.do(t, http.MethodGet, "/repository/apt-group/dists/stable/InRelease", nil)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "hosted repositories only") {
-		t.Fatalf("group with proxy member = %d %s", rec.Code, rec.Body)
+	// A proxy member without remote keys cannot be verified, so it is not merged.
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "remote_keys") {
+		t.Fatalf("group with a proxy member without remote_keys = %d %s", rec.Code, rec.Body)
 	}
 }
 

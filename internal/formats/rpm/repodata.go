@@ -37,7 +37,12 @@ type pkgFile struct {
 	SHA256 string
 	Size   int64
 	Time   int64 // upload time (time file=)
+	// Header is the parsed header; of a proxy member's package, only the
+	// name, epoch, version, release and arch its repodata lists.
 	Header *pkgHeader
+	// Frags, for a proxy member's package, are its entries as the remote's
+	// repodata has them; nil renders them from Header.
+	Frags *fragments
 }
 
 // primaryFiles are the files primary.xml lists (as createrepo does): the

@@ -421,8 +421,17 @@ func (h *handler) servePool(w http.ResponseWriter, r *http.Request) {
 		a, err = h.proxyPool(ctx, repo, p)
 	case core.RepoGroup:
 		var leaves []repokit.Leaf
-		if leaves, err = h.HostedLeaves(ctx, repo); err == nil {
-			a, owner, err = h.FindInLeaves(ctx, leaves, p, poolPackage(p))
+		if leaves, err = h.Leaves(ctx, repo); err == nil {
+			a, owner, err = h.FindInLeaves(ctx, leaves, p, poolPackage(p), func(ctx context.Context, m *core.Repository) (*core.Asset, error) {
+				// Only a member the group can list is read through it.
+				if keys, err := remoteKeysOf(m); err != nil || keys == nil {
+					if err == nil {
+						err = repokit.MissingRemoteKeys(Name, repo, m)
+					}
+					return nil, err
+				}
+				return h.proxyPool(ctx, m, p)
+			})
 		}
 	default:
 		a, err = h.Deps.Components.GetAsset(ctx, repo.ID, p)
