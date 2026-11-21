@@ -87,6 +87,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/oidc/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange a CI platform's ID token for a short-lived token (trusted publishing)
+         * @description A CI job (GitHub Actions with `permissions: id-token: write`, GitLab CI
+         *     `id_tokens`, any OpenID Connect issuer) sends the ID token its platform
+         *     signed and gets a Hangar token of the service account a trust policy
+         *     names, narrowed to the policy's scopes, valid for the policy's
+         *     `max_ttl_seconds` (15 minutes by default, at most an hour). See
+         *     `/trust-policies` and docs/guides/ci-oidc.md.
+         *
+         *     The token must be a compact JWS signed with RS256 or ES256 by a key
+         *     the issuer publishes (OpenID discovery and JWKS, fetched over https).
+         *     `iss` must be the issuer of an enabled trust policy (other issuers are
+         *     refused without contacting them), `exp` is required, `exp`, `nbf` and
+         *     `iat` are checked with one minute of leeway, `sub` and `jti` are
+         *     required, and the policy's audience must be in `aud`. Every condition
+         *     of the policy must match. Each ID token can be exchanged once.
+         *
+         *     The minted token is kind `federated`: it is not listed under
+         *     `/tokens`, cannot be rotated and cannot create tokens; registry logins
+         *     made with it end when it does. Changing or deleting the policy
+         *     revokes the tokens it minted. Exchanges count against a per-address
+         *     limit sized like `auth.login_rate`. Every attempt is audited as
+         *     `auth.oidc.exchange` with the issuer, subject, policy and scopes
+         *     (never the tokens).
+         */
+        post: operations["exchangeOidcToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/logout": {
         parameters: {
             query?: never;
@@ -2060,6 +2101,240 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/trust-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * CI OIDC trust policies
+         * @description `system:settings:read`. Sorted by name.
+         */
+        get: operations["listTrustPolicies"];
+        put?: never;
+        /**
+         * Create a CI OIDC trust policy
+         * @description `system:settings:admin`, and the caller must hold every privilege of
+         *     `scopes` (a policy hands them to whoever presents a matching ID token).
+         *     `service_account` must be an enabled service account; the minted token
+         *     can do what that account can, narrowed to `scopes`. At least one
+         *     condition is required; for `https://token.actions.githubusercontent.com`
+         *     and `https://gitlab.com` one condition must pin the owner (`repository`,
+         *     `repository_owner`, `repository_id`, `repository_owner_id` or `sub`;
+         *     `project_path`, `namespace_path`, `project_id`, `namespace_id` or `sub`)
+         *     with exact values or globs like `acme/*`. Audited as `trust_policy.create`.
+         */
+        post: operations["createTrustPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trust-policies/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["TrustPolicyName"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One CI OIDC trust policy
+         * @description `system:settings:read`.
+         */
+        get: operations["getTrustPolicy"];
+        /**
+         * Replace a CI OIDC trust policy
+         * @description `system:settings:admin`, and the caller must hold every privilege of the
+         *     old and the new `scopes`. The name cannot change. Tokens the policy
+         *     minted before are revoked. Audited as `trust_policy.update`.
+         */
+        put: operations["updateTrustPolicy"];
+        post?: never;
+        /**
+         * Delete a CI OIDC trust policy
+         * @description `system:settings:admin` and the policy's scopes. The tokens it minted are
+         *     deleted with it. Audited as `trust_policy.delete`.
+         */
+        delete: operations["deleteTrustPolicy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Outgoing webhooks
+         * @description `system:webhooks:read`. Every webhook, by name. URLs are redacted to
+         *     scheme, host and port (see `Webhook.url`); secrets are never returned.
+         */
+        get: operations["listWebhooks"];
+        put?: never;
+        /**
+         * Create a webhook
+         * @description `system:webhooks:admin`, and read access to every repository the
+         *     webhook names (`repo:*:read` when `repositories` is empty): a webhook
+         *     sends the events of those repositories to its URL. The URL must pass
+         *     the outbound address policy of proxy repository remotes (internal and
+         *     reserved addresses need `http.allow_private_networks`) and must not
+         *     carry user information. A `secret` needs `security.secret_key`; a
+         *     sealed value (`hgs1.`/`hgs2.`) is refused. Audited as `webhook.create`
+         *     (redacted URL, without the secret).
+         */
+        post: operations["createWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["WebhookId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One webhook
+         * @description `system:webhooks:read`.
+         */
+        get: operations["getWebhook"];
+        /**
+         * Change a webhook
+         * @description `system:webhooks:admin`, and read access to every repository the
+         *     webhook names. Replaces the settings. An empty `url` keeps the stored
+         *     URL, an empty `secret` the stored secret and an absent `enabled` the
+         *     current state. A URL that moves to another scheme, host or port needs
+         *     the secret again (or `clear_secret: true`): a stored secret is only
+         *     sent to the endpoint it was entered for. Enabling a webhook resets
+         *     its failure count. Audited as `webhook.update`.
+         */
+        put: operations["updateWebhook"];
+        post?: never;
+        /**
+         * Delete a webhook and its deliveries
+         * @description `system:webhooks:admin`. Audited as `webhook.delete`.
+         */
+        delete: operations["deleteWebhook"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/{id}:test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["WebhookId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a ping to a webhook now
+         * @description `system:webhooks:admin`. Sends a `ping` event (also to a disabled
+         *     webhook), waits for the answer and returns the recorded delivery:
+         *     `state` is `succeeded` or `failed`, with status code, latency and
+         *     error. A test is not retried and does not count towards disabling the
+         *     webhook. Audited as `webhook.test`.
+         */
+        post: operations["testWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/{id}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["WebhookId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Deliveries of a webhook, newest first
+         * @description `system:webhooks:read`, and read access to every repository the
+         *     webhook names. Finished deliveries are kept for 30 days.
+         */
+        get: operations["listWebhookDeliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/{id}/deliveries/{delivery_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["WebhookId"];
+                delivery_id: components["parameters"]["WebhookDeliveryId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One delivery with its payload
+         * @description `system:webhooks:read`, and read access to every repository the
+         *     webhook names. `payload` is the generic envelope (`WebhookPayload`);
+         *     Slack and Teams bodies are rendered from it when sent.
+         */
+        get: operations["getWebhookDelivery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/{id}/deliveries/{delivery_id}:redeliver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["WebhookId"];
+                delivery_id: components["parameters"]["WebhookDeliveryId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send the event of a delivery again
+         * @description `system:webhooks:admin`, and read access to every repository the
+         *     webhook names. Queues a new delivery of the same event (same
+         *     `event_id`, `redelivery_of` set) with a full set of attempts. The
+         *     webhook must be enabled (400 otherwise). Audited as
+         *     `webhook.redeliver`.
+         */
+        post: operations["redeliverWebhookDelivery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tokens": {
         parameters: {
             query?: never;
@@ -2415,10 +2690,10 @@ export interface components {
         CurrentToken: {
             id: string;
             /**
-             * @description `personal` (personal access and service-account tokens) or `session` (short-lived registry logins)
+             * @description `personal` (personal access and service-account tokens), `session` (short-lived registry logins) or `federated` (minted by `POST /auth/oidc/exchange`)
              * @enum {string}
              */
-            kind: "personal" | "session";
+            kind: "personal" | "session" | "federated";
             name: string;
             prefix: string;
             /** @description Effective scopes (narrowed to read for read-only tokens); null means the owner's full rights */
@@ -2861,15 +3136,17 @@ export interface components {
                 [key: string]: unknown;
             } | components["schemas"]["AptFormatConfig"] | components["schemas"]["CargoFormatConfig"] | components["schemas"]["DockerFormatConfig"] | components["schemas"]["GoFormatConfig"] | components["schemas"]["HelmFormatConfig"] | components["schemas"]["MavenFormatConfig"] | components["schemas"]["NpmFormatConfig"] | components["schemas"]["NugetFormatConfig"] | components["schemas"]["PypiFormatConfig"] | components["schemas"]["RawFormatConfig"] | components["schemas"]["RpmFormatConfig"];
         };
-        /** @description `config.format` of apt repositories. Both keys apply to hosted and group repositories; a proxy serves the remote's metadata. */
+        /** @description `config.format` of apt repositories. `architectures` and `signing_key` apply to hosted and group repositories (a proxy serves the remote's metadata); `remote_keys` applies to proxies. */
         AptFormatConfig: {
-            /** @description Architectures listed in every distribution besides those of the uploaded packages (not `all`). Default `[amd64, arm64]`. */
+            /** @description Architectures listed in every distribution besides those of the uploaded packages (not `all`). Default `[amd64, arm64]`. A group merges these architectures from its proxy members. */
             architectures?: string[];
             /**
              * @description Key that signs the metadata. Default `repository` (the repository's own key).
              * @enum {string}
              */
             signing_key?: "repository" | "shared";
+            /** @description Proxy repositories: the remote archive's ASCII-armored OpenPGP public keys. A group merges the proxy only after its `Release` verifies with one of them; a proxy member without them makes the group answer 400. */
+            remote_keys?: string[];
         } & {
             [key: string]: unknown;
         };
@@ -2963,7 +3240,7 @@ export interface components {
         RawFormatConfig: {
             [key: string]: unknown;
         };
-        /** @description `config.format` of rpm repositories. Both keys apply to hosted and group repositories; a proxy serves the remote's metadata. */
+        /** @description `config.format` of rpm repositories. `repodata_depth` and `signing_key` apply to hosted and group repositories (a proxy serves the remote's metadata); `remote_keys` applies to proxies. */
         RpmFormatConfig: {
             /** @description Directory depth that holds `repodata/`. Default 0 (one yum repository); 2 serves e.g. `el9/x86_64/repodata/` for packages uploaded below `el9/x86_64/`. */
             repodata_depth?: number;
@@ -2972,6 +3249,8 @@ export interface components {
              * @enum {string}
              */
             signing_key?: "repository" | "shared";
+            /** @description Proxy repositories: the remote's ASCII-armored OpenPGP public keys. A group merges the proxy only after its `repomd.xml.asc` verifies with one of them; a proxy member without them makes the group answer 400. */
+            remote_keys?: string[];
         } & {
             [key: string]: unknown;
         };
@@ -4505,6 +4784,88 @@ export interface components {
             updated_at: string | null;
             updated_by?: string;
         };
+        OIDCExchangeRequest: {
+            /** @description The CI platform's ID token (compact JWS) */
+            token: string;
+            /** @description Trust policy to use; only needed when several match */
+            policy?: string;
+        };
+        OIDCExchangeResult: {
+            /** @description The minted token (`hgr_...`); use it as a Bearer token or as the password */
+            token: string;
+            /** @constant */
+            token_type: "Bearer";
+            /** Format: date-time */
+            expires_at: string;
+            /** @description Seconds until it expires */
+            expires_in: number;
+            scopes: components["schemas"]["Privilege"][];
+            /** @description The account the token acts as */
+            service_account: string;
+            /** @description The trust policy that matched */
+            policy: string;
+        };
+        TrustPolicyCondition: {
+            /**
+             * @description A claim of the ID token (`repository`, `ref`, `ref_type`, `environment`,
+             *     `workflow_ref` on GitHub; `project_path`, `ref`, `ref_protected` on
+             *     GitLab), or a dotted path into nested objects. Booleans compare as
+             *     `true`/`false`, numbers as written; arrays and objects never match.
+             * @example repository
+             * @example ref
+             */
+            claim: string;
+            /**
+             * @description `glob`: `*` is any run of characters (`/` included), `?` one character
+             * @default exact
+             * @enum {string}
+             */
+            match: "exact" | "glob";
+            /** @description The claim must match one of these */
+            values: string[];
+        };
+        TrustPolicyInput: {
+            name: string;
+            description?: string;
+            /** @default true */
+            enabled: boolean;
+            /**
+             * Format: uri
+             * @description Exact `iss` of the ID tokens, an https URL
+             * @example https://token.actions.githubusercontent.com
+             * @example https://gitlab.com
+             */
+            issuer: string;
+            /** @description Must be in the token's `aud`; defaults to the server's base URL */
+            audience?: string;
+            /** @description Every condition must match */
+            conditions: components["schemas"]["TrustPolicyCondition"][];
+            /** @description Enabled service account the minted token acts as */
+            service_account: string;
+            /** @description The minted token's scopes; the caller must hold each */
+            scopes: components["schemas"]["Privilege"][];
+            /**
+             * @description Lifetime of minted tokens
+             * @default 900
+             */
+            max_ttl_seconds: number;
+        };
+        TrustPolicy: {
+            id: string;
+            name: string;
+            description: string;
+            enabled: boolean;
+            issuer: string;
+            audience: string;
+            conditions: components["schemas"]["TrustPolicyCondition"][];
+            service_account: string;
+            scopes: components["schemas"]["Privilege"][];
+            max_ttl_seconds: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
         OutboundProxyList: {
             items: components["schemas"]["OutboundProxy"][];
             /** @description Name of the platform default proxy; empty when none */
@@ -4515,6 +4876,135 @@ export interface components {
             ca_file?: string;
             /** @description Items carry names only (caller cannot read settings) */
             limited: boolean;
+        };
+        Webhook: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /**
+             * @description Redacted: scheme, host and port, with `/***` standing for any path
+             *     and query. Incoming-webhook URLs carry their credential in the path,
+             *     so the full URL is write-only.
+             */
+            url: string;
+            events: components["schemas"]["WebhookEvent"][];
+            /** @description Repository names or globs whose events are sent; empty = every repository */
+            repositories: string[];
+            format: components["schemas"]["WebhookFormat"];
+            /** @description Deliveries are signed (X-Hangar-Signature) */
+            secret_configured: boolean;
+            enabled: boolean;
+            /** @description Failed attempts in a row; 20 disable the webhook */
+            consecutive_failures: number;
+            /** @description Why the server disabled the webhook; empty when enabled or disabled by hand */
+            disabled_reason: string;
+            /** Format: date-time */
+            last_delivery_at: string | null;
+            last_status_code: number | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            updated_by: string;
+        };
+        WebhookList: {
+            items: components["schemas"]["Webhook"][];
+        };
+        WebhookInput: {
+            name: string;
+            /**
+             * Format: uri
+             * @description http:// or https:// URL without user information; required on create, empty keeps the stored one on update
+             */
+            url?: string;
+            events: components["schemas"]["WebhookEvent"][];
+            /** @description Repository names or globs (`npm-*`); empty = every repository */
+            repositories?: string[];
+            format?: components["schemas"]["WebhookFormat"];
+            /** @description HMAC-SHA256 signing secret; empty keeps the stored one */
+            secret?: string;
+            /** @description Remove the stored secret */
+            clear_secret?: boolean;
+            /** @description Default true on create; absent keeps the state on update */
+            enabled?: boolean;
+        };
+        /**
+         * @description `generic`: the JSON envelope (`WebhookPayload`). `slack`: a Slack
+         *     incoming-webhook message (`text` and blocks). `teams`: a Microsoft
+         *     Teams message with an Adaptive Card (Workflows or incoming webhook).
+         * @default generic
+         * @enum {string}
+         */
+        WebhookFormat: "generic" | "slack" | "teams";
+        /** @enum {string} */
+        WebhookEvent: "component.published" | "component.deleted" | "component.quarantined" | "component.released" | "repository.created" | "repository.deleted" | "scan.finding";
+        WebhookDelivery: {
+            /**
+             * Format: uuid
+             * @description Sent as X-Hangar-Delivery; retries repeat it
+             */
+            id: string;
+            /** Format: uuid */
+            webhook_id: string;
+            /** @description The envelope id; redeliveries repeat it */
+            event_id: string;
+            /** @description Event type */
+            event: string;
+            repository: string;
+            subject: string;
+            /** @enum {string} */
+            state: "pending" | "delivering" | "succeeded" | "failed";
+            attempts: number;
+            max_attempts: number;
+            /**
+             * Format: date-time
+             * @description When a pending delivery is tried next
+             */
+            next_attempt_at: string | null;
+            last_status_code: number | null;
+            last_latency_ms: number | null;
+            /** @description Empty after a success; never contains the URL */
+            last_error: string;
+            /** Format: uuid */
+            redelivery_of: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            completed_at: string | null;
+            /** @description Only on GET of one delivery */
+            payload?: components["schemas"]["WebhookPayload"];
+        };
+        WebhookDeliveryPage: {
+            items: components["schemas"]["WebhookDelivery"][];
+            next_cursor?: components["schemas"]["NextCursor"];
+        };
+        /**
+         * @description Body of a `generic` delivery. Credentials in event data are replaced
+         *     by `REDACTED`. An envelope larger than 64 KiB is sent with
+         *     `data: {"truncated": true, "size": <bytes>}`. Headers:
+         *     `X-Hangar-Event`, `X-Hangar-Delivery`, `X-Hangar-Timestamp` (Unix
+         *     seconds) and, with a secret, `X-Hangar-Signature:
+         *     sha256=<hex HMAC-SHA256 of "<timestamp>.<body>">`.
+         */
+        WebhookPayload: {
+            /** @description Event id; retries and redeliveries repeat it */
+            id: string;
+            event: string;
+            /** Format: date-time */
+            occurred_at: string;
+            actor?: string;
+            repository?: string;
+            subject?: string;
+            /**
+             * @description Event-specific: the component (component.*), the repository's id,
+             *     name, format, type and online flag (repository.*), or the new
+             *     findings with `count` and `max_severity` (scan.finding)
+             */
+            data?: {
+                [key: string]: unknown;
+            };
+            /** @description server.base_url of the sending server */
+            instance?: string;
         };
         TokenInput: {
             name: string;
@@ -4867,6 +5357,9 @@ export interface components {
         TaskRef: string;
         RunId: string;
         ProxyName: string;
+        TrustPolicyName: string;
+        WebhookId: string;
+        WebhookDeliveryId: string;
     };
     requestBodies: never;
     headers: never;
@@ -5022,6 +5515,74 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    exchangeOidcToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OIDCExchangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Minted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OIDCExchangeResult"];
+                };
+            };
+            /**
+             * @description No token, or (`details.reason: ambiguous_policy`) several trust policies
+             *     match: name one in `policy`.
+             */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /**
+             * @description The ID token was refused; `details.reason` is one of `malformed`,
+             *     `unknown_issuer`, `unknown_key`, `bad_signature`, `expired`,
+             *     `not_yet_valid`, `missing_claims`, `no_matching_policy` or `replayed`.
+             */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The policy's service account is disabled or gone (`details.reason` `service_account_refused`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+            /** @description The issuer's discovery document or keys could not be fetched (code `upstream_unavailable`). */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     logout: {
@@ -8503,6 +9064,374 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SettingsTestResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listTrustPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Trust policies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["TrustPolicy"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createTrustPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrustPolicyInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrustPolicy"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTrustPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["TrustPolicyName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policy */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrustPolicy"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateTrustPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["TrustPolicyName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrustPolicyInput"];
+            };
+        };
+        responses: {
+            /** @description Replaced */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrustPolicy"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTrustPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["TrustPolicyName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listWebhooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Webhooks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Webhook"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["WebhookId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Webhook */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Webhook"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["WebhookId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookInput"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Webhook"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["WebhookId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    testWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["WebhookId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Outcome (also when the receiver failed) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookDelivery"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listWebhookDeliveries: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["Cursor"];
+                state?: "pending" | "delivering" | "succeeded" | "failed";
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["WebhookId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of deliveries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookDeliveryPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getWebhookDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["WebhookId"];
+                delivery_id: components["parameters"]["WebhookDeliveryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Delivery */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookDelivery"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    redeliverWebhookDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["WebhookId"];
+                delivery_id: components["parameters"]["WebhookDeliveryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookDelivery"];
                 };
             };
             400: components["responses"]["BadRequest"];
