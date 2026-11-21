@@ -169,8 +169,8 @@
 .audit-actor { font-weight: 600; }
 .audit-action { font-size: 12.5px; color: var(--ink); white-space: nowrap; }
 .audit-target { overflow-wrap: anywhere; color: var(--ink-2); }
-.audit-table tr.is-open > td { background: rgba(255, 255, 255, .45); }
-.audit-details > td { border-top: 0 !important; padding-top: 0 !important; background: rgba(255, 255, 255, .45); }
+.audit-table tr.is-open > td { background: var(--wash-hover); }
+.audit-details > td { border-top: 0 !important; padding-top: 0 !important; background: var(--wash-hover); }
 /* phone cards: the toggle and the time head each event, the details follow it */
 @media (max-width: 640px) {
   .audit-table > tbody > tr > td.audit-toggle-cell { flex: none; width: auto; }
@@ -188,7 +188,7 @@
 .endpoint { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .endpoint dt { font-size: 12px; font-weight: 600; color: var(--ink-3); }
 .endpoint dd { margin: 0; display: flex; align-items: center; gap: 8px; min-width: 0; }
-.endpoint__value { flex: 1; min-width: 0; padding: 8px 10px; border-radius: var(--r-small); background: rgba(255, 255, 255, .8); font-size: 13px; overflow-wrap: anywhere; }
+.endpoint__value { flex: 1; min-width: 0; padding: 8px 10px; border-radius: var(--r-small); background: var(--wash-strong); font-size: 13px; overflow-wrap: anywhere; }
 .config-section { display: flex; flex-direction: column; gap: 6px; }
 .config-section .section-label { text-transform: capitalize; }
 .config-list { margin: 0; display: flex; flex-direction: column; }
