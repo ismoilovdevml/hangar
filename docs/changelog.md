@@ -121,6 +121,12 @@ on OCI. **Read the upgrade notes before upgrading**; full steps are in
   decompression and memory; an oversized index fails the import instead of
   being read truncated.
 - PyPI proxies hide quarantined cached files past the first 1,000 versions.
+- Built with Go 1.27.4 (GO-2026-6859 in `net/http`); go-jose 4.1.6 (a denial
+  of service when parsing tokens, reachable through the new CI OIDC
+  exchange); the scanner image is based on Trivy 0.76.2 (a critical brotli
+  fix in its base).
+- Task run logs keep their order: a step could appear before "Started" when a
+  heartbeat and a checkpoint wrote at the same time.
 
 ### Performance and reliability
 
