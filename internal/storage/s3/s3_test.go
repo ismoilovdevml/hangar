@@ -193,12 +193,17 @@ func TestLayoutAndDedup(t *testing.T) {
 	if k, _ := s.BlobKey(d); k != want {
 		t.Fatalf("BlobKey = %s", k)
 	}
-	// Small content goes straight to its final key; a repeat is a HEAD only.
+	// Small content goes straight to its final key with a conditional PUT; a
+	// repeat is refused by the store (412) and changes nothing.
+	before := f.object(testBucket, want)
 	if _, _, err := s.Put(ctx, strings.NewReader("hello")); err != nil {
 		t.Fatal(err)
 	}
-	if n := f.count("PutObject"); n != 1 {
-		t.Fatalf("PutObject calls = %d, want 1 (dedup)", n)
+	if n, heads := f.count("PutObject"), f.count("HeadObject"); n != 2 || heads != 0 {
+		t.Fatalf("PutObject calls = %d, HeadObject calls = %d; want 2 conditional PUTs and no HEAD", n, heads)
+	}
+	if after := f.object(testBucket, want); after != before {
+		t.Fatal("a repeated small Put replaced the stored object")
 	}
 
 	// Multipart content goes through tmp/ and is copied once.
