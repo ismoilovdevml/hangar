@@ -150,6 +150,9 @@ type API struct {
 	// Cleanup manages cleanup policies; Tasks manages scheduled tasks and runs.
 	Cleanup CleanupPolicies
 	Tasks   TaskManager
+	// Labels keeps the labels of configuration resources (ownership marks
+	// of `hangar apply`); nil answers 501.
+	Labels LabelStore
 	// Monitor and Logs serve the System status and System logs screens.
 	Monitor SystemMonitor
 	Logs    SystemLogs
@@ -244,6 +247,9 @@ func (a *API) Mount(r chi.Router) {
 		r.Post("/cleanup-policies/{name}/run", a.runCleanupPolicy)
 		r.Post("/cleanup-policies/{name}/stop", a.stopCleanupPolicy)
 		r.Get("/cleanup-policies/{name}/runs", a.listCleanupPolicyRuns)
+
+		r.Get("/resource-labels", a.listResourceLabels)
+		r.Put("/resource-labels/{kind}/{name}", a.putResourceLabels)
 
 		r.Get("/tasks", a.listTasks)
 		r.Post("/tasks", a.createTask)

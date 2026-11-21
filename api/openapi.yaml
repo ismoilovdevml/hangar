@@ -68,6 +68,10 @@ tags:
     description: Cleanup policies and their runs.
   - name: tasks
     description: Scheduled maintenance tasks and their runs.
+  - name: labels
+    description: >-
+      Labels on repositories, blob stores, cleanup policies, roles and outbound
+      proxies; `hangar apply` keeps its ownership marks in them.
   - name: access
     description: Users, service accounts, roles and access tokens.
   - name: settings
@@ -744,7 +748,8 @@ paths:
               description: >-
                 Config-as-code form (with `Accept: application/yaml`): the
                 RepositoryInput, ready to send back to POST /repositories or
-                PUT /repositories/{name} as JSON. A `hangar apply -f` CLI is planned.
+                PUT /repositories/{name} as JSON. `hangar apply -f` manages
+                repositories declaratively (docs/guides/config-as-code.md).
               schema: { $ref: "#/components/schemas/RepositoryInput" }
         "404": { $ref: "#/components/responses/NotFound" }
     put:
@@ -2058,6 +2063,85 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TaskRunPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- labels
+  /resource-labels:
+    get:
+      tags: [labels]
+      operationId: listResourceLabels
+      description: |
+        Labels of every resource of one kind that carries any, by name. Only
+        resources the caller may read are listed: repositories with
+        `repo:<name>:read`, the other kinds with the read privilege of their
+        area (`system:blobstores`, `system:cleanup`, `system:users`,
+        `system:settings`).
+
+        `hangar apply` marks what it creates or adopts with
+        `hangar/managed-by: hangar-apply` and `hangar/apply-set: <set>`;
+        `hangar apply --prune` deletes only resources of its own set that
+        the configuration no longer declares (docs/guides/config-as-code.md).
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/LabeledKind" }
+      responses:
+        "200":
+          description: Labelled resources by name (not paginated; one entry per resource)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ResourceLabels" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /resource-labels/{kind}/{name}:
+    parameters:
+      - name: kind
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/LabeledKind" }
+      - name: name
+        in: path
+        required: true
+        description: Name of the repository, blob store, cleanup policy, role or proxy
+        schema: { type: string }
+    put:
+      tags: [labels]
+      operationId: putResourceLabels
+      description: |
+        Replaces the labels of one resource; `{"labels": {}}` removes them.
+        Requires the right to change the resource itself
+        (`repo:<name>:admin` or `system:repos:admin`, `system:blobstores:admin`,
+        `system:cleanup:write`, `system:users:write`, `system:settings:admin`).
+        Labels belong to the resource they were set on: deleting it removes
+        them, and a resource created again under the same name starts
+        without labels. Audited as `resource.labels.update` with the labels
+        before and after.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [labels]
+              properties:
+                labels: { $ref: "#/components/schemas/Labels" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceLabels" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   # ---------------------------------------------------------------- tasks
@@ -6888,6 +6972,28 @@ components:
         privileges:
           type: array
           items: { $ref: "#/components/schemas/Privilege" }
+    LabeledKind:
+      type: string
+      enum: [repository, blob_store, cleanup_policy, role, proxy]
+      description: Kind of resource that carries labels
+    Labels:
+      type: object
+      description: >-
+        Up to 64 labels. Keys are `[prefix/]name`: an optional DNS-style
+        prefix, then 1-63 letters, digits, `-`, `_` or `.` starting and
+        ending with a letter or digit. Values are at most 256 characters
+        without control characters. The `hangar/` prefix is used by
+        `hangar apply`.
+      maxProperties: 64
+      additionalProperties: { type: string, maxLength: 256 }
+      example: { hangar/managed-by: hangar-apply, hangar/apply-set: platform, team: web }
+    ResourceLabels:
+      type: object
+      required: [kind, name, labels]
+      properties:
+        kind: { $ref: "#/components/schemas/LabeledKind" }
+        name: { type: string }
+        labels: { $ref: "#/components/schemas/Labels" }
     EffectivePermissions:
       type: object
       required: [user_id, username, kind, disabled, locked, roles, repositories, system, notes]

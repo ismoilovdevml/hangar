@@ -1,0 +1,1583 @@
+{
+  "$defs": {
+    "AptFormatConfig": {
+      "additionalProperties": true,
+      "description": "`config.format` of apt repositories. `architectures` and `signing_key` apply to hosted and group repositories (a proxy serves the remote's metadata); `remote_keys` applies to proxies.",
+      "properties": {
+        "architectures": {
+          "description": "Architectures listed in every distribution besides those of the uploaded packages (not `all`). Default `[amd64, arm64]`. A group merges these architectures from its proxy members.",
+          "items": {
+            "anyOf": [
+              {
+                "examples": [
+                  "amd64",
+                  "arm64",
+                  "i386"
+                ],
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ValueFrom"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "remote_keys": {
+          "description": "Proxy repositories: the remote archive's ASCII-armored OpenPGP public keys. A group merges the proxy only after its `Release` verifies with one of them; a proxy member without them makes the group answer 400.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ValueFrom"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "signing_key": {
+          "anyOf": [
+            {
+              "description": "Key that signs the metadata. Default `repository` (the repository's own key).",
+              "enum": [
+                "repository",
+                "shared"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        }
+      },
+      "type": "object",
+      "x-format": "apt"
+    },
+    "BlobStoreInput": {
+      "properties": {
+        "fs": {
+          "properties": {
+            "path": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/ValueFrom"
+                }
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "fs",
+                "s3"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "s3": {
+          "properties": {
+            "access_key_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/ValueFrom"
+                }
+              ]
+            },
+            "bucket": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/ValueFrom"
+                }
+              ]
+            },
+            "endpoint": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/ValueFrom"
+                }
+              ]
+            },
+            "prefix": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/ValueFrom"
+                }
+              ]
+            },
+            "region": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/ValueFrom"
+                }
+              ]
+            },
+            "secret_access_key": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "$ref": "#/$defs/ValueFrom"
+                }
+              ]
+            },
+            "use_path_style": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "soft_quota_bytes": {
+          "description": "Soft quota; null or absent = none",
+          "format": "int64",
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "CargoFormatConfig": {
+      "additionalProperties": true,
+      "description": "`config.format` of cargo repositories.",
+      "properties": {
+        "download_url": {
+          "anyOf": [
+            {
+              "description": "Proxy only: the remote's crate download template, as `dl` in its\n`config.json` (markers `{crate}`, `{version}`, `{prefix}`,\n`{lowerprefix}`, `{sha256-checksum}`; without markers\n`/{crate}/{version}/download` is appended). Default: the remote's own `dl`.\n",
+              "examples": [
+                "https://static.crates.io/crates"
+              ],
+              "format": "uri",
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        }
+      },
+      "type": "object",
+      "x-format": "cargo"
+    },
+    "CleanupCriteria": {
+      "description": "Scope: `version_include` (if set) must match and, with\n`prerelease_only`, only pre-release / snapshot versions count. Versions\nmatching `version_exclude` or a `keep_matching` glob, quarantined\nversions and versions under legal hold (component attribute\n`legal_hold: true`) are never deleted and do not use `keep_newest`\nslots. Of the rest, the `keep_newest` most recently published versions\nper package are kept; the others are deleted when every set condition\nholds (AND). At least one of `older_than_days`, `not_downloaded_days`,\n`prerelease_only` or `keep_newest >= 1` is required.\n",
+      "properties": {
+        "keep_matching": {
+          "description": "Version/tag globs never deleted (e.g. `release-*`, `latest`)",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ValueFrom"
+              }
+            ]
+          },
+          "maxItems": 100,
+          "type": "array"
+        },
+        "keep_newest": {
+          "description": "Versions kept per package",
+          "maximum": 100000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "min_size_bytes": {
+          "description": "Only versions at least this large (sum of their assets)",
+          "format": "int64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "not_downloaded_days": {
+          "description": "Not downloaded for N days (never-downloaded versions count from publication)",
+          "maximum": 36500,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "older_than_days": {
+          "description": "Published more than N days ago",
+          "maximum": 36500,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "prerelease_only": {
+          "description": "Only pre-release / snapshot versions: Maven `-SNAPSHOT` and unstable\nqualifiers, PEP 440 pre/dev releases for PyPI, SemVer pre-release\nidentifiers otherwise\n",
+          "type": "boolean"
+        },
+        "version_exclude": {
+          "anyOf": [
+            {
+              "description": "RE2 regular expression; matching versions are never deleted",
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "version_include": {
+          "anyOf": [
+            {
+              "description": "RE2 regular expression; only matching versions are in scope",
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "CleanupPolicyInput": {
+      "properties": {
+        "criteria": {
+          "$ref": "#/$defs/CleanupCriteria"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "enabled": {
+          "description": "Optional; true when omitted. A disabled policy does not run on its schedule.",
+          "type": "boolean"
+        },
+        "format": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Format"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "$ref": "#/$defs/RepositoryName"
+        },
+        "repositories": {
+          "description": "Hosted or proxy repositories attached by the policy. The policy\nalso applies to repositories whose `config.cleanup_policies` names it.\n",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ValueFrom"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "schedule": {
+          "anyOf": [
+            {
+              "description": "5-field cron in UTC (or @daily, @hourly, ...); null = manual only",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ConnectorConfig": {
+      "description": "Dedicated entry point, mainly for Docker clients that need a host root",
+      "properties": {
+        "host": {
+          "anyOf": [
+            {
+              "description": "Virtual host name (e.g. cr.example.com) routed to Hangar",
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "http_port": {
+          "description": "Extra plain-HTTP listener serving only this repository; 0 = none",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "DockerFormatConfig": {
+      "additionalProperties": true,
+      "description": "`config.format` of docker repositories: none. Host and port connectors are `config.connector`.",
+      "properties": {},
+      "type": "object",
+      "x-format": "docker"
+    },
+    "Duration": {
+      "anyOf": [
+        {
+          "description": "Go duration string",
+          "examples": [
+            "24h0m0s",
+            "90s"
+          ],
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/ValueFrom"
+        }
+      ]
+    },
+    "Format": {
+      "anyOf": [
+        {
+          "enum": [
+            "docker",
+            "npm",
+            "maven",
+            "pypi",
+            "go",
+            "helm",
+            "nuget",
+            "cargo",
+            "apt",
+            "rpm",
+            "raw"
+          ],
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/ValueFrom"
+        }
+      ]
+    },
+    "GoFormatConfig": {
+      "additionalProperties": true,
+      "description": "`config.format` of go repositories.",
+      "properties": {
+        "sumdb_via": {
+          "anyOf": [
+            {
+              "description": "Proxy only. Where checksum database requests go. `database` (default) asks `https://<name>/` itself; `remote` asks `<remote_url>/sumdb/<name>/`, for remotes that proxy the database (an inner Hangar, Athens).",
+              "enum": [
+                "database",
+                "remote"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "sumdbs": {
+          "description": "Proxy only. Checksum databases served under `sumdb/<name>/`. Absent means `[sum.golang.org]`; an empty list turns the pass-through off.",
+          "items": {
+            "anyOf": [
+              {
+                "examples": [
+                  "sum.golang.org"
+                ],
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ValueFrom"
+              }
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "type": "object",
+      "x-format": "go"
+    },
+    "GroupMapping": {
+      "properties": {
+        "group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "provider": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        }
+      },
+      "required": [
+        "provider",
+        "group"
+      ],
+      "type": "object"
+    },
+    "HelmFormatConfig": {
+      "additionalProperties": true,
+      "description": "`config.format` of helm repositories: none; any key is rejected.",
+      "maxProperties": 0,
+      "properties": {},
+      "type": "object",
+      "x-format": "helm"
+    },
+    "Labels": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "maxLength": 256,
+            "type": "string"
+          },
+          {
+            "$ref": "#/$defs/ValueFrom"
+          }
+        ]
+      },
+      "description": "Up to 64 labels. Keys are `[prefix/]name`: an optional DNS-style prefix, then 1-63 letters, digits, `-`, `_` or `.` starting and ending with a letter or digit. Values are at most 256 characters without control characters. The `hangar/` prefix is used by `hangar apply`.",
+      "example": {
+        "hangar/apply-set": "platform",
+        "hangar/managed-by": "hangar-apply",
+        "team": "web"
+      },
+      "maxProperties": 64,
+      "type": "object"
+    },
+    "MavenFormatConfig": {
+      "additionalProperties": true,
+      "description": "`config.format` of maven repositories. Other keys are rejected.",
+      "properties": {
+        "layout_policy": {
+          "anyOf": [
+            {
+              "description": "`strict` stores only Maven-layout paths; `permissive` also stores other files. Default `strict`.",
+              "enum": [
+                "strict",
+                "permissive"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "version_policy": {
+          "anyOf": [
+            {
+              "description": "Versions the repository accepts. Default `mixed`.",
+              "enum": [
+                "release",
+                "snapshot",
+                "mixed"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        }
+      },
+      "type": "object",
+      "x-format": "maven"
+    },
+    "MemberRouting": {
+      "properties": {
+        "block": {
+          "description": "Names this member never serves through the group.",
+          "items": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ValueFrom"
+              }
+            ]
+          },
+          "maxItems": 256,
+          "type": "array"
+        },
+        "exclusive": {
+          "description": "Names reserved for this member: a name matching the exclusive patterns of one or more members is served only by them.",
+          "example": [
+            "Edcom.*"
+          ],
+          "items": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ValueFrom"
+              }
+            ]
+          },
+          "maxItems": 256,
+          "type": "array"
+        },
+        "member": {
+          "$ref": "#/$defs/RepositoryName"
+        }
+      },
+      "required": [
+        "member"
+      ],
+      "type": "object"
+    },
+    "Metadata": {
+      "additionalProperties": false,
+      "properties": {
+        "labels": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/Labels"
+            }
+          ],
+          "description": "Labels of the resource. Keys under hangar/ are reserved for hangar apply."
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "NpmFormatConfig": {
+      "additionalProperties": true,
+      "description": "`config.format` of npm repositories.",
+      "properties": {
+        "login_token_ttl": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/Duration"
+            }
+          ],
+          "description": "Lifetime of tokens issued by `npm login`. Default `720h` (30 days)."
+        },
+        "reuse_unpublished_versions": {
+          "description": "Let a version number be published again after it was unpublished. Default false (a version always names the same bytes).",
+          "type": "boolean"
+        },
+        "unpublish_window": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/Duration"
+            }
+          ],
+          "description": "How long after publishing a holder of `repo:<name>:delete` may unpublish a version (`repo:<name>:admin` always may). Default `72h`; `0s` means administrators only."
+        }
+      },
+      "type": "object",
+      "x-format": "npm"
+    },
+    "NugetFormatConfig": {
+      "additionalProperties": true,
+      "description": "`config.format` of nuget repositories.",
+      "properties": {
+        "delete_mode": {
+          "anyOf": [
+            {
+              "description": "What `DELETE api/v2/package/{id}/{version}` (`dotnet nuget delete`) does. Default `unlist`.",
+              "enum": [
+                "unlist",
+                "delete"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "service_index": {
+          "anyOf": [
+            {
+              "description": "Proxy only. The remote's service index path, relative to `remote_url`. Default `v3/index.json`.\nSensitive, as some feeds carry their key in this path: returned only to administrators of\nthe repository (`repo:<name>:admin`, `system:repos:admin`), as `***` to everyone else. An\nupdate that sends `***` keeps the stored value.\n",
+              "examples": [
+                "v3/index.json",
+                "index.json"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        }
+      },
+      "type": "object",
+      "x-format": "nuget"
+    },
+    "OutboundProxyInput": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/OutboundProxySettings"
+        },
+        {
+          "properties": {
+            "clear_password": {
+              "type": "boolean"
+            },
+            "name": {
+              "anyOf": [
+                {
+                  "description": "Required on create; cannot change",
+                  "pattern": "^[a-z0-9][a-z0-9._-]{0,62}$",
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/ValueFrom"
+                }
+              ]
+            },
+            "password": {
+              "anyOf": [
+                {
+                  "description": "New password; empty keeps the stored one",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "$ref": "#/$defs/ValueFrom"
+                }
+              ]
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "OutboundProxySettings": {
+      "properties": {
+        "ca_pem": {
+          "anyOf": [
+            {
+              "description": "PEM certificates trusted for requests through this proxy",
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "default": {
+          "description": "The platform default; at most one proxy",
+          "type": "boolean"
+        },
+        "host": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "no_proxy": {
+          "description": "Hosts, domain suffixes (.corp.example), IPs and CIDRs reached directly",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ValueFrom"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "port": {
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "redirect_hosts": {
+          "description": "Hosts upstream redirects may lead to and still use this proxy (a\nregistry's CDN). When not empty, only the repository's remote host and\nthese hosts go through the proxy. Empty: every host does.\n",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ValueFrom"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "scheme": {
+          "anyOf": [
+            {
+              "description": "How Hangar talks to the proxy",
+              "enum": [
+                "http",
+                "https"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "username": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "Privilege": {
+      "anyOf": [
+        {
+          "examples": [
+            "repo:*:read",
+            "repo:npm-*:write",
+            "system:users:admin",
+            "system:*"
+          ],
+          "pattern": "^(repo|system):[^:]+:(read|write|delete|admin|\\*)$|^system:\\*$",
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/ValueFrom"
+        }
+      ]
+    },
+    "PypiFormatConfig": {
+      "additionalProperties": true,
+      "description": "`config.format` of pypi repositories.",
+      "properties": {
+        "file_hosts": {
+          "description": "Proxy only. Hosts (`host`, `host:port`, or `.domain` for its subdomains) distribution files may be downloaded from when the remote links elsewhere. Default `[files.pythonhosted.org]`; the remote's own host is always allowed.",
+          "items": {
+            "anyOf": [
+              {
+                "examples": [
+                  "files.pythonhosted.org",
+                  ".example.com"
+                ],
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ValueFrom"
+              }
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "type": "object",
+      "x-format": "pypi"
+    },
+    "RawFormatConfig": {
+      "additionalProperties": true,
+      "description": "`config.format` of raw repositories: none; any key is rejected.",
+      "maxProperties": 0,
+      "properties": {},
+      "type": "object",
+      "x-format": "raw"
+    },
+    "RepositoryConfig": {
+      "description": "Exactly one of hosted, proxy, group is set, matching the repository type.",
+      "properties": {
+        "anonymous_read": {
+          "type": "boolean"
+        },
+        "cleanup_policies": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ValueFrom"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "connector": {
+          "$ref": "#/$defs/ConnectorConfig"
+        },
+        "format": {
+          "additionalProperties": true,
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AptFormatConfig"
+            },
+            {
+              "$ref": "#/$defs/CargoFormatConfig"
+            },
+            {
+              "$ref": "#/$defs/DockerFormatConfig"
+            },
+            {
+              "$ref": "#/$defs/GoFormatConfig"
+            },
+            {
+              "$ref": "#/$defs/HelmFormatConfig"
+            },
+            {
+              "$ref": "#/$defs/MavenFormatConfig"
+            },
+            {
+              "$ref": "#/$defs/NpmFormatConfig"
+            },
+            {
+              "$ref": "#/$defs/NugetFormatConfig"
+            },
+            {
+              "$ref": "#/$defs/PypiFormatConfig"
+            },
+            {
+              "$ref": "#/$defs/RawFormatConfig"
+            },
+            {
+              "$ref": "#/$defs/RpmFormatConfig"
+            }
+          ],
+          "description": "Format-specific settings. The keys depend on the repository's\n`format`; each format's keys are described by its own schema:\napt `AptFormatConfig`, cargo `CargoFormatConfig`, docker\n`DockerFormatConfig`, go `GoFormatConfig`, helm `HelmFormatConfig`,\nmaven `MavenFormatConfig`, npm `NpmFormatConfig`, nuget\n`NugetFormatConfig`, pypi `PypiFormatConfig`, raw `RawFormatConfig`,\nrpm `RpmFormatConfig` (also listed in `x-format-schemas`). Absent keys\ntake the defaults shown there.\n",
+          "type": "object",
+          "x-format-schemas": {
+            "apt": "#/$defs/AptFormatConfig",
+            "cargo": "#/$defs/CargoFormatConfig",
+            "docker": "#/$defs/DockerFormatConfig",
+            "go": "#/$defs/GoFormatConfig",
+            "helm": "#/$defs/HelmFormatConfig",
+            "maven": "#/$defs/MavenFormatConfig",
+            "npm": "#/$defs/NpmFormatConfig",
+            "nuget": "#/$defs/NugetFormatConfig",
+            "pypi": "#/$defs/PypiFormatConfig",
+            "raw": "#/$defs/RawFormatConfig",
+            "rpm": "#/$defs/RpmFormatConfig"
+          }
+        },
+        "group": {
+          "properties": {
+            "members": {
+              "description": "Member repository names in resolution order",
+              "items": {
+                "$ref": "#/$defs/RepositoryName"
+              },
+              "type": "array"
+            },
+            "write_member": {
+              "anyOf": [
+                {
+                  "description": "Hosted member receiving writes sent to the group (docker, npm)",
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/ValueFrom"
+                }
+              ]
+            }
+          },
+          "required": [
+            "members"
+          ],
+          "type": "object"
+        },
+        "hosted": {
+          "properties": {
+            "write_policy": {
+              "$ref": "#/$defs/WritePolicy"
+            }
+          },
+          "type": "object"
+        },
+        "proxy": {
+          "properties": {
+            "auth": {
+              "description": "Credentials for the remote. On update: left out keeps the stored credentials, null removes them (see updateRepository).",
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/UpstreamAuth"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "circuit_failures": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "circuit_open_for": {
+              "$ref": "#/$defs/Duration"
+            },
+            "content_ttl": {
+              "$ref": "#/$defs/Duration"
+            },
+            "http": {
+              "$ref": "#/$defs/UpstreamHTTP"
+            },
+            "max_concurrent_requests": {
+              "description": "Requests in flight to the remote and its related hosts; 0 = unlimited",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "metadata_ttl": {
+              "$ref": "#/$defs/Duration"
+            },
+            "negative_cache_ttl": {
+              "$ref": "#/$defs/Duration"
+            },
+            "offline": {
+              "description": "Offline mode: never contact the remote; serve cached content (also when stale) and answer 404 for anything not cached.",
+              "type": "boolean"
+            },
+            "related_hosts": {
+              "description": "Other hosts the remote links to that may be fetched on its behalf (tarball or file CDNs, API hosts): host, host:port or `.domain` for its subdomains. Never sent the remote's credentials. Formats add their own (PyPI `files.pythonhosted.org`, the hosts a NuGet service index names).",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/ValueFrom"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "remote_url": {
+              "anyOf": [
+                {
+                  "format": "uri",
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/ValueFrom"
+                }
+              ]
+            }
+          },
+          "required": [
+            "remote_url"
+          ],
+          "type": "object"
+        },
+        "quarantine_critical": {
+          "type": "boolean"
+        },
+        "routing": {
+          "$ref": "#/$defs/RoutingRules"
+        },
+        "scan_on_arrival": {
+          "type": "boolean"
+        },
+        "scanning": {
+          "properties": {
+            "distro": {
+              "anyOf": [
+                {
+                  "description": "APT and RPM: the distribution release of the packages, as an OSV ecosystem (Debian:12, Ubuntu:22.04:LTS, Rocky Linux:9, AlmaLinux:9, Red Hat:enterprise_linux:9::baseos). Their advisories apply to one release only. Empty: unknown; proxies of well-known archives are detected from the remote.",
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/ValueFrom"
+                }
+              ]
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "RepositoryInput": {
+      "properties": {
+        "blob_store": {
+          "anyOf": [
+            {
+              "description": "Blob store of a hosted or proxy repository; on create, `default`\n(the configured store) when omitted. Ignored for groups, which\nstore nothing; their responses leave it out.\n",
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "config": {
+          "$ref": "#/$defs/RepositoryConfig"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "format": {
+          "$ref": "#/$defs/Format"
+        },
+        "name": {
+          "$ref": "#/$defs/RepositoryName"
+        },
+        "online": {
+          "description": "Optional; true when omitted",
+          "type": "boolean"
+        },
+        "type": {
+          "$ref": "#/$defs/RepositoryType"
+        }
+      },
+      "type": "object"
+    },
+    "RepositoryName": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z0-9][a-z0-9-]{1,62}$",
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/ValueFrom"
+        }
+      ]
+    },
+    "RepositoryType": {
+      "anyOf": [
+        {
+          "enum": [
+            "hosted",
+            "proxy",
+            "group"
+          ],
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/ValueFrom"
+        }
+      ]
+    },
+    "RoleInput": {
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "group_mappings": {
+          "description": "External (OIDC/LDAP/SAML) groups granted this role",
+          "items": {
+            "$ref": "#/$defs/GroupMapping"
+          },
+          "type": "array"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "privileges": {
+          "items": {
+            "$ref": "#/$defs/Privilege"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "RoutingRules": {
+      "description": "Dependency-confusion guard. A name a rule excludes is never fetched from a proxy's remote, not served from its cache, and left out of a group's merged metadata (version lists, indexes, search); downloads answer 404 with the reason in the body and the `X-Hangar-Routing` header. Block wins over allow and exclusive.",
+      "properties": {
+        "allow": {
+          "description": "Proxy repositories. When set, only names matching one of these are fetched and served.",
+          "items": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ValueFrom"
+              }
+            ]
+          },
+          "maxItems": 256,
+          "type": "array"
+        },
+        "block": {
+          "description": "Proxy repositories. Names matching one of these are never fetched nor served.",
+          "example": [
+            "Edcom.*"
+          ],
+          "items": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ValueFrom"
+              }
+            ]
+          },
+          "maxItems": 256,
+          "type": "array"
+        },
+        "members": {
+          "description": "Group repositories. Rules for direct members; each member must be in the group.",
+          "items": {
+            "$ref": "#/$defs/MemberRouting"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "RpmFormatConfig": {
+      "additionalProperties": true,
+      "description": "`config.format` of rpm repositories. `repodata_depth` and `signing_key` apply to hosted and group repositories (a proxy serves the remote's metadata); `remote_keys` applies to proxies.",
+      "properties": {
+        "remote_keys": {
+          "description": "Proxy repositories: the remote's ASCII-armored OpenPGP public keys. A group merges the proxy only after its `repomd.xml.asc` verifies with one of them; a proxy member without them makes the group answer 400.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ValueFrom"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "repodata_depth": {
+          "description": "Directory depth that holds `repodata/`. Default 0 (one yum repository); 2 serves e.g. `el9/x86_64/repodata/` for packages uploaded below `el9/x86_64/`.",
+          "maximum": 4,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "signing_key": {
+          "anyOf": [
+            {
+              "description": "Key that signs the metadata. Default `repository` (the repository's own key).",
+              "enum": [
+                "repository",
+                "shared"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        }
+      },
+      "type": "object",
+      "x-format": "rpm"
+    },
+    "UpstreamAuth": {
+      "description": "Credentials sent only to the remote's own host. Secrets are write-only.",
+      "properties": {
+        "header_name": {
+          "anyOf": [
+            {
+              "description": "For kind=header, e.g. `Private-Token`",
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "basic",
+                "bearer",
+                "header"
+              ],
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "password": {
+          "anyOf": [
+            {
+              "type": "string",
+              "writeOnly": true
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "token": {
+          "anyOf": [
+            {
+              "type": "string",
+              "writeOnly": true
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "username": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "UpstreamHTTP": {
+      "description": "Outbound HTTP for one remote; omitted fields inherit the server-wide `http` config.",
+      "properties": {
+        "body_timeout": {
+          "$ref": "#/$defs/Duration",
+          "description": "Longest wait for more body bytes (default 60s). A stalled transfer is aborted, or resumed with a Range request when the remote supports it; there is no overall limit for large blobs."
+        },
+        "ca_bundle": {
+          "anyOf": [
+            {
+              "description": "PEM certificates trusted for this remote in addition to the system roots",
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "connect_timeout": {
+          "$ref": "#/$defs/Duration"
+        },
+        "disable_http2": {
+          "description": "Speak HTTP/1.1 only (remotes or TLS-inspecting proxies with broken HTTP/2)",
+          "type": "boolean"
+        },
+        "insecure_skip_verify": {
+          "description": "Disable TLS verification for this remote (audited)",
+          "type": "boolean"
+        },
+        "max_conns_per_host": {
+          "description": "Connection cap per remote host; 0 = unlimited",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_idle_conns_per_host": {
+          "description": "Keep-alive pool size per host; 0 = server-wide `http.max_idle_conns_per_host`",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "proxy": {
+          "anyOf": [
+            {
+              "description": "`inherit` (default: the platform default proxy), `none` (direct), or an http://, https:// or socks5:// proxy URL (password write-only)",
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "proxy_name": {
+          "anyOf": [
+            {
+              "description": "Name of an outbound proxy (`GET /proxies`) to use instead; `proxy` must then be empty or `inherit`.",
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/ValueFrom"
+            }
+          ]
+        },
+        "read_timeout": {
+          "$ref": "#/$defs/Duration",
+          "description": "Wait for response headers"
+        }
+      },
+      "type": "object"
+    },
+    "ValueFrom": {
+      "additionalProperties": false,
+      "description": "A value read when applying: an environment variable or a file (relative to the document's file; one trailing newline is dropped). Use it for secrets.",
+      "properties": {
+        "valueFrom": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "env": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "env"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "file": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "required": [
+        "valueFrom"
+      ],
+      "type": "object"
+    },
+    "WritePolicy": {
+      "anyOf": [
+        {
+          "description": "Publishing into a hosted repository. allow overwrites freely; allow_once accepts a path once (identical bytes again are accepted, different bytes answer 409); deny is read-only. Default for a new hosted repository: allow_once, except docker (allow: tags move). An update that leaves it out keeps the stored policy.",
+          "enum": [
+            "allow",
+            "allow_once",
+            "deny"
+          ],
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/ValueFrom"
+        }
+      ]
+    }
+  },
+  "$id": "https://raw.githubusercontent.com/ismoilovdevml/hangar/main/api/hangar-config.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "OutboundProxy"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/OutboundProxyInput"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "BlobStore"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/BlobStoreInput"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Role"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/RoleInput"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Repository"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/RepositoryInput"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "CleanupPolicy"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "spec": {
+            "$ref": "#/$defs/CleanupPolicyInput"
+          }
+        }
+      }
+    }
+  ],
+  "description": "One resource for hangar apply (docs/guides/config-as-code.md). Generated from api/openapi.yaml by internal/cac/schema_test.go; do not edit.",
+  "properties": {
+    "apiVersion": {
+      "const": "hangar/v1"
+    },
+    "kind": {
+      "enum": [
+        "OutboundProxy",
+        "BlobStore",
+        "Role",
+        "Repository",
+        "CleanupPolicy"
+      ]
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "spec": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "title": "Hangar configuration document",
+  "type": "object"
+}

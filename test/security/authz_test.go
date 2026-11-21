@@ -167,6 +167,8 @@ var apiPolicy = map[string]policy{
 	"GET /identity-providers/ldap":                 privileged,
 	"PUT /identity-providers/ldap":                 privileged,
 	"POST /identity-providers/ldap:test":           privileged,
+	"GET /resource-labels":                         filtered,
+	"PUT /resource-labels/{kind}/{name}":           privileged,
 	"GET /proxies":                                 filtered,
 	"POST /proxies":                                privileged,
 	"GET /proxies/{name}":                          privileged,
@@ -276,6 +278,7 @@ func apiTargets(t *testing.T, h *harness) map[string]string {
 		"/blob-stores/{name}":         "sweep-empty",
 		"/roles/{name}":               "Admin",
 		"/cleanup-policies/{name}":    "nightly",
+		"/resource-labels/{kind}":     "repository",
 		"/replication/targets/{name}": "edge",
 		"{id}":                        "00000000-0000-4000-8000-000000000000",
 	}

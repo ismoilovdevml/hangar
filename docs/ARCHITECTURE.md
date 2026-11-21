@@ -126,9 +126,11 @@ replication_targets, replication_state  -- created by a migration, unused until 
   (replication targets, SBOM, dependents, moving repositories between blob stores)
   answer 501 until they are implemented.
 - `GET /api/v1/events` — Server-Sent Events: publishes, quarantines, task progress.
-- Config as code (planned): the UI shows every repository's settings as YAML; a
-  `hangar apply -f` / `hangar export` CLI and a Terraform provider do not exist yet.
-  Automate with the REST API meanwhile.
+- Config as code: `hangar apply -f` / `hangar diff` / `hangar export` manage
+  repositories, blob stores, cleanup policies, roles and outbound proxies from
+  YAML over the REST API; ownership for `--prune` is kept in resource labels
+  (`/resource-labels`). See [guides/config-as-code.md](guides/config-as-code.md).
+  A Terraform provider does not exist yet.
 - Health: `/healthz` (liveness), `/readyz` (DB, blob store, NATS reachable), `/metrics`.
 
 ## Security

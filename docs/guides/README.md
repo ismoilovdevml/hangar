@@ -20,6 +20,7 @@ Practical, copy-paste guides for running Hangar and connecting package clients t
 | [CI integration](ci.md) | GitLab CI, GitHub Actions, Jenkins and Gitea Actions with tokens |
 | [CI OIDC token exchange](ci-oidc.md) | Trusted publishing: GitHub Actions and GitLab CI ID tokens traded for short-lived tokens, trust policies |
 | [REST API](api.md) | Authentication, common calls, pagination, errors |
+| [Configuration as code](config-as-code.md) | `hangar apply` / `diff` / `export`: repositories, blob stores, cleanup policies, roles and proxies from YAML in Git, secrets by reference, `--prune` ownership |
 | [Access management](access.md) | Members, service accounts, roles, privileges and token scopes |
 | [Routing rules](routing-rules.md) | Dependency confusion: block internal names on public proxies, reserve them for hosted group members |
 | [Vulnerability scanning](vulnerabilities.md) | OSV scanning of npm, Maven, PyPI, NuGet, Go and Cargo packages, waivers, quarantine, mirrors |

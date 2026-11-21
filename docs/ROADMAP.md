@@ -68,6 +68,6 @@ describes what actually ships.
 | Moving repositories between blob stores | Planned | `POST /blob-stores/{name}/move-repositories` answers 501. |
 | Search reindex task | Planned | `reindex` is a reserved task type. |
 | Scheduled database backup | Planned | Use `deploy/scripts/backup.sh` ([backup and restore](deploy/backup-restore.md)). |
-| Config as code (`hangar apply -f`, `hangar export`) | In progress (v0.2.0) | Up to v0.1.9 the New repository screen shows the settings as YAML for review and copying, and no CLI applies it. |
+| Config as code (`hangar apply -f`, `hangar diff`, `hangar export`) | Done (0.2.0) | [guides/config-as-code.md](guides/config-as-code.md). Users, tokens, tasks and sign-in providers are not managed yet. |
 | Terraform provider | Planned | |
 | Dark theme | Planned | Tokens only (`web/src/styles/tokens.css`). |

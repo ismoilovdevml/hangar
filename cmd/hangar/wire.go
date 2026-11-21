@@ -17,6 +17,7 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/api"
 	"github.com/ismoilovdevml/hangar/internal/api/catalog"
+	"github.com/ismoilovdevml/hangar/internal/api/labels"
 	"github.com/ismoilovdevml/hangar/internal/api/pkginfo"
 	"github.com/ismoilovdevml/hangar/internal/api/readmeimg"
 	"github.com/ismoilovdevml/hangar/internal/audit"
@@ -568,6 +569,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 		BlobStoreProbe: storeStates,
 		AuthMiddleware: chainMiddleware(httpapi.Middleware(authSvc, authOpts), observability.TagPrincipal),
 		Traffic:        rollup.NewStore(pool),
+		Labels:         labels.New(pool),
 		Monitor:        mon,
 		Logs:           sysLogs,
 		AuthRoutes:     api.RouteFunc(func(r chi.Router) { httpapi.Register(r, authSvc, authOpts) }),
