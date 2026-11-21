@@ -40,12 +40,12 @@ test('every sidebar entry stays reachable on a laptop screen', async ({ page }) 
   // The list runs past the card: the bottom fades and a button scrolls on.
   await expect(page.locator('.sidebar__nav')).toHaveAttribute('data-more-below', '');
   await expect(page.locator('.sidebar__more')).toHaveCSS('opacity', '1');
-  for (const label of ['System logs', 'Settings', 'Authentication', 'Proxies']) {
+  for (const label of ['System', 'Authentication', 'Proxies', 'Webhooks', 'CI trust']) {
     await expect(nav.getByRole('link', { name: label, exact: true })).toHaveCount(1);
   }
 
   // Pages at the bottom of the list scroll their entry into view.
-  for (const path of ['/system/logs', '/settings/proxies', '/account']) {
+  for (const path of ['/system/logs', '/settings/proxies', '/settings/trust-policies']) {
     await page.goto(path);
     await expect(page.locator('.nav-item.is-active')).toBeVisible();
     await expect.poll(() => activeEntryInView(page), { message: path }).toBe(true);
