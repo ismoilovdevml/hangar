@@ -28,7 +28,7 @@ A signature is only worth the identity you require. Release signatures come
 from this workflow file, run for a version tag:
 
 ```bash
-VERSION=0.2.0   # the release, without the "v"
+VERSION=0.2.1   # the release, without the "v"
 ISSUER=https://token.actions.githubusercontent.com
 IDENTITY="https://github.com/ismoilovdevml/hangar/.github/workflows/release.yml@refs/tags/v$VERSION"
 ```

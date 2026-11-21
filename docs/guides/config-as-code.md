@@ -274,7 +274,7 @@ jobs:
           [ "${{ github.event_name }}" = push ] && cmd=apply
           docker run --rm -v "$PWD/hangar:/hangar:ro" \
             -e HANGAR_URL -e HANGAR_TOKEN -e NPM_TOKEN -e HANGAR_S3_SECRET \
-            ghcr.io/ismoilovdevml/hangar:0.2.0 \
+            ghcr.io/ismoilovdevml/hangar:0.2.1 \
             $cmd -f /hangar -R --apply-set platform --prune || test $? -eq 2 -a $cmd = diff
 ```
 

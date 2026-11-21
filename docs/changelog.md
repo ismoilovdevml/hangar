@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## v0.2.1 (2026-11-22)
+
+Fixes found by running v0.2.0 as a three-node cluster. No upgrade steps
+beyond replacing the image or chart; no migrations.
+
+- **Repository pages and the repository API are fast again**: Hangar turns
+  PostgreSQL's JIT off on its own connections. The repository list and every
+  repository read paid about half a second of JIT compilation on servers
+  with JIT enabled (the default of the official images and most packages):
+  465 ms per call before, 5 ms after, measured on the test cluster. The
+  same delay made a change on one node take over a second to show on
+  another; it now shows within about 60 ms. Add `jit=on` to the database
+  URL to keep JIT. This affected earlier releases too.
+- **Task runs name the node by `server.node_id`** (as System status does),
+  not by the container's host name.
+- **High availability guide**: what the cluster test showed, scenario by
+  scenario, including that `server.drain_delay` should cover the load
+  balancer's health check (with HAProxy checking every 2 s, 6 s gave no
+  failed requests while a node stopped; 0 s lost 2 of 36).
+
 ## v0.2.0 (2026-11-21)
 
 NATS is gone: events and jobs run on the PostgreSQL every node already
