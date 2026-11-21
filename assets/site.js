@@ -15,22 +15,34 @@
     else select(btn);
   }
   function select(btn) {
-    var el = btn.parentElement.querySelector('code, pre:not([hidden])'); if (!el) return;
+    var el = btn.parentElement.querySelector('code, pre'); if (!el) return;
     var r = document.createRange(); r.selectNodeContents(el); var s = getSelection(); s.removeAllRanges(); s.addRange(r);
     btn.textContent = 'Press ⌘C';
   }
   $$('[data-copy]').forEach(function (b) { b.addEventListener('click', function () { copyText($(b.dataset.copy).textContent.trim(), b); }); });
 
-  /* install tabs */
+  /* install tabs: click or arrow keys, one panel visible */
   var tabs = $$('.tabs [role="tab"]');
-  tabs.forEach(function (t) {
-    t.addEventListener('click', function () {
-      tabs.forEach(function (x) { x.setAttribute('aria-selected', x === t ? 'true' : 'false'); });
-      $$('.code pre').forEach(function (p) { p.hidden = p.dataset.tab !== t.dataset.tab; });
+  function pick(t) {
+    tabs.forEach(function (x) {
+      var on = x === t;
+      x.setAttribute('aria-selected', on ? 'true' : 'false');
+      x.tabIndex = on ? 0 : -1;
+      document.getElementById(x.getAttribute('aria-controls')).hidden = !on;
+    });
+  }
+  tabs.forEach(function (t, i) {
+    t.addEventListener('click', function () { pick(t); });
+    t.addEventListener('keydown', function (e) {
+      var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!d) return;
+      e.preventDefault();
+      var n = tabs[(i + d + tabs.length) % tabs.length];
+      pick(n);
+      n.focus();
     });
   });
-  var cb = $('[data-copy-active]');
-  if (cb) cb.addEventListener('click', function () { copyText($$('.code pre').filter(function (p) { return !p.hidden; })[0].textContent.trim(), cb); });
+  $$('.panels .copy').forEach(function (b) { b.addEventListener('click', function () { copyText(b.parentElement.querySelector('pre').textContent.trim(), b); }); });
 
 
   /* live demo: load the frame when it comes near, fit its 1440x900 page to the frame, mirror its address */

@@ -3,13 +3,54 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Hangar Package Registry</title>
-<meta name="description" content="Hangar is a self-hosted package registry. Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files in one place.">
+<title>Hangar — self-hosted package registry for Docker, npm, Maven, PyPI and more</title>
+<meta name="description" content="Hangar is a self-hosted package registry: Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files in one place. Cache, publish and scan on your own servers.">
+<link rel="canonical" href="https://ismoilovdevml.github.io/hangar/">
+<meta name="theme-color" content="#C9D5E7">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Hangar — self-hosted package registry">
+<meta property="og:title" content="Hangar — self-hosted package registry">
+<meta property="og:description" content="One registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files. Cache what you download, store what you publish, see what is unsafe.">
+<meta property="og:url" content="https://ismoilovdevml.github.io/hangar/">
+<meta property="og:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hangar, the self-hosted package registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Hangar — self-hosted package registry">
+<meta name="twitter:description" content="One registry for Docker, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw files. Cache what you download, store what you publish, see what is unsafe.">
+<meta name="twitter:image" content="https://ismoilovdevml.github.io/hangar/assets/og.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M8 24V13l8-5 8 5v11' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="preload" href="assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="assets/site.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Hangar",
+  "alternateName": "Hangar package registry",
+  "description": "A self-hosted package registry for Docker/OCI, npm, Maven, PyPI, NuGet, Go modules, Helm charts, Cargo crates, APT and RPM packages and raw files, in one Go binary backed by PostgreSQL.",
+  "applicationCategory": "DeveloperApplication",
+  "applicationSubCategory": "Package registry",
+  "operatingSystem": "Linux",
+  "softwareVersion": "0.2.0",
+  "url": "https://ismoilovdevml.github.io/hangar/",
+  "downloadUrl": "https://github.com/ismoilovdevml/hangar/releases/latest",
+  "softwareHelp": { "@type": "CreativeWork", "url": "https://ismoilovdevml.github.io/hangar/docs/" },
+  "screenshot": "https://ismoilovdevml.github.io/hangar/assets/img/ui/overview.jpg",
+  "image": "https://ismoilovdevml.github.io/hangar/assets/og.png",
+  "sameAs": ["https://github.com/ismoilovdevml/hangar"],
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "featureList": [
+    "Hosted, proxy and group repositories",
+    "Docker/OCI, npm, Maven, PyPI, NuGet, Go, Helm, Cargo, APT, RPM and raw formats",
+    "Vulnerability scanning with OSV advisories and Trivy",
+    "Users, roles, scoped access tokens, OIDC and LDAP sign-in",
+    "Cleanup policies and audit log",
+    "Prometheus metrics and OpenTelemetry traces"
+  ]
+}
+</script>
 </head>
 <body>
 <div class="dawn" aria-hidden="true"><i class="glow"></i></div>
@@ -23,8 +64,8 @@
     </a>
     <nav class="links" aria-label="Main">
       <a class="hide-sm" href="#demo">Demo</a>
-      <a class="hide-sm" href="#how">How it works</a>
-      <a href="docs.html">Docs</a>
+      <a class="hide-sm" href="#why">Why Hangar</a>
+      <a href="docs/">Docs</a>
       <a class="hide-sm" href="https://github.com/ismoilovdevml/hangar">GitHub</a>
     </nav>
   </div>
@@ -35,7 +76,7 @@
     <h1 class="reveal">Your packages,<br>on your servers.</h1>
     <p class="lead reveal">The self-hosted package registry for eleven formats. It caches what you download, stores what you publish and tells you what is unsafe.</p>
     <div class="actions reveal">
-      <a class="btn btn-dark" href="docs.html#quick-start">Get started</a>
+      <a class="btn btn-dark" href="#install">Get started</a>
       <a class="btn btn-light" href="https://github.com/ismoilovdevml/hangar">View on GitHub</a>
     </div>
     <div class="cmd reveal">
@@ -101,35 +142,110 @@
 <li style="--c:#00ADD8"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1.811 10.231c-.047 0-.058-.023-.035-.059l.246-.315c.023-.035.081-.058.128-.058h4.172c.046 0 .058.035.035.07l-.199.303c-.023.036-.082.07-.117.07zM.047 11.306c-.047 0-.059-.023-.035-.058l.245-.316c.023-.035.082-.058.129-.058h5.328c.047 0 .07.035.058.07l-.093.28c-.012.047-.058.07-.105.07zm2.828 1.075c-.047 0-.059-.035-.035-.07l.163-.292c.023-.035.07-.07.117-.07h2.337c.047 0 .07.035.07.082l-.023.28c0 .047-.047.082-.082.082zm12.129-2.36c-.736.187-1.239.327-1.963.514-.176.046-.187.058-.34-.117-.174-.199-.303-.327-.548-.444-.737-.362-1.45-.257-2.115.175-.795.514-1.204 1.274-1.192 2.22.011.935.654 1.706 1.577 1.835.795.105 1.46-.175 1.987-.77.105-.13.198-.27.315-.434H10.47c-.245 0-.304-.152-.222-.35.152-.362.432-.97.596-1.274a.315.315 0 01.292-.187h4.253c-.023.316-.023.631-.07.947a4.983 4.983 0 01-.958 2.29c-.841 1.11-1.94 1.8-3.33 1.986-1.145.152-2.209-.07-3.143-.77-.865-.655-1.356-1.52-1.484-2.595-.152-1.274.222-2.419.993-3.424.83-1.086 1.928-1.776 3.272-2.02 1.098-.2 2.15-.07 3.096.571.62.41 1.063.97 1.356 1.648.07.105.023.164-.117.2m3.868 6.461c-1.064-.024-2.034-.328-2.852-1.029a3.665 3.665 0 01-1.262-2.255c-.21-1.32.152-2.489.947-3.529.853-1.122 1.881-1.706 3.272-1.95 1.192-.21 2.314-.095 3.33.595.923.63 1.496 1.484 1.648 2.605.198 1.578-.257 2.863-1.344 3.962-.771.783-1.718 1.273-2.805 1.495-.315.06-.63.07-.934.106zm2.78-4.72c-.011-.153-.011-.27-.034-.387-.21-1.157-1.274-1.81-2.384-1.554-1.087.245-1.788.935-2.045 2.033-.21.912.234 1.835 1.075 2.21.643.28 1.285.244 1.905-.07.923-.48 1.425-1.228 1.484-2.233z"/></svg>Go</li>
 <li style="--c:#0F1689"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.337 0c-.475 0-.861 1.016-.861 2.269 0 .527.069 1.011.183 1.396a8.514 8.514 0 0 0-3.961 1.22 5.229 5.229 0 0 0-.595-1.093c-.606-.866-1.34-1.436-1.79-1.43a.381.381 0 0 0-.217.066c-.39.273-.123 1.326.596 2.353.267.381.559.705.84.948a8.683 8.683 0 0 0-1.528 1.716h1.734a7.179 7.179 0 0 1 5.381-2.421 7.18 7.18 0 0 1 5.382 2.42h1.733a8.687 8.687 0 0 0-1.32-1.53c.35-.249.735-.643 1.078-1.133.719-1.027.986-2.08.596-2.353a.382.382 0 0 0-.217-.065c-.45-.007-1.184.563-1.79 1.43a4.897 4.897 0 0 0-.676 1.325 8.52 8.52 0 0 0-3.899-1.42c.12-.39.193-.887.193-1.429 0-1.253-.386-2.269-.862-2.269zM1.624 9.443v5.162h1.358v-1.968h1.64v1.968h1.357V9.443H4.62v1.838H2.98V9.443zm5.912 0v5.162h3.21v-1.108H8.893v-.95h1.64v-1.142h-1.64v-.84h1.853V9.443zm4.698 0v5.162h3.218v-1.362h-1.86v-3.8zm4.706 0v5.162h1.364v-2.643l1.357 1.225 1.35-1.232v2.65h1.365V9.443h-.614l-2.1 1.914-2.109-1.914zm-11.82 7.28a8.688 8.688 0 0 0 1.412 1.548 5.206 5.206 0 0 0-.841.948c-.719 1.027-.985 2.08-.596 2.353.39.273 1.289-.338 2.007-1.364a5.23 5.23 0 0 0 .595-1.092 8.514 8.514 0 0 0 3.961 1.219 5.01 5.01 0 0 0-.183 1.396c0 1.253.386 2.269.861 2.269.476 0 .862-1.016.862-2.269 0-.542-.072-1.04-.193-1.43a8.52 8.52 0 0 0 3.9-1.42c.121.4.352.865.675 1.327.719 1.026 1.617 1.637 2.007 1.364.39-.273.123-1.326-.596-2.353-.343-.49-.727-.885-1.077-1.135a8.69 8.69 0 0 0 1.202-1.36h-1.771a7.174 7.174 0 0 1-5.227 2.252 7.174 7.174 0 0 1-5.226-2.252z"/></svg>Helm</li>
     </ul>
-    <p class="after reveal">Plus Cargo crates, APT and RPM packages, and raw files. Helm works both as a chart repository and as OCI charts. <a href="docs.html#docker">Format guides</a>.</p>
+    <p class="after reveal">Plus Cargo crates, APT and RPM packages, and raw files. Helm works both as a chart repository and as OCI charts. <a href="docs/guides/">Format guides</a>.</p>
+  </section>
+
+  <section class="sec wrap why" id="why">
+    <h2 class="reveal">Why Hangar</h2>
+    <p class="sub reveal">Every format your builds use, behind one sign-in, on your own servers. One Go binary and PostgreSQL.</p>
+
+    <ul class="stats reveal" aria-label="Measured throughput of one node">
+      <li><b>22 279<small> req/s</small></b><span>Docker blob downloads, p95 2.5 ms</span></li>
+      <li><b>14 144<small> req/s</small></b><span>npm metadata and tarballs, p95 3.0 ms</span></li>
+      <li><b>28 302<small> req/s</small></b><span>Maven metadata, POMs and jars, p95 1.7 ms</span></li>
+    </ul>
+    <p class="fine reveal">One Hangar node on an Apple M4 Pro (12 cores), with PostgreSQL 17 and the k6 load generator on the same machine, 32 virtual users for 30 s; the machine was not isolated, so expect 10–20 % variance. Setup, all scenarios and the known limits: <a href="docs/operations/performance/">Performance</a>.</p>
+
+    <h3 class="cmp-h reveal">How it compares</h3>
+    <div class="cmp reveal">
+      <article>
+        <h4>Nexus Repository Community Edition</h4>
+        <p>The free successor of Nexus Repository OSS supports up to 40,000 components and 100,000 requests a day, and pauses new components above that. High availability, replication and SSO are in Pro. It requires Java 21.<sup><a href="#src-1" aria-label="Source 1">1</a></sup></p>
+        <p class="us"><b>Hangar</b> has no user or seat limits and no activation key. <a href="docs/deploy/high-availability/">Several nodes</a> and <a href="docs/guides/sso/">OIDC and LDAP sign-in</a> are part of it.</p>
+      </article>
+      <article>
+        <h4>Artifactory OSS</h4>
+        <p>JFrog describes its free, open-source edition as Artifactory for Java package management.<sup><a href="#src-2" aria-label="Source 2">2</a></sup></p>
+        <p class="us"><b>Hangar</b> hosts and proxies eleven formats, from Docker images and npm to Go modules, APT and RPM, and scans them against OSV advisories and with Trivy.</p>
+      </article>
+      <article>
+        <h4>Harbor</h4>
+        <p>A CNCF Graduated registry for OCI artifacts: container images, OCI Helm charts and other OCI artifacts, with image scanning and signing. It asks for at least 2 CPUs and 4 GB of memory.<sup><a href="#src-3" aria-label="Source 3">3</a></sup></p>
+        <p class="us"><b>Hangar</b> stores images and OCI Helm charts too, next to your npm, Maven, PyPI and NuGet packages. If you only need container images, Harbor is a mature choice.</p>
+      </article>
+    </div>
+    <ol class="sources">
+      <li id="src-1">Sonatype, <a href="https://help.sonatype.com/en/ce-onboarding.html">Community Edition Onboarding</a> and <a href="https://help.sonatype.com/en/sonatype-nexus-repository-system-requirements.html">System Requirements</a>.</li>
+      <li id="src-2">JFrog, <a href="https://jfrog.com/open-source/">Downloads &amp; Open Source</a>.</li>
+      <li id="src-3">Harbor, <a href="https://goharbor.io/">goharbor.io</a>, <a href="https://goharbor.io/docs/main/working-with-projects/working-with-oci/">Working with OCI Artifacts</a> and <a href="https://goharbor.io/docs/main/install-config/installation-prereqs/">Harbor Installation Prerequisites</a>.</li>
+    </ol>
+    <p class="fine">Facts about other products are taken from the vendors' pages above, as published on 20 November 2026.</p>
   </section>
 
   <section class="sec wrap install" id="install">
     <h2 class="reveal">Start in a minute.</h2>
     <div class="tabs reveal" role="tablist" aria-label="Install method">
-      <button role="tab" type="button" aria-selected="true" data-tab="script">Script</button>
-      <button role="tab" type="button" aria-selected="false" data-tab="docker">Docker</button>
-      <button role="tab" type="button" aria-selected="false" data-tab="helm">Kubernetes</button>
+      <button role="tab" type="button" id="tab-script" aria-controls="panel-script" aria-selected="true" data-tab="script">Script</button>
+      <button role="tab" type="button" id="tab-compose" aria-controls="panel-compose" aria-selected="false" tabindex="-1" data-tab="compose">Docker Compose</button>
+      <button role="tab" type="button" id="tab-docker" aria-controls="panel-docker" aria-selected="false" tabindex="-1" data-tab="docker">Docker</button>
+      <button role="tab" type="button" id="tab-helm" aria-controls="panel-helm" aria-selected="false" tabindex="-1" data-tab="helm">Kubernetes</button>
     </div>
-    <div class="code reveal">
-      <pre data-tab="script">curl -fsSL https://github.com/ismoilovdevml/hangar/releases/latest/download/install.sh | sudo bash</pre>
-      <pre data-tab="docker" hidden>docker run -d --name hangar -p 8080:8080 \
+    <div class="panels reveal">
+      <div role="tabpanel" id="panel-script" aria-labelledby="tab-script" data-panel="script">
+        <div class="code"><pre tabindex="0">curl -fsSL https://github.com/ismoilovdevml/hangar/releases/latest/download/install.sh | sudo bash</pre><button class="copy" type="button">Copy</button></div>
+        <p class="after">For a Linux host with Docker and the Compose plugin. It asks for a data directory and an optional domain, generates every secret, starts Hangar and PostgreSQL, and prints the URL (<code>http://&lt;host-ip&gt;:8080</code> without a domain), the user <code>admin</code> and a one-time password. Re-run it to upgrade. Flags, TLS and unattended installs: <a href="docs/deploy/install-compose/">Install with Docker Compose</a>.</p>
+      </div>
+      <div role="tabpanel" id="panel-compose" aria-labelledby="tab-compose" data-panel="compose" hidden>
+        <div class="code"><pre tabindex="0">cat &gt; compose.yaml &lt;&lt;'EOF'
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: hangar
+      POSTGRES_PASSWORD: change-me
+      POSTGRES_DB: hangar
+    volumes: [postgres:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hangar -d hangar"]
+      interval: 5s
+      retries: 20
+  hangar:
+    image: ghcr.io/ismoilovdevml/hangar:0.2.0
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      HANGAR_DATABASE_URL: postgres://hangar:change-me@postgres:5432/hangar?sslmode=disable
+      HANGAR_DATABASE_MIGRATE_ON_START: "true"
+      HANGAR_SERVER_BASE_URL: http://localhost:8080
+    ports: ["8080:8080"]
+    volumes: [hangar:/var/lib/hangar]
+volumes: { postgres: {}, hangar: {} }
+EOF
+docker compose up -d
+docker compose logs hangar | grep -A4 'first administrator'</pre><button class="copy" type="button">Copy</button></div>
+        <p class="after">A local trial: Hangar and PostgreSQL 16, files and the job queue in the <code>hangar</code> volume. The last command shows the user <code>admin</code> and its one-time password; open <code>http://localhost:8080</code>. Before real use, set <code>HANGAR_SECRET_KEY</code> and <code>HANGAR_DOCKER_TOKEN_KEY</code> (<a href="docs/guides/getting-started/#configuration">Getting started</a>), or use the script, which does it for you.</p>
+      </div>
+      <div role="tabpanel" id="panel-docker" aria-labelledby="tab-docker" data-panel="docker" hidden>
+        <div class="code"><pre tabindex="0">docker run -d --name hangar -p 8080:8080 \
   -v hangar-data:/var/lib/hangar \
   -e HANGAR_DATABASE_URL='postgres://hangar:secret@db.example.com:5432/hangar' \
   -e HANGAR_DATABASE_MIGRATE_ON_START=true \
-  ghcr.io/ismoilovdevml/hangar:latest</pre>
-      <pre data-tab="helm" hidden>git clone https://github.com/ismoilovdevml/hangar.git
-helm upgrade --install hangar hangar/deploy/helm/hangar \
-  --namespace hangar --create-namespace -f values-prod.yaml</pre>
-      <button class="copy" type="button" data-copy-active>Copy</button>
+  ghcr.io/ismoilovdevml/hangar:0.2.0</pre><button class="copy" type="button">Copy</button></div>
+        <p class="after">Needs a PostgreSQL 16+ database. <code>docker logs hangar</code> shows the first administrator's one-time password. Settings and secrets: <a href="docs/deploy/#configuration-in-one-paragraph">Configuration</a>.</p>
+      </div>
+      <div role="tabpanel" id="panel-helm" aria-labelledby="tab-helm" data-panel="helm" hidden>
+        <div class="code"><pre tabindex="0">helm install hangar oci://ghcr.io/ismoilovdevml/charts/hangar --version 0.2.0 \
+  --namespace hangar --create-namespace -f values.yaml</pre><button class="copy" type="button">Copy</button></div>
+        <p class="after">Two or more replicas against your PostgreSQL 16+ and S3 bucket. <code>values.yaml</code> holds the public URL, the database and storage secrets and the ingress; the <a href="docs/deploy/install-helm/">Helm guide</a> has a complete example and every option.</p>
+      </div>
     </div>
-    <p class="after reveal">The script needs Docker with the Compose plugin. It starts Hangar and PostgreSQL, then prints the URL (<code>http://&lt;host-ip&gt;:8080</code> without a domain), the user <code>admin</code> and a one-time password. Docker needs a PostgreSQL 16+ database; Kubernetes needs a values file (<a href="docs.html#installation">Installation</a>). Next steps are in the <a href="docs.html#quick-start">quick start</a>.</p>
+    <p class="after reveal">Next: create a repository and point a client at it, in the <a href="docs/guides/getting-started/">getting started guide</a>.</p>
   </section>
 </main>
 
 <footer class="wrap foot">
   <span>Hangar · self-hosted package registry</span>
-  <nav aria-label="Footer"><a href="docs.html">Docs</a><a href="docs.html#api">API</a><a href="https://github.com/ismoilovdevml/hangar">GitHub</a></nav>
+  <nav aria-label="Footer"><a href="docs/">Docs</a><a href="docs/guides/api/">API</a><a href="docs/changelog/">Changelog</a><a href="https://github.com/ismoilovdevml/hangar">GitHub</a></nav>
 </footer>
 
 <script src="assets/site.js"></script>
