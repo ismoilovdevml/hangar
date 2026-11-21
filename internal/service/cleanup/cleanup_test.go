@@ -343,7 +343,10 @@ func TestIsPrerelease(t *testing.T) {
 
 func waitRun(t *testing.T, ts *tasks.Service, taskID, runID string) *tasks.Run {
 	t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
+	// Generous: under -race with the whole module's tests in parallel a run of
+	// a few hundred deletions takes far longer than alone; a hung run still
+	// fails here.
+	deadline := time.Now().Add(60 * time.Second)
 	for {
 		r, err := ts.GetRun(context.Background(), taskID, runID)
 		if err != nil {
@@ -594,11 +597,15 @@ func TestStopCleanupRun(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
+	// The policy cannot be deleted while its run is going. Checked before
+	// Stop: once the run has stopped, Delete succeeds and removes the task
+	// (and the run this test waits for), which under load can happen before
+	// a Delete issued after Stop.
+	if err := f.svc.Delete(f.ctx, "big"); !errors.Is(err, cleanup.ErrRunning) {
+		t.Fatalf("delete while running = %v, want ErrRunning", err)
+	}
 	if _, err := f.svc.Stop(f.ctx, "big"); err != nil {
 		t.Fatal(err)
-	}
-	if err := f.svc.Delete(f.ctx, "big"); err != nil && !errors.Is(err, cleanup.ErrRunning) {
-		t.Fatalf("delete while running = %v", err)
 	}
 	done := waitRun(t, f.tasks, p.TaskID, run.ID)
 	if done.Status != tasks.StatusCancelled {
