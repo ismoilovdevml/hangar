@@ -67,15 +67,25 @@ JetBrains Mono (`@fontsource`), no external font requests in production.
   title, one-sentence explanation, primary action → glass panels in grids with 16 px gaps.
   The Overview drops the bar: its header is the breadcrumb, a system state pill, bell and
   avatar, and its hero carries the search box.
-- The sidebar holds only the everyday pages (Registry, Storage, Security, Operations). Its
-  links scroll on short screens; the system status card (state, nodes up, version) stays
-  pinned at its bottom and links to System status. A page without its own entry lights
-  up the entry of its area: Sign-in, My account and Audit log under Access & audit, the
-  other Settings and System pages under Cluster & replication.
-- **Settings** (`/settings`, avatar menu → Settings, ⌘K) gathers configuration and
-  personal pages as rows in glass cards (720 px column): name, a one-line live status,
-  chevron. Rows the user may not open are left out. Pages reached from it keep their
-  addresses and show "Settings / <page>" in the breadcrumb.
+- The sidebar has one entry per area (Registry, Storage, Security, Operations, Settings),
+  and only the entries the user may open; a section left empty is dropped. Its links
+  scroll on short screens; the system status card (state, nodes up, version) stays
+  pinned at its bottom and links to System. Pages inside an area (a repository's
+  settings, a task, a System tab) light up the area's entry.
+- **System** (`/system`) is one area with tabs: Status, Nodes and Logs for operators
+  (`system:cluster:read`, Logs `system:cluster:admin`), About (version, addresses,
+  dependency health, where the configuration lives) for everyone. `/system` opens the
+  first tab the user may see; with only About there is no tab bar. The breadcrumb reads
+  "System / <tab>".
+- **Settings** has no page of its own: Authentication and Proxies are sidebar entries
+  (breadcrumb "Settings / <page>"), personal pages (My account, access tokens, API
+  reference) are in the avatar menu, and `/settings` opens the first settings page the
+  user may see, or My account.
+- **Audit log** (`/audit`) is the one audit view; the Access page shows only the latest
+  access events and links to it.
+- Old addresses keep working as redirects: `/cluster` → System → Nodes (or About),
+  `/settings/system` → System → About (anchors kept), `/access?tab=audit` → Audit log
+  filtered to the tab's category.
 - Tables live inside a panel; wide tables scroll horizontally inside it.
 
 ## Components

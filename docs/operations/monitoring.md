@@ -300,8 +300,8 @@ them reaches the output.
 ### System logs screen
 
 Each node also keeps its newest `log.buffer_size` records in memory, after the
-same scrubbing, so administrators can read them under **Operations → System
-logs** without access to the host. The buffer is a fixed ring: appending is
+same scrubbing, so administrators can read them under **System → Logs**
+without access to the host. The buffer is a fixed ring: appending is
 constant time and never waits for readers, and the oldest records are
 overwritten. Warnings and errors are kept longer: the newest of them (a fifth
 of `log.buffer_size`, at least 100) stay readable after a burst of info
@@ -340,7 +340,8 @@ issued it.
 
 ## System status screen
 
-**Operations → System status** (privilege `system:cluster:read`) opens with a
+**System → Status** (privilege `system:cluster:read`; the sidebar's System
+entry and the status pill open it) opens with a
 headline for the whole installation (*Everything is working*, *1 check needs
 attention*, *2 checks are down*, *1 node is not responding*), the number of
 checks passing on the nodes that answer, and the version. Below it, every

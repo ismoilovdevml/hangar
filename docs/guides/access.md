@@ -1,7 +1,7 @@
 # Access management
 
 How people, service accounts, roles, tokens and sessions work in Hangar, and
-how to operate them from the web UI (**Access & audit**, **My account**) and
+how to operate them from the web UI (**Access**, **Audit log**, **My account**) and
 the REST API (`api/openapi.yaml`, tag `access`).
 
 ## Model
@@ -47,7 +47,7 @@ always keeps **Admin**: the last one cannot be disabled, deleted or demoted.
 
 ## Members
 
-*Access & audit → Members*. Filter by name or email, role and status
+*Access → Members*. Filter by name or email, role and status
 (`active`, `locked`, `disabled`). Selecting a member opens a drawer with
 their roles, tokens, sessions and effective permissions.
 
@@ -104,7 +104,7 @@ Refusals answer `403` and are audited with what was missing. See
 
 ## Service accounts
 
-*Access & audit → Service accounts → New service account*. Give it a name, a
+*Access → Service accounts → New service account*. Give it a name, a
 note about what uses it ("GitLab runners, group infra") and roles — usually
 **CI deployer**, or a custom role limited to the repositories the pipeline
 publishes to. Then open it and create a token under **Tokens → New token**
@@ -119,7 +119,7 @@ npm config set //registry.example.com/repository/npm-internal/:_authToken "$HANG
 
 ## Personal access tokens
 
-*My account → Personal access tokens → New token*, or **Access & audit →
+*My account → Personal access tokens → New token*, or **Access →
 Access tokens → New token**.
 
 1. **Name** — what the token is for ("laptop CLI", "release pipeline").
@@ -172,7 +172,7 @@ are about to expire.
 
 ## Roles and permissions
 
-*Access & audit → Roles*. Built-in roles are read-only. **New role** opens the
+*Access → Roles*. Built-in roles are read-only. **New role** opens the
 privilege editor: add repository privileges (pattern × action) and
 administration privileges (area × action); each row is described in plain
 words. **Directory groups** map OIDC, LDAP or SAML groups to the role
@@ -213,7 +213,10 @@ Open it from the avatar menu or from **Settings → My account** (`/account`).
 
 Every change above is written to the audit log with the actor, client address
 and outcome, and every refused attempt is recorded with outcome `denied`.
-*Access & audit → Audit log* shows access events by category:
+The **Audit log** page (Security → Audit log) lists them; access events read in
+plain words ("granted role Publisher to malika"). Filter the action by these
+prefixes to see one category (`auth.*` for sign-ins); the Access page shows the
+latest of them and links to the full log:
 
 | Category | Actions |
 |---|---|
