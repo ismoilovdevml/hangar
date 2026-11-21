@@ -2,6 +2,182 @@
 
 ## Unreleased
 
+## v0.2.0 (2026-11-21)
+
+NATS is gone: events and jobs run on the PostgreSQL every node already
+shares. Also new: webhooks, CI OIDC trusted publishing, `hangar apply`,
+context-bound secrets, faster search, and signed releases with the Helm chart
+on OCI. **Read the upgrade notes before upgrading**; full steps are in
+[upgrade.md](deploy/upgrade.md#upgrading-to-020).
+
+### Upgrade notes
+
+- **Upgrade every node together.** v0.1 and v0.2 nodes share neither events
+  nor jobs. With Helm, add `--set updateStrategy.type=Recreate --set
+  updateStrategy.rollingUpdate=null` to this one upgrade to avoid a mixed
+  window. Run the migrations (00310–00380).
+- **NATS is no longer used.** Remove `nats:` and `HANGAR_NATS_*` (they are
+  ignored, with one startup warning). Jobs still queued in JetStream are not
+  carried over: drain the queue first (`hangar_job_queue_depth` = 0) to lose
+  none; scheduled jobs run again on their next schedule. Afterwards the NATS
+  server and its data can be removed:
+  - Helm: the chart no longer deploys NATS; the upgrade deletes its
+    StatefulSet, Services and Secret but keeps the PVCs (`kubectl delete pvc
+    -l app.kubernetes.io/instance=<release>,app.kubernetes.io/component=nats`).
+    Old `nats.*` values are accepted and ignored.
+  - Compose: `install.sh` no longer creates or mounts `<data>/nats` and leaves
+    an existing one in place for a rollback; remove it when you no longer need
+    one.
+- **PostgreSQL connections.** Each node holds one extra long-lived session for
+  the event listener: budget `nodes × (database.max_conns + 17)`. PgBouncer
+  must use session pooling, not transaction pooling.
+- **System logs across nodes** are read over HTTP: each node's
+  `server.node_url` (`HANGAR_SERVER_NODE_URL`) must be reachable from the
+  others. The chart sets it to the pod IP and its NetworkPolicy allows
+  pod-to-pod HTTP; elsewhere it defaults to the local address used to reach
+  the database plus the port of `server.addr`.
+- **Secrets are re-sealed as `hgs2`** (bound to their row and field) on the
+  first start. **v0.1.x cannot read them afterwards**: to roll back, restore
+  the pre-upgrade backup, or stop every v0.2 node and run `hangar admin
+  rotate-secrets --downgrade` before starting v0.1.x (which also needs its
+  NATS back).
+- **Search** pages stop at 10,000 results. `pg_trgm` is created by the
+  migration when the database owner may; otherwise Hangar warns at start and
+  `CREATE EXTENSION pg_trgm; SELECT hangar_search_trgm();` adds the index
+  later.
+- **Retention.** New `tasks.run_retention` (default `2160h`, 90 days) prunes
+  finished task runs; the first run after the upgrade deletes older ones (set
+  `0s` to keep all). New `audit.retention` defaults to `0s`: audit history is
+  kept unless you set a limit.
+- **Dropped schema:** the unused `nodes`, `replication_targets` and
+  `replication_state` tables and `task_runs.node_id`.
+- **Metrics renamed:** `hangar_nats_connected` →
+  `hangar_event_listener_connected`, `hangar_nats_reconnects_total` →
+  `hangar_event_listener_reconnects_total`; new `hangar_job_queue_dead`.
+- **Web UI addresses:** `/cluster`, `/settings/system`, `/settings` and
+  `/access?tab=audit` redirect to the new System area, Audit log and settings
+  pages.
+- **APT and RPM groups with proxy members** need the remote's public keys in
+  the proxy's `format.remote_keys`; without them the group answers 400.
+
+### Events and jobs on PostgreSQL
+
+- Cache invalidation and live events use LISTEN/NOTIFY on one dedicated
+  connection per node; after a reconnect every cache resyncs and live
+  streams restart.
+- Jobs (task runs, scans, policy jobs) are claimed from a `jobs` table with
+  `FOR UPDATE SKIP LOCKED` under a lease that long jobs renew; expired leases
+  are reclaimed, failed jobs are retried with backoff and kept as dead for 7
+  days. One job per type at a time per node, as in v0.1.9.
+- APT and RPM reindexing and npm state cleanup are durable, debounced jobs run
+  once per repository: deleting 1,000 packages triggers one reindex, not one
+  per node per package, and nothing is lost when a node restarts.
+- System logs of other nodes are fetched over signed HTTP.
+- `/readyz` "eventbus" reports the listener; System status shows it with job
+  counts.
+
+### New features
+
+- **Webhooks** (Settings › Webhooks, `/api/v1/webhooks`): component
+  published, deleted, quarantined and released, repository created and
+  deleted, and new scan findings, sent as generic JSON, Slack or Microsoft
+  Teams messages. Deliveries are signed (`X-Hangar-Signature`, HMAC-SHA256),
+  retried with backoff for about an hour from a PostgreSQL outbox, can be
+  inspected and redelivered, and a webhook that keeps failing is disabled.
+  URLs follow the outbound address policy of proxy remotes and are
+  write-only; a URL on another host needs the secret again. New privilege
+  `system:webhooks:read|admin`. See [webhooks](guides/webhooks.md).
+- **CI OIDC trusted publishing** (Settings › CI trust,
+  `POST /api/v1/auth/oidc/exchange`): GitHub Actions, GitLab CI and other OIDC
+  issuers trade their ID token for a short-lived token scoped by a trust
+  policy (issuer, audience, claim conditions, service account, scopes,
+  lifetime up to 1 h). Tokens are single-use per ID token, never listed or
+  rotated, and revoked when their policy changes. GitHub and GitLab policies
+  must pin the owner. Managing policies needs `system:settings:admin` and
+  every privilege the policy grants. See [CI OIDC](guides/ci-oidc.md).
+- **Configuration as code**: `hangar apply -f FILE|DIR`, `hangar diff` and
+  `hangar export` manage repositories (every format and type, with routing
+  rules), blob stores, cleanup policies, roles and outbound proxies from YAML
+  over the REST API. Plans are idempotent and ordered by dependency; secrets
+  come from `valueFrom: {env|file}` and are never exported; `--prune` deletes
+  only what the named apply set created or adopted (kept in the new
+  `/resource-labels` API). JSON schema: `api/hangar-config.schema.json`. See
+  [config as code](guides/config-as-code.md).
+- **APT and RPM groups take proxy members.** A remote's packages are listed
+  next to hosted ones under the group's signature after the remote's own
+  signature (InRelease/Release.gpg, repomd.xml.asc) is verified with
+  `format.remote_keys`; quarantine, routing rules and offline members are
+  respected. The web UI has a "Remote signing keys" field.
+
+### Security
+
+- **Secrets bound to their place (`hgs2`)**: a sealed value copied to another
+  row or field can no longer be opened there, closing the replay path that
+  v0.1.9 blocked at the API. Key rotation and the startup sweep upgrade
+  `hgs1` values; see [ADR 0010](adr/0010-context-bound-sealed-secrets.md).
+- **Login and failed-authentication rate limits are cluster-wide** (new
+  `rate_limit_buckets` table), not per node.
+- Repository imports from APT, RPM, Cargo and PyPI sources bound
+  decompression and memory; an oversized index fails the import instead of
+  being read truncated.
+- PyPI proxies hide quarantined cached files past the first 1,000 versions.
+
+### Performance and reliability
+
+- **Search** runs one statement over one match set with a trigram index for
+  substrings: in a 100k-component test, an empty query went from 356 to
+  127 ms and a query with no match from 17 to 0.6 ms.
+- **Blob GC** lists candidates from two partial indexes (a batch went from
+  23–33 ms to under 1 ms).
+- **Audit partitions**: rows that landed in the default partition no longer
+  block creating later months; months older than `audit.retention` are
+  dropped when it is set.
+- **S3**: small reads and writes take one request instead of HEAD plus
+  request; publishing no longer calls storage inside its database
+  transaction, and a blob GC run racing a publish no longer fails it.
+- **Outbound HTTP** no longer takes a global lock per request; the client
+  cache is bounded.
+- System status shows OIDC and LDAP enabled from the web UI.
+
+### Web UI
+
+- **One System area** (`/system`: Status, Nodes, Logs, About) replaces
+  Cluster, System status, System logs and Settings › System; users without
+  cluster access land on About instead of an error. **One Audit log**
+  (`/audit`); the Access page drops its Audit tab. The Settings hub is gone.
+- **Dusk (dark) theme** is readable: every colour comes from tokens checked
+  for WCAG AA in both themes.
+- An empty server's Overview starts with **"Create your first repository"**.
+- Admins of some repositories (e.g. `repo:npm-*:admin`) can create
+  repositories on the default blob store.
+- Vulnerabilities: lighter row actions; the quarantined count is no longer
+  cut off. Search: one search box, examples from your own repositories. New
+  task: errors at each field. Most downloaded keeps npm scopes and Maven
+  groups. Large package trees no longer recompute on every scroll.
+- One dialog, confirmation, filter field, error message and permission check
+  everywhere; the permission check now matches the server exactly.
+- Unhashed static files (login wallpaper, favicon) are revalidated with an
+  ETag.
+- The demo's numbers agree across pages.
+
+### Releases, deployment and docs
+
+- **Signed releases**: both images (every platform), the Helm chart and every
+  release file are signed with cosign (keyless, bound to the release
+  workflow); SPDX SBOMs and SLSA provenance are attached. See
+  [verify a release](deploy/verify-release.md).
+- **Helm chart on OCI**: `helm install hangar
+  oci://ghcr.io/ismoilovdevml/charts/hangar --version 0.2.0`. Pod templates no
+  longer repeat their selector labels (strict parsers such as kubeconform
+  rejected them).
+- The release gate also runs govulncheck, `npm audit`, Trivy on both images
+  and kubeconform on the chart; Dependabot proposes weekly grouped updates.
+- Every exported metric is documented (a test enforces it); the proxy
+  upstream metrics and `hangar_routing_blocked_total` are on the dashboards.
+- Docs: getting started lists all 11 formats and the real write policy
+  default; README compares Hangar with Nexus, Artifactory and Harbor; a code
+  of conduct, issue forms and a pull request template were added.
+
 ## v0.1.9 (2026-11-20)
 
 A security and reliability release. Upgrading is recommended for every

@@ -254,7 +254,7 @@ type S3Storage struct {
 // NATS is the former event bus and job queue section.
 //
 // Deprecated: since v0.2.0 events and jobs go through PostgreSQL (ADR
-// 0010). The keys are still accepted, so existing configuration files and
+// 0011). The keys are still accepted, so existing configuration files and
 // HANGAR_NATS_* variables keep loading, and are ignored; the server logs a
 // warning when any is set (DeprecationWarnings).
 type NATS struct {

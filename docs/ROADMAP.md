@@ -21,25 +21,26 @@ answer 501).
 | v0.1.7 | 2026-11-09 | Routing rules against dependency confusion; cluster operations (job stream replicas, migration lock, `/metrics` authentication); `npm audit` answered for real. |
 | v0.1.8 | 2026-11-15 | Local times across the web UI and many UI fixes; releases run the test suite before publishing. |
 | v0.1.9 | 2026-11-20 | Security and reliability: SSRF through repository proxies, sealed secret replay, NuGet proxy cache poisoning, archive bombs; the chart defaults to the release's images. |
+| v0.2.0 | 2026-11-21 | NATS removed (PostgreSQL events and jobs), webhooks, CI OIDC trusted publishing, `hangar apply`, hgs2 secrets, trigram search, signed releases and the OCI chart. |
 
-## v0.2.0 (in progress)
+## v0.2.0 (2026-11-21)
 
 | Item | Status | Notes |
 |---|---|---|
-| Remove NATS | In progress | Hangar stops depending on NATS JetStream for jobs and events. |
-| Webhooks | In progress | Outgoing notifications of repository events. |
-| CI OIDC token exchange | In progress | CI jobs (GitHub Actions, GitLab CI) exchange their OIDC identity token for a short-lived Hangar token instead of storing one. |
-| Config as code (`hangar apply`) | In progress | Apply configuration from YAML files with a CLI. |
-| `hgs2` sealed secrets | In progress | The next version of the sealed secret format (`hgs1.` today). |
-| Search with `pg_trgm` | In progress | Search backed by PostgreSQL trigram (`pg_trgm`) indexes. |
-| Release supply chain | In progress | cosign signatures, SPDX SBOMs and SLSA provenance for the images, the chart and the release files; the Helm chart on `oci://ghcr.io/ismoilovdevml/charts/hangar`; Trivy, govulncheck and npm audit gate the release ([verify a release](deploy/verify-release.md)). |
+| Remove NATS | Done | Events on PostgreSQL LISTEN/NOTIFY, jobs in a `jobs` table ([ADR 0011](adr/0011-postgresql-events-and-jobs.md)). |
+| Webhooks | Done | Generic JSON, Slack and Teams, HMAC-signed, from a PostgreSQL outbox ([guide](guides/webhooks.md)). |
+| CI OIDC token exchange | Done | GitHub Actions, GitLab CI and other OIDC issuers trade their ID token for a short-lived scoped token ([guide](guides/ci-oidc.md)). |
+| Config as code (`hangar apply`) | Done | `hangar apply`, `diff` and `export` ([guide](guides/config-as-code.md)). |
+| `hgs2` sealed secrets | Done | Sealed values are bound to their row and field ([ADR 0010](adr/0010-context-bound-sealed-secrets.md)). |
+| Search with `pg_trgm` | Done | One statement per search, trigram index for substrings. |
+| Release supply chain | Done | cosign signatures, SPDX SBOMs and SLSA provenance for the images, the chart and the release files; the Helm chart on `oci://ghcr.io/ismoilovdevml/charts/hangar`; Trivy, govulncheck and npm audit gate the release ([verify a release](deploy/verify-release.md)). |
 
 Notes for v0.2.0 items describe the goal; the [changelog](changelog.md)
 describes what actually ships.
 
 | # | Milestone | Done when | Status |
 |---|---|---|---|
-| M0 | Skeleton | Repo layout, Makefile, docker-compose (postgres, minio, nats, trivy), config loading, migrations, `/healthz`, CI pipeline, ADRs for stack choices. | Partial: everything exists; the CI workflow is switched off while development is fast; the release workflow runs the full test suite before it publishes (unless the `RELEASE_SKIP_TESTS` repository variable is `true`). |
+| M0 | Skeleton | Repo layout, Makefile, docker-compose (postgres, minio, trivy), config loading, migrations, `/healthz`, CI pipeline, ADRs for stack choices. | Partial: everything exists; the CI workflow is switched off while development is fast; the release workflow runs the full test suite before it publishes (unless the `RELEASE_SKIP_TESTS` repository variable is `true`). |
 | M1 | Core + first formats | Blob stores (fs, s3) with dedup, repositories (hosted/proxy/group), local auth + tokens + RBAC, audit log; Docker, npm, Maven, Raw pass their e2e checklists. | Done. The S3 driver's conformance tests run against a fake S3 server everywhere and against MinIO in the CI workflow. |
 | M2 | UI v1 | Login, Overview, Repositories, New repository, Package detail, Search, Blob stores match the approved design; live feed via SSE. | Done. The Overview has no recent-publications list, so it fits one screen; live updates arrive over `GET /api/v1/events`. |
 | M3 | Policies & jobs | Scheduler, cleanup policies with preview, compaction, Docker GC, reindex, backup; Tasks and Cleanup screens. | Partial: reindex is planned; backups are the `deploy/scripts/backup.sh` script, not a scheduled task. |

@@ -5,8 +5,8 @@ description: >-
   Go modules, Helm, Cargo, APT, RPM and raw repositories behind one stateless,
   horizontally scalable server.
 type: application
-version: 0.1.9
-appVersion: "0.1.9"
+version: 0.2.0
+appVersion: "0.2.0"
 kubeVersion: ">=1.27.0-0"
 home: https://github.com/ismoilovdevml/hangar
 sources:
