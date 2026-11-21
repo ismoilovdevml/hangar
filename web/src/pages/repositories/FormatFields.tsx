@@ -191,6 +191,31 @@ export function FormatSettings({ form, set, errors, blur }: { form: RepoForm; se
         </div>
       )}
 
+      {keys.includes('remote_keys') && (
+        <div className="field field--wide">
+          <label htmlFor={fieldId('remoteKeys')} className="field__label">
+            Remote signing keys <span className="field__optional">optional</span>
+          </label>
+          <textarea
+            className="input input--mono textarea"
+            rows={5}
+            spellCheck={false}
+            autoComplete="off"
+            placeholder="-----BEGIN PGP PUBLIC KEY BLOCK-----"
+            value={form.remoteKeys}
+            onChange={(e) => set('remoteKeys', e.target.value)}
+            onBlur={blur('remoteKeys')}
+            {...invalidProps('remoteKeys', errors, 'repo-remoteKeys-hint')}
+          />
+          <span id="repo-remoteKeys-hint" className="field__hint">
+            The remote&apos;s ASCII-armored OpenPGP public keys (<code className="inline-code">gpg --export --armor</code>). Needed to use this proxy in a group: the
+            group merges the remote&apos;s metadata only after its {form.format === 'rpm' ? <code className="inline-code">repomd.xml.asc</code> : <code className="inline-code">Release</code>}{' '}
+            signature verifies with one of them
+          </span>
+          <FieldError field="remoteKeys" errors={errors} />
+        </div>
+      )}
+
       {relatedHosts && (
         <div className="field field--wide">
           <label htmlFor={fieldId('relatedHosts')} className="field__label">

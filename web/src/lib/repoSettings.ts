@@ -67,6 +67,7 @@ function formatFields(fmt: Record<string, unknown>): Partial<RepoForm> {
     goSumdbs: strings(fmt.sumdbs) ?? [...GO_DEFAULT_SUMDBS],
     goSumdbVia: fmt.sumdb_via === 'remote' ? 'remote' : 'database',
     cargoDownloadUrl: typeof fmt.download_url === 'string' ? fmt.download_url : '',
+    remoteKeys: (strings(fmt.remote_keys) ?? []).map((k) => k.trim()).join('\n\n'),
   };
 }
 

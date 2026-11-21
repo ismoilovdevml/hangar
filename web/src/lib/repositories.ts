@@ -201,6 +201,8 @@ export interface RepoForm {
   goSumdbVia: SumdbVia;
   /** Cargo proxy: crate download template; empty = the remote's config.json "dl". */
   cargoDownloadUrl: string;
+  /** APT and RPM proxy: the remote's ASCII-armored public keys as pasted (config.format.remote_keys, one entry per block). */
+  remoteKeys: string;
   /** APT and RPM hosted/proxy: the distribution release advisories are checked in (config.scanning.distro); empty = unknown or detected. */
   distro: string;
 }
@@ -223,6 +225,7 @@ export const SIGNED_FORMATS: Format[] = ['apt', 'rpm'];
 export function formatSettingKeys(format: Format | undefined, type: RepositoryType | undefined): string[] {
   if (format === 'apt' && (type === 'hosted' || type === 'group')) return ['architectures', 'signing_key'];
   if (format === 'rpm' && (type === 'hosted' || type === 'group')) return ['repodata_depth', 'signing_key'];
+  if ((format === 'apt' || format === 'rpm') && type === 'proxy') return ['remote_keys'];
   if (format === 'go' && type === 'proxy') return ['sumdbs', 'sumdb_via'];
   if (format === 'cargo' && type === 'proxy') return ['download_url'];
   return [];
@@ -307,6 +310,7 @@ export function initialRepoForm(format?: Format, type?: RepositoryType): RepoFor
     goSumdbs: [...GO_DEFAULT_SUMDBS],
     goSumdbVia: 'database',
     cargoDownloadUrl: '',
+    remoteKeys: '',
     distro: '',
   };
 }
@@ -338,6 +342,7 @@ export type RepoFormField =
   | 'rpmRepodataDepth'
   | 'goSumdbs'
   | 'cargoDownloadUrl'
+  | 'remoteKeys'
   | 'distro';
 
 export type RepoFormErrors = Partial<Record<RepoFormField, string>>;
@@ -485,6 +490,10 @@ export function validateRepoForm(
   if (keys.includes('download_url') && f.cargoDownloadUrl.trim() && !validDownloadTemplate(f.cargoDownloadUrl.trim())) {
     e.cargoDownloadUrl = 'Use an absolute http:// or https:// address.';
   }
+  if (keys.includes('remote_keys')) {
+    const msg = remoteKeysError(f.remoteKeys);
+    if (msg) e.remoteKeys = msg;
+  }
 
   if (hasDistroSetting(f.format, f.type)) {
     const msg = distroError(f.format, f.distro.trim());
@@ -519,7 +528,33 @@ export function formatSettings(f: RepoForm): Record<string, unknown> {
   if (keys.includes('sumdbs') && JSON.stringify(f.goSumdbs) !== JSON.stringify(GO_DEFAULT_SUMDBS)) out.sumdbs = [...f.goSumdbs];
   if (keys.includes('sumdb_via') && f.goSumdbVia === 'remote') out.sumdb_via = 'remote';
   if (keys.includes('download_url') && f.cargoDownloadUrl.trim()) out.download_url = f.cargoDownloadUrl.trim();
+  if (keys.includes('remote_keys')) {
+    const blocks = armoredKeyBlocks(f.remoteKeys).blocks;
+    if (blocks.length) out.remote_keys = blocks;
+  }
   return out;
+}
+
+const ARMORED_PUBLIC_KEY = /-----BEGIN PGP PUBLIC KEY BLOCK-----[\s\S]*?-----END PGP PUBLIC KEY BLOCK-----/g;
+
+/**
+ * The ASCII-armored public key blocks in pasted text, each one entry of
+ * remote_keys (a block may hold several keys, as `gpg --export --armor`
+ * writes a keyring), and whether anything but blank space lies outside them.
+ */
+export function armoredKeyBlocks(text: string): { blocks: string[]; stray: boolean } {
+  const blocks = [...text.matchAll(ARMORED_PUBLIC_KEY)].map((m) => m[0]);
+  const stray = text.replace(ARMORED_PUBLIC_KEY, '').trim() !== '';
+  return { blocks, stray };
+}
+
+/** What is wrong with pasted remote keys; null when they are empty or look like armored public keys. */
+export function remoteKeysError(text: string): string | null {
+  if (!text.trim()) return null;
+  if (/-----BEGIN PGP PRIVATE KEY BLOCK-----/.test(text)) return 'This is a private key. Paste the remote’s public keys only.';
+  const { blocks, stray } = armoredKeyBlocks(text);
+  if (blocks.length === 0 || stray) return 'Paste ASCII-armored public keys (-----BEGIN PGP PUBLIC KEY BLOCK----- … -----END PGP PUBLIC KEY BLOCK-----), as gpg --export --armor writes them.';
+  return null;
 }
 
 /** The request body for POST /repositories. Secrets are included; never log it. */
