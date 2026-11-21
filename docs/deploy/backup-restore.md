@@ -10,9 +10,8 @@ A Hangar installation is three things; back up all of them:
 
 Without `HANGAR_SECRET_KEY` a restored database still serves every artifact,
 but credentials it stores (proxy upstream passwords and tokens, S3 keys of
-extra blob stores) cannot be decrypted and must be entered again. Embedded
-NATS state is not needed: it only holds queued jobs, which the scheduler
-recreates.
+extra blob stores) cannot be decrypted and must be entered again. The job queue
+is part of the database dump.
 
 ## Why dump first, then copy blobs
 

@@ -16,14 +16,14 @@ named) or **planned** (not implemented; API operations for it are marked
 | M3 | Policies & jobs | Scheduler, cleanup policies with preview, compaction, Docker GC, reindex, backup; Tasks and Cleanup screens. | Partial: reindex is planned; backups are the `deploy/scripts/backup.sh` script, not a scheduled task. |
 | M4 | Security | Trivy scanning, findings, waivers, quarantine, cosign verification, licence policy; OIDC, LDAP, SAML; Access & audit and Vulnerabilities screens. | Partial: cosign verification, licence policy and SAML are planned. |
 | M5 | More formats | e2e green for each. | Done: Go, Helm (classic and OCI), NuGet, PyPI, Cargo, APT and RPM, 11 formats in all. |
-| M6 | HA & replication | Multi-node with leader lock, local cache, edge replication via NATS, Cluster screen, Helm chart, load test (k6) 5k req/s. | Partial: multi-node with a leader lock and the Helm chart are done; the on-disk blob cache, edge replication and the Cluster screen are planned; the measured load is about 1 100 req/s on one node (mixed traffic, a laptop), see [performance](operations/performance.md). |
+| M6 | HA & replication | Multi-node with leader lock, local cache, edge replication, Cluster screen, Helm chart, load test (k6) 5k req/s. | Partial: multi-node with a leader lock and the Helm chart are done; the on-disk blob cache, edge replication and the Cluster screen are planned; the measured load is about 1 100 req/s on one node (mixed traffic, a laptop), see [performance](operations/performance.md). |
 | M7 | Long tail | e2e green; dark "dusk" theme; Terraform provider. | Planned: the dusk colour tokens exist but are not wired to a switch or to `prefers-color-scheme`; no Terraform provider. |
 
 ## Item by item
 
 | Item | Status | Notes |
 |---|---|---|
-| Multi-node (HA) | Done | Stateless nodes, PostgreSQL advisory-lock leader, NATS job queue; [high availability](deploy/high-availability.md). |
+| Multi-node (HA) | Done | Stateless nodes, PostgreSQL advisory-lock leader, job queue and events in PostgreSQL; [high availability](deploy/high-availability.md). |
 | Edge replication | Planned | `/api/v1/replication/targets` answers 501; the Cluster screen is a placeholder. |
 | On-disk blob cache per node | Planned | Nodes keep only in-memory caches today. |
 | Image scanning (Trivy) | Done | Optional scan adapter; [vulnerabilities](guides/vulnerabilities.md). |

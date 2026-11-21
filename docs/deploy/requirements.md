@@ -4,10 +4,9 @@
 
 | Component | Required | Notes |
 |---|---|---|
-| Hangar | yes | One static binary (`linux/amd64`, `linux/arm64`) or the container image `ghcr.io/ismoilovdevml/hangar` (distroless, runs as UID 65532). Stateless apart from the embedded NATS and filesystem blob options. |
-| PostgreSQL | yes | Version 16 or newer. Holds repositories, components, assets, users, tokens, audit log, task state. Hangar applies its own schema migrations. |
+| Hangar | yes | One static binary (`linux/amd64`, `linux/arm64`) or the container image `ghcr.io/ismoilovdevml/hangar` (distroless, runs as UID 65532). Stateless apart from the filesystem blob option. |
+| PostgreSQL | yes | Version 16 or newer. Holds repositories, components, assets, users, tokens, audit log, task state, the job queue, and carries the events between nodes (LISTEN/NOTIFY: needs session-mode connections, not PgBouncer transaction pooling). Hangar applies its own schema migrations. |
 | Blob storage | yes | **S3-compatible** (AWS S3, MinIO, Ceph RGW, ...) or a **filesystem path**. Blobs are content-addressed and immutable. Several nodes need S3 or a shared ReadWriteMany volume. |
-| NATS with JetStream | yes | Events and the job queue. Embedded in the process for a single node; an external cluster (3 nodes) for several nodes. |
 | Reverse proxy / ingress | for TLS | Hangar serves plain HTTP. Terminate TLS in Caddy, Traefik, a cloud load balancer or an ingress controller. |
 | OSV API (`api.osv.dev:443`) or a mirror | no | Vulnerability scanning of npm, Maven, PyPI, NuGet and Go packages (`scanning.osv.url`); without it scans fail and are retried. |
 | Trivy server and the scan adapter | no | Container image scanning (`scanner.trivy_url`, `install.sh --with-trivy`, Helm `imageScanning`). The Trivy server downloads its database from `mirror.gcr.io:443` (or `ghcr.io`) through `HTTPS_PROXY`; about 1 GiB of disk and 2 GiB of memory. Without it images show *Image scanning not configured*. |
@@ -66,7 +65,6 @@ What drives each resource:
   `storage.gc.grace_period` (48h) before deleting them.
 - **Disk for filesystem blobs**: local SSD or NFS. Each write is fsynced, so
   flush latency bounds publish throughput.
-- **Embedded NATS**: a few hundred MiB of disk under `nats.data_dir`.
 
 ## Network
 
@@ -77,7 +75,7 @@ What drives each resource:
 | Docker clients | Hangar | per connector | only for Docker port connectors (`connector.http_port`) |
 | Hangar | PostgreSQL | 5432 | |
 | Hangar | S3 endpoint | 443 / 9000 | blob storage |
-| Hangar | NATS | 4222 | external NATS only |
+| Hangar | Hangar | 8080 (`server.node_url`) | several nodes: System logs of other nodes (signed requests) |
 | Hangar | Internet or corporate proxy | 443 | proxy repositories (Maven Central, npmjs, Docker Hub, PyPI, nuget.org) |
 | Prometheus | Hangar | 8080 `/metrics` | scraping; keep `/metrics` off public hosts |
 
