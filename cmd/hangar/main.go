@@ -3,10 +3,14 @@
 //	hangar serve   [--config hangar.yaml] [--migrate]
 //	hangar migrate [--config hangar.yaml] up|down|status|version
 //	hangar admin   bootstrap | reset-password | token create ...
+//	hangar apply   -f FILE|DIR --server URL [--prune --apply-set NAME] [--dry-run]
+//	hangar diff    -f FILE|DIR --server URL
+//	hangar export  --server URL
 //	hangar version [--json]
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -29,10 +33,17 @@ Usage:
   hangar admin   token create --user NAME --name LABEL --scopes LIST [--expires 90d]
                                                     create a personal access token
   hangar admin   rotate-secrets [--dry-run]        re-encrypt stored secrets with security.secret_key
+  hangar apply   -f FILE|DIR [--dry-run] [--prune --apply-set NAME] --server URL
+                                                    make a server match resource documents
+  hangar diff    -f FILE|DIR --server URL           print what apply would change
+                                                    (exit 0 no changes, 2 changes, 1 error)
+  hangar export  [--kind LIST] --server URL        write the server's configuration as documents
   hangar version [--json]                           print build information
 
 Configuration is read from --config (or $HANGAR_CONFIG) and HANGAR_* environment
-variables; see hangar.example.yaml.
+variables; see hangar.example.yaml. apply, diff and export talk to a running
+server over the REST API and read the token from $HANGAR_TOKEN or --token-file;
+see docs/guides/config-as-code.md.
 `
 
 func main() {
@@ -52,6 +63,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		err = adminCmd(args[1:], stdin, stdout, stderr)
 	case "migrate":
 		err = migrateCmd(args[1:], stdout, stderr)
+	case "apply", "diff", "export":
+		err = cacCommand(context.Background(), args[0], args[1:], stdin, stdout, stderr)
 	case "version", "--version", "-v":
 		err = versionCmd(args[1:], stdout)
 	case "help", "-h", "--help":
@@ -63,6 +76,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	if errors.Is(err, flag.ErrHelp) {
 		return 0
+	}
+	if code, ok := errors.AsType[exitCode](err); ok {
+		return int(code)
 	}
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "hangar %s: %v\n", args[0], err)
