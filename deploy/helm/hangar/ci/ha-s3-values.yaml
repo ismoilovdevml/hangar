@@ -1,5 +1,6 @@
-# Highly available: 3 replicas, bundled 3-node NATS, S3 via existing secrets,
-# ingress-nginx with a separate registry host, monitoring and network policies.
+# Highly available: 3 replicas, S3 via existing secrets, ingress-nginx with a
+# separate registry host, monitoring and network policies (pod-to-pod System
+# logs included).
 replicaCount: 3
 config:
   server:

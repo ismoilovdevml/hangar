@@ -49,30 +49,6 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       enableServiceLinks: false
-      {{- if eq .Values.nats.mode "bundled" }}
-      initContainers:
-        # On a fresh install NATS starts together with Hangar; wait for a
-        # healthy JetStream instead of crash-looping until it is up.
-        - name: wait-for-nats
-          image: {{ include "hangar.image" . }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command:
-            - /usr/local/bin/hangar-healthcheck
-            - -url
-            - http://{{ include "hangar.natsName" . }}.{{ .Release.Namespace }}.svc:8222/healthz
-            - -wait
-            - 10m
-            - -interval
-            - 3s
-          resources:
-            requests:
-              cpu: 10m
-              memory: 16Mi
-            limits:
-              memory: 64Mi
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
-      {{- end }}
       containers:
         - name: hangar
           image: {{ include "hangar.image" . }}
@@ -90,6 +66,16 @@ spec:
           env:
             - name: HANGAR_CONFIG
               value: /etc/hangar/hangar.yaml
+            {{- if not (dig "server" "node_url" "" .Values.config) }}
+            # Where the other pods read this pod's System logs (signed HTTP
+            # to /internal/v1/system/logs on the http port).
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: HANGAR_SERVER_NODE_URL
+              value: "http://$(POD_IP):8080"
+            {{- end }}
             - name: HANGAR_DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -161,21 +147,6 @@ spec:
                   name: {{ .Values.metrics.auth.existingSecret }}
                   key: {{ .Values.metrics.auth.passwordKey }}
             {{- end }}
-            {{- if eq .Values.nats.mode "bundled" }}
-            - name: NATS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "hangar.natsPasswordSecret" . }}
-                  key: {{ .Values.nats.bundled.existingSecretKey }}
-            - name: HANGAR_NATS_URL
-              value: "nats://hangar:$(NATS_PASSWORD)@{{ include "hangar.natsName" . }}.{{ .Release.Namespace }}.svc:4222"
-            {{- else if eq .Values.nats.mode "external" }}
-            - name: HANGAR_NATS_URL
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "hangar.natsExternalSecret" . }}
-                  key: {{ .Values.nats.external.existingSecretKey }}
-            {{- end }}
             {{- if .Values.imageScanning.enabled }}
             # Image scanning: the Trivy server, the scan adapter, and this
             # Service as the registry the adapter pulls from.
@@ -242,7 +213,7 @@ spec:
           persistentVolumeClaim:
             claimName: {{ .Values.storage.fs.persistence.existingClaim | default (printf "%s-data" (include "hangar.fullname" .)) }}
           {{- else }}
-          # Embedded NATS state only (S3 holds the blobs).
+          # Scratch space only (S3 holds the blobs).
           emptyDir:
             sizeLimit: 2Gi
           {{- end }}

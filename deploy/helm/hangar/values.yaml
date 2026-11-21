@@ -24,16 +24,21 @@ fullnameOverride: ""
 commonLabels: {}
 
 # Hangar is stateless: run two or more replicas for availability. More than
-# one replica needs nats.mode=bundled or external, and S3 storage or a
-# ReadWriteMany volume for storage.kind=fs.
+# one replica needs S3 storage or a ReadWriteMany volume for storage.kind=fs.
+# Nodes share events and the job queue through PostgreSQL, and each pod holds
+# one long-lived database session for them: a PgBouncer in front of the
+# database must use session pooling (docs/deploy/high-availability.md).
 replicaCount: 2
 
 # hangar.yaml, rendered into a ConfigMap. Every key is documented in
 # hangar.example.yaml at the repository root. The chart manages these keys
 # itself and overrides them: server.addr, database.url,
-# database.migrate_on_start, storage.kind/fs/s3, nats, docker.token_key,
+# database.migrate_on_start, storage.kind/fs/s3, docker.token_key,
 # bootstrap.* and the metrics credentials (metrics.auth, bearer_token*,
 # username, password*; see the sections below). Secrets never go here.
+# server.node_url defaults to each pod's own address (http://<pod IP>:8080),
+# which the other pods use to read its System logs; set it only for a single
+# replica that must be reached another way.
 config:
   server:
     # External URL clients use (required), e.g. https://hangar.example.com.
@@ -219,53 +224,6 @@ migrations:
         memory: 128Mi
       limits:
         memory: 512Mi
-
-# Event bus and job queue.
-#   bundled   a NATS JetStream cluster deployed by this chart (multi-replica)
-#   external  your NATS cluster (JetStream enabled)
-#   embedded  inside the hangar process (replicaCount 1 only)
-nats:
-  mode: bundled
-  # Replicas of Hangar's JetStream streams (the job queue), 1 to 5. 0 picks
-  # nats.bundled.replicas for bundled and 1 for external and embedded. Use 3
-  # on a 3-node cluster so queued jobs survive the loss of one NATS server.
-  # Changing it scales the existing stream when the pods restart.
-  streamReplicas: 0
-  external:
-    # nats://user:password@nats.messaging.svc:4222 (stored in the chart's Secret).
-    url: ""
-    existingSecret: ""
-    existingSecretKey: nats-url
-  bundled:
-    replicas: 3
-    image:
-      repository: nats
-      tag: 2.15.2-alpine
-      pullPolicy: IfNotPresent
-    # Client password for user "hangar" (letters and digits only). Generated
-    # and kept across upgrades when empty; see the GitOps note above.
-    password: ""
-    existingSecret: ""
-    existingSecretKey: nats-password
-    jetstream:
-      maxMemoryStore: 256MB
-      maxFileStore: 8GB
-    persistence:
-      storageClass: ""
-      size: 10Gi
-    resources:
-      requests:
-        cpu: 100m
-        memory: 256Mi
-      limits:
-        memory: 1Gi
-    podDisruptionBudget:
-      enabled: true
-      maxUnavailable: 1
-    nodeSelector: {}
-    tolerations: []
-    affinity: {}
-    priorityClassName: ""
 
 # Container image scanning with Trivy (docs/guides/vulnerabilities.md): a
 # Trivy server holding the vulnerability database and Hangar's scan adapter
@@ -490,10 +448,12 @@ networkPolicy:
   enabled: false
   # Peers allowed to reach Hangar's HTTP port (NetworkPolicyPeer list), e.g.
   # the ingress controller namespace and Prometheus. Empty allows any source.
+  # The other Hangar pods are always allowed (System logs).
   ingressFrom: []
   egress:
-    # Restrict egress to DNS, the bundled NATS and `to`. Proxy repositories
-    # need their remotes (or the corporate proxy) listed here.
+    # Restrict egress to DNS, the other Hangar pods (System logs) and `to`.
+    # List PostgreSQL and the blob store here; proxy repositories need their
+    # remotes (or the corporate proxy) too.
     enabled: false
     to: []
     #  - to: [{ipBlock: {cidr: 10.20.0.0/16}}]
