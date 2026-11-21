@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
@@ -21,6 +21,12 @@ const (
 	SortDownloads   = "-downloads"
 	SortPublishedAt = "-published_at"
 )
+
+// MaxOffset is the deepest position a search pages to: a page that reaches
+// it has no next_cursor, and a cursor beyond it is refused. Every page
+// computes the whole match set for the total and the facets anyway; deeper
+// pages only add sorting work, and a narrower query is the way to them.
+const MaxOffset = 10_000
 
 // Query is one search request.
 type Query struct {
@@ -83,20 +89,50 @@ func New(pool *pgxpool.Pool) *Service {
 	return &Service{pool: pool, now: time.Now}
 }
 
+// TrigramIndexName is the pg_trgm index over the package coordinates that
+// serves substring matches (migration 00320).
+const TrigramIndexName = "components_coordinates_trgm_idx"
+
+// WarnIfNoTrigramIndex logs a warning when the trigram index is missing:
+// migration 00320 skips it when extension pg_trgm cannot be created, and
+// search then reads every component for substring matches. A failed check
+// is logged too; neither stops the server.
+func WarnIfNoTrigramIndex(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) {
+	var ok bool
+	if err := pool.QueryRow(ctx, `SELECT to_regclass($1) IS NOT NULL`, TrigramIndexName).Scan(&ok); err != nil {
+		log.Warn("search: cannot check for the trigram index", "index", TrigramIndexName, "error", err)
+		return
+	}
+	if !ok {
+		log.Warn("search: the trigram index is missing, so substring search reads every component; "+
+			"have a database administrator run CREATE EXTENSION pg_trgm, then SELECT hangar_search_trgm()",
+			"index", TrigramIndexName)
+	}
+}
+
 // ScanStateSQL is the SQL expression for a component's scan state given
 // the components alias c: quarantined wins, then any open or assigned
 // finding; components of formats without an advisory source, and those
 // the scanner found it cannot scan (a Helm chart in a docker repository),
 // are unsupported; otherwise the last scan decides (clean or failed), and a
-// component never scanned is pending.
+// component never scanned is pending. It suits queries that return a page
+// of rows; Search, which classifies every match, joins the tables instead.
 func ScanStateSQL(c string) string {
+	return scanState(c,
+		`EXISTS (SELECT 1 FROM repositories sr WHERE sr.id = `+c+`.repo_id AND `+scanning.ScannableSQL("sr")+`)`,
+		`(SELECT ss.status FROM component_scans ss WHERE ss.component_id = `+c+`.id)`)
+}
+
+// scanState is the CASE behind ScanStateSQL, over an expression for
+// whether the component's repository is scanned and one for its
+// component_scans status (NULL when never scanned). The status expression
+// appears once, so a subquery there runs once per row, not once per branch.
+func scanState(c, scannable, scanStatus string) string {
 	return `CASE WHEN ` + c + `.quarantined THEN 'quarantined'
 		WHEN EXISTS (SELECT 1 FROM findings sf WHERE sf.component_id = ` + c + `.id AND sf.status IN ('open', 'assigned')) THEN 'findings'
-		WHEN NOT EXISTS (SELECT 1 FROM repositories sr WHERE sr.id = ` + c + `.repo_id AND ` + scanning.ScannableSQL("sr") + `) THEN 'unsupported'
-		WHEN (SELECT ss.status FROM component_scans ss WHERE ss.component_id = ` + c + `.id) = 'unsupported' THEN 'unsupported'
-		WHEN (SELECT ss.status FROM component_scans ss WHERE ss.component_id = ` + c + `.id) = 'ok' THEN 'clean'
-		WHEN (SELECT ss.status FROM component_scans ss WHERE ss.component_id = ` + c + `.id) = 'failed' THEN 'failed'
-		ELSE 'pending' END`
+		WHEN NOT ` + scannable + ` THEN 'unsupported'
+		ELSE COALESCE(CASE ` + scanStatus + ` WHEN 'unsupported' THEN 'unsupported' WHEN 'ok' THEN 'clean' WHEN 'failed' THEN 'failed' END,
+			'pending') END`
 }
 
 type builder struct{ args []any }
@@ -106,18 +142,45 @@ func (b *builder) arg(v any) string {
 	return "$" + strconv.Itoa(len(b.args))
 }
 
-// facet dimensions, also used to skip a facet's own filter.
+// Facet dimensions. Each facet leaves out its own dimension's filter.
 const (
-	dimNone       = ""
 	dimFormat     = "format"
 	dimRepository = "repository"
 	dimSecurity   = "security"
 )
 
-// matchCTE builds "WITH m AS (...), g AS (...)" for p, leaving out the
-// filter of dimension skip.
-func (s *Service) matchCTE(b *builder, p Parsed, q Query, skip string) string {
-	state := ScanStateSQL("c")
+// facetDims lists the facets in the order of their result rows.
+var facetDims = []string{dimFormat, dimSecurity, dimRepository}
+
+// filters are the conditions of the facet dimensions over the columns of
+// m, "true" for a dimension the query does not filter on.
+type filters map[string]string
+
+// others is the conjunction of every filter except skip's.
+func (f filters) others(skip string) string {
+	var out []string
+	for _, d := range facetDims {
+		if d != skip {
+			out = append(out, f[d])
+		}
+	}
+	return strings.Join(out, " AND ")
+}
+
+// matchSQL builds "WITH m AS (...), g AS (...) " for p and returns it with
+// the facet dimensions' filters over the columns of m.
+//
+// m holds every matching version with its scan state, computed once,
+// leaving out the format, repository and security filters: each facet
+// needs the matches without its own filter, so the page, the total and all
+// facets are computed from this one set instead of matching again per
+// facet. PostgreSQL materializes m when a filtered facet reads it besides
+// g, and otherwise folds it into g, where the scan of
+// (repo_id, namespace, name, version) already arrives grouped by package.
+// g is one row per package (repository, namespace, name) with a version
+// that passes every filter, represented by its newest such version; its
+// window is ordered like DISTINCT ON, so one sort serves both.
+func (s *Service) matchSQL(b *builder, p Parsed, q Query) (string, filters) {
 	var where []string
 	if q.RepoIDs != nil {
 		where = append(where, "c.repo_id = ANY("+b.arg(q.RepoIDs)+"::uuid[])")
@@ -136,14 +199,15 @@ func (s *Service) matchCTE(b *builder, p Parsed, q Query, skip string) string {
 		score = "(CASE WHEN lower(c.name) = " + text + " OR lower(c.namespace || '/' || c.name) = " + text + " THEN 3" +
 			" WHEN lower(c.name) LIKE " + b.arg(likeEscape(p.Text)+"%") + ` ESCAPE '\' THEN 2 ELSE 0 END + ` + score + ")"
 	}
-	if len(p.Formats) > 0 && skip != dimFormat {
-		where = append(where, "r.format = ANY("+b.arg(p.Formats)+"::text[])")
+	f := filters{dimFormat: "true", dimRepository: "true", dimSecurity: "true"}
+	if len(p.Formats) > 0 {
+		f[dimFormat] = "format = ANY(" + b.arg(p.Formats) + "::text[])"
 	}
-	if len(p.Repos) > 0 && skip != dimRepository {
-		where = append(where, "r.name = ANY("+b.arg(p.Repos)+"::text[])")
+	if len(p.Repos) > 0 {
+		f[dimRepository] = "repo = ANY(" + b.arg(p.Repos) + "::text[])"
 	}
-	if len(p.Security) > 0 && skip != dimSecurity {
-		where = append(where, "("+state+") = ANY("+b.arg(p.Security)+"::text[])")
+	if len(p.Security) > 0 {
+		f[dimSecurity] = "security = ANY(" + b.arg(p.Security) + "::text[])"
 	}
 	if len(p.SHA256) > 0 {
 		pats := make([]string, len(p.SHA256))
@@ -181,19 +245,55 @@ func (s *Service) matchCTE(b *builder, p Parsed, q Query, skip string) string {
 	if len(where) > 0 {
 		w = " WHERE " + strings.Join(where, " AND ")
 	}
+	// Whether a repository is scanned is decided once per repository, and
+	// component_scans is joined rather than looked up per row and branch.
 	return `WITH m AS (
 	SELECT c.id, c.repo_id, r.name AS repo, r.format, c.namespace, c.name, c.version, c.created_at,
-		c.download_count, (` + state + `) AS security, ` + score + ` AS score
-	FROM components c JOIN repositories r ON r.id = c.repo_id` + w + `
+		c.download_count, (` + scanState("c", "r.scannable", "cs.status") + `) AS security, ` + score + ` AS score
+	FROM components c
+	JOIN (SELECT r.id, r.name, r.format, ` + scanning.ScannableSQL("r") + ` AS scannable FROM repositories r) r ON r.id = c.repo_id
+	LEFT JOIN component_scans cs ON cs.component_id = c.id` + w + `
 ), g AS (
 	SELECT DISTINCT ON (repo_id, namespace, name) id, repo, format, namespace, name, version, created_at, security,
 		count(*) OVER w AS versions, sum(download_count) OVER w AS downloads, max(score) OVER w AS score
-	FROM m WINDOW w AS (PARTITION BY repo_id, namespace, name)
+	FROM m WHERE ` + f.others("") + `
+	WINDOW w AS (PARTITION BY repo_id, namespace, name ORDER BY created_at DESC, id DESC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
 	ORDER BY repo_id, namespace, name, created_at DESC, id DESC
-) `
+) `, f
 }
 
-// Search runs q.
+// facetSQL selects the buckets (value, n) of facet d. A dimension the query
+// does not filter on counts the packages of g. A filtered one counts the
+// packages matching every other filter: format and repository are the same
+// for every version of a package, so a package counts when any of its
+// versions passes; its security state is that of its newest version.
+func facetSQL(d string, p Parsed, f filters) string {
+	if !filtered(p, d) {
+		return `SELECT ` + facetColumn[d] + `, count(*) FROM g GROUP BY 1`
+	}
+	switch d {
+	case dimSecurity:
+		return `SELECT security, count(*) FROM (SELECT DISTINCT ON (repo_id, namespace, name) security FROM m
+		WHERE ` + f.others(d) + ` ORDER BY repo_id, namespace, name, created_at DESC, id DESC) s GROUP BY 1`
+	default:
+		col := facetColumn[d]
+		return `SELECT ` + col + `, count(*) FROM (SELECT DISTINCT repo_id, namespace, name, ` + col + ` FROM m
+		WHERE ` + f.others(d) + `) s GROUP BY 1`
+	}
+}
+
+// Kinds of result row of the search statement, in output order.
+const (
+	rowHit = iota
+	rowTotal
+	rowFacet // + index in facetDims
+)
+
+// maxFacetValues is the number of buckets returned per facet.
+const maxFacetValues = 50
+
+// Search runs q. The page, the total and the facets come from one
+// statement over one materialized match set.
 func (s *Service) Search(ctx context.Context, q Query) (*Result, error) {
 	p, err := Parse(q.Q)
 	if err != nil {
@@ -216,98 +316,69 @@ func (s *Service) Search(ctx context.Context, q Query) (*Result, error) {
 	}
 	limit := core.ClampLimit(q.Limit)
 
-	batch := &pgx.Batch{}
-	main := &builder{}
-	sql := s.matchCTE(main, p, q, dimNone) +
-		`SELECT id::text, repo, format, namespace, name, version, created_at, security, versions, downloads
-		FROM g ORDER BY ` + order + ` LIMIT ` + main.arg(limit+1) + ` OFFSET ` + main.arg(offset)
-	batch.Queue(sql, main.args...)
-	// The total and the facets of every dimension the query does not filter
-	// on come from the same matches: one statement counts them all. A
-	// filtered dimension's facet leaves its own filter out, so it needs its
-	// own statement.
-	dims := []string{dimFormat, dimSecurity, dimRepository}
-	var shared, separate []string
-	for _, d := range dims {
-		if filtered(p, d) {
-			separate = append(separate, d)
-		} else {
-			shared = append(shared, d)
-		}
+	b := &builder{}
+	with, f := s.matchSQL(b, p, q)
+	// Hit rows fill the hit columns, the total and facet rows a value and a
+	// count; (kind, ord) orders the rows of each kind through the UNION.
+	var sql strings.Builder
+	sql.WriteString(with + `SELECT * FROM (SELECT ` + strconv.Itoa(rowHit) + ` AS kind, row_number() OVER (ORDER BY ` + order + `) AS ord,
+		id::text, repo, format, namespace, name, version, created_at, security, versions, downloads,
+		NULL::text AS value, NULL::bigint AS n
+	FROM g ORDER BY ` + order + ` LIMIT ` + b.arg(limit+1) + ` OFFSET ` + b.arg(offset) + `) h
+	UNION ALL SELECT ` + strconv.Itoa(rowTotal) + `, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, count(*) FROM g`)
+	for i, d := range facetDims {
+		fmt.Fprintf(&sql, `
+	UNION ALL (SELECT %d, row_number() OVER (ORDER BY n DESC, value), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, value, n
+		FROM (%s) f%d(value, n) ORDER BY n DESC, value LIMIT %d)`, rowFacet+i, facetSQL(d, p, f), i, maxFacetValues)
 	}
-	total := &builder{}
-	agg := `SELECT 0 AS dim, ''::text AS value, count(*) AS n FROM g`
-	for i, d := range shared {
-		agg += fmt.Sprintf(` UNION ALL (SELECT %d, %s, count(*) FROM g GROUP BY 2 ORDER BY 3 DESC, 2 LIMIT 50)`, i+1, facetColumn[d])
-	}
-	batch.Queue(s.matchCTE(total, p, q, dimNone)+agg+` ORDER BY 1, 3 DESC, 2`, total.args...)
-	for _, d := range separate {
-		fb := &builder{}
-		batch.Queue(s.matchCTE(fb, p, q, d)+`SELECT `+facetColumn[d]+`, count(*) FROM g GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 50`, fb.args...)
-	}
+	sql.WriteString(`
+	ORDER BY 1, 2`)
 
-	br := s.pool.SendBatch(ctx, batch)
-	defer func() { _ = br.Close() }()
-
-	res := &Result{Items: []Hit{}}
-	rows, err := br.Query()
+	rows, err := s.pool.Query(ctx, sql.String(), b.args...)
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)
 	}
+	defer rows.Close()
+	res := &Result{Items: []Hit{}}
+	facets := make([][]FacetValue, len(facetDims))
 	for rows.Next() {
-		var h Hit
-		if err := rows.Scan(&h.ComponentID, &h.Repository, &h.Format, &h.Namespace, &h.Name, &h.Version,
-			&h.PublishedAt, &h.Security, &h.Versions, &h.Downloads); err != nil {
-			rows.Close()
+		var (
+			kind, ord                                                   int
+			id, repo, format, namespace, name, version, security, value *string
+			publishedAt                                                 *time.Time
+			versions, count                                             *int
+			downloads                                                   *int64
+		)
+		if err := rows.Scan(&kind, &ord, &id, &repo, &format, &namespace, &name, &version, &publishedAt, &security,
+			&versions, &downloads, &value, &count); err != nil {
 			return nil, fmt.Errorf("search: scan: %w", err)
 		}
-		h.PublishedAt = h.PublishedAt.UTC()
-		h.Coordinates = Coordinates(h.Format, h.Namespace, h.Name, h.Version)
-		res.Items = append(res.Items, h)
+		switch {
+		case kind == rowHit:
+			h := Hit{ComponentID: *id, Repository: *repo, Format: *format, Namespace: *namespace, Name: *name,
+				Version: *version, PublishedAt: publishedAt.UTC(), Security: *security, Versions: *versions, Downloads: *downloads}
+			h.Coordinates = Coordinates(h.Format, h.Namespace, h.Name, h.Version)
+			res.Items = append(res.Items, h)
+		case kind == rowTotal:
+			res.Total = *count
+		case kind >= rowFacet && kind < rowFacet+len(facetDims):
+			facets[kind-rowFacet] = append(facets[kind-rowFacet], FacetValue{Value: *value, Count: *count})
+		}
 	}
-	rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("search: %w", err)
 	}
 	if len(res.Items) > limit {
 		res.Items = res.Items[:limit]
-		res.NextCursor = encodeOffset(offset + limit)
-	}
-	facets := map[string][]FacetValue{}
-	rows, err = br.Query()
-	if err != nil {
-		return nil, fmt.Errorf("search: count: %w", err)
-	}
-	for rows.Next() {
-		var dim int
-		var f FacetValue
-		if err := rows.Scan(&dim, &f.Value, &f.Count); err != nil {
-			rows.Close()
-			return nil, fmt.Errorf("search: count: %w", err)
-		}
-		if dim == 0 {
-			res.Total = f.Count
-		} else {
-			facets[shared[dim-1]] = append(facets[shared[dim-1]], f)
+		if offset+limit < MaxOffset {
+			res.NextCursor = encodeOffset(offset + limit)
 		}
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("search: count: %w", err)
-	}
-	for _, d := range separate {
-		vals, err := facetRows(br)
-		if err != nil {
-			return nil, err
-		}
-		facets[d] = vals
-	}
-	res.Facets = Facets{Format: orEmpty(facets[dimFormat]), Security: orEmpty(facets[dimSecurity]),
-		Repository: orEmpty(facets[dimRepository])}
+	res.Facets = Facets{Format: orEmpty(facets[0]), Security: orEmpty(facets[1]), Repository: orEmpty(facets[2])}
 	return res, nil
 }
 
-// facetColumn is the column of g each facet counts.
+// facetColumn is the column of g and m each facet counts.
 var facetColumn = map[string]string{dimFormat: "format", dimSecurity: "security", dimRepository: "repo"}
 
 // filtered reports whether p filters on dimension d.
@@ -329,26 +400,6 @@ func orEmpty(v []FacetValue) []FacetValue {
 	return v
 }
 
-func facetRows(br pgx.BatchResults) ([]FacetValue, error) {
-	rows, err := br.Query()
-	if err != nil {
-		return nil, fmt.Errorf("search: facets: %w", err)
-	}
-	defer rows.Close()
-	out := []FacetValue{}
-	for rows.Next() {
-		var f FacetValue
-		if err := rows.Scan(&f.Value, &f.Count); err != nil {
-			return nil, fmt.Errorf("search: facets: %w", err)
-		}
-		out = append(out, f)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("search: facets: %w", err)
-	}
-	return out, nil
-}
-
 func likeEscape(s string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
@@ -363,7 +414,7 @@ func decodeOffset(c string) (int, error) {
 	}
 	b, err := base64.RawURLEncoding.DecodeString(c)
 	if err == nil && len(b) > 1 && b[0] == 'o' {
-		if n, err := strconv.Atoi(string(b[1:])); err == nil && n >= 0 && n <= 1_000_000 {
+		if n, err := strconv.Atoi(string(b[1:])); err == nil && n >= 0 && n <= MaxOffset {
 			return n, nil
 		}
 	}

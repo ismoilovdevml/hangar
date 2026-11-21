@@ -204,4 +204,16 @@ func checkSchemaBehaviour(t *testing.T, pool *pgxpool.Pool) {
 	if err := exec(`INSERT INTO privileges (role_id, privilege) SELECT id, 'repo:*:fly' FROM roles LIMIT 1`); err == nil {
 		t.Error("invalid privilege accepted")
 	}
+	// The trigram index for global search exists where pg_trgm can be
+	// installed; hangar_search_trgm reports it and is safe to call again.
+	var trgmAvailable, trgm bool
+	if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_trgm')`).Scan(&trgmAvailable); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT hangar_search_trgm()`).Scan(&trgm); err != nil {
+		t.Fatalf("hangar_search_trgm: %v", err)
+	}
+	if trgmAvailable && !trgm {
+		t.Error("pg_trgm is available but the trigram index was not created")
+	}
 }

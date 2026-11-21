@@ -527,6 +527,7 @@ func build(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, metrics *
 	catDone := make(chan struct{})
 	go func() { cat.RunStats(catCtx); close(catDone) }()
 	a.onClose(func() { stopCat(); <-catDone })
+	search.WarnIfNoTrigramIndex(ctx, pool, log)
 	restAPI := &api.API{
 		Deps:           deps,
 		InstanceName:   cfg.Server.InstanceName,
