@@ -113,7 +113,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "hangar.labels" . | nindent 8 }}
+        {{- include "hangar.metaLabels" . | nindent 8 }}
         {{- include "hangar.natsSelectorLabels" . | nindent 8 }}
       annotations:
         checksum/config: {{ printf "%v-%v" $n.jetstream $replicas | sha256sum }}

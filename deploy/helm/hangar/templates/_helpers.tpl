@@ -38,9 +38,19 @@
 
 {{/* Labels */}}
 {{- define "hangar.labels" -}}
-helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 app.kubernetes.io/name: {{ include "hangar.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+{{ include "hangar.metaLabels" . }}
+{{- end -}}
+
+{{/*
+The labels of hangar.labels other than the selector labels. Pod templates use
+these plus their selector labels: hangar.labels there would repeat
+app.kubernetes.io/name and app.kubernetes.io/instance, a duplicate key that
+strict YAML parsers (kubeconform, some GitOps tools) reject.
+*/}}
+{{- define "hangar.metaLabels" -}}
+helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 app.kubernetes.io/version: {{ .Values.image.tag | default .Chart.AppVersion | trunc 63 | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/part-of: hangar

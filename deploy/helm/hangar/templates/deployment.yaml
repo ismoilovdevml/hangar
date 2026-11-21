@@ -24,7 +24,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "hangar.labels" . | nindent 8 }}
+        {{- include "hangar.metaLabels" . | nindent 8 }}
         {{- include "hangar.selectorLabels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
