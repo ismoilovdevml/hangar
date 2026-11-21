@@ -271,7 +271,6 @@ jobs:
             echo "HANGAR_SECRET_KEY=$(openssl rand -base64 32)"
             echo "HANGAR_DOCKER_TOKEN_KEY=$(openssl rand -base64 48)"
             echo "HANGAR_STORAGE_FS_PATH=$RUNNER_TEMP/hangar/blobs"
-            echo "HANGAR_NATS_DATA_DIR=$RUNNER_TEMP/hangar/nats"
           } >> "$GITHUB_ENV"
       - name: Serve and create an admin token
         run: |

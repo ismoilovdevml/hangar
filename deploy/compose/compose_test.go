@@ -265,8 +265,42 @@ func TestServerConfigLoads(t *testing.T) {
 	if cfg.Auth.Session.Insecure {
 		t.Error("cookies must stay secure for an https base URL")
 	}
-	if cfg.Storage.Kind != "fs" || cfg.Storage.FS.Path != "/var/lib/hangar/blobs" || cfg.NATS.DataDir != "/var/lib/hangar/nats" {
-		t.Errorf("storage %+v nats %+v", cfg.Storage.FS, cfg.NATS)
+	if cfg.Storage.Kind != "fs" || cfg.Storage.FS.Path != "/var/lib/hangar/blobs" {
+		t.Errorf("storage %+v", cfg.Storage.FS)
+	}
+	// NATS is gone since v0.2.0: the stack must not set deprecated settings
+	// (the server would warn on every start).
+	if w := cfg.DeprecationWarnings(); len(w) != 0 {
+		t.Errorf("compose.yaml sets deprecated settings: %v", w)
+	}
+}
+
+// Since v0.2.0 events and jobs live in PostgreSQL: the stack mounts no
+// nats/ directory, while install.sh leaves an existing one (and the data
+// of the old named volume) alone and tells the operator it can go.
+func TestNoNATS(t *testing.T) {
+	c, raw := load(t)
+	for name, s := range c.Services {
+		for _, m := range s.Volumes {
+			if filepath.Clean(m.Source) == "nats" || strings.HasPrefix(m.Target, "/var/lib/hangar/nats") {
+				t.Errorf("%s mounts %s at %s", name, m.Source, m.Target)
+			}
+		}
+		for k := range s.Environment {
+			if strings.HasPrefix(k, "HANGAR_NATS_") {
+				t.Errorf("%s sets %s", name, k)
+			}
+		}
+	}
+	if strings.Contains(strings.ToLower(raw), "nats") {
+		t.Error("compose.yaml still mentions NATS")
+	}
+	sh := installer(t)
+	if strings.Contains(sh, `make_dir "$data/nats"`) {
+		t.Error("install.sh still creates nats/")
+	}
+	if strings.Contains(sh, "rm -rf \"$data/nats\"") || strings.Contains(sh, "rm -r \"$data/nats\"") {
+		t.Error("install.sh must not delete an existing nats/ directory: it is the operator's data")
 	}
 }
 

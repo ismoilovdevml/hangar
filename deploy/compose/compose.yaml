@@ -14,7 +14,6 @@
 #                       by the server and deleted after the first sign-in
 #   postgres/           PostgreSQL data
 #   blobs/              package files
-#   nats/               job queue state
 #   caddy/              certificates and Caddyfile (with --tls caddy)
 #   scanner.env         image scanning wiring of the hangar service (written
 #                       by install.sh; empty without --with-trivy)
@@ -70,7 +69,7 @@ services:
         target: /run/secrets/hangar
         read_only: true
         bind: { create_host_path: false, selinux: z }
-      # The only place the server writes outside blobs/ and nats/: the
+      # The only place the server writes outside blobs/: the
       # one-time password of the first administrator (replaced atomically,
       # so a directory rather than a single file).
       - type: bind
@@ -80,10 +79,6 @@ services:
       - type: bind
         source: ./blobs
         target: /var/lib/hangar/blobs
-        bind: { create_host_path: false, selinux: Z }
-      - type: bind
-        source: ./nats
-        target: /var/lib/hangar/nats
         bind: { create_host_path: false, selinux: Z }
     tmpfs:
       - /tmp:size=256m,mode=1777
@@ -111,7 +106,6 @@ services:
       # A single hangar process applies migrations on start.
       HANGAR_DATABASE_MIGRATE_ON_START: "true"
       HANGAR_STORAGE_FS_PATH: /var/lib/hangar/blobs
-      HANGAR_NATS_DATA_DIR: /var/lib/hangar/nats
       # First start of an empty database: the server creates "admin" with a
       # one-time password, writes it here (bootstrap/initial-admin-password
       # on the host) and deletes the file after the first password change.
