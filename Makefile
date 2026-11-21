@@ -29,7 +29,6 @@ WEB_PRESENT := $(wildcard web/package.json)
 # environment win). Matches deploy/docker-compose.yml.
 DEV_ENV := HANGAR_DATABASE_URL="$${HANGAR_DATABASE_URL:-postgres://hangar:hangar@localhost:5432/hangar?sslmode=disable}" \
            HANGAR_STORAGE_FS_PATH="$${HANGAR_STORAGE_FS_PATH:-./data/blobs}" \
-           HANGAR_NATS_DATA_DIR="$${HANGAR_NATS_DATA_DIR:-./data/nats}" \
            HANGAR_LOG_FORMAT="$${HANGAR_LOG_FORMAT:-text}"
 
 .PHONY: help
@@ -51,8 +50,8 @@ dev: dev-deps ## Start dependencies, then hangar (live reload if `air` is instal
 	fi
 
 .PHONY: dev-deps
-dev-deps: ## Start postgres, minio, nats and trivy in docker
-	$(COMPOSE) up -d --wait postgres minio nats trivy
+dev-deps: ## Start postgres, minio and trivy in docker
+	$(COMPOSE) up -d --wait postgres minio trivy
 	$(COMPOSE) up minio-init
 
 .PHONY: dev-down

@@ -1,6 +1,6 @@
-# Hangar development stack: PostgreSQL, MinIO, NATS JetStream, a Trivy server
-# with Hangar's scan adapter, and Hangar itself, with throwaway credentials
-# and every port published.
+# Hangar development stack: PostgreSQL, MinIO, a Trivy server with Hangar's
+# scan adapter, and Hangar itself, with throwaway credentials and every port
+# published.
 # For production use deploy/compose/ (docs/deploy/install-compose.md).
 #
 #   docker compose -f deploy/docker-compose.yml up -d --build
@@ -13,7 +13,9 @@
 # The project is hangar-dev, so it never shares containers, networks or
 # volumes with an installed stack (project hangar) on the same host. Before
 # v0.1.9 it was hangar: earlier dev volumes are hangar_postgres, hangar_minio,
-# ... (docker volume ls); remove them when no longer needed.
+# ... (docker volume ls); remove them when no longer needed. Since v0.2.0
+# events and jobs go through PostgreSQL: the old hangar-dev_nats volume
+# (docker volume rm hangar-dev_nats) and container are no longer used.
 
 name: hangar-dev
 
@@ -69,18 +71,6 @@ services:
         mc mb --ignore-existing local/hangar
     restart: "no"
 
-  nats:
-    image: nats:2.11-alpine
-    command: ["nats-server", "--jetstream", "--store_dir", "/data", "--http_port", "8222"]
-    ports:
-      - "${NATS_PORT:-4222}:4222"
-      - "${NATS_MONITOR_PORT:-8222}:8222"
-    volumes:
-      - nats:/data
-    healthcheck:
-      <<: *healthcheck
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8222/healthz?js-enabled-only=true"]
-
   # Vulnerability scanner in client/server mode.
   trivy:
     image: aquasec/trivy:0.76.1
@@ -116,8 +106,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      nats:
-        condition: service_healthy
       minio-init:
         condition: service_completed_successfully
     environment:
@@ -139,8 +127,6 @@ services:
       HANGAR_DOCKER_TOKEN_KEY: ${HANGAR_DOCKER_TOKEN_KEY:-dev-only-token-key-change-me-0123456789abcdef}
       # 32 bytes, base64; development only.
       HANGAR_SECRET_KEY: ${HANGAR_SECRET_KEY:-ZGV2LW9ubHktc2VjcmV0LWtleS0zMi1ieXRlcy0hISE=}
-      HANGAR_NATS_EMBEDDED: "false"
-      HANGAR_NATS_URL: nats://nats:4222
       HANGAR_SCANNER_TRIVY_URL: http://trivy:4954
       HANGAR_SCANNER_ADAPTER_URL: http://hangar-scanner:4955
       HANGAR_SCANNER_ADAPTER_TOKEN: ${HANGAR_SCANNER_TOKEN:-dev-only-scanner-token-change-me}
@@ -157,7 +143,6 @@ services:
 volumes:
   postgres:
   minio:
-  nats:
   trivy:
   scanner:
   hangar:

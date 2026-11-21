@@ -4,7 +4,7 @@ Requirements: Go (see `go.mod`), PostgreSQL 16 or newer, Node 22 (`web/.nvmrc`)
 for the web UI, and for the acceptance tests Docker on Linux.
 
 ```bash
-make dev     # postgres, minio, nats and trivy in docker, then the server and the web dev server
+make dev     # postgres, minio and trivy in docker, then the server and the web dev server
 make help    # every target
 ```
 

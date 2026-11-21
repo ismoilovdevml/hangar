@@ -110,6 +110,11 @@
             },
             "trusted_proxies": {
               "$ref": "#/definitions/stringList"
+            },
+            "node_url": {
+              "type": "string",
+              "pattern": "^(|https?://.+)$",
+              "description": "Where the other nodes reach this one; empty: http://<pod IP>:8080 (set by the chart)"
             }
           }
         },
@@ -626,137 +631,12 @@
       }
     },
     "nats": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "mode": {
-          "enum": [
-            "bundled",
-            "external",
-            "embedded"
-          ]
-        },
-        "streamReplicas": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 5
-        },
-        "external": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "url": {
-              "type": "string",
-              "pattern": "^(|(nats|tls)://.+)$"
-            },
-            "existingSecret": {
-              "type": "string"
-            },
-            "existingSecretKey": {
-              "$ref": "#/definitions/secretKey"
-            }
-          }
-        },
-        "bundled": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "replicas": {
-              "type": "integer",
-              "enum": [
-                1,
-                3,
-                5
-              ]
-            },
-            "image": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "repository": {
-                  "type": "string"
-                },
-                "tag": {
-                  "type": "string"
-                },
-                "pullPolicy": {
-                  "enum": [
-                    "Always",
-                    "IfNotPresent",
-                    "Never"
-                  ]
-                }
-              }
-            },
-            "password": {
-              "type": "string",
-              "pattern": "^[A-Za-z0-9]*$"
-            },
-            "existingSecret": {
-              "type": "string"
-            },
-            "existingSecretKey": {
-              "$ref": "#/definitions/secretKey"
-            },
-            "jetstream": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "maxMemoryStore": {
-                  "type": "string",
-                  "pattern": "^[0-9]+(K|M|G|T)?B?$"
-                },
-                "maxFileStore": {
-                  "type": "string",
-                  "pattern": "^[0-9]+(K|M|G|T)?B?$"
-                }
-              }
-            },
-            "persistence": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "storageClass": {
-                  "type": "string"
-                },
-                "size": {
-                  "$ref": "#/definitions/quantity"
-                }
-              }
-            },
-            "resources": {
-              "type": "object"
-            },
-            "podDisruptionBudget": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "enabled": {
-                  "type": "boolean"
-                },
-                "maxUnavailable": {
-                  "type": [
-                    "integer",
-                    "string"
-                  ]
-                }
-              }
-            },
-            "nodeSelector": {
-              "type": "object"
-            },
-            "tolerations": {
-              "type": "array"
-            },
-            "affinity": {
-              "type": "object"
-            },
-            "priorityClassName": {
-              "type": "string"
-            }
-          }
-        }
-      }
+      "description": "Deprecated since 0.2.0 and ignored: events and the job queue live in PostgreSQL. Accepted so values files from 0.1.x still validate; remove it.",
+      "deprecated": true,
+      "type": [
+        "object",
+        "null"
+      ]
     },
     "serviceAccount": {
       "type": "object",

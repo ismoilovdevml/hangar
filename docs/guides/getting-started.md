@@ -34,7 +34,7 @@ this way has no web UI (it serves a placeholder page); the container image and
 
 ### Option B: Docker Compose
 
-The bundled stack runs PostgreSQL, NATS, MinIO, a Trivy server and Hangar:
+The bundled stack runs PostgreSQL, MinIO, a Trivy server and Hangar:
 
 ```bash
 docker compose -f deploy/docker-compose.yml up -d --build

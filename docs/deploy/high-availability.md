@@ -20,9 +20,9 @@ job queue (the `jobs` table); there is no other stateful service
 
 | Shared | Requirement |
 |---|---|
-| PostgreSQL | One database for all nodes, made highly available by the platform: a managed service, Patroni, CloudNativePG. Connections: `nodes x (database.max_conns + 17)` (16 for locks, 1 for the event listener). Session-mode connections: LISTEN and advisory locks do not work through PgBouncer in transaction pooling mode. |
+| PostgreSQL | One database for all nodes, made highly available by the platform: a managed service, Patroni, CloudNativePG. Connections: `nodes x (database.max_conns + 17)` (16 for locks, 1 for the event listener), for example 3 nodes with the default `max_conns` of 20 need 111, plus your other clients, below `max_connections`. Session-mode connections: LISTEN and advisory locks do not work through PgBouncer in transaction pooling mode (see [PgBouncer](#pgbouncer)). |
 | Blob store | `storage.kind: s3` (recommended) or one filesystem mounted at the same path on every node (NFS, CephFS, a ReadWriteMany volume). |
-| Node address | Each node publishes the URL the others reach it at (System logs of other nodes): `server.node_url`, by default the local address it reaches the database from with the port of `server.addr`. In Kubernetes set `HANGAR_SERVER_NODE_URL=http://$(POD_IP):8080`. Nodes must reach each other on that port. |
+| Node address | Each node publishes the URL the others reach it at to read its System logs (`POST /internal/v1/system/logs`, signed with the shared secret key): `server.node_url`, by default the local address it reaches the database from with the port of `server.addr`. Set it when that address is not reachable from the other nodes (a database behind a local proxy or sidecar, NAT). The Helm chart sets `HANGAR_SERVER_NODE_URL=http://$(POD_IP):8080` on every pod and its NetworkPolicy allows pod-to-pod traffic on that port. Elsewhere, open the port between the nodes in firewalls and security groups. |
 | `HANGAR_SECRET_KEY` | Identical on every node; otherwise a node cannot read credentials another node stored. |
 | `HANGAR_DOCKER_TOKEN_KEY` | Identical on every node; otherwise a registry token or an upload session started on one node is rejected by the next. |
 | Configuration | Identical `hangar.yaml` (the Helm chart renders one ConfigMap). |
@@ -59,6 +59,17 @@ job queue (the `jobs` table); there is no other stateful service
   blob store, or its event listener connection is down. A database outage
   makes all nodes unready at once; the load balancer then answers 503 until
   it returns.
+
+## PgBouncer
+
+Each node keeps one PostgreSQL session open for as long as it runs, the event
+listener (`application_name = hangar-listener`, LISTEN), and takes
+session-level advisory locks for the scheduler leader and migrations. Neither
+works through PgBouncer in transaction pooling mode: the listener never
+receives events, `/readyz` fails with `eventbus`, and locks are lost between
+statements. Either connect Hangar straight to PostgreSQL, or give its
+database `pool_mode = session` with a pool of at least
+`nodes x (database.max_conns + 17)` server connections.
 
 ## Job queue
 

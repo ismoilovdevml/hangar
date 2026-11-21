@@ -2,7 +2,7 @@ Hangar ({{ include "hangar.image" . }}) is deploying as "{{ include "hangar.full
 
   Replicas:    {{ if .Values.autoscaling.enabled }}{{ .Values.autoscaling.minReplicas }}-{{ .Values.autoscaling.maxReplicas }} (autoscaling){{ else }}{{ .Values.replicaCount }}{{ end }}
   Blob store:  {{ .Values.storage.kind }}{{ if eq .Values.storage.kind "s3" }} (bucket {{ .Values.storage.s3.bucket }}){{ end }}
-  Event bus:   NATS {{ .Values.nats.mode }}
+  Event bus:   PostgreSQL (LISTEN/NOTIFY, jobs table)
   Migrations:  {{ .Values.migrations.mode }}
 
 1. Wait until every pod is ready and check it:
@@ -45,4 +45,12 @@ Hangar stores in the database: back it up together with your database backups:
 NOTE: the Docker token key was generated and is kept by `helm upgrade`. If this
 chart is rendered offline (Argo CD, `helm template`), set dockerTokenKey.value
 or dockerTokenKey.existingSecret so it stays stable.
+{{- end }}
+{{- if .Values.nats }}
+
+DEPRECATED: the nats values are ignored since chart 0.2.0: Hangar keeps its
+events and job queue in PostgreSQL. Remove nats from your values. This upgrade
+removes the NATS StatefulSet an earlier chart deployed, but not its volumes;
+delete them once every pod runs 0.2.0:
+  kubectl -n {{ .Release.Namespace }} delete pvc -l app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=nats
 {{- end }}

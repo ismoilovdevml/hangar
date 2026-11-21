@@ -152,7 +152,8 @@ node count) or adding nodes.
 ## HangarJobFailures
 
 **Meaning.** A background job failed on its last attempt (5 attempts with
-backoff) and was dropped.
+backoff). It stays in the `jobs` table as `dead` for 7 days
+(`hangar_job_queue_dead`) and is not retried.
 
 **Impact.** Depends on the job: `blob.gc` → storage is not reclaimed;
 `audit.ensure_partitions` → audit writes fail when the month rolls over;
@@ -160,7 +161,9 @@ backoff) and was dropped.
 
 **Diagnose.** Node log: `"msg":"job failed permanently"` with `type`, `job_id`
 and the error; earlier `"job failed, will retry"` lines show the history. Jobs
-dashboard → *Executions by result*.
+dashboard → *Executions by result*. The dead jobs and their last error stay in
+the database for 7 days: `SELECT id, type, attempts, finished_at, last_error
+FROM jobs WHERE state = 'dead' ORDER BY finished_at DESC`.
 
 **Fix.** Fix the cause (database, blob store, permissions). Scheduled jobs run
 again on their next schedule; for `audit.ensure_partitions` near a month

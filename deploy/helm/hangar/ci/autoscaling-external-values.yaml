@@ -1,5 +1,5 @@
-# Autoscaling with external NATS and AWS S3 through IRSA (no static keys),
-# Traefik ingress, corporate proxy with a private CA and inline secrets.
+# Autoscaling with AWS S3 through IRSA (no static keys), Traefik ingress,
+# corporate proxy with a private CA and inline secrets.
 autoscaling:
   enabled: true
   minReplicas: 2
@@ -23,6 +23,8 @@ storage:
 serviceAccount:
   annotations:
     eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/hangar
+# Left over from a 0.1.x values file: deprecated and ignored, but it must
+# still pass the schema (NOTES.txt prints a deprecation note).
 nats:
   mode: external
   external:

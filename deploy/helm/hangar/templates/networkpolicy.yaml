@@ -26,6 +26,17 @@ spec:
       from:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+    {{- if .Values.networkPolicy.ingressFrom }}
+    # The other Hangar pods read this pod's System logs
+    # (POST /internal/v1/system/logs, signed with the secret key).
+    - ports:
+        - port: http
+          protocol: TCP
+      from:
+        - podSelector:
+            matchLabels:
+              {{- include "hangar.selectorLabels" . | nindent 14 }}
+    {{- end }}
     {{- if .Values.tests.enabled }}
     # The chart's `helm test` pod (tests/test-readyz.yaml) calls /readyz.
     - ports:
@@ -54,17 +65,14 @@ spec:
           protocol: UDP
         - port: 53
           protocol: TCP
-    {{- if eq .Values.nats.mode "bundled" }}
+    # The System logs of the other Hangar pods.
     - to:
         - podSelector:
             matchLabels:
-              {{- include "hangar.natsSelectorLabels" . | nindent 14 }}
+              {{- include "hangar.selectorLabels" . | nindent 14 }}
       ports:
-        - port: 4222
+        - port: 8080
           protocol: TCP
-        - port: 8222
-          protocol: TCP
-    {{- end }}
     {{- if .Values.imageScanning.enabled }}
     - to:
         - podSelector:

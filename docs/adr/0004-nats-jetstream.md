@@ -1,6 +1,6 @@
 # 0004. NATS JetStream for events and jobs, embedded or clustered
 
-Date: 2026-11-03 · Status: Superseded by [0010](0011-postgresql-events-and-jobs.md)
+Date: 2026-11-03 · Status: Superseded by [0011](0011-postgresql-events-and-jobs.md)
 
 ## Context
 Hangar needs a live event feed (UI over SSE, cache invalidation), a durable job

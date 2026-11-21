@@ -25,7 +25,7 @@ EnvironmentFile=/etc/hangar/hangar.env
 Environment=HANGAR_CONFIG=/etc/hangar/hangar.yaml
 ExecStart=/usr/local/bin/hangar serve
 WorkingDirectory=/var/lib/hangar
-# /var/lib/hangar: blobs (storage.fs.path) and embedded NATS (nats.data_dir).
+# /var/lib/hangar: blobs (storage.fs.path).
 StateDirectory=hangar
 StateDirectoryMode=0750
 

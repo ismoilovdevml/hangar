@@ -213,7 +213,7 @@ if [ -z "${HANGAR_E2E_URL:-}" ]; then
 	env HANGAR_SERVER_ADDR="127.0.0.1:$hangar_port" HANGAR_SERVER_BASE_URL="http://127.0.0.1:$hangar_port" \
 		HANGAR_DATABASE_URL="postgres://hangar:hangar@127.0.0.1:$postgres_port/hangar?sslmode=disable" \
 		HANGAR_DATABASE_MIGRATE_ON_START=true \
-		HANGAR_STORAGE_FS_PATH="$work/blobs" HANGAR_NATS_DATA_DIR="$work/nats" \
+		HANGAR_STORAGE_FS_PATH="$work/blobs" \
 		HANGAR_SECRET_KEY="$(openssl rand -base64 32)" HANGAR_DOCKER_TOKEN_KEY="$(openssl rand -base64 48)" \
 		HANGAR_BOOTSTRAP_ADMIN_USER=admin HANGAR_BOOTSTRAP_ADMIN_PASSWORD="$admin_pw" \
 		HANGAR_BOOTSTRAP_REQUIRE_PASSWORD_CHANGE=false \

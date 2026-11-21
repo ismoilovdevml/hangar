@@ -1,4 +1,4 @@
-# Two replicas sharing a ReadWriteMany volume (NFS, CephFS) with bundled NATS.
+# Two replicas sharing a ReadWriteMany volume (NFS, CephFS).
 replicaCount: 2
 config:
   server:
@@ -11,7 +11,3 @@ storage:
     persistence:
       accessModes: [ReadWriteMany]
       storageClass: cephfs
-nats:
-  bundled:
-    replicas: 3
-    password: OnlyLettersAndDigits123

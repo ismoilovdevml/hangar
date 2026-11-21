@@ -244,7 +244,9 @@ test_fresh_install_unattended() {
 	local D=$T/srv/hangar
 	run_install --data-dir "$D" --version v9.9.9 --yes
 	check "exit 0" ok
-	for d in config secrets bootstrap blobs nats postgres backups; do check "$d/ exists" test -d "$D/$d"; done
+	for d in config secrets bootstrap blobs postgres backups; do check "$d/ exists" test -d "$D/$d"; done
+	check "no nats/ (events and jobs in PostgreSQL)" test ! -e "$D/nats"
+	check "no nats note on a fresh install" absent "$OUT" "/nats is no longer used"
 	check "secrets/ is 700" mode_is "$D/secrets" 700
 	check "bootstrap/ is 700" mode_is "$D/bootstrap" 700
 	check "bootstrap/ owned by the hangar user" contains "$T/log/chown.log" "65532:65532 $D/bootstrap"
@@ -260,7 +262,6 @@ test_fresh_install_unattended() {
 	check "summary names the metrics token" contains "$OUT" "$D/secrets/metrics.bearer_token"
 	check "secrets/ owned by the hangar user" contains "$T/log/chown.log" "65532:65532 $D/secrets"
 	check "blobs/ owned by the hangar user" contains "$T/log/chown.log" "65532:65532 $D/blobs"
-	check "nats/ owned by the hangar user" contains "$T/log/chown.log" "65532:65532 $D/nats"
 	check "postgres/ owned by the postgres user" contains "$T/log/chown.log" "70:70 $D/postgres"
 	check "postgres-password owned by the postgres user" contains "$T/log/chown.log" "70:70 $D/secrets/.postgres-password.tmp"
 	check "secret key is 32 bytes" test "$(base64 -d <"$D/secrets/security.secret_key" | wc -c | tr -d ' ')" = 32
@@ -362,6 +363,25 @@ test_latest_version_lookup() {
 	check "latest asked from the API" contains "$T/log/curl.log" "api.github.com/repos/ismoilovdevml/hangar/releases/latest"
 	check "latest image" env_is "$T/d" HANGAR_IMAGE ghcr.io/ismoilovdevml/hangar:9.9.11
 	check "no token, no auth header" test ! -s "$T/log/curl-config.log"
+}
+
+# An installation from v0.1.x has nats/ (the embedded NATS job queue). The
+# upgrade keeps it, since it is the operator's data and a rollback to v0.1.x
+# needs it, and says it can be removed; compose.yaml no longer mounts it.
+test_upgrade_keeps_old_nats_dir() {
+	local D=$T/srv/hangar
+	run_install --data-dir "$D" --version v9.9.9 --yes
+	check "first run" ok
+	mkdir -p "$D/nats/jetstream"
+	echo "stream" >"$D/nats/jetstream/meta.inf"
+	make_release v9.9.10
+	export FAKE_PG_RUNNING=1
+	run_install --data-dir "$D" --version v9.9.10 --yes
+	check "upgrade" ok
+	check "nats/ kept" test -f "$D/nats/jetstream/meta.inf"
+	check "note printed" contains "$OUT" "$D/nats is no longer used"
+	check "removal command printed" contains "$OUT" "rm -rf $D/nats"
+	check "compose.yaml does not mount it" absent "$D/compose.yaml" "nats"
 }
 
 # Up to v0.1.8 the one-time password lived in secrets/, which the server now
@@ -614,9 +634,9 @@ test_migration_from_old_layout() {
 	check "database copied" cmp -s "$D/postgres/base/1/16384" "$T/volumes/hangar_postgres-data/base/1/16384"
 	check "PG_VERSION copied" test -f "$D/postgres/PG_VERSION"
 	check "blobs copied" cmp -s "$D/blobs/sha256/ab/abcdef" "$T/volumes/hangar_hangar-data/blobs/sha256/ab/abcdef"
-	check "nats copied" test -f "$D/nats/jetstream/meta.inf"
+	check "NATS job state not copied (unused since v0.2.0)" test ! -e "$D/nats"
 	check "postgres data owned by postgres" contains "$T/log/chown.log" "-R 70:70 $D/postgres"
-	check "blobs owned by hangar" contains "$T/log/chown.log" "-R 65532:65532 $D/blobs $D/nats"
+	check "blobs owned by hangar" contains "$T/log/chown.log" "-R 65532:65532 $D/blobs"
 	# Order: images first, then stop the old stack, copy, start the new one.
 	check "old stack stopped" contains "$T/log/docker.log" "$L|compose down --remove-orphans"
 	check "pull before stop" docker_order "$D|compose pull" "$L|compose down"

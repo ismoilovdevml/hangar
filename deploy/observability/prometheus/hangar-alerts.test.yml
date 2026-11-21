@@ -122,7 +122,7 @@ tests:
           - exp_labels: { severity: warning, type: blob.gc }
             exp_annotations:
               summary: "Background job blob.gc failed permanently"
-              description: "1 blob.gc jobs exhausted their retries in the last hour and were dropped."
+              description: "1 blob.gc jobs exhausted their retries in the last hour; they are kept as dead jobs for 7 days."
               runbook_url: "https://github.com/ismoilovdevml/hangar/blob/main/docs/operations/runbooks.md#hangarjobfailures"
       - eval_time: 31m
         alertname: HangarJobBacklog

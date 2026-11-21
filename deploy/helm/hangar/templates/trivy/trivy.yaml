@@ -72,7 +72,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "hangar.labels" . | nindent 8 }}
+        {{- include "hangar.metaLabels" . | nindent 8 }}
         {{- include "hangar.trivySelectorLabels" . | nindent 8 }}
     spec:
       automountServiceAccountToken: false
@@ -185,7 +185,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "hangar.labels" . | nindent 8 }}
+        {{- include "hangar.metaLabels" . | nindent 8 }}
         {{- include "hangar.scannerSelectorLabels" . | nindent 8 }}
     spec:
       automountServiceAccountToken: false

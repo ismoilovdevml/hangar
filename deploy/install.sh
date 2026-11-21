@@ -606,7 +606,8 @@ if [[ -f "$data/secrets/initial-admin-password" && ! -e "$data/bootstrap/initial
 	mv "$data/secrets/initial-admin-password" "$data/bootstrap/initial-admin-password"
 fi
 make_dir "$data/blobs" 750 "$HANGAR_UID"
-make_dir "$data/nats" 750 "$HANGAR_UID"
+# Up to v0.1.x nats/ held the embedded NATS job queue. v0.2.0 keeps jobs in
+# PostgreSQL: an existing nats/ is left alone (see the note at the end).
 make_dir "$data/postgres" 700 "$POSTGRES_UID"
 make_dir "$data/backups" 700 0
 if [[ "$trivy" == on ]]; then
@@ -787,12 +788,12 @@ if [[ -n "$legacy" ]]; then
 	(cd "$legacy" && docker compose down --remove-orphans)
 	log "copying the database (volume $vol_pg)"
 	copy_volume "$vol_pg" "" "$data/postgres"
-	log "copying packages and job state (volume $vol_data)"
+	# Only blobs: the NATS job state in the volume is not used since v0.2.0.
+	log "copying packages (volume $vol_data)"
 	copy_volume "$vol_data" blobs "$data/blobs"
-	copy_volume "$vol_data" nats "$data/nats"
 	chown -R "$POSTGRES_UID:$POSTGRES_UID" "$data/postgres"
 	chmod 700 "$data/postgres"
-	chown -R "$HANGAR_UID:$HANGAR_UID" "$data/blobs" "$data/nats"
+	chown -R "$HANGAR_UID:$HANGAR_UID" "$data/blobs"
 fi
 
 # ---- Start ------------------------------------------------------------------------
@@ -888,6 +889,16 @@ if [[ "$tls" == proxy ]]; then
 elif [[ "$tls" == caddy ]]; then
 	echo
 	echo "Caddy requests the certificate for $domain on first use: DNS must point here and ports 80/443 be open."
+fi
+if [[ -d "$data/nats" ]]; then
+	cat <<EOF
+
+$data/nats is no longer used: since v0.2.0 events and background jobs go
+through PostgreSQL. Jobs still queued there are not carried over (scheduled
+ones run again on their own). Remove it once you will not roll back to v0.1.x:
+
+  rm -rf $data/nats
+EOF
 fi
 if [[ -n "$legacy" ]]; then
 	cat <<EOF

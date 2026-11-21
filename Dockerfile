@@ -56,7 +56,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
       -o /out/usr/local/bin/hangar ./cmd/hangar; \
     go build -trimpath -ldflags "-s -w -buildid=" \
       -o /out/usr/local/bin/hangar-healthcheck ./deploy/healthcheck; \
-    mkdir -p /out/var/lib/hangar/blobs /out/var/lib/hangar/nats /out/etc/hangar
+    mkdir -p /out/var/lib/hangar/blobs /out/etc/hangar
 
 # ---- Runtime ----------------------------------------------------------------
 FROM ${RUNTIME_IMAGE}
@@ -70,11 +70,10 @@ LABEL org.opencontainers.image.title="Hangar" \
 COPY --from=build /out/usr/local/bin/ /usr/local/bin/
 COPY --from=build --chown=65532:65532 /out/var/lib/hangar /var/lib/hangar
 COPY --from=build /out/etc/hangar /etc/hangar
-# Single-node defaults: filesystem blobs and embedded NATS under /var/lib/hangar.
+# Single-node defaults: filesystem blobs under /var/lib/hangar.
 # Set HANGAR_DATABASE_URL and HANGAR_SERVER_BASE_URL; see hangar.example.yaml.
 ENV HANGAR_SERVER_ADDR=":8080" \
-    HANGAR_STORAGE_FS_PATH="/var/lib/hangar/blobs" \
-    HANGAR_NATS_DATA_DIR="/var/lib/hangar/nats"
+    HANGAR_STORAGE_FS_PATH="/var/lib/hangar/blobs"
 USER 65532:65532
 WORKDIR /var/lib/hangar
 VOLUME ["/var/lib/hangar"]
