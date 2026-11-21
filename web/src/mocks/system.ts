@@ -65,14 +65,13 @@ function subsystems(degraded: boolean, uptimeMs: number): Subsystem[] {
       ['default (fs)', 'Reachable; 412.6 GiB free of 1.8 TiB (22%)'],
       ['s3-archive (s3)', 'Reachable (38 ms)'],
     ], { metric: '22% free', sinceMs: since }),
-    sub('eventbus', 'Event bus', 'healthy', 'JetStream · external cluster · 1 stream, 4 consumers', [
-      ['Mode', 'External cluster'],
-      ['Server', 'nats://nats-1.hangar.example.com:4222'],
+    sub('eventbus', 'Event bus', 'healthy', 'Listening · 3 jobs waiting, 1 running', [
+      ['Transport', 'PostgreSQL LISTEN/NOTIFY'],
       ['Reconnects', '0'],
-      ['Streams', '1'],
-      ['Consumers', '4'],
-      ['Stored', '1.2 MiB'],
-    ], { latency: 1, metric: '1 ms', target: 'nats://nats-1.hangar.example.com:4222', sinceMs: since }),
+      ['Jobs waiting', '3'],
+      ['Jobs running', '1'],
+      ['Dead jobs', '0'],
+    ], { latency: 1, metric: 'listening', sinceMs: since }),
     sub('scheduler', 'Task scheduler', 'healthy', 'Another node is the leader; this one runs tasks · 0 active, 0 failed in 24 h', [
       ['Role since', iso(since)],
       ['Active runs', '0'],

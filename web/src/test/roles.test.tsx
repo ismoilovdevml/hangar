@@ -57,6 +57,8 @@ describe('reader (repo:*:read)', () => {
     ['/system/logs', 'System logs', 'system logs', 'system:cluster:admin', '/system/logs'],
     ['/repositories/new', 'New repository', 'creating repositories', 'system:repos:admin', '/blob-stores'],
     ['/settings/proxies', 'Proxies', 'these settings', 'system:settings:read', '/proxies'],
+    ['/settings/webhooks', 'Webhooks', 'webhooks', 'system:webhooks:read', '/webhooks'],
+    ['/settings/trust-policies', 'CI trust policies', 'these settings', 'system:settings:read', '/trust-policies'],
   ])('%s says who to ask, without calling the API or offering Retry', async (path, title, what, privilege, endpoint) => {
     signInWith(READER);
     const asked = recordRequests();
@@ -203,6 +205,8 @@ describe('administrator', () => {
       'System',
       'Authentication',
       'Proxies',
+      'Webhooks',
+      'CI trust',
     ]);
     expect(await screen.findByRole('link', { name: /New repository/ })).toBeInTheDocument();
   });

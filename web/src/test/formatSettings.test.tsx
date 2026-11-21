@@ -30,9 +30,9 @@ describe('format settings in the repository form', () => {
   it.each([
     ['apt', 'hosted', ['Architectures', 'Sign with']],
     ['apt', 'group', ['Architectures', 'Sign with']],
-    ['apt', 'proxy', []],
+    ['apt', 'proxy', ['Remote signing keys']],
     ['rpm', 'hosted', ['Repodata depth', 'Sign with']],
-    ['rpm', 'proxy', []],
+    ['rpm', 'proxy', ['Remote signing keys']],
     ['go', 'proxy', ['Checksum databases', 'Checksum requests go']],
     ['go', 'hosted', []],
     ['cargo', 'proxy', ['Crate download URL']],
@@ -43,7 +43,7 @@ describe('format settings in the repository form', () => {
   ])('%s %s shows %j', async (format, type, labels) => {
     renderApp(`/repositories/new?format=${format}&type=${type}`);
     const step = await screen.findByRole('region', { name: /Settings/ });
-    const all = ['Architectures', 'Sign with', 'Repodata depth', 'Checksum databases', 'Checksum requests go', 'Crate download URL', 'Chart hosts'];
+    const all = ['Architectures', 'Sign with', 'Repodata depth', 'Checksum databases', 'Checksum requests go', 'Crate download URL', 'Chart hosts', 'Remote signing keys'];
     for (const l of all) {
       const re = new RegExp(`^${l}`);
       if (labels.includes(l)) expect(within(step).getByLabelText(re)).toBeInTheDocument();
@@ -89,6 +89,50 @@ describe('format settings in the repository form', () => {
     await user.click(screen.getByRole('button', { name: 'Create repository' }));
     await waitFor(() => expect(posts).toHaveLength(1));
     expect((posts[0] as RepositoryInput).config.format).toEqual({ repodata_depth: 2 });
+  });
+
+  it('creates an APT proxy with the remote archive keys, one entry per armored block', async () => {
+    const posts = capture('POST', /^\/api\/v1\/repositories$/);
+    const user = userEvent.setup({ delay: null });
+    renderApp('/repositories/new?format=apt&type=proxy');
+    await user.type(await screen.findByLabelText('Remote URL'), 'http://deb.debian.org/debian');
+    const keys = screen.getByLabelText(/^Remote signing keys/);
+    expect(screen.getByText(/Needed to use this proxy in a group/)).toBeInTheDocument();
+    await user.click(keys);
+    await user.paste('not a key');
+    await user.tab();
+    expect(screen.getByText(/Paste ASCII-armored public keys/)).toBeInTheDocument();
+    expect(keys).toHaveAttribute('aria-invalid', 'true');
+    await user.click(screen.getByRole('button', { name: 'Create repository' }));
+    expect(posts).toHaveLength(0);
+    const a = '-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nmQINBGPL\n=abcd\n-----END PGP PUBLIC KEY BLOCK-----';
+    const b = '-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nmQINBGPM\n=efgh\n-----END PGP PUBLIC KEY BLOCK-----';
+    await user.clear(keys);
+    await user.click(keys);
+    await user.paste(`${a}\n\n${b}\n`);
+    await user.tab();
+    expect(screen.queryByText(/Paste ASCII-armored public keys/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Create repository' }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect((posts[0] as RepositoryInput).config.format).toEqual({ remote_keys: [a, b] });
+  });
+
+  it('shows the server’s refusal of a remote key at the field', async () => {
+    server.use(
+      http.post('*/api/v1/repositories', () =>
+        HttpResponse.json({ code: 'invalid_argument', message: 'remote_keys[0]: not an ASCII-armored OpenPGP public key: openpgp: invalid data' }, { status: 400 }),
+      ),
+    );
+    const user = userEvent.setup({ delay: null });
+    renderApp('/repositories/new?format=rpm&type=proxy');
+    await user.type(await screen.findByLabelText('Remote URL'), 'https://dl.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os');
+    const keys = screen.getByLabelText(/^Remote signing keys/);
+    expect(screen.getByText('repomd.xml.asc')).toBeInTheDocument();
+    await user.click(keys);
+    await user.paste('-----BEGIN PGP PUBLIC KEY BLOCK-----\nbroken\n-----END PGP PUBLIC KEY BLOCK-----');
+    await user.click(screen.getByRole('button', { name: 'Create repository' }));
+    expect(await screen.findByText(/Not an ASCII-armored OpenPGP public key/)).toBeInTheDocument();
+    expect(keys).toHaveAttribute('aria-invalid', 'true');
   });
 
   it('creates a Go proxy with the checksum database pass-through off, via the remote', async () => {

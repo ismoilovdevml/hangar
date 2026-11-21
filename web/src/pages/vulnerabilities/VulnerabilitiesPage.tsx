@@ -16,12 +16,13 @@ import { isMissingEndpoint, useCanSystem } from '../../api/ops';
 import type { FixPlan, PackagePlan, Rescan, ScanningStatus } from '../../api/types';
 import { ErrorNote } from '../../components/ErrorNote';
 import { FormatIcon } from '../../components/FormatIcon';
-import { IconSearch } from '../../components/icons';
+import { FilterSearch } from '../../components/FilterSearch';
 import { Panel } from '../../components/Panel';
 import { Select, type SelectOption } from '../../components/Select';
 import { formatCount, formatDayMonth, relativeTime } from '../../lib/format';
 import { plural } from '../../lib/overview';
-import { errorText, hasFilters, PLAN_TABS, planQuery, type VulnSearch } from '../../lib/vulnerabilities';
+import { errorText } from '../../lib/apiError';
+import { hasFilters, PLAN_TABS, planQuery, type VulnSearch } from '../../lib/vulnerabilities';
 import { FindingDrawer } from './FindingDrawer';
 import { FixPlanTable } from './FixPlanTable';
 import { VulnSummary } from './VulnSummary';
@@ -83,7 +84,7 @@ function ScanState({ status, canRescan, canFollow }: { status?: ScanningStatus; 
           <span style={{ width: `${pct}%` }} />
         </span>
       )}
-      {start.isError && <ErrorMessage error={start.error} message={errorText(start.error)} className="form-error vhead__error" />}
+      {start.isError && <ErrorMessage error={start.error} message={errorText(start.error, { action: 'start a rescan' })} className="form-error vhead__error" />}
     </div>
   );
 }
@@ -160,44 +161,6 @@ function ImpactBanner({ plan, status }: { plan: FixPlan; status?: ScanningStatus
         </div>
       </div>
     </section>
-  );
-}
-
-/** Free-text filter: typed locally, written to the URL after a short pause. */
-function SearchFilter({ value, onChange }: { value: string; onChange: (q: string | undefined) => void }) {
-  const [draft, setDraft] = useState(value);
-  const [synced, setSynced] = useState(value);
-  if (value !== synced) {
-    setSynced(value);
-    setDraft(value);
-  }
-  const commit = useRef(onChange);
-  useEffect(() => {
-    commit.current = onChange;
-  }, [onChange]);
-  useEffect(() => {
-    if (draft.trim() === value) return;
-    const t = setTimeout(() => commit.current(draft.trim() || undefined), 300);
-    return () => clearTimeout(t);
-  }, [draft, value]);
-  const id = useId();
-  return (
-    <div className="filter-search vplan-search">
-      <label htmlFor={id} className="visually-hidden">
-        Search packages and advisories
-      </label>
-      <IconSearch size={16} />
-      <input
-        id={id}
-        className="filter-search__input"
-        type="search"
-        placeholder="CVE, advisory or package"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        autoComplete="off"
-        spellCheck={false}
-      />
-    </div>
   );
 }
 
@@ -334,7 +297,13 @@ export function VulnerabilitiesPage() {
           </button>
         </div>
         <div className="vplan-panel__filters">
-          <SearchFilter value={search.q ?? ''} onChange={(q) => setSearch({ q }, true)} />
+          <FilterSearch
+            className="vplan-search"
+            label="Search packages and advisories"
+            placeholder="CVE, advisory or package"
+            value={search.q ?? ''}
+            onChange={(q) => setSearch({ q }, true)}
+          />
           <div className="filter-select">
             <label htmlFor={repoId} className="filter-select__label">
               Repository

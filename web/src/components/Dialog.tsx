@@ -6,6 +6,10 @@ import { IconClose } from './icons';
 export interface DialogProps {
   title: ReactNode;
   description?: ReactNode;
+  /** Above the title, outside its accessible name (status pills). */
+  eyebrow?: ReactNode;
+  /** Pinned under the scrolling body (a drawer's actions). */
+  footer?: ReactNode;
   onClose: () => void;
   children: ReactNode;
   /**
@@ -19,6 +23,8 @@ export interface DialogProps {
   dismissible?: boolean;
   /** `alertdialog` for a confirmation that interrupts the user. */
   role?: 'dialog' | 'alertdialog';
+  /** Where focus goes on open: the first control (or `[data-autofocus]`), or the dialog itself for one opened to read. */
+  initialFocus?: 'first' | 'container';
   /** Extra classes on the dialog and on the scrim behind it. */
   className?: string;
   scrimClassName?: string;
@@ -35,19 +41,22 @@ export interface DialogProps {
 export function Dialog({
   title,
   description,
+  eyebrow,
+  footer,
   onClose,
   children,
   variant = 'dialog',
   wide,
   dismissible = true,
   role = 'dialog',
+  initialFocus = 'first',
   className,
   scrimClassName,
 }: DialogProps) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descId = useId();
-  useModal(ref, onClose, { dismissible });
+  useModal(ref, onClose, { dismissible, focus: initialFocus });
 
   const plain = variant === 'plain';
   const heading = (
@@ -85,6 +94,7 @@ export function Dialog({
         ) : (
           <div className="dialog__head">
             <div className="dialog__titles">
+              {eyebrow && <div className="dialog__eyebrow">{eyebrow}</div>}
               {heading}
               {desc}
             </div>
@@ -96,6 +106,7 @@ export function Dialog({
           </div>
         )}
         <div className="dialog__body">{children}</div>
+        {footer && <div className="dialog__foot">{footer}</div>}
       </div>
     </div>,
     document.body,

@@ -2,7 +2,6 @@
  * Pure helpers of the Vulnerabilities screen: URL filters, severity and
  * status wording, the fix plan wording and waiver validation.
  */
-import { ApiRequestError } from '../api/client';
 import type { FixPlanQuery } from '../api/findings';
 import type { Finding, PackagePlan, ScanningStatus, Severity, UpgradeLine } from '../api/types';
 import { formatDate, type Tone } from './format';
@@ -173,9 +172,6 @@ export function validateWaiver(reason: string, dateValue: string, now: Date = ne
   else if (until.getTime() - now.getTime() > (MAX_WAIVER_DAYS + 1) * 86_400_000) errors.until = 'A waiver can last at most a year.';
   return errors;
 }
-
-/** The message of a failed request, for an inline error. */
-export const errorText = (err: unknown) => (err instanceof ApiRequestError ? err.message : 'Something went wrong. Try again.');
 
 // ---- Container images ----
 

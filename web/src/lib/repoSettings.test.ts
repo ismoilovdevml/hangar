@@ -162,6 +162,21 @@ describe('format settings round-trip', () => {
     expect(validateRepoForm({ ...rpm, distro: 'Debian:12' }).distro).toBeDefined();
   });
 
+  it('keeps the remote keys of an APT or RPM proxy, one entry per armored block', () => {
+    const key = (n: string) => `-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n${n}\n-----END PGP PUBLIC KEY BLOCK-----`;
+    const aptProxy: Repository = { ...proxy, name: 'debian', format: 'apt', config: { proxy: { remote_url: 'http://deb.debian.org/debian' }, format: { remote_keys: [key('a'), key('b')] } } };
+    const f = repoToForm(aptProxy);
+    expect(f.remoteKeys).toBe(`${key('a')}\n\n${key('b')}`);
+    expect(isDirty(f, aptProxy)).toBe(false);
+    expect(toRepositoryUpdate(f, aptProxy).config.format).toEqual({ remote_keys: [key('a'), key('b')] });
+    expect(toRepositoryUpdate({ ...f, remoteKeys: '' }, aptProxy).config.format).toBeUndefined();
+    expect(validateRepoForm({ ...f, remoteKeys: 'junk' }).remoteKeys).toMatch(/ASCII-armored/);
+    expect(validateRepoForm({ ...f, remoteKeys: `${key('a')}\njunk` }).remoteKeys).toBeDefined();
+    expect(validateRepoForm({ ...f, remoteKeys: '-----BEGIN PGP PRIVATE KEY BLOCK-----\nx\n-----END PGP PRIVATE KEY BLOCK-----' }).remoteKeys).toMatch(/private key/);
+    // Hosted repositories have no remote to verify.
+    expect(validateRepoForm({ ...repoToForm(apt), remoteKeys: 'junk' }).remoteKeys).toBeUndefined();
+  });
+
   it('validates format settings like the server', () => {
     const f = repoToForm(apt);
     expect(validateRepoForm({ ...f, aptArchitectures: ['all'] }).aptArchitectures).toMatch(/Leave out "all"/);

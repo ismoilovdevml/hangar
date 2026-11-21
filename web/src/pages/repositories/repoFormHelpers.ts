@@ -11,7 +11,7 @@ export const errorId = (f: RepoFormField) => `repo-${f}-error`;
 export const FIELD_ORDER: RepoFormField[] = [
   'format', 'type', 'name', 'blobStore', 'remoteUrl', 'metadataTtl', 'contentTtl', 'negativeTtl',
   'authUsername', 'authPassword', 'authHeader', 'authToken', 'proxyName', 'proxyUrl', 'caBundle', 'members', 'writeMember',
-  'relatedHosts', 'aptArchitectures', 'rpmRepodataDepth', 'goSumdbs', 'cargoDownloadUrl',
+  'relatedHosts', 'aptArchitectures', 'rpmRepodataDepth', 'goSumdbs', 'cargoDownloadUrl', 'remoteKeys',
 ];
 
 /** Focuses the first field with an error; returns whether there was one. */
@@ -45,6 +45,8 @@ export function serverFieldErrors(err: unknown): RepoFormErrors {
       remoteUrl: `${host ? `${host} is` : 'This address is'} blocked by the outbound address policy, which keeps proxies away from loopback, private, link-local and cloud metadata addresses. Use a public registry URL, or ask an administrator to allow it (http.allow_private_networks).`,
     };
   }
+  const keys = /remote_keys(?:\[\d+\])?:?\s*(.+)$/.exec(msg);
+  if (keys) return { remoteKeys: cleanServerMessage(keys[1]!) };
   const remote = /remote[ _]url\b[^:]*:\s*(.+)$/i.exec(msg);
   if (remote) return { remoteUrl: cleanServerMessage(remote[1]!) };
   if (/blob[ _]store/i.test(msg)) return { blobStore: cleanServerMessage(msg.replace(/^repository "[^"]*":\s*/, '')) };

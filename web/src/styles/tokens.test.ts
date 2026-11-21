@@ -151,15 +151,8 @@ describe('contrast', () => {
 /**
  * Surface colours written straight into a stylesheet do not follow the theme:
  * a white wash that lifts a row at dawn glares at dusk. They belong in
- * tokens.css. The stylesheets listed here still carry some, to be converted
- * with those pages; the counts only go down.
+ * tokens.css, or are mixed from a token (color-mix) where a tint is needed.
  */
-const NOT_YET_TOKENS: Record<string, number> = {
-  'styles/ops.css': 3, // audit table rows, the System page's endpoint value
-  'pages/settings/hub.css': 1,
-  'pages/settings/settings.css': 6,
-  'pages/system/system.css': 6,
-};
 
 function styleSheets(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -178,6 +171,6 @@ describe('stylesheets', () => {
       .split(/[;{}]/)
       .filter((decl) => !/^\s*(box-shadow|mask-image|-webkit-mask-image)\s*:/.test(decl))
       .filter((decl) => /#[0-9a-f]{3,8}\b|rgba?\(/i.test(decl));
-    expect(literal.length).toBeLessThanOrEqual(NOT_YET_TOKENS[file] ?? 0);
+    expect(literal).toEqual([]);
   });
 });

@@ -18,7 +18,7 @@ import { IconAudit } from './components/opsIcons';
 import { allows } from './lib/privileges';
 import { GATES, passes, type Gate } from './lib/gates';
 import { IconLogs, IconPulse } from './pages/system/icons';
-import { IconLock, IconRoute } from './pages/settings/icons';
+import { IconBadgeCheck, IconLock, IconRoute, IconWebhook } from './pages/settings/icons';
 
 export type AppPath =
   | '/'
@@ -40,6 +40,8 @@ export type AppPath =
   | '/system/about'
   | '/settings/authentication'
   | '/settings/proxies'
+  | '/settings/webhooks'
+  | '/settings/trust-policies'
   | '/api-docs';
 
 /** `system:<area>:<action>` the signed-in user must hold to see an entry (the server still authorizes every call). */
@@ -142,6 +144,21 @@ export const NAV: NavSection[] = [
         keywords: 'internet access http proxy outbound corporate no_proxy ca certificate',
         requires: GATES.settings,
       },
+      {
+        to: '/settings/webhooks',
+        label: 'Webhooks',
+        icon: IconWebhook,
+        keywords: 'notifications slack teams events callbacks deliveries integrations',
+        requires: GATES.webhooks,
+      },
+      {
+        to: '/settings/trust-policies',
+        label: 'CI trust',
+        title: 'CI trust policies',
+        icon: IconBadgeCheck,
+        keywords: 'oidc github actions gitlab trusted publishing federation id token pipelines',
+        requires: GATES.settings,
+      },
     ],
   },
 ];
@@ -156,7 +173,7 @@ export const SYSTEM_TABS: NavItem[] = [
     label: 'Status',
     title: 'System status',
     icon: IconPulse,
-    keywords: 'health heartbeat database nats subsystems uptime checks',
+    keywords: 'health heartbeat database events jobs queue subsystems uptime checks',
     requires: GATES.cluster,
   },
   { to: '/system/nodes', label: 'Nodes', title: 'Cluster nodes', icon: IconCluster, keywords: 'cluster edge ha leader quorum', requires: GATES.cluster },

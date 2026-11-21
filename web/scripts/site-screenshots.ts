@@ -206,6 +206,10 @@ const SHOTS: Shot[] = [
   { name: 'authentication', path: '/settings/authentication' },
   { name: 'proxies', path: '/settings/proxies' },
   { name: 'proxies-add', path: '/settings/proxies', act: (p) => button(p, 'Add another proxy') },
+  { name: 'webhooks', path: '/settings/webhooks' },
+  { name: 'webhook-deliveries', path: '/settings/webhooks', act: (p) => button(p, 'Deliveries of ci-trigger') },
+  { name: 'trust-policies', path: '/settings/trust-policies' },
+  { name: 'trust-policy-new', path: '/settings/trust-policies', act: (p) => button(p, 'Add policy') },
   { name: 'account', path: '/account' },
   { name: 'sign-in', path: '/login' },
 ];

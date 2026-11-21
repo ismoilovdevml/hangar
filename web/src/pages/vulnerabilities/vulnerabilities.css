@@ -119,23 +119,12 @@
 .vfrow__fix { color: var(--ok-ink); }
 .data-table .vfrow__sev { justify-self: end; font-size: 11px; font-weight: 700; padding: 3px 8px; white-space: nowrap; }
 
-/* ---------- drawer ---------- */
-.vdrawer-scrim { position: fixed; inset: 0; z-index: var(--z-modal); display: flex; justify-content: flex-end; background: var(--scrim); }
-.vdrawer {
-  width: min(560px, 100%); height: 100%; display: flex; flex-direction: column; background: var(--glass-bg-strong);
-  border-radius: var(--r-panel) 0 0 var(--r-panel); box-shadow: var(--shadow-modal);
-}
-.vdrawer:focus { outline: none; }
-.vdrawer__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 22px 12px; }
-.vdrawer__titles { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.vdrawer__eyebrow { display: flex; flex-wrap: wrap; gap: 6px; }
-.vdrawer__eyebrow .pill { font-size: 11px; font-weight: 700; padding: 3px 8px; }
-.vdrawer__title { font-size: 19px; font-weight: 700; line-height: 1.3; color: var(--ink-strong); overflow-wrap: anywhere; }
-.vdrawer__subtitle { font-size: 12px; color: var(--ink-2); }
+/* ---------- drawer (components/Dialog, variant drawer) ---------- */
+.vdrawer.dialog--drawer { width: min(560px, 100%); }
+.vdrawer .dialog__eyebrow .pill { font-size: 11px; font-weight: 700; padding: 3px 8px; }
+.vdrawer .dialog__title { font-size: 19px; line-height: 1.3; }
+.vdrawer .dialog__desc { font-size: 12px; }
 .vdrawer__ids { font-family: var(--font-mono); }
-.vdrawer__close { flex: none; background: var(--surface-muted); }
-.vdrawer__body { flex: 1; overflow-y: auto; padding: 4px 22px 22px; }
-.vdrawer__foot { padding: 14px 22px 18px; border-top: 1px solid var(--hairline-strong); }
 .vdrawer__actions { display: flex; gap: 8px; }
 .vdrawer__actions .button { flex: 1; min-height: 40px; font-size: 13px; border-radius: var(--r-small); }
 
@@ -167,9 +156,7 @@
 .vpullers__n { flex: none; color: var(--ink-2); }
 
 /* ---------- dialogs ---------- */
-.vdialog-scrim { z-index: var(--z-modal-popover); }
 .vdialog { width: min(520px, 100%); }
-.vdialog .vdialog__body { gap: 14px; }
 .vchoice { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; border: 0; min-width: 0; }
 .vchoice--scroll { max-height: 220px; overflow-y: auto; padding: 4px; border: 1px solid var(--hairline-strong); border-radius: var(--r-small); }
 .vchoice__item { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 4px 8px; border-radius: 8px; font-size: 13.5px; color: var(--ink); cursor: pointer; }
@@ -186,10 +173,7 @@
   .vimpact__bar { flex-basis: 100%; }
   .vplan-panel__head, .vplan-panel__filters { padding-left: 14px; padding-right: 14px; }
   .vplan-panel__title { white-space: nowrap; }
-  .vdrawer { border-radius: 0; }
-  .vdrawer__head { padding: 16px 16px 8px; }
-  .vdrawer__body { padding: 4px 16px 18px; }
-  .vdrawer__foot { padding: 12px 16px 16px; }
+  .vdrawer.dialog--drawer { border-radius: 0; }
 }
 
 .advisory { display: flex; flex-direction: column; gap: 8px; min-width: 0; }

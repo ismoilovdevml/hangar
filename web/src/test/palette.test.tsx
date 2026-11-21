@@ -63,6 +63,8 @@ describe('command palette', () => {
   it.each([
     ['proxies', 'Proxies', '/settings/proxies', ''],
     ['sso', 'Authentication', '/settings/authentication', ''],
+    ['slack', 'Webhooks', '/settings/webhooks', ''],
+    ['github actions', 'CI trust policies', '/settings/trust-policies', ''],
     ['tokens', 'Access tokens', '/account', '#my-tokens-title'],
     ['profile', 'My account', '/account', ''],
     ['health', 'System status', '/system/status', ''],
