@@ -46,7 +46,10 @@ func serveCmd(args []string, stderr io.Writer) error {
 	slog.SetDefault(log)
 	info := version.Get()
 	log.Info("starting hangar", "version", info.Version, "commit", info.Commit, "addr", cfg.Server.Addr,
-		"base_url", cfg.Server.BaseURL, "storage", cfg.Storage.Kind, "nats_embedded", cfg.NATS.Embedded)
+		"base_url", cfg.Server.BaseURL, "storage", cfg.Storage.Kind)
+	for _, w := range cfg.DeprecationWarnings() {
+		log.Warn("deprecated configuration: " + w)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

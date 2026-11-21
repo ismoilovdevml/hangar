@@ -1,5 +1,5 @@
 // Package coretest provides in-memory implementations of every interface in
-// package core, for unit tests that must not need PostgreSQL, S3 or NATS.
+// package core, for unit tests that must not need PostgreSQL or S3.
 //
 // The fakes follow the documented contracts closely enough that a format
 // handler tested against them behaves the same against the real services:

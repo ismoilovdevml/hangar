@@ -105,6 +105,11 @@ func (f *Format) Mount(r chi.Router, deps core.Deps) {
 	h := &handler{f: f, deps: deps}
 	r.HandleFunc("/", h.serve)
 	r.HandleFunc("/*", h.serve)
+	if deps.Jobs != nil && deps.Repos != nil {
+		if err := deps.Jobs.Handle(DropStateJob, h.dropStateJob); err != nil && deps.Logger != nil {
+			deps.Logger.Warn("npm: package state jobs are not handled on this node", "err", err)
+		}
+	}
 	if deps.Events != nil && deps.Repos != nil {
 		h.watch(deps.Events)
 	}

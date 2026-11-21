@@ -13,8 +13,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/health"
@@ -388,45 +386,51 @@ func roundDuration(d time.Duration) string {
 	return d.Round(100 * time.Millisecond).String()
 }
 
-// EventBusCheck reports the NATS connection and JetStream usage.
-func EventBusCheck(nc *nats.Conn, js jetstream.JetStream, embedded bool, ready Readiness) Check {
+// EventListener is a node's event bus connection (events.Listener).
+type EventListener interface {
+	Connected() bool
+	Reconnects() uint64
+	LastError() string
+}
+
+// JobTotals are the jobs of the cluster-wide queue per state.
+type JobTotals struct {
+	Queued, Running, Dead int64
+}
+
+// EventBusCheck reports this node's event listener connection to
+// PostgreSQL (LISTEN/NOTIFY) and the job queue it shares with every node.
+func EventBusCheck(listener EventListener, jobs func(ctx context.Context) (JobTotals, error), ready Readiness) Check {
 	return Check{Name: "eventbus", Label: "Event bus", Run: func(ctx context.Context) Result {
-		mode := "External cluster"
-		if embedded {
-			mode = "Embedded server"
-		}
-		facts := []Fact{{"Mode", mode}}
-		if nc == nil || !nc.IsConnected() {
-			status := "Disconnected"
-			if nc != nil {
-				status = strings.ToLower(nc.Status().String())
+		facts := []Fact{{"Transport", "PostgreSQL LISTEN/NOTIFY"},
+			{"Reconnects", strconv.FormatUint(listener.Reconnects(), 10)}}
+		if !listener.Connected() {
+			detail := "Not listening; events from other nodes are missed until the connection is back (jobs still run)"
+			if e := listener.LastError(); e != "" {
+				detail += ": " + observability.Scrub(e)
 			}
-			return Result{Status: StatusDown, Detail: "Not connected (" + status + "); events and jobs are paused", Facts: facts}
+			return Result{Status: StatusDown, Detail: detail, Facts: facts}
 		}
-		target := nc.ConnectedUrlRedacted()
-		if target != "" {
-			facts = append(facts, Fact{"Server", target})
-		}
-		facts = append(facts, Fact{"Reconnects", strconv.FormatUint(nc.Stats().Reconnects, 10)})
 		var latency *int64
-		metric := "connected"
+		metric := "listening"
 		if r, ok := ready(ctx, "eventbus"); ok {
-			latency, metric = ms(r.LatencyMS), fmt.Sprintf("%d ms", r.LatencyMS)
+			latency = ms(r.LatencyMS)
 			if r.Status != health.StatusOK {
-				return Result{Status: StatusDown, Detail: observability.Scrub(r.Error), Target: target, LatencyMS: latency, Facts: facts}
+				return Result{Status: StatusDown, Detail: observability.Scrub(r.Error), LatencyMS: latency, Facts: facts}
 			}
 		}
-		info, err := js.AccountInfo(ctx)
+		t, err := jobs(ctx)
 		if err != nil {
-			return Result{Status: StatusDown, Detail: "JetStream unavailable: " + err.Error(), Target: target, LatencyMS: latency, Facts: facts}
+			return Result{Status: StatusDegraded, Metric: metric, LatencyMS: latency, Facts: facts,
+				Detail: "Listening; the job queue cannot be read: " + observability.Scrub(err.Error())}
 		}
 		facts = append(facts,
-			Fact{"Streams", strconv.Itoa(info.Streams)},
-			Fact{"Consumers", strconv.Itoa(info.Consumers)},
-			Fact{"Stored", HumanBytes(info.Store)},
+			Fact{"Jobs waiting", strconv.FormatInt(t.Queued, 10)},
+			Fact{"Jobs running", strconv.FormatInt(t.Running, 10)},
+			Fact{"Dead jobs", strconv.FormatInt(t.Dead, 10)},
 		)
-		return Result{Status: StatusHealthy, Metric: metric, Target: target, LatencyMS: latency, Facts: facts,
-			Detail: fmt.Sprintf("JetStream · %s · %s, %s", strings.ToLower(mode), plural(info.Streams, "stream"), plural(info.Consumers, "consumer"))}
+		return Result{Status: StatusHealthy, Metric: metric, LatencyMS: latency, Facts: facts,
+			Detail: fmt.Sprintf("Listening · %s waiting, %d running", plural(int(t.Queued), "job"), t.Running)}
 	}}
 }
 

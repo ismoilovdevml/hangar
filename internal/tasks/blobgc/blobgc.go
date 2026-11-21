@@ -40,7 +40,6 @@ package blobgc
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -52,9 +51,6 @@ import (
 
 	"github.com/ismoilovdevml/hangar/internal/core"
 )
-
-// JobType is the core.Job type the collector handles.
-const JobType = "blob.gc"
 
 // Defaults for Options.
 const (
@@ -413,28 +409,6 @@ func cleanTemp(ctx context.Context, store core.BlobStore, maxAge time.Duration) 
 		return s.CleanTemp(maxAge)
 	}
 	return 0, nil
-}
-
-// Handler adapts the collector to the job queue. The job payload is a JSON
-// Request (store_id, orphan_scan); an empty payload collects every store.
-// The result is logged; per-batch progress is logged at debug level.
-func (c *Collector) Handler() core.JobHandler {
-	return func(ctx context.Context, job core.Job) error {
-		var req Request
-		if len(job.Payload) > 0 {
-			if err := json.Unmarshal(job.Payload, &req); err != nil {
-				return fmt.Errorf("blob gc payload: %w: %w", err, core.ErrInvalid)
-			}
-		}
-		req.OnProgress = func(p Progress) {
-			c.opts.Logger.Debug("blob gc progress", "job_id", job.ID, "blob_store", p.StoreName,
-				"deleted", p.Deleted, "freed_bytes", p.FreedBytes, "failed", p.Failed)
-		}
-		res, err := c.Run(ctx, req)
-		c.opts.Logger.Info("blob gc run", "job_id", job.ID, "stores", len(res.Stores), "deleted", res.Deleted,
-			"freed_bytes", res.FreedBytes, "failed", res.Failed, "error", err)
-		return err
-	}
 }
 
 // sortedCopy returns a sorted copy of ds (for deterministic reports).

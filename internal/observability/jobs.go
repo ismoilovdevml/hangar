@@ -3,25 +3,21 @@ package observability
 import (
 	"context"
 	"log/slog"
-	"strings"
 	"time"
 
-	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/ismoilovdevml/hangar/internal/core"
-	"github.com/ismoilovdevml/hangar/internal/events"
 )
 
 // Job results.
 const (
 	jobSuccess = "success"
 	jobRetry   = "retry"  // failed, will be retried
-	jobFailed  = "failed" // failed on its last attempt; dropped
+	jobFailed  = "failed" // failed on its last attempt; dead
 )
 
 // InstrumentJob wraps a job handler of jobType with metrics, a span and log
@@ -64,52 +60,75 @@ func InstrumentJob(m *Metrics, jobType string, maxAttempts int, h core.JobHandle
 	}
 }
 
-// RegisterJobQueue adds the job queue depth (messages per job type in the
-// JetStream work queue: waiting plus running) and the NATS connection
-// state. Depth is read from the stream on each scrape (bounded by timeout).
-func (m *Metrics) RegisterJobQueue(js jetstream.JetStream, nc *nats.Conn, log *slog.Logger) error {
+// JobCounts are the jobs of one type per state.
+type JobCounts struct {
+	Queued, Running, Dead int64
+}
+
+// JobCounter reads the job queue: jobs per type and state, cluster-wide.
+type JobCounter func(ctx context.Context) (map[string]JobCounts, error)
+
+// EventListener is the state of a node's event bus connection.
+type EventListener interface {
+	Connected() bool
+	Reconnects() uint64
+}
+
+// RegisterJobQueue adds the job queue depth (jobs per type waiting or
+// running, and dead), read from the database on each scrape (bounded by a
+// timeout), and the state of this node's event listener connection.
+// Either argument may be nil.
+func (m *Metrics) RegisterJobQueue(counts JobCounter, listener EventListener, log *slog.Logger) error {
 	if m == nil {
 		return nil
 	}
-	return m.Registry.Register(&queueCollector{m: m, js: js, nc: nc, log: log, timeout: 2 * time.Second})
+	return m.Registry.Register(&queueCollector{m: m, counts: counts, listener: listener, log: log, timeout: 2 * time.Second})
 }
 
 var (
 	descQueueDepth = prometheus.NewDesc("hangar_job_queue_depth",
-		"Jobs queued or running per type (messages in the JetStream work queue).", []string{"type"}, nil)
+		"Jobs waiting or running per type in the cluster-wide job queue.", []string{"type"}, nil)
+	descQueueDead = prometheus.NewDesc("hangar_job_queue_dead",
+		"Jobs per type that failed their last attempt, kept for inspection.", []string{"type"}, nil)
 	descQueueUp = prometheus.NewDesc("hangar_job_queue_up",
-		"1 if the job stream could be read on this scrape, else 0.", nil, nil)
-	descNATSConnected = prometheus.NewDesc("hangar_nats_connected",
-		"1 while the NATS connection is established, else 0.", nil, nil)
-	descNATSReconnects = prometheus.NewDesc("hangar_nats_reconnects_total",
-		"NATS reconnections since start.", nil, nil)
+		"1 if the job queue could be read on this scrape, else 0.", nil, nil)
+	descListenerConnected = prometheus.NewDesc("hangar_event_listener_connected",
+		"1 while this node's event listener connection to PostgreSQL is up, else 0.", nil, nil)
+	descListenerReconnects = prometheus.NewDesc("hangar_event_listener_reconnects_total",
+		"Reconnections of this node's event listener since start.", nil, nil)
 )
 
 type queueCollector struct {
-	m       *Metrics
-	js      jetstream.JetStream
-	nc      *nats.Conn
-	log     *slog.Logger
-	timeout time.Duration
+	m        *Metrics
+	counts   JobCounter
+	listener EventListener
+	log      *slog.Logger
+	timeout  time.Duration
 }
 
 func (c *queueCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- descQueueDepth
+	ch <- descQueueDead
 	ch <- descQueueUp
-	ch <- descNATSConnected
-	ch <- descNATSReconnects
+	ch <- descListenerConnected
+	ch <- descListenerReconnects
 }
 
 func (c *queueCollector) Collect(ch chan<- prometheus.Metric) {
-	if c.nc != nil {
+	if c.listener != nil {
 		connected := 0.0
-		if c.nc.IsConnected() {
+		if c.listener.Connected() {
 			connected = 1
 		}
-		ch <- prometheus.MustNewConstMetric(descNATSConnected, prometheus.GaugeValue, connected)
-		ch <- prometheus.MustNewConstMetric(descNATSReconnects, prometheus.CounterValue, float64(c.nc.Stats().Reconnects))
+		ch <- prometheus.MustNewConstMetric(descListenerConnected, prometheus.GaugeValue, connected)
+		ch <- prometheus.MustNewConstMetric(descListenerReconnects, prometheus.CounterValue, float64(c.listener.Reconnects()))
 	}
-	depth, err := c.depth()
+	if c.counts == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+	counts, err := c.counts(ctx)
 	if err != nil {
 		if c.log != nil {
 			c.log.Debug("job queue depth unavailable", "error", err)
@@ -118,33 +137,19 @@ func (c *queueCollector) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 	ch <- prometheus.MustNewConstMetric(descQueueUp, prometheus.GaugeValue, 1)
+	depth, dead := map[string]float64{}, map[string]float64{}
 	c.m.mu.Lock()
 	for t := range c.m.knownJobs {
-		if _, ok := depth[t]; !ok {
-			depth[t] = 0
-		}
+		depth[t], dead[t] = 0, 0
 	}
 	c.m.mu.Unlock()
+	for typ, n := range counts {
+		t := c.m.jobTypeLabel(typ)
+		depth[t] += float64(n.Queued + n.Running)
+		dead[t] += float64(n.Dead)
+	}
 	for t, n := range depth {
 		ch <- prometheus.MustNewConstMetric(descQueueDepth, prometheus.GaugeValue, n, t)
+		ch <- prometheus.MustNewConstMetric(descQueueDead, prometheus.GaugeValue, dead[t], t)
 	}
-}
-
-func (c *queueCollector) depth() (map[string]float64, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
-	defer cancel()
-	stream, err := c.js.Stream(ctx, events.JobStream)
-	if err != nil {
-		return nil, err
-	}
-	info, err := stream.Info(ctx, jetstream.WithSubjectFilter(events.JobSubjectPrefix+">"))
-	if err != nil {
-		return nil, err
-	}
-	out := map[string]float64{}
-	for subj, n := range info.State.Subjects {
-		t := c.m.jobTypeLabel(strings.TrimPrefix(subj, events.JobSubjectPrefix))
-		out[t] += float64(n)
-	}
-	return out, nil
 }

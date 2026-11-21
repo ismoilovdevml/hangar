@@ -136,6 +136,11 @@ type Server struct {
 	// NodeID names this process on the System status and System logs
 	// screens; unique per node. Empty: the host name.
 	NodeID string `yaml:"node_id"`
+	// NodeURL is where the other nodes reach this one (http://10.0.0.5:8080),
+	// for the System logs of a cluster. Empty: the address this node uses
+	// to reach the database and the port of server.addr, unless
+	// server.addr names a host.
+	NodeURL string `yaml:"node_url"`
 	// DevMode marks a development server: it may start with the keys
 	// published in deploy/docker-compose.yml, which anyone can use to forge
 	// registry tokens and open stored secrets. Never set it in production.
@@ -219,21 +224,32 @@ type S3Storage struct {
 	PartSize int64 `yaml:"part_size"`
 }
 
-// NATS configures the event bus and job queue.
+// NATS is the former event bus and job queue section.
+//
+// Deprecated: since v0.2.0 events and jobs go through PostgreSQL (ADR
+// 0010). The keys are still accepted, so existing configuration files and
+// HANGAR_NATS_* variables keep loading, and are ignored; the server logs a
+// warning when any is set (DeprecationWarnings).
 type NATS struct {
-	// Embedded runs a NATS server with JetStream inside the hangar process
-	// (single-node mode). Otherwise URL points at an external cluster.
 	Embedded bool   `yaml:"embedded"`
 	URL      string `yaml:"url"`
-	// DataDir holds embedded JetStream state.
-	DataDir string `yaml:"data_dir"`
-	// Listen exposes the embedded server on host:port; empty = in-process only.
-	Listen string `yaml:"listen"`
-	// Replicas of every JetStream stream Hangar creates (the job queue), 1
-	// to 5. Embedded NATS is a single server: 1. In a NATS cluster use 3 so
-	// queued jobs survive the loss of a NATS server. Changing it scales the
-	// existing stream on the next start.
-	Replicas int `yaml:"replicas"`
+	DataDir  string `yaml:"data_dir"`
+	Listen   string `yaml:"listen"`
+	Replicas int    `yaml:"replicas"`
+}
+
+// set reports whether any nats.* key has a value.
+func (n NATS) set() bool { return n != NATS{} }
+
+// DeprecationWarnings lists the settings that are accepted but no longer
+// used, for one warning each at startup.
+func (c Config) DeprecationWarnings() []string {
+	var out []string
+	if c.NATS.set() {
+		out = append(out, "nats.* (HANGAR_NATS_*) is ignored since v0.2.0: events and jobs go through PostgreSQL; "+
+			"remove the nats settings and the NATS server (docs/adr/0010-postgresql-events-and-jobs.md)")
+	}
+	return out
 }
 
 // HTTP configures outbound HTTP for proxy repositories (corporate networks).
@@ -508,8 +524,8 @@ type AccessLog struct {
 	SampleRatio float64 `yaml:"sample_ratio"`
 }
 
-// Default returns the built-in defaults: single node, filesystem blobs,
-// embedded NATS, data under ./data.
+// Default returns the built-in defaults: single node, filesystem blobs
+// under ./data.
 func Default() Config {
 	return Config{
 		Server: Server{
@@ -525,7 +541,6 @@ func Default() Config {
 		Storage: Storage{Kind: "fs", FS: FSStorage{Path: "./data/blobs"},
 			GC: GC{GracePeriod: 48 * time.Hour, BatchSize: 100, TempMaxAge: 24 * time.Hour}},
 		Auth: auth.DefaultConfig(),
-		NATS: NATS{Embedded: true, DataDir: "./data/nats", Replicas: 1},
 		HTTP: HTTP{
 			UseEnvironment:      true,
 			ConnectTimeout:      10 * time.Second,
@@ -618,6 +633,12 @@ func (c *Config) Validate() error {
 	if len(c.Server.NodeID) > 128 {
 		errs = append(errs, errors.New("server.node_id: at most 128 characters"))
 	}
+	if c.Server.NodeURL != "" {
+		u, err := url.Parse(c.Server.NodeURL)
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil {
+			errs = append(errs, fmt.Errorf("server.node_url %q must be an http:// or https:// URL without credentials", redactURL(c.Server.NodeURL)))
+		}
+	}
 	switch c.Storage.Kind {
 	case "fs":
 		if c.Storage.FS.Path == "" {
@@ -645,19 +666,6 @@ func (c *Config) Validate() error {
 	}
 	if (c.Bootstrap.AdminUser == "") != (c.Bootstrap.AdminPassword == "") {
 		errs = append(errs, errors.New("bootstrap.admin_user and bootstrap.admin_password must be set together"))
-	}
-	if c.NATS.Embedded {
-		if c.NATS.DataDir == "" {
-			errs = append(errs, errors.New("nats.data_dir is required for embedded NATS"))
-		}
-		if c.NATS.Replicas != 1 {
-			errs = append(errs, fmt.Errorf("nats.replicas %d: embedded NATS is a single server, use 1 (or an external NATS cluster)", c.NATS.Replicas))
-		}
-	} else if c.NATS.URL == "" {
-		errs = append(errs, errors.New("nats.url is required when nats.embedded=false"))
-	}
-	if c.NATS.Replicas < 1 || c.NATS.Replicas > 5 {
-		errs = append(errs, fmt.Errorf("nats.replicas %d: want 1 to 5", c.NATS.Replicas))
 	}
 	if c.HTTP.Proxy != "" {
 		u, err := url.Parse(c.HTTP.Proxy)

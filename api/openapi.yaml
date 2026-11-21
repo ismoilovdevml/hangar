@@ -454,7 +454,7 @@ paths:
       operationId: getSystemHealth
       summary: Subsystem health of the node that answers, checked now
       description: |
-        Database, blob stores, NATS / JetStream, task scheduler, search index,
+        Database, blob stores, event bus and job queue, task scheduler, search index,
         external sign-in and proxy upstreams, each `healthy`, `degraded` or
         `down` with a detail sentence and the time it was checked. Always
         200; read `status`. Requires `system:cluster:read`.
@@ -478,7 +478,7 @@ paths:
         returned (oldest first); pass the returned `cursor` to get only newer
         records, and `wait` to hold the request until one arrives (long poll).
         `cursor=0` reads the buffer from its oldest record (downloads). Other
-        nodes are asked over NATS. Full logs stay in the container or journal
+        nodes are asked over HTTP. Full logs stay in the container or journal
         output. Requires `system:cluster:admin`.
       parameters:
         - name: node

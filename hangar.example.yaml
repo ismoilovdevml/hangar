@@ -61,6 +61,11 @@ server:
   # Name of this node on the System status and System logs screens; must be
   # unique per node. Default: empty (the host name).
   node_id: ""
+  # Where the other nodes reach this one, for the System logs of a cluster,
+  # e.g. http://10.0.0.5:8080 (in Kubernetes: http://$(POD_IP):8080).
+  # Default: empty (the address this node uses to reach the database, with
+  # the port of server.addr).
+  node_url: ""
 
 log:
   level: info # debug, info, warn, error
@@ -126,22 +131,9 @@ storage:
   # The default store above always may.
   allow_ambient_credentials: false
 
-nats:
-  # Single node: run NATS JetStream inside the hangar process. Several nodes:
-  # embedded=false and url pointing at a NATS cluster with JetStream.
-  embedded: true
-  # Embedded JetStream state.
-  data_dir: ./data/nats
-  # Expose the embedded server (host:port); empty = in-process only.
-  listen: ""
-  # External cluster, e.g. nats://user:password@nats:4222.
-  url: ""
-  # Replicas of every JetStream stream Hangar creates (the job queue), 1 to
-  # 5. Embedded NATS is a single server: keep 1. On a 3-node NATS cluster use
-  # 3, so queued jobs survive the loss of one NATS server. Changing it scales
-  # the existing stream when the next node starts; it must not exceed the
-  # number of NATS servers.
-  replicas: 1
+# Events between nodes and the background job queue go through PostgreSQL
+# (LISTEN/NOTIFY and the jobs table) since v0.2.0: there is nothing to
+# configure. A nats: section from an older file is ignored with a warning.
 
 # Outbound HTTP for proxy repositories (Maven Central, npmjs, Docker Hub, ...).
 # Each proxy repository inherits these settings and can override proxy, CA

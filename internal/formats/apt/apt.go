@@ -191,9 +191,34 @@ func (f *Format) Mount(r chi.Router, deps core.Deps) {
 	r.Put("/upload", h.upload)
 	r.Post("/upload", h.upload)
 	r.Delete("/pool/*", h.deletePool)
+	if deps.Jobs != nil {
+		if err := deps.Jobs.Handle(ReindexJob, h.reindexJob); err != nil {
+			h.Log.Warn("apt: index regeneration jobs are not handled on this node", "err", err)
+		}
+	}
 	if deps.Events != nil {
 		h.watch(deps.Events)
 	}
+}
+
+// ReindexJob regenerates the indexes of one hosted repository (payload
+// repokit.ReindexPayload). It is coalesced per repository: a burst of
+// deletes or quarantines regenerates the indexes once, on one node.
+const ReindexJob = "apt.reindex"
+
+// reindexJob is the ReindexJob handler.
+func (h *handler) reindexJob(ctx context.Context, j core.Job) error {
+	ctx = core.WithPrincipal(ctx, systemPrincipal())
+	repo, err := h.ReindexTarget(ctx, j)
+	if repo == nil || err != nil {
+		return err
+	}
+	return h.reindex(ctx, repo)
+}
+
+// reindexAsSystem regenerates the indexes acting as the system.
+func (h *handler) reindexAsSystem(ctx context.Context, repo *core.Repository) error {
+	return h.reindex(core.WithPrincipal(ctx, systemPrincipal()), repo)
 }
 
 // watch regenerates hosted indexes when packages are deleted outside this
@@ -208,16 +233,20 @@ func (h *handler) watch(bus core.EventBus) {
 		}
 		go fn(core.WithPrincipal(context.Background(), systemPrincipal()), repo)
 	}
-	// Quarantined packages leave the indexes; released ones return.
+	// Quarantined packages leave the indexes; released ones return. Every
+	// node receives the event and enqueues; the queue keeps one job.
 	for _, typ := range []string{core.EventComponentDeleted, core.EventComponentQuarantined, core.EventComponentReleased} {
 		_, _ = bus.Subscribe(ctx, typ, func(_ context.Context, e core.Event) {
-			onRepo(e, func(ctx context.Context, repo *core.Repository) {
-				if repo.Type == core.RepoHosted {
-					if err := h.reindex(ctx, repo); err != nil {
-						h.Log.WarnContext(ctx, "regenerate indexes", "repository", repo.Name, "event", e.Type, "err", err)
-					}
-				}
-			})
+			if e.Type == core.EventResync {
+				return
+			}
+			repo, err := h.Deps.Repos.Get(ctx, e.Repository)
+			if err != nil || repo.Format != Name || repo.Type != core.RepoHosted {
+				return
+			}
+			if err := h.EnqueueReindex(ctx, ReindexJob, repo, h.reindexAsSystem); err != nil {
+				h.Log.WarnContext(ctx, "regenerate indexes", "repository", repo.Name, "event", e.Type, "err", err)
+			}
 		})
 	}
 	_, _ = bus.Subscribe(ctx, core.EventRepositoryCreated, func(_ context.Context, e core.Event) {

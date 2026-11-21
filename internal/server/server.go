@@ -48,6 +48,10 @@ type RouterOptions struct {
 	// Security configures the hardening middleware: security headers, CORS,
 	// body limits and per-IP rate limits (security.go).
 	Security Security
+	// Internal serves /internal/..., the requests nodes of a cluster send
+	// each other (sysmon.NodeLogsPath). It authenticates them itself; nil
+	// serves none.
+	Internal http.Handler
 }
 
 // NewRouter builds the full route tree:
@@ -55,6 +59,7 @@ type RouterOptions struct {
 //	/healthz /readyz /metrics      operations
 //	/api/v1/...                    REST API (api/openapi.yaml)
 //	/llms.txt                      index for automated clients
+//	/internal/...                  node-to-node requests (signed)
 //	/repository/{repo}/... /v2/... format protocols
 //	everything else                web UI (SPA)
 func NewRouter(o RouterOptions) http.Handler {
@@ -96,6 +101,15 @@ func NewRouter(o RouterOptions) http.Handler {
 		r.Group(func(g chi.Router) {
 			g.Use(apiHeaders, sec.apiRateLimit, sec.bodyLimit(maxOtherBody))
 			g.Get("/llms.txt", o.API.LLMsTxt)
+		})
+	}
+
+	if o.Internal != nil {
+		r.Group(func(g chi.Router) {
+			// Refused signatures count towards the per-IP failed
+			// authentication limit, like every other endpoint.
+			g.Use(apiHeaders, sec.failedAuthLimit, sec.bodyLimit(maxOtherBody))
+			g.Handle("/internal/*", o.Internal)
 		})
 	}
 

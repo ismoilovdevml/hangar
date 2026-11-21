@@ -37,8 +37,16 @@ const (
 	EventAssetDeleted = "asset.deleted"
 )
 
-// Event is a fact that already happened. Handlers must be idempotent: delivery
-// is at-least-once in clustered mode.
+// EventResync is delivered to every subscription, whatever its pattern, when
+// the bus may have missed events from other nodes: its connection to the
+// database was lost and re-established, or a slow subscriber's queue
+// overflowed. Subscribers that cache must drop everything they derived from
+// events; subscribers that only trigger work may ignore it. It has no
+// Repository, Subject or Data.
+const EventResync = "bus.resync"
+
+// Event is a fact that already happened. Handlers must be idempotent and
+// must not rely on delivery: an event can be missed (see EventResync).
 type Event struct {
 	ID         string          `json:"id"`
 	Type       string          `json:"type"`
@@ -56,7 +64,14 @@ type Job struct {
 	// Key deduplicates: a job with the same Type+Key enqueued again within the
 	// queue's deduplication window (at least 2 minutes) is stored once, so
 	// handlers must still tolerate repeats. Empty = no dedup.
-	Key        string          `json:"key,omitempty"`
+	Key string `json:"key,omitempty"`
+	// Debounce, when positive, coalesces instead of deduplicating (Key is
+	// required): the job runs no sooner than Debounce after it was first
+	// enqueued, and enqueues of the same Type+Key while it waits merge into
+	// it. One enqueued while such a job runs waits for a run of its own, so
+	// a change made during a run is never lost. Use it for work that
+	// recomputes state from scratch, such as index regeneration.
+	Debounce   time.Duration   `json:"-"`
 	Payload    json.RawMessage `json:"payload,omitempty"`
 	Attempt    int             `json:"attempt"`
 	EnqueuedAt time.Time       `json:"enqueued_at"`

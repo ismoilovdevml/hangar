@@ -177,9 +177,34 @@ func (f *Format) Mount(r chi.Router, deps core.Deps) {
 	r.Put("/*", h.put)
 	r.Post("/upload", h.post)
 	r.Delete("/*", h.delete)
+	if deps.Jobs != nil {
+		if err := deps.Jobs.Handle(ReindexJob, h.reindexJob); err != nil {
+			h.Log.Warn("rpm: repodata regeneration jobs are not handled on this node", "err", err)
+		}
+	}
 	if deps.Events != nil {
 		h.watch(deps.Events)
 	}
+}
+
+// ReindexJob regenerates every repodata root of one hosted repository
+// (payload repokit.ReindexPayload). It is coalesced per repository: a burst
+// of deletes or quarantines regenerates the repodata once, on one node.
+const ReindexJob = "rpm.reindex"
+
+// reindexJob is the ReindexJob handler.
+func (h *handler) reindexJob(ctx context.Context, j core.Job) error {
+	ctx = core.WithPrincipal(ctx, systemPrincipal())
+	repo, err := h.ReindexTarget(ctx, j)
+	if repo == nil || err != nil {
+		return err
+	}
+	return h.reindexAll(ctx, repo)
+}
+
+// reindexAllAsSystem regenerates the repodata acting as the system.
+func (h *handler) reindexAllAsSystem(ctx context.Context, repo *core.Repository) error {
+	return h.reindexAll(core.WithPrincipal(ctx, systemPrincipal()), repo)
 }
 
 func (h *handler) publicKey(binary bool) http.HandlerFunc {
@@ -205,15 +230,19 @@ func (h *handler) watch(bus core.EventBus) {
 		}
 		go fn(core.WithPrincipal(context.Background(), systemPrincipal()), repo)
 	}
+	// Every node receives the event and enqueues; the queue keeps one job.
 	for _, typ := range []string{core.EventComponentDeleted, core.EventComponentQuarantined, core.EventComponentReleased} {
 		_, _ = bus.Subscribe(ctx, typ, func(_ context.Context, e core.Event) {
-			onRepo(e, func(ctx context.Context, repo *core.Repository) {
-				if repo.Type == core.RepoHosted {
-					if err := h.reindexAll(ctx, repo); err != nil {
-						h.Log.WarnContext(ctx, "regenerate repodata", "repository", repo.Name, "event", e.Type, "err", err)
-					}
-				}
-			})
+			if e.Type == core.EventResync {
+				return
+			}
+			repo, err := h.Deps.Repos.Get(ctx, e.Repository)
+			if err != nil || repo.Format != Name || repo.Type != core.RepoHosted {
+				return
+			}
+			if err := h.EnqueueReindex(ctx, ReindexJob, repo, h.reindexAllAsSystem); err != nil {
+				h.Log.WarnContext(ctx, "regenerate repodata", "repository", repo.Name, "event", e.Type, "err", err)
+			}
 		})
 	}
 	_, _ = bus.Subscribe(ctx, core.EventRepositoryCreated, func(_ context.Context, e core.Event) {

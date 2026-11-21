@@ -79,6 +79,13 @@ func (c *quarantineCache) forget(repo string) {
 	}
 }
 
+// forgetAll drops every view (component events may have been missed).
+func (c *quarantineCache) forgetAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	clear(c.views)
+}
+
 // quarantined reports whether content d of image in repo is blocked, and by
 // which quarantined tag.
 func (h *handler) quarantined(ctx context.Context, repo *core.Repository, image string, d core.Digest) (string, bool, error) {

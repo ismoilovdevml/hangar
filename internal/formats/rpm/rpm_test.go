@@ -52,6 +52,8 @@ func newFixture(t *testing.T) *fixture {
 	_, _ = rand.Read(b)
 	kr, _ := secrets.NewKeyring(base64.StdEncoding.EncodeToString(b), nil)
 	signer := signing.New(signing.Options{Store: signing.NewMemStore(), Secrets: kr, Algorithm: signing.AlgorithmEd25519})
+	// Repodata regeneration after deletes elsewhere is a job: run it.
+	env.Jobs.RunInline = true
 	f.h = formats.NewHandler(env.Deps(), rpm.New(signer))
 	return f
 }
