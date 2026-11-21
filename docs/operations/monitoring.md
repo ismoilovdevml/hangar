@@ -121,7 +121,8 @@ the pods and, with `metrics.serviceMonitor.enabled`, adds the matching
 ```bash
 kubectl -n hangar create secret generic hangar-metrics \
   --from-literal=metrics-token="$(openssl rand -hex 32)"
-helm upgrade hangar deploy/helm/hangar -n hangar --reuse-values \
+helm upgrade hangar oci://ghcr.io/ismoilovdevml/charts/hangar --version <installed version> \
+  -n hangar --reuse-values \
   --set metrics.auth.mode=bearer --set metrics.auth.existingSecret=hangar-metrics
 ```
 

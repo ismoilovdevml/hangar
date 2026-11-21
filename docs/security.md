@@ -17,6 +17,7 @@ an operator must configure, and how to report a vulnerability
 | Availability | Slow-header, slow-body and oversized requests, API floods | `server.read_header_timeout`, body idle timeout, header and API body limits, per-IP API rate limit; uploads are streamed, never buffered. |
 | Rights | A limited administrator widening their own rights or taking over an account | Grants and account changes are limited to what the caller holds; groups expose only what their creator may read (below). Registry tokens are not credentials: renewing one reloads the account. |
 | Audit trail | Repudiation | Every mutation, denial and failed sign-in is recorded in the append-only audit log with the client IP (forwarding headers honoured only from `server.trusted_proxies`). |
+| Hangar's own releases | A tampered or substituted image, chart, binary or installer | From v0.2.0 the release workflow signs both images, the Helm chart and every release file with cosign (keyless, certificate bound to the workflow and tag), attaches SPDX SBOMs and records SLSA build provenance; releases are published only after the tests, `govulncheck`, `npm audit` and a Trivy scan pass. Verify before deploying: [deploy/verify-release.md](deploy/verify-release.md). |
 
 Out of scope: an attacker who can write to the database or read the
 server's environment (they hold the secret key, and can redirect a proxy to
@@ -146,6 +147,9 @@ A lost key cannot be recovered: re-enter the affected credentials.
   your hosted repositories publish, and reserve them for the hosted member in
   groups. See [guides/routing-rules.md](guides/routing-rules.md).
 
+- [ ] Verify the images, chart or files you deploy against the release
+      workflow's identity, and pin the image by the verified digest
+      ([deploy/verify-release.md](deploy/verify-release.md)).
 - [ ] Serve Hangar over HTTPS only. Terminate TLS at a reverse proxy, list
       it in `server.trusted_proxies` so `X-Forwarded-Proto` is believed, and
       set `server.base_url` to the `https://` URL. HSTS is then sent
