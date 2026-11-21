@@ -18,6 +18,7 @@ const maxPrivileges = 100
 var SystemAreas = []string{
 	core.SystemUsers, core.SystemTokens, core.SystemRepos, core.SystemBlobStores, core.SystemTasks,
 	core.SystemCleanup, core.SystemSecurity, core.SystemAudit, core.SystemCluster, core.SystemSettings,
+	core.SystemWebhooks,
 }
 
 // Actions in the order they are checked and shown.

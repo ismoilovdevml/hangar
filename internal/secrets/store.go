@@ -54,7 +54,8 @@ type Report struct {
 
 // Sweep walks every stored secret (repositories.config, blob_stores.config,
 // the source credentials of import tasks, the sign-in settings, the outbound
-// proxy passwords and the repository signing keys) in one transaction,
+// proxy passwords, the repository signing keys and the webhook signing
+// secrets) in one transaction,
 // sealing plaintext values with the primary key, upgrading legacy hgs1 values
 // to hgs2 bound to their row and field, and, with Rewrap, re-wrapping values
 // sealed with previous keys. It is idempotent and safe to run on several
@@ -154,6 +155,12 @@ func Sweep(ctx context.Context, pool *pgxpool.Pool, k *Keyring, opts SweepOption
 			func(doc map[string]any, where, key string) (bool, error) {
 				return mapFields(doc, visit(where, func(string) Context { return SigningKeyContext(key) }), "", "private_key")
 			}},
+		{"webhooks", `SELECT id::text, name, jsonb_build_object('secret', secret) FROM webhooks
+			WHERE secret <> '' ORDER BY name FOR UPDATE`,
+			`UPDATE webhooks SET secret = $2::jsonb ->> 'secret' WHERE id = $1::uuid`,
+			func(doc map[string]any, where, key string) (bool, error) {
+				return mapFields(doc, visit(where, func(string) Context { return WebhookContext(key) }), "", "secret")
+			}},
 		{"tasks", `SELECT id::text, name, config FROM tasks WHERE config ? 'source' OR config ? 'inventory' ORDER BY name FOR UPDATE`,
 			`UPDATE tasks SET config = $2 WHERE id = $1`,
 			func(doc map[string]any, where, key string) (bool, error) {
@@ -161,7 +168,7 @@ func Sweep(ctx context.Context, pool *pgxpool.Pool, k *Keyring, opts SweepOption
 			}},
 	}
 	// Tables of later migrations are skipped when absent (schemas migrated in part).
-	optional := map[string]bool{"signing_keys": true}
+	optional := map[string]bool{"signing_keys": true, "webhooks": true}
 	for _, t := range tables {
 		if optional[t.table] {
 			var present bool

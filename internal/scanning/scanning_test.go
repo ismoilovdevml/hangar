@@ -130,6 +130,8 @@ type env struct {
 	jobs   *coretest.JobQueue
 	audit  *coretest.AuditLog
 	seed   apitest.Seeder
+	// notes receives what the service hands to webhooks.
+	notes *notifier
 
 	nugetRepo, npmRepo, dockerRepo string
 	newtonsoft, ui, image          string
@@ -139,7 +141,7 @@ func newEnv(t *testing.T) *env {
 	t.Helper()
 	pool := apitest.MigratedPool(t)
 	e := &env{t: t, pool: pool, db: newAdvisoryDB(), events: coretest.NewEventBus(), jobs: coretest.NewJobQueue(),
-		audit: coretest.NewAuditLog(), seed: apitest.Seeder{T: t, Pool: pool}}
+		audit: coretest.NewAuditLog(), seed: apitest.Seeder{T: t, Pool: pool}, notes: &notifier{}}
 	srv := httptest.NewServer(e.db.handler())
 	t.Cleanup(srv.Close)
 	client, err := osv.New(osv.Options{BaseURL: srv.URL, HTTPClient: srv.Client(), MinInterval: -1,
@@ -148,7 +150,7 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	e.svc, err = scanning.New(scanning.Options{Pool: pool, Advisories: client, SourceURL: srv.URL, Enabled: true,
-		Events: e.events, Jobs: e.jobs, Audit: e.audit})
+		Events: e.events, Jobs: e.jobs, Audit: e.audit, Notifier: e.notes})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,6 +315,68 @@ func TestScanFindingsStatusAndQuarantine(t *testing.T) {
 	st, err := e.svc.Status(ctx, nil)
 	if err != nil || st.Coverage.Scanned != 1 || st.Coverage.Never != 1 || st.Coverage.Unsupported != 1 || st.Coverage.LastScanAt == nil {
 		t.Fatalf("status = %+v %+v, %v", st, st.Coverage, err)
+	}
+}
+
+// notifier records the events handed to webhooks.
+type notifier struct {
+	mu     sync.Mutex
+	events []core.Event
+}
+
+func (n *notifier) Notify(_ context.Context, e core.Event) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.events = append(n.events, e)
+}
+
+func (n *notifier) of(typ string) []core.Event {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	var out []core.Event
+	for _, e := range n.events {
+		if e.Type == typ {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// TestNotifierGetsNewFindings: webhooks hear of findings new to a
+// component (scan.finding) and of quarantine changes; a rescan that finds
+// nothing new raises nothing.
+func TestNotifierGetsNewFindings(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	if _, err := e.svc.ScanComponent(ctx, e.newtonsoft); err != nil {
+		t.Fatal(err)
+	}
+	found := e.notes.of(core.EventScanFinding)
+	if len(found) != 1 || found[0].Repository != "nuget-hosted" || found[0].Actor != "system" {
+		t.Fatalf("scan.finding events = %+v", found)
+	}
+	var data struct {
+		Count       int    `json:"count"`
+		MaxSeverity string `json:"max_severity"`
+		Scanner     string `json:"scanner"`
+		Findings    []struct {
+			AdvisoryID string `json:"advisory_id"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(found[0].Data, &data); err != nil {
+		t.Fatal(err)
+	}
+	if data.Count != 2 || data.MaxSeverity != "critical" || data.Scanner != scanning.SourceOSV || len(data.Findings) != 2 {
+		t.Fatalf("scan.finding data = %+v", data)
+	}
+	if q := e.notes.of(core.EventComponentQuarantined); len(q) != 1 || q[0].Repository != "nuget-hosted" {
+		t.Fatalf("quarantine events = %+v", q)
+	}
+	if _, err := e.svc.ScanComponent(ctx, e.newtonsoft); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(e.notes.of(core.EventScanFinding)); n != 1 {
+		t.Fatalf("a rescan without new findings raised scan.finding (%d events)", n)
 	}
 }
 

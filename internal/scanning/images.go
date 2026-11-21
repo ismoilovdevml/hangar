@@ -258,7 +258,8 @@ func (s *Service) scanImage(ctx context.Context, t *Target, cache *reportCache) 
 	if err != nil {
 		return Summary{}, err
 	}
-	return Summary{Scanned: 1, Findings: len(found), New: added}, nil
+	s.notifyFindings(ctx, t, added, SourceTrivy)
+	return Summary{Scanned: 1, Findings: len(found), New: len(added)}, nil
 }
 
 // pickPlatforms applies the platform selection, default platform first.

@@ -115,6 +115,17 @@ func (s *Service) RequireCoversRoles(ctx context.Context, auditAction, target st
 	return s.requireCoversRoles(ctx, auditAction, target, roles)
 }
 
+// RequireCovers fails with ErrForbidden, and audits the denial as
+// auditAction on target, unless the context principal covers every
+// privilege of want (see covers). what names the thing being configured, for
+// the error message. Packages that let a caller route data out of Hangar on
+// the caller's behalf (webhooks, which send the events of the repositories
+// they name) use it so that configuring them is no wider than reading that
+// data directly.
+func (s *Service) RequireCovers(ctx context.Context, auditAction, target, what string, want []core.Privilege) error {
+	return s.requireCovers(ctx, auditAction, target, what, want)
+}
+
 // requireCoversUser: the caller covers everything account u holds. Acting on
 // yourself needs no coverage.
 func (s *Service) requireCoversUser(ctx context.Context, auditAction string, u *User) error {

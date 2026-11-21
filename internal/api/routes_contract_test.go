@@ -20,6 +20,7 @@ import (
 	"github.com/ismoilovdevml/hangar/internal/core"
 	"github.com/ismoilovdevml/hangar/internal/settings"
 	"github.com/ismoilovdevml/hangar/internal/signing"
+	"github.com/ismoilovdevml/hangar/internal/webhooks"
 )
 
 // specOperation is one operation of api/openapi.yaml.
@@ -62,13 +63,13 @@ func specOperations(t *testing.T) []specOperation {
 
 // fullRouter mounts the API with every route registrar the server wires in
 // (cmd/hangar/wire.go): the core routes, the authentication routes and the
-// settings, signing-key and trust policy routes. Handlers are only registered, never
+// settings, signing-key and trust policy and webhook routes. Handlers are only registered, never
 // called, so the services can be empty.
 func fullRouter() chi.Router {
 	r := chi.NewRouter()
 	(&api.API{
 		AuthRoutes:  api.RouteFunc(func(r chi.Router) { httpapi.Register(r, &auth.Service{}, httpapi.Options{}) }),
-		ExtraRoutes: []api.RouteRegistrar{&settings.Service{}, &signing.Service{}, &federation.Service{}},
+		ExtraRoutes: []api.RouteRegistrar{&settings.Service{}, &signing.Service{}, &federation.Service{}, &webhooks.Service{}},
 	}).Mount(r)
 	return r
 }

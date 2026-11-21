@@ -22,6 +22,11 @@ const (
 	EventUpstreamStatus       = "upstream.status" // proxy remote became healthy/slow/blocked
 )
 
+// EventScanFinding is raised when a scan finds vulnerabilities that are new
+// to a component. It goes to webhooks (core.Event via the scanning service's
+// notifier), not to the event bus. Data lists the new findings.
+const EventScanFinding = "scan.finding"
+
 // EventRepositoryCacheInvalidated is published when an administrator purges
 // the remote answers a proxy repository remembers (404s, rate limits); every
 // node drops its copy.

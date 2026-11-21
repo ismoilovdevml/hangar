@@ -72,6 +72,8 @@ tags:
     description: Users, service accounts, roles and access tokens.
   - name: settings
     description: Sign-in providers, outbound proxies and CI OIDC trust policies.
+  - name: webhooks
+    description: Outgoing webhooks (generic JSON, Slack, Microsoft Teams) and their deliveries.
   - name: audit
     description: The audit log.
   - name: cluster
@@ -3004,6 +3006,198 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /webhooks:
+    get:
+      tags: [webhooks]
+      operationId: listWebhooks
+      summary: Outgoing webhooks
+      description: |
+        `system:webhooks:read`. Every webhook, by name. URLs are redacted to
+        scheme, host and port (see `Webhook.url`); secrets are never returned.
+      responses:
+        "200":
+          description: Webhooks
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [webhooks]
+      operationId: createWebhook
+      summary: Create a webhook
+      description: |
+        `system:webhooks:admin`, and read access to every repository the
+        webhook names (`repo:*:read` when `repositories` is empty): a webhook
+        sends the events of those repositories to its URL. The URL must pass
+        the outbound address policy of proxy repository remotes (internal and
+        reserved addresses need `http.allow_private_networks`) and must not
+        carry user information. A `secret` needs `security.secret_key`; a
+        sealed value (`hgs1.`/`hgs2.`) is refused. Audited as `webhook.create`
+        (redacted URL, without the secret).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Webhook" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /webhooks/{id}:
+    parameters:
+      - $ref: "#/components/parameters/WebhookId"
+    get:
+      tags: [webhooks]
+      operationId: getWebhook
+      summary: One webhook
+      description: "`system:webhooks:read`."
+      responses:
+        "200":
+          description: Webhook
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Webhook" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [webhooks]
+      operationId: updateWebhook
+      summary: Change a webhook
+      description: |
+        `system:webhooks:admin`, and read access to every repository the
+        webhook names. Replaces the settings. An empty `url` keeps the stored
+        URL, an empty `secret` the stored secret and an absent `enabled` the
+        current state. A URL that moves to another scheme, host or port needs
+        the secret again (or `clear_secret: true`): a stored secret is only
+        sent to the endpoint it was entered for. Enabling a webhook resets
+        its failure count. Audited as `webhook.update`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookInput" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Webhook" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [webhooks]
+      operationId: deleteWebhook
+      summary: Delete a webhook and its deliveries
+      description: "`system:webhooks:admin`. Audited as `webhook.delete`."
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /webhooks/{id}:test:
+    parameters:
+      - $ref: "#/components/parameters/WebhookId"
+    post:
+      tags: [webhooks]
+      operationId: testWebhook
+      summary: Send a ping to a webhook now
+      description: |
+        `system:webhooks:admin`. Sends a `ping` event (also to a disabled
+        webhook), waits for the answer and returns the recorded delivery:
+        `state` is `succeeded` or `failed`, with status code, latency and
+        error. A test is not retried and does not count towards disabling the
+        webhook. Audited as `webhook.test`.
+      responses:
+        "200":
+          description: Outcome (also when the receiver failed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookDelivery" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /webhooks/{id}/deliveries:
+    parameters:
+      - $ref: "#/components/parameters/WebhookId"
+    get:
+      tags: [webhooks]
+      operationId: listWebhookDeliveries
+      summary: Deliveries of a webhook, newest first
+      description: |
+        `system:webhooks:read`, and read access to every repository the
+        webhook names. Finished deliveries are kept for 30 days.
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - name: state
+          in: query
+          schema: { type: string, enum: [pending, delivering, succeeded, failed] }
+      responses:
+        "200":
+          description: A page of deliveries
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookDeliveryPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /webhooks/{id}/deliveries/{delivery_id}:
+    parameters:
+      - $ref: "#/components/parameters/WebhookId"
+      - $ref: "#/components/parameters/WebhookDeliveryId"
+    get:
+      tags: [webhooks]
+      operationId: getWebhookDelivery
+      summary: One delivery with its payload
+      description: |
+        `system:webhooks:read`, and read access to every repository the
+        webhook names. `payload` is the generic envelope (`WebhookPayload`);
+        Slack and Teams bodies are rendered from it when sent.
+      responses:
+        "200":
+          description: Delivery
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookDelivery" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /webhooks/{id}/deliveries/{delivery_id}:redeliver:
+    parameters:
+      - $ref: "#/components/parameters/WebhookId"
+      - $ref: "#/components/parameters/WebhookDeliveryId"
+    post:
+      tags: [webhooks]
+      operationId: redeliverWebhookDelivery
+      summary: Send the event of a delivery again
+      description: |
+        `system:webhooks:admin`, and read access to every repository the
+        webhook names. Queues a new delivery of the same event (same
+        `event_id`, `redelivery_of` set) with a full set of attempts. The
+        webhook must be enabled (400 otherwise). Audited as
+        `webhook.redeliver`.
+      responses:
+        "202":
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookDelivery" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /tokens:
     get:
       tags: [access]
@@ -3330,6 +3524,16 @@ components:
       in: path
       required: true
       schema: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" }
+    WebhookId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    WebhookDeliveryId:
+      name: delivery_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
 
   responses:
     BadRequest:
@@ -6353,6 +6557,145 @@ components:
           description: HTTPS_PROXY of the server (password masked), used when there is no default
         ca_file: { type: string, description: http.ca_file, trusted for every request }
         limited: { type: boolean, description: Items carry names only (caller cannot read settings) }
+    Webhook:
+      type: object
+      required: [id, name, url, events, repositories, format, secret_configured, enabled, consecutive_failures,
+        disabled_reason, last_delivery_at, last_status_code, created_at, updated_at, updated_by]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        url:
+          type: string
+          description: |
+            Redacted: scheme, host and port, with `/***` standing for any path
+            and query. Incoming-webhook URLs carry their credential in the path,
+            so the full URL is write-only.
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/WebhookEvent" }
+        repositories:
+          type: array
+          description: Repository names or globs whose events are sent; empty = every repository
+          items: { type: string }
+        format: { $ref: "#/components/schemas/WebhookFormat" }
+        secret_configured: { type: boolean, description: Deliveries are signed (X-Hangar-Signature) }
+        enabled: { type: boolean }
+        consecutive_failures:
+          type: integer
+          description: Failed attempts in a row; 20 disable the webhook
+        disabled_reason:
+          type: string
+          description: Why the server disabled the webhook; empty when enabled or disabled by hand
+        last_delivery_at: { type: [string, "null"], format: date-time }
+        last_status_code: { type: [integer, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        updated_by: { type: string }
+    WebhookList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Webhook" }
+    WebhookInput:
+      type: object
+      required: [name, events]
+      properties:
+        name: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$" }
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: http:// or https:// URL without user information; required on create, empty keeps the stored one on update
+        events:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/WebhookEvent" }
+        repositories:
+          type: array
+          maxItems: 100
+          description: Repository names or globs (`npm-*`); empty = every repository
+          items: { type: string }
+        format: { $ref: "#/components/schemas/WebhookFormat" }
+        secret:
+          type: string
+          writeOnly: true
+          description: HMAC-SHA256 signing secret; empty keeps the stored one
+        clear_secret: { type: boolean, description: Remove the stored secret }
+        enabled: { type: boolean, description: Default true on create; absent keeps the state on update }
+    WebhookFormat:
+      type: string
+      enum: [generic, slack, teams]
+      default: generic
+      description: |
+        `generic`: the JSON envelope (`WebhookPayload`). `slack`: a Slack
+        incoming-webhook message (`text` and blocks). `teams`: a Microsoft
+        Teams message with an Adaptive Card (Workflows or incoming webhook).
+    WebhookEvent:
+      type: string
+      enum: [component.published, component.deleted, component.quarantined, component.released,
+        repository.created, repository.deleted, scan.finding]
+    WebhookDelivery:
+      type: object
+      required: [id, webhook_id, event_id, event, repository, subject, state, attempts, max_attempts, next_attempt_at,
+        last_status_code, last_latency_ms, last_error, redelivery_of, created_at, completed_at]
+      properties:
+        id: { type: string, format: uuid, description: Sent as X-Hangar-Delivery; retries repeat it }
+        webhook_id: { type: string, format: uuid }
+        event_id: { type: string, description: The envelope id; redeliveries repeat it }
+        event: { type: string, description: Event type, or ping for a test }
+        repository: { type: string }
+        subject: { type: string }
+        state: { type: string, enum: [pending, delivering, succeeded, failed] }
+        attempts: { type: integer }
+        max_attempts: { type: integer }
+        next_attempt_at:
+          type: [string, "null"]
+          format: date-time
+          description: When a pending delivery is tried next
+        last_status_code: { type: [integer, "null"] }
+        last_latency_ms: { type: [integer, "null"] }
+        last_error: { type: string, description: Empty after a success; never contains the URL }
+        redelivery_of: { type: [string, "null"], format: uuid }
+        created_at: { type: string, format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+        payload:
+          description: Only on GET of one delivery
+          $ref: "#/components/schemas/WebhookPayload"
+    WebhookDeliveryPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/WebhookDelivery" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+    WebhookPayload:
+      type: object
+      description: |
+        Body of a `generic` delivery. Credentials in event data are replaced
+        by `REDACTED`. An envelope larger than 64 KiB is sent with
+        `data: {"truncated": true, "size": <bytes>}`. Headers:
+        `X-Hangar-Event`, `X-Hangar-Delivery`, `X-Hangar-Timestamp` (Unix
+        seconds) and, with a secret, `X-Hangar-Signature:
+        sha256=<hex HMAC-SHA256 of "<timestamp>.<body>">`.
+      required: [id, event, occurred_at]
+      properties:
+        id: { type: string, description: Event id; retries and redeliveries repeat it }
+        event: { type: string }
+        occurred_at: { type: string, format: date-time }
+        actor: { type: string }
+        repository: { type: string }
+        subject: { type: string }
+        data:
+          type: object
+          additionalProperties: true
+          description: |
+            Event-specific: the component (component.*), the repository's id,
+            name, format, type and online flag (repository.*), or the new
+            findings with `count` and `max_severity` (scan.finding)
+        instance: { type: string, description: server.base_url of the sending server }
     TokenInput:
       type: object
       required: [name, scopes, expires_at]

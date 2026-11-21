@@ -52,6 +52,8 @@ type Options struct {
 	Audit core.AuditLog
 	// Events receives component.published and component.deleted.
 	Events core.EventBus
+	// Notifier, when set, also receives those events (outgoing webhooks).
+	Notifier Notifier
 	// Blobs, when set, lets Publish check that every asset's blob exists in
 	// the repository's store, and fill Asset.Size from it when zero.
 	Blobs  core.BlobStores
@@ -65,6 +67,13 @@ type Options struct {
 	// are dropped, counted and logged: the statistics are best-effort.
 	// Default 10 * MaxPending.
 	MaxBuffered int
+}
+
+// Notifier receives the domain events of the service after they happened
+// (implemented by *webhooks.Outbox). Notify must not block for long and
+// never fails the caller.
+type Notifier interface {
+	Notify(ctx context.Context, e core.Event)
 }
 
 // Service implements core.ComponentService on PostgreSQL. Call Close on
@@ -1167,13 +1176,18 @@ func (s *Service) record(ctx context.Context, action, target, outcome string, de
 }
 
 func (s *Service) emit(ctx context.Context, typ string, repo *core.Repository, subject string, c *core.Component) {
-	if s.opts.Events == nil {
+	if s.opts.Events == nil && s.opts.Notifier == nil {
 		return
 	}
 	data, _ := json.Marshal(c)
 	e := core.Event{Type: typ, At: time.Now().UTC(), Actor: core.PrincipalFrom(ctx).Name, Repository: repo.Name, Subject: subject, Data: data}
-	if err := s.opts.Events.Publish(ctx, e); err != nil {
-		s.log.WarnContext(ctx, "publish event failed", "type", typ, "subject", subject, "error", err)
+	if s.opts.Events != nil {
+		if err := s.opts.Events.Publish(ctx, e); err != nil {
+			s.log.WarnContext(ctx, "publish event failed", "type", typ, "subject", subject, "error", err)
+		}
+	}
+	if s.opts.Notifier != nil {
+		s.opts.Notifier.Notify(ctx, e)
 	}
 }
 

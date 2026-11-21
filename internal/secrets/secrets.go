@@ -174,6 +174,12 @@ func TaskContext(id, field string) Context {
 	return Context{Table: "tasks", Row: id, Field: field}
 }
 
+// WebhookContext is the context of the signing secret of a webhook
+// (webhooks.secret); row is the webhook id.
+func WebhookContext(id string) Context {
+	return Context{Table: "webhooks", Row: id, Field: "secret"}
+}
+
 // IsSealed reports whether s has a sealed form, current or legacy (it may
 // still fail to open).
 func IsSealed(s string) bool { return strings.HasPrefix(s, Prefix) || IsLegacy(s) }
