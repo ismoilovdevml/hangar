@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { RepositoryInput } from '../api/types';
 import { session } from '../mocks/data';
 import { mockState } from '../mocks/handlers';
@@ -24,14 +24,22 @@ const setupUser = () => userEvent.setup({ delay: null });
 
 const repo = (name: string) => mockState.repositories.find((r) => r.name === name)!;
 
+// The two pages are lazy routes. The first test to open them would also pay
+// for compiling them cold, which on a loaded machine outlasts the wait for
+// their first element; compile them here, under the hook's own budget.
+beforeAll(async () => {
+  await Promise.all([import('../pages/repositories/RepositoriesPage'), import('../pages/repositories/settings/RepoSettingsPage')]);
+}, 60_000);
+
 describe('repository settings', () => {
   it('opens from the repository list', async () => {
     const user = setupUser();
     const { history } = renderApp('/repositories');
-    await user.click(await screen.findByRole('link', { name: 'npmjs-proxy' }, { timeout: 5000 }));
-    await waitFor(() => expect(history.location.pathname).toBe('/repositories/npmjs-proxy/settings'));
+    await user.click(await screen.findByRole('link', { name: 'npmjs-proxy' }));
+    // The form appears once the route has changed and the repository has loaded.
     expect(await screen.findByRole('form', { name: 'Settings of npmjs-proxy' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Browse packages' })).toHaveAttribute('href', '/browse?repo=npmjs-proxy');
+    expect(history.location.pathname).toBe('/repositories/npmjs-proxy/settings');
+    expect(await screen.findByRole('link', { name: 'Browse packages' })).toHaveAttribute('href', '/browse?repo=npmjs-proxy');
   });
 
   it('invalidates the cache of a proxy and scans a repository', async () => {
