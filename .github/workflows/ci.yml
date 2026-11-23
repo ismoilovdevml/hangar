@@ -64,7 +64,7 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.15.0
 
@@ -179,7 +179,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
         with:
           version: v4.3.1
       - uses: actions/setup-go@v7
@@ -329,7 +329,7 @@ jobs:
           cache-from: type=gha,scope=e2e-runner
           cache-to: type=gha,scope=e2e-runner,mode=max
       - name: Go module cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/hangar-e2e/go-mod
           key: e2e-gomod-${{ hashFiles('go.sum') }}
